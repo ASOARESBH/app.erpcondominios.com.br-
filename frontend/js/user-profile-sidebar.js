@@ -122,7 +122,11 @@
         if (sidebarHeader) {
             sidebarHeader.innerHTML = `
                 <div class="sidebar-logo-container">
-                    <img src="../uploads/logo/logo_1769740112.jpeg" alt="Logo" class="sidebar-logo" id="dynamicSidebarLogo" onerror="this.src='../assets/img/logos/logo_padrao.png';">
+                    <img src="../assets/img/logos/logo_padrao.png"
+                         alt="ERP Condomínio"
+                         class="sidebar-logo"
+                         id="dynamicSidebarLogo"
+                         onerror="this.onerror=null;this.style.display='none';">
                 </div>
                 <button id="sidebarCollapseBtn" title="Recolher menu" style="
                     background: none;
