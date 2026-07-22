@@ -4,240 +4,261 @@
 <div class="page-wrapper page-superadmin">
     <div class="page-header">
         <h1><i class="fas fa-crown" style="color:#f59e0b;"></i> Painel Super-Admin</h1>
-        <p>Gerenciamento global de condomínios, usuários e planos</p>
+        <p>Gerenciamento global de condomínios, usuários, planos e módulos</p>
     </div>
 
     <!-- ── TABS ──────────────────────────────────────────────────────── -->
     <div class="sa-tabs">
-        <button class="sa-tab active" data-tab="dashboard" onclick="SA.showTab('dashboard')">
-            <i class="fas fa-chart-pie"></i> Dashboard
-        </button>
-        <button class="sa-tab" data-tab="condominios" onclick="SA.showTab('condominios')">
-            <i class="fas fa-building"></i> Condomínios
-        </button>
-        <button class="sa-tab" data-tab="onboarding" onclick="SA.showTab('onboarding')">
-            <i class="fas fa-plus-circle"></i> Novo Condomínio
-        </button>
+        <button class="sa-tab active" data-tab="dashboard"    onclick="SA.showTab('dashboard')"><i class="fas fa-chart-pie"></i> Dashboard</button>
+        <button class="sa-tab"        data-tab="condominios"  onclick="SA.showTab('condominios')"><i class="fas fa-building"></i> Condomínios</button>
+        <button class="sa-tab"        data-tab="usuarios"     onclick="SA.showTab('usuarios')"><i class="fas fa-users"></i> Usuários</button>
+        <button class="sa-tab"        data-tab="onboarding"   onclick="SA.showTab('onboarding')"><i class="fas fa-rocket"></i> Novo Condomínio</button>
+        <button class="sa-tab"        data-tab="auditoria"    onclick="SA.showTab('auditoria')"><i class="fas fa-shield-alt"></i> Auditoria</button>
     </div>
 
     <!-- ── TAB: DASHBOARD ────────────────────────────────────────────── -->
     <div id="tab-dashboard" class="sa-tab-content active">
         <div class="stats-grid" id="sa-kpis">
-            <div class="stat-card">
-                <i class="fas fa-building icon"></i>
-                <h3>Condomínios Ativos</h3>
-                <div class="value" id="sa-total-ativos">-</div>
-            </div>
-            <div class="stat-card">
-                <i class="fas fa-users icon"></i>
-                <h3>Total de Usuários</h3>
-                <div class="value" id="sa-total-usuarios">-</div>
-            </div>
-            <div class="stat-card">
-                <i class="fas fa-home icon"></i>
-                <h3>Total de Moradores</h3>
-                <div class="value" id="sa-total-moradores">-</div>
-            </div>
-            <div class="stat-card">
-                <i class="fas fa-layer-group icon"></i>
-                <h3>Total de Condomínios</h3>
-                <div class="value" id="sa-total-tenants">-</div>
-            </div>
+            <div class="stat-card"><i class="fas fa-building icon"></i><h3>Condomínios Ativos</h3><div class="value" id="sa-total-ativos">-</div></div>
+            <div class="stat-card"><i class="fas fa-users icon"></i><h3>Usuários Ativos</h3><div class="value" id="sa-total-usuarios">-</div></div>
+            <div class="stat-card"><i class="fas fa-home icon"></i><h3>Total de Moradores</h3><div class="value" id="sa-total-moradores">-</div></div>
+            <div class="stat-card"><i class="fas fa-layer-group icon"></i><h3>Total de Condomínios</h3><div class="value" id="sa-total-tenants">-</div></div>
         </div>
 
-        <!-- Planos -->
-        <div class="page-card" style="margin-top:1.5rem;">
-            <h2 class="section-title"><i class="fas fa-tags"></i> Distribuição por Plano</h2>
-            <div id="sa-planos-grid" class="sa-planos-grid">
-                <div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
-            </div>
+        <!-- Alertas -->
+        <div id="sa-alertas-box" class="page-card" style="margin-top:1.5rem;display:none;">
+            <h2 class="section-title" style="color:#dc2626;"><i class="fas fa-exclamation-triangle"></i> Condomínios com Alertas</h2>
+            <div id="sa-alertas-lista"></div>
         </div>
 
-        <!-- Últimos cadastrados -->
-        <div class="page-card" style="margin-top:1.5rem;">
-            <h2 class="section-title"><i class="fas fa-clock"></i> Últimos Condomínios Cadastrados</h2>
-            <div class="table-responsive">
-                <table class="data-table" id="sa-table-recentes">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Slug</th>
-                            <th>Nome</th>
-                            <th>Plano</th>
-                            <th>Status</th>
-                            <th>Cadastrado em</th>
-                        </tr>
-                    </thead>
-                    <tbody id="sa-tbody-recentes">
-                        <tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
-                    </tbody>
-                </table>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.5rem;">
+            <!-- Planos -->
+            <div class="page-card">
+                <h2 class="section-title"><i class="fas fa-tags"></i> Distribuição por Plano</h2>
+                <div id="sa-planos-grid" class="sa-planos-grid"><div class="loading-inline"><i class="fas fa-spinner fa-spin"></i></div></div>
+            </div>
+            <!-- Últimos cadastrados -->
+            <div class="page-card">
+                <h2 class="section-title"><i class="fas fa-clock"></i> Últimos Cadastrados</h2>
+                <div id="sa-recentes-lista"></div>
             </div>
         </div>
     </div>
 
     <!-- ── TAB: CONDOMÍNIOS ──────────────────────────────────────────── -->
     <div id="tab-condominios" class="sa-tab-content" style="display:none;">
-        <!-- Filtros -->
         <div class="page-card">
             <div class="sa-filtros">
-                <div class="form-group" style="flex:2;">
-                    <label>Buscar</label>
-                    <input type="text" id="sa-busca" placeholder="Nome, CNPJ, slug..." oninput="SA.filtrar()">
-                </div>
-                <div class="form-group">
-                    <label>Status</label>
-                    <select id="sa-filtro-status" onchange="SA.filtrar()">
-                        <option value="">Todos</option>
-                        <option value="ativo">Ativo</option>
-                        <option value="inativo">Inativo</option>
-                        <option value="suspenso">Suspenso</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Plano</label>
-                    <select id="sa-filtro-plano" onchange="SA.filtrar()">
-                        <option value="">Todos</option>
-                        <option value="basico">Básico</option>
-                        <option value="profissional">Profissional</option>
-                        <option value="enterprise">Enterprise</option>
-                    </select>
-                </div>
-                <div class="form-group" style="align-self:flex-end;">
-                    <button class="btn-primary" onclick="SA.carregarCondominios()">
-                        <i class="fas fa-sync"></i> Atualizar
-                    </button>
-                </div>
+                <div class="form-group" style="flex:2;"><label>Buscar</label><input type="text" id="sa-busca" placeholder="Nome, CNPJ, slug..." oninput="SA.filtrar()"></div>
+                <div class="form-group"><label>Status</label><select id="sa-filtro-status" onchange="SA.filtrar()"><option value="">Todos</option><option value="ativo">Ativo</option><option value="inativo">Inativo</option><option value="suspenso">Suspenso</option></select></div>
+                <div class="form-group"><label>Plano</label><select id="sa-filtro-plano" onchange="SA.filtrar()"><option value="">Todos</option><option value="basico">Básico</option><option value="profissional">Profissional</option><option value="enterprise">Enterprise</option></select></div>
+                <div class="form-group" style="align-self:flex-end;"><button class="btn-primary" onclick="SA.carregarCondominios()"><i class="fas fa-sync"></i> Atualizar</button></div>
             </div>
         </div>
+        <div id="sa-condominios-grid" class="sa-condominios-grid"><div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+    </div>
 
-        <!-- Lista de condomínios -->
-        <div id="sa-condominios-grid" class="sa-condominios-grid">
-            <div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando condomínios...</div>
+    <!-- ── TAB: USUÁRIOS GLOBAIS ─────────────────────────────────────── -->
+    <div id="tab-usuarios" class="sa-tab-content" style="display:none;">
+        <div class="page-card">
+            <div class="sa-filtros">
+                <div class="form-group" style="flex:2;"><label>Buscar usuário</label><input type="text" id="sa-busca-user" placeholder="Nome ou e-mail..." oninput="SA.buscarUsuarios()"></div>
+                <div class="form-group" style="align-self:flex-end;"><button class="btn-primary" onclick="SA.carregarUsuariosGlobais()"><i class="fas fa-sync"></i> Atualizar</button></div>
+            </div>
+        </div>
+        <div class="page-card" style="margin-top:1rem;">
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead><tr><th>Nome</th><th>E-mail</th><th>Permissão</th><th>Condomínios</th><th>Status</th><th>Ações</th></tr></thead>
+                    <tbody id="sa-tbody-usuarios"><tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <!-- ── TAB: ONBOARDING ───────────────────────────────────────────── -->
     <div id="tab-onboarding" class="sa-tab-content" style="display:none;">
+        <!-- Wizard Steps -->
+        <div class="sa-wizard-steps">
+            <div class="sa-step active" id="step-ind-1"><div class="sa-step-num">1</div><div class="sa-step-label">Condomínio</div></div>
+            <div class="sa-step-line"></div>
+            <div class="sa-step" id="step-ind-2"><div class="sa-step-num">2</div><div class="sa-step-label">Administrador</div></div>
+            <div class="sa-step-line"></div>
+            <div class="sa-step" id="step-ind-3"><div class="sa-step-num">3</div><div class="sa-step-label">Módulos</div></div>
+            <div class="sa-step-line"></div>
+            <div class="sa-step" id="step-ind-4"><div class="sa-step-num">4</div><div class="sa-step-label">Confirmar</div></div>
+        </div>
+
+        <div id="sa-onboarding-alert" class="alert" style="display:none;"></div>
+
+        <!-- Step 1: Dados do Condomínio -->
+        <div id="wizard-step-1" class="page-card wizard-step">
+            <h3><i class="fas fa-building"></i> Dados do Condomínio</h3>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Slug <span class="required">*</span> <small style="color:var(--color-text-tertiary)">(ex: parque-verde)</small></label>
+                    <div style="position:relative;">
+                        <input type="text" id="ob-slug" placeholder="nome-do-condominio" oninput="SA.onSlugInput()" required>
+                        <span id="ob-slug-status" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:0.85rem;"></span>
+                    </div>
+                    <small id="ob-slug-preview" style="color:var(--color-primary-600);"></small>
+                </div>
+                <div class="form-group">
+                    <label>Plano <span class="required">*</span></label>
+                    <select id="ob-plano" onchange="SA.onPlanoChange()">
+                        <option value="basico">Básico — Controle de acesso + moradores</option>
+                        <option value="profissional" selected>Profissional — Todos os módulos principais</option>
+                        <option value="enterprise">Enterprise — Acesso completo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Razão Social <span class="required">*</span></label>
+                    <input type="text" id="ob-razao" placeholder="Nome Jurídico Ltda" required>
+                </div>
+                <div class="form-group">
+                    <label>Nome Fantasia</label>
+                    <input type="text" id="ob-fantasia" placeholder="Nome Fantasia">
+                </div>
+                <div class="form-group">
+                    <label>CNPJ <span class="required">*</span></label>
+                    <input type="text" id="ob-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="SA.mascaraCnpj(this)" required>
+                </div>
+                <div class="form-group">
+                    <label>E-mail do Condomínio <span class="required">*</span></label>
+                    <input type="email" id="ob-email-cond" placeholder="contato@condominio.com.br" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefone</label>
+                    <input type="text" id="ob-telefone" placeholder="(31) 99999-9999">
+                </div>
+                <div class="form-group">
+                    <label>Cidade</label>
+                    <input type="text" id="ob-cidade" placeholder="Belo Horizonte">
+                </div>
+                <div class="form-group">
+                    <label>Estado</label>
+                    <select id="ob-estado">
+                        <option value="">Selecione</option>
+                        <option value="AC">AC</option><option value="AL">AL</option><option value="AP">AP</option><option value="AM">AM</option><option value="BA">BA</option><option value="CE">CE</option><option value="DF">DF</option><option value="ES">ES</option><option value="GO">GO</option><option value="MA">MA</option><option value="MT">MT</option><option value="MS">MS</option><option value="MG" selected>MG</option><option value="PA">PA</option><option value="PB">PB</option><option value="PR">PR</option><option value="PE">PE</option><option value="PI">PI</option><option value="RJ">RJ</option><option value="RN">RN</option><option value="RS">RS</option><option value="RO">RO</option><option value="RR">RR</option><option value="SC">SC</option><option value="SP">SP</option><option value="SE">SE</option><option value="TO">TO</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top:1.5rem;display:flex;justify-content:flex-end;">
+                <button class="btn-primary" onclick="SA.wizardNext(1)">Próximo <i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+
+        <!-- Step 2: Admin -->
+        <div id="wizard-step-2" class="page-card wizard-step" style="display:none;">
+            <h3><i class="fas fa-user-shield"></i> Administrador Principal</h3>
+            <div class="form-grid-2">
+                <div class="form-group"><label>Nome Completo <span class="required">*</span></label><input type="text" id="ob-admin-nome" placeholder="João da Silva" required></div>
+                <div class="form-group"><label>E-mail do Admin <span class="required">*</span></label><input type="email" id="ob-admin-email" placeholder="admin@condominio.com.br" required></div>
+                <div class="form-group"><label>Senha Inicial <span class="required">*</span></label><input type="password" id="ob-admin-senha" placeholder="Mínimo 6 caracteres" required minlength="6"></div>
+                <div class="form-group"><label>Confirmar Senha <span class="required">*</span></label><input type="password" id="ob-admin-senha2" placeholder="Repita a senha" required minlength="6"></div>
+            </div>
+            <div style="margin-top:1.5rem;display:flex;gap:1rem;justify-content:space-between;">
+                <button class="btn-secondary" onclick="SA.wizardBack(2)"><i class="fas fa-arrow-left"></i> Voltar</button>
+                <button class="btn-primary" onclick="SA.wizardNext(2)">Próximo <i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+
+        <!-- Step 3: Módulos -->
+        <div id="wizard-step-3" class="page-card wizard-step" style="display:none;">
+            <h3><i class="fas fa-puzzle-piece"></i> Módulos Habilitados</h3>
+            <p style="color:var(--color-text-secondary);margin-bottom:1rem;">Selecione os módulos que este condomínio poderá acessar. O plano selecionado já pré-seleciona os módulos recomendados.</p>
+            <div id="ob-modulos-grid" class="sa-modulos-grid"><div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando módulos...</div></div>
+            <div style="margin-top:1.5rem;display:flex;gap:1rem;justify-content:space-between;">
+                <button class="btn-secondary" onclick="SA.wizardBack(3)"><i class="fas fa-arrow-left"></i> Voltar</button>
+                <button class="btn-primary" onclick="SA.wizardNext(3)">Próximo <i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+
+        <!-- Step 4: Confirmação -->
+        <div id="wizard-step-4" class="page-card wizard-step" style="display:none;">
+            <h3><i class="fas fa-check-circle" style="color:#10b981;"></i> Confirmar Criação</h3>
+            <div id="ob-resumo" class="sa-resumo"></div>
+            <div style="margin-top:1.5rem;display:flex;gap:1rem;justify-content:space-between;">
+                <button class="btn-secondary" onclick="SA.wizardBack(4)"><i class="fas fa-arrow-left"></i> Voltar</button>
+                <button class="btn-primary" id="btn-onboarding-final" onclick="SA.onboarding()">
+                    <i class="fas fa-rocket"></i> Criar Condomínio
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── TAB: AUDITORIA ────────────────────────────────────────────── -->
+    <div id="tab-auditoria" class="sa-tab-content" style="display:none;">
         <div class="page-card">
-            <h2 class="section-title"><i class="fas fa-rocket"></i> Criar Novo Condomínio</h2>
-            <p style="color:var(--color-text-secondary);margin-bottom:1.5rem;">
-                Preencha os dados abaixo para criar um novo condomínio e seu administrador principal.
-                O sistema criará automaticamente o tenant, o usuário admin e o vínculo entre eles.
-            </p>
-
-            <div id="sa-onboarding-alert" class="alert" style="display:none;"></div>
-
-            <form id="sa-form-onboarding" onsubmit="SA.onboarding(event)">
-                <!-- Seção: Condomínio -->
-                <div class="sa-form-section">
-                    <h3><i class="fas fa-building"></i> Dados do Condomínio</h3>
-                    <div class="form-grid-2">
-                        <div class="form-group">
-                            <label>Slug <span class="required">*</span>
-                                <small style="color:var(--color-text-tertiary);font-weight:400;">(ex: serra, parque-verde)</small>
-                            </label>
-                            <input type="text" id="ob-slug" name="slug" placeholder="nome-do-condominio"
-                                   pattern="[a-z0-9\-]+" required
-                                   oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9\-]/g,'');SA.previewUrl()">
-                            <small id="ob-slug-preview" style="color:var(--color-primary-600);"></small>
-                        </div>
-                        <div class="form-group">
-                            <label>Plano <span class="required">*</span></label>
-                            <select id="ob-plano" name="plano" required>
-                                <option value="basico">Básico</option>
-                                <option value="profissional" selected>Profissional</option>
-                                <option value="enterprise">Enterprise</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Razão Social <span class="required">*</span></label>
-                            <input type="text" id="ob-razao" name="razao_social" placeholder="Nome Jurídico Ltda" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Nome Fantasia</label>
-                            <input type="text" id="ob-fantasia" name="nome_fantasia" placeholder="Nome Fantasia">
-                        </div>
-                        <div class="form-group">
-                            <label>CNPJ <span class="required">*</span></label>
-                            <input type="text" id="ob-cnpj" name="cnpj" placeholder="00.000.000/0000-00"
-                                   maxlength="18" required oninput="SA.mascaraCnpj(this)">
-                        </div>
-                        <div class="form-group">
-                            <label>E-mail do Condomínio <span class="required">*</span></label>
-                            <input type="email" id="ob-email-cond" name="email_condominio" placeholder="contato@condominio.com.br" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Telefone</label>
-                            <input type="text" id="ob-telefone" name="telefone" placeholder="(31) 99999-9999">
-                        </div>
-                        <div class="form-group">
-                            <label>Cidade</label>
-                            <input type="text" id="ob-cidade" name="cidade" placeholder="Belo Horizonte">
-                        </div>
-                        <div class="form-group">
-                            <label>Estado</label>
-                            <select id="ob-estado" name="estado">
-                                <option value="">Selecione</option>
-                                <option value="AC">AC</option><option value="AL">AL</option><option value="AP">AP</option>
-                                <option value="AM">AM</option><option value="BA">BA</option><option value="CE">CE</option>
-                                <option value="DF">DF</option><option value="ES">ES</option><option value="GO">GO</option>
-                                <option value="MA">MA</option><option value="MT">MT</option><option value="MS">MS</option>
-                                <option value="MG" selected>MG</option><option value="PA">PA</option><option value="PB">PB</option>
-                                <option value="PR">PR</option><option value="PE">PE</option><option value="PI">PI</option>
-                                <option value="RJ">RJ</option><option value="RN">RN</option><option value="RS">RS</option>
-                                <option value="RO">RO</option><option value="RR">RR</option><option value="SC">SC</option>
-                                <option value="SP">SP</option><option value="SE">SE</option><option value="TO">TO</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Seção: Admin -->
-                <div class="sa-form-section" style="margin-top:1.5rem;">
-                    <h3><i class="fas fa-user-shield"></i> Administrador Principal</h3>
-                    <div class="form-grid-2">
-                        <div class="form-group">
-                            <label>Nome Completo <span class="required">*</span></label>
-                            <input type="text" id="ob-admin-nome" name="admin_nome" placeholder="João da Silva" required>
-                        </div>
-                        <div class="form-group">
-                            <label>E-mail do Admin <span class="required">*</span></label>
-                            <input type="email" id="ob-admin-email" name="admin_email" placeholder="admin@condominio.com.br" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Senha Inicial <span class="required">*</span></label>
-                            <input type="password" id="ob-admin-senha" name="admin_senha" placeholder="Mínimo 6 caracteres" required minlength="6">
-                        </div>
-                        <div class="form-group">
-                            <label>Confirmar Senha <span class="required">*</span></label>
-                            <input type="password" id="ob-admin-senha2" placeholder="Repita a senha" required minlength="6">
-                        </div>
-                    </div>
-                </div>
-
-                <div style="margin-top:2rem;display:flex;gap:1rem;">
-                    <button type="submit" class="btn-primary" id="btn-onboarding">
-                        <i class="fas fa-rocket"></i> Criar Condomínio
-                    </button>
-                    <button type="reset" class="btn-secondary" onclick="SA.limparOnboarding()">
-                        <i class="fas fa-times"></i> Limpar
-                    </button>
-                </div>
-            </form>
+            <h2 class="section-title"><i class="fas fa-shield-alt"></i> Log de Auditoria — Ações do Super-Admin</h2>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Descrição</th><th>IP</th></tr></thead>
+                    <tbody id="sa-tbody-logs"><tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr></tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- ── MODAL: DETALHES DO CONDOMÍNIO ─────────────────────────────────── -->
+<!-- ── MODAL: DETALHES / EDIÇÃO DO CONDOMÍNIO ────────────────────────── -->
 <div id="sa-modal-cond" class="modal-overlay" style="display:none;" onclick="if(event.target===this)SA.fecharModal()">
-    <div class="modal-content modal-lg">
+    <div class="modal-content modal-xl">
         <div class="modal-header">
-            <h3 id="sa-modal-titulo"><i class="fas fa-building"></i> Detalhes do Condomínio</h3>
+            <h3 id="sa-modal-titulo"><i class="fas fa-building"></i> Condomínio</h3>
             <button class="modal-close" onclick="SA.fecharModal()"><i class="fas fa-times"></i></button>
         </div>
-        <div class="modal-body" id="sa-modal-body">
-            <div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+        <!-- Sub-tabs do modal -->
+        <div class="sa-modal-tabs">
+            <button class="sa-modal-tab active" data-mtab="info"     onclick="SA.showModalTab('info')"><i class="fas fa-info-circle"></i> Dados</button>
+            <button class="sa-modal-tab"        data-mtab="modulos"  onclick="SA.showModalTab('modulos')"><i class="fas fa-puzzle-piece"></i> Módulos</button>
+            <button class="sa-modal-tab"        data-mtab="usuarios" onclick="SA.showModalTab('usuarios')"><i class="fas fa-users"></i> Usuários</button>
+            <button class="sa-modal-tab"        data-mtab="plano"    onclick="SA.showModalTab('plano')"><i class="fas fa-tags"></i> Plano</button>
+        </div>
+        <div class="modal-body">
+            <!-- Info -->
+            <div id="mtab-info" class="modal-tab-content active">
+                <div id="sa-modal-info-body"><div class="loading-inline"><i class="fas fa-spinner fa-spin"></i></div></div>
+            </div>
+            <!-- Módulos -->
+            <div id="mtab-modulos" class="modal-tab-content" style="display:none;">
+                <p style="color:var(--color-text-secondary);margin-bottom:1rem;">Marque os módulos que este condomínio pode acessar.</p>
+                <div id="sa-modal-modulos-grid" class="sa-modulos-grid"><div class="loading-inline"><i class="fas fa-spinner fa-spin"></i></div></div>
+                <div style="margin-top:1.5rem;">
+                    <button class="btn-primary" onclick="SA.salvarModulos()"><i class="fas fa-save"></i> Salvar Módulos</button>
+                </div>
+            </div>
+            <!-- Usuários -->
+            <div id="mtab-usuarios" class="modal-tab-content" style="display:none;">
+                <div id="sa-modal-usuarios-body"><div class="loading-inline"><i class="fas fa-spinner fa-spin"></i></div></div>
+            </div>
+            <!-- Plano -->
+            <div id="mtab-plano" class="modal-tab-content" style="display:none;">
+                <div id="sa-modal-plano-body">
+                    <h4 style="margin-bottom:1rem;">Alterar Plano do Condomínio</h4>
+                    <div class="sa-planos-cards" id="sa-planos-selecao"></div>
+                    <div style="margin-top:1.5rem;">
+                        <button class="btn-primary" onclick="SA.salvarPlano()"><i class="fas fa-save"></i> Confirmar Plano</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: RESET SENHA ─────────────────────────────────────────────── -->
+<div id="sa-modal-senha" class="modal-overlay" style="display:none;" onclick="if(event.target===this)SA.fecharModalSenha()">
+    <div class="modal-content" style="max-width:400px;">
+        <div class="modal-header"><h3><i class="fas fa-key"></i> Resetar Senha</h3><button class="modal-close" onclick="SA.fecharModalSenha()"><i class="fas fa-times"></i></button></div>
+        <div class="modal-body">
+            <p id="sa-senha-usuario-nome" style="margin-bottom:1rem;color:var(--color-text-secondary);"></p>
+            <div class="form-group"><label>Nova Senha <span class="required">*</span></label><input type="password" id="sa-nova-senha" placeholder="Mínimo 6 caracteres" minlength="6"></div>
+            <div class="form-group"><label>Confirmar Senha <span class="required">*</span></label><input type="password" id="sa-nova-senha2" placeholder="Repita a senha" minlength="6"></div>
+            <div id="sa-senha-alert" class="alert" style="display:none;margin-top:0.75rem;"></div>
+            <div style="margin-top:1.5rem;display:flex;gap:0.75rem;">
+                <button class="btn-primary" onclick="SA.confirmarResetSenha()"><i class="fas fa-key"></i> Salvar Senha</button>
+                <button class="btn-secondary" onclick="SA.fecharModalSenha()">Cancelar</button>
+            </div>
         </div>
     </div>
 </div>
@@ -246,242 +267,135 @@
 <style>
 .page-superadmin { padding: 0; }
 
-/* Tabs */
-.sa-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-    border-bottom: 2px solid var(--border-color);
-    padding-bottom: 0;
-}
-.sa-tab {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--color-text-secondary);
-    border-bottom: 3px solid transparent;
-    margin-bottom: -2px;
-    transition: all 0.2s;
-    font-family: inherit;
-    border-radius: 6px 6px 0 0;
-}
-.sa-tab:hover { color: var(--color-primary-600); background: rgba(102,126,234,0.05); }
-.sa-tab.active { color: var(--color-primary-600); border-bottom-color: var(--color-primary-600); }
+/* Tabs principais */
+.sa-tabs { display:flex; gap:0.5rem; margin-bottom:1.5rem; border-bottom:2px solid var(--border-color); padding-bottom:0; flex-wrap:wrap; }
+.sa-tab { padding:0.75rem 1.25rem; border:none; background:transparent; cursor:pointer; font-size:0.9rem; font-weight:600; color:var(--color-text-secondary); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all 0.2s; font-family:inherit; border-radius:6px 6px 0 0; }
+.sa-tab:hover { color:var(--color-primary-600); background:rgba(102,126,234,0.05); }
+.sa-tab.active { color:var(--color-primary-600); border-bottom-color:var(--color-primary-600); }
 
 /* Filtros */
-.sa-filtros {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    align-items: flex-end;
-}
-.sa-filtros .form-group { margin-bottom: 0; flex: 1; min-width: 150px; }
+.sa-filtros { display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end; }
+.sa-filtros .form-group { margin-bottom:0; flex:1; min-width:140px; }
 
 /* Grid de condomínios */
-.sa-condominios-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 1.25rem;
-    margin-top: 1.25rem;
-}
+.sa-condominios-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:1.25rem; margin-top:1.25rem; }
 
 /* Card de condomínio */
-.sa-cond-card {
-    background: var(--color-background-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 1.25rem;
-    transition: all 0.2s;
-    position: relative;
-}
-.sa-cond-card:hover { box-shadow: var(--shadow-md); border-color: var(--color-primary-300); }
+.sa-cond-card { background:var(--color-background-primary); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; transition:all 0.2s; }
+.sa-cond-card:hover { box-shadow:var(--shadow-md); border-color:var(--color-primary-300); }
+.sa-cond-header { display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem; }
+.sa-cond-avatar { width:48px; height:48px; background:linear-gradient(135deg,var(--color-primary-600),var(--color-primary-700)); border-radius:10px; display:flex; align-items:center; justify-content:center; color:white; font-size:1.2rem; font-weight:700; flex-shrink:0; }
+.sa-cond-info h4 { margin:0; font-size:1rem; }
+.sa-cond-info small { color:var(--color-text-tertiary); font-size:0.8rem; }
+.sa-cond-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem; margin:0.75rem 0; }
+.sa-cond-stat { text-align:center; padding:0.5rem; background:var(--color-background-tertiary); border-radius:8px; }
+.sa-cond-stat .num { font-size:1.2rem; font-weight:700; color:var(--color-primary-600); }
+.sa-cond-stat .lbl { font-size:0.7rem; color:var(--color-text-tertiary); }
+.sa-cond-footer { display:flex; align-items:center; justify-content:space-between; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border-color); }
+.sa-cond-actions { display:flex; gap:0.4rem; flex-wrap:wrap; }
+.sa-cond-actions button { padding:0.35rem 0.65rem; border-radius:6px; border:1px solid var(--border-color); background:var(--color-background-primary); cursor:pointer; font-size:0.78rem; font-family:inherit; transition:all 0.2s; color:var(--color-text-secondary); }
+.sa-cond-actions button:hover { background:var(--color-primary-600); color:white; border-color:var(--color-primary-600); }
+.sa-cond-actions button.danger:hover { background:#dc2626; border-color:#dc2626; }
 
-.sa-cond-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-}
-.sa-cond-avatar {
-    width: 48px; height: 48px;
-    background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    color: white; font-size: 1.2rem; font-weight: 700;
-    flex-shrink: 0;
-}
-.sa-cond-info h4 { margin: 0; font-size: 1rem; color: var(--color-text-primary); }
-.sa-cond-info small { color: var(--color-text-tertiary); font-size: 0.8rem; }
-
-.sa-cond-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    margin: 0.75rem 0;
-}
-.sa-cond-stat {
-    text-align: center;
-    padding: 0.5rem;
-    background: var(--color-background-tertiary);
-    border-radius: 8px;
-}
-.sa-cond-stat .num { font-size: 1.2rem; font-weight: 700; color: var(--color-primary-600); }
-.sa-cond-stat .lbl { font-size: 0.7rem; color: var(--color-text-tertiary); }
-
-.sa-cond-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border-color);
-}
-.sa-cond-actions { display: flex; gap: 0.5rem; }
-.sa-cond-actions button {
-    padding: 0.4rem 0.75rem;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    background: var(--color-background-primary);
-    cursor: pointer;
-    font-size: 0.8rem;
-    font-family: inherit;
-    transition: all 0.2s;
-    color: var(--color-text-secondary);
-}
-.sa-cond-actions button:hover { background: var(--color-primary-600); color: white; border-color: var(--color-primary-600); }
-.sa-cond-actions button.danger:hover { background: var(--color-error-700); border-color: var(--color-error-700); }
-
-/* Badge de status */
-.badge-status {
-    padding: 0.2rem 0.6rem;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-.badge-status.ativo    { background: #d1fae5; color: #065f46; }
-.badge-status.inativo  { background: #f1f5f9; color: #475569; }
-.badge-status.suspenso { background: #fef3c7; color: #92400e; }
-
-/* Badge de plano */
-.badge-plano {
-    padding: 0.2rem 0.6rem;
-    border-radius: 20px;
-    font-size: 0.72rem;
-    font-weight: 600;
-}
-.badge-plano.basico       { background: #e0f2fe; color: #0369a1; }
-.badge-plano.profissional { background: #ede9fe; color: #5b21b6; }
-.badge-plano.enterprise   { background: #fef9c3; color: #854d0e; }
+/* Badges */
+.badge-status { padding:0.2rem 0.6rem; border-radius:20px; font-size:0.75rem; font-weight:600; }
+.badge-status.ativo    { background:#d1fae5; color:#065f46; }
+.badge-status.inativo  { background:#f1f5f9; color:#475569; }
+.badge-status.suspenso { background:#fef3c7; color:#92400e; }
+.badge-plano { padding:0.2rem 0.6rem; border-radius:20px; font-size:0.72rem; font-weight:600; }
+.badge-plano.basico       { background:#e0f2fe; color:#0369a1; }
+.badge-plano.profissional { background:#ede9fe; color:#5b21b6; }
+.badge-plano.enterprise   { background:#fef9c3; color:#854d0e; }
 
 /* Planos grid */
-.sa-planos-grid {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-.sa-plano-item {
-    flex: 1; min-width: 120px;
-    text-align: center;
-    padding: 1rem;
-    border-radius: 10px;
-    background: var(--color-background-tertiary);
-}
-.sa-plano-item .num { font-size: 2rem; font-weight: 700; color: var(--color-primary-600); }
-.sa-plano-item .lbl { font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 0.25rem; }
+.sa-planos-grid { display:flex; gap:1rem; flex-wrap:wrap; }
+.sa-plano-item { flex:1; min-width:120px; text-align:center; padding:1rem; border-radius:10px; background:var(--color-background-tertiary); }
+.sa-plano-item .num { font-size:2rem; font-weight:700; color:var(--color-primary-600); }
+.sa-plano-item .lbl { font-size:0.85rem; color:var(--color-text-secondary); margin-top:0.25rem; }
 
-/* Formulário */
-.sa-form-section {
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 1.25rem;
-}
-.sa-form-section h3 {
-    margin: 0 0 1rem;
-    font-size: 1rem;
-    color: var(--color-text-primary);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.form-grid-2 {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-}
-@media (max-width: 640px) {
-    .form-grid-2 { grid-template-columns: 1fr; }
-    .sa-condominios-grid { grid-template-columns: 1fr; }
-    .sa-tabs { flex-wrap: wrap; }
-    .sa-tab { font-size: 0.85rem; padding: 0.6rem 1rem; }
-}
+/* Módulos grid */
+.sa-modulos-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:0.75rem; }
+.sa-modulo-grupo { grid-column:1/-1; font-size:0.8rem; font-weight:700; color:var(--color-text-tertiary); text-transform:uppercase; letter-spacing:0.05em; padding:0.5rem 0 0.25rem; border-bottom:1px solid var(--border-color); margin-top:0.5rem; }
+.sa-modulo-item { display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; border:1px solid var(--border-color); border-radius:8px; cursor:pointer; transition:all 0.2s; background:var(--color-background-primary); }
+.sa-modulo-item:hover { border-color:var(--color-primary-400); background:rgba(102,126,234,0.05); }
+.sa-modulo-item.selected { border-color:var(--color-primary-600); background:rgba(102,126,234,0.1); }
+.sa-modulo-item input[type=checkbox] { margin:0; accent-color:var(--color-primary-600); width:16px; height:16px; }
+.sa-modulo-item label { cursor:pointer; font-size:0.85rem; margin:0; }
+.sa-modulo-item i { color:var(--color-primary-600); width:16px; text-align:center; font-size:0.85rem; }
+
+/* Wizard */
+.sa-wizard-steps { display:flex; align-items:center; justify-content:center; margin-bottom:2rem; gap:0; flex-wrap:wrap; }
+.sa-step { display:flex; flex-direction:column; align-items:center; gap:0.35rem; }
+.sa-step-num { width:36px; height:36px; border-radius:50%; border:2px solid var(--border-color); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.9rem; color:var(--color-text-tertiary); background:var(--color-background-primary); transition:all 0.3s; }
+.sa-step.active .sa-step-num { border-color:var(--color-primary-600); color:var(--color-primary-600); background:rgba(102,126,234,0.1); }
+.sa-step.done .sa-step-num { border-color:#10b981; background:#10b981; color:white; }
+.sa-step-label { font-size:0.75rem; color:var(--color-text-tertiary); font-weight:600; }
+.sa-step.active .sa-step-label { color:var(--color-primary-600); }
+.sa-step-line { flex:1; height:2px; background:var(--border-color); min-width:40px; margin:0 0.5rem; margin-bottom:1.2rem; }
+
+/* Resumo onboarding */
+.sa-resumo { background:var(--color-background-tertiary); border-radius:10px; padding:1.25rem; }
+.sa-resumo-row { display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border-color); font-size:0.9rem; }
+.sa-resumo-row:last-child { border-bottom:none; }
+.sa-resumo-row strong { color:var(--color-text-secondary); }
+
+/* Planos seleção */
+.sa-planos-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; }
+.sa-plano-card { border:2px solid var(--border-color); border-radius:12px; padding:1.25rem; cursor:pointer; transition:all 0.2s; text-align:center; }
+.sa-plano-card:hover { border-color:var(--color-primary-400); }
+.sa-plano-card.selected { border-color:var(--color-primary-600); background:rgba(102,126,234,0.08); }
+.sa-plano-card h4 { margin:0 0 0.5rem; }
+.sa-plano-card p { font-size:0.8rem; color:var(--color-text-tertiary); margin:0; }
 
 /* Modal */
-.modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.5);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 9999; padding: 1rem;
-}
-.modal-content {
-    background: var(--color-background-primary);
-    border-radius: 16px;
-    width: 100%; max-width: 600px;
-    max-height: 90vh; overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-}
-.modal-content.modal-lg { max-width: 800px; }
-.modal-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-}
-.modal-header h3 { margin: 0; font-size: 1.1rem; }
-.modal-close {
-    background: none; border: none; cursor: pointer;
-    color: var(--color-text-tertiary); font-size: 1.1rem; padding: 0.25rem;
-}
-.modal-close:hover { color: var(--color-text-primary); }
-.modal-body { padding: 1.5rem; }
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999; padding:1rem; }
+.modal-content { background:var(--color-background-primary); border-radius:16px; width:100%; max-width:600px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+.modal-content.modal-xl { max-width:900px; }
+.modal-header { display:flex; align-items:center; justify-content:space-between; padding:1.25rem 1.5rem; border-bottom:1px solid var(--border-color); }
+.modal-header h3 { margin:0; font-size:1.1rem; }
+.modal-close { background:none; border:none; cursor:pointer; color:var(--color-text-tertiary); font-size:1.1rem; padding:0.25rem; }
+.modal-close:hover { color:var(--color-text-primary); }
+.modal-body { padding:1.5rem; }
+
+/* Modal sub-tabs */
+.sa-modal-tabs { display:flex; gap:0; border-bottom:1px solid var(--border-color); padding:0 1.5rem; }
+.sa-modal-tab { padding:0.6rem 1rem; border:none; background:transparent; cursor:pointer; font-size:0.85rem; font-weight:600; color:var(--color-text-secondary); border-bottom:2px solid transparent; margin-bottom:-1px; transition:all 0.2s; font-family:inherit; }
+.sa-modal-tab:hover { color:var(--color-primary-600); }
+.sa-modal-tab.active { color:var(--color-primary-600); border-bottom-color:var(--color-primary-600); }
+
+/* Tabela de usuários */
+.sa-usuarios-table { width:100%; border-collapse:collapse; margin-top:0.5rem; }
+.sa-usuarios-table th, .sa-usuarios-table td { padding:0.6rem 0.75rem; text-align:left; border-bottom:1px solid var(--border-color); font-size:0.875rem; }
+.sa-usuarios-table th { font-weight:600; color:var(--color-text-secondary); background:var(--color-background-tertiary); }
 
 /* Misc */
-.loading-inline { text-align: center; padding: 2rem; color: var(--color-text-tertiary); }
-.required { color: var(--color-error-700); }
-.btn-secondary {
-    padding: 0.75rem 1.5rem;
-    background: var(--color-background-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.95rem;
-    font-family: inherit;
-    color: var(--color-text-secondary);
-    transition: all 0.2s;
-}
-.btn-secondary:hover { background: var(--color-background-secondary); }
+.loading-inline { text-align:center; padding:2rem; color:var(--color-text-tertiary); }
+.required { color:#dc2626; }
+.btn-secondary { padding:0.75rem 1.5rem; background:var(--color-background-tertiary); border:1px solid var(--border-color); border-radius:8px; cursor:pointer; font-size:0.95rem; font-family:inherit; color:var(--color-text-secondary); transition:all 0.2s; }
+.btn-secondary:hover { background:var(--color-background-secondary); }
+.btn-sm { padding:0.3rem 0.65rem; font-size:0.8rem; border-radius:6px; border:1px solid var(--border-color); background:var(--color-background-primary); cursor:pointer; font-family:inherit; transition:all 0.2s; color:var(--color-text-secondary); }
+.btn-sm:hover { background:var(--color-primary-600); color:white; border-color:var(--color-primary-600); }
+.btn-sm.danger:hover { background:#dc2626; border-color:#dc2626; }
+.wizard-step h3 { margin:0 0 1.25rem; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem; }
+.form-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:1rem; }
 
-/* Tabela de usuários no modal */
-.sa-usuarios-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-.sa-usuarios-table th, .sa-usuarios-table td {
-    padding: 0.6rem 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);
-    font-size: 0.875rem;
+@media (max-width:640px) {
+    .form-grid-2 { grid-template-columns:1fr; }
+    .sa-condominios-grid { grid-template-columns:1fr; }
+    .sa-tabs { gap:0.25rem; }
+    .sa-tab { font-size:0.8rem; padding:0.5rem 0.75rem; }
+    .sa-planos-cards { grid-template-columns:1fr; }
+    .sa-wizard-steps { gap:0.25rem; }
+    .sa-step-line { min-width:20px; }
 }
-.sa-usuarios-table th { font-weight: 600; color: var(--color-text-secondary); background: var(--color-background-tertiary); }
 </style>
 
 <!-- ── JAVASCRIPT ─────────────────────────────────────────────────────── -->
 <script>
 (function () {
     'use strict';
-
     const API = '/api/api_superadmin.php';
-
-    // Debug log
-    const log = (...args) => console.log('[SuperAdmin]', ...args);
+    const log = (...a) => console.log('[SuperAdmin v2]', ...a);
 
     // ── Utilitários ──────────────────────────────────────────────────
     function req(params, method = 'GET', body = null) {
@@ -490,293 +404,538 @@
         if (body) opts.body = JSON.stringify(body);
         return fetch(url, opts).then(r => r.json());
     }
-
     function statusBadge(s) {
-        const map = { ativo: 'ativo', inativo: 'inativo', suspenso: 'suspenso' };
-        const label = { ativo: 'Ativo', inativo: 'Inativo', suspenso: 'Suspenso' };
-        return `<span class="badge-status ${map[s] || ''}">${label[s] || s}</span>`;
+        const label = { ativo:'Ativo', inativo:'Inativo', suspenso:'Suspenso' };
+        return `<span class="badge-status ${s}">${label[s]||s}</span>`;
     }
-
     function planoBadge(p) {
-        const label = { basico: 'Básico', profissional: 'Profissional', enterprise: 'Enterprise' };
-        return `<span class="badge-plano ${p || ''}">${label[p] || p}</span>`;
+        const label = { basico:'Básico', profissional:'Profissional', enterprise:'Enterprise' };
+        return `<span class="badge-plano ${p}">${label[p]||p}</span>`;
     }
-
-    function avatar(nome) {
-        return (nome || '?').charAt(0).toUpperCase();
-    }
-
-    function fmt(n) { return parseInt(n || 0).toLocaleString('pt-BR'); }
-
+    function fmt(n) { return parseInt(n||0).toLocaleString('pt-BR'); }
+    function fmtDate(d) { return d ? new Date(d).toLocaleString('pt-BR') : '-'; }
+    function avatar(n) { return (n||'?').charAt(0).toUpperCase(); }
     function showAlert(el, msg, tipo) {
         el.className = 'alert alert-' + tipo;
-        el.innerHTML = `<i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${msg}`;
+        el.innerHTML = `<i class="fas fa-${tipo==='success'?'check-circle':'exclamation-circle'}"></i> ${msg}`;
         el.style.display = 'block';
-        setTimeout(() => { el.style.display = 'none'; }, 6000);
+        if (tipo === 'success') setTimeout(() => el.style.display='none', 6000);
     }
+
+    // ── Estado global ────────────────────────────────────────────────
+    let _condominios = [];
+    let _modalTenantId = null;
+    let _modalTenantData = null;
+    let _resetUserId = null;
+    let _todosMods = [];
+    let _wizardData = {};
+    let _slugTimer = null;
 
     // ── Tabs ─────────────────────────────────────────────────────────
     function showTab(tab) {
-        document.querySelectorAll('.sa-tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.sa-tab-content').forEach(el => el.style.display='none');
         document.querySelectorAll('.sa-tab').forEach(el => el.classList.remove('active'));
-        const content = document.getElementById('tab-' + tab);
-        if (content) content.style.display = 'block';
-        const btn = document.querySelector(`.sa-tab[data-tab="${tab}"]`);
-        if (btn) btn.classList.add('active');
-
-        if (tab === 'dashboard') carregarDashboard();
+        const c = document.getElementById('tab-'+tab);
+        if (c) c.style.display = 'block';
+        const b = document.querySelector(`.sa-tab[data-tab="${tab}"]`);
+        if (b) b.classList.add('active');
+        if (tab === 'dashboard')   carregarDashboard();
         if (tab === 'condominios') carregarCondominios();
-        log('Tab:', tab);
+        if (tab === 'usuarios')    carregarUsuariosGlobais();
+        if (tab === 'onboarding')  iniciarWizard();
+        if (tab === 'auditoria')   carregarAuditoria();
     }
 
     // ── Dashboard ────────────────────────────────────────────────────
     function carregarDashboard() {
-        log('Carregando dashboard...');
         req({ action: 'dashboard' }).then(res => {
-            if (!res.sucesso) { log('Erro dashboard:', res.mensagem); return; }
+            if (!res.sucesso) return;
             const d = res.dados;
-
             document.getElementById('sa-total-ativos').textContent   = fmt(d.tenants?.ativos);
             document.getElementById('sa-total-usuarios').textContent  = fmt(d.usuarios?.ativos);
             document.getElementById('sa-total-moradores').textContent = fmt(d.moradores?.total);
             document.getElementById('sa-total-tenants').textContent   = fmt(d.tenants?.total);
 
-            // Planos
-            const planosEl = document.getElementById('sa-planos-grid');
-            if (d.planos && d.planos.length) {
-                planosEl.innerHTML = d.planos.map(p =>
-                    `<div class="sa-plano-item">
-                        <div class="num">${fmt(p.total)}</div>
-                        <div class="lbl">${planoBadge(p.plano)}</div>
+            // Alertas
+            const alertasBox = document.getElementById('sa-alertas-box');
+            if (d.alertas && d.alertas.length) {
+                alertasBox.style.display = 'block';
+                document.getElementById('sa-alertas-lista').innerHTML = d.alertas.map(t =>
+                    `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border-color);">
+                        <i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i>
+                        <span><strong>${t.nome_fantasia||t.razao_social}</strong> — ${statusBadge(t.status)}</span>
+                        <button class="btn-sm" onclick="SA.alterarStatus(${t.id},'${t.status}')">Ativar</button>
                     </div>`
                 ).join('');
-            } else {
-                planosEl.innerHTML = '<p style="color:var(--color-text-tertiary)">Nenhum dado</p>';
             }
 
+            // Planos
+            const planosEl = document.getElementById('sa-planos-grid');
+            planosEl.innerHTML = (d.planos||[]).map(p =>
+                `<div class="sa-plano-item"><div class="num">${fmt(p.total)}</div><div class="lbl">${planoBadge(p.plano)}</div></div>`
+            ).join('') || '<p style="color:var(--color-text-tertiary)">Nenhum dado</p>';
+
             // Recentes
-            const tbody = document.getElementById('sa-tbody-recentes');
-            if (d.recentes && d.recentes.length) {
-                tbody.innerHTML = d.recentes.map(t =>
-                    `<tr>
-                        <td>${t.id}</td>
-                        <td><code style="background:var(--color-background-tertiary);padding:2px 6px;border-radius:4px;">${t.slug}</code></td>
-                        <td>${t.nome_fantasia || t.razao_social || '-'}</td>
-                        <td>${planoBadge(t.plano)}</td>
-                        <td>${statusBadge(t.status)}</td>
-                        <td>${t.data_criacao ? new Date(t.data_criacao).toLocaleDateString('pt-BR') : '-'}</td>
-                    </tr>`
-                ).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum condomínio cadastrado</td></tr>';
-            }
+            const recentesEl = document.getElementById('sa-recentes-lista');
+            recentesEl.innerHTML = (d.recentes||[]).map(t =>
+                `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid var(--border-color);">
+                    <div>
+                        <div style="font-weight:600;font-size:0.9rem;">${t.nome_fantasia||t.razao_social}</div>
+                        <div style="font-size:0.75rem;color:var(--color-text-tertiary);"><code>${t.slug}</code> · ${fmtDate(t.data_criacao).split(',')[0]}</div>
+                    </div>
+                    <div style="display:flex;gap:0.4rem;">${planoBadge(t.plano)} ${statusBadge(t.status)}</div>
+                </div>`
+            ).join('') || '<p style="color:var(--color-text-tertiary)">Nenhum cadastrado</p>';
         }).catch(e => log('Erro dashboard:', e));
     }
 
     // ── Condomínios ──────────────────────────────────────────────────
-    let _todosCondominios = [];
-
     function carregarCondominios() {
         const grid = document.getElementById('sa-condominios-grid');
         grid.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
-
         req({ action: 'tenants' }).then(res => {
-            if (!res.sucesso) {
-                grid.innerHTML = `<div class="loading-inline" style="color:var(--color-error-700)"><i class="fas fa-exclamation-circle"></i> ${res.mensagem}</div>`;
-                return;
-            }
-            _todosCondominios = res.dados.tenants || [];
-            renderCondominios(_todosCondominios);
-        }).catch(e => {
-            grid.innerHTML = '<div class="loading-inline" style="color:var(--color-error-700)"><i class="fas fa-exclamation-circle"></i> Erro ao carregar</div>';
-            log('Erro condominios:', e);
-        });
+            if (!res.sucesso) { grid.innerHTML = `<div class="loading-inline" style="color:#dc2626;">${res.mensagem}</div>`; return; }
+            _condominios = res.dados.tenants || [];
+            renderCondominios(_condominios);
+        }).catch(() => { grid.innerHTML = '<div class="loading-inline" style="color:#dc2626;">Erro ao carregar</div>'; });
     }
 
     function renderCondominios(lista) {
         const grid = document.getElementById('sa-condominios-grid');
-        if (!lista.length) {
-            grid.innerHTML = '<div class="loading-inline"><i class="fas fa-building"></i> Nenhum condomínio encontrado</div>';
-            return;
-        }
+        if (!lista.length) { grid.innerHTML = '<div class="loading-inline"><i class="fas fa-building"></i> Nenhum condomínio encontrado</div>'; return; }
         grid.innerHTML = lista.map(t => `
             <div class="sa-cond-card">
                 <div class="sa-cond-header">
-                    <div class="sa-cond-avatar">${avatar(t.nome_fantasia || t.razao_social)}</div>
+                    <div class="sa-cond-avatar">${avatar(t.nome_fantasia||t.razao_social)}</div>
                     <div class="sa-cond-info">
-                        <h4>${t.nome_fantasia || t.razao_social || '-'}</h4>
-                        <small><code>${t.slug}</code> · ${t.cidade || ''} ${t.estado || ''}</small>
+                        <h4>${t.nome_fantasia||t.razao_social||'-'}</h4>
+                        <small><code>${t.slug}</code> · ${t.cidade||''} ${t.estado||''}</small>
                     </div>
                 </div>
-                <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
-                    ${statusBadge(t.status)} ${planoBadge(t.plano)}
-                </div>
+                <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">${statusBadge(t.status)} ${planoBadge(t.plano)}</div>
                 <div class="sa-cond-stats">
-                    <div class="sa-cond-stat">
-                        <div class="num">${fmt(t.total_usuarios)}</div>
-                        <div class="lbl">Usuários</div>
-                    </div>
-                    <div class="sa-cond-stat">
-                        <div class="num">${fmt(t.total_moradores)}</div>
-                        <div class="lbl">Moradores</div>
-                    </div>
-                    <div class="sa-cond-stat">
-                        <div class="num">${t.id}</div>
-                        <div class="lbl">ID</div>
-                    </div>
+                    <div class="sa-cond-stat"><div class="num">${fmt(t.total_usuarios)}</div><div class="lbl">Usuários</div></div>
+                    <div class="sa-cond-stat"><div class="num">${fmt(t.total_moradores)}</div><div class="lbl">Moradores</div></div>
+                    <div class="sa-cond-stat"><div class="num">${t.id}</div><div class="lbl">ID</div></div>
                 </div>
                 <div class="sa-cond-footer">
-                    <small style="color:var(--color-text-tertiary);">${t.email_principal || ''}</small>
+                    <small style="color:var(--color-text-tertiary);font-size:0.75rem;">${t.email_principal||''}</small>
                     <div class="sa-cond-actions">
-                        <button onclick="SA.verDetalhes(${t.id})"><i class="fas fa-eye"></i> Ver</button>
-                        <button onclick="SA.alterarStatus(${t.id}, '${t.status}')" class="${t.status === 'ativo' ? 'danger' : ''}">
-                            <i class="fas fa-${t.status === 'ativo' ? 'ban' : 'check'}"></i>
-                            ${t.status === 'ativo' ? 'Suspender' : 'Ativar'}
+                        <button onclick="SA.abrirModal(${t.id})"><i class="fas fa-cog"></i> Gerenciar</button>
+                        <button onclick="SA.alterarStatus(${t.id},'${t.status}')" class="${t.status==='ativo'?'danger':''}">
+                            <i class="fas fa-${t.status==='ativo'?'ban':'check'}"></i> ${t.status==='ativo'?'Suspender':'Ativar'}
                         </button>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            </div>`
+        ).join('');
     }
 
     function filtrar() {
-        const busca  = (document.getElementById('sa-busca')?.value || '').toLowerCase();
-        const status = document.getElementById('sa-filtro-status')?.value || '';
-        const plano  = document.getElementById('sa-filtro-plano')?.value  || '';
-
-        const filtrado = _todosCondominios.filter(t => {
-            const matchBusca = !busca ||
-                (t.nome_fantasia || '').toLowerCase().includes(busca) ||
-                (t.razao_social  || '').toLowerCase().includes(busca) ||
-                (t.slug          || '').toLowerCase().includes(busca) ||
-                (t.cnpj          || '').includes(busca);
-            const matchStatus = !status || t.status === status;
-            const matchPlano  = !plano  || t.plano  === plano;
-            return matchBusca && matchStatus && matchPlano;
-        });
-        renderCondominios(filtrado);
+        const busca  = (document.getElementById('sa-busca')?.value||'').toLowerCase();
+        const status = document.getElementById('sa-filtro-status')?.value||'';
+        const plano  = document.getElementById('sa-filtro-plano')?.value||'';
+        renderCondominios(_condominios.filter(t => {
+            const mb = !busca || (t.nome_fantasia||'').toLowerCase().includes(busca) || (t.razao_social||'').toLowerCase().includes(busca) || (t.slug||'').toLowerCase().includes(busca) || (t.cnpj||'').includes(busca);
+            return mb && (!status||t.status===status) && (!plano||t.plano===plano);
+        }));
     }
 
-    // ── Detalhes do condomínio ────────────────────────────────────────
-    function verDetalhes(id) {
-        const modal = document.getElementById('sa-modal-cond');
-        const body  = document.getElementById('sa-modal-body');
-        modal.style.display = 'flex';
-        body.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
-
+    // ── Modal Gerenciar ──────────────────────────────────────────────
+    function abrirModal(id) {
+        _modalTenantId = id;
+        _modalTenantData = null;
+        document.getElementById('sa-modal-cond').style.display = 'flex';
+        document.getElementById('sa-modal-info-body').innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i></div>';
+        showModalTab('info');
         req({ action: 'tenant', id }).then(res => {
-            if (!res.sucesso) { body.innerHTML = `<p style="color:red">${res.mensagem}</p>`; return; }
-            const { tenant, usuarios } = res.dados;
-            document.getElementById('sa-modal-titulo').innerHTML = `<i class="fas fa-building"></i> ${tenant.nome_fantasia || tenant.razao_social}`;
-
-            body.innerHTML = `
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-                    <div><strong>Slug:</strong> <code>${tenant.slug}</code></div>
-                    <div><strong>CNPJ:</strong> ${tenant.cnpj || '-'}</div>
-                    <div><strong>Plano:</strong> ${planoBadge(tenant.plano)}</div>
-                    <div><strong>Status:</strong> ${statusBadge(tenant.status)}</div>
-                    <div><strong>E-mail:</strong> ${tenant.email_principal || '-'}</div>
-                    <div><strong>Telefone:</strong> ${tenant.telefone || '-'}</div>
-                    <div><strong>Cidade/UF:</strong> ${tenant.cidade || '-'} / ${tenant.estado || '-'}</div>
-                    <div><strong>Cadastrado em:</strong> ${tenant.data_criacao ? new Date(tenant.data_criacao).toLocaleDateString('pt-BR') : '-'}</div>
-                </div>
-                <div style="display:flex;gap:1rem;margin-bottom:1.5rem;">
-                    <div class="sa-cond-stat" style="flex:1;">
-                        <div class="num">${fmt(tenant.total_usuarios)}</div>
-                        <div class="lbl">Usuários</div>
-                    </div>
-                    <div class="sa-cond-stat" style="flex:1;">
-                        <div class="num">${fmt(tenant.total_moradores)}</div>
-                        <div class="lbl">Moradores</div>
-                    </div>
-                    <div class="sa-cond-stat" style="flex:1;">
-                        <div class="num">${fmt(tenant.total_unidades)}</div>
-                        <div class="lbl">Unidades</div>
-                    </div>
-                </div>
-                <h4 style="margin-bottom:0.75rem;"><i class="fas fa-users"></i> Usuários Vinculados</h4>
-                ${usuarios.length ? `
-                    <table class="sa-usuarios-table">
-                        <thead><tr><th>Nome</th><th>E-mail</th><th>Permissão</th><th>Status</th></tr></thead>
-                        <tbody>
-                            ${usuarios.map(u => `
-                                <tr>
-                                    <td>${u.nome}</td>
-                                    <td>${u.email}</td>
-                                    <td><span class="badge-plano">${u.permissao_tenant || u.permissao}</span></td>
-                                    <td>${u.vinculo_ativo ? '<span class="badge-status ativo">Ativo</span>' : '<span class="badge-status inativo">Inativo</span>'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                ` : '<p style="color:var(--color-text-tertiary)">Nenhum usuário vinculado</p>'}
-                <div style="margin-top:1.5rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
-                    <button class="btn-primary" onclick="SA.fecharModal();SA.showTab('onboarding')">
-                        <i class="fas fa-user-plus"></i> Adicionar Usuário
-                    </button>
-                    <button class="btn-secondary" onclick="SA.alterarStatus(${tenant.id}, '${tenant.status}');SA.fecharModal()">
-                        <i class="fas fa-${tenant.status === 'ativo' ? 'ban' : 'check'}"></i>
-                        ${tenant.status === 'ativo' ? 'Suspender' : 'Ativar'}
-                    </button>
-                </div>
-            `;
-        }).catch(e => { body.innerHTML = '<p style="color:red">Erro ao carregar detalhes</p>'; log(e); });
+            if (!res.sucesso) { document.getElementById('sa-modal-info-body').innerHTML = `<p style="color:#dc2626">${res.mensagem}</p>`; return; }
+            _modalTenantData = res.dados;
+            const t = res.dados.tenant;
+            document.getElementById('sa-modal-titulo').innerHTML = `<i class="fas fa-building"></i> ${t.nome_fantasia||t.razao_social}`;
+            renderModalInfo(t, res.dados.usuarios);
+        });
     }
 
-    function fecharModal() {
-        document.getElementById('sa-modal-cond').style.display = 'none';
+    function showModalTab(tab) {
+        document.querySelectorAll('.modal-tab-content').forEach(el => el.style.display='none');
+        document.querySelectorAll('.sa-modal-tab').forEach(el => el.classList.remove('active'));
+        const c = document.getElementById('mtab-'+tab);
+        if (c) c.style.display = 'block';
+        const b = document.querySelector(`.sa-modal-tab[data-mtab="${tab}"]`);
+        if (b) b.classList.add('active');
+        if (tab === 'modulos' && _modalTenantId) carregarModulosModal();
+        if (tab === 'plano'   && _modalTenantData) renderPlanoModal(_modalTenantData.tenant.plano);
     }
 
-    // ── Alterar status ───────────────────────────────────────────────
+    function renderModalInfo(t, usuarios) {
+        document.getElementById('sa-modal-info-body').innerHTML = `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1.25rem;">
+                <div><strong>Slug:</strong> <code>${t.slug}</code></div>
+                <div><strong>CNPJ:</strong> ${t.cnpj||'-'}</div>
+                <div><strong>Plano:</strong> ${planoBadge(t.plano)}</div>
+                <div><strong>Status:</strong> ${statusBadge(t.status)}</div>
+                <div><strong>E-mail:</strong> ${t.email_principal||'-'}</div>
+                <div><strong>Telefone:</strong> ${t.telefone||'-'}</div>
+                <div><strong>Cidade/UF:</strong> ${t.cidade||'-'} / ${t.estado||'-'}</div>
+                <div><strong>Cadastrado:</strong> ${fmtDate(t.data_criacao)}</div>
+            </div>
+            <div style="display:flex;gap:1rem;margin-bottom:1.25rem;">
+                <div class="sa-cond-stat" style="flex:1;"><div class="num">${fmt(t.total_usuarios)}</div><div class="lbl">Usuários</div></div>
+                <div class="sa-cond-stat" style="flex:1;"><div class="num">${fmt(t.total_moradores)}</div><div class="lbl">Moradores</div></div>
+                <div class="sa-cond-stat" style="flex:1;"><div class="num">${fmt(t.total_unidades)}</div><div class="lbl">Unidades</div></div>
+            </div>
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                <button class="btn-sm" onclick="SA.showModalTab('modulos')"><i class="fas fa-puzzle-piece"></i> Módulos</button>
+                <button class="btn-sm" onclick="SA.showModalTab('plano')"><i class="fas fa-tags"></i> Plano</button>
+                <button class="btn-sm ${t.status==='ativo'?'danger':''}" onclick="SA.alterarStatus(${t.id},'${t.status}');SA.fecharModal()">
+                    <i class="fas fa-${t.status==='ativo'?'ban':'check'}"></i> ${t.status==='ativo'?'Suspender':'Ativar'}
+                </button>
+            </div>`;
+
+        // Usuários no modal
+        document.getElementById('sa-modal-usuarios-body').innerHTML = usuarios.length ? `
+            <table class="sa-usuarios-table">
+                <thead><tr><th>Nome</th><th>E-mail</th><th>Permissão</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody>${usuarios.map(u => `
+                    <tr>
+                        <td>${u.nome}</td>
+                        <td style="font-size:0.8rem;">${u.email}</td>
+                        <td>${planoBadge(u.permissao_tenant||u.permissao)}</td>
+                        <td>${u.vinculo_ativo ? '<span class="badge-status ativo">Ativo</span>' : '<span class="badge-status inativo">Inativo</span>'}</td>
+                        <td>
+                            <button class="btn-sm" onclick="SA.abrirResetSenha(${u.id},'${u.nome.replace(/'/g,'')}')"><i class="fas fa-key"></i></button>
+                            <button class="btn-sm danger" onclick="SA.desvincularUsuario(${u.id},${_modalTenantId})"><i class="fas fa-unlink"></i></button>
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>` : '<p style="color:var(--color-text-tertiary)">Nenhum usuário vinculado</p>';
+    }
+
+    function fecharModal() { document.getElementById('sa-modal-cond').style.display='none'; }
+
+    // ── Módulos no Modal ─────────────────────────────────────────────
+    function carregarModulosModal() {
+        const grid = document.getElementById('sa-modal-modulos-grid');
+        grid.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i></div>';
+
+        Promise.all([
+            req({ action: 'modulos_sistema' }),
+            req({ action: 'modulos_tenant', id: _modalTenantId })
+        ]).then(([resMods, resTenant]) => {
+            if (!resMods.sucesso) { grid.innerHTML = '<p style="color:#dc2626">Erro ao carregar módulos</p>'; return; }
+            _todosMods = resMods.dados.modulos;
+            const habilitados = new Set(resTenant.dados?.modulos || []);
+            renderModulosGrid(grid, _todosMods, habilitados, 'modal-mod-');
+        });
+    }
+
+    function renderModulosGrid(container, modulos, habilitados, prefix) {
+        const grupos = {};
+        modulos.forEach(m => { if (!grupos[m.grupo]) grupos[m.grupo] = []; grupos[m.grupo].push(m); });
+        let html = '';
+        for (const [grupo, mods] of Object.entries(grupos)) {
+            html += `<div class="sa-modulo-grupo">${grupo}</div>`;
+            mods.forEach(m => {
+                const checked = habilitados.has(m.chave) ? 'checked' : '';
+                html += `<div class="sa-modulo-item ${checked?'selected':''}" onclick="SA.toggleMod(this,'${prefix}${m.chave}')">
+                    <input type="checkbox" id="${prefix}${m.chave}" ${checked} onclick="event.stopPropagation()">
+                    <i class="${m.icone}"></i>
+                    <label for="${prefix}${m.chave}">${m.nome}</label>
+                </div>`;
+            });
+        }
+        container.innerHTML = html;
+    }
+
+    function toggleMod(el, id) {
+        const cb = document.getElementById(id);
+        if (!cb) return;
+        cb.checked = !cb.checked;
+        el.classList.toggle('selected', cb.checked);
+    }
+
+    function salvarModulos() {
+        const checkboxes = document.querySelectorAll('#sa-modal-modulos-grid input[type=checkbox]');
+        const modulos = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.id.replace('modal-mod-',''));
+        req({ action: 'salvar_modulos' }, 'POST', { id: _modalTenantId, modulos }).then(res => {
+            alert(res.sucesso ? `✅ ${res.mensagem} (${modulos.length} módulos)` : '❌ ' + res.mensagem);
+        });
+    }
+
+    // ── Plano no Modal ───────────────────────────────────────────────
+    let _planoSelecionado = null;
+    function renderPlanoModal(planoAtual) {
+        _planoSelecionado = planoAtual;
+        const planos = [
+            { key:'basico',       nome:'Básico',       desc:'Controle de acesso + moradores + veículos' },
+            { key:'profissional', nome:'Profissional',  desc:'Todos os módulos principais do sistema' },
+            { key:'enterprise',   nome:'Enterprise',    desc:'Acesso completo + módulos avançados' }
+        ];
+        document.getElementById('sa-planos-selecao').innerHTML = planos.map(p => `
+            <div class="sa-plano-card ${p.key===planoAtual?'selected':''}" onclick="SA.selecionarPlano('${p.key}',this)">
+                ${planoBadge(p.key)}
+                <h4 style="margin:0.75rem 0 0.25rem;">${p.nome}</h4>
+                <p>${p.desc}</p>
+            </div>`
+        ).join('');
+    }
+
+    function selecionarPlano(plano, el) {
+        _planoSelecionado = plano;
+        document.querySelectorAll('.sa-plano-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    function salvarPlano() {
+        if (!_planoSelecionado) { alert('Selecione um plano'); return; }
+        req({ action: 'salvar_plano' }, 'POST', { id: _modalTenantId, plano: _planoSelecionado }).then(res => {
+            alert(res.sucesso ? '✅ ' + res.mensagem : '❌ ' + res.mensagem);
+            if (res.sucesso) carregarCondominios();
+        });
+    }
+
+    // ── Alterar Status ───────────────────────────────────────────────
     function alterarStatus(id, statusAtual) {
         const novo = statusAtual === 'ativo' ? 'suspenso' : 'ativo';
-        const label = novo === 'ativo' ? 'ativar' : 'suspender';
-        if (!confirm(`Deseja ${label} este condomínio?`)) return;
-
+        if (!confirm(`Deseja ${novo==='ativo'?'ativar':'suspender'} este condomínio?`)) return;
         req({ action: 'status_tenant', id }, 'POST', { status: novo }).then(res => {
-            if (res.sucesso) {
-                carregarCondominios();
-                alert(res.mensagem);
-            } else {
-                alert('Erro: ' + res.mensagem);
-            }
+            if (res.sucesso) { carregarCondominios(); carregarDashboard(); }
+            else alert('Erro: ' + res.mensagem);
         });
     }
 
-    // ── Onboarding ───────────────────────────────────────────────────
-    function onboarding(e) {
-        e.preventDefault();
-        const alertEl = document.getElementById('sa-onboarding-alert');
-        const btn     = document.getElementById('btn-onboarding');
+    // ── Desvincular Usuário ──────────────────────────────────────────
+    function desvincularUsuario(uid, tid) {
+        if (!confirm('Remover vínculo deste usuário com o condomínio?')) return;
+        req({ action: 'desvincular_usuario' }, 'POST', { usuario_id: uid, tenant_id: tid }).then(res => {
+            alert(res.sucesso ? '✅ ' + res.mensagem : '❌ ' + res.mensagem);
+            if (res.sucesso && _modalTenantId) abrirModal(_modalTenantId);
+        });
+    }
 
-        // Validar senhas
-        const s1 = document.getElementById('ob-admin-senha').value;
-        const s2 = document.getElementById('ob-admin-senha2').value;
-        if (s1 !== s2) {
-            showAlert(alertEl, 'As senhas não coincidem.', 'error');
-            return;
+    // ── Reset Senha ──────────────────────────────────────────────────
+    function abrirResetSenha(uid, nome) {
+        _resetUserId = uid;
+        document.getElementById('sa-senha-usuario-nome').textContent = 'Usuário: ' + nome;
+        document.getElementById('sa-nova-senha').value = '';
+        document.getElementById('sa-nova-senha2').value = '';
+        document.getElementById('sa-senha-alert').style.display = 'none';
+        document.getElementById('sa-modal-senha').style.display = 'flex';
+    }
+
+    function fecharModalSenha() { document.getElementById('sa-modal-senha').style.display='none'; }
+
+    function confirmarResetSenha() {
+        const s1 = document.getElementById('sa-nova-senha').value;
+        const s2 = document.getElementById('sa-nova-senha2').value;
+        const alertEl = document.getElementById('sa-senha-alert');
+        if (s1.length < 6) { showAlert(alertEl, 'Senha deve ter pelo menos 6 caracteres', 'error'); return; }
+        if (s1 !== s2)     { showAlert(alertEl, 'As senhas não coincidem', 'error'); return; }
+        req({ action: 'resetar_senha' }, 'POST', { usuario_id: _resetUserId, nova_senha: s1 }).then(res => {
+            if (res.sucesso) { fecharModalSenha(); alert('✅ ' + res.mensagem); }
+            else showAlert(alertEl, res.mensagem, 'error');
+        });
+    }
+
+    // ── Usuários Globais ─────────────────────────────────────────────
+    let _buscarTimer = null;
+    function carregarUsuariosGlobais(busca = '') {
+        const tbody = document.getElementById('sa-tbody-usuarios');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+        req({ action: 'usuarios_globais', busca }).then(res => {
+            if (!res.sucesso) { tbody.innerHTML = `<tr><td colspan="6" style="color:#dc2626;">${res.mensagem}</td></tr>`; return; }
+            const lista = res.dados.usuarios || [];
+            if (!lista.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum usuário encontrado</td></tr>'; return; }
+            tbody.innerHTML = lista.map(u => `
+                <tr>
+                    <td><strong>${u.nome}</strong></td>
+                    <td style="font-size:0.8rem;">${u.email}</td>
+                    <td>${planoBadge(u.permissao)}</td>
+                    <td style="font-size:0.8rem;">${u.condominios||'—'}</td>
+                    <td>${u.ativo ? '<span class="badge-status ativo">Ativo</span>' : '<span class="badge-status inativo">Inativo</span>'}</td>
+                    <td>
+                        <button class="btn-sm" onclick="SA.abrirResetSenha(${u.id},'${u.nome.replace(/'/g,'')}')"><i class="fas fa-key"></i> Senha</button>
+                        <button class="btn-sm ${u.ativo?'danger':''}" onclick="SA.toggleUsuario(${u.id},${u.ativo?0:1},this)">
+                            <i class="fas fa-${u.ativo?'ban':'check'}"></i> ${u.ativo?'Inativar':'Ativar'}
+                        </button>
+                    </td>
+                </tr>`
+            ).join('');
+        });
+    }
+
+    function buscarUsuarios() {
+        clearTimeout(_buscarTimer);
+        _buscarTimer = setTimeout(() => {
+            const busca = document.getElementById('sa-busca-user')?.value || '';
+            carregarUsuariosGlobais(busca);
+        }, 400);
+    }
+
+    function toggleUsuario(uid, novoAtivo, btn) {
+        const label = novoAtivo ? 'ativar' : 'inativar';
+        if (!confirm(`Deseja ${label} este usuário?`)) return;
+        req({ action: 'toggle_usuario' }, 'POST', { usuario_id: uid, ativo: novoAtivo }).then(res => {
+            if (res.sucesso) carregarUsuariosGlobais(document.getElementById('sa-busca-user')?.value||'');
+            else alert('Erro: ' + res.mensagem);
+        });
+    }
+
+    // ── Auditoria ────────────────────────────────────────────────────
+    function carregarAuditoria() {
+        const tbody = document.getElementById('sa-tbody-logs');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+        req({ action: 'logs_auditoria', limite: 100 }).then(res => {
+            if (!res.sucesso) { tbody.innerHTML = `<tr><td colspan="5" style="color:#dc2626;">${res.mensagem}</td></tr>`; return; }
+            const logs = res.dados.logs || [];
+            if (!logs.length) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum log registrado</td></tr>'; return; }
+            tbody.innerHTML = logs.map(l => `
+                <tr>
+                    <td style="font-size:0.8rem;white-space:nowrap;">${fmtDate(l.created_at)}</td>
+                    <td>${l.usuario_nome||'-'}</td>
+                    <td><code style="font-size:0.75rem;background:var(--color-background-tertiary);padding:2px 6px;border-radius:4px;">${l.acao}</code></td>
+                    <td style="font-size:0.85rem;">${l.descricao||'-'}</td>
+                    <td style="font-size:0.75rem;color:var(--color-text-tertiary);">${l.ip||'-'}</td>
+                </tr>`
+            ).join('');
+        });
+    }
+
+    // ── Wizard Onboarding ────────────────────────────────────────────
+    let _wizardStep = 1;
+
+    function iniciarWizard() {
+        _wizardStep = 1;
+        _wizardData = {};
+        for (let i = 1; i <= 4; i++) {
+            const el = document.getElementById('wizard-step-'+i);
+            if (el) el.style.display = i===1 ? 'block' : 'none';
+            const ind = document.getElementById('step-ind-'+i);
+            if (ind) { ind.classList.remove('active','done'); if (i===1) ind.classList.add('active'); }
+        }
+        document.getElementById('sa-onboarding-alert').style.display = 'none';
+        // Carregar módulos para step 3
+        if (_todosMods.length === 0) {
+            req({ action: 'modulos_sistema' }).then(res => {
+                if (res.sucesso) _todosMods = res.dados.modulos;
+            });
+        }
+    }
+
+    function wizardNext(step) {
+        if (step === 1) {
+            const slug  = document.getElementById('ob-slug').value.trim();
+            const razao = document.getElementById('ob-razao').value.trim();
+            const cnpj  = document.getElementById('ob-cnpj').value.replace(/\D/g,'');
+            const email = document.getElementById('ob-email-cond').value.trim();
+            if (!slug || !razao || cnpj.length < 14 || !email) {
+                showAlert(document.getElementById('sa-onboarding-alert'), 'Preencha todos os campos obrigatórios do condomínio.', 'error');
+                return;
+            }
+            _wizardData.slug          = slug;
+            _wizardData.razao_social  = razao;
+            _wizardData.nome_fantasia = document.getElementById('ob-fantasia').value.trim() || razao;
+            _wizardData.cnpj          = cnpj;
+            _wizardData.email_condominio = email;
+            _wizardData.telefone      = document.getElementById('ob-telefone').value.trim();
+            _wizardData.cidade        = document.getElementById('ob-cidade').value.trim();
+            _wizardData.estado        = document.getElementById('ob-estado').value;
+            _wizardData.plano         = document.getElementById('ob-plano').value;
+        }
+        if (step === 2) {
+            const nome  = document.getElementById('ob-admin-nome').value.trim();
+            const email = document.getElementById('ob-admin-email').value.trim();
+            const s1    = document.getElementById('ob-admin-senha').value;
+            const s2    = document.getElementById('ob-admin-senha2').value;
+            if (!nome || !email || !s1) {
+                showAlert(document.getElementById('sa-onboarding-alert'), 'Preencha todos os campos do administrador.', 'error');
+                return;
+            }
+            if (s1 !== s2) {
+                showAlert(document.getElementById('sa-onboarding-alert'), 'As senhas não coincidem.', 'error');
+                return;
+            }
+            _wizardData.admin_nome  = nome;
+            _wizardData.admin_email = email;
+            _wizardData.admin_senha = s1;
+        }
+        if (step === 3) {
+            const checkboxes = document.querySelectorAll('#ob-modulos-grid input[type=checkbox]');
+            _wizardData.modulos = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.id.replace('ob-mod-',''));
+        }
+        if (step === 4) return; // Não deve chegar aqui
+
+        document.getElementById('sa-onboarding-alert').style.display = 'none';
+        goToWizardStep(step + 1);
+    }
+
+    function wizardBack(step) { goToWizardStep(step - 1); }
+
+    function goToWizardStep(step) {
+        for (let i = 1; i <= 4; i++) {
+            const el = document.getElementById('wizard-step-'+i);
+            if (el) el.style.display = i===step ? 'block' : 'none';
+            const ind = document.getElementById('step-ind-'+i);
+            if (ind) {
+                ind.classList.remove('active','done');
+                if (i < step) ind.classList.add('done');
+                if (i === step) ind.classList.add('active');
+            }
+        }
+        _wizardStep = step;
+
+        // Carregar módulos no step 3
+        if (step === 3) {
+            const grid = document.getElementById('ob-modulos-grid');
+            if (_todosMods.length) {
+                const padrao = {
+                    basico:       new Set(['dashboard','moradores','veiculos','visitantes','registro','acesso']),
+                    profissional: new Set(['dashboard','moradores','veiculos','visitantes','registro','acesso','relatorios','financeiro','contas_pagar','contas_receber','manutencao','hidrometro','leitura','estoque','contratos','protocolos','notificacoes','documentos','rh','configuracao']),
+                    enterprise:   new Set(_todosMods.map(m => m.chave))
+                };
+                const habilitados = _wizardData.modulos ? new Set(_wizardData.modulos) : (padrao[_wizardData.plano] || padrao.basico);
+                renderModulosGrid(grid, _todosMods, habilitados, 'ob-mod-');
+            } else {
+                grid.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando módulos...</div>';
+                req({ action: 'modulos_sistema' }).then(res => {
+                    if (res.sucesso) { _todosMods = res.dados.modulos; goToWizardStep(3); }
+                });
+            }
         }
 
-        const form = document.getElementById('sa-form-onboarding');
-        const fd   = new FormData(form);
-        const body = {};
-        fd.forEach((v, k) => { body[k] = v; });
+        // Resumo no step 4
+        if (step === 4) {
+            const checkboxes = document.querySelectorAll('#ob-modulos-grid input[type=checkbox]');
+            _wizardData.modulos = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.id.replace('ob-mod-',''));
+            document.getElementById('ob-resumo').innerHTML = `
+                <div class="sa-resumo-row"><strong>Condomínio</strong><span>${_wizardData.nome_fantasia}</span></div>
+                <div class="sa-resumo-row"><strong>Slug / URL</strong><span><code>${_wizardData.slug}</code> → https://${_wizardData.slug}.erpcondominios.com.br</span></div>
+                <div class="sa-resumo-row"><strong>CNPJ</strong><span>${_wizardData.cnpj}</span></div>
+                <div class="sa-resumo-row"><strong>Plano</strong><span>${planoBadge(_wizardData.plano)}</span></div>
+                <div class="sa-resumo-row"><strong>Administrador</strong><span>${_wizardData.admin_nome} (${_wizardData.admin_email})</span></div>
+                <div class="sa-resumo-row"><strong>Módulos habilitados</strong><span>${_wizardData.modulos.length} módulos selecionados</span></div>`;
+        }
+    }
 
+    function onboarding() {
+        const alertEl = document.getElementById('sa-onboarding-alert');
+        const btn = document.getElementById('btn-onboarding-final');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
 
-        req({ action: 'onboarding' }, 'POST', body).then(res => {
+        req({ action: 'onboarding' }, 'POST', _wizardData).then(res => {
             if (res.sucesso) {
                 showAlert(alertEl,
-                    `✅ Condomínio criado! Slug: <strong>${res.dados.tenant_slug}</strong> | Admin: <strong>${res.dados.admin_email}</strong> | URL: <a href="${res.dados.url_acesso}" target="_blank">${res.dados.url_acesso}</a>`,
+                    `✅ Condomínio <strong>${res.dados.tenant_slug}</strong> criado! Admin: <strong>${res.dados.admin_email}</strong> | URL: <a href="${res.dados.url_acesso}" target="_blank">${res.dados.url_acesso}</a>`,
                     'success'
                 );
-                form.reset();
-                document.getElementById('ob-slug-preview').textContent = '';
-                // Atualizar lista
-                setTimeout(() => carregarCondominios(), 500);
+                // Resetar wizard
+                setTimeout(() => iniciarWizard(), 1000);
+                carregarCondominios();
             } else {
                 showAlert(alertEl, res.mensagem, 'error');
+                goToWizardStep(1);
             }
         }).catch(() => {
             showAlert(alertEl, 'Erro de comunicação com o servidor.', 'error');
@@ -786,35 +945,52 @@
         });
     }
 
-    function previewUrl() {
-        const slug = document.getElementById('ob-slug')?.value || '';
-        const el   = document.getElementById('ob-slug-preview');
-        if (el) el.textContent = slug ? `URL: https://${slug}.erpcondominios.com.br` : '';
+    function onSlugInput() {
+        const slug = document.getElementById('ob-slug').value.toLowerCase().replace(/[^a-z0-9\-]/g,'');
+        document.getElementById('ob-slug').value = slug;
+        const preview = document.getElementById('ob-slug-preview');
+        const status  = document.getElementById('ob-slug-status');
+        preview.textContent = slug ? `URL: https://${slug}.erpcondominios.com.br` : '';
+        if (!slug) { status.textContent = ''; return; }
+        status.textContent = '⏳';
+        clearTimeout(_slugTimer);
+        _slugTimer = setTimeout(() => {
+            req({ action: 'verificar_slug', slug }).then(res => {
+                if (res.sucesso) {
+                    status.textContent = res.dados.disponivel ? '✅' : '❌ Já em uso';
+                    status.style.color = res.dados.disponivel ? '#10b981' : '#dc2626';
+                }
+            });
+        }, 500);
+    }
+
+    function onPlanoChange() {
+        const plano = document.getElementById('ob-plano').value;
+        log('Plano selecionado:', plano);
     }
 
     function mascaraCnpj(input) {
-        let v = input.value.replace(/\D/g, '').substring(0, 14);
-        v = v.replace(/^(\d{2})(\d)/, '$1.$2');
-        v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
-        v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
-        v = v.replace(/(\d{4})(\d)/, '$1-$2');
+        let v = input.value.replace(/\D/g,'').substring(0,14);
+        v = v.replace(/^(\d{2})(\d)/,'$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3')
+             .replace(/\.(\d{3})(\d)/,'.$1/$2').replace(/(\d{4})(\d)/,'$1-$2');
         input.value = v;
-    }
-
-    function limparOnboarding() {
-        document.getElementById('ob-slug-preview').textContent = '';
-        document.getElementById('sa-onboarding-alert').style.display = 'none';
     }
 
     // ── API pública ──────────────────────────────────────────────────
     window.SA = {
         showTab, carregarCondominios, filtrar,
-        verDetalhes, fecharModal, alterarStatus,
-        onboarding, previewUrl, mascaraCnpj, limparOnboarding
+        abrirModal, showModalTab, fecharModal,
+        salvarModulos, salvarPlano, selecionarPlano,
+        alterarStatus, desvincularUsuario,
+        abrirResetSenha, fecharModalSenha, confirmarResetSenha,
+        carregarUsuariosGlobais, buscarUsuarios, toggleUsuario,
+        wizardNext, wizardBack, onboarding,
+        onSlugInput, onPlanoChange, mascaraCnpj,
+        toggleMod
     };
 
-    // ── Inicializar ──────────────────────────────────────────────────
-    log('Inicializando Painel Super-Admin v1.0');
+    // ── Init ─────────────────────────────────────────────────────────
+    log('Painel Super-Admin v2.0 inicializado');
     carregarDashboard();
 
 })();

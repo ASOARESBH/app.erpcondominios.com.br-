@@ -1,38 +1,48 @@
 <?php
 /**
  * =====================================================
- * API: SUPER-ADMIN — GERENCIAMENTO MULTI-TENANT
+ * API: SUPER-ADMIN — GERENCIAMENTO MULTI-TENANT v2.0
  * =====================================================
- *
- * Painel exclusivo para o Super-Administrador do sistema.
- * Gerencia todos os condomínios (tenants), usuários globais,
- * planos e onboarding de novos clientes.
  *
  * REQUER: permissao = 'super_admin' na sessão
  *
- * Ações disponíveis:
+ * AÇÕES DISPONÍVEIS:
  *
  * DASHBOARD
- *   GET  ?action=dashboard          — KPIs globais do sistema
+ *   GET  ?action=dashboard          — KPIs globais + gráficos
+ *   GET  ?action=dashboard_grafico  — Dados de crescimento mensal
  *
  * TENANTS (Condomínios)
- *   GET  ?action=tenants            — Lista todos os tenants
- *   GET  ?action=tenant&id=X        — Dados de um tenant
+ *   GET  ?action=tenants            — Lista com filtros
+ *   GET  ?action=tenant&id=X        — Dados completos de um tenant
  *   POST ?action=criar_tenant       — Cria novo condomínio
- *   POST ?action=editar_tenant&id=X — Edita dados do condomínio
- *   POST ?action=status_tenant&id=X — Ativa/inativa/suspende
+ *   POST ?action=editar_tenant      — Edita dados do condomínio
+ *   POST ?action=status_tenant      — Ativa/inativa/suspende
+ *   POST ?action=salvar_modulos     — Define módulos habilitados
+ *   POST ?action=salvar_plano       — Altera plano do condomínio
+ *   GET  ?action=verificar_slug     — Verifica disponibilidade do slug
  *
  * USUÁRIOS
+ *   GET  ?action=usuarios_globais   — Todos os usuários do sistema
  *   GET  ?action=usuarios&tenant=X  — Usuários de um tenant
  *   POST ?action=criar_usuario      — Cria usuário em um tenant
- *   POST ?action=vincular_usuario   — Vincula usuário existente a tenant
- *   POST ?action=desvincular_usuario — Remove vínculo usuário × tenant
- *   POST ?action=resetar_senha      — Reseta senha de qualquer usuário
+ *   POST ?action=vincular_usuario   — Vincula usuário existente
+ *   POST ?action=desvincular_usuario — Remove vínculo
+ *   POST ?action=resetar_senha      — Reseta senha
+ *   POST ?action=toggle_usuario     — Ativa/inativa usuário
+ *
+ * MÓDULOS
+ *   GET  ?action=modulos_sistema    — Lista todos os módulos disponíveis
+ *   GET  ?action=modulos_tenant&id=X — Módulos habilitados de um tenant
+ *
+ * AUDITORIA
+ *   GET  ?action=logs_auditoria     — Logs de ações do super-admin
+ *   GET  ?action=logs_tenant&id=X   — Logs de um tenant específico
  *
  * ONBOARDING
- *   POST ?action=onboarding         — Cria tenant + admin em uma única chamada
+ *   POST ?action=onboarding         — Cria tenant + admin em uma chamada
  *
- * @version 1.0.0 (Multi-Tenant)
+ * @version 2.0.0 (Fase 5 — Multi-Tenant)
  * @date 2026-07-22
  */
 
@@ -57,7 +67,6 @@ if (
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
-
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 // ── Autenticação: exige super_admin ──────────────────────────────────────
@@ -67,9 +76,8 @@ $conexao = conectar_banco();
 $action  = $_GET['action'] ?? $_POST['action'] ?? '';
 $input   = json_decode(file_get_contents('php://input'), true) ?? $_POST;
 
-// ─── Helpers locais ───────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────
 function sa_ok($dados = null, $msg = 'OK') {
-    http_response_code(200);
     $r = ['sucesso' => true, 'mensagem' => $msg];
     if ($dados !== null) $r['dados'] = $dados;
     echo json_encode($r, JSON_UNESCAPED_UNICODE);
@@ -80,32 +88,47 @@ function sa_err($msg, $code = 400) {
     echo json_encode(['sucesso' => false, 'mensagem' => $msg], JSON_UNESCAPED_UNICODE);
     exit;
 }
+function sa_log($conexao, $acao, $descricao, $tenant_id = null) {
+    $usuario_id   = $_SESSION['usuario_id']   ?? 0;
+    $usuario_nome = $_SESSION['usuario_nome'] ?? 'super_admin';
+    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+    $stmt = $conexao->prepare(
+        "INSERT INTO logs_sistema (usuario_id, usuario_nome, acao, descricao, tenant_id, ip, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE id = id"
+    );
+    if ($stmt) {
+        $stmt->bind_param('isssss', $usuario_id, $usuario_nome, $acao, $descricao, $tenant_id, $ip);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────
 if ($action === 'dashboard') {
     $kpis = [];
 
-    // Total de tenants
     $r = $conexao->query("SELECT COUNT(*) AS total, SUM(status='ativo') AS ativos, SUM(status='inativo') AS inativos, SUM(status='suspenso') AS suspensos FROM tenants");
     $kpis['tenants'] = $r->fetch_assoc();
 
-    // Total de usuários (todos os tenants)
     $r = $conexao->query("SELECT COUNT(*) AS total, SUM(ativo=1) AS ativos FROM usuarios");
     $kpis['usuarios'] = $r->fetch_assoc();
 
-    // Total de moradores (todos os tenants)
     $r = $conexao->query("SELECT COUNT(*) AS total FROM moradores");
     $kpis['moradores'] = $r->fetch_assoc();
 
-    // Tenants por plano
+    $r = $conexao->query("SELECT COUNT(*) AS total FROM unidades");
+    $kpis['unidades'] = $r->fetch_assoc();
+
+    // Distribuição por plano
     $r = $conexao->query("SELECT plano, COUNT(*) AS total FROM tenants GROUP BY plano ORDER BY total DESC");
     $kpis['planos'] = $r->fetch_all(MYSQLI_ASSOC);
 
-    // Últimos tenants criados
-    $r = $conexao->query("SELECT id, slug, nome_fantasia, plano, status, data_criacao FROM tenants ORDER BY data_criacao DESC LIMIT 5");
+    // Últimos 5 tenants
+    $r = $conexao->query("SELECT id, slug, nome_fantasia, razao_social, plano, status, data_criacao FROM tenants ORDER BY data_criacao DESC LIMIT 5");
     $kpis['recentes'] = $r->fetch_all(MYSQLI_ASSOC);
 
-    // Tenants com mais usuários
+    // Top 5 tenants por usuários
     $r = $conexao->query(
         "SELECT t.id, t.slug, t.nome_fantasia, COUNT(ut.usuario_id) AS total_usuarios
          FROM tenants t
@@ -114,8 +137,37 @@ if ($action === 'dashboard') {
     );
     $kpis['top_tenants'] = $r->fetch_all(MYSQLI_ASSOC);
 
+    // Tenants com alertas (suspensos ou inativos)
+    $r = $conexao->query("SELECT id, slug, nome_fantasia, status FROM tenants WHERE status != 'ativo' ORDER BY data_criacao DESC");
+    $kpis['alertas'] = $r->fetch_all(MYSQLI_ASSOC);
+
     fechar_conexao($conexao);
     sa_ok($kpis, 'Dashboard carregado');
+}
+
+// ─── GRÁFICO DE CRESCIMENTO ────────────────────────────────────────────────
+if ($action === 'dashboard_grafico') {
+    $meses = [];
+    // Crescimento de tenants nos últimos 12 meses
+    $r = $conexao->query(
+        "SELECT DATE_FORMAT(data_criacao, '%Y-%m') AS mes, COUNT(*) AS novos
+         FROM tenants
+         WHERE data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+         GROUP BY mes ORDER BY mes ASC"
+    );
+    $meses['tenants'] = $r->fetch_all(MYSQLI_ASSOC);
+
+    // Crescimento de usuários nos últimos 12 meses
+    $r2 = $conexao->query(
+        "SELECT DATE_FORMAT(created_at, '%Y-%m') AS mes, COUNT(*) AS novos
+         FROM usuario_tenant
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+         GROUP BY mes ORDER BY mes ASC"
+    );
+    $meses['usuarios'] = $r2->fetch_all(MYSQLI_ASSOC);
+
+    fechar_conexao($conexao);
+    sa_ok($meses);
 }
 
 // ─── LISTAR TENANTS ───────────────────────────────────────────────────────
@@ -124,34 +176,28 @@ if ($action === 'tenants') {
     $filtro_plano  = $_GET['plano']  ?? '';
     $busca         = $_GET['busca']  ?? '';
 
-    $where = ['1=1'];
-    $tipos = '';
-    $vals  = [];
-
+    $where = ['1=1']; $tipos = ''; $vals = [];
     if ($filtro_status) { $where[] = 't.status = ?'; $tipos .= 's'; $vals[] = $filtro_status; }
     if ($filtro_plano)  { $where[] = 't.plano = ?';  $tipos .= 's'; $vals[] = $filtro_plano; }
     if ($busca) {
         $where[] = '(t.nome_fantasia LIKE ? OR t.razao_social LIKE ? OR t.cnpj LIKE ? OR t.slug LIKE ?)';
-        $tipos .= 'ssss';
-        $b = "%$busca%";
+        $tipos .= 'ssss'; $b = "%$busca%";
         $vals = array_merge($vals, [$b, $b, $b, $b]);
     }
 
     $sql = "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj, t.plano, t.status,
                    t.logo_url, t.email_principal, t.telefone, t.cidade, t.estado, t.data_criacao,
+                   t.modulos_habilitados,
                    COUNT(DISTINCT ut.usuario_id) AS total_usuarios,
                    COUNT(DISTINCT m.id) AS total_moradores
             FROM tenants t
             LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id AND ut.ativo = 1
             LEFT JOIN moradores m ON m.tenant_id = t.id
             WHERE " . implode(' AND ', $where) . "
-            GROUP BY t.id
-            ORDER BY t.nome_fantasia ASC";
+            GROUP BY t.id ORDER BY t.nome_fantasia ASC";
 
     $stmt = $conexao->prepare($sql);
-    if (!empty($vals)) {
-        $stmt->bind_param($tipos, ...$vals);
-    }
+    if (!empty($vals)) $stmt->bind_param($tipos, ...$vals);
     $stmt->execute();
     $list = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
@@ -159,7 +205,7 @@ if ($action === 'tenants') {
     sa_ok(['tenants' => $list, 'total' => count($list)]);
 }
 
-// ─── OBTER TENANT ─────────────────────────────────────────────────────────
+// ─── OBTER TENANT COMPLETO ────────────────────────────────────────────────
 if ($action === 'tenant') {
     $id = (int)($_GET['id'] ?? 0);
     if (!$id) sa_err('ID obrigatório');
@@ -173,20 +219,18 @@ if ($action === 'tenant') {
          LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id AND ut.ativo = 1
          LEFT JOIN moradores m ON m.tenant_id = t.id
          LEFT JOIN unidades u ON u.tenant_id = t.id
-         WHERE t.id = ?
-         GROUP BY t.id LIMIT 1"
+         WHERE t.id = ? GROUP BY t.id LIMIT 1"
     );
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $tenant = $stmt->get_result()->fetch_assoc();
     $stmt->close();
-
     if (!$tenant) { fechar_conexao($conexao); sa_err('Condomínio não encontrado', 404); }
 
-    // Usuários do tenant
+    // Usuários
     $stmt2 = $conexao->prepare(
         "SELECT u.id, u.nome, u.email, u.funcao, u.permissao, u.ativo,
-                ut.permissao AS permissao_tenant, ut.ativo AS vinculo_ativo
+                ut.permissao AS permissao_tenant, ut.ativo AS vinculo_ativo, ut.created_at AS vinculado_em
          FROM usuarios u
          INNER JOIN usuario_tenant ut ON ut.usuario_id = u.id AND ut.tenant_id = ?
          ORDER BY u.nome ASC"
@@ -196,8 +240,34 @@ if ($action === 'tenant') {
     $usuarios = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt2->close();
 
+    // Módulos habilitados (JSON)
+    $modulos_habilitados = [];
+    if (!empty($tenant['modulos_habilitados'])) {
+        $modulos_habilitados = json_decode($tenant['modulos_habilitados'], true) ?? [];
+    }
+
     fechar_conexao($conexao);
-    sa_ok(['tenant' => $tenant, 'usuarios' => $usuarios]);
+    sa_ok(['tenant' => $tenant, 'usuarios' => $usuarios, 'modulos_habilitados' => $modulos_habilitados]);
+}
+
+// ─── VERIFICAR SLUG ───────────────────────────────────────────────────────
+if ($action === 'verificar_slug') {
+    $slug = strtolower(preg_replace('/[^a-z0-9\-]/', '', $_GET['slug'] ?? ''));
+    $id_excluir = (int)($_GET['excluir_id'] ?? 0);
+    if (empty($slug)) sa_err('Slug inválido');
+
+    $sql = "SELECT id FROM tenants WHERE slug = ?";
+    $params = [$slug]; $tipos = 's';
+    if ($id_excluir) { $sql .= " AND id != ?"; $params[] = $id_excluir; $tipos .= 'i'; }
+
+    $stmt = $conexao->prepare($sql . " LIMIT 1");
+    $stmt->bind_param($tipos, ...$params);
+    $stmt->execute();
+    $stmt->store_result();
+    $disponivel = $stmt->num_rows === 0;
+    $stmt->close();
+    fechar_conexao($conexao);
+    sa_ok(['disponivel' => $disponivel, 'slug' => $slug]);
 }
 
 // ─── CRIAR TENANT ─────────────────────────────────────────────────────────
@@ -212,19 +282,12 @@ if ($action === 'criar_tenant') {
     $estado        = trim($input['estado']   ?? '');
     $plano         = in_array($input['plano'] ?? '', ['basico','profissional','enterprise']) ? $input['plano'] : 'basico';
 
-    if (empty($slug) || empty($razao_social) || empty($cnpj) || empty($email)) {
-        sa_err('Campos obrigatórios: slug, razao_social, cnpj, email_principal');
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        sa_err('E-mail inválido');
-    }
+    if (empty($slug) || empty($razao_social) || empty($cnpj) || empty($email)) sa_err('Campos obrigatórios: slug, razao_social, cnpj, email_principal');
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) sa_err('E-mail inválido');
 
-    // Verificar slug único
     $chk = $conexao->prepare("SELECT id FROM tenants WHERE slug = ? LIMIT 1");
-    $chk->bind_param('s', $slug);
-    $chk->execute();
-    $chk->store_result();
-    if ($chk->num_rows > 0) { $chk->close(); fechar_conexao($conexao); sa_err("Slug '{$slug}' já está em uso."); }
+    $chk->bind_param('s', $slug); $chk->execute(); $chk->store_result();
+    if ($chk->num_rows > 0) { $chk->close(); fechar_conexao($conexao); sa_err("Slug '{$slug}' já está em uso"); }
     $chk->close();
 
     $stmt = $conexao->prepare(
@@ -235,42 +298,26 @@ if ($action === 'criar_tenant') {
     $stmt->execute();
     $novo_id = $conexao->insert_id;
     $stmt->close();
-    fechar_conexao($conexao);
 
-    registrar_log('SUPERADMIN_TENANT_CRIADO', "Novo tenant: {$slug} (ID={$novo_id})", $_SESSION['usuario_nome'] ?? '');
+    sa_log($conexao, 'TENANT_CRIADO', "Novo tenant: {$slug} (ID={$novo_id})", $novo_id);
+    fechar_conexao($conexao);
     sa_ok(['id' => $novo_id, 'slug' => $slug], 'Condomínio criado com sucesso!');
 }
 
 // ─── EDITAR TENANT ────────────────────────────────────────────────────────
 if ($action === 'editar_tenant') {
-    $id = (int)($_GET['id'] ?? $input['id'] ?? 0);
+    $id = (int)($input['id'] ?? $_GET['id'] ?? 0);
     if (!$id) sa_err('ID obrigatório');
 
-    $campos = [];
-    $tipos  = '';
-    $vals   = [];
-
-    $map = [
-        'razao_social'   => 's',
-        'nome_fantasia'  => 's',
-        'email_principal'=> 's',
-        'telefone'       => 's',
-        'cidade'         => 's',
-        'estado'         => 's',
-        'logo_url'       => 's',
-        'modulos_habilitados' => 's',
-    ];
+    $campos = []; $tipos = ''; $vals = [];
+    $map = ['razao_social'=>'s','nome_fantasia'=>'s','email_principal'=>'s','telefone'=>'s',
+            'cidade'=>'s','estado'=>'s','logo_url'=>'s','endereco'=>'s'];
     foreach ($map as $campo => $tipo) {
-        if (isset($input[$campo]) && $input[$campo] !== '') {
-            $campos[] = "`{$campo}` = ?";
-            $tipos .= $tipo;
-            $vals[] = trim($input[$campo]);
-        }
+        if (isset($input[$campo])) { $campos[] = "`{$campo}` = ?"; $tipos .= $tipo; $vals[] = trim($input[$campo]); }
     }
     if (isset($input['plano']) && in_array($input['plano'], ['basico','profissional','enterprise'])) {
         $campos[] = '`plano` = ?'; $tipos .= 's'; $vals[] = $input['plano'];
     }
-
     if (empty($campos)) sa_err('Nenhum campo para atualizar');
 
     $sql = "UPDATE tenants SET " . implode(', ', $campos) . " WHERE id = ?";
@@ -279,15 +326,15 @@ if ($action === 'editar_tenant') {
     $stmt->bind_param($tipos, ...$vals);
     $stmt->execute();
     $stmt->close();
-    fechar_conexao($conexao);
 
-    registrar_log('SUPERADMIN_TENANT_EDITADO', "Tenant ID={$id} editado", $_SESSION['usuario_nome'] ?? '');
+    sa_log($conexao, 'TENANT_EDITADO', "Tenant ID={$id} editado", $id);
+    fechar_conexao($conexao);
     sa_ok(null, 'Condomínio atualizado com sucesso!');
 }
 
 // ─── STATUS DO TENANT ─────────────────────────────────────────────────────
 if ($action === 'status_tenant') {
-    $id     = (int)($_GET['id'] ?? $input['id'] ?? 0);
+    $id     = (int)($input['id'] ?? $_GET['id'] ?? 0);
     $status = $input['status'] ?? '';
     if (!$id) sa_err('ID obrigatório');
     if (!in_array($status, ['ativo','inativo','suspenso'])) sa_err('Status inválido');
@@ -296,13 +343,115 @@ if ($action === 'status_tenant') {
     $stmt->bind_param('si', $status, $id);
     $stmt->execute();
     $stmt->close();
-    fechar_conexao($conexao);
 
-    registrar_log('SUPERADMIN_TENANT_STATUS', "Tenant ID={$id} → {$status}", $_SESSION['usuario_nome'] ?? '');
+    sa_log($conexao, 'TENANT_STATUS', "Tenant ID={$id} → {$status}", $id);
+    fechar_conexao($conexao);
     sa_ok(null, "Status alterado para '{$status}'");
 }
 
-// ─── LISTAR USUÁRIOS DE UM TENANT ─────────────────────────────────────────
+// ─── SALVAR MÓDULOS DO TENANT ─────────────────────────────────────────────
+if ($action === 'salvar_modulos') {
+    $id      = (int)($input['id'] ?? 0);
+    $modulos = $input['modulos'] ?? [];
+    if (!$id) sa_err('ID do tenant obrigatório');
+    if (!is_array($modulos)) sa_err('Módulos deve ser um array');
+
+    // Sanitizar: apenas strings alfanuméricas com underscore
+    $modulos = array_values(array_filter($modulos, fn($m) => preg_match('/^[a-z0-9_]+$/', $m)));
+    $json    = json_encode($modulos);
+
+    $stmt = $conexao->prepare("UPDATE tenants SET modulos_habilitados = ? WHERE id = ?");
+    $stmt->bind_param('si', $json, $id);
+    $stmt->execute();
+    $stmt->close();
+
+    sa_log($conexao, 'TENANT_MODULOS', "Tenant ID={$id}: " . count($modulos) . " módulos configurados", $id);
+    fechar_conexao($conexao);
+    sa_ok(['modulos' => $modulos, 'total' => count($modulos)], 'Módulos atualizados com sucesso!');
+}
+
+// ─── SALVAR PLANO DO TENANT ───────────────────────────────────────────────
+if ($action === 'salvar_plano') {
+    $id    = (int)($input['id'] ?? 0);
+    $plano = $input['plano'] ?? '';
+    if (!$id) sa_err('ID obrigatório');
+    if (!in_array($plano, ['basico','profissional','enterprise'])) sa_err('Plano inválido');
+
+    $stmt = $conexao->prepare("UPDATE tenants SET plano = ? WHERE id = ?");
+    $stmt->bind_param('si', $plano, $id);
+    $stmt->execute();
+    $stmt->close();
+
+    sa_log($conexao, 'TENANT_PLANO', "Tenant ID={$id} → plano {$plano}", $id);
+    fechar_conexao($conexao);
+    sa_ok(null, "Plano alterado para '{$plano}'");
+}
+
+// ─── MÓDULOS DO SISTEMA ───────────────────────────────────────────────────
+if ($action === 'modulos_sistema') {
+    $r = $conexao->query(
+        "SELECT id, chave, nome, grupo, icone, descricao, permissao_minima, ativo, ordem
+         FROM modulos_sistema WHERE ativo = 1 ORDER BY grupo, ordem ASC"
+    );
+    $modulos = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+
+    // Agrupar por grupo
+    $agrupados = [];
+    foreach ($modulos as $m) {
+        $agrupados[$m['grupo']][] = $m;
+    }
+
+    fechar_conexao($conexao);
+    sa_ok(['modulos' => $modulos, 'agrupados' => $agrupados, 'total' => count($modulos)]);
+}
+
+// ─── MÓDULOS HABILITADOS DE UM TENANT ────────────────────────────────────
+if ($action === 'modulos_tenant') {
+    $id = (int)($_GET['id'] ?? 0);
+    if (!$id) sa_err('ID obrigatório');
+
+    $stmt = $conexao->prepare("SELECT modulos_habilitados FROM tenants WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    fechar_conexao($conexao);
+
+    $modulos = [];
+    if ($row && !empty($row['modulos_habilitados'])) {
+        $modulos = json_decode($row['modulos_habilitados'], true) ?? [];
+    }
+    sa_ok(['modulos' => $modulos, 'total' => count($modulos)]);
+}
+
+// ─── USUÁRIOS GLOBAIS ─────────────────────────────────────────────────────
+if ($action === 'usuarios_globais') {
+    $busca = $_GET['busca'] ?? '';
+    $where = '1=1'; $vals = []; $tipos = '';
+    if ($busca) {
+        $where = '(u.nome LIKE ? OR u.email LIKE ?)';
+        $b = "%$busca%"; $vals = [$b, $b]; $tipos = 'ss';
+    }
+
+    $sql = "SELECT u.id, u.nome, u.email, u.funcao, u.permissao, u.ativo,
+                   COUNT(DISTINCT ut.tenant_id) AS total_tenants,
+                   GROUP_CONCAT(DISTINCT t.nome_fantasia ORDER BY t.nome_fantasia SEPARATOR ', ') AS condominios
+            FROM usuarios u
+            LEFT JOIN usuario_tenant ut ON ut.usuario_id = u.id AND ut.ativo = 1
+            LEFT JOIN tenants t ON t.id = ut.tenant_id
+            WHERE {$where}
+            GROUP BY u.id ORDER BY u.nome ASC LIMIT 200";
+
+    $stmt = $conexao->prepare($sql);
+    if (!empty($vals)) $stmt->bind_param($tipos, ...$vals);
+    $stmt->execute();
+    $usuarios = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    fechar_conexao($conexao);
+    sa_ok(['usuarios' => $usuarios, 'total' => count($usuarios)]);
+}
+
+// ─── USUÁRIOS DE UM TENANT ────────────────────────────────────────────────
 if ($action === 'usuarios') {
     $tenant_id_filtro = (int)($_GET['tenant'] ?? 0);
     if (!$tenant_id_filtro) sa_err('Parâmetro tenant obrigatório');
@@ -322,110 +471,148 @@ if ($action === 'usuarios') {
     sa_ok(['usuarios' => $usuarios, 'total' => count($usuarios)]);
 }
 
-// ─── CRIAR USUÁRIO EM UM TENANT ───────────────────────────────────────────
+// ─── CRIAR USUÁRIO ────────────────────────────────────────────────────────
 if ($action === 'criar_usuario') {
     $tenant_id_novo = (int)($input['tenant_id'] ?? 0);
-    $nome           = trim($input['nome']       ?? '');
-    $email          = strtolower(trim($input['email'] ?? ''));
-    $senha          = $input['senha']           ?? '';
-    $funcao         = trim($input['funcao']     ?? 'Operador');
-    $permissao      = in_array($input['permissao'] ?? '', ['visualizador','operador','gerente','admin']) ? $input['permissao'] : 'operador';
+    $nome      = trim($input['nome']  ?? '');
+    $email     = strtolower(trim($input['email'] ?? ''));
+    $senha     = $input['senha']      ?? '';
+    $funcao    = trim($input['funcao']    ?? 'Operador');
+    $permissao = in_array($input['permissao'] ?? '', ['visualizador','operador','gerente','admin']) ? $input['permissao'] : 'operador';
 
-    if (!$tenant_id_novo || empty($nome) || empty($email) || empty($senha)) {
-        sa_err('Campos obrigatórios: tenant_id, nome, email, senha');
-    }
+    if (!$tenant_id_novo || empty($nome) || empty($email) || empty($senha)) sa_err('Campos obrigatórios: tenant_id, nome, email, senha');
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) sa_err('E-mail inválido');
     if (strlen($senha) < 6) sa_err('Senha deve ter pelo menos 6 caracteres');
 
-    // Verificar e-mail único
     $chk = $conexao->prepare("SELECT id FROM usuarios WHERE email = ? LIMIT 1");
-    $chk->bind_param('s', $email);
-    $chk->execute();
-    $chk->store_result();
-    if ($chk->num_rows > 0) { $chk->close(); fechar_conexao($conexao); sa_err('E-mail já cadastrado no sistema'); }
+    $chk->bind_param('s', $email); $chk->execute(); $chk->store_result();
+    if ($chk->num_rows > 0) { $chk->close(); fechar_conexao($conexao); sa_err('E-mail já cadastrado'); }
     $chk->close();
 
-    $senha_hash = password_hash($senha, PASSWORD_BCRYPT);
+    $hash = password_hash($senha, PASSWORD_BCRYPT);
     $stmt = $conexao->prepare(
-        "INSERT INTO usuarios (tenant_id, nome, email, senha, funcao, permissao, ativo)
-         VALUES (?, ?, ?, ?, ?, ?, 1)"
+        "INSERT INTO usuarios (tenant_id, nome, email, senha, funcao, permissao, ativo) VALUES (?, ?, ?, ?, ?, ?, 1)"
     );
-    $stmt->bind_param('isssss', $tenant_id_novo, $nome, $email, $senha_hash, $funcao, $permissao);
+    $stmt->bind_param('isssss', $tenant_id_novo, $nome, $email, $hash, $funcao, $permissao);
     $stmt->execute();
-    $novo_usuario_id = $conexao->insert_id;
+    $novo_id = $conexao->insert_id;
     $stmt->close();
 
-    // Criar vínculo usuario_tenant
-    $stmt2 = $conexao->prepare(
-        "INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, ?, ?, 1)"
-    );
-    $stmt2->bind_param('iis', $novo_usuario_id, $tenant_id_novo, $permissao);
+    $stmt2 = $conexao->prepare("INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, ?, ?, 1)");
+    $stmt2->bind_param('iis', $novo_id, $tenant_id_novo, $permissao);
     $stmt2->execute();
     $stmt2->close();
 
+    sa_log($conexao, 'USUARIO_CRIADO', "Usuário {$email} criado no tenant {$tenant_id_novo}", $tenant_id_novo);
     fechar_conexao($conexao);
-    registrar_log('SUPERADMIN_USUARIO_CRIADO', "Usuário {$email} criado no tenant {$tenant_id_novo}", $_SESSION['usuario_nome'] ?? '');
-    sa_ok(['id' => $novo_usuario_id], 'Usuário criado com sucesso!');
+    sa_ok(['id' => $novo_id], 'Usuário criado com sucesso!');
 }
 
-// ─── VINCULAR USUÁRIO EXISTENTE A TENANT ──────────────────────────────────
+// ─── VINCULAR USUÁRIO ─────────────────────────────────────────────────────
 if ($action === 'vincular_usuario') {
-    $usuario_id_v  = (int)($input['usuario_id'] ?? 0);
-    $tenant_id_v   = (int)($input['tenant_id']  ?? 0);
-    $permissao_v   = in_array($input['permissao'] ?? '', ['visualizador','operador','gerente','admin']) ? $input['permissao'] : 'operador';
-
-    if (!$usuario_id_v || !$tenant_id_v) sa_err('usuario_id e tenant_id são obrigatórios');
+    $uid = (int)($input['usuario_id'] ?? 0);
+    $tid = (int)($input['tenant_id']  ?? 0);
+    $perm = in_array($input['permissao'] ?? '', ['visualizador','operador','gerente','admin']) ? $input['permissao'] : 'operador';
+    if (!$uid || !$tid) sa_err('usuario_id e tenant_id são obrigatórios');
 
     $stmt = $conexao->prepare(
-        "INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo)
-         VALUES (?, ?, ?, 1)
+        "INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, ?, ?, 1)
          ON DUPLICATE KEY UPDATE permissao = VALUES(permissao), ativo = 1"
     );
-    $stmt->bind_param('iis', $usuario_id_v, $tenant_id_v, $permissao_v);
+    $stmt->bind_param('iis', $uid, $tid, $perm);
     $stmt->execute();
     $stmt->close();
-    fechar_conexao($conexao);
 
-    registrar_log('SUPERADMIN_USUARIO_VINCULADO', "Usuário {$usuario_id_v} → tenant {$tenant_id_v}", $_SESSION['usuario_nome'] ?? '');
+    sa_log($conexao, 'USUARIO_VINCULADO', "Usuário {$uid} → tenant {$tid}", $tid);
+    fechar_conexao($conexao);
     sa_ok(null, 'Usuário vinculado com sucesso!');
 }
 
-// ─── DESVINCULAR USUÁRIO DE TENANT ────────────────────────────────────────
+// ─── DESVINCULAR USUÁRIO ──────────────────────────────────────────────────
 if ($action === 'desvincular_usuario') {
-    $usuario_id_d = (int)($input['usuario_id'] ?? 0);
-    $tenant_id_d  = (int)($input['tenant_id']  ?? 0);
-    if (!$usuario_id_d || !$tenant_id_d) sa_err('usuario_id e tenant_id são obrigatórios');
+    $uid = (int)($input['usuario_id'] ?? 0);
+    $tid = (int)($input['tenant_id']  ?? 0);
+    if (!$uid || !$tid) sa_err('usuario_id e tenant_id são obrigatórios');
 
     $stmt = $conexao->prepare("UPDATE usuario_tenant SET ativo = 0 WHERE usuario_id = ? AND tenant_id = ?");
-    $stmt->bind_param('ii', $usuario_id_d, $tenant_id_d);
+    $stmt->bind_param('ii', $uid, $tid);
     $stmt->execute();
     $stmt->close();
-    fechar_conexao($conexao);
 
-    registrar_log('SUPERADMIN_USUARIO_DESVINCULADO', "Usuário {$usuario_id_d} removido do tenant {$tenant_id_d}", $_SESSION['usuario_nome'] ?? '');
+    sa_log($conexao, 'USUARIO_DESVINCULADO', "Usuário {$uid} removido do tenant {$tid}", $tid);
+    fechar_conexao($conexao);
     sa_ok(null, 'Vínculo removido com sucesso!');
+}
+
+// ─── TOGGLE USUÁRIO (ativar/inativar) ─────────────────────────────────────
+if ($action === 'toggle_usuario') {
+    $uid  = (int)($input['usuario_id'] ?? 0);
+    $ativo = (int)($input['ativo'] ?? 0);
+    if (!$uid) sa_err('usuario_id obrigatório');
+
+    $stmt = $conexao->prepare("UPDATE usuarios SET ativo = ? WHERE id = ?");
+    $stmt->bind_param('ii', $ativo, $uid);
+    $stmt->execute();
+    $stmt->close();
+
+    $label = $ativo ? 'ativado' : 'inativado';
+    sa_log($conexao, 'USUARIO_TOGGLE', "Usuário {$uid} {$label}");
+    fechar_conexao($conexao);
+    sa_ok(null, "Usuário {$label} com sucesso!");
 }
 
 // ─── RESETAR SENHA ────────────────────────────────────────────────────────
 if ($action === 'resetar_senha') {
-    $usuario_id_r = (int)($input['usuario_id'] ?? 0);
-    $nova_senha   = $input['nova_senha'] ?? '';
-    if (!$usuario_id_r || strlen($nova_senha) < 6) sa_err('usuario_id e nova_senha (mín. 6 chars) são obrigatórios');
+    $uid   = (int)($input['usuario_id'] ?? 0);
+    $senha = $input['nova_senha'] ?? '';
+    if (!$uid || strlen($senha) < 6) sa_err('usuario_id e nova_senha (mín. 6 chars) são obrigatórios');
 
-    $hash = password_hash($nova_senha, PASSWORD_BCRYPT);
+    $hash = password_hash($senha, PASSWORD_BCRYPT);
     $stmt = $conexao->prepare("UPDATE usuarios SET senha = ? WHERE id = ?");
-    $stmt->bind_param('si', $hash, $usuario_id_r);
+    $stmt->bind_param('si', $hash, $uid);
     $stmt->execute();
     $stmt->close();
-    fechar_conexao($conexao);
 
-    registrar_log('SUPERADMIN_SENHA_RESETADA', "Senha do usuário {$usuario_id_r} resetada", $_SESSION['usuario_nome'] ?? '');
+    sa_log($conexao, 'SENHA_RESETADA', "Senha do usuário {$uid} resetada");
+    fechar_conexao($conexao);
     sa_ok(null, 'Senha alterada com sucesso!');
+}
+
+// ─── LOGS DE AUDITORIA ────────────────────────────────────────────────────
+if ($action === 'logs_auditoria') {
+    $limite = min((int)($_GET['limite'] ?? 50), 200);
+    $r = $conexao->query(
+        "SELECT id, usuario_nome, acao, descricao, tenant_id, ip, created_at
+         FROM logs_sistema
+         WHERE acao LIKE 'TENANT_%' OR acao LIKE 'USUARIO_%' OR acao LIKE 'SENHA_%' OR acao LIKE 'SUPERADMIN_%'
+         ORDER BY created_at DESC LIMIT {$limite}"
+    );
+    $logs = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+    fechar_conexao($conexao);
+    sa_ok(['logs' => $logs, 'total' => count($logs)]);
+}
+
+// ─── LOGS DE UM TENANT ────────────────────────────────────────────────────
+if ($action === 'logs_tenant') {
+    $id     = (int)($_GET['id'] ?? 0);
+    $limite = min((int)($_GET['limite'] ?? 30), 100);
+    if (!$id) sa_err('ID obrigatório');
+
+    $stmt = $conexao->prepare(
+        "SELECT id, usuario_nome, acao, descricao, ip, created_at
+         FROM logs_sistema WHERE tenant_id = ?
+         ORDER BY created_at DESC LIMIT {$limite}"
+    );
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $logs = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    fechar_conexao($conexao);
+    sa_ok(['logs' => $logs, 'total' => count($logs)]);
 }
 
 // ─── ONBOARDING COMPLETO ──────────────────────────────────────────────────
 if ($action === 'onboarding') {
-    // Dados do condomínio
     $slug          = strtolower(preg_replace('/[^a-z0-9\-]/', '', $input['slug'] ?? ''));
     $razao_social  = trim($input['razao_social']  ?? '');
     $nome_fantasia = trim($input['nome_fantasia'] ?? $razao_social);
@@ -435,11 +622,10 @@ if ($action === 'onboarding') {
     $cidade        = trim($input['cidade']   ?? '');
     $estado        = trim($input['estado']   ?? '');
     $plano         = in_array($input['plano'] ?? '', ['basico','profissional','enterprise']) ? $input['plano'] : 'basico';
-
-    // Dados do admin
     $admin_nome    = trim($input['admin_nome']  ?? '');
     $admin_email   = strtolower(trim($input['admin_email'] ?? ''));
     $admin_senha   = $input['admin_senha'] ?? '';
+    $modulos       = $input['modulos'] ?? null;
 
     if (empty($slug) || empty($razao_social) || empty($cnpj) || empty($email_cond) ||
         empty($admin_nome) || empty($admin_email) || empty($admin_senha)) {
@@ -448,61 +634,55 @@ if ($action === 'onboarding') {
     if (!filter_var($admin_email, FILTER_VALIDATE_EMAIL)) sa_err('E-mail do admin inválido');
     if (strlen($admin_senha) < 6) sa_err('Senha do admin deve ter pelo menos 6 caracteres');
 
-    // Verificar slug único
     $chk = $conexao->prepare("SELECT id FROM tenants WHERE slug = ? LIMIT 1");
-    $chk->bind_param('s', $slug);
-    $chk->execute();
-    $chk->store_result();
+    $chk->bind_param('s', $slug); $chk->execute(); $chk->store_result();
     if ($chk->num_rows > 0) { $chk->close(); fechar_conexao($conexao); sa_err("Slug '{$slug}' já está em uso"); }
     $chk->close();
 
-    // Verificar e-mail do admin único
     $chk2 = $conexao->prepare("SELECT id FROM usuarios WHERE email = ? LIMIT 1");
-    $chk2->bind_param('s', $admin_email);
-    $chk2->execute();
-    $chk2->store_result();
-    $admin_existe = $chk2->num_rows > 0;
-    $admin_id_existente = null;
-    if ($admin_existe) {
-        $chk2->bind_result($admin_id_existente);
-        $chk2->fetch();
-    }
+    $chk2->bind_param('s', $admin_email); $chk2->execute();
+    $admin_row = $chk2->get_result()->fetch_assoc();
     $chk2->close();
 
     $conexao->begin_transaction();
     try {
-        // 1. Criar tenant
+        // Módulos padrão por plano
+        if ($modulos === null) {
+            $modulos_padrao = [
+                'basico'       => ['dashboard','moradores','veiculos','visitantes','registro','acesso'],
+                'profissional' => ['dashboard','moradores','veiculos','visitantes','registro','acesso','relatorios','financeiro','contas_pagar','contas_receber','manutencao','hidrometro','leitura','estoque','contratos','protocolos','notificacoes','documentos','rh','configuracao'],
+                'enterprise'   => null // null = todos os módulos
+            ];
+            $modulos = $modulos_padrao[$plano] ?? $modulos_padrao['basico'];
+        }
+        $modulos_json = $modulos ? json_encode($modulos) : null;
+
         $stmt = $conexao->prepare(
-            "INSERT INTO tenants (slug, razao_social, nome_fantasia, cnpj, email_principal, telefone, cidade, estado, plano, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativo')"
+            "INSERT INTO tenants (slug, razao_social, nome_fantasia, cnpj, email_principal, telefone, cidade, estado, plano, status, modulos_habilitados)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativo', ?)"
         );
-        $stmt->bind_param('sssssssss', $slug, $razao_social, $nome_fantasia, $cnpj, $email_cond, $telefone, $cidade, $estado, $plano);
+        $stmt->bind_param('ssssssssss', $slug, $razao_social, $nome_fantasia, $cnpj, $email_cond, $telefone, $cidade, $estado, $plano, $modulos_json);
         $stmt->execute();
         $novo_tenant_id = $conexao->insert_id;
         $stmt->close();
 
-        // 2. Criar ou reutilizar admin
-        if (!$admin_existe) {
-            $senha_hash = password_hash($admin_senha, PASSWORD_BCRYPT);
-            $funcao_admin = 'Administrador';
-            $perm_admin   = 'admin';
+        if ($admin_row) {
+            $novo_admin_id = (int)$admin_row['id'];
+        } else {
+            $hash = password_hash($admin_senha, PASSWORD_BCRYPT);
+            $funcao_a = 'Administrador'; $perm_a = 'admin';
             $stmt2 = $conexao->prepare(
-                "INSERT INTO usuarios (tenant_id, nome, email, senha, funcao, permissao, ativo)
-                 VALUES (?, ?, ?, ?, ?, ?, 1)"
+                "INSERT INTO usuarios (tenant_id, nome, email, senha, funcao, permissao, ativo) VALUES (?, ?, ?, ?, ?, ?, 1)"
             );
-            $stmt2->bind_param('isssss', $novo_tenant_id, $admin_nome, $admin_email, $senha_hash, $funcao_admin, $perm_admin);
+            $stmt2->bind_param('isssss', $novo_tenant_id, $admin_nome, $admin_email, $hash, $funcao_a, $perm_a);
             $stmt2->execute();
             $novo_admin_id = $conexao->insert_id;
             $stmt2->close();
-        } else {
-            $novo_admin_id = $admin_id_existente;
         }
 
-        // 3. Criar vínculo admin × tenant
         $perm_admin = 'admin';
         $stmt3 = $conexao->prepare(
-            "INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo)
-             VALUES (?, ?, ?, 1)
+            "INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, ?, ?, 1)
              ON DUPLICATE KEY UPDATE permissao = 'admin', ativo = 1"
         );
         $stmt3->bind_param('iis', $novo_admin_id, $novo_tenant_id, $perm_admin);
@@ -510,15 +690,17 @@ if ($action === 'onboarding') {
         $stmt3->close();
 
         $conexao->commit();
+        sa_log($conexao, 'ONBOARDING', "Onboarding: {$slug} (tenant={$novo_tenant_id}, admin={$admin_email})", $novo_tenant_id);
         fechar_conexao($conexao);
 
-        registrar_log('SUPERADMIN_ONBOARDING', "Onboarding: {$slug} (tenant={$novo_tenant_id}, admin={$admin_email})", $_SESSION['usuario_nome'] ?? '');
         sa_ok([
-            'tenant_id'  => $novo_tenant_id,
-            'tenant_slug'=> $slug,
-            'admin_id'   => $novo_admin_id,
-            'admin_email'=> $admin_email,
-            'url_acesso' => "https://{$slug}.erpcondominios.com.br"
+            'tenant_id'   => $novo_tenant_id,
+            'tenant_slug' => $slug,
+            'admin_id'    => $novo_admin_id,
+            'admin_email' => $admin_email,
+            'plano'       => $plano,
+            'modulos'     => $modulos ? count($modulos) : 'todos',
+            'url_acesso'  => "https://{$slug}.erpcondominios.com.br"
         ], 'Condomínio criado com sucesso! Onboarding concluído.');
 
     } catch (Exception $e) {
@@ -529,7 +711,6 @@ if ($action === 'onboarding') {
     }
 }
 
-// ─── Ação não reconhecida ─────────────────────────────────────────────────
 fechar_conexao($conexao);
 sa_err("Ação '{$action}' não reconhecida", 400);
 ?>
