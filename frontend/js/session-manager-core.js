@@ -625,14 +625,27 @@ class SessionManagerCore {
         const publicPages = [
             'login.html','login_morador.html','login_fornecedor.html',
             'esqueci_senha.html','redefinir_senha.html','index.html',
-            'register.html','layout-base.html?page=registro'
+            'register.html'
         ];
         const pathname = window.location.pathname;
-        const page     = pathname.split('/').pop();
-        return publicPages.includes(page) || page === '' || page === 'frontend/';
+        // FIX: remover query string antes de comparar (ex: layout-base.html?page=dashboard)
+        const page = pathname.split('/').pop().split('?')[0];
+        return publicPages.includes(page) || page === '' || page === 'frontend';
     }
 
     redirectToLogin() {
+        // Proteção anti-loop: verificar se já está na página de login
+        const currentPage = window.location.pathname.split('/').pop().split('?')[0];
+        if (currentPage === 'login.html' || currentPage === 'login_morador.html') {
+            console.warn('[SessionManager] ⚠️ Já está no login — redirecionamento cancelado');
+            return;
+        }
+        // Proteção anti-loop: flag no sessionStorage
+        if (sessionStorage.getItem('_sessionRedirecting') === '1') {
+            console.warn('[SessionManager] ⚠️ Loop detectado — redirecionamento cancelado');
+            return;
+        }
+        sessionStorage.setItem('_sessionRedirecting', '1');
         console.log('[SessionManager] ? Redirecionando para login...');
         window.location.replace(window.location.origin + '/frontend/login.html');
     }

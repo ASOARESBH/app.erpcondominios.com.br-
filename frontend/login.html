@@ -370,6 +370,12 @@
     <div class="login-container">
         <div class="login-header">
 
+            <!-- Limpar flags de redirecionamento anti-loop -->
+    <script>
+        sessionStorage.removeItem('_sessionRedirecting');
+        sessionStorage.removeItem('_authGuardRedirecting');
+    </script>
+
             <!-- Logo ERP Condomínio -->
             <div class="logo-box" id="logoBox">
                 <img id="loginLogo"
