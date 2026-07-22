@@ -1,0 +1,7 @@
+# ============================================================
+# BLOQUEIO DE ACESSO HTTP DIRETO
+# Este diretório contém credenciais sensíveis do Firebase.
+# Nunca deve ser acessível via HTTP — apenas via PHP no servidor.
+# ============================================================
+Order Deny,Allow
+Deny from all

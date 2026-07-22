@@ -1,0 +1,497 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Importação Financeira" data-icon="fa-file-import" style="display:none;"></div>
+
+<div class="page-wrapper page-importacao-financeira">
+
+    <!-- ── Cabeçalho ─────────────────────────────────────────── -->
+    <div class="page-header">
+        <h1><i class="fas fa-file-import"></i> Importação Financeira</h1>
+        <p>Importe extratos e contas de outros sistemas (BRCondos, CSV genérico) e concilie com os lançamentos existentes</p>
+    </div>
+
+    <!-- ── Submenu financeiro ─────────────────────────────────── -->
+    <nav class="page-card financeiro-submenu" aria-label="Atalhos financeiros">
+        <a href="#" onclick="AppRouter.navigate('financeiro'); return false;" class="submenu-link">
+            <i class="fas fa-home"></i> Início
+        </a>
+        <a href="#" onclick="AppRouter.navigate('contas_pagar'); return false;" class="submenu-link">
+            <i class="fas fa-arrow-up"></i> Contas a Pagar
+        </a>
+        <a href="#" onclick="AppRouter.navigate('contas_receber'); return false;" class="submenu-link">
+            <i class="fas fa-arrow-down"></i> Contas a Receber
+        </a>
+        <a href="#" onclick="AppRouter.navigate('planos_contas'); return false;" class="submenu-link">
+            <i class="fas fa-list"></i> Planos de Contas
+        </a>
+        <a href="#" onclick="AppRouter.navigate('importacao_financeira'); return false;" class="submenu-link active">
+            <i class="fas fa-file-import"></i> Importação
+        </a>
+    </nav>
+
+    <!-- ── Tabs de navegação ─────────────────────────────────── -->
+    <div class="page-card" style="padding:0;overflow:hidden;">
+        <div class="imp-tabs-nav">
+            <button class="imp-tab-btn active" data-tab="importar" onclick="ImpFin.mostrarTab('importar',this)">
+                <i class="fas fa-upload"></i> Importar Arquivo
+            </button>
+            <button class="imp-tab-btn" data-tab="extrato" onclick="ImpFin.mostrarTab('extrato',this)" id="imp_tabExtrato">
+                <i class="fas fa-chart-bar"></i> Visualizar Extrato
+            </button>
+            <button class="imp-tab-btn" data-tab="conciliar" onclick="ImpFin.mostrarTab('conciliar',this)" id="imp_tabConciliar">
+                <i class="fas fa-balance-scale"></i> Conciliação
+                <span class="imp-badge" id="imp_badgeDup" style="display:none">0</span>
+            </button>
+            <button class="imp-tab-btn" data-tab="historico" onclick="ImpFin.mostrarTab('historico',this)">
+                <i class="fas fa-history"></i> Histórico de Lotes
+            </button>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- ABA 1 — IMPORTAR ARQUIVO                                -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="imp-tab-content active" id="imp-tab-importar">
+
+        <div class="page-card imp-info-box">
+            <i class="fas fa-info-circle" style="color:#2563eb;margin-right:8px;"></i>
+            <strong>Formatos suportados:</strong> Extrato Financeiro BRCondos (PDF), Contas a Pagar BRCondos (PDF) e CSV genérico.
+            O sistema detecta automaticamente o formato pelo nome do arquivo.
+        </div>
+
+        <!-- Upload -->
+        <div class="page-card">
+            <h2 class="section-title"><i class="fas fa-cloud-upload-alt"></i> Selecionar Arquivo</h2>
+
+            <div id="imp_dropZone" class="imp-drop-zone" onclick="document.getElementById('imp_arquivo').click()">
+                <i class="fas fa-file-upload imp-drop-icon"></i>
+                <p class="imp-drop-title">Arraste o arquivo aqui ou clique para selecionar</p>
+                <p class="imp-drop-sub">Extrato BRCondos, Contas a Pagar BRCondos ou qualquer CSV financeiro</p>
+                <div class="imp-drop-badges">
+                    <span class="badge-imp badge-pdf"><i class="fas fa-file-pdf"></i> PDF</span>
+                    <span class="badge-imp badge-csv"><i class="fas fa-file-csv"></i> CSV</span>
+                </div>
+                <p id="imp_nomeArquivo" class="imp-drop-filename"></p>
+            </div>
+            <input type="file" id="imp_arquivo" accept=".csv,.pdf" style="display:none;">
+
+            <div class="form-grid-3" style="margin-top:20px;">
+                <div class="form-group">
+                    <label class="form-label">Tipo de Conta</label>
+                    <select id="imp_tipoConta" class="form-control">
+                        <option value="EXTRATO">Extrato Financeiro (Entradas e Saídas)</option>
+                        <option value="PAGAR">Contas a Pagar (somente despesas)</option>
+                        <option value="RECEBER">Contas a Receber (somente receitas)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Data Início (filtro)</label>
+                    <input type="date" id="imp_dataInicio" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Data Fim (filtro)</label>
+                    <input type="date" id="imp_dataFim" class="form-control">
+                </div>
+            </div>
+
+            <div class="page-card imp-info-box imp-warn-box" style="margin-top:4px;">
+                <i class="fas fa-exclamation-triangle" style="color:#d97706;margin-right:8px;"></i>
+                Deixe as datas em branco para importar <strong>todos os lançamentos</strong> do arquivo.
+            </div>
+
+            <!-- Progress -->
+            <div id="imp_progressWrap" style="display:none;margin-top:16px;">
+                <p id="imp_progressText" style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Processando arquivo...</p>
+                <div style="background:#e2e8f0;border-radius:8px;overflow:hidden;height:8px;">
+                    <div id="imp_progressFill" style="background:linear-gradient(90deg,#1e3a8a,#2563eb);height:100%;width:60%;animation:impProgress 1.5s ease-in-out infinite;"></div>
+                </div>
+            </div>
+
+            <div class="form-actions" style="margin-top:16px;">
+                <button class="btn btn-primary" id="imp_btnImportar" onclick="ImpFin.importarArquivo()" disabled>
+                    <i class="fas fa-file-import"></i> Processar Arquivo
+                </button>
+                <button class="btn btn-secondary" onclick="ImpFin.limparForm()">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+            </div>
+        </div>
+
+        <!-- Resultado -->
+        <div id="imp_cardResultado" class="page-card" style="display:none;">
+            <h2 class="section-title"><i class="fas fa-check-circle" style="color:#16a34a;"></i> Resultado do Processamento</h2>
+            <p id="imp_nomeArqResultado" style="font-size:13px;color:#64748b;margin-bottom:16px;"></p>
+
+            <div class="stats-grid imp-kpi-grid" id="imp_kpisResultado"></div>
+
+            <div id="imp_alertaDup" class="page-card imp-info-box imp-warn-box" style="display:none;margin-top:12px;">
+                <i class="fas fa-exclamation-triangle" style="color:#d97706;margin-right:8px;"></i>
+                <span id="imp_alertaDupTexto"></span>
+            </div>
+
+            <div class="form-actions" style="margin-top:16px;">
+                <button class="btn btn-primary" onclick="ImpFin.confirmarImportacao()">
+                    <i class="fas fa-check-circle"></i> Importar Despesas para Contas a Pagar
+                </button>
+                <button class="btn btn-secondary" onclick="ImpFin.verExtrato()">
+                    <i class="fas fa-chart-bar"></i> Visualizar Extrato
+                </button>
+                <button class="btn btn-secondary" onclick="ImpFin.irConciliacao()">
+                    <i class="fas fa-balance-scale"></i> Revisar Duplicatas
+                </button>
+            </div>
+        </div>
+
+    </div><!-- /tab importar -->
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- ABA 2 — VISUALIZAR EXTRATO                              -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="imp-tab-content" id="imp-tab-extrato">
+
+        <div class="page-card">
+            <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+                <div class="form-group" style="margin:0;flex:1;min-width:260px;">
+                    <label class="form-label">Lote de Importação</label>
+                    <select id="imp_seletorLoteVis" class="form-control" onchange="ImpFin.carregarResumo(this.value)">
+                        <option value="">— Selecione um lote —</option>
+                    </select>
+                </div>
+                <button class="btn btn-sm btn-secondary" onclick="ImpFin.carregarLotes()">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+        </div>
+
+        <div id="imp_painelResumo" style="display:none;">
+
+            <!-- KPIs do extrato -->
+            <div class="stats-grid imp-kpi-grid" id="imp_kpisExtrato"></div>
+
+            <!-- Gráficos lado a lado -->
+            <div class="imp-grid-2col">
+                <div class="page-card">
+                    <h3 class="section-title" style="font-size:14px;">
+                        <i class="fas fa-arrow-down" style="color:#dc2626;"></i> Top Despesas por Fornecedor
+                    </h3>
+                    <div id="imp_chartFornecedores" class="imp-chart-wrap"></div>
+                </div>
+                <div class="page-card">
+                    <h3 class="section-title" style="font-size:14px;">
+                        <i class="fas fa-tags" style="color:#d97706;"></i> Por Categoria de Despesa
+                    </h3>
+                    <div id="imp_chartCategoria" class="imp-chart-wrap"></div>
+                </div>
+            </div>
+
+            <!-- Evolução mensal -->
+            <div class="page-card">
+                <h3 class="section-title" style="font-size:14px;">
+                    <i class="fas fa-calendar-alt" style="color:#2563eb;"></i> Evolução Mensal
+                </h3>
+                <div id="imp_timelineMensal" class="imp-timeline-grid"></div>
+            </div>
+
+            <!-- Tabela de lançamentos -->
+            <div class="page-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+                    <h3 class="section-title" style="margin:0;font-size:14px;">
+                        <i class="fas fa-list" style="color:#16a34a;"></i> Lançamentos
+                        <span id="imp_totalLanc" style="font-size:12px;font-weight:400;color:#64748b;margin-left:8px;"></span>
+                    </h3>
+                    <button class="btn btn-sm btn-secondary" onclick="ImpFin.exportarCSV()">
+                        <i class="fas fa-file-csv"></i> Exportar CSV
+                    </button>
+                </div>
+
+                <!-- Filtros -->
+                <div class="imp-filtros-bar">
+                    <div class="form-group" style="margin:0;flex:2;min-width:180px;">
+                        <input type="text" id="imp_buscaVis" class="form-control-sm" placeholder="Buscar fornecedor, histórico..." oninput="ImpFin.filtrarItens()">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <select id="imp_filtroTipo" class="form-control-sm" onchange="ImpFin.filtrarItens()">
+                            <option value="">Todos os tipos</option>
+                            <option value="ENTRADA">Entradas</option>
+                            <option value="SAIDA">Saídas</option>
+                            <option value="TARIFA">Tarifas</option>
+                            <option value="TRANSFERENCIA">Transferências</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <select id="imp_filtroStatus" class="form-control-sm" onchange="ImpFin.filtrarItens()">
+                            <option value="">Todos os status</option>
+                            <option value="PENDENTE">Pendente</option>
+                            <option value="IMPORTADO">Importado</option>
+                            <option value="DUPLICATA">Duplicata</option>
+                            <option value="IGNORADO">Ignorado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-container" style="overflow-x:auto;">
+                    <table id="imp_tabelaLanc" style="min-width:900px;">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th>Fornecedor / Origem</th>
+                                <th>Histórico</th>
+                                <th>Categoria</th>
+                                <th style="text-align:right;">Entrada</th>
+                                <th style="text-align:right;">Saída</th>
+                                <th style="text-align:right;">Saldo</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="imp_tbodyLanc">
+                            <tr><td colspan="10" class="empty-table">Selecione um lote para visualizar</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="imp_paginacaoVis" class="imp-paginacao"></div>
+            </div>
+
+        </div><!-- /painelResumo -->
+    </div><!-- /tab extrato -->
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- ABA 3 — CONCILIAÇÃO                                     -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="imp-tab-content" id="imp-tab-conciliar">
+
+        <div class="page-card">
+            <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+                <div class="form-group" style="margin:0;flex:1;min-width:260px;">
+                    <label class="form-label">Lote de Importação</label>
+                    <select id="imp_seletorLoteCon" class="form-control" onchange="ImpFin.carregarConciliacao(this.value)">
+                        <option value="">— Selecione um lote —</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="imp_painelConciliacao" style="display:none;">
+            <div class="page-card imp-info-box">
+                <i class="fas fa-info-circle" style="color:#2563eb;margin-right:8px;"></i>
+                Itens <strong>Duplicata</strong> já existem no sistema com mesmo fornecedor, valor e data.
+                <strong>Conciliar</strong> = confirmar que é o mesmo lançamento.
+                <strong>Ignorar</strong> = não importar.
+            </div>
+
+            <div class="page-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+                    <h3 class="section-title" style="margin:0;font-size:14px;">
+                        <i class="fas fa-balance-scale" style="color:#9d174d;"></i> Itens para Conciliação
+                        <span id="imp_totalConc" style="font-size:12px;font-weight:400;color:#64748b;margin-left:8px;"></span>
+                    </h3>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <select id="imp_filtroStatusConc" class="form-control-sm" onchange="ImpFin.carregarConciliacao(document.getElementById('imp_seletorLoteCon').value)">
+                            <option value="DUPLICATA">Duplicatas</option>
+                            <option value="PENDENTE">Pendentes</option>
+                            <option value="">Todos</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary" onclick="ImpFin.conciliarTodos()">
+                            <i class="fas fa-check"></i> Conciliar Selecionados
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="ImpFin.ignorarTodos()">
+                            <i class="fas fa-ban"></i> Ignorar Selecionados
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-container" style="overflow-x:auto;">
+                    <table style="min-width:800px;">
+                        <thead>
+                            <tr>
+                                <th style="width:36px;"><input type="checkbox" id="imp_checkAll" onchange="ImpFin.toggleCheckAll(this)"></th>
+                                <th>Data</th>
+                                <th>Fornecedor</th>
+                                <th>Histórico</th>
+                                <th style="text-align:right;">Valor</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="imp_tbodyConc">
+                            <tr><td colspan="7" class="empty-table">Selecione um lote</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="imp_paginacaoCon" class="imp-paginacao"></div>
+            </div>
+        </div>
+    </div><!-- /tab conciliar -->
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- ABA 4 — HISTÓRICO DE LOTES                              -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="imp-tab-content" id="imp-tab-historico">
+        <div id="imp_listaLotes">
+            <div class="page-card" style="text-align:center;padding:40px;color:#94a3b8;">
+                <i class="fas fa-spinner fa-spin" style="font-size:24px;margin-bottom:12px;display:block;"></i>
+                Carregando lotes...
+            </div>
+        </div>
+    </div>
+
+</div><!-- /page-wrapper -->
+
+<!-- ── Estilos da página ──────────────────────────────────────── -->
+<style>
+@keyframes impProgress {
+    0%   { width: 20%; margin-left: 0; }
+    50%  { width: 60%; margin-left: 20%; }
+    100% { width: 20%; margin-left: 80%; }
+}
+
+/* Tabs */
+.imp-tabs-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e2e8f0;
+    overflow-x: auto;
+}
+.imp-tab-btn {
+    padding: 14px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all .2s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.imp-tab-btn:hover { color: #2563eb; background: #f8faff; }
+.imp-tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+.imp-badge {
+    background: #ef4444;
+    color: #fff;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* Tab content */
+.imp-tab-content { display: none; }
+.imp-tab-content.active { display: block; }
+
+/* Drop zone */
+.imp-drop-zone {
+    border: 2px dashed #2563eb;
+    border-radius: 12px;
+    padding: 36px 24px;
+    text-align: center;
+    cursor: pointer;
+    background: #f0f6ff;
+    transition: background .2s, border-color .2s;
+}
+.imp-drop-zone:hover, .imp-drop-zone.drag-over {
+    background: #dbeafe;
+    border-color: #1e3a8a;
+}
+.imp-drop-icon { font-size: 40px; color: #2563eb; margin-bottom: 10px; display: block; }
+.imp-drop-title { font-size: 15px; font-weight: 700; color: #1e293b; margin: 0 0 6px; }
+.imp-drop-sub { font-size: 13px; color: #64748b; margin: 0; }
+.imp-drop-badges { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+.imp-drop-filename { font-size: 13px; font-weight: 700; color: #2563eb; margin: 10px 0 0; }
+
+/* Info boxes */
+.imp-info-box {
+    padding: 12px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+.imp-warn-box { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+
+/* KPI grid */
+.imp-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 16px; }
+
+/* Gráficos */
+.imp-grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.imp-chart-wrap { margin-top: 4px; }
+.imp-bar-item { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.imp-bar-label { width: 160px; font-size: 12px; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.imp-bar-track { flex: 1; height: 16px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.imp-bar-fill-saida  { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#dc2626,#ef4444); transition: width .6s; }
+.imp-bar-fill-entrada{ height: 100%; border-radius: 4px; background: linear-gradient(90deg,#16a34a,#22c55e); transition: width .6s; }
+.imp-bar-val { width: 90px; text-align: right; font-size: 12px; font-weight: 700; color: #374151; flex-shrink: 0; }
+
+/* Timeline mensal */
+.imp-timeline-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 8px; }
+.imp-mes-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; text-align: center; }
+.imp-mes-card .mes { font-size: 11px; font-weight: 700; color: #374151; margin-bottom: 5px; text-transform: uppercase; }
+.imp-mes-card .ent { font-size: 12px; font-weight: 700; color: #16a34a; }
+.imp-mes-card .sai { font-size: 12px; font-weight: 700; color: #dc2626; }
+.imp-mes-card .qtd { font-size: 10px; color: #94a3b8; margin-top: 3px; }
+
+/* Filtros bar */
+.imp-filtros-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+
+/* Valores coloridos */
+.imp-val-ent { color: #16a34a; font-weight: 700; }
+.imp-val-sai { color: #dc2626; font-weight: 700; }
+.imp-val-sal { color: #2563eb; font-weight: 600; }
+
+/* Badges */
+.badge-imp { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.badge-entrada      { background: #dcfce7; color: #15803d; }
+.badge-saida        { background: #fee2e2; color: #dc2626; }
+.badge-tarifa       { background: #fef3c7; color: #b45309; }
+.badge-transferencia{ background: #e0f2fe; color: #0369a1; }
+.badge-pendente     { background: #fef9c3; color: #854d0e; }
+.badge-importado    { background: #dcfce7; color: #15803d; }
+.badge-duplicata    { background: #fce7f3; color: #9d174d; }
+.badge-ignorado     { background: #f1f5f9; color: #64748b; }
+.badge-conciliado   { background: #ede9fe; color: #6d28d9; }
+.badge-erro         { background: #fee2e2; color: #dc2626; }
+.badge-pdf          { background: #fee2e2; color: #dc2626; }
+.badge-csv          { background: #dcfce7; color: #15803d; }
+
+/* Paginação */
+.imp-paginacao { display: flex; align-items: center; gap: 6px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+.imp-paginacao button { padding: 5px 11px; border: 1.5px solid #e2e8f0; background: #fff; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: #374151; transition: all .2s; }
+.imp-paginacao button:hover { border-color: #2563eb; color: #2563eb; }
+.imp-paginacao button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.imp-paginacao button:disabled { opacity: .4; cursor: not-allowed; }
+.imp-paginacao .imp-pag-info { font-size: 12px; color: #64748b; }
+
+/* Lote card */
+.imp-lote-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; margin-bottom: 12px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.imp-lote-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.imp-lote-icon-pdf { background: #fee2e2; color: #dc2626; }
+.imp-lote-icon-csv { background: #dcfce7; color: #16a34a; }
+.imp-lote-info { flex: 1; min-width: 180px; }
+.imp-lote-nome { font-weight: 700; color: #1e293b; font-size: 14px; }
+.imp-lote-meta { font-size: 12px; color: #64748b; margin-top: 2px; }
+.imp-lote-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+.imp-lote-stat .v { font-size: 17px; font-weight: 800; color: #1e293b; }
+.imp-lote-stat .l { font-size: 10px; color: #94a3b8; text-transform: uppercase; }
+.imp-lote-acoes { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* Hist cell */
+.imp-hist-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
+
+/* Form grid */
+.form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+@media(max-width: 768px) {
+    .form-grid-3 { grid-template-columns: 1fr; }
+    .imp-grid-2col { grid-template-columns: 1fr; }
+    .imp-filtros-bar { flex-direction: column; }
+}
+</style>

@@ -1,0 +1,627 @@
+<!-- =====================================================
+     CONTAS BANCÁRIAS — Módulo Financeiro
+     ===================================================== -->
+<link rel="stylesheet" href="/assets/css/pages/contas_bancarias.css">
+
+<!-- ── Cabeçalho ──────────────────────────────────────── -->
+<div class="cb-header">
+  <div class="cb-header-left">
+    <button class="btn-voltar" onclick="AppRouter.navigate("financeiro")" title="Voltar para Financeiro"><i class="fas fa-arrow-left"></i> Voltar</button>
+    <span class="cb-header-icon"><i class="fas fa-university"></i></span>
+    <div>
+      <h1 class="cb-titulo">Contas Bancárias</h1>
+      <p class="cb-subtitulo">Gerencie contas, movimentações e importações OFX</p>
+    </div>
+  </div>
+  <button class="btn-primary" onclick="ContasBancarias.abrirModalConta()">
+    <i class="fas fa-plus"></i> Nova Conta
+  </button>
+</div>
+
+<!-- ── KPIs ───────────────────────────────────────────── -->
+<div class="cb-kpis" id="cb-kpis">
+  <div class="cb-kpi">
+    <div class="cb-kpi-icon azul"><i class="fas fa-university"></i></div>
+    <div class="cb-kpi-info">
+      <span class="cb-kpi-valor" id="kpi-total-contas">—</span>
+      <span class="cb-kpi-label">Contas Ativas</span>
+    </div>
+  </div>
+  <div class="cb-kpi">
+    <div class="cb-kpi-icon verde"><i class="fas fa-wallet"></i></div>
+    <div class="cb-kpi-info">
+      <span class="cb-kpi-valor" id="kpi-saldo-total">—</span>
+      <span class="cb-kpi-label">Saldo Total</span>
+    </div>
+  </div>
+  <div class="cb-kpi">
+    <div class="cb-kpi-icon verde-claro"><i class="fas fa-arrow-down"></i></div>
+    <div class="cb-kpi-info">
+      <span class="cb-kpi-valor" id="kpi-creditos-mes">—</span>
+      <span class="cb-kpi-label">Entradas no Mês</span>
+    </div>
+  </div>
+  <div class="cb-kpi">
+    <div class="cb-kpi-icon vermelho"><i class="fas fa-arrow-up"></i></div>
+    <div class="cb-kpi-info">
+      <span class="cb-kpi-valor" id="kpi-debitos-mes">—</span>
+      <span class="cb-kpi-label">Saídas no Mês</span>
+    </div>
+  </div>
+  <div class="cb-kpi">
+    <div class="cb-kpi-icon amarelo"><i class="fas fa-clock"></i></div>
+    <div class="cb-kpi-info">
+      <span class="cb-kpi-valor" id="kpi-pendentes">—</span>
+      <span class="cb-kpi-label">Pendentes Conciliação</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Conteúdo principal ─────────────────────────────── -->
+<div class="cb-layout">
+
+  <!-- Painel esquerdo: lista de contas -->
+  <div class="cb-painel-contas" id="cb-painel-contas">
+    <div class="cb-painel-header">
+      <h3><i class="fas fa-list"></i> Contas Cadastradas</h3>
+    </div>
+    <div id="cb-lista-contas" class="cb-lista-contas">
+      <div class="cb-loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+    </div>
+  </div>
+
+  <!-- Painel direito: detalhes da conta selecionada -->
+  <div class="cb-painel-detalhe" id="cb-painel-detalhe">
+    <div class="cb-detalhe-vazio" id="cb-detalhe-vazio">
+      <i class="fas fa-hand-pointer"></i>
+      <p>Selecione uma conta para ver os detalhes</p>
+    </div>
+
+    <!-- Conteúdo do detalhe (oculto até selecionar conta) -->
+    <div id="cb-detalhe-conteudo" style="display:none;">
+
+      <!-- Header da conta selecionada -->
+      <div class="cb-conta-header" id="cb-conta-header">
+        <div class="cb-conta-header-info">
+          <div class="cb-conta-logo" id="cb-conta-logo">
+            <i class="fas fa-university"></i>
+          </div>
+          <div>
+            <h2 id="cb-conta-nome">—</h2>
+            <p id="cb-conta-dados">—</p>
+          </div>
+          <div class="cb-conta-saldo-box">
+            <span class="cb-conta-saldo-label">Saldo Atual</span>
+            <span class="cb-conta-saldo-valor" id="cb-conta-saldo">R$ 0,00</span>
+          </div>
+        </div>
+        <div class="cb-conta-acoes">
+          <button class="btn-outline-sm" onclick="ContasBancarias.editarConta()">
+            <i class="fas fa-edit"></i> Editar
+          </button>
+        </div>
+      </div>
+
+      <!-- Abas -->
+      <div class="cb-tabs">
+        <button class="cb-tab active" data-tab="movimentacoes" onclick="ContasBancarias.mudarAba('movimentacoes')">
+          <i class="fas fa-exchange-alt"></i> Movimentações
+        </button>
+        <button class="cb-tab" data-tab="importar" onclick="ContasBancarias.mudarAba('importar')">
+          <i class="fas fa-file-import"></i> Importar OFX
+        </button>
+        <button class="cb-tab" data-tab="historico" onclick="ContasBancarias.mudarAba('historico')">
+          <i class="fas fa-history"></i> Histórico
+        </button>
+        <button class="cb-tab" data-tab="relatorios" onclick="ContasBancarias.mudarAba('relatorios')">
+          <i class="fas fa-chart-bar"></i> Relatórios
+        </button>
+        <button class="cb-tab" data-tab="conciliacao" onclick="ContasBancarias.mudarAba('conciliacao')">
+          <i class="fas fa-balance-scale"></i> Conciliação
+          <span class="cb-tab-badge" id="cb-badge-conc" style="display:none"></span>
+        </button>
+      </div>
+
+      <!-- ── ABA: MOVIMENTAÇÕES ───────────────────────── -->
+      <div class="cb-tab-content active" id="tab-movimentacoes">
+        <!-- Filtros -->
+        <div class="cb-filtros">
+          <div class="cb-filtros-row">
+            <div class="cb-filtro-grupo">
+              <label>Tipo</label>
+              <select id="mov-filtro-tipo" onchange="ContasBancarias.filtrarMovimentacoes()">
+                <option value="">Todos</option>
+                <option value="credito">Crédito</option>
+                <option value="debito">Débito</option>
+              </select>
+            </div>
+            <div class="cb-filtro-grupo">
+              <label>Conciliação</label>
+              <select id="mov-filtro-conciliado" onchange="ContasBancarias.filtrarMovimentacoes()">
+                <option value="">Todos</option>
+                <option value="0">Pendente</option>
+                <option value="1">Conciliado</option>
+              </select>
+            </div>
+            <div class="cb-filtro-grupo">
+              <label>De</label>
+              <input type="date" id="mov-filtro-dt-ini" onchange="ContasBancarias.filtrarMovimentacoes()">
+            </div>
+            <div class="cb-filtro-grupo">
+              <label>Até</label>
+              <input type="date" id="mov-filtro-dt-fim" onchange="ContasBancarias.filtrarMovimentacoes()">
+            </div>
+            <div class="cb-filtro-grupo flex-grow">
+              <label>Buscar</label>
+              <input type="text" id="mov-filtro-busca" placeholder="Descrição..." oninput="ContasBancarias.filtrarMovimentacoes()">
+            </div>
+          </div>
+          <div class="cb-filtros-acoes">
+            <button class="btn-outline-sm" onclick="ContasBancarias.abrirModalMovimentacao()">
+              <i class="fas fa-plus"></i> Lançamento Manual
+            </button>
+            <button class="btn-outline-sm" onclick="ContasBancarias.exportarCSV()">
+              <i class="fas fa-download"></i> Exportar CSV
+            </button>
+            <span class="cb-total-badge" id="mov-total-badge">0 registros</span>
+          </div>
+        </div>
+
+        <!-- Tabela de movimentações -->
+        <div class="cb-tabela-wrap">
+          <table class="cb-tabela" id="cb-tabela-mov">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="cb-check-all" onchange="ContasBancarias.selecionarTodos(this)"></th>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th>Doc.</th>
+                <th>Tipo</th>
+                <th class="text-right">Valor</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="cb-tbody-mov">
+              <tr><td colspan="8" class="cb-vazio">Selecione uma conta para ver as movimentações</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Paginação e conciliação em lote -->
+        <div class="cb-tabela-footer">
+          <div class="cb-conciliacao-lote" id="cb-conciliacao-lote" style="display:none;">
+            <span id="cb-selecionados-count">0 selecionados</span>
+            <button class="btn-sm-verde" onclick="ContasBancarias.conciliarSelecionados(1)">
+              <i class="fas fa-check"></i> Marcar Conciliado
+            </button>
+            <button class="btn-sm-cinza" onclick="ContasBancarias.conciliarSelecionados(0)">
+              <i class="fas fa-times"></i> Desmarcar
+            </button>
+          </div>
+          <div class="cb-paginacao" id="cb-paginacao"></div>
+        </div>
+      </div>
+
+      <!-- ── ABA: IMPORTAR OFX ────────────────────────── -->
+      <div class="cb-tab-content" id="tab-importar">
+        <!-- Último importado -->
+        <div class="cb-ultimo-importado" id="cb-ultimo-importado">
+          <i class="fas fa-info-circle"></i>
+          <span id="cb-ultimo-importado-texto">Verificando último arquivo importado...</span>
+        </div>
+
+        <!-- Área de drop de arquivo -->
+        <div class="cb-ofx-drop" id="cb-ofx-drop"
+             ondragover="ContasBancarias.dragOver(event)"
+             ondragleave="ContasBancarias.dragLeave(event)"
+             ondrop="ContasBancarias.dropArquivo(event)">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <p>Arraste o arquivo <strong>.OFX</strong> aqui ou</p>
+          <label class="btn-primary" for="ofx-input">
+            <i class="fas fa-folder-open"></i> Selecionar Arquivo
+          </label>
+          <input type="file" id="ofx-input" accept=".ofx,.OFX" style="display:none"
+                 onchange="ContasBancarias.selecionarArquivo(this)">
+          <p class="cb-ofx-hint">Suporta arquivos OFX de qualquer banco brasileiro</p>
+        </div>
+
+        <!-- Preview do arquivo (oculto até selecionar) -->
+        <div class="cb-ofx-preview" id="cb-ofx-preview" style="display:none;">
+          <div class="cb-ofx-preview-header">
+            <div class="cb-ofx-preview-icon"><i class="fas fa-file-alt"></i></div>
+            <div class="cb-ofx-preview-info">
+              <strong id="prev-nome-arquivo">—</strong>
+              <span id="prev-periodo">—</span>
+            </div>
+          </div>
+          <div class="cb-ofx-stats">
+            <div class="cb-ofx-stat">
+              <span class="cb-ofx-stat-valor" id="prev-total">—</span>
+              <span class="cb-ofx-stat-label">Total no arquivo</span>
+            </div>
+            <div class="cb-ofx-stat verde">
+              <span class="cb-ofx-stat-valor" id="prev-novas">—</span>
+              <span class="cb-ofx-stat-label">Novas transações</span>
+            </div>
+            <div class="cb-ofx-stat cinza">
+              <span class="cb-ofx-stat-valor" id="prev-dup">—</span>
+              <span class="cb-ofx-stat-label">Já importadas</span>
+            </div>
+            <div class="cb-ofx-stat azul">
+              <span class="cb-ofx-stat-valor" id="prev-saldo">—</span>
+              <span class="cb-ofx-stat-label">Saldo no arquivo</span>
+            </div>
+          </div>
+          <div class="cb-ofx-acoes">
+            <button class="btn-outline-sm" onclick="ContasBancarias.cancelarOFX()">
+              <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button class="btn-primary" id="btn-importar-ofx" onclick="ContasBancarias.confirmarImportacao()">
+              <i class="fas fa-file-import"></i> Importar Transações Novas
+            </button>
+          </div>
+        </div>
+
+        <!-- Progresso de importação -->
+        <div class="cb-ofx-progresso" id="cb-ofx-progresso" style="display:none;">
+          <div class="cb-progresso-bar">
+            <div class="cb-progresso-fill" id="cb-progresso-fill"></div>
+          </div>
+          <p id="cb-progresso-texto">Importando...</p>
+        </div>
+
+        <!-- Resultado da importação -->
+        <div class="cb-ofx-resultado" id="cb-ofx-resultado" style="display:none;">
+          <div class="cb-resultado-icon" id="cb-resultado-icon"><i class="fas fa-check-circle"></i></div>
+          <h3 id="cb-resultado-titulo">Importação concluída</h3>
+          <div class="cb-resultado-stats" id="cb-resultado-stats"></div>
+          <button class="btn-primary" onclick="ContasBancarias.novaImportacao()">
+            <i class="fas fa-redo"></i> Nova Importação
+          </button>
+        </div>
+      </div>
+
+      <!-- ── ABA: HISTÓRICO ───────────────────────────── -->
+      <div class="cb-tab-content" id="tab-historico">
+        <div class="cb-tabela-wrap">
+          <table class="cb-tabela">
+            <thead>
+              <tr>
+                <th>Data/Hora</th>
+                <th>Arquivo</th>
+                <th>Período OFX</th>
+                <th class="text-right">Total</th>
+                <th class="text-right">Importadas</th>
+                <th class="text-right">Duplicadas</th>
+                <th>Saldo Final</th>
+                <th>Usuário</th>
+              </tr>
+            </thead>
+            <tbody id="cb-tbody-historico">
+              <tr><td colspan="8" class="cb-vazio">Nenhuma importação registrada</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── ABA: RELATÓRIOS ──────────────────────────── -->
+      <div class="cb-tab-content" id="tab-relatorios">
+        <div class="cb-rel-filtros">
+          <div class="cb-filtro-grupo">
+            <label>De</label>
+            <input type="date" id="rel-dt-ini" value="">
+          </div>
+          <div class="cb-filtro-grupo">
+            <label>Até</label>
+            <input type="date" id="rel-dt-fim" value="">
+          </div>
+          <button class="btn-primary" onclick="ContasBancarias.gerarRelatorio()">
+            <i class="fas fa-search"></i> Gerar Extrato
+          </button>
+          <button class="btn-outline-sm" onclick="ContasBancarias.exportarRelatorioCSV()">
+            <i class="fas fa-download"></i> CSV
+          </button>
+          <button class="btn-outline-sm" onclick="ContasBancarias.imprimirRelatorio()">
+            <i class="fas fa-print"></i> Imprimir
+          </button>
+        </div>
+
+        <!-- Resumo do período -->
+        <div class="cb-rel-resumo" id="cb-rel-resumo" style="display:none;">
+          <div class="cb-rel-kpi verde">
+            <span id="rel-total-c">R$ 0,00</span>
+            <label>Total Créditos</label>
+          </div>
+          <div class="cb-rel-kpi vermelho">
+            <span id="rel-total-d">R$ 0,00</span>
+            <label>Total Débitos</label>
+          </div>
+          <div class="cb-rel-kpi azul">
+            <span id="rel-saldo-p">R$ 0,00</span>
+            <label>Saldo do Período</label>
+          </div>
+        </div>
+
+        <div class="cb-tabela-wrap" id="cb-rel-tabela-wrap" style="display:none;">
+          <table class="cb-tabela">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th>Doc.</th>
+                <th>Tipo</th>
+                <th class="text-right">Valor</th>
+                <th>Conciliado</th>
+              </tr>
+            </thead>
+            <tbody id="cb-tbody-rel">
+            </tbody>
+          </table>
+        </div>
+
+        <div class="cb-rel-vazio" id="cb-rel-vazio">
+          <i class="fas fa-chart-bar"></i>
+          <p>Defina o período e clique em "Gerar Extrato"</p>
+        </div>
+      </div>
+
+      <!-- ── ABA: CONCILIAÇÃO ────────────────────────── -->
+      <div class="cb-tab-content" id="tab-conciliacao">
+        <div class="cb-filtros">
+          <div class="cb-filtros-row">
+            <div class="cb-filtro-grupo">
+              <label>Tipo</label>
+              <select id="conc-filtro-tipo" onchange="ContasBancarias.filtrarConciliacao()">
+                <option value="">Todos</option>
+                <option value="credito">Crédito</option>
+                <option value="debito">Débito</option>
+              </select>
+            </div>
+            <div class="cb-filtro-grupo">
+              <label>De</label>
+              <input type="date" id="conc-filtro-dt-ini" onchange="ContasBancarias.filtrarConciliacao()">
+            </div>
+            <div class="cb-filtro-grupo">
+              <label>Até</label>
+              <input type="date" id="conc-filtro-dt-fim" onchange="ContasBancarias.filtrarConciliacao()">
+            </div>
+            <div class="cb-filtro-grupo flex-grow">
+              <label>Buscar</label>
+              <input type="text" id="conc-filtro-busca" placeholder="Descrição, favorecido..." oninput="ContasBancarias.filtrarConciliacao()">
+            </div>
+          </div>
+          <span class="cb-total-badge" id="conc-total-badge">0 pendentes</span>
+        </div>
+
+        <div class="cb-tabela-wrap">
+          <table class="cb-tabela">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Descrição / Favorecido</th>
+                <th>Doc.</th>
+                <th>Tipo</th>
+                <th class="text-right">Valor</th>
+                <th style="text-align:center">Candidatos</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="cb-tbody-conc">
+              <tr><td colspan="7" class="cb-vazio">Selecione uma conta para ver as pendências</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="cb-paginacao" id="cb-pag-conc"></div>
+      </div>
+
+    </div><!-- /cb-detalhe-conteudo -->
+  </div><!-- /cb-painel-detalhe -->
+</div><!-- /cb-layout -->
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: CADASTRO DE CONTA BANCÁRIA
+     ═══════════════════════════════════════════════════ -->
+<div class="cb-modal-overlay" id="modal-conta" style="display:none;">
+  <div class="cb-modal">
+    <div class="cb-modal-header">
+      <h3 id="modal-conta-titulo"><i class="fas fa-university"></i> Nova Conta Bancária</h3>
+      <button class="cb-modal-fechar" onclick="ContasBancarias.fecharModalConta()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="cb-modal-body">
+      <input type="hidden" id="conta-id">
+
+      <div class="cb-form-row">
+        <div class="cb-form-grupo">
+          <label>Nome / Apelido da Conta <span class="obrig">*</span></label>
+          <input type="text" id="conta-nome" placeholder="Ex: Bradesco Corrente Principal">
+        </div>
+        <div class="cb-form-grupo cb-form-grupo-sm">
+          <label>Tipo de Conta <span class="obrig">*</span></label>
+          <select id="conta-tipo">
+            <option value="corrente">Conta Corrente</option>
+            <option value="poupanca">Conta Poupança</option>
+            <option value="investimento">Investimento</option>
+            <option value="caixa">Caixa Interno</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="cb-form-row">
+        <div class="cb-form-grupo cb-form-grupo-sm">
+          <label>Código do Banco <span class="obrig">*</span></label>
+          <input type="text" id="conta-banco-codigo" placeholder="Ex: 0237 ou nome do banco" maxlength="10"
+                 oninput="ContasBancarias.autocompletarBanco(this.value)"
+                 autocomplete="off">
+        </div>
+        <div class="cb-form-grupo">
+          <label>Nome do Banco <span class="obrig">*</span></label>
+          <input type="text" id="conta-banco-nome" placeholder="Ex: Banco Bradesco S.A."
+                 oninput="ContasBancarias.autocompletarBancoNome(this.value)"
+                 autocomplete="off">
+        </div>
+      </div>
+
+      <div class="cb-form-row">
+        <div class="cb-form-grupo cb-form-grupo-sm">
+          <label>Agência <span class="obrig">*</span></label>
+          <input type="text" id="conta-agencia" placeholder="Ex: 0001-9">
+        </div>
+        <div class="cb-form-grupo">
+          <label>Número da Conta <span class="obrig">*</span></label>
+          <input type="text" id="conta-numero" placeholder="Ex: 12345-6">
+        </div>
+        <div class="cb-form-grupo cb-form-grupo-sm">
+          <label>Moeda</label>
+          <select id="conta-moeda">
+            <option value="BRL">BRL — Real</option>
+            <option value="USD">USD — Dólar</option>
+            <option value="EUR">EUR — Euro</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="cb-form-row">
+        <div class="cb-form-grupo cb-form-grupo-sm">
+          <label>Saldo Inicial (R$)</label>
+          <input type="number" id="conta-saldo-inicial" value="0" step="0.01" min="0">
+        </div>
+        <div class="cb-form-grupo">
+          <label>Observações</label>
+          <input type="text" id="conta-obs" placeholder="Informações adicionais...">
+        </div>
+      </div>
+    </div>
+    <div class="cb-modal-footer">
+      <button class="btn-outline" onclick="ContasBancarias.fecharModalConta()">Cancelar</button>
+      <button class="btn-primary" onclick="ContasBancarias.salvarConta()">
+        <i class="fas fa-save"></i> Salvar Conta
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: LANÇAMENTO MANUAL
+     ═══════════════════════════════════════════════════ -->
+<div class="cb-modal-overlay" id="modal-movimentacao" style="display:none;">
+  <div class="cb-modal cb-modal-sm">
+    <div class="cb-modal-header">
+      <h3 id="modal-mov-titulo"><i class="fas fa-exchange-alt"></i> Novo Lançamento</h3>
+      <button class="cb-modal-fechar" onclick="ContasBancarias.fecharModalMovimentacao()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="cb-modal-body">
+      <input type="hidden" id="mov-id">
+
+      <div class="cb-tipo-toggle">
+        <button class="cb-tipo-btn credito active" id="btn-tipo-credito"
+                onclick="ContasBancarias.setTipoMov('credito')">
+          <i class="fas fa-arrow-down"></i> Crédito (Entrada)
+        </button>
+        <button class="cb-tipo-btn debito" id="btn-tipo-debito"
+                onclick="ContasBancarias.setTipoMov('debito')">
+          <i class="fas fa-arrow-up"></i> Débito (Saída)
+        </button>
+      </div>
+      <input type="hidden" id="mov-tipo" value="credito">
+
+      <div class="cb-form-row">
+        <div class="cb-form-grupo">
+          <label>Data do Lançamento <span class="obrig">*</span></label>
+          <input type="date" id="mov-data">
+        </div>
+        <div class="cb-form-grupo">
+          <label>Valor (R$) <span class="obrig">*</span></label>
+          <input type="number" id="mov-valor" step="0.01" min="0.01" placeholder="0,00">
+        </div>
+      </div>
+
+      <div class="cb-form-grupo">
+        <label>Descrição <span class="obrig">*</span></label>
+        <input type="text" id="mov-descricao" placeholder="Descrição da movimentação...">
+      </div>
+
+      <div class="cb-form-grupo">
+        <label>Favorecido / Pagador</label>
+        <input type="text" id="mov-favorecido" placeholder="Nome do favorecido ou pagador...">
+      </div>
+
+      <div class="cb-form-row">
+        <div class="cb-form-grupo">
+          <label>Nº Documento / Cheque</label>
+          <input type="text" id="mov-checknum" placeholder="Opcional">
+        </div>
+        <div class="cb-form-grupo">
+          <label>Nº Documento Financeiro</label>
+          <input type="text" id="mov-numero-documento" placeholder="NF, boleto, recibo...">
+        </div>
+      </div>
+
+      <div class="cb-form-row">
+        <div class="cb-form-grupo">
+          <label>Categoria</label>
+          <input type="text" id="mov-categoria" placeholder="Ex: Manutenção, Taxas...">
+        </div>
+        <div class="cb-form-grupo">
+          <label>Centro de Custo</label>
+          <input type="text" id="mov-centro-custo" placeholder="Opcional">
+        </div>
+      </div>
+
+      <div class="cb-form-row">
+        <div class="cb-form-grupo cb-form-grupo-sm">
+          <label>Status</label>
+          <select id="mov-status">
+            <option value="pendente">Pendente</option>
+            <option value="conciliado">Conciliado</option>
+            <option value="ignorado">Ignorado</option>
+          </select>
+        </div>
+        <div class="cb-form-grupo">
+          <label>Observações</label>
+          <textarea id="mov-obs" rows="2" placeholder="Observações adicionais..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="cb-modal-footer">
+      <button class="btn-outline" onclick="ContasBancarias.fecharModalMovimentacao()">Cancelar</button>
+      <button class="btn-primary" onclick="ContasBancarias.salvarMovimentacao()">
+        <i class="fas fa-save"></i> Salvar Lançamento
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     MODAL: CANDIDATOS À CONCILIAÇÃO
+     ═══════════════════════════════════════════════════ -->
+<div class="cb-modal-overlay" id="modal-conc-candidatos" style="display:none;">
+  <div class="cb-modal">
+    <div class="cb-modal-header">
+      <h3><i class="fas fa-search"></i> Candidatos à Conciliação</h3>
+      <button class="cb-modal-fechar" onclick="ContasBancarias.fecharModalCandidatos()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="cb-modal-body" id="modal-conc-body">
+      <div style="text-align:center;padding:24px;color:#64748b;">
+        <i class="fas fa-spinner fa-spin"></i> Buscando candidatos...
+      </div>
+    </div>
+    <div class="cb-modal-footer">
+      <button class="btn-outline" onclick="ContasBancarias.fecharModalCandidatos()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCRIPT
+     ═══════════════════════════════════════════════════ -->
+<script type="module" src="/frontend/js/pages/contas_bancarias.js"></script>

@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500" role="img" aria-label="Ilustração institucional de obra em manutenção">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef2f9"/>
+      <stop offset="1" stop-color="#dbe4f0"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#94a3b8"/>
+      <stop offset="1" stop-color="#64748b"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="500" fill="url(#bg)"/>
+
+  <!-- Faixa/piso -->
+  <rect x="0" y="430" width="800" height="70" fill="#cbd5e1"/>
+  <rect x="0" y="430" width="800" height="6" fill="#94a3b8"/>
+
+  <!-- Estrutura / andaime (fundo, tons de cinza-azulado) -->
+  <g opacity="0.55" stroke="url(#steel)" stroke-width="10" fill="none">
+    <rect x="90" y="200" width="160" height="230"/>
+    <line x1="90" y1="270" x2="250" y2="270"/>
+    <line x1="90" y1="340" x2="250" y2="340"/>
+    <line x1="90" y1="200" x2="250" y2="430"/>
+    <line x1="250" y1="200" x2="90" y2="430"/>
+  </g>
+  <g opacity="0.4" stroke="url(#steel)" stroke-width="10" fill="none">
+    <rect x="560" y="150" width="170" height="280"/>
+    <line x1="560" y1="230" x2="730" y2="230"/>
+    <line x1="560" y1="310" x2="730" y2="310"/>
+    <line x1="560" y1="390" x2="730" y2="390"/>
+  </g>
+
+  <!-- Cone de sinalização (laranja, cor do módulo) -->
+  <g transform="translate(618,340)">
+    <ellipse cx="0" cy="86" rx="46" ry="12" fill="#94a3b8"/>
+    <polygon points="0,-6 34,80 -34,80" fill="#f97316"/>
+    <polygon points="0,-6 12,26 -12,26" fill="#ffffff"/>
+    <polygon points="-20,46 20,46 26,62 -26,62" fill="#ffffff"/>
+    <rect x="-34" y="80" width="68" height="10" rx="3" fill="#f97316"/>
+  </g>
+
+  <!-- Emblema central: capacete de EPI -->
+  <g transform="translate(400,255)">
+    <circle r="118" fill="#ffffff"/>
+    <circle r="118" fill="none" stroke="#2563eb" stroke-width="6"/>
+    <!-- capacete -->
+    <path d="M -70,18 A 70,62 0 0 1 70,18 Z" fill="#f97316"/>
+    <rect x="-82" y="14" width="164" height="16" rx="8" fill="#ea580c"/>
+    <rect x="-10" y="-58" width="20" height="16" rx="4" fill="#ea580c"/>
+    <!-- viseira/faixa -->
+    <rect x="-70" y="30" width="140" height="10" rx="5" fill="#1e40af"/>
+  </g>
+
+  <!-- Chave inglesa (ferramenta) -->
+  <g transform="translate(255,330) rotate(-25)">
+    <rect x="-8" y="-60" width="16" height="110" rx="8" fill="#475569"/>
+    <circle cx="0" cy="-64" r="26" fill="none" stroke="#475569" stroke-width="14"/>
+    <circle cx="0" cy="-64" r="10" fill="#eef2f9"/>
+  </g>
+
+  <!-- Trena / nível de obra -->
+  <g transform="translate(538,352) rotate(18)">
+    <rect x="-60" y="-14" width="120" height="28" rx="6" fill="#2563eb"/>
+    <rect x="-52" y="-6" width="104" height="12" rx="3" fill="#eef2f9"/>
+  </g>
+
+  <!-- Rodapé com marca do módulo -->
+  <text x="400" y="472" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#475569" letter-spacing="1">
+    OBRA EM ANDAMENTO
+  </text>
+</svg>

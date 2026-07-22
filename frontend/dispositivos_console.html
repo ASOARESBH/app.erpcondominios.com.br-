@@ -1,0 +1,1226 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dispositivos de Segurança - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        /* Menu Toggle */
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            color: #1e293b;
+        }
+
+        .user-info {
+            color: #64748b;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: 0.2s;
+        }
+
+        .stat-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            color: #fff;
+        }
+
+        .stat-icon.blue {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+
+        .stat-icon.green {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .stat-icon.red {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .stat-icon.orange {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .stat-content h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .stat-content p {
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+
+        /* Card */
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h2 {
+            font-size: 1.25rem;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-body {
+            padding: 2rem;
+        }
+
+        /* Form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #334155;
+            font-size: 0.9rem;
+        }
+
+        .form-control {
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-group-full {
+            grid-column: 1 / -1;
+        }
+
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .btn-primary {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .actions-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #f8fafc;
+        }
+
+        th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: #334155;
+            font-size: 0.9rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.9rem;
+            color: #475569;
+        }
+
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .device-icon {
+            font-size: 1.5rem;
+            color: #3b82f6;
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Badge */
+        .badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 1.5rem;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .modal-close {
+            background: #f1f5f9;
+            border: none;
+            color: #64748b;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #e2e8f0;
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .modal-footer {
+            padding: 1.5rem 2rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 3rem;
+            color: #3b82f6;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .loading i {
+            font-size: 3rem;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: none;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .alert.active {
+            display: flex;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 0.85rem;
+            }
+
+            th,
+            td {
+                padding: 0.75rem 0.5rem;
+            }
+
+            .modal-content {
+                max-width: 100%;
+                margin: 0;
+                border-radius: 0;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i>
+                        Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a>
+                </li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                        Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+                        Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                        Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                        Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                        Configuraçµes</a></li>
+                <li class="nav-item"><a href="dispositivos_console.html" class="nav-link active"><i
+                            class="fas fa-microchip"></i> Dispositivos</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                        Administrativo</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <h1><i class="fas fa-microchip"></i> Dispositivos de Segurança</h1>
+                <div class="user-info" id="userInfo"></div>
+            </header>
+
+            <!-- Alertas -->
+            <div id="alertContainer"></div>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <i class="fas fa-microchip"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="statTotal">0</h3>
+                        <p>Total de Dispositivos</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="statAtivos">0</h3>
+                        <p>Dispositivos Ativos</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon red">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="statInativos">0</h3>
+                        <p>Dispositivos Inativos</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="statCameras">0</h3>
+                        <p>Câmeras</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-filter"></i> Filtros e Açµes</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Tipo de Dispositivo</label>
+                            <select id="filtroTipo" class="form-control">
+                                <option value="">Todos os tipos</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Marca</label>
+                            <select id="filtroMarca" class="form-control">
+                                <option value="">Todas as marcas</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>rea de Instalação</label>
+                            <input type="text" id="filtroArea" class="form-control" placeholder="Digite a área...">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select id="filtroStatus" class="form-control">
+                                <option value="">Todos</option>
+                                <option value="1">Ativos</option>
+                                <option value="0">Inativos</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="actions-row">
+                        <button class="btn btn-primary" onclick="abrirModalDispositivo()">
+                            <i class="fas fa-plus"></i> Novo Dispositivo
+                        </button>
+                        <button class="btn btn-secondary" onclick="aplicarFiltros()">
+                            <i class="fas fa-filter"></i> Filtrar
+                        </button>
+                        <button class="btn btn-secondary" onclick="limparFiltros()">
+                            <i class="fas fa-eraser"></i> Limpar
+                        </button>
+                        <button class="btn btn-success" onclick="carregarDispositivos()">
+                            <i class="fas fa-sync"></i> Atualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading -->
+            <div class="loading" id="loading">
+                <i class="fas fa-spinner"></i>
+                <p>Carregando dispositivos...</p>
+            </div>
+
+            <!-- Tabela -->
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-list"></i> Lista de Dispositivos</h2>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Nome</th>
+                            <th>Marca/Modelo</th>
+                            <th>rea</th>
+                            <th>ID Dispositivo</th>
+                            <th>IP</th>
+                            <th>Status</th>
+                            <th>Açµes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dispositivosBody">
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 3rem; color: #94a3b8;">
+                                Nenhum dispositivo cadastrado
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de Cadastro/Edição -->
+    <div class="modal" id="modalDispositivo">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitulo"><i class="fas fa-plus"></i> Novo Dispositivo</h2>
+                <button class="modal-close" onclick="fecharModalDispositivo()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="formDispositivo">
+                <input type="hidden" id="dispositivoId">
+
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group form-group-full">
+                            <label>Nome do Dispositivo *</label>
+                            <input type="text" id="dispositivoNome" class="form-control"
+                                placeholder="Ex: Câmera Portaria Principal" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Tipo *</label>
+                            <select id="dispositivoTipo" class="form-control" required>
+                                <option value="">Selecione...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Marca</label>
+                            <select id="dispositivoMarca" class="form-control">
+                                <option value="">Selecione...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Modelo</label>
+                            <input type="text" id="dispositivoModelo" class="form-control" placeholder="Ex: VIP 1230 B">
+                        </div>
+
+                        <div class="form-group">
+                            <label>rea de Instalação *</label>
+                            <input type="text" id="dispositivoArea" class="form-control"
+                                placeholder="Ex: Portaria Principal" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>ID do Dispositivo</label>
+                            <input type="text" id="dispositivoIdDispositivo" class="form-control"
+                                placeholder="Ex: CAM001">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Endereço IP</label>
+                            <input type="text" id="dispositivoIp" class="form-control" placeholder="Ex: 192.168.1.100">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Porta</label>
+                            <input type="number" id="dispositivoPorta" class="form-control" placeholder="Ex: 80">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Usuário</label>
+                            <input type="text" id="dispositivoUsuario" class="form-control"
+                                placeholder="Usuário de acesso">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" id="dispositivoSenha" class="form-control"
+                                placeholder="Senha de acesso">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Data de Instalação</label>
+                            <input type="date" id="dispositivoDataInstalacao" class="form-control">
+                        </div>
+
+                        <div class="form-group form-group-full">
+                            <label>Observaçµes</label>
+                            <textarea id="dispositivoObservacoes" class="form-control"
+                                placeholder="Informaçµes adicionais..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModalDispositivo()">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================
+        // VARIVEIS GLOBAIS
+        // =====================================================
+        let dispositivos = [];
+        let tipos = [];
+        let marcas = [];
+
+        // =====================================================
+        // INICIALIZAO
+        // =====================================================
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarTipos();
+            carregarMarcas();
+            carregarDispositivos();
+            carregarEstatisticas();
+        });
+
+        // =====================================================
+        // MENU TOGGLE
+        // =====================================================
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        // Fechar sidebar ao clicar fora (mobile)
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        // =====================================================
+        // CARREGAR TIPOS
+        // =====================================================
+        function carregarTipos() {
+            fetch('../api/api_dispositivos_seguranca.php?acao=listar_tipos')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        tipos = data.dados;
+
+                        const selectFiltro = document.getElementById('filtroTipo');
+                        const selectForm = document.getElementById('dispositivoTipo');
+
+                        tipos.forEach(tipo => {
+                            selectFiltro.innerHTML += `<option value="${tipo.id}">${tipo.nome}</option>`;
+                            selectForm.innerHTML += `<option value="${tipo.id}">${tipo.nome}</option>`;
+                        });
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar tipos:', error));
+        }
+
+        // =====================================================
+        // CARREGAR MARCAS
+        // =====================================================
+        function carregarMarcas() {
+            fetch('../api/api_dispositivos_seguranca.php?acao=listar_marcas')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        marcas = data.dados;
+
+                        const selectFiltro = document.getElementById('filtroMarca');
+                        const selectForm = document.getElementById('dispositivoMarca');
+
+                        marcas.forEach(marca => {
+                            selectFiltro.innerHTML += `<option value="${marca.id}">${marca.nome}</option>`;
+                            selectForm.innerHTML += `<option value="${marca.id}">${marca.nome}</option>`;
+                        });
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar marcas:', error));
+        }
+
+        // =====================================================
+        // CARREGAR DISPOSITIVOS
+        // =====================================================
+        function carregarDispositivos() {
+            document.getElementById('loading').classList.add('active');
+
+            fetch('../api/api_dispositivos_seguranca.php?acao=listar')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loading').classList.remove('active');
+
+                    if (data.sucesso) {
+                        dispositivos = data.dados;
+                        renderizarTabela();
+                    } else {
+                        mostrarAlerta('Erro ao carregar dispositivos: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').classList.remove('active');
+                    mostrarAlerta('Erro ao carregar dispositivos', 'error');
+                    console.error('Erro:', error);
+                });
+        }
+
+        // =====================================================
+        // CARREGAR ESTATSTICAS
+        // =====================================================
+        function carregarEstatisticas() {
+            fetch('../api/api_dispositivos_seguranca.php?acao=estatisticas')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        document.getElementById('statTotal').textContent = data.dados.total;
+                        document.getElementById('statAtivos').textContent = data.dados.ativos;
+                        document.getElementById('statInativos').textContent = data.dados.inativos;
+
+                        const cameras = data.dados.por_tipo.find(t => t.tipo.includes('Câmera'));
+                        document.getElementById('statCameras').textContent = cameras ? cameras.total : 0;
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar estatísticas:', error));
+        }
+
+        // =====================================================
+        // RENDERIZAR TABELA
+        // =====================================================
+        function renderizarTabela() {
+            const tbody = document.getElementById('dispositivosBody');
+
+            if (dispositivos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 3rem; color: #94a3b8;">Nenhum dispositivo encontrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = dispositivos.map(d => `
+                <tr>
+                    <td>
+                        <i class="fas ${d.tipo_icone || 'fa-microchip'} device-icon"></i>
+                        ${d.tipo_nome || '-'}
+                    </td>
+                    <td><strong>${d.nome}</strong></td>
+                    <td>
+                        ${d.marca_nome || '-'}<br>
+                        <small style="color: #94a3b8;">${d.modelo || '-'}</small>
+                    </td>
+                    <td>${d.area_instalacao}</td>
+                    <td>${d.id_dispositivo || '-'}</td>
+                    <td>${d.ip_address || '-'}</td>
+                    <td>
+                        <span class="badge ${d.ativo == 1 ? 'badge-success' : 'badge-danger'}">
+                            ${d.ativo == 1 ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </td>
+                    <td class="actions">
+                        <button onclick="editarDispositivo(${d.id})" class="btn btn-sm btn-warning" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="alternarStatus(${d.id})" class="btn btn-sm ${d.ativo == 1 ? 'btn-danger' : 'btn-success'}" title="${d.ativo == 1 ? 'Inativar' : 'Ativar'}">
+                            <i class="fas fa-${d.ativo == 1 ? 'ban' : 'check'}"></i>
+                        </button>
+                        <button onclick="excluirDispositivo(${d.id})" class="btn btn-sm btn-danger" title="Excluir">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // =====================================================
+        // MODAL
+        // =====================================================
+        function abrirModalDispositivo(id = null) {
+            document.getElementById('formDispositivo').reset();
+            document.getElementById('dispositivoId').value = '';
+
+            if (id) {
+                const dispositivo = dispositivos.find(d => d.id == id);
+                if (dispositivo) {
+                    document.getElementById('modalTitulo').innerHTML = '<i class="fas fa-edit"></i> Editar Dispositivo';
+                    document.getElementById('dispositivoId').value = dispositivo.id;
+                    document.getElementById('dispositivoNome').value = dispositivo.nome;
+                    document.getElementById('dispositivoTipo').value = dispositivo.tipo_id;
+                    document.getElementById('dispositivoMarca').value = dispositivo.marca_id || '';
+                    document.getElementById('dispositivoModelo').value = dispositivo.modelo || '';
+                    document.getElementById('dispositivoArea').value = dispositivo.area_instalacao;
+                    document.getElementById('dispositivoIdDispositivo').value = dispositivo.id_dispositivo || '';
+                    document.getElementById('dispositivoIp').value = dispositivo.ip_address || '';
+                    document.getElementById('dispositivoPorta').value = dispositivo.porta || '';
+                    document.getElementById('dispositivoUsuario').value = dispositivo.usuario || '';
+                    document.getElementById('dispositivoSenha').value = dispositivo.senha || '';
+                    document.getElementById('dispositivoDataInstalacao').value = dispositivo.data_instalacao || '';
+                    document.getElementById('dispositivoObservacoes').value = dispositivo.observacoes || '';
+                }
+            } else {
+                document.getElementById('modalTitulo').innerHTML = '<i class="fas fa-plus"></i> Novo Dispositivo';
+            }
+
+            document.getElementById('modalDispositivo').classList.add('active');
+        }
+
+        function fecharModalDispositivo() {
+            document.getElementById('modalDispositivo').classList.remove('active');
+        }
+
+        function editarDispositivo(id) {
+            abrirModalDispositivo(id);
+        }
+
+        // =====================================================
+        // SALVAR DISPOSITIVO
+        // =====================================================
+        document.getElementById('formDispositivo').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData();
+            const id = document.getElementById('dispositivoId').value;
+
+            formData.append('acao', id ? 'atualizar' : 'cadastrar');
+            if (id) formData.append('id', id);
+            formData.append('nome', document.getElementById('dispositivoNome').value);
+            formData.append('tipo_id', document.getElementById('dispositivoTipo').value);
+            formData.append('marca_id', document.getElementById('dispositivoMarca').value);
+            formData.append('modelo', document.getElementById('dispositivoModelo').value);
+            formData.append('area_instalacao', document.getElementById('dispositivoArea').value);
+            formData.append('id_dispositivo', document.getElementById('dispositivoIdDispositivo').value);
+            formData.append('ip_address', document.getElementById('dispositivoIp').value);
+            formData.append('porta', document.getElementById('dispositivoPorta').value);
+            formData.append('usuario', document.getElementById('dispositivoUsuario').value);
+            formData.append('senha', document.getElementById('dispositivoSenha').value);
+            formData.append('data_instalacao', document.getElementById('dispositivoDataInstalacao').value);
+            formData.append('observacoes', document.getElementById('dispositivoObservacoes').value);
+
+            fetch('../api/api_dispositivos_seguranca.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        fecharModalDispositivo();
+                        carregarDispositivos();
+                        carregarEstatisticas();
+                    } else {
+                        mostrarAlerta('Erro: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    mostrarAlerta('Erro ao salvar dispositivo', 'error');
+                    console.error('Erro:', error);
+                });
+        });
+
+        // =====================================================
+        // ALTERNAR STATUS
+        // =====================================================
+        function alternarStatus(id) {
+            if (!confirm('Deseja realmente alterar o status deste dispositivo?')) return;
+
+            const formData = new FormData();
+            formData.append('acao', 'alternar_status');
+            formData.append('id', id);
+
+            fetch('../api/api_dispositivos_seguranca.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        carregarDispositivos();
+                        carregarEstatisticas();
+                    } else {
+                        mostrarAlerta('Erro: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    mostrarAlerta('Erro ao alterar status', 'error');
+                    console.error('Erro:', error);
+                });
+        }
+
+        // =====================================================
+        // EXCLUIR DISPOSITIVO
+        // =====================================================
+        function excluirDispositivo(id) {
+            if (!confirm('Deseja realmente excluir este dispositivo? Esta ação não pode ser desfeita!')) return;
+
+            const formData = new FormData();
+            formData.append('acao', 'excluir');
+            formData.append('id', id);
+
+            fetch('../api/api_dispositivos_seguranca.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        carregarDispositivos();
+                        carregarEstatisticas();
+                    } else {
+                        mostrarAlerta('Erro: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    mostrarAlerta('Erro ao excluir dispositivo', 'error');
+                    console.error('Erro:', error);
+                });
+        }
+
+        // =====================================================
+        // FILTROS
+        // =====================================================
+        function aplicarFiltros() {
+            const tipo = document.getElementById('filtroTipo').value;
+            const marca = document.getElementById('filtroMarca').value;
+            const area = document.getElementById('filtroArea').value.toLowerCase();
+            const status = document.getElementById('filtroStatus').value;
+
+            const filtrados = dispositivos.filter(d => {
+                if (tipo && d.tipo_id != tipo) return false;
+                if (marca && d.marca_id != marca) return false;
+                if (area && !d.area_instalacao.toLowerCase().includes(area)) return false;
+                if (status !== '' && d.ativo != status) return false;
+                return true;
+            });
+
+            const temp = dispositivos;
+            dispositivos = filtrados;
+            renderizarTabela();
+            dispositivos = temp;
+        }
+
+        function limparFiltros() {
+            document.getElementById('filtroTipo').value = '';
+            document.getElementById('filtroMarca').value = '';
+            document.getElementById('filtroArea').value = '';
+            document.getElementById('filtroStatus').value = '';
+            renderizarTabela();
+        }
+
+        // =====================================================
+        // ALERTAS
+        // =====================================================
+        function mostrarAlerta(mensagem, tipo) {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo === 'success' ? 'success' : 'error'} active`;
+            alert.innerHTML = `
+                <i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                <span>${mensagem}</span>
+            `;
+            container.appendChild(alert);
+
+            setTimeout(() => {
+                alert.classList.remove('active');
+                setTimeout(() => alert.remove(), 300);
+            }, 5000);
+        }
+
+        // Fechar modal ao clicar fora
+        document.getElementById('modalDispositivo').addEventListener('click', function (e) {
+            if (e.target === this) {
+                fecharModalDispositivo();
+            }
+        });
+    </script>
+
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

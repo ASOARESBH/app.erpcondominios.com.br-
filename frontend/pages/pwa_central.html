@@ -1,0 +1,466 @@
+<!-- page: pwa_central | css: pwa_central -->
+<script>
+// Quando acessado diretamente (sem AppRouter), redireciona para o layout correto
+// Scripts dentro de innerHTML não executam — este só roda no acesso direto
+if (typeof AppRouter === 'undefined') {
+    window.location.replace('/frontend/layout-base.html?page=pwa_central');
+}
+</script>
+<div id="page-metadata" data-title="Central PWA" data-icon="fa-mobile-alt" style="display:none;"></div>
+
+<div class="page-wrapper page-pwa-central">
+    <div class="page-header">
+        <h1><i class="fas fa-mobile-alt"></i> Central PWA</h1>
+        <p>Gerenciamento completo do Portal do Morador como aplicativo progressivo</p>
+    </div>
+
+    <!-- ── ABAS ──────────────────────────────────────────────── -->
+    <div class="pwa-tabs">
+        <button class="pwa-tab ativo" onclick="PwaCentral.trocarAba('dashboard')">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </button>
+        <button class="pwa-tab" onclick="PwaCentral.trocarAba('health')">
+            <i class="fas fa-heartbeat"></i> Diagnóstico
+            <span class="tab-badge" id="pwa-badge-erros" style="display:none">0</span>
+        </button>
+        <button class="pwa-tab" onclick="PwaCentral.trocarAba('firebase')">
+            <i class="fab fa-google"></i> Firebase
+        </button>
+        <button class="pwa-tab" onclick="PwaCentral.trocarAba('versao')">
+            <i class="fas fa-code-branch"></i> Versão
+        </button>
+        <button class="pwa-tab" onclick="PwaCentral.trocarAba('dispositivos')">
+            <i class="fas fa-mobile-alt"></i> Dispositivos
+        </button>
+        <button class="pwa-tab" onclick="PwaCentral.trocarAba('estatisticas')">
+            <i class="fas fa-chart-pie"></i> Estatísticas
+        </button>
+        <button class="pwa-tab" onclick="PwaCentral.trocarAba('logs')">
+            <i class="fas fa-list-alt"></i> Logs
+        </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- PAINEL: DASHBOARD                                       -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="pwa-painel ativo" id="pwa-painel-dashboard">
+
+        <!-- KPIs -->
+        <div class="pwa-kpi-grid">
+            <div class="pwa-kpi azul">
+                <i class="fas fa-mobile-alt pwa-kpi-icone"></i>
+                <div class="pwa-kpi-valor" id="kpi-tokens-ativos">—</div>
+                <div class="pwa-kpi-label">Dispositivos Ativos</div>
+                <div class="pwa-kpi-sub" id="kpi-moradores-pwa">— moradores</div>
+            </div>
+            <div class="pwa-kpi verde">
+                <i class="fas fa-bell pwa-kpi-icone"></i>
+                <div class="pwa-kpi-valor" id="kpi-push-hoje">—</div>
+                <div class="pwa-kpi-label">Pushes Hoje</div>
+                <div class="pwa-kpi-sub" id="kpi-push-total">— total enviados</div>
+            </div>
+            <div class="pwa-kpi" id="kpi-versao-card">
+                <i class="fas fa-code-branch pwa-kpi-icone"></i>
+                <div class="pwa-kpi-valor" id="kpi-versao">—</div>
+                <div class="pwa-kpi-label">Versão PWA</div>
+                <div class="pwa-kpi-sub" id="kpi-cache-version">—</div>
+            </div>
+            <div class="pwa-kpi" id="kpi-erros-card">
+                <i class="fas fa-exclamation-triangle pwa-kpi-icone"></i>
+                <div class="pwa-kpi-valor" id="kpi-erros-hoje">—</div>
+                <div class="pwa-kpi-label">Erros Hoje</div>
+                <div class="pwa-kpi-sub">logs de erro</div>
+            </div>
+        </div>
+
+        <!-- Status Geral -->
+        <div class="page-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+                <h3 style="font-size:1rem;font-weight:700;"><i class="fas fa-circle-check" style="color:var(--color-primary-600)"></i> Status Geral</h3>
+                <button class="btn-secondary" onclick="PwaCentral.carregarDashboard()" style="font-size:0.82rem;padding:0.35rem 0.8rem;">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+            <div class="pwa-status-grid" id="pwa-status-grid">
+                <div class="pwa-loading"><i class="fas fa-spinner"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <!-- QR Code -->
+        <div class="page-card">
+            <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">
+                <i class="fas fa-qrcode" style="color:var(--color-primary-600)"></i> QR Code de Instalação
+            </h3>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:2rem;align-items:center;">
+                <div class="pwa-qr-canvas" id="pwa-qr-canvas"></div>
+                <div>
+                    <p style="font-weight:600;margin-bottom:0.5rem;">Compartilhe este QR Code com os moradores</p>
+                    <p style="font-size:0.875rem;color:var(--color-text-secondary);margin-bottom:1rem;">
+                        Ao escanear, o morador abrirá diretamente o Portal do Morador e poderá instalar o aplicativo no dispositivo.
+                    </p>
+                    <div class="pwa-qr-url" id="pwa-qr-url-display"></div>
+                    <div style="display:flex;gap:0.75rem;margin-top:1rem;flex-wrap:wrap;">
+                        <button class="btn-primary" onclick="PwaCentral.baixarQrCode()" style="font-size:0.82rem;">
+                            <i class="fas fa-download"></i> Baixar QR Code
+                        </button>
+                        <button class="btn-secondary" onclick="PwaCentral.copiarUrlPortal()" style="font-size:0.82rem;">
+                            <i class="fas fa-copy"></i> Copiar URL
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- PAINEL: DIAGNÓSTICO / HEALTH CHECK                      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="pwa-painel" id="pwa-painel-health">
+        <div class="page-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.75rem;">
+                <div>
+                    <h3 style="font-size:1rem;font-weight:700;">Diagnóstico Automático</h3>
+                    <p style="font-size:0.82rem;color:var(--color-text-secondary);">Validação completa de todos os componentes do PWA</p>
+                </div>
+                <button class="btn-primary" onclick="PwaCentral.executarHealthCheck()">
+                    <i class="fas fa-heartbeat"></i> Executar Diagnóstico
+                </button>
+            </div>
+            <div id="pwa-health-resumo" class="pwa-health-resumo" style="display:none;"></div>
+            <div id="pwa-health-resultado">
+                <div class="pwa-empty">
+                    <i class="fas fa-stethoscope"></i>
+                    <p>Clique em "Executar Diagnóstico" para iniciar</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- PAINEL: FIREBASE                                         -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="pwa-painel" id="pwa-painel-firebase">
+
+        <!-- Alert FCM v1 -->
+        <div class="pwa-alert info">
+            <span class="pwa-alert-icon"><i class="fas fa-info-circle"></i></span>
+            <div>
+                <strong>FCM HTTP v1 ativo</strong> — Este sistema utiliza a API FCM HTTP v1 com autenticação OAuth2 via Service Account.
+                A API Legacy (fcm/send) foi encerrada em junho de 2024 e não é mais utilizada.
+            </div>
+        </div>
+
+        <!-- Service Account -->
+        <div class="page-card">
+            <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">
+                <i class="fas fa-key" style="color:var(--color-primary-600)"></i> Service Account (FCM v1)
+            </h3>
+            <div id="pwa-sa-area" class="pwa-sa-area" onclick="document.getElementById('pwa-sa-file').click()">
+                <div class="sa-icon">🔑</div>
+                <div class="sa-titulo" id="pwa-sa-titulo">Clique para enviar o Service Account JSON</div>
+                <div class="sa-desc" id="pwa-sa-desc">
+                    Firebase Console → Configurações do projeto → Contas de serviço → Gerar nova chave privada
+                </div>
+            </div>
+            <input type="file" id="pwa-sa-file" accept=".json" style="display:none" onchange="PwaCentral.lerServiceAccount(event)">
+            <div id="pwa-sa-preview" style="display:none;margin-top:1rem;"></div>
+            <div style="display:flex;gap:0.75rem;margin-top:1rem;" id="pwa-sa-botoes" style="display:none">
+                <button class="btn-primary" id="pwa-sa-btn-salvar" onclick="PwaCentral.salvarServiceAccount()" style="display:none">
+                    <i class="fas fa-save"></i> Salvar Service Account
+                </button>
+            </div>
+        </div>
+
+        <!-- Config Firebase (client-side) -->
+        <div class="page-card">
+            <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.5rem;">
+                <i class="fab fa-google" style="color:#ea4335"></i> Configuração Firebase (Client-Side)
+            </h3>
+            <p style="font-size:0.82rem;color:var(--color-text-secondary);margin-bottom:1.25rem;">
+                Estas credenciais são usadas pelo Portal do Morador para inicializar o Firebase SDK no navegador. São públicas por natureza (client-side).
+            </p>
+            <div class="pwa-config-grid">
+                <div class="pwa-config-field">
+                    <label>API Key</label>
+                    <input type="text" id="cfg-api-key" placeholder="AIzaSy...">
+                </div>
+                <div class="pwa-config-field">
+                    <label>Auth Domain</label>
+                    <input type="text" id="cfg-auth-domain" placeholder="projeto.firebaseapp.com">
+                </div>
+                <div class="pwa-config-field">
+                    <label>Project ID</label>
+                    <input type="text" id="cfg-project-id" placeholder="meu-projeto">
+                </div>
+                <div class="pwa-config-field">
+                    <label>Storage Bucket</label>
+                    <input type="text" id="cfg-storage-bucket" placeholder="projeto.appspot.com">
+                </div>
+                <div class="pwa-config-field">
+                    <label>Messaging Sender ID</label>
+                    <input type="text" id="cfg-sender-id" placeholder="123456789">
+                </div>
+                <div class="pwa-config-field">
+                    <label>App ID</label>
+                    <input type="text" id="cfg-app-id" placeholder="1:123456789:web:abc...">
+                </div>
+                <div class="pwa-config-field" style="grid-column:1/-1">
+                    <label>VAPID Key Pública <span style="font-weight:400;color:var(--color-text-tertiary)">(Firebase Console → Cloud Messaging → Web Push certificates)</span></label>
+                    <input type="text" id="cfg-vapid-key" placeholder="BNt...">
+                </div>
+            </div>
+            <div style="display:flex;gap:0.75rem;margin-top:1.25rem;flex-wrap:wrap;">
+                <button class="btn-primary" onclick="PwaCentral.salvarConfigFirebase()">
+                    <i class="fas fa-save"></i> Salvar Configuração Firebase
+                </button>
+            </div>
+        </div>
+
+        <!-- Push Feature Flags -->
+        <div class="page-card">
+            <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">
+                <i class="fas fa-toggle-on" style="color:var(--color-primary-600)"></i> Tipos de Notificação
+            </h3>
+            <div class="pwa-toggle-row">
+                <div><div class="pwa-toggle-label">PWA Ativo</div><div class="pwa-toggle-desc">Habilita/desabilita o Portal do Morador completamente</div></div>
+                <label class="pwa-switch"><input type="checkbox" id="flag-pwa-ativo"><span class="pwa-switch-slider"></span></label>
+            </div>
+            <div class="pwa-toggle-row">
+                <div><div class="pwa-toggle-label">Push — Visitantes</div><div class="pwa-toggle-desc">Notificar morador quando visitante for autorizado</div></div>
+                <label class="pwa-switch"><input type="checkbox" id="flag-push-visitante"><span class="pwa-switch-slider"></span></label>
+            </div>
+            <div class="pwa-toggle-row">
+                <div><div class="pwa-toggle-label">Push — Inadimplência</div><div class="pwa-toggle-desc">Alertar moradores com débitos em atraso</div></div>
+                <label class="pwa-switch"><input type="checkbox" id="flag-push-inadimplencia"><span class="pwa-switch-slider"></span></label>
+            </div>
+            <div class="pwa-toggle-row">
+                <div><div class="pwa-toggle-label">Push — Comunicados</div><div class="pwa-toggle-desc">Enviar comunicados gerais do condomínio</div></div>
+                <label class="pwa-switch"><input type="checkbox" id="flag-push-comunicado"><span class="pwa-switch-slider"></span></label>
+            </div>
+            <div class="pwa-toggle-row">
+                <div><div class="pwa-toggle-label">Push — Ordens de Serviço</div><div class="pwa-toggle-desc">Atualizar morador sobre seus chamados</div></div>
+                <label class="pwa-switch"><input type="checkbox" id="flag-push-os"><span class="pwa-switch-slider"></span></label>
+            </div>
+            <div class="pwa-toggle-row">
+                <div><div class="pwa-toggle-label">Push — Urgentes</div><div class="pwa-toggle-desc">Notificações de alta prioridade (requerem interação)</div></div>
+                <label class="pwa-switch"><input type="checkbox" id="flag-push-urgente"><span class="pwa-switch-slider"></span></label>
+            </div>
+            <div style="margin-top:1.25rem;">
+                <button class="btn-primary" onclick="PwaCentral.salvarFlags()">
+                    <i class="fas fa-save"></i> Salvar Configurações
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- PAINEL: VERSÃO                                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="pwa-painel" id="pwa-painel-versao">
+        <div class="page-card">
+            <div class="pwa-versao-atual">
+                <div class="pwa-versao-num" id="versao-num-display">—</div>
+                <div class="pwa-versao-info">
+                    <div class="label">Versão atual do PWA</div>
+                    <div class="cache" id="versao-cache-display">—</div>
+                    <div style="font-size:0.78rem;opacity:0.7;margin-top:0.25rem;" id="versao-data-display"></div>
+                </div>
+            </div>
+
+            <h4 style="font-size:0.875rem;font-weight:700;margin-bottom:0.75rem;color:var(--color-text-secondary);">
+                PUBLICAR NOVA VERSÃO
+            </h4>
+            <div class="pwa-bump-grid">
+                <button class="pwa-bump-btn patch" onclick="PwaCentral.publicarVersao('patch')">
+                    Patch <span style="font-weight:400;font-size:0.78rem;">+0.0.1</span>
+                </button>
+                <button class="pwa-bump-btn minor" onclick="PwaCentral.publicarVersao('minor')">
+                    Minor <span style="font-weight:400;font-size:0.78rem;">+0.1.0</span>
+                </button>
+                <button class="pwa-bump-btn major" onclick="PwaCentral.publicarVersao('major')">
+                    Major <span style="font-weight:400;font-size:0.78rem;">+1.0.0</span>
+                </button>
+            </div>
+
+            <div class="pwa-config-field" style="margin-bottom:1rem;">
+                <label>Changelog (opcional)</label>
+                <textarea id="versao-changelog" placeholder="Descreva as alterações desta versão..."></textarea>
+            </div>
+
+            <p style="font-size:0.8rem;color:var(--color-text-secondary);">
+                <i class="fas fa-info-circle"></i>
+                Publicar uma nova versão invalida o cache de todos os dispositivos, forçando o Service Worker a buscar os arquivos atualizados.
+            </p>
+        </div>
+
+        <div class="page-card">
+            <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">Histórico de Versões</h3>
+            <div class="pwa-tabela-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Versão</th>
+                            <th>Tipo</th>
+                            <th>Cache</th>
+                            <th>Changelog</th>
+                            <th>Publicado em</th>
+                        </tr>
+                    </thead>
+                    <tbody id="versao-historico-tbody">
+                        <tr><td colspan="5" class="pwa-loading"><i class="fas fa-spinner"></i> Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- PAINEL: DISPOSITIVOS                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="pwa-painel" id="pwa-painel-dispositivos">
+        <div class="page-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.75rem;">
+                <div>
+                    <h3 style="font-size:1rem;font-weight:700;">Dispositivos Registrados</h3>
+                    <p style="font-size:0.82rem;color:var(--color-text-secondary);" id="disp-total-info">—</p>
+                </div>
+                <button class="btn-secondary" onclick="PwaCentral.carregarDispositivos(0)" style="font-size:0.82rem;">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+            <div class="pwa-dispositivos-filtros">
+                <select id="disp-filtro-status" onchange="PwaCentral.carregarDispositivos(0)">
+                    <option value="">Todos os status</option>
+                    <option value="ativo">Ativos</option>
+                    <option value="inativo">Inativos</option>
+                </select>
+                <select id="disp-filtro-plat" onchange="PwaCentral.carregarDispositivos(0)">
+                    <option value="">Todas plataformas</option>
+                    <option value="web">Web</option>
+                    <option value="android">Android</option>
+                    <option value="ios">iOS</option>
+                </select>
+                <input type="search" id="disp-busca" placeholder="Buscar morador, browser, OS..." oninput="PwaCentral._debounceDispositivos()" style="flex:1;min-width:180px;">
+            </div>
+            <div class="pwa-tabela-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Morador</th>
+                            <th>Plataforma</th>
+                            <th>OS / Browser</th>
+                            <th>Token</th>
+                            <th>Último acesso</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="disp-tbody">
+                        <tr><td colspan="7" class="pwa-loading"><i class="fas fa-spinner"></i> Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pwa-paginacao">
+                <span id="disp-pag-info">—</span>
+                <div class="pwa-pag-btns">
+                    <button class="pwa-pag-btn" id="disp-btn-ant" onclick="PwaCentral.paginaDispositivos(-1)" disabled>← Anterior</button>
+                    <button class="pwa-pag-btn" id="disp-btn-prox" onclick="PwaCentral.paginaDispositivos(1)" disabled>Próxima →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- PAINEL: ESTATÍSTICAS                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="pwa-painel" id="pwa-painel-estatisticas">
+        <div class="pwa-stats-grid">
+            <div class="pwa-stat-card">
+                <h4>Por Plataforma</h4>
+                <div id="stats-plataforma"><div class="pwa-loading"><i class="fas fa-spinner"></i></div></div>
+            </div>
+            <div class="pwa-stat-card">
+                <h4>Top Browsers</h4>
+                <div id="stats-browsers"><div class="pwa-loading"><i class="fas fa-spinner"></i></div></div>
+            </div>
+            <div class="pwa-stat-card">
+                <h4>Sistemas Operacionais</h4>
+                <div id="stats-os"><div class="pwa-loading"><i class="fas fa-spinner"></i></div></div>
+            </div>
+            <div class="pwa-stat-card">
+                <h4>Últimos Acessos</h4>
+                <div id="stats-ultimos"><div class="pwa-loading"><i class="fas fa-spinner"></i></div></div>
+            </div>
+        </div>
+
+        <div class="page-card">
+            <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.5rem;">Instalações — Últimos 30 dias</h3>
+            <p style="font-size:0.82rem;color:var(--color-text-secondary);margin-bottom:1rem;" id="stats-novos-30d">—</p>
+            <div class="pwa-timeline" id="stats-timeline"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- PAINEL: LOGS                                            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="pwa-painel" id="pwa-painel-logs">
+        <div class="page-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.75rem;">
+                <h3 style="font-size:1rem;font-weight:700;">Logs do PWA</h3>
+                <button class="btn-secondary" onclick="PwaCentral.carregarLogs(0)" style="font-size:0.82rem;">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+            <div class="pwa-dispositivos-filtros" style="margin-bottom:1rem;">
+                <select id="log-filtro-tipo" onchange="PwaCentral.carregarLogs(0)">
+                    <option value="">Todos os tipos</option>
+                    <option value="instalacao">Instalação</option>
+                    <option value="push_enviado">Push Enviado</option>
+                    <option value="push_erro">Push Erro</option>
+                    <option value="token_registrado">Token Registrado</option>
+                    <option value="token_removido">Token Removido</option>
+                    <option value="firebase_init">Firebase Init</option>
+                    <option value="firebase_erro">Firebase Erro</option>
+                    <option value="cache_atualizado">Cache Atualizado</option>
+                    <option value="health_check">Health Check</option>
+                    <option value="config_salva">Config Salva</option>
+                    <option value="erro_geral">Erro Geral</option>
+                </select>
+                <select id="log-filtro-nivel" onchange="PwaCentral.carregarLogs(0)">
+                    <option value="">Todos os níveis</option>
+                    <option value="info">Info</option>
+                    <option value="aviso">Aviso</option>
+                    <option value="erro">Erro</option>
+                </select>
+                <input type="date" id="log-filtro-de"  onchange="PwaCentral.carregarLogs(0)">
+                <input type="date" id="log-filtro-ate" onchange="PwaCentral.carregarLogs(0)">
+                <input type="search" id="log-busca" placeholder="Buscar na descrição..." oninput="PwaCentral._debounceLogs()" style="flex:1;min-width:160px;">
+            </div>
+            <div class="pwa-tabela-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Nível</th>
+                            <th>Tipo</th>
+                            <th>Descrição</th>
+                            <th>Morador</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-tbody">
+                        <tr><td colspan="6" class="pwa-loading"><i class="fas fa-spinner"></i> Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pwa-paginacao">
+                <span id="log-pag-info">—</span>
+                <div class="pwa-pag-btns">
+                    <button class="pwa-pag-btn" id="log-btn-ant"  onclick="PwaCentral.paginaLogs(-1)"  disabled>← Anterior</button>
+                    <button class="pwa-pag-btn" id="log-btn-prox" onclick="PwaCentral.paginaLogs(1)"   disabled>Próxima →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /page-wrapper -->

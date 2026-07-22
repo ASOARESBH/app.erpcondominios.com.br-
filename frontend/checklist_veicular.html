@@ -1,0 +1,739 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checklist Veicular - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        .section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .section h2 {
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 0.6rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 0.6rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            white-space: nowrap;
+            color: #1e293b;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #f87171;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #3b82f6;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+        }
+
+        .stat-card.success {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+        }
+
+        .stat-card.warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .section {
+                padding: 1rem;
+            }
+
+            .submenu ul {
+                flex-direction: column;
+            }
+
+            .submenu a {
+                display: block;
+                text-align: center;
+            }
+
+            .filters {
+                grid-template-columns: 1fr;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+
+            button {
+                width: 100%;
+                margin-right: 0;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i>
+                        Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a>
+                </li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                        Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+                        Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                        Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                        Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                        Configuraçµes</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link active"><i class="fas fa-tools"></i>
+                        Manutenção</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                        Administrativo</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-clipboard-check"></i> Checklist Veicular</h1>
+            </header>
+
+            <nav class="submenu">
+                <ul>
+                    <li><a href="manutencao.html"><i class="fas fa-arrow-left"></i> Voltar</a></li>
+                    <li><a href="checklist_veicular.html" class="active"><i class="fas fa-list"></i> Checklists</a></li>
+                    <li><a href="checklist_alertas.html"><i class="fas fa-exclamation-triangle"></i> Alertas</a></li>
+                </ul>
+            </nav>
+
+            <div id="alertaMsg"></div>
+
+            <!-- Estatísticas -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total de Checklists</h3>
+                    <div class="value" id="statTotal">0</div>
+                </div>
+                <div class="stat-card warning">
+                    <h3>Checklists Abertos</h3>
+                    <div class="value" id="statAbertos">0</div>
+                </div>
+                <div class="stat-card success">
+                    <h3>Checklists Fechados</h3>
+                    <div class="value" id="statFechados">0</div>
+                </div>
+            </div>
+
+            <!-- Açµes Rápidas -->
+            <div class="section">
+                <button class="btn-success" onclick="window.location.href='checklist_novo.html'">
+                    <i class="fas fa-plus"></i> Novo Checklist
+                </button>
+                <button class="btn-warning" onclick="window.location.href='checklist_fechar.html'">
+                    <i class="fas fa-check-circle"></i> Fechar Checklist
+                </button>
+                <button class="btn-info" onclick="carregarChecklists()">
+                    <i class="fas fa-sync"></i> Atualizar
+                </button>
+            </div>
+
+            <!-- Filtros -->
+            <div class="section">
+                <h2>Filtros</h2>
+                <div class="filters">
+                    <div>
+                        <label>Status</label>
+                        <select id="filtroStatus">
+                            <option value="">Todos</option>
+                            <option value="aberto">Aberto</option>
+                            <option value="fechado">Fechado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Veículo</label>
+                        <select id="filtroVeiculo">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Data Início</label>
+                        <input type="date" id="filtroDataInicio">
+                    </div>
+                    <div>
+                        <label>Data Fim</label>
+                        <input type="date" id="filtroDataFim">
+                    </div>
+                </div>
+                <button onclick="aplicarFiltros()"><i class="fas fa-filter"></i> Aplicar Filtros</button>
+                <button class="btn-warning" onclick="limparFiltros()"><i class="fas fa-eraser"></i> Limpar</button>
+            </div>
+
+            <!-- Lista de Checklists -->
+            <div class="section">
+                <h2>Checklists Registrados</h2>
+                <div class="table-wrapper">
+                    <table id="tabelaChecklists">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Veículo</th>
+                                <th>Operador</th>
+                                <th>KM Inicial</th>
+                                <th>KM Final</th>
+                                <th>KM Percorrido</th>
+                                <th>Data Abertura</th>
+                                <th>Data Fechamento</th>
+                                <th>Status</th>
+                                <th>Açµes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpoTabela">
+                            <tr>
+                                <td colspan="10" class="empty-state">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    <p>Carregando checklists...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Variáveis globais
+        let checklists = [];
+        let veiculos = [];
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarVeiculos();
+            carregarChecklists();
+        });
+
+        // Carregar veículos para o filtro
+        function carregarVeiculos() {
+            fetch('../api/api_checklist.php?acao=listar_veiculos')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        veiculos = data.dados;
+                        preencherSelectVeiculos();
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        function preencherSelectVeiculos() {
+            const select = document.getElementById('filtroVeiculo');
+            veiculos.forEach(veiculo => {
+                const option = document.createElement('option');
+                option.value = veiculo.id;
+                option.textContent = `${veiculo.placa} - ${veiculo.modelo}`;
+                select.appendChild(option);
+            });
+        }
+
+        // Carregar checklists
+        function carregarChecklists() {
+            const params = new URLSearchParams();
+
+            const status = document.getElementById('filtroStatus').value;
+            const veiculo = document.getElementById('filtroVeiculo').value;
+            const dataInicio = document.getElementById('filtroDataInicio').value;
+            const dataFim = document.getElementById('filtroDataFim').value;
+
+            if (status) params.append('status', status);
+            if (veiculo) params.append('veiculo_id', veiculo);
+            if (dataInicio) params.append('data_inicio', dataInicio);
+            if (dataFim) params.append('data_fim', dataFim);
+
+            fetch(`../api/api_checklist.php?acao=listar&${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        checklists = data.dados;
+                        renderizarTabela();
+                        atualizarEstatisticas();
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro ao carregar checklists', 'error');
+                });
+        }
+
+        function renderizarTabela() {
+            const tbody = document.getElementById('corpoTabela');
+
+            if (checklists.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="empty-state">
+                            <i class="fas fa-clipboard-list"></i>
+                            <p>Nenhum checklist encontrado</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = checklists.map(checklist => `
+                <tr>
+                    <td>${checklist.id}</td>
+                    <td>${checklist.placa}<br><small>${checklist.veiculo_modelo}</small></td>
+                    <td>${checklist.operador_nome}</td>
+                    <td>${checklist.km_inicial} km</td>
+                    <td>${checklist.km_final ? checklist.km_final + ' km' : '-'}</td>
+                    <td>${checklist.km_percorrido ? checklist.km_percorrido + ' km' : '-'}</td>
+                    <td>${formatarDataHora(checklist.data_hora_abertura)}</td>
+                    <td>${checklist.data_hora_fechamento ? formatarDataHora(checklist.data_hora_fechamento) : '-'}</td>
+                    <td>
+                        <span class="badge ${checklist.status === 'aberto' ? 'badge-warning' : 'badge-success'}">
+                            ${checklist.status.toUpperCase()}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn-info btn-sm" onclick="visualizarChecklist(${checklist.id})">
+                            <i class="fas fa-eye"></i> Ver
+                        </button>
+                        ${checklist.status === 'aberto' ? `
+                            <button class="btn-danger btn-sm" onclick="deletarChecklist(${checklist.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function atualizarEstatisticas() {
+            const total = checklists.length;
+            const abertos = checklists.filter(c => c.status === 'aberto').length;
+            const fechados = checklists.filter(c => c.status === 'fechado').length;
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statAbertos').textContent = abertos;
+            document.getElementById('statFechados').textContent = fechados;
+        }
+
+        function aplicarFiltros() {
+            carregarChecklists();
+        }
+
+        function limparFiltros() {
+            document.getElementById('filtroStatus').value = '';
+            document.getElementById('filtroVeiculo').value = '';
+            document.getElementById('filtroDataInicio').value = '';
+            document.getElementById('filtroDataFim').value = '';
+            carregarChecklists();
+        }
+
+        function visualizarChecklist(id) {
+            window.location.href = `checklist_visualizar.html?id=${id}`;
+        }
+
+        function deletarChecklist(id) {
+            if (!confirm('Tem certeza que deseja deletar este checklist?')) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('acao', 'deletar');
+            formData.append('id', id);
+
+            fetch('../api/api_checklist.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        carregarChecklists();
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro ao deletar checklist', 'error');
+                });
+        }
+
+        function formatarDataHora(dataHora) {
+            if (!dataHora) return '-';
+            const data = new Date(dataHora);
+            return data.toLocaleString('pt-BR');
+        }
+
+        function mostrarAlerta(mensagem, tipo) {
+            const alertaDiv = document.getElementById('alertaMsg');
+            alertaDiv.innerHTML = `<div class="alert alert-${tipo === 'success' ? 'success' : 'error'}">${mensagem}</div>`;
+            setTimeout(() => { alertaDiv.innerHTML = ''; }, 5000);
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    </script>
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

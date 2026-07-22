@@ -1,0 +1,340 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Marketplace" data-icon="fa-store" style="display:none;"></div>
+
+<div class="page-wrapper page-marketplace">
+
+  <!-- Breadcrumb -->
+  <nav class="stub-breadcrumb">
+    <span data-page="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
+    <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+    <span>Marketplace</span>
+  </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-store" style="color:#2563eb;margin-right:10px;"></i>Marketplace</h1>
+            <p>Vitrine de produtos e serviços, gestão de fornecedores e ramos de atividade</p>
+        </div>
+        <div class="page-header-actions">
+            <button class="btn-mk btn-mk-primary" id="btn-novo-ramo" style="display:none;">
+                <i class="fas fa-plus"></i> Novo Ramo
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-mk">
+        <button class="tab-mk active" data-tab="vitrine">
+            <i class="fas fa-shopping-bag"></i> Vitrine
+        </button>
+        <button class="tab-mk" data-tab="fornecedores">
+            <i class="fas fa-users"></i> Fornecedores
+        </button>
+        <button class="tab-mk" data-tab="ramos">
+            <i class="fas fa-list"></i> Ramos de Atividade
+        </button>
+    </div>
+
+    <!-- ===== ABA VITRINE ===== -->
+    <div class="tab-mk-content active" id="tab-vitrine">
+
+        <!-- Filtros Vitrine -->
+        <div class="card-mk filter-card-mk">
+            <div class="filter-grid-mk">
+                <div class="form-group-mk">
+                    <label>Buscar produto ou serviço</label>
+                    <div class="input-icon-mk">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="vt-busca" placeholder="Nome do produto ou serviço...">
+                    </div>
+                </div>
+                <div class="form-group-mk">
+                    <label>Tipo</label>
+                    <select id="vt-tipo">
+                        <option value="">Todos os tipos</option>
+                        <option value="produto">Produtos</option>
+                        <option value="servico">Serviços</option>
+                    </select>
+                </div>
+                <div class="form-group-mk">
+                    <label>Fornecedor</label>
+                    <select id="vt-fornecedor">
+                        <option value="">Todos os fornecedores</option>
+                    </select>
+                </div>
+                <div class="form-group-mk align-end-mk">
+                    <button class="btn-mk btn-mk-primary" id="btn-buscar-vitrine">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    <button class="btn-mk btn-mk-secondary" id="btn-limpar-vitrine">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Vitrine -->
+        <div class="loading-mk" id="loading-vitrine">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Carregando produtos...</span>
+        </div>
+
+        <!-- Grid de Produtos -->
+        <div class="produtos-grid-mk" id="grid-produtos">
+            <!-- Preenchido via JS -->
+        </div>
+
+        <!-- Empty Vitrine -->
+        <div class="empty-mk" id="empty-vitrine" style="display:none;">
+            <i class="fas fa-store-slash"></i>
+            <p>Nenhum produto ou serviço encontrado com os filtros selecionados.</p>
+        </div>
+
+    </div><!-- /tab-vitrine -->
+
+    <!-- ===== ABA FORNECEDORES ===== -->
+    <div class="tab-mk-content" id="tab-fornecedores">
+
+        <!-- KPIs Fornecedores -->
+        <div class="kpis-mk" id="kpis-fornecedores">
+            <div class="kpi-mk kpi-mk-green">
+                <div class="kpi-mk-icon"><i class="fas fa-users"></i></div>
+                <div class="kpi-mk-info">
+                    <span class="kpi-mk-label">Total</span>
+                    <span class="kpi-mk-value" id="kpi-total-forn">0</span>
+                </div>
+            </div>
+            <div class="kpi-mk kpi-mk-blue">
+                <div class="kpi-mk-icon"><i class="fas fa-check-circle"></i></div>
+                <div class="kpi-mk-info">
+                    <span class="kpi-mk-label">Ativos</span>
+                    <span class="kpi-mk-value" id="kpi-ativos-forn">0</span>
+                </div>
+            </div>
+            <div class="kpi-mk kpi-mk-red">
+                <div class="kpi-mk-icon"><i class="fas fa-ban"></i></div>
+                <div class="kpi-mk-info">
+                    <span class="kpi-mk-label">Inativos</span>
+                    <span class="kpi-mk-value" id="kpi-inativos-forn">0</span>
+                </div>
+            </div>
+            <div class="kpi-mk kpi-mk-yellow">
+                <div class="kpi-mk-icon"><i class="fas fa-clock"></i></div>
+                <div class="kpi-mk-info">
+                    <span class="kpi-mk-label">Aguardando Aprovação</span>
+                    <span class="kpi-mk-value" id="kpi-pendentes-forn">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros Fornecedores -->
+        <div class="card-mk filter-card-mk">
+            <div class="filter-grid-mk">
+                <div class="form-group-mk">
+                    <label>Buscar</label>
+                    <div class="input-icon-mk">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="forn-busca" placeholder="Nome ou CPF/CNPJ...">
+                    </div>
+                </div>
+                <div class="form-group-mk">
+                    <label>Status</label>
+                    <select id="forn-status">
+                        <option value="">Todos</option>
+                        <option value="1">Ativos</option>
+                        <option value="0">Inativos</option>
+                    </select>
+                </div>
+                <div class="form-group-mk">
+                    <label>Aprovação</label>
+                    <select id="forn-aprovacao">
+                        <option value="">Todos</option>
+                        <option value="1">Aprovados</option>
+                        <option value="0">Pendentes</option>
+                    </select>
+                </div>
+                <div class="form-group-mk align-end-mk">
+                    <button class="btn-mk btn-mk-primary" id="btn-filtrar-forn">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <button class="btn-mk btn-mk-secondary" id="btn-limpar-forn">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                    <button class="btn-mk btn-mk-success" id="btn-atualizar-forn">
+                        <i class="fas fa-sync"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Fornecedores -->
+        <div class="loading-mk" id="loading-forn">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Carregando fornecedores...</span>
+        </div>
+
+        <!-- Tabela Fornecedores -->
+        <div class="card-mk table-card-mk">
+            <div class="table-header-mk">
+                <h3><i class="fas fa-list"></i> Lista de Fornecedores</h3>
+            </div>
+            <div class="table-responsive-mk">
+                <table class="table-mk">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Estabelecimento</th>
+                            <th>CPF/CNPJ</th>
+                            <th>Ramo</th>
+                            <th>Telefone</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Aprovação</th>
+                            <th>Cadastro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-fornecedores">
+                        <tr>
+                            <td colspan="10" class="empty-row-mk">Nenhum fornecedor encontrado</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /tab-fornecedores -->
+
+    <!-- ===== ABA RAMOS DE ATIVIDADE ===== -->
+    <div class="tab-mk-content" id="tab-ramos">
+
+        <!-- Toolbar Ramos -->
+        <div class="toolbar-mk">
+            <button class="btn-mk btn-mk-success" id="btn-novo-ramo-tab">
+                <i class="fas fa-plus"></i> Novo Ramo de Atividade
+            </button>
+        </div>
+
+        <!-- Loading Ramos -->
+        <div class="loading-mk" id="loading-ramos">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Carregando ramos...</span>
+        </div>
+
+        <!-- Tabela Ramos -->
+        <div class="card-mk table-card-mk">
+            <div class="table-header-mk">
+                <h3><i class="fas fa-list"></i> Ramos de Atividade</h3>
+            </div>
+            <div class="table-responsive-mk">
+                <table class="table-mk">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Ícone</th>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th>Fornecedores</th>
+                            <th>Status</th>
+                            <th>Cadastro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-ramos">
+                        <tr>
+                            <td colspan="8" class="empty-row-mk">Nenhum ramo encontrado</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /tab-ramos -->
+
+    <!-- Toast -->
+    <div class="toast-container-mk" id="toast-mk"></div>
+
+    <!-- ===== MODAL DETALHES PRODUTO ===== -->
+    <div class="modal-overlay-mk page-marketplace" id="modal-produto">
+        <div class="modal-box-mk modal-lg-mk">
+            <div class="modal-header-mk">
+                <h3 id="modal-produto-titulo"><i class="fas fa-box"></i> Detalhes do Produto</h3>
+                <button class="modal-close-mk" id="btn-fechar-produto">&times;</button>
+            </div>
+            <div class="modal-body-mk" id="modal-produto-body">
+                <!-- Preenchido via JS -->
+            </div>
+            <div class="modal-footer-mk">
+                <button class="btn-mk btn-mk-secondary" id="btn-fechar-produto-2">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL RAMO DE ATIVIDADE ===== -->
+    <div class="modal-overlay-mk page-marketplace" id="modal-ramo">
+        <div class="modal-box-mk">
+            <div class="modal-header-mk">
+                <h3 id="modal-ramo-titulo"><i class="fas fa-plus"></i> Novo Ramo de Atividade</h3>
+                <button class="modal-close-mk" id="btn-fechar-ramo">&times;</button>
+            </div>
+            <div class="modal-body-mk">
+                <form id="form-ramo" novalidate>
+                    <input type="hidden" id="ramo-id">
+                    <div class="form-group-mk">
+                        <label>Nome <span class="required-mk">*</span></label>
+                        <input type="text" id="ramo-nome" placeholder="Ex: Serviços Domésticos" required>
+                    </div>
+                    <div class="form-group-mk">
+                        <label>Descrição</label>
+                        <textarea id="ramo-descricao" rows="3" placeholder="Descrição do ramo de atividade..."></textarea>
+                    </div>
+                    <div class="form-group-mk">
+                        <label>Ícone FontAwesome <span class="required-mk">*</span></label>
+                        <div class="input-icon-mk">
+                            <i class="fas fa-icons"></i>
+                            <input type="text" id="ramo-icone" placeholder="fa-briefcase" required>
+                        </div>
+                        <small class="hint-mk">Exemplos: fa-wrench, fa-paint-roller, fa-leaf, fa-tools, fa-home</small>
+                        <div class="icone-preview-mk" id="icone-preview">
+                            <i class="fas fa-briefcase" id="icone-preview-icon"></i>
+                            <span id="icone-preview-nome">fa-briefcase</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer-mk">
+                <button class="btn-mk btn-mk-primary" id="btn-salvar-ramo">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+                <button class="btn-mk btn-mk-secondary" id="btn-cancelar-ramo">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL CONFIRMAÇÃO ===== -->
+    <div class="modal-overlay-mk page-marketplace" id="modal-confirm-mk">
+        <div class="modal-box-mk modal-sm-mk">
+            <div class="modal-header-mk">
+                <h3 id="confirm-titulo-mk"><i class="fas fa-question-circle"></i> Confirmar</h3>
+                <button class="modal-close-mk" id="btn-fechar-confirm">&times;</button>
+            </div>
+            <div class="modal-body-mk">
+                <p id="confirm-msg-mk"></p>
+            </div>
+            <div class="modal-footer-mk">
+                <button class="btn-mk btn-mk-danger" id="btn-confirm-ok">
+                    <i class="fas fa-check"></i> Confirmar
+                </button>
+                <button class="btn-mk btn-mk-secondary" id="btn-confirm-cancel">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /page-marketplace -->

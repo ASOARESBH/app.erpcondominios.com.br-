@@ -1,0 +1,1493 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abastecimento - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        .section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .section h2 {
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.6rem;
+            margin-bottom: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        input:disabled {
+            background: #f1f5f9;
+            cursor: not-allowed;
+        }
+
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 0.6rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            white-space: nowrap;
+            color: #1e293b;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #f87171;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #3b82f6;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 1rem;
+        }
+
+        .modal-header h3 {
+            color: #1e293b;
+            font-size: 1.3rem;
+        }
+
+        .modal-close {
+            background: #ef4444;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .modal-close:hover {
+            background: #dc2626;
+        }
+
+        .saldo-display {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .saldo-display.negativo {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .saldo-display.alerta {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .saldo-display h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
+        }
+
+        .saldo-display .valor {
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .info-box {
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+            margin-bottom: 1rem;
+        }
+
+        .info-box strong {
+            color: #1e293b;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-box p {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .section {
+                padding: 1rem;
+            }
+
+            .submenu ul {
+                flex-direction: column;
+            }
+
+            .submenu a {
+                display: block;
+                text-align: center;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+
+            button {
+                width: 100%;
+                margin-right: 0;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i>
+                        Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a>
+                </li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                        Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+                        Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                        Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                        Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                        Configuraçµes</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link active"><i class="fas fa-tools"></i>
+                        Manutenção</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                        Administrativo</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-gas-pump"></i> Controle de Abastecimento</h1>
+            </header>
+
+            <nav class="submenu">
+                <ul>
+                    <li><a href="manutencao.html"><i class="fas fa-home"></i> Início</a></li>
+                    <li><a href="hidrometro.html"><i class="fas fa-tint"></i> Hidrômetros</a></li>
+                    <li><a href="leitura.html"><i class="fas fa-tachometer-alt"></i> Leituras</a></li>
+                    <li><a href="relatorios_hidrometro.html"><i class="fas fa-chart-bar"></i> Relatórios Hidrômetro</a>
+                    </li>
+                    <li><a href="abastecimento.html" class="active"><i class="fas fa-gas-pump"></i> Abastecimento</a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div id="alertContainer"></div>
+
+            <!-- Navegação de Abas -->
+            <div class="submenu">
+                <ul>
+                    <li><a href="#" onclick="mostrarAba('veiculos'); return false;" id="tab-veiculos" class="active"><i
+                                class="fas fa-car"></i> Cadastro de Veículos</a></li>
+                    <li><a href="#" onclick="mostrarAba('lancamento'); return false;" id="tab-lancamento"><i
+                                class="fas fa-gas-pump"></i> Lançamento</a></li>
+                    <li><a href="#" onclick="mostrarAba('recarga'); return false;" id="tab-recarga"><i
+                                class="fas fa-wallet"></i> Recarga</a></li>
+                    <li><a href="#" onclick="mostrarAba('relatorio'); return false;" id="tab-relatorio"><i
+                                class="fas fa-chart-line"></i> Relatórios</a></li>
+                </ul>
+            </div>
+
+            <!-- ABA: CADASTRO DE VECULOS -->
+            <div id="aba-veiculos" class="aba-content">
+                <section class="section">
+                    <h2><i class="fas fa-plus-circle"></i> Cadastrar Novo Veículo</h2>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Importante:</strong> Após cadastrar o veículo, não
+                        será possível editar os dados nem alterar o KM inicial.
+                    </div>
+                    <form id="formVeiculo">
+                        <div class="form-grid">
+                            <div>
+                                <label for="placa">Placa do Veículo *</label>
+                                <input type="text" id="placa" placeholder="ABC-1234 ou ABC1D23" required maxlength="8"
+                                    class="u-uppercase">
+                                <small class="u-text-secondary">Aceita formato antigo (ABC-1234) ou Mercosul
+                                    (ABC1D23)</small>
+                            </div>
+                            <div>
+                                <label for="modelo">Modelo do Veículo *</label>
+                                <input type="text" id="modelo" placeholder="Ex: Fiat Uno" required>
+                            </div>
+                            <div>
+                                <label for="ano">Ano *</label>
+                                <input type="number" id="ano" placeholder="Ex: 2020" required min="1900" max="2099">
+                            </div>
+                            <div>
+                                <label for="cor">Cor *</label>
+                                <input type="text" id="cor" placeholder="Ex: Branco" required>
+                            </div>
+                            <div>
+                                <label for="km_inicial">KM Atual *</label>
+                                <input type="number" id="km_inicial" placeholder="Ex: 50000" required min="0" step="1">
+                            </div>
+                        </div>
+                        <button type="submit"><i class="fas fa-save"></i> Cadastrar Veículo</button>
+                        <button type="button" class="btn-secondary" onclick="limparFormularioVeiculo()"><i
+                                class="fas fa-eraser"></i> Limpar</button>
+                    </form>
+                </section>
+
+                <section class="section">
+                    <h2><i class="fas fa-list"></i> Veículos Cadastrados</h2>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Placa</th>
+                                    <th>Modelo</th>
+                                    <th>Ano</th>
+                                    <th>Cor</th>
+                                    <th>KM Inicial</th>
+                                    <th>Data Cadastro</th>
+                                    <th>Açµes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaVeiculos">
+                                <tr>
+                                    <td colspan="7" class="empty-state">
+                                        <i class="fas fa-car"></i>
+                                        <p>Nenhum veículo cadastrado</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ABA: LANAMENTO DE ABASTECIMENTO -->
+            <div id="aba-lancamento" class="aba-content u-hidden">
+                <!-- Display de Saldo -->
+                <div class="saldo-display" id="saldoDisplay">
+                    <h3>Saldo Disponível</h3>
+                    <div class="valor" id="saldoValor">R$ 0,00</div>
+                </div>
+
+                <section class="section">
+                    <h2><i class="fas fa-gas-pump"></i> Registrar Abastecimento</h2>
+                    <div class="alert alert-warning u-hidden" id="alertSemSaldo">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong> Saldo insuficiente! O
+                        lançamento ficará negativo até a próxima recarga.
+                    </div>
+                    <form id="formAbastecimento">
+                        <div class="form-grid">
+                            <div>
+                                <label for="veiculo_id">Veículo *</label>
+                                <select id="veiculo_id" required>
+                                    <option value="">Selecione um veículo...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="data_abastecimento">Data e Hora *</label>
+                                <input type="datetime-local" id="data_abastecimento" required>
+                            </div>
+                            <div>
+                                <label for="km_abastecimento">KM Atual *</label>
+                                <input type="number" id="km_abastecimento" placeholder="KM no momento do abastecimento"
+                                    required min="0" step="1">
+                                <small class="u-text-secondary" id="km_info"></small>
+                            </div>
+                            <div>
+                                <label for="litros">Litros *</label>
+                                <input type="number" id="litros" placeholder="Ex: 45.5" required min="0.01" step="0.01">
+                            </div>
+                            <div>
+                                <label for="valor_abastecimento">Valor (R$) *</label>
+                                <input type="number" id="valor_abastecimento" placeholder="Ex: 250.00" required
+                                    min="0.01" step="0.01">
+                            </div>
+                            <div>
+                                <label for="tipo_combustivel">Tipo de Combustível *</label>
+                                <select id="tipo_combustivel" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="Gasolina">Gasolina</option>
+                                    <option value="lcool">lcool</option>
+                                    <option value="Diesel">Diesel</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="operador_id">Operador *</label>
+                                <select id="operador_id" required>
+                                    <option value="">Selecione um operador...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit"><i class="fas fa-save"></i> Registrar Abastecimento</button>
+                        <button type="button" class="btn-secondary" onclick="limparFormularioAbastecimento()"><i
+                                class="fas fa-eraser"></i> Limpar</button>
+                    </form>
+                </section>
+
+                <section class="section">
+                    <h2><i class="fas fa-history"></i> Histórico de Abastecimentos</h2>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Veículo</th>
+                                    <th>KM</th>
+                                    <th>Litros</th>
+                                    <th>Valor</th>
+                                    <th>Combustível</th>
+                                    <th>Operador</th>
+                                    <th>Usuário Logado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaAbastecimentos">
+                                <tr>
+                                    <td colspan="8" class="empty-state">
+                                        <i class="fas fa-gas-pump"></i>
+                                        <p>Nenhum abastecimento registrado</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ABA: RECARGA -->
+            <div id="aba-recarga" class="aba-content u-hidden">
+                <!-- Display de Saldo -->
+                <div class="saldo-display" id="saldoDisplayRecarga">
+                    <h3>Saldo Atual</h3>
+                    <div class="valor" id="saldoValorRecarga">R$ 0,00</div>
+                </div>
+
+                <section class="section">
+                    <h2><i class="fas fa-wallet"></i> Nova Recarga</h2>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Sistema de Crédito/Débito:</strong> Para realizar
+                        lançamentos de abastecimento, é necessário ter saldo. Quando o saldo atingir o valor mínimo,
+                        vocª será alertado.  possível continuar lançando mesmo com saldo negativo.
+                    </div>
+                    <form id="formRecarga">
+                        <div class="form-grid">
+                            <div>
+                                <label for="data_recarga">Data e Hora *</label>
+                                <input type="datetime-local" id="data_recarga" required>
+                            </div>
+                            <div>
+                                <label for="valor_recarga">Valor da Recarga (R$) *</label>
+                                <input type="number" id="valor_recarga" placeholder="Ex: 1000.00" required min="0.01"
+                                    step="0.01">
+                            </div>
+                            <div>
+                                <label for="valor_minimo">Valor Mínimo para Alerta (R$) *</label>
+                                <input type="number" id="valor_minimo" placeholder="Ex: 200.00" required min="0"
+                                    step="0.01">
+                                <small class="u-text-secondary">Sistema alertará quando o saldo atingir este
+                                    valor</small>
+                            </div>
+                            <div>
+                                <label for="nf_recarga">Nºmero da NF (Opcional)</label>
+                                <input type="text" id="nf_recarga" placeholder="Ex: 12345">
+                            </div>
+                        </div>
+                        <button type="submit"><i class="fas fa-save"></i> Registrar Recarga</button>
+                        <button type="button" class="btn-secondary" onclick="limparFormularioRecarga()"><i
+                                class="fas fa-eraser"></i> Limpar</button>
+                    </form>
+                </section>
+
+                <section class="section">
+                    <h2><i class="fas fa-history"></i> Histórico de Recargas</h2>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Valor Recarga</th>
+                                    <th>Valor Mínimo</th>
+                                    <th>NF</th>
+                                    <th>Saldo Após Recarga</th>
+                                    <th>Usuário</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaRecargas">
+                                <tr>
+                                    <td colspan="6" class="empty-state">
+                                        <i class="fas fa-wallet"></i>
+                                        <p>Nenhuma recarga registrada</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ABA: RELATRIOS -->
+            <div id="aba-relatorio" class="aba-content u-hidden">
+                <section class="section">
+                    <h2><i class="fas fa-filter"></i> Filtros de Relatório</h2>
+                    <div class="form-grid">
+                        <div>
+                            <label for="filtro_veiculo">Veículo</label>
+                            <select id="filtro_veiculo">
+                                <option value="">Todos os veículos</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="filtro_data_inicio">Data Início</label>
+                            <input type="date" id="filtro_data_inicio">
+                        </div>
+                        <div>
+                            <label for="filtro_data_fim">Data Fim</label>
+                            <input type="date" id="filtro_data_fim">
+                        </div>
+                        <div>
+                            <label for="filtro_combustivel">Combustível</label>
+                            <select id="filtro_combustivel">
+                                <option value="">Todos</option>
+                                <option value="Gasolina">Gasolina</option>
+                                <option value="lcool">lcool</option>
+                                <option value="Diesel">Diesel</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button onclick="gerarRelatorio()"><i class="fas fa-search"></i> Gerar Relatório</button>
+                    <button class="btn-success" onclick="exportarRelatorio()"><i class="fas fa-file-excel"></i> Exportar
+                        Excel</button>
+                </section>
+
+                <section class="section" id="secaoRelatorio" class="u-hidden">
+                    <h2><i class="fas fa-chart-bar"></i> Resultado do Relatório</h2>
+
+                    <!-- Resumo Geral -->
+                    <div class="info-box">
+                        <strong>Resumo Geral</strong>
+                        <p><strong>Total de Abastecimentos:</strong> <span id="rel_total_abast">0</span></p>
+                        <p><strong>Total em Litros:</strong> <span id="rel_total_litros">0</span> L</p>
+                        <p><strong>Total Gasto:</strong> R$ <span id="rel_total_valor">0,00</span></p>
+                        <p><strong>Média de Consumo:</strong> <span id="rel_media_consumo">0</span> km/L</p>
+                        <p><strong>Preço Médio por Litro:</strong> R$ <span id="rel_preco_medio">0,00</span></p>
+                    </div>
+
+                    <!-- Tabela Detalhada -->
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Veículo</th>
+                                    <th>Placa</th>
+                                    <th>KM</th>
+                                    <th>KM Rodado</th>
+                                    <th>Litros</th>
+                                    <th>Valor</th>
+                                    <th>R$/L</th>
+                                    <th>Consumo (km/L)</th>
+                                    <th>Combustível</th>
+                                    <th>Operador</th>
+                                </tr>
+                            </thead>
+                            <tbody id="relatorioDetalhado">
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modal Ver Detalhes do Veículo -->
+    <div id="modalDetalhesVeiculo" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-car"></i> Detalhes do Veículo</h3>
+                <button class="modal-close" onclick="fecharModal('modalDetalhesVeiculo')">?</button>
+            </div>
+            <div id="detalhesVeiculoContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // VARIVEIS GLOBAIS
+        // ============================================
+        let veiculos = [];
+        let abastecimentos = [];
+        let recargas = [];
+        let usuarios = [];
+        let saldoAtual = 0;
+        let valorMinimoAlerta = 0;
+
+        // ============================================
+        // FUNES AUXILIARES
+        // ============================================
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        function mostrarAba(aba) {
+            // Ocultar todas as abas
+            document.querySelectorAll('.aba-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.submenu a').forEach(el => el.classList.remove('active'));
+
+            // Mostrar aba selecionada
+            document.getElementById('aba-' + aba).style.display = 'block';
+            document.getElementById('tab-' + aba).classList.add('active');
+
+            // Atualizar dados conforme necessário
+            if (aba === 'lancamento') {
+                carregarVeiculosSelect();
+                carregarUsuariosSelect();
+                atualizarSaldo();
+            } else if (aba === 'recarga') {
+                atualizarSaldo();
+            } else if (aba === 'relatorio') {
+                carregarVeiculosSelectFiltro();
+            }
+        }
+
+        function mostrarAlerta(mensagem, tipo) {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo}`;
+            alert.innerHTML = `<i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'times-circle' : 'info-circle'}"></i> ${mensagem}`;
+            container.innerHTML = '';
+            container.appendChild(alert);
+
+            setTimeout(() => alert.remove(), 5000);
+
+            // Scroll para o topo
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function formatarMoeda(valor) {
+            return parseFloat(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatarData(dataString) {
+            const data = new Date(dataString);
+            return data.toLocaleString('pt-BR');
+        }
+
+        function abrirModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function fecharModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function validarPlaca(placa) {
+            // Formato antigo: ABC-1234
+            const regexAntigo = /^[A-Z]{3}-[0-9]{4}$/;
+            // Formato Mercosul: ABC1D23
+            const regexMercosul = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
+
+            placa = placa.toUpperCase().trim();
+            return regexAntigo.test(placa) || regexMercosul.test(placa);
+        }
+
+        function setDataAtual(elementId) {
+            const agora = new Date();
+            agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+            document.getElementById(elementId).value = agora.toISOString().slice(0, 16);
+        }
+
+        // ============================================
+        // CADASTRO DE VECULOS
+        // ============================================
+        async function carregarVeiculos() {
+            try {
+                const response = await fetch('../api/api_abastecimento.php?action=listar_veiculos');
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    veiculos = data.dados;
+                    renderizarVeiculos();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar veículos:', error);
+            }
+        }
+
+        function renderizarVeiculos() {
+            const tbody = document.getElementById('listaVeiculos');
+
+            if (veiculos.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <i class="fas fa-car"></i>
+                            <p>Nenhum veículo cadastrado</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = veiculos.map(v => `
+                <tr>
+                    <td><strong>${v.placa}</strong></td>
+                    <td>${v.modelo}</td>
+                    <td>${v.ano}</td>
+                    <td>${v.cor}</td>
+                    <td>${parseInt(v.km_inicial).toLocaleString('pt-BR')} km</td>
+                    <td>${formatarData(v.data_cadastro)}</td>
+                    <td>
+                        <button class="btn-info btn-sm" onclick="verDetalhesVeiculo(${v.id})">
+                            <i class="fas fa-eye"></i> Ver
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('formVeiculo').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const placa = document.getElementById('placa').value.toUpperCase().trim();
+
+            // Validar placa
+            if (!validarPlaca(placa)) {
+                mostrarAlerta('Placa inválida! Use o formato ABC-1234 (antigo) ou ABC1D23 (Mercosul)', 'error');
+                return;
+            }
+
+            const dados = {
+                action: 'cadastrar_veiculo',
+                placa: placa,
+                modelo: document.getElementById('modelo').value.trim(),
+                ano: document.getElementById('ano').value,
+                cor: document.getElementById('cor').value.trim(),
+                km_inicial: document.getElementById('km_inicial').value
+            };
+
+            try {
+                const response = await fetch('../api/api_abastecimento.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('Veículo cadastrado com sucesso!', 'success');
+                    limparFormularioVeiculo();
+                    carregarVeiculos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao cadastrar veículo', 'error');
+            }
+        });
+
+        function limparFormularioVeiculo() {
+            document.getElementById('formVeiculo').reset();
+        }
+
+        function verDetalhesVeiculo(id) {
+            const veiculo = veiculos.find(v => v.id == id);
+            if (!veiculo) return;
+
+            const abastVeiculo = abastecimentos.filter(a => a.veiculo_id == id);
+            const totalAbast = abastVeiculo.length;
+            const totalLitros = abastVeiculo.reduce((sum, a) => sum + parseFloat(a.litros), 0);
+            const totalValor = abastVeiculo.reduce((sum, a) => sum + parseFloat(a.valor), 0);
+
+            document.getElementById('detalhesVeiculoContent').innerHTML = `
+                <div class="info-box">
+                    <strong>Informaçµes do Veículo</strong>
+                    <p><strong>Placa:</strong> ${veiculo.placa}</p>
+                    <p><strong>Modelo:</strong> ${veiculo.modelo}</p>
+                    <p><strong>Ano:</strong> ${veiculo.ano}</p>
+                    <p><strong>Cor:</strong> ${veiculo.cor}</p>
+                    <p><strong>KM Inicial:</strong> ${parseInt(veiculo.km_inicial).toLocaleString('pt-BR')} km</p>
+                    <p><strong>Data Cadastro:</strong> ${formatarData(veiculo.data_cadastro)}</p>
+                </div>
+                <div class="info-box">
+                    <strong>Estatísticas de Abastecimento</strong>
+                    <p><strong>Total de Abastecimentos:</strong> ${totalAbast}</p>
+                    <p><strong>Total de Litros:</strong> ${totalLitros.toFixed(2)} L</p>
+                    <p><strong>Total Gasto:</strong> R$ ${formatarMoeda(totalValor)}</p>
+                </div>
+            `;
+
+            abrirModal('modalDetalhesVeiculo');
+        }
+
+        // ============================================
+        // LANAMENTO DE ABASTECIMENTO
+        // ============================================
+        async function carregarAbastecimentos() {
+            try {
+                const response = await fetch('../api/api_abastecimento.php?action=listar_abastecimentos');
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    abastecimentos = data.dados;
+                    renderizarAbastecimentos();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar abastecimentos:', error);
+            }
+        }
+
+        function renderizarAbastecimentos() {
+            const tbody = document.getElementById('listaAbastecimentos');
+
+            if (abastecimentos.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="empty-state">
+                            <i class="fas fa-gas-pump"></i>
+                            <p>Nenhum abastecimento registrado</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = abastecimentos.map(a => `
+                <tr>
+                    <td>${formatarData(a.data_abastecimento)}</td>
+                    <td>${a.veiculo_modelo} (${a.veiculo_placa})</td>
+                    <td>${parseInt(a.km_abastecimento).toLocaleString('pt-BR')} km</td>
+                    <td>${parseFloat(a.litros).toFixed(2)} L</td>
+                    <td>R$ ${formatarMoeda(a.valor)}</td>
+                    <td>${a.tipo_combustivel}</td>
+                    <td>${a.operador_nome}</td>
+                    <td>${a.usuario_logado}</td>
+                </tr>
+            `).join('');
+        }
+
+        function carregarVeiculosSelect() {
+            const select = document.getElementById('veiculo_id');
+            select.innerHTML = '<option value="">Selecione um veículo...</option>' +
+                veiculos.map(v => `<option value="${v.id}">${v.placa} - ${v.modelo}</option>`).join('');
+        }
+
+        async function carregarUsuariosSelect() {
+            try {
+                const response = await fetch('../api/api_abastecimento.php?action=listar_usuarios');
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    usuarios = data.dados;
+                    const select = document.getElementById('operador_id');
+                    select.innerHTML = '<option value="">Selecione um operador...</option>' +
+                        usuarios.map(u => `<option value="${u.id}">${u.nome}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar usuários:', error);
+            }
+        }
+
+        // Atualizar informação de KM ao selecionar veículo
+        document.getElementById('veiculo_id').addEventListener('change', function () {
+            const veiculoId = this.value;
+            if (!veiculoId) {
+                document.getElementById('km_info').textContent = '';
+                return;
+            }
+
+            const veiculo = veiculos.find(v => v.id == veiculoId);
+            const abastVeiculo = abastecimentos.filter(a => a.veiculo_id == veiculoId);
+
+            if (abastVeiculo.length > 0) {
+                const ultimoKm = Math.max(...abastVeiculo.map(a => parseInt(a.km_abastecimento)));
+                document.getElementById('km_info').textContent = `ltimo KM registrado: ${ultimoKm.toLocaleString('pt-BR')} km`;
+            } else {
+                document.getElementById('km_info').textContent = `KM inicial do veículo: ${parseInt(veiculo.km_inicial).toLocaleString('pt-BR')} km`;
+            }
+        });
+
+        document.getElementById('formAbastecimento').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const veiculoId = document.getElementById('veiculo_id').value;
+            const kmAbastecimento = parseInt(document.getElementById('km_abastecimento').value);
+            const valor = parseFloat(document.getElementById('valor_abastecimento').value);
+
+            // Validar KM
+            const veiculo = veiculos.find(v => v.id == veiculoId);
+            const abastVeiculo = abastecimentos.filter(a => a.veiculo_id == veiculoId);
+
+            let kmMinimo = parseInt(veiculo.km_inicial);
+            if (abastVeiculo.length > 0) {
+                kmMinimo = Math.max(...abastVeiculo.map(a => parseInt(a.km_abastecimento)));
+            }
+
+            if (kmAbastecimento < kmMinimo) {
+                mostrarAlerta(`KM inválido! O KM deve ser maior ou igual a ${kmMinimo.toLocaleString('pt-BR')} km`, 'error');
+                return;
+            }
+
+            // Verificar saldo
+            if (valor > saldoAtual) {
+                if (!confirm('Saldo insuficiente! O lançamento ficará negativo. Deseja continuar?')) {
+                    return;
+                }
+            }
+
+            const dados = {
+                action: 'lancar_abastecimento',
+                veiculo_id: veiculoId,
+                data_abastecimento: document.getElementById('data_abastecimento').value,
+                km_abastecimento: kmAbastecimento,
+                litros: document.getElementById('litros').value,
+                valor: valor,
+                tipo_combustivel: document.getElementById('tipo_combustivel').value,
+                operador_id: document.getElementById('operador_id').value
+            };
+
+            try {
+                const response = await fetch('../api/api_abastecimento.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('Abastecimento registrado com sucesso!', 'success');
+                    limparFormularioAbastecimento();
+                    carregarAbastecimentos();
+                    atualizarSaldo();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao registrar abastecimento', 'error');
+            }
+        });
+
+        function limparFormularioAbastecimento() {
+            document.getElementById('formAbastecimento').reset();
+            document.getElementById('km_info').textContent = '';
+            setDataAtual('data_abastecimento');
+        }
+
+        // ============================================
+        // RECARGA
+        // ============================================
+        async function carregarRecargas() {
+            try {
+                const response = await fetch('../api/api_abastecimento.php?action=listar_recargas');
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    recargas = data.dados;
+                    renderizarRecargas();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar recargas:', error);
+            }
+        }
+
+        function renderizarRecargas() {
+            const tbody = document.getElementById('listaRecargas');
+
+            if (recargas.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            <i class="fas fa-wallet"></i>
+                            <p>Nenhuma recarga registrada</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = recargas.map(r => `
+                <tr>
+                    <td>${formatarData(r.data_recarga)}</td>
+                    <td>R$ ${formatarMoeda(r.valor_recarga)}</td>
+                    <td>R$ ${formatarMoeda(r.valor_minimo)}</td>
+                    <td>${r.nf || '-'}</td>
+                    <td>R$ ${formatarMoeda(r.saldo_apos)}</td>
+                    <td>${r.usuario_nome}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function atualizarSaldo() {
+            try {
+                const response = await fetch('../api/api_abastecimento.php?action=obter_saldo');
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    saldoAtual = parseFloat(data.saldo);
+                    valorMinimoAlerta = parseFloat(data.valor_minimo || 0);
+
+                    // Atualizar displays
+                    const displays = ['saldoValor', 'saldoValorRecarga'];
+                    displays.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.textContent = 'R$ ' + formatarMoeda(saldoAtual);
+                    });
+
+                    // Atualizar classes de cor
+                    const saldoDisplays = ['saldoDisplay', 'saldoDisplayRecarga'];
+                    saldoDisplays.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.classList.remove('negativo', 'alerta');
+                            if (saldoAtual < 0) {
+                                el.classList.add('negativo');
+                            } else if (saldoAtual <= valorMinimoAlerta) {
+                                el.classList.add('alerta');
+                            }
+                        }
+                    });
+
+                    // Mostrar/ocultar alerta de saldo
+                    const alertSemSaldo = document.getElementById('alertSemSaldo');
+                    if (alertSemSaldo) {
+                        alertSemSaldo.style.display = saldoAtual <= 0 ? 'block' : 'none';
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar saldo:', error);
+            }
+        }
+
+        document.getElementById('formRecarga').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const dados = {
+                action: 'registrar_recarga',
+                data_recarga: document.getElementById('data_recarga').value,
+                valor_recarga: document.getElementById('valor_recarga').value,
+                valor_minimo: document.getElementById('valor_minimo').value,
+                nf: document.getElementById('nf_recarga').value.trim()
+            };
+
+            try {
+                const response = await fetch('../api/api_abastecimento.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('Recarga registrada com sucesso!', 'success');
+                    limparFormularioRecarga();
+                    carregarRecargas();
+                    atualizarSaldo();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao registrar recarga', 'error');
+            }
+        });
+
+        function limparFormularioRecarga() {
+            document.getElementById('formRecarga').reset();
+            setDataAtual('data_recarga');
+        }
+
+        // ============================================
+        // RELATRIOS
+        // ============================================
+        function carregarVeiculosSelectFiltro() {
+            const select = document.getElementById('filtro_veiculo');
+            select.innerHTML = '<option value="">Todos os veículos</option>' +
+                veiculos.map(v => `<option value="${v.id}">${v.placa} - ${v.modelo}</option>`).join('');
+        }
+
+        async function gerarRelatorio() {
+            const veiculoId = document.getElementById('filtro_veiculo').value;
+            const dataInicio = document.getElementById('filtro_data_inicio').value;
+            const dataFim = document.getElementById('filtro_data_fim').value;
+            const combustivel = document.getElementById('filtro_combustivel').value;
+
+            try {
+                let url = 'api_abastecimento.php?action=relatorio';
+                if (veiculoId) url += `&veiculo_id=${veiculoId}`;
+                if (dataInicio) url += `&data_inicio=${dataInicio}`;
+                if (dataFim) url += `&data_fim=${dataFim}`;
+                if (combustivel) url += `&combustivel=${combustivel}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    renderizarRelatorio(data.dados);
+                } else {
+                    mostrarAlerta('Erro ao gerar relatório', 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao gerar relatório', 'error');
+            }
+        }
+
+        function renderizarRelatorio(dados) {
+            if (dados.length === 0) {
+                document.getElementById('secaoRelatorio').style.display = 'none';
+                mostrarAlerta('Nenhum registro encontrado com os filtros selecionados', 'info');
+                return;
+            }
+
+            // Calcular totais
+            const totalAbast = dados.length;
+            const totalLitros = dados.reduce((sum, d) => sum + parseFloat(d.litros), 0);
+            const totalValor = dados.reduce((sum, d) => sum + parseFloat(d.valor), 0);
+            const precoMedio = totalValor / totalLitros;
+
+            // Calcular média de consumo
+            let somaConsumo = 0;
+            let countConsumo = 0;
+
+            dados.forEach((d, index) => {
+                if (index > 0 && d.veiculo_id === dados[index - 1].veiculo_id) {
+                    const kmRodado = parseInt(d.km_abastecimento) - parseInt(dados[index - 1].km_abastecimento);
+                    const litrosAnterior = parseFloat(dados[index - 1].litros);
+                    if (kmRodado > 0 && litrosAnterior > 0) {
+                        const consumo = kmRodado / litrosAnterior;
+                        somaConsumo += consumo;
+                        countConsumo++;
+                    }
+                }
+            });
+
+            const mediaConsumo = countConsumo > 0 ? somaConsumo / countConsumo : 0;
+
+            // Atualizar resumo
+            document.getElementById('rel_total_abast').textContent = totalAbast;
+            document.getElementById('rel_total_litros').textContent = totalLitros.toFixed(2);
+            document.getElementById('rel_total_valor').textContent = formatarMoeda(totalValor);
+            document.getElementById('rel_media_consumo').textContent = mediaConsumo.toFixed(2);
+            document.getElementById('rel_preco_medio').textContent = formatarMoeda(precoMedio);
+
+            // Renderizar tabela detalhada
+            const tbody = document.getElementById('relatorioDetalhado');
+            tbody.innerHTML = dados.map((d, index) => {
+                let kmRodado = '-';
+                let consumo = '-';
+                let precoLitro = (parseFloat(d.valor) / parseFloat(d.litros)).toFixed(2);
+
+                if (index > 0 && d.veiculo_id === dados[index - 1].veiculo_id) {
+                    const km = parseInt(d.km_abastecimento) - parseInt(dados[index - 1].km_abastecimento);
+                    const litrosAnterior = parseFloat(dados[index - 1].litros);
+
+                    if (km > 0) {
+                        kmRodado = km.toLocaleString('pt-BR') + ' km';
+                        if (litrosAnterior > 0) {
+                            consumo = (km / litrosAnterior).toFixed(2) + ' km/L';
+                        }
+                    }
+                }
+
+                return `
+                    <tr>
+                        <td>${formatarData(d.data_abastecimento)}</td>
+                        <td>${d.veiculo_modelo}</td>
+                        <td>${d.veiculo_placa}</td>
+                        <td>${parseInt(d.km_abastecimento).toLocaleString('pt-BR')} km</td>
+                        <td>${kmRodado}</td>
+                        <td>${parseFloat(d.litros).toFixed(2)} L</td>
+                        <td>R$ ${formatarMoeda(d.valor)}</td>
+                        <td>R$ ${precoLitro}</td>
+                        <td>${consumo}</td>
+                        <td>${d.tipo_combustivel}</td>
+                        <td>${d.operador_nome}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('secaoRelatorio').style.display = 'block';
+        }
+
+        function exportarRelatorio() {
+            mostrarAlerta('Função de exportação será implementada no backend', 'info');
+        }
+
+        // ============================================
+        // INICIALIZAO
+        // ============================================
+        window.addEventListener('load', function () {
+            setDataAtual('data_abastecimento');
+            setDataAtual('data_recarga');
+
+            carregarVeiculos();
+            carregarAbastecimentos();
+            carregarRecargas();
+            atualizarSaldo();
+        });
+    </script>
+
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

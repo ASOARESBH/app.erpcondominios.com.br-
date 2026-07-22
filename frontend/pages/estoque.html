@@ -1,0 +1,611 @@
+<!-- Módulo: Estoque | Padrão SPA v2.0 -->
+<div class="page-wrapper page-estoque">
+
+  <!-- Breadcrumb -->
+  <nav class="stub-breadcrumb">
+    <span data-page="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
+    <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+    <span>Estoque</span>
+  </nav>
+
+  <!-- Cabeçalho da página -->
+  <div class="page-header-est">
+    <div class="page-title-est">
+      <i class="fas fa-boxes"></i>
+      <div>
+        <h1>Gestão de Estoque</h1>
+        <p>Controle de produtos, entradas, saídas e movimentações</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs de navegação -->
+  <div class="tabs-est">
+    <button class="tab-btn-est active" data-tab="dashboard">
+      <i class="fas fa-tachometer-alt"></i> Dashboard
+    </button>
+    <button class="tab-btn-est" data-tab="produtos">
+      <i class="fas fa-box"></i> Produtos
+    </button>
+    <button class="tab-btn-est" data-tab="entrada">
+      <i class="fas fa-arrow-down"></i> Entrada
+    </button>
+    <button class="tab-btn-est" data-tab="saida">
+      <i class="fas fa-arrow-up"></i> Saída
+    </button>
+    <button class="tab-btn-est" data-tab="movimentacoes">
+      <i class="fas fa-history"></i> Movimentações
+    </button>
+  </div>
+
+  <!-- ===== ABA DASHBOARD ===== -->
+  <div class="tab-content-est active" id="tab-dashboard">
+
+    <div class="kpi-grid-est">
+      <div class="kpi-card-est kpi-blue-est">
+        <div class="kpi-icon-est"><i class="fas fa-box"></i></div>
+        <div class="kpi-info-est">
+          <span class="kpi-value-est" id="kpiTotalProdutos">--</span>
+          <span class="kpi-label-est">Total de Produtos</span>
+        </div>
+      </div>
+      <div class="kpi-card-est kpi-green-est">
+        <div class="kpi-icon-est"><i class="fas fa-dollar-sign"></i></div>
+        <div class="kpi-info-est">
+          <span class="kpi-value-est" id="kpiValorTotal">--</span>
+          <span class="kpi-label-est">Valor em Estoque</span>
+        </div>
+      </div>
+      <div class="kpi-card-est kpi-orange-est">
+        <div class="kpi-icon-est"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="kpi-info-est">
+          <span class="kpi-value-est" id="kpiEstoqueBaixo">--</span>
+          <span class="kpi-label-est">Estoque Baixo</span>
+        </div>
+      </div>
+      <div class="kpi-card-est kpi-red-est">
+        <div class="kpi-icon-est"><i class="fas fa-times-circle"></i></div>
+        <div class="kpi-info-est">
+          <span class="kpi-value-est" id="kpiZerados">--</span>
+          <span class="kpi-label-est">Zerados</span>
+        </div>
+      </div>
+      <div class="kpi-card-est kpi-purple-est">
+        <div class="kpi-icon-est"><i class="fas fa-exchange-alt"></i></div>
+        <div class="kpi-info-est">
+          <span class="kpi-value-est" id="kpiMovMes">--</span>
+          <span class="kpi-label-est">Movimentações/Mês</span>
+        </div>
+      </div>
+      <div class="kpi-card-est kpi-teal-est">
+        <div class="kpi-icon-est"><i class="fas fa-bell"></i></div>
+        <div class="kpi-info-est">
+          <span class="kpi-value-est" id="kpiAlertas">--</span>
+          <span class="kpi-label-est">Alertas Ativos</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-row-est">
+      <div class="card-est">
+        <div class="card-header-est">
+          <h3><i class="fas fa-chart-bar"></i> Movimentações do Mês</h3>
+        </div>
+        <div class="card-body-est">
+          <div class="mov-summary-est">
+            <div class="mov-item-est mov-entrada-est">
+              <i class="fas fa-arrow-down"></i>
+              <div>
+                <span class="mov-count-est" id="dashEntradasMes">--</span>
+                <span class="mov-label-est">Entradas</span>
+                <span class="mov-valor-est" id="dashValorEntradas">--</span>
+              </div>
+            </div>
+            <div class="mov-item-est mov-saida-est">
+              <i class="fas fa-arrow-up"></i>
+              <div>
+                <span class="mov-count-est" id="dashSaidasMes">--</span>
+                <span class="mov-label-est">Saídas</span>
+                <span class="mov-valor-est" id="dashValorSaidas">--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-est">
+        <div class="card-header-est">
+          <h3><i class="fas fa-fire"></i> Mais Movimentados no Mês</h3>
+        </div>
+        <div class="card-body-est">
+          <div id="maisMov">
+            <div class="loading-est"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-bell"></i> Alertas de Estoque</h3>
+        <button class="btn-sm-est btn-outline-est" id="btnMarcarTodosLidos">
+          <i class="fas fa-check-double"></i> Marcar todos como lidos
+        </button>
+      </div>
+      <div class="card-body-est" id="listaAlertas">
+        <div class="loading-est"><i class="fas fa-spinner fa-spin"></i> Carregando alertas...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== ABA PRODUTOS ===== -->
+  <div class="tab-content-est" id="tab-produtos">
+
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3 id="tituloProdutoForm"><i class="fas fa-plus-circle"></i> Novo Produto</h3>
+        <button class="btn-sm-est btn-outline-est" id="btnToggleFormProduto">
+          <i class="fas fa-chevron-up" id="iconToggleForm"></i>
+        </button>
+      </div>
+      <div id="bodyFormProduto">
+        <div class="card-body-est">
+          <form id="produtoForm" autocomplete="off">
+            <input type="hidden" id="produtoId">
+            <div class="form-grid-est">
+              <div class="form-group-est">
+                <label>Código *</label>
+                <input type="text" id="produtoCodigo" placeholder="Ex: PROD-001" required>
+              </div>
+              <div class="form-group-est">
+                <label>Nome do Produto *</label>
+                <input type="text" id="produtoNome" placeholder="Nome completo do produto" required>
+              </div>
+              <div class="form-group-est">
+                <label>Categoria *</label>
+                <select id="produtoCategoria" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div class="form-group-est">
+                <label>Unidade de Medida *</label>
+                <select id="produtoUnidade" required>
+                  <option value="un">Unidade (un)</option>
+                  <option value="kg">Quilograma (kg)</option>
+                  <option value="g">Grama (g)</option>
+                  <option value="l">Litro (l)</option>
+                  <option value="ml">Mililitro (ml)</option>
+                  <option value="m">Metro (m)</option>
+                  <option value="m2">Metro² (m²)</option>
+                  <option value="cx">Caixa (cx)</option>
+                  <option value="pct">Pacote (pct)</option>
+                  <option value="par">Par</option>
+                </select>
+              </div>
+              <div class="form-group-est">
+                <label>Preço Unitário (R$)</label>
+                <input type="number" id="produtoPreco" placeholder="0.00" min="0" step="0.01">
+              </div>
+              <div class="form-group-est">
+                <label>Estoque Mínimo</label>
+                <input type="number" id="produtoEstoqueMin" placeholder="0" min="0" step="0.01">
+              </div>
+              <div class="form-group-est">
+                <label>Localização</label>
+                <input type="text" id="produtoLocalizacao" placeholder="Ex: Prateleira A-3">
+              </div>
+              <div class="form-group-est">
+                <label>Fornecedor Padrão</label>
+                <input type="text" id="produtoFornecedorPad" placeholder="Nome do fornecedor">
+              </div>
+            </div>
+            <div class="form-group-est">
+              <label>Descrição</label>
+              <textarea id="produtoDescricao" rows="2" placeholder="Descrição opcional do produto"></textarea>
+            </div>
+            <div class="form-actions-est">
+              <button type="submit" class="btn-est btn-primary-est">
+                <i class="fas fa-save"></i> Salvar Produto
+              </button>
+              <button type="button" class="btn-est btn-secondary-est" id="btnLimparProduto">
+                <i class="fas fa-times"></i> Limpar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-list"></i> Produtos Cadastrados</h3>
+        <div class="header-actions-est">
+          <input type="text" id="buscaProduto" class="search-est" placeholder="Buscar por código ou nome...">
+          <select id="filtroCatProd" class="filter-select-est">
+            <option value="">Todas as categorias</option>
+          </select>
+          <select id="filtroStatusProd" class="filter-select-est">
+            <option value="">Todos</option>
+            <option value="baixo">Estoque baixo</option>
+            <option value="zerado">Zerados</option>
+          </select>
+          <button class="btn-sm-est btn-outline-est" id="btnExportarProdutos">
+            <i class="fas fa-file-csv"></i> CSV
+          </button>
+        </div>
+      </div>
+      <div class="card-body-est table-wrapper-est">
+        <table class="table-est">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Nome</th>
+              <th>Categoria</th>
+              <th>Unidade</th>
+              <th>Preço Unit.</th>
+              <th>Qtd. Estoque</th>
+              <th>Est. Mínimo</th>
+              <th>Valor Total</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="bodyProdutos">
+            <tr><td colspan="10" class="empty-row-est"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination-est" id="paginacaoProdutos"></div>
+    </div>
+
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-tags"></i> Categorias</h3>
+        <button class="btn-sm-est btn-primary-est" id="btnNovaCat">
+          <i class="fas fa-plus"></i> Nova Categoria
+        </button>
+      </div>
+      <div id="formCatWrapper" style="display:none">
+        <div class="card-body-est">
+          <div class="form-grid-est">
+            <div class="form-group-est">
+              <label>Nome da Categoria *</label>
+              <input type="text" id="catNome" placeholder="Ex: Limpeza">
+            </div>
+            <div class="form-group-est">
+              <label>Descrição</label>
+              <input type="text" id="catDescricao" placeholder="Descrição opcional">
+            </div>
+          </div>
+          <div class="form-actions-est">
+            <button class="btn-est btn-primary-est" id="btnSalvarCat">
+              <i class="fas fa-save"></i> Salvar
+            </button>
+            <button class="btn-est btn-secondary-est" id="btnCancelarCat">
+              <i class="fas fa-times"></i> Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body-est table-wrapper-est">
+        <table class="table-est">
+          <thead>
+            <tr><th>Nome</th><th>Descrição</th><th>Produtos</th><th>Ações</th></tr>
+          </thead>
+          <tbody id="bodyCategorias">
+            <tr><td colspan="4" class="empty-row-est"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== ABA ENTRADA ===== -->
+  <div class="tab-content-est" id="tab-entrada">
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-arrow-down"></i> Registrar Entrada de Estoque</h3>
+      </div>
+      <div class="card-body-est">
+        <form id="entradaForm" autocomplete="off">
+          <div class="form-group-est">
+            <label>Produto *</label>
+            <div class="search-produto-wrapper-est">
+              <input type="text" id="buscaEntradaProduto" placeholder="Digite o código ou nome do produto..." autocomplete="off">
+              <div class="search-results-est" id="resultadosBuscaEntrada"></div>
+            </div>
+            <div class="produto-selecionado-est" id="produtoEntradaInfo" style="display:none">
+              <span id="entradaProdutoNome" class="prod-nome-est"></span>
+              <span class="badge-est badge-blue-est">Estoque: <strong id="entradaEstoqueAtual">0</strong></span>
+              <span class="badge-est badge-gray-est">Preço: R$ <strong id="entradaPrecoUnit">0,00</strong></span>
+              <button type="button" class="btn-clear-est" id="btnLimparEntradaProduto"><i class="fas fa-times"></i></button>
+            </div>
+            <input type="hidden" id="entradaProdutoId">
+          </div>
+          <div class="form-grid-est">
+            <div class="form-group-est">
+              <label>Quantidade *</label>
+              <input type="number" id="entradaQtd" placeholder="0" min="0.01" step="0.01" required>
+            </div>
+            <div class="form-group-est">
+              <label>Valor Unitário (R$)</label>
+              <input type="number" id="entradaValorUnit" placeholder="0.00" min="0" step="0.01">
+              <small class="hint-est">Deixe em branco para usar o preço cadastrado</small>
+            </div>
+            <div class="form-group-est">
+              <label>Nota Fiscal</label>
+              <input type="text" id="entradaNF" placeholder="Número da NF">
+            </div>
+            <div class="form-group-est">
+              <label>Fornecedor</label>
+              <input type="text" id="entradaFornecedor" placeholder="Nome do fornecedor">
+            </div>
+            <div class="form-group-est">
+              <label>Motivo *</label>
+              <input type="text" id="entradaMotivo" placeholder="Ex: Compra mensal" required>
+            </div>
+            <div class="form-group-est">
+              <label>Responsável *</label>
+              <input type="text" id="entradaResponsavel" placeholder="Nome do responsável" required>
+            </div>
+          </div>
+          <div class="form-group-est">
+            <label>Observações</label>
+            <textarea id="entradaObs" rows="2" placeholder="Observações adicionais..."></textarea>
+          </div>
+          <div class="calc-preview-est" id="previewEntrada" style="display:none">
+            <h4><i class="fas fa-calculator"></i> Resumo da Entrada</h4>
+            <div class="calc-grid-est">
+              <div class="calc-item-est"><span>Estoque Atual</span><strong id="prevEntradaAtual">0</strong></div>
+              <div class="calc-item-est"><span>Quantidade Entrada</span><strong id="prevEntradaQtd">0</strong></div>
+              <div class="calc-item-est highlight-est"><span>Novo Estoque</span><strong id="prevEntradaNovo">0</strong></div>
+              <div class="calc-item-est"><span>Valor Total</span><strong id="prevEntradaValor">R$ 0,00</strong></div>
+            </div>
+          </div>
+          <div class="form-actions-est">
+            <button type="submit" class="btn-est btn-success-est">
+              <i class="fas fa-check"></i> Registrar Entrada
+            </button>
+            <button type="button" class="btn-est btn-secondary-est" id="btnLimparEntrada">
+              <i class="fas fa-times"></i> Limpar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-history"></i> Últimas Entradas</h3>
+        <button class="btn-sm-est btn-outline-est" id="btnRefreshEntradas"><i class="fas fa-sync-alt"></i> Atualizar</button>
+      </div>
+      <div class="card-body-est table-wrapper-est">
+        <table class="table-est">
+          <thead>
+            <tr><th>Data/Hora</th><th>Produto</th><th>Qtd.</th><th>Valor Unit.</th><th>Valor Total</th><th>NF</th><th>Fornecedor</th><th>Responsável</th></tr>
+          </thead>
+          <tbody id="bodyHistoricoEntradas">
+            <tr><td colspan="8" class="empty-row-est">Nenhuma entrada registrada</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ABA SAÍDA ===== -->
+  <div class="tab-content-est" id="tab-saida">
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-arrow-up"></i> Registrar Saída de Estoque</h3>
+      </div>
+      <div class="card-body-est">
+        <form id="saidaForm" autocomplete="off">
+          <div class="form-group-est">
+            <label>Produto *</label>
+            <div class="search-produto-wrapper-est">
+              <input type="text" id="buscaSaidaProduto" placeholder="Digite o código ou nome do produto..." autocomplete="off">
+              <div class="search-results-est" id="resultadosBuscaSaida"></div>
+            </div>
+            <div class="produto-selecionado-est" id="produtoSaidaInfo" style="display:none">
+              <span id="saidaProdutoNome" class="prod-nome-est"></span>
+              <span class="badge-est badge-blue-est">Estoque: <strong id="saidaEstoqueAtual">0</strong></span>
+              <span class="badge-est badge-gray-est">Preço: R$ <strong id="saidaPrecoUnit">0,00</strong></span>
+              <button type="button" class="btn-clear-est" id="btnLimparSaidaProduto"><i class="fas fa-times"></i></button>
+            </div>
+            <input type="hidden" id="saidaProdutoId">
+          </div>
+          <div class="form-grid-est">
+            <div class="form-group-est">
+              <label>Quantidade *</label>
+              <input type="number" id="saidaQtd" placeholder="0" min="0.01" step="0.01" required>
+            </div>
+            <div class="form-group-est">
+              <label>Tipo de Destino *</label>
+              <select id="saidaTipoDestino" required>
+                <option value="Administracao">Administração</option>
+                <option value="Manutencao">Manutenção</option>
+                <option value="Morador">Morador</option>
+                <option value="Descarte">Descarte</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div class="form-group-est" id="moradorWrapper" style="display:none">
+              <label>Morador</label>
+              <select id="saidaMorador">
+                <option value="">Selecione o morador...</option>
+              </select>
+            </div>
+            <div class="form-group-est">
+              <label>Motivo *</label>
+              <input type="text" id="saidaMotivo" placeholder="Ex: Uso na manutenção" required>
+            </div>
+            <div class="form-group-est">
+              <label>Responsável *</label>
+              <input type="text" id="saidaResponsavel" placeholder="Nome do responsável" required>
+            </div>
+          </div>
+          <div class="form-group-est">
+            <label>Observações</label>
+            <textarea id="saidaObs" rows="2" placeholder="Observações adicionais..."></textarea>
+          </div>
+          <div class="calc-preview-est" id="previewSaida" style="display:none">
+            <h4><i class="fas fa-calculator"></i> Resumo da Saída</h4>
+            <div class="calc-grid-est">
+              <div class="calc-item-est"><span>Estoque Atual</span><strong id="prevSaidaAtual">0</strong></div>
+              <div class="calc-item-est"><span>Quantidade Saída</span><strong id="prevSaidaQtd">0</strong></div>
+              <div class="calc-item-est highlight-est"><span>Novo Estoque</span><strong id="prevSaidaNovo">0</strong></div>
+              <div class="calc-item-est"><span>Valor Total</span><strong id="prevSaidaValor">R$ 0,00</strong></div>
+            </div>
+            <div class="alert-est alert-danger-est" id="alertEstoqueInsuficiente" style="display:none">
+              <i class="fas fa-exclamation-triangle"></i>
+              <strong>Estoque insuficiente!</strong> Quantidade solicitada maior que o disponível.
+            </div>
+          </div>
+          <div class="form-actions-est">
+            <button type="submit" class="btn-est btn-danger-est" id="btnRegistrarSaida">
+              <i class="fas fa-check"></i> Registrar Saída
+            </button>
+            <button type="button" class="btn-est btn-secondary-est" id="btnLimparSaida">
+              <i class="fas fa-times"></i> Limpar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-history"></i> Últimas Saídas</h3>
+        <button class="btn-sm-est btn-outline-est" id="btnRefreshSaidas"><i class="fas fa-sync-alt"></i> Atualizar</button>
+      </div>
+      <div class="card-body-est table-wrapper-est">
+        <table class="table-est">
+          <thead>
+            <tr><th>Data/Hora</th><th>Produto</th><th>Qtd.</th><th>Destino</th><th>Morador</th><th>Valor Total</th><th>Motivo</th><th>Responsável</th></tr>
+          </thead>
+          <tbody id="bodyHistoricoSaidas">
+            <tr><td colspan="8" class="empty-row-est">Nenhuma saída registrada</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ABA MOVIMENTAÇÕES ===== -->
+  <div class="tab-content-est" id="tab-movimentacoes">
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-filter"></i> Filtros de Movimentação</h3>
+      </div>
+      <div class="card-body-est">
+        <div class="form-grid-est">
+          <div class="form-group-est">
+            <label>Produto</label>
+            <select id="filtroMovProduto"><option value="">Todos os produtos</option></select>
+          </div>
+          <div class="form-group-est">
+            <label>Tipo</label>
+            <select id="filtroMovTipo">
+              <option value="">Todos</option>
+              <option value="Entrada">Entradas</option>
+              <option value="Saida">Saídas</option>
+            </select>
+          </div>
+          <div class="form-group-est">
+            <label>Data Início</label>
+            <input type="date" id="filtroMovInicio">
+          </div>
+          <div class="form-group-est">
+            <label>Data Fim</label>
+            <input type="date" id="filtroMovFim">
+          </div>
+          <div class="form-group-est">
+            <label>Morador</label>
+            <select id="filtroMovMorador"><option value="">Todos</option></select>
+          </div>
+          <div class="form-group-est">
+            <label>Limite</label>
+            <select id="filtroMovLimit">
+              <option value="50">50 registros</option>
+              <option value="100">100 registros</option>
+              <option value="200">200 registros</option>
+              <option value="500">500 registros</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions-est">
+          <button class="btn-est btn-primary-est" id="btnFiltrarMov">
+            <i class="fas fa-search"></i> Filtrar
+          </button>
+          <button class="btn-est btn-secondary-est" id="btnLimparFiltroMov">
+            <i class="fas fa-times"></i> Limpar
+          </button>
+          <button class="btn-est btn-outline-est" id="btnExportarMov">
+            <i class="fas fa-file-csv"></i> Exportar CSV
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-history"></i> Histórico de Movimentações</h3>
+        <span class="badge-est badge-gray-est" id="totalMovLabel">0 registros</span>
+      </div>
+      <div class="card-body-est table-wrapper-est">
+        <table class="table-est">
+          <thead>
+            <tr>
+              <th>Data/Hora</th><th>Produto</th><th>Tipo</th><th>Qtd.</th>
+              <th>Ant.</th><th>Novo</th><th>Destino/Origem</th><th>Morador</th>
+              <th>Valor Total</th><th>Responsável</th>
+            </tr>
+          </thead>
+          <tbody id="bodyMovimentacoes">
+            <tr><td colspan="10" class="empty-row-est">Use os filtros acima para buscar movimentações</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card-est">
+      <div class="card-header-est">
+        <h3><i class="fas fa-user-chart"></i> Consumo por Morador</h3>
+      </div>
+      <div class="card-body-est">
+        <div class="form-grid-est">
+          <div class="form-group-est">
+            <label>Período Início</label>
+            <input type="date" id="relMoradorInicio">
+          </div>
+          <div class="form-group-est">
+            <label>Período Fim</label>
+            <input type="date" id="relMoradorFim">
+          </div>
+        </div>
+        <div class="form-actions-est">
+          <button class="btn-est btn-primary-est" id="btnRelMorador">
+            <i class="fas fa-chart-bar"></i> Gerar Relatório
+          </button>
+          <button class="btn-est btn-outline-est" id="btnExportarRelMorador" style="display:none">
+            <i class="fas fa-file-csv"></i> Exportar CSV
+          </button>
+        </div>
+        <div id="relMoradorWrapper" style="display:none">
+          <div class="table-wrapper-est">
+            <table class="table-est">
+              <thead>
+                <tr><th>Morador</th><th>Unidade</th><th>Retiradas</th><th>Qtd. Total</th><th>Valor Total</th></tr>
+              </thead>
+              <tbody id="bodyRelMorador"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast-container-est" id="toastEstoque"></div>
+
+</div>

@@ -1,0 +1,31 @@
+# API .htaccess — Restaurado ao estado original funcional
+Options -Indexes
+
+# =====================================================
+# CORS
+# =====================================================
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "https://asl.erpcondominios.com.br"
+    Header set Access-Control-Allow-Methods "POST, GET, OPTIONS, PUT, DELETE"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    Header set Access-Control-Allow-Credentials "true"
+</IfModule>
+
+# Não mostrar erros PHP para o usuário
+php_flag display_errors off
+php_value error_reporting E_ALL
+php_flag log_errors on
+
+# Tratar requisições OPTIONS para CORS preflight
+RewriteEngine On
+RewriteCond %{REQUEST_METHOD} ^OPTIONS$
+RewriteRule ^ - [L,R=200]
+
+# =====================================================
+# MOD_SECURITY — COMENTADO
+# O bloco SecRuleRemoveById / SecRuleEngine Off
+# causa erro 500 no HostGator pois o mod_security2
+# não aceita diretivas via .htaccess neste plano.
+# Para liberar o bridge_receiver.php, use o cPanel:
+#   Security > ModSecurity > Disable for specific URL
+# =====================================================

@@ -1,0 +1,208 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Contas a Pagar" data-icon="fa-arrow-up" style="display:none;"></div>
+
+<div class="page-wrapper page-contas-pagar">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1><i class="fas fa-arrow-up" style="color:#dc2626;margin-right:10px;"></i>Contas a Pagar</h1>
+        <p>Gestão de despesas e pagamentos do condomínio</p>
+    </div>
+
+    <!-- Submenu Financeiro -->
+    <nav class="page-card financeiro-submenu" aria-label="Navegação financeira">
+        <a href="#" onclick="AppRouter.navigate('financeiro'); return false;" class="submenu-link">
+            <i class="fas fa-home"></i> Início
+        </a>
+        <a href="#" onclick="AppRouter.navigate('contas_pagar'); return false;" class="submenu-link active">
+            <i class="fas fa-arrow-up"></i> Contas a Pagar
+        </a>
+        <a href="#" onclick="AppRouter.navigate('contas_receber'); return false;" class="submenu-link">
+            <i class="fas fa-arrow-down"></i> Contas a Receber
+        </a>
+        <a href="#" onclick="AppRouter.navigate('planos_contas'); return false;" class="submenu-link">
+            <i class="fas fa-list"></i> Planos de Contas
+        </a>
+    </nav>
+
+    <!-- KPI Cards -->
+    <div class="stats-grid">
+        <div class="kpi-card kpi-pendente page-card">
+            <div class="kpi-label">Total Pendente</div>
+            <div class="kpi-value" id="cp_totalPendente">R$ 0,00</div>
+            <div class="kpi-icon-row"><i class="fas fa-clock"></i></div>
+        </div>
+        <div class="kpi-card kpi-pago page-card">
+            <div class="kpi-label">Total Pago no Mês</div>
+            <div class="kpi-value" id="cp_totalPago">R$ 0,00</div>
+            <div class="kpi-icon-row"><i class="fas fa-check-circle"></i></div>
+            <div id="cp_subPagoTotal" style="font-size:11px;color:#64748b;margin-top:4px;"></div>
+        </div>
+        <div class="kpi-card kpi-atrasado page-card">
+            <div class="kpi-label">Contas Atrasadas</div>
+            <div class="kpi-value" id="cp_contasAtrasadas">0</div>
+            <div class="kpi-alert-bar" id="cp_alertBar" style="display:none;">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>Existem contas vencidas</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Cadastro -->
+    <div class="page-card cp-form-card">
+        <h2 class="section-title" id="cp_formTitle">
+            <i class="fas fa-plus-circle"></i> Nova Conta a Pagar
+        </h2>
+
+        <form id="cp_formCadastro" autocomplete="off">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-label">Nº do Documento <span class="required">*</span></label>
+                    <input type="text" name="numero_documento" class="form-control" placeholder="NF, Fatura, Boleto..." required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Plano de Contas <span class="required">*</span></label>
+                    <select name="plano_conta_id" class="form-control" id="cp_selectPlano" required>
+                        <option value="">Selecione um plano...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-label">Classificação da Despesa</label>
+                    <input type="text" name="classificacao_despesa" class="form-control" placeholder="Ex: Serviços, Manutenção, Contratos">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Grupo</label>
+                    <input type="text" name="grupo" class="form-control" placeholder="Ex: Água, Energia, Limpeza">
+                </div>
+            </div>
+
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-label">Valor <span class="required">*</span></label>
+                    <input type="number" name="valor_original" class="form-control" placeholder="0,00" step="0.01" min="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Data de Vencimento <span class="required">*</span></label>
+                    <input type="date" name="data_vencimento" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Observações</label>
+                <textarea name="observacoes" class="form-control" rows="2" placeholder="Observações adicionais..."></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="cp_btnSalvar">
+                    <i class="fas fa-save"></i> Cadastrar Conta
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="ContasPagar.limparForm()">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Listagem -->
+    <div class="page-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem;">
+            <h2 class="section-title" style="margin-bottom:0;">
+                <i class="fas fa-list"></i> Contas Cadastradas
+            </h2>
+            <div class="filter-bar" style="margin-bottom:0;">
+                <label>Status:</label>
+                <select id="cp_filtroStatus" class="form-control-sm" onchange="ContasPagar.filtrar()">
+                    <option value="">Todos</option>
+                    <option value="PENDENTE">Pendente</option>
+                    <option value="PAGO">Pago</option>
+                    <option value="PARCIAL">Parcial</option>
+                    <option value="CANCELADO">Cancelado</option>
+                </select>
+                <button class="btn btn-outline btn-xs" onclick="ContasPagar.carregar()">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Documento</th>
+                        <th>Fornecedor</th>
+                        <th>Classificação</th>
+                        <th>Grupo</th>
+                        <th>Descrição</th>
+                        <th>Valor</th>
+                        <th>Vencimento</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="cp_corpoTabela">
+                    <tr>
+                        <td colspan="9" class="empty-table">
+                            <i class="fas fa-spinner fa-spin"></i> Carregando...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Pagamento -->
+<div class="modal-overlay" id="cp_modalPagamento" style="display:none;" onclick="if(event.target===this)ContasPagar.fecharModal()">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-money-bill-wave"></i> Registrar Pagamento</h3>
+            <button class="modal-close-btn" onclick="ContasPagar.fecharModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="cp_formPagamento">
+                <input type="hidden" name="id" id="cp_pagarId">
+
+                <div class="form-group">
+                    <label class="form-label">Valor a Pagar <span class="required">*</span></label>
+                    <input type="number" name="valor_pago" class="form-control" placeholder="0,00" step="0.01" min="0.01" required>
+                </div>
+
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Data de Pagamento <span class="required">*</span></label>
+                        <input type="date" name="data_pagamento" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Forma de Pagamento</label>
+                        <select name="forma_pagamento" class="form-control">
+                            <option value="">Selecione...</option>
+                            <option value="DINHEIRO">Dinheiro</option>
+                            <option value="CHEQUE">Cheque</option>
+                            <option value="TRANSFERENCIA">Transferência</option>
+                            <option value="CARTAO">Cartão</option>
+                            <option value="BOLETO">Boleto</option>
+                            <option value="PIX">PIX</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Observações</label>
+                    <textarea name="observacoes" class="form-control" rows="2" placeholder="Observações do pagamento..."></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i> Registrar Pagamento
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="ContasPagar.fecharModal()">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

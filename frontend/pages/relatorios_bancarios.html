@@ -1,0 +1,206 @@
+<!-- =====================================================
+     RELATÓRIOS BANCÁRIOS — Módulo Financeiro
+     page: relatorios_bancarios | css: relatorios_bancarios
+     ===================================================== -->
+<link rel="stylesheet" href="/assets/css/pages/relatorios_bancarios.css">
+
+<!-- ── Cabeçalho ─────────────────────────────────────── -->
+<div class="rb-header">
+  <div class="rb-header-left">
+    <button class="btn-voltar" onclick="AppRouter.navigate('financeiro')" title="Voltar para Financeiro">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </button>
+    <span class="rb-header-icon"><i class="fas fa-chart-bar"></i></span>
+    <div>
+      <h1 class="rb-titulo">Relatórios Bancários</h1>
+      <p class="rb-subtitulo">Extrato, fluxo de caixa e DRE simplificado</p>
+    </div>
+  </div>
+  <div class="rb-header-acoes">
+    <select id="rb-sel-conta" onchange="RelatoriosBancariosPage.mudarConta()" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff;min-width:180px;">
+      <option value="0">Todas as Contas</option>
+    </select>
+  </div>
+</div>
+
+<!-- ── Tabs ──────────────────────────────────────────── -->
+<div class="rb-tabs">
+  <button class="rb-tab ativa" onclick="RelatoriosBancariosPage.mudarAba('extrato')">
+    <i class="fas fa-list-ul"></i> Extrato
+  </button>
+  <button class="rb-tab" onclick="RelatoriosBancariosPage.mudarAba('fluxo')">
+    <i class="fas fa-chart-line"></i> Fluxo de Caixa
+  </button>
+  <button class="rb-tab" onclick="RelatoriosBancariosPage.mudarAba('dre')">
+    <i class="fas fa-table"></i> DRE Simplificado
+  </button>
+</div>
+
+<!-- ── PAINEL: EXTRATO ───────────────────────────────── -->
+<div class="rb-panel" id="rb-panel-extrato">
+  <!-- Filtros -->
+  <div class="rb-filtros">
+    <label>Período:</label>
+    <input type="date" id="ext-dt-ini" onchange="RelatoriosBancariosPage.carregarExtrato()">
+    <input type="date" id="ext-dt-fim" onchange="RelatoriosBancariosPage.carregarExtrato()">
+    <span class="rb-filtros-sep"></span>
+    <select id="ext-tipo" onchange="RelatoriosBancariosPage.carregarExtrato()">
+      <option value="">Todos os tipos</option>
+      <option value="credito">Créditos</option>
+      <option value="debito">Débitos</option>
+    </select>
+    <select id="ext-status" onchange="RelatoriosBancariosPage.carregarExtrato()">
+      <option value="">Todos os status</option>
+      <option value="pendente">Pendente</option>
+      <option value="conciliado">Conciliado</option>
+      <option value="ignorado">Ignorado</option>
+    </select>
+    <input type="search" id="ext-busca" placeholder="Buscar descrição, favorecido..."
+           oninput="RelatoriosBancariosPage.filtrarExtrato()">
+    <span class="rb-total-badge" id="ext-total-badge">—</span>
+    <button class="btn-exportar-csv" onclick="RelatoriosBancariosPage.exportarCSV()">
+      <i class="fas fa-download"></i> CSV
+    </button>
+  </div>
+
+  <!-- Resumo do período -->
+  <div class="rb-resumo" id="rb-resumo-extrato">
+    <div class="rb-resumo-card">
+      <div class="rb-resumo-label">Total Entradas</div>
+      <div class="rb-resumo-valor verde" id="ext-total-credito">R$ —</div>
+    </div>
+    <div class="rb-resumo-card">
+      <div class="rb-resumo-label">Total Saídas</div>
+      <div class="rb-resumo-valor vermelho" id="ext-total-debito">R$ —</div>
+    </div>
+    <div class="rb-resumo-card">
+      <div class="rb-resumo-label">Saldo do Período</div>
+      <div class="rb-resumo-valor roxo" id="ext-saldo-periodo">R$ —</div>
+    </div>
+    <div class="rb-resumo-card">
+      <div class="rb-resumo-label">Registros</div>
+      <div class="rb-resumo-valor" id="ext-total-regs">—</div>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div class="rb-tabela-wrap">
+    <table class="rb-tabela">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Conta</th>
+          <th>Descrição</th>
+          <th>Favorecido</th>
+          <th>Categoria</th>
+          <th>Doc.</th>
+          <th style="text-align:center">Tipo</th>
+          <th class="text-right">Valor</th>
+          <th style="text-align:center">Status</th>
+          <th style="text-align:center">Origem</th>
+        </tr>
+      </thead>
+      <tbody id="rb-tbody-extrato">
+        <tr><td colspan="10" class="rb-loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="rb-paginacao" id="rb-pag-extrato"></div>
+</div>
+
+<!-- ── PAINEL: FLUXO DE CAIXA ────────────────────────── -->
+<div class="rb-panel rb-oculto" id="rb-panel-fluxo">
+  <!-- Filtros -->
+  <div class="rb-filtros">
+    <label>Meses:</label>
+    <select id="fluxo-meses" onchange="RelatoriosBancariosPage.carregarFluxo()">
+      <option value="6">6 meses</option>
+      <option value="12" selected>12 meses</option>
+      <option value="18">18 meses</option>
+      <option value="24">24 meses</option>
+    </select>
+  </div>
+
+  <!-- Gráfico -->
+  <div class="rb-grafico-wrap">
+    <h3 class="rb-grafico-titulo">
+      <i class="fas fa-chart-line" style="color:#6366f1"></i>
+      Fluxo de Caixa Mensal
+    </h3>
+    <div class="rb-grafico-container">
+      <canvas id="rb-chart-fluxo"></canvas>
+    </div>
+    <div class="rb-grafico-legenda">
+      <span><span class="rb-legenda-cor" style="background:#22c55e"></span> Entradas Realizadas</span>
+      <span><span class="rb-legenda-cor" style="background:#ef4444"></span> Saídas Realizadas</span>
+      <span><span class="rb-legenda-cor" style="background:#86efac;opacity:.6"></span> A Receber (Previsto)</span>
+      <span><span class="rb-legenda-cor" style="background:#fca5a5;opacity:.6"></span> A Pagar (Previsto)</span>
+    </div>
+  </div>
+
+  <!-- Tabela de fluxo -->
+  <div class="rb-tabela-wrap">
+    <table class="rb-tabela" id="rb-tabela-fluxo">
+      <thead>
+        <tr>
+          <th>Mês</th>
+          <th class="text-right">Entradas Realizadas</th>
+          <th class="text-right">Saídas Realizadas</th>
+          <th class="text-right">Saldo Realizado</th>
+          <th class="text-right">A Receber (Prev.)</th>
+          <th class="text-right">A Pagar (Prev.)</th>
+          <th class="text-right">Saldo Previsto</th>
+        </tr>
+      </thead>
+      <tbody id="rb-tbody-fluxo">
+        <tr><td colspan="7" class="rb-vazio">Selecione o período para carregar o fluxo</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── PAINEL: DRE SIMPLIFICADO ─────────────────────── -->
+<div class="rb-panel rb-oculto" id="rb-panel-dre">
+  <!-- Filtros -->
+  <div class="rb-filtros">
+    <label>Ano:</label>
+    <select id="dre-ano" onchange="RelatoriosBancariosPage.carregarDRE()">
+      <!-- preenchido pelo JS -->
+    </select>
+    <span class="rb-filtros-sep"></span>
+    <label>Ou período:</label>
+    <input type="date" id="dre-dt-ini" onchange="RelatoriosBancariosPage.carregarDRE()">
+    <input type="date" id="dre-dt-fim" onchange="RelatoriosBancariosPage.carregarDRE()">
+  </div>
+
+  <!-- Resultado líquido -->
+  <div class="rb-dre-resultado" id="rb-dre-resultado">
+    <div>
+      <div class="rb-dre-resultado-label">Resultado Líquido do Período</div>
+      <div style="font-size:12px;color:#94a3b8;margin-top:3px" id="rb-dre-periodo">—</div>
+    </div>
+    <div class="rb-dre-resultado-valor" id="rb-dre-liquido">R$ —</div>
+  </div>
+
+  <!-- Receitas vs Despesas -->
+  <div class="rb-dre-grid" id="rb-dre-grid">
+    <div class="rb-dre-secao">
+      <div class="rb-dre-secao-header receitas">
+        <i class="fas fa-arrow-down"></i> Receitas
+        <span style="margin-left:auto;font-size:16px" id="rb-dre-total-rec">R$ —</span>
+      </div>
+      <div id="rb-dre-rows-rec">
+        <div style="padding:32px;text-align:center;color:#94a3b8;font-size:13px">Carregando...</div>
+      </div>
+    </div>
+    <div class="rb-dre-secao">
+      <div class="rb-dre-secao-header despesas">
+        <i class="fas fa-arrow-up"></i> Despesas
+        <span style="margin-left:auto;font-size:16px" id="rb-dre-total-des">R$ —</span>
+      </div>
+      <div id="rb-dre-rows-des">
+        <div style="padding:32px;text-align:center;color:#94a3b8;font-size:13px">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>

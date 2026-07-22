@@ -1,0 +1,290 @@
+<!-- page: seguranca | css: seguranca -->
+<div id="page-metadata" data-title="Segurança" data-icon="fa-shield-alt" style="display:none;"></div>
+
+<div class="page-wrapper page-seguranca">
+
+  <div class="page-header">
+    <h1><i class="fas fa-shield-alt"></i> Segurança e Auditoria</h1>
+    <p>Visualize e filtre todos os eventos de auditoria, acessos e erros do sistema.</p>
+  </div>
+
+  <!-- KPI cards -->
+  <div class="seg-kpi-grid">
+    <div class="seg-kpi-card">
+      <div class="seg-kpi-icon seg-kpi-icon--blue"><i class="fas fa-database"></i></div>
+      <div>
+        <span class="seg-kpi-label">Total de Registros</span>
+        <strong class="seg-kpi-value" id="segurancaTotal">—</strong>
+        <span class="seg-kpi-sub">Últimos 30 dias</span>
+      </div>
+    </div>
+    <div class="seg-kpi-card">
+      <div class="seg-kpi-icon seg-kpi-icon--red"><i class="fas fa-exclamation-triangle"></i></div>
+      <div>
+        <span class="seg-kpi-label">Eventos de Erro</span>
+        <strong class="seg-kpi-value" id="segurancaErros">—</strong>
+        <span class="seg-kpi-sub">Erros e falhas</span>
+      </div>
+    </div>
+    <div class="seg-kpi-card">
+      <div class="seg-kpi-icon seg-kpi-icon--green"><i class="fas fa-user-check"></i></div>
+      <div>
+        <span class="seg-kpi-label">Acessos e Login</span>
+        <strong class="seg-kpi-value" id="segurancaAcessos">—</strong>
+        <span class="seg-kpi-sub">Acessos registrados</span>
+      </div>
+    </div>
+    <div class="seg-kpi-card">
+      <div class="seg-kpi-icon seg-kpi-icon--purple"><i class="fas fa-tags"></i></div>
+      <div>
+        <span class="seg-kpi-label">Tipos de Log</span>
+        <strong class="seg-kpi-value" id="segurancaTipos">—</strong>
+        <span class="seg-kpi-sub">Categorias distintas</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab buttons -->
+  <div class="tabs-container">
+    <button type="button" class="tab-btn active" data-tab="auditoria"
+            onclick="SegurancaPage.trocarAba('auditoria')">
+      <i class="fas fa-list-alt"></i> Auditoria
+    </button>
+    <button type="button" class="tab-btn" data-tab="relatorios"
+            onclick="SegurancaPage.trocarAba('relatorios')">
+      <i class="fas fa-chart-bar"></i> Relatórios
+    </button>
+  </div>
+
+  <!-- ===== TAB: AUDITORIA ===== -->
+  <div id="tab-auditoria">
+
+    <div class="page-alert">
+      <i class="fas fa-info-circle"></i>
+      Os logs são extraídos do sistema de auditoria. Use filtros para investigar acessos, erros e atividades de manutenção.
+    </div>
+
+    <div class="page-card">
+      <div class="page-card-header">
+        <h2><i class="fas fa-filter"></i> Filtros de Auditoria</h2>
+        <p>Filtre por tipo, usuário, período ou descrição para encontrar eventos específicos.</p>
+      </div>
+
+      <div class="seg-filters">
+        <div>
+          <label for="filtroTipo">Tipo de Log</label>
+          <select id="filtroTipo">
+            <option value="">Todos os tipos</option>
+          </select>
+        </div>
+        <div>
+          <label for="filtroUsuario">Usuário</label>
+          <input id="filtroUsuario" type="text" placeholder="Nome ou email" />
+        </div>
+        <div>
+          <label for="filtroDataInicio">Data Início</label>
+          <input id="filtroDataInicio" type="date" />
+        </div>
+        <div>
+          <label for="filtroDataFim">Data Fim</label>
+          <input id="filtroDataFim" type="date" />
+        </div>
+        <div>
+          <label for="filtroBusca">Busca Geral</label>
+          <input id="filtroBusca" type="text" placeholder="Descrição, IP ou tipo" />
+        </div>
+        <div>
+          <label for="filtroLimite">Registros por página</label>
+          <select id="filtroLimite">
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="seg-pills-row" id="segurancaTags"></div>
+
+      <div class="seg-actions">
+        <button type="button" class="btn-primary" id="btnBuscar">
+          <i class="fas fa-search"></i> Buscar
+        </button>
+        <button type="button" class="btn-secondary" id="btnLimpar">
+          <i class="fas fa-eraser"></i> Limpar
+        </button>
+        <button type="button" class="btn-success" id="btnExportar">
+          <i class="fas fa-file-export"></i> Exportar CSV
+        </button>
+        <button type="button" class="btn-warning" id="btnAtualizar">
+          <i class="fas fa-chart-line"></i> Atualizar Estatísticas
+        </button>
+        <button type="button" class="btn-danger" id="btnLimparLogs">
+          <i class="fas fa-trash"></i> Limpar Logs Antigos
+        </button>
+      </div>
+    </div>
+
+    <div class="page-card">
+      <div class="page-card-header">
+        <h2><i class="fas fa-list"></i> Registros de Auditoria</h2>
+        <p>Visualize logs de debug, erros, acesso, alteração de dados e operações críticas.</p>
+      </div>
+      <div class="seg-table-container">
+        <table id="tableLogs">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Data / Hora</th>
+              <th>Tipo</th>
+              <th>Descrição</th>
+              <th>Usuário</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+  </div><!-- /tab-auditoria -->
+
+  <!-- ===== TAB: RELATÓRIOS ===== -->
+  <div id="tab-relatorios" class="seg-hidden">
+
+    <div class="page-card">
+      <div class="page-card-header">
+        <h2><i class="fas fa-sliders-h"></i> Filtros do Relatório</h2>
+        <p>Filtre por categoria de exceção, severidade, período e usuário para gerar um relatório personalizado.</p>
+      </div>
+
+      <div class="seg-filters">
+        <div>
+          <label for="relCategoria">Categoria de Exceção</label>
+          <select id="relCategoria">
+            <option value="">Todas as categorias</option>
+            <option value="auth">Autenticação</option>
+            <option value="acesso">Controle de Acesso</option>
+            <option value="rfid">RFID</option>
+            <option value="sessao">Sessão</option>
+            <option value="dados">Dados / Sistema</option>
+            <option value="manutencao">Manutenção</option>
+          </select>
+        </div>
+        <div>
+          <label for="relTipo">Tipo Específico</label>
+          <select id="relTipo">
+            <option value="">Todos os tipos</option>
+          </select>
+        </div>
+        <div>
+          <label for="relSeveridade">Severidade</label>
+          <select id="relSeveridade">
+            <option value="">Todas</option>
+            <option value="critico">Crítico</option>
+            <option value="erro">Erro</option>
+            <option value="aviso">Aviso</option>
+            <option value="info">Informação</option>
+          </select>
+        </div>
+        <div>
+          <label for="relDataInicio">Data Início</label>
+          <input id="relDataInicio" type="date" />
+        </div>
+        <div>
+          <label for="relDataFim">Data Fim</label>
+          <input id="relDataFim" type="date" />
+        </div>
+        <div>
+          <label for="relUsuario">Usuário / IP</label>
+          <input id="relUsuario" type="text" placeholder="Nome, email ou IP" />
+        </div>
+      </div>
+
+      <div class="seg-actions">
+        <button type="button" class="btn-primary" onclick="SegurancaPage.gerarRelatorio(1)">
+          <i class="fas fa-chart-line"></i> Gerar Relatório
+        </button>
+        <button type="button" class="btn-secondary" onclick="SegurancaPage.limparFiltrosRel()">
+          <i class="fas fa-eraser"></i> Limpar
+        </button>
+        <button type="button" class="btn-success" onclick="SegurancaPage.exportarRelatorio()">
+          <i class="fas fa-file-export"></i> Exportar CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Resumo por tipo de exceção -->
+    <div class="page-card seg-hidden" id="rel-resumo-card">
+      <div class="page-card-header">
+        <h2><i class="fas fa-chart-pie"></i> Resumo por Tipo de Exceção</h2>
+      </div>
+      <div class="seg-exception-grid" id="rel-exception-grid"></div>
+    </div>
+
+    <!-- Atividade por dia -->
+    <div class="page-card seg-hidden" id="rel-timeline-card">
+      <div class="page-card-header">
+        <h2><i class="fas fa-calendar-alt"></i> Atividade por Dia</h2>
+      </div>
+      <div class="seg-timeline-wrap">
+        <div class="seg-timeline" id="rel-timeline"></div>
+      </div>
+    </div>
+
+    <!-- Top usuários -->
+    <div class="page-card seg-hidden" id="rel-usuarios-card">
+      <div class="page-card-header">
+        <h2><i class="fas fa-users"></i> Usuários mais Ativos</h2>
+      </div>
+      <div class="seg-table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Usuário</th>
+              <th>Total de Ações</th>
+              <th>Último Acesso</th>
+            </tr>
+          </thead>
+          <tbody id="rel-usuarios-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Logs filtrados -->
+    <div class="page-card">
+      <div class="page-card-header">
+        <h2><i class="fas fa-list"></i> Logs Filtrados</h2>
+        <p id="rel-logs-info">Aplique filtros e clique em "Gerar Relatório" para visualizar os dados.</p>
+      </div>
+      <div class="seg-table-container">
+        <table id="rel-logs-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Data / Hora</th>
+              <th>Tipo</th>
+              <th>Severidade</th>
+              <th>Descrição</th>
+              <th>Usuário</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody id="rel-logs-tbody">
+            <tr>
+              <td colspan="7" class="seg-empty-cell">
+                <i class="fas fa-chart-bar seg-empty-icon"></i>
+                Selecione os filtros e clique em Gerar Relatório
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="rel-pagination"></div>
+    </div>
+
+  </div><!-- /tab-relatorios -->
+
+</div><!-- /page-wrapper -->

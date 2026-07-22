@@ -1,0 +1,24 @@
+# Frontend .htaccess
+Options -Indexes
+
+# Proteger arquivos PHP
+<FilesMatch "\.(php)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+
+# Segurança
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Cache para arquivos estáticos
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/html "access plus 1 hour"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+</IfModule>

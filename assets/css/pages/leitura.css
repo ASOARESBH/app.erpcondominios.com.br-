@@ -1,0 +1,671 @@
+/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES - LEITURA
+|--------------------------------------------------------------------------
+| CSS autossuficiente: o router carrega APENAS este arquivo para a página
+| de leituras. Não herda hidrometro.css (que é removido ao navegar).
+|
+| Proibido: redefinir .page-wrapper, .page-header, .page-card, .sidebar
+|--------------------------------------------------------------------------
+*/
+
+/* ============================================
+   TABS NAVIGATION
+   ============================================ */
+.page-hidrometro .tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+
+.page-hidrometro .tab-button {
+    padding: 0.875rem 1.5rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.page-hidrometro .tab-button i {
+    font-size: 15px;
+}
+
+.page-hidrometro .tab-button:hover {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.04);
+    border-radius: 6px 6px 0 0;
+}
+
+.page-hidrometro .tab-button.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+}
+
+/* Tab Content — CRÍTICO: oculta abas inativas */
+.page-hidrometro .tab-content {
+    display: none;
+    animation: leituraFadeIn 0.3s ease;
+}
+
+.page-hidrometro .tab-content.active {
+    display: block;
+}
+
+@keyframes leituraFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   KPI STATS GRID
+   ============================================ */
+.page-hidrometro .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-hidrometro .kpi-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+}
+
+.page-hidrometro .kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.page-hidrometro .kpi-icon.blue   { background: #eff6ff; color: #2563eb; }
+.page-hidrometro .kpi-icon.green  { background: #f0fdf4; color: #16a34a; }
+.page-hidrometro .kpi-icon.amber  { background: #fffbeb; color: #d97706; }
+.page-hidrometro .kpi-icon.purple { background: #f5f3ff; color: #7c3aed; }
+
+.page-hidrometro .kpi-content h3 {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 4px;
+}
+
+.page-hidrometro .kpi-content .value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1;
+}
+
+/* ============================================
+   FORM GRID
+   ============================================ */
+.page-hidrometro .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-hidrometro .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.page-hidrometro label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.page-hidrometro input,
+.page-hidrometro select,
+.page-hidrometro textarea {
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #1e293b;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.page-hidrometro input:focus,
+.page-hidrometro select:focus,
+.page-hidrometro textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.page-hidrometro input:disabled,
+.page-hidrometro select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: #f1f5f9;
+}
+
+.page-hidrometro input[readonly] {
+    opacity: 0.7;
+    cursor: default;
+    background: #f1f5f9;
+}
+
+.page-hidrometro textarea {
+    resize: vertical;
+    min-height: 90px;
+}
+
+.page-hidrometro .form-hint {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.page-hidrometro .btn-primary {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border: none;
+    border-radius: 8px;
+    padding: 11px 22px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.page-hidrometro .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.3);
+    filter: brightness(1.08);
+}
+
+.page-hidrometro .btn-secondary {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 11px 22px;
+    color: #475569;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-hidrometro .btn-secondary:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.page-hidrometro .btn-success {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    border: none;
+    border-radius: 8px;
+    padding: 11px 22px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-hidrometro .btn-success:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.08);
+}
+
+.page-hidrometro .btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border: none;
+    border-radius: 8px;
+    padding: 11px 22px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-hidrometro .btn-danger:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.08);
+}
+
+.page-hidrometro .btn-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+/* ============================================
+   ALERT / INFO BOX
+   ============================================ */
+.page-hidrometro .alert {
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 1.25rem;
+    font-size: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.page-hidrometro .alert i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+.page-hidrometro .alert-info    { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.page-hidrometro .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.page-hidrometro .alert-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.page-hidrometro .alert-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* ============================================
+   INFO BOX (HIDRÔMETRO SELECIONADO)
+   ============================================ */
+.page-hidrometro .info-box {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.page-hidrometro .info-box h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #1e40af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-hidrometro .info-box-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+}
+
+.page-hidrometro .info-item label {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.page-hidrometro .info-item span {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+/* ============================================
+   CALC PREVIEW
+   ============================================ */
+.page-hidrometro .calc-preview {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+    display: none;
+}
+
+.page-hidrometro .calc-preview.show {
+    display: block;
+}
+
+.page-hidrometro .calc-preview h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #166534;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-hidrometro .calc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+
+.page-hidrometro .calc-item label {
+    font-size: 11px;
+    color: #166534;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.page-hidrometro .calc-item span {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #15803d;
+}
+
+/* ============================================
+   SEARCH BOX
+   ============================================ */
+.page-hidrometro .search-box {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 1.5rem;
+    background: #f1f5f9;
+    padding: 14px;
+    border-radius: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.page-hidrometro .search-box .form-group {
+    flex: 1;
+    min-width: 160px;
+}
+
+/* ============================================
+   TABLE
+   ============================================ */
+.page-hidrometro .table-container {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    overflow-x: auto;
+}
+
+.page-hidrometro table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+.page-hidrometro thead {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+}
+
+.page-hidrometro th {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 14px 16px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.page-hidrometro td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.page-hidrometro tbody tr {
+    transition: background 0.15s ease;
+}
+
+.page-hidrometro tbody tr:hover {
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.page-hidrometro tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.page-hidrometro .empty-row td {
+    text-align: center;
+    padding: 2.5rem;
+    color: #94a3b8;
+}
+
+.page-hidrometro .empty-row i {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+/* ============================================
+   LEITURA COLETIVA — INPUTS NA TABELA
+   ============================================ */
+.page-hidrometro .coletiva-table input[type="number"] {
+    width: 110px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    font-size: 14px;
+    text-align: right;
+    min-width: unset;
+}
+
+.page-hidrometro .coletiva-table input[type="number"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.page-hidrometro .coletiva-table input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #2563eb;
+    min-width: unset;
+}
+
+.page-hidrometro .coletiva-table tr.selecionado td {
+    background: rgba(37, 99, 235, 0.04);
+}
+
+/* ============================================
+   STATUS BADGES
+   ============================================ */
+.page-hidrometro .badge {
+    display: inline-flex;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.page-hidrometro .badge-active   { background: #dcfce7; color: #166534; }
+.page-hidrometro .badge-inactive { background: #fee2e2; color: #991b1b; }
+.page-hidrometro .badge-warning  { background: #fef9c3; color: #854d0e; }
+.page-hidrometro .badge-info     { background: #dbeafe; color: #1e40af; }
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+.page-hidrometro .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.page-hidrometro .pagination span {
+    font-size: 14px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* ============================================
+   LOADING STATE
+   ============================================ */
+.page-hidrometro .loading-state {
+    padding: 2.5rem;
+    text-align: center;
+    color: #3b82f6;
+}
+
+.page-hidrometro .loading-state i {
+    font-size: 1.8rem;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.page-hidrometro .loading-state p {
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* ============================================
+   TOAST NOTIFICATION
+   ============================================ */
+.page-hidrometro .toast-container {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    pointer-events: none;
+}
+
+.page-hidrometro .toast {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 280px;
+    max-width: 380px;
+    pointer-events: all;
+    animation: toastIn 0.3s ease;
+    border-left: 4px solid #2563eb;
+}
+
+.page-hidrometro .toast.success { border-left-color: #16a34a; }
+.page-hidrometro .toast.error   { border-left-color: #ef4444; }
+.page-hidrometro .toast.warning { border-left-color: #d97706; }
+
+.page-hidrometro .toast i { font-size: 1.1rem; flex-shrink: 0; }
+.page-hidrometro .toast.success i { color: #16a34a; }
+.page-hidrometro .toast.error   i { color: #ef4444; }
+.page-hidrometro .toast.warning i { color: #d97706; }
+.page-hidrometro .toast.info    i { color: #2563eb; }
+
+.page-hidrometro .toast span {
+    font-size: 14px;
+    color: #1e293b;
+    font-weight: 500;
+    flex: 1;
+}
+
+@keyframes toastIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ============================================
+   KPIs DO HISTÓRICO
+   ============================================ */
+.page-hidrometro #kpiHistorico {
+    margin-bottom: 1.5rem;
+}
+
+/* ============================================
+   CONFIGURAÇÕES DE PERÍODO
+   ============================================ */
+.page-hidrometro .config-periodo-card {
+    max-width: 600px;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    .page-hidrometro .tabs {
+        gap: 0.25rem;
+    }
+
+    .page-hidrometro .tab-button {
+        padding: 0.75rem 1rem;
+        font-size: 0.82rem;
+    }
+
+    .page-hidrometro .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-hidrometro .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .page-hidrometro .search-box {
+        flex-direction: column;
+    }
+
+    .page-hidrometro .btn-actions {
+        flex-direction: column;
+    }
+
+    .page-hidrometro .btn-actions button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .page-hidrometro .coletiva-table input[type="number"] {
+        width: 90px;
+    }
+}

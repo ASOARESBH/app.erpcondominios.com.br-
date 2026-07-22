@@ -1,0 +1,218 @@
+/**
+ * empresa.css — Módulo de Dados da Empresa
+ * CSS autossuficiente com escopo .page-empresa para evitar conflitos globais
+ * @version 1.0.0
+ */
+
+/* ============================================================
+   BREADCRUMB
+   ============================================================ */
+.page-empresa .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.page-empresa .breadcrumb [data-page],
+.page-empresa .breadcrumb a {
+    color: #4f46e5;
+    text-decoration: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.page-empresa .breadcrumb [data-page]:hover,
+.page-empresa .breadcrumb a:hover {
+    color: #3730a3;
+    text-decoration: underline;
+}
+
+/* ============================================================
+   FORMULÁRIO
+   ============================================================ */
+.page-empresa .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.page-empresa .form-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.page-empresa .form-grid label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.page-empresa .form-grid input,
+.page-empresa .form-grid select {
+    padding: 9px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: #1e293b;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.page-empresa .form-grid input:focus,
+.page-empresa .form-grid select:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* ============================================================
+   BOTÕES
+   ============================================================ */
+.page-empresa .btn-primary-modern {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: #4f46e5;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.page-empresa .btn-primary-modern:hover {
+    background: #4338ca;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.page-empresa .btn-secondary-modern {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.page-empresa .btn-secondary-modern:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+/* ============================================================
+   LOGO SECTION
+   ============================================================ */
+.page-empresa .logo-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.page-empresa .logo-preview {
+    width: 140px;
+    height: 140px;
+    border: 2px dashed #cbd5e1;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.page-empresa .logo-preview img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.page-empresa .logo-controls {
+    flex: 1;
+}
+
+.page-empresa .logo-controls h3 {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+/* ============================================================
+   SEÇÕES DE FORMULÁRIO
+   ============================================================ */
+.page-empresa .form-section h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-empresa .form-section h2 i,
+.page-empresa .form-section h3 i {
+    color: #4f46e5;
+}
+
+.page-empresa .form-section h3 {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: #1e293b;
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-empresa .form-actions {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* ============================================================
+   RESPONSIVIDADE
+   ============================================================ */
+@media (max-width: 768px) {
+    .page-empresa .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-empresa .logo-section {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+}

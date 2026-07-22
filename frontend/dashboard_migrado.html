@@ -1,0 +1,388 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.css" rel="stylesheet">
+    <!-- Design System CSS -->
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <!-- Tema Azul (FASE 2) - Ativado apenas nesta tela piloto -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--color-background-tertiary); display: flex; }
+        
+        /* Sidebar */
+        .sidebar { position: fixed; top: 0; left: 0; width: 260px; height: 100vh; background: linear-gradient(135deg, var(--color-primary-900) 0%, var(--color-primary-800) 100%); padding: 2rem 0; overflow-y: auto; z-index: 1000; }
+        .sidebar h1 { color: #fff; font-size: 1.3rem; text-align: center; margin-bottom: 2rem; }
+        .nav-menu { list-style: none; padding: 1rem; }
+        .nav-item { margin-bottom: 0.5rem; }
+        .nav-link { display: flex; align-items: center; padding: 0.75rem 1rem; color: rgba(255, 255, 255, 0.7); text-decoration: none; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .nav-link i { margin-right: 0.75rem; width: 20px; }
+
+        
+        /* Main Content */
+        .main-content { margin-left: 260px; padding: 2rem; width: 100%; }
+        .header { background: var(--color-background-primary); padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: var(--shadow-sm); }
+        .header h1 { color: var(--color-text-primary); font-size: 1.8rem; margin: 0; }
+        
+        /* Welcome Section */
+        .welcome { background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-800)); color: #fff; padding: 2rem; border-radius: 12px; margin-bottom: 2rem; text-align: center; }
+        .welcome h2 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+        .welcome p { opacity: 0.9; }
+        
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        
+        /* Sections */
+        .section { background: var(--color-background-primary); padding: 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: var(--shadow-sm); }
+        .section-title { font-size: 1.3rem; color: var(--color-text-primary); margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border-color); display: flex; align-items: center; gap: 0.75rem; }
+        .section-title i { color: var(--color-primary-600); font-size: 1.5rem; }
+        
+        /* Info Box */
+        .info-box { background: var(--color-info-50); border-left: 4px solid var(--color-info-600); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; }
+        .info-box h4 { color: var(--color-info-900); margin-bottom: 0.5rem; }
+        .info-box p { color: var(--color-info-700); font-size: 0.9rem; margin: 0.25rem 0; }
+        
+        /* Abastecimento Info */
+        .abastecimento-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .abastecimento-item { background: var(--color-background-secondary); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--color-warning-600); }
+        .abastecimento-item h5 { color: var(--color-text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem; }
+        .abastecimento-item .value { font-size: 1.5rem; font-weight: bold; color: var(--color-text-primary); }
+        
+        /* Loading State */
+        .loading { text-align: center; padding: 2rem; color: var(--color-text-secondary); }
+        .loading i { font-size: 2rem; margin-bottom: 1rem; animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        /* Empty State */
+        .empty-state { text-align: center; padding: 2rem; color: var(--color-text-secondary); }
+        .empty-state i { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+        
+        /* User Profile Section */
+        .user-profile-section { background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.2); }
+        .user-profile-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+        .user-avatar { width: 60px; height: 60px; background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-800) 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.8rem; font-weight: bold; flex-shrink: 0; }
+        .user-info { flex: 1; }
+        .user-name { color: #fff; font-size: 1.1rem; font-weight: 600; margin: 0; }
+        .user-function { color: rgba(255, 255, 255, 0.7); font-size: 0.9rem; margin: 0.25rem 0 0 0; }
+        .user-email { color: rgba(255, 255, 255, 0.6); font-size: 0.85rem; margin: 0.25rem 0 0 0; }
+        .session-info { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.2); }
+        .session-item { }
+        .session-label { color: rgba(255, 255, 255, 0.6); font-size: 0.8rem; margin-bottom: 0.25rem; }
+        .session-value { color: #fff; font-size: 0.95rem; font-weight: 600; }
+        .session-timer { color: #10b981; font-weight: 700; }
+        .session-timer.warning { color: #f97316; }
+        .session-timer.critical { color: #ef4444; }
+        
+        /* Menu Toggle Mobile */
+        .menu-toggle { display: none; position: fixed; top: 1rem; left: 1rem; z-index: 1001; background: var(--color-primary-900); color: #fff; border: none; padding: 0.75rem; border-radius: 8px; cursor: pointer; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.3s; }
+            .sidebar.active { transform: translateX(0); }
+            .menu-toggle { display: block; }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .header { padding: 1rem; }
+            .header h1 { font-size: 1.3rem; }
+            .stats-grid { grid-template-columns: 1fr; gap: 1rem; }
+            .section { padding: 1rem; }
+            .section-title { font-size: 1.1rem; }
+            .abastecimento-info { grid-template-columns: 1fr; }
+        }
+        
+        @media (max-width: 480px) {
+            .main-content { padding: 0.5rem; }
+            .section { padding: 0.75rem; }
+            .stat-card { padding: 1rem; }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <nav class="sidebar" id="sidebar">
+        <h1>Serra da Liberdade</h1>
+        
+        <!-- User Profile Section -->
+        <div class="user-profile-section" id="userProfileSection" style="display: none;">
+            <div class="user-profile-header">
+                <div class="user-avatar" id="userAvatar">-</div>
+                <div class="user-info">
+                    <p class="user-name" id="userName">Carregando...</p>
+                    <p class="user-function" id="userFunction">-</p>
+                    <p class="user-email" id="userEmail">-</p>
+                </div>
+            </div>
+            <div class="session-info">
+                <div class="session-item">
+                    <div class="session-label">Tempo de Sessão</div>
+                    <div class="session-value session-timer" id="sessionTimer">00:00:00</div>
+                </div>
+                <div class="session-item">
+                    <div class="session-label">Status</div>
+                    <div class="session-value" id="sessionStatus"><i class="fas fa-circle" style="color: #10b981; font-size: 0.6rem;"></i> Ativo</div>
+                </div>
+            </div>
+        </div>
+        
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link active"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i> Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de Acesso</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i> Relatórios</a></li>
+            <li class="nav-item"><a href="financeiro.html" class="nav-link"><i class="fas fa-money-bill-wave"></i> Financeiro</a></li>
+            <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i> Configuraçµes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a></li>
+            <li class="nav-item"><a href="#" class="nav-link" ><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+        </ul>
+    </nav>
+    
+    <div class="main-content">
+        <div class="header">
+            <h1>Dashboard</h1>
+        </div>
+        
+        <div class="welcome">
+            <h2>Bem-vindo ao Sistema de Controle de Acesso</h2>
+            <p>Acompanhe em tempo real as atividades do condomínio</p>
+        </div>
+        
+        <!-- Stats Grid usando componentes .c-card -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="c-card c-card--compact">
+                <div class="c-card__body">
+                    <h3 class="u-text-sm u-text-secondary u-mb-2">Moradores Ativos</h3>
+                    <div class="u-text-3xl u-font-bold u-text-primary" id="moradoresCount">-</div>
+                    <p class="u-text-xs u-text-secondary u-mt-2">Total de unidades ocupadas</p>
+                </div>
+            </div>
+            
+            <div class="c-card c-card--compact">
+                <div class="c-card__body">
+                    <h3 class="u-text-sm u-text-secondary u-mb-2">Visitantes Hoje</h3>
+                    <div class="u-text-3xl u-font-bold u-text-info" id="visitantesCount">-</div>
+                    <p class="u-text-xs u-text-secondary u-mt-2">Entradas registradas</p>
+                </div>
+            </div>
+            
+            <div class="c-card c-card--compact">
+                <div class="c-card__body">
+                    <h3 class="u-text-sm u-text-secondary u-mb-2">Veículos Registrados</h3>
+                    <div class="u-text-3xl u-font-bold u-text-success" id="veiculosCount">-</div>
+                    <p class="u-text-xs u-text-secondary u-mt-2">Placas cadastradas</p>
+                </div>
+            </div>
+            
+            <div class="c-card c-card--compact">
+                <div class="c-card__body">
+                    <h3 class="u-text-sm u-text-secondary u-mb-2">Alertas Pendentes</h3>
+                    <div class="u-text-3xl u-font-bold u-text-warning" id="alertasCount">-</div>
+                    <p class="u-text-xs u-text-secondary u-mt-2">Requer atenção</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Seção de Abastecimento -->
+        <div class="section" id="abastecimentoSection" style="display: none;">
+            <div class="section-title">
+                <i class="fas fa-gas-pump"></i>
+                Informaçµes de Abastecimento
+            </div>
+            
+            <div class="info-box">
+                <h4>Status do Abastecimento</h4>
+                <p id="abastecimentoStatus">Carregando informaçµes...</p>
+            </div>
+            
+            <div class="abastecimento-info" id="abastecimentoInfo">
+                <div class="abastecimento-item">
+                    <h5>Combustível Disponível</h5>
+                    <div class="value" id="combustivelDisponivel">-</div>
+                </div>
+                <div class="abastecimento-item">
+                    <h5>ltimo Abastecimento</h5>
+                    <div class="value" id="ultimoAbastecimento">-</div>
+                </div>
+                <div class="abastecimento-item">
+                    <h5>Próximo Previsto</h5>
+                    <div class="value" id="proximoAbastecimento">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Seção de Acessos Recentes -->
+        <div class="section">
+            <div class="section-title">
+                <i class="fas fa-history"></i>
+                Acessos Recentes
+            </div>
+            
+            <div class="table-container" id="acessosContainer">
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Carregando acessos...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Seção de Alertas -->
+        <div class="section" id="alertasSection" style="display: none;">
+            <div class="section-title">
+                <i class="fas fa-bell"></i>
+                Alertas do Sistema
+            </div>
+            
+            <div id="alertasContainer">
+                <div class="empty-state">
+                    <i class="fas fa-check-circle"></i>
+                    <p>Nenhum alerta no momento</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // ========== DADOS MOCKADOS PARA TESTE ==========
+        const mockData = {
+            moradores: 45,
+            visitantes: 12,
+            veiculos: 78,
+            alertas: 3,
+            acessos: [
+                { id: 1, morador: 'João Silva', tipo: 'Entrada', hora: '08:30', status: 'Sucesso' },
+                { id: 2, morador: 'Maria Santos', tipo: 'Saída', hora: '08:45', status: 'Sucesso' },
+                { id: 3, morador: 'Pedro Costa', tipo: 'Entrada', hora: '09:00', status: 'Sucesso' },
+                { id: 4, morador: 'Ana Oliveira', tipo: 'Saída', hora: '09:15', status: 'Sucesso' }
+            ]
+        };
+        
+        function carregarDados() {
+            // Simular carregamento
+            setTimeout(() => {
+                document.getElementById('moradoresCount').textContent = mockData.moradores;
+                document.getElementById('visitantesCount').textContent = mockData.visitantes;
+                document.getElementById('veiculosCount').textContent = mockData.veiculos;
+                document.getElementById('alertasCount').textContent = mockData.alertas;
+                
+                // Carregar acessos
+                const acessosHtml = `
+                    <table class="c-table c-table--striped">
+                        <thead>
+                            <tr>
+                                <th>Morador</th>
+                                <th>Tipo</th>
+                                <th>Hora</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${mockData.acessos.map(acesso => `
+                                <tr>
+                                    <td>${acesso.morador}</td>
+                                    <td>${acesso.tipo}</td>
+                                    <td>${acesso.hora}</td>
+                                    <td><span class="c-badge c-badge--success">${acesso.status}</span></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                document.getElementById('acessosContainer').innerHTML = acessosHtml;
+            }, 500);
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function toggleFinanceiroMenu(e) {
+            e.preventDefault();
+            const submenu = e.target.closest('.nav-item').querySelector('.nav-submenu');
+            submenu.classList.toggle('active');
+            e.target.closest('.nav-link').classList.toggle('active');
+        }
+
+        // Fechar menu ao clicar fora (mobile)
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+        
+        // ========== FUNO DE LOGOUT ==========
+        function fazerLogout(event) {
+            event.preventDefault();
+            
+            if (confirm('Deseja realmente sair do sistema?')) {
+                fetch('../api/logout.php', {
+                    method: 'POST',
+                    credentials: 'include'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        // Limpar sessionStorage
+                        sessionStorage.clear();
+                        
+                        // Redirecionar para login
+                        window.location.href = 'login.html';
+                    } else {
+                        alert('Erro ao fazer logout: ' + data.mensagem);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao fazer logout:', error);
+                    // Mesmo com erro, limpar e redirecionar
+                    sessionStorage.clear();
+                    window.location.href = 'login.html';
+                });
+            }
+        }
+        
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', carregarDados);
+    </script>
+    
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+</html>
+
+
+
+
+
+

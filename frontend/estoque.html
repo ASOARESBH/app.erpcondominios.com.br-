@@ -1,0 +1,1206 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gest£o de Estoque - Serra da Liberdade</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+
+        .dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .dash-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .dash-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .dash-card-icon {
+            font-size: 2rem;
+        }
+
+        .dash-card-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1e293b;
+        }
+
+        .dash-card-label {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .section {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 0.5rem;
+            color: #334155;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #64748b;
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #334155;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .search-box input,
+        .search-box select {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .submenu {
+                flex-direction: column;
+            }
+
+            .submenu a {
+                justify-content: center;
+            }
+
+            .dashboard-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+    <!-- âÅâ¦ FASE 4: Session Manager Core v2.0 -->
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <!-- User Profile Section -->
+            <div class="user-profile-section" id="userProfileSection" style="display: none;">
+                <div class="user-profile-header">
+                    <div class="user-avatar" id="userAvatar">-</div>
+                    <div class="user-info">
+                        <p class="user-name" id="userName">Carregando...</p>
+                        <p class="user-function" id="userFunction">-</p>
+                        <p class="user-email" id="userEmail">-</p>
+                    </div>
+                </div>
+                <div class="session-info">
+                    <div class="session-item">
+                        <div class="session-label">Tempo de Sess£o</div>
+                        <div class="session-value session-timer" id="sessionTimer">00:00:00</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-label">Status</div>
+                        <div class="session-value" id="sessionStatus"><i class="fas fa-circle"
+                                style="color: #10b981; font-size: 0.6rem;"></i> Ativo</div>
+                    </div>
+                </div>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link active"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i>
+                        Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Ve­culos</a>
+                </li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                        Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+                        Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                        Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                        Relat³rios</a></li>
+                <li class="nav-item"><a href="financeiro.html" class="nav-link"><i class="fas fa-money-bill-wave"></i>
+                        Financeiro</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                        Configura§µes</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i>
+                        Manuten§£o</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                        Administrativo</a></li>
+                <li class="nav-item"
+                    style="margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                    <a href="#" class="nav-link" id="btn-logout"
+                        style="background: rgba(239, 68, 68, 0.1); color: #fca5a5;" >
+                        <i class="fas fa-sign-out-alt"></i> Sair
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-boxes"></i> Gest£o de Estoque</h1>
+            </header>
+
+            <nav class="submenu">
+                <li><a href="administrativa.html"><i class="fas fa-home"></i> In­cio</a></li>
+                <a href="estoque.html" class="active"><i class="fas fa-boxes"></i> Produtos</a>
+                <a href="entrada_estoque.html"><i class="fas fa-arrow-down"></i> Entrada</a>
+                <a href="saida_estoque.html"><i class="fas fa-arrow-up"></i> Sa­da</a>
+                <a href="relatorio_estoque.html"><i class="fas fa-chart-bar"></i> Relat³rios</a>
+            </nav>
+
+            <div id="alertContainer"></div>
+
+            <!-- Dashboard Cards -->
+            <div class="dashboard-cards" id="dashboardCards">
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <div class="dash-card-icon" style="color: #667eea;"><i class="fas fa-boxes"></i></div>
+                    </div>
+                    <div class="dash-card-value" id="totalProdutos">0</div>
+                    <div class="dash-card-label">Total de Produtos</div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <div class="dash-card-icon" style="color: #10b981;"><i class="fas fa-dollar-sign"></i></div>
+                    </div>
+                    <div class="dash-card-value" id="valorTotal">R$ 0,00</div>
+                    <div class="dash-card-label">Valor Total do Estoque</div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <div class="dash-card-icon" style="color: #f59e0b;"><i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                    <div class="dash-card-value" id="estoqueBaixo">0</div>
+                    <div class="dash-card-label">Produtos com Estoque Baixo</div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <div class="dash-card-icon" style="color: #ef4444;"><i class="fas fa-times-circle"></i></div>
+                    </div>
+                    <div class="dash-card-value" id="estoqueZerado">0</div>
+                    <div class="dash-card-label">Produtos Zerados</div>
+                </div>
+            </div>
+
+            <!-- Formul¡rio de Cadastro/Edi§£o -->
+            <section class="section">
+                <h2 class="section-title"><i class="fas fa-plus-circle"></i> <span id="formTitle">Cadastrar
+                        Produto</span></h2>
+                <form id="produtoForm">
+                    <input type="hidden" id="produtoId">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="nome">Nome do Material *</label>
+                            <input type="text" id="nome" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="categoria_id">Categoria *</label>
+                            <select id="categoria_id" required>
+                                <option value="">Selecione...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="unidade_medida">Unidade de Medida *</label>
+                            <select id="unidade_medida" required>
+                                <option value="Unidade">Unidade</option>
+                                <option value="Metro">Metro</option>
+                                <option value="Kg">Kg</option>
+                                <option value="Litro">Litro</option>
+                                <option value="Caixa">Caixa</option>
+                                <option value="Pacote">Pacote</option>
+                                <option value="Rolo">Rolo</option>
+                                <option value="Saco">Saco</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="preco_unitario">Pre§o Unit¡rio (R$) *</label>
+                            <input type="number" id="preco_unitario" step="0.01" min="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="quantidade_estoque">Quantidade em Estoque *</label>
+                            <input type="number" id="quantidade_estoque" step="0.01" min="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="estoque_minimo">Estoque M­nimo</label>
+                            <input type="number" id="estoque_minimo" step="0.01" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="estoque_maximo">Estoque M¡ximo</label>
+                            <input type="number" id="estoque_maximo" step="0.01" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="localizacao">Localiza§£o</label>
+                            <input type="text" id="localizacao" placeholder="Ex: Dep³sito A - Prateleira 1">
+                        </div>
+                        <div class="form-group">
+                            <label for="fornecedor">Fornecedor</label>
+                            <input type="text" id="fornecedor">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="descricao">Descri§£o</label>
+                        <textarea id="descricao"></textarea>
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar
+                            Produto</button>
+                        <button type="button" class="btn btn-secondary" onclick="limparFormulario()"><i
+                                class="fas fa-times"></i> Limpar</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Busca e Filtros -->
+            <section class="section">
+                <h2 class="section-title"><i class="fas fa-search"></i> Buscar Produtos</h2>
+                <div class="search-box">
+                    <input type="text" id="busca" placeholder="Buscar por nome, c³digo ou descri§£o...">
+                    <select id="filtroCategoria">
+                        <option value="">Todas as categorias</option>
+                    </select>
+                    <select id="filtroEstoque">
+                        <option value="">Todos os produtos</option>
+                        <option value="baixo">Estoque Baixo</option>
+                        <option value="zerado">Estoque Zerado</option>
+                        <option value="normal">Estoque Normal</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="carregarProdutos()"><i class="fas fa-search"></i>
+                        Buscar</button>
+                </div>
+            </section>
+
+            <!-- Lista de Produtos -->
+            <section class="section">
+                <h2 class="section-title"><i class="fas fa-list"></i> Lista de Produtos</h2>
+                <div class="table-container">
+                    <table id="produtosTable">
+                        <thead>
+                            <tr>
+                                <th>C³digo</th>
+                                <th>Nome</th>
+                                <th>Categoria</th>
+                                <th>Unidade</th>
+                                <th>Pre§o Unit.</th>
+                                <th>Estoque</th>
+                                <th>Valor Total</th>
+                                <th>Status</th>
+                                <th>A§µes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="produtosTableBody">
+                            <tr>
+                                <td colspan="9" class="loading"><i class="fas fa-spinner fa-spin"></i> Carregando
+                                    produtos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        let editando = false;
+
+        // Toggle menu mobile
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        // Fechar menu ao clicar fora (mobile)
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        // Carregar dashboard
+        async function carregarDashboard() {
+            try {
+                const response = await fetch('../api/api_estoque.php?action=dashboard');
+                const data = await response.json();
+                if (data.sucesso) {
+                    document.getElementById('totalProdutos').textContent = data.dados.total_produtos || 0;
+                    document.getElementById('valorTotal').textContent = 'R$ ' + (data.dados.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                    document.getElementById('estoqueBaixo').textContent = data.dados.produtos_estoque_baixo || 0;
+                    document.getElementById('estoqueZerado').textContent = data.dados.produtos_zerados || 0;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dashboard:', error);
+            }
+        }
+
+        // Carregar categorias
+        async function carregarCategorias() {
+            try {
+                const response = await fetch('../api/api_estoque.php?action=categorias');
+                const data = await response.json();
+                if (data.sucesso) {
+                    const selectCadastro = document.getElementById('categoria_id');
+                    const selectFiltro = document.getElementById('filtroCategoria');
+
+                    selectCadastro.innerHTML = '<option value="">Selecione...</option>';
+                    selectFiltro.innerHTML = '<option value="">Todas as categorias</option>';
+
+                    data.dados.forEach(cat => {
+                        selectCadastro.innerHTML += `<option value="${cat.id}">${cat.nome}</option>`;
+                        selectFiltro.innerHTML += `<option value="${cat.id}">${cat.nome}</option>`;
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar categorias:', error);
+            }
+        }
+
+        // Carregar produtos
+        async function carregarProdutos() {
+            const busca = document.getElementById('busca').value;
+            const categoria = document.getElementById('filtroCategoria').value;
+            const estoque = document.getElementById('filtroEstoque').value;
+
+            const tbody = document.getElementById('produtosTableBody');
+            tbody.innerHTML = '<tr><td colspan="9" class="loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+
+            try {
+                let url = 'api_estoque.php?action=produtos';
+                if (busca) url += '&busca=' + encodeURIComponent(busca);
+                if (categoria) url += '&categoria_id=' + categoria;
+                if (estoque === 'baixo') url += '&estoque_baixo=1';
+                if (estoque === 'zerado') url += '&estoque_zerado=1';
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.sucesso && data.dados.length > 0) {
+                    tbody.innerHTML = '';
+                    data.dados.forEach(produto => {
+                        const valorTotal = (produto.preco_unitario * produto.quantidade_estoque).toFixed(2);
+                        let statusBadge = '<span class="badge badge-success">Normal</span>';
+
+                        if (produto.quantidade_estoque == 0) {
+                            statusBadge = '<span class="badge badge-danger">Zerado</span>';
+                        } else if (produto.quantidade_estoque <= produto.estoque_minimo) {
+                            statusBadge = '<span class="badge badge-warning">Baixo</span>';
+                        }
+
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${produto.codigo}</td>
+                                <td>${produto.nome}</td>
+                                <td>${produto.categoria_nome || '-'}</td>
+                                <td>${produto.unidade_medida}</td>
+                                <td>R$ ${parseFloat(produto.preco_unitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td>${parseFloat(produto.quantidade_estoque).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td>R$ ${parseFloat(valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td>${statusBadge}</td>
+                                <td class="action-buttons">
+                                    <button class="btn btn-sm btn-primary" onclick="editarProduto(${produto.id})"><i class="fas fa-edit"></i></button>
+                                    <button class="btn btn-sm btn-danger" onclick="excluirProduto(${produto.id}, '${produto.nome}')"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><i class="fas fa-box-open"></i><br>Nenhum produto encontrado</td></tr>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar produtos:', error);
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><i class="fas fa-exclamation-triangle"></i><br>Erro ao carregar produtos</td></tr>';
+            }
+        }
+
+        // Salvar produto
+        document.getElementById('produtoForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const formData = {
+                nome: document.getElementById('nome').value,
+                categoria_id: document.getElementById('categoria_id').value,
+                unidade_medida: document.getElementById('unidade_medida').value,
+                descricao: document.getElementById('descricao').value,
+                preco_unitario: document.getElementById('preco_unitario').value,
+                quantidade_estoque: document.getElementById('quantidade_estoque').value,
+                estoque_minimo: document.getElementById('estoque_minimo').value || 0,
+                estoque_maximo: document.getElementById('estoque_maximo').value || 0,
+                localizacao: document.getElementById('localizacao').value,
+                fornecedor: document.getElementById('fornecedor').value
+            };
+
+            try {
+                let url = 'api_estoque.php?action=produtos';
+                let method = 'POST';
+
+                if (editando) {
+                    formData.id = document.getElementById('produtoId').value;
+                    method = 'PUT';
+                }
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('success', data.mensagem);
+                    limparFormulario();
+                    carregarProdutos();
+                    carregarDashboard();
+                } else {
+                    mostrarAlerta('error', data.mensagem);
+                }
+            } catch (error) {
+                console.error('Erro ao salvar produto:', error);
+                mostrarAlerta('error', 'Erro ao salvar produto');
+            }
+        });
+
+        // Editar produto
+        async function editarProduto(id) {
+            try {
+                const response = await fetch(`../api/api_estoque.php?action=produto&id=${id}`);
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    const produto = data.dados;
+                    document.getElementById('produtoId').value = produto.id;
+                    document.getElementById('nome').value = produto.nome;
+                    document.getElementById('categoria_id').value = produto.categoria_id;
+                    document.getElementById('unidade_medida').value = produto.unidade_medida;
+                    document.getElementById('descricao').value = produto.descricao || '';
+                    document.getElementById('preco_unitario').value = produto.preco_unitario;
+                    document.getElementById('quantidade_estoque').value = produto.quantidade_estoque;
+                    document.getElementById('estoque_minimo').value = produto.estoque_minimo;
+                    document.getElementById('estoque_maximo').value = produto.estoque_maximo;
+                    document.getElementById('localizacao').value = produto.localizacao || '';
+                    document.getElementById('fornecedor').value = produto.fornecedor || '';
+
+                    document.getElementById('formTitle').textContent = 'Editar Produto';
+                    editando = true;
+
+                    // Scroll para o formul¡rio
+                    document.getElementById('produtoForm').scrollIntoView({ behavior: 'smooth' });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar produto:', error);
+                mostrarAlerta('error', 'Erro ao carregar produto');
+            }
+        }
+
+        // Excluir produto
+        async function excluirProduto(id, nome) {
+            if (!confirm(`Tem certeza que deseja excluir o produto "${nome}"?`)) return;
+
+            try {
+                const response = await fetch(`../api/api_estoque.php?action=produtos&id=${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('success', data.mensagem);
+                    carregarProdutos();
+                    carregarDashboard();
+                } else {
+                    mostrarAlerta('error', data.mensagem);
+                }
+            } catch (error) {
+                console.error('Erro ao excluir produto:', error);
+                mostrarAlerta('error', 'Erro ao excluir produto');
+            }
+        }
+
+        // Limpar formul¡rio
+        function limparFormulario() {
+            document.getElementById('produtoForm').reset();
+            document.getElementById('produtoId').value = '';
+            document.getElementById('formTitle').textContent = 'Cadastrar Produto';
+            editando = false;
+        }
+
+        // Mostrar alerta
+        function mostrarAlerta(tipo, mensagem) {
+            const container = document.getElementById('alertContainer');
+            const icone = tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle';
+            const classe = tipo === 'success' ? 'alert-success' : tipo === 'error' ? 'alert-error' : 'alert-info';
+
+            container.innerHTML = `
+                <div class="alert ${classe}">
+                    <i class="fas fa-${icone}"></i>
+                    <span>${mensagem}</span>
+                </div>
+            `;
+
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarDashboard();
+            carregarCategorias();
+            carregarProdutos();
+        });
+        // ========== LOGOUT REMOVIDO - Centralizado em SessionManagerCore via sidebar-controller.js ==========
+        // Logout agora © ºnico ponto de entrada: sidebar-controller.js ââ â SessionManagerCore.getInstance().logout()
+    </script>
+
+    <!-- Prote§£o de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+
+    <!-- Script para exibir usu¡rio logado em tempo real -->
+    <script>
+        (function () {
+            'use strict';
+
+            const CONFIG = {
+                warningThreshold: 300,
+                autoRenewThreshold: 600,
+                enableAutoRenew: true
+            };
+
+            let intervaloAtualizacao = null;
+
+            /**
+             * Inicializar o script
+             * âÅâ¦ CORRIGIDO: Usar SessionManager Singleton em vez de polling agressivo
+             */
+            function inicializar() {
+                console.log('°Å¸â§ Dashboard User Display inicializado');
+
+                // Usar SessionManager Singleton em vez de fazer polling
+                const sessionMgr = SessionManagerCore.getInstance();
+                const userData = sessionMgr.getUserData();
+                if (userData) {
+                    atualizarExibicao({ usuario: userData, sessao: { tempo_restante: 600 } });
+                }
+
+                sessionMgr.onUserDataChanged((dados) => {
+                    atualizarExibicao(dados);
+                });
+
+                document.addEventListener('visibilitychange', handleVisibilidadeChange);
+                window.addEventListener('beforeunload', limpar);
+
+                console.log('âÅâ¦ Dashboard User Display pronto');
+            }
+
+            /**
+             * Carregar dados do usu¡rio logado
+             */
+            function carregarDadosUsuario() {
+                fetch(CONFIG.apiUrl, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.sucesso && data.logado) {
+                            const tempo = (typeof data.tempo_restante !== 'undefined') ? data.tempo_restante : (data.sessao ? data.sessao.tempo_restante : null);
+                            atualizarExibicao(data);
+                            if (tempo !== null) verificarAvisos(tempo);
+
+                            if (CONFIG.enableAutoRenew && tempo !== null && tempo < CONFIG.autoRenewThreshold) {
+                                renovarSessaoAutomaticamente();
+                            }
+                        } else {
+                            handleSessaoExpirada();
+                        }
+                    })
+                    .catch(error => console.warn('Erro ao carregar dados da sess£o:', error));
+            }
+
+            /**
+             * Atualizar exibi§£o na interface
+             */
+            function atualizarExibicao(data) {
+                const usuario = data && data.usuario ? data.usuario : null;
+                const tempo = (typeof (data && data.tempo_restante) !== 'undefined') ? data.tempo_restante : (data && data.sessao ? data.sessao.tempo_restante : null);
+
+                atualizarPerfilUsuario(usuario);
+                atualizarTempoSessao({ tempo_restante: tempo, tempo_restante_formatado: data && data.sessao ? data.sessao.tempo_restante_formatado : null });
+                atualizarStatusVisual(tempo);
+            }
+
+            /**
+             * Atualizar perfil do usu¡rio
+             */
+            function atualizarPerfilUsuario(usuario) {
+                const section = document.getElementById('userProfileSection');
+                if (!section) return;
+
+                if (!usuario) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+
+                const nome = usuario.nome || '';
+                const inicial = nome.length ? nome.charAt(0).toUpperCase() : '?';
+                const avatarEl = document.getElementById('userAvatar');
+                const nameEl = document.getElementById('userName');
+                const funcEl = document.getElementById('userFunction');
+                const emailEl = document.getElementById('userEmail');
+
+                if (avatarEl) avatarEl.textContent = inicial;
+                if (nameEl) nameEl.textContent = nome || 'Usu¡rio';
+                if (funcEl) funcEl.textContent = usuario.funcao || usuario.permissao || 'Usu¡rio';
+                if (emailEl) emailEl.textContent = usuario.email || '-';
+            }
+
+            /**
+             * Atualizar tempo de sess£o
+             */
+            function atualizarTempoSessao(sessao) {
+                const tempoElement = document.getElementById('sessionTimer');
+                if (!tempoElement) return;
+
+                const tempoRestante = sessao.tempo_restante_formatado || formatarTempo(sessao.tempo_restante);
+                tempoElement.textContent = tempoRestante;
+
+                // Atualizar classe de cor
+                tempoElement.classList.remove('warning', 'critical');
+                if (sessao.tempo_restante < CONFIG.warningThreshold) {
+                    tempoElement.classList.add('critical');
+                } else if (sessao.tempo_restante < 1800) {
+                    tempoElement.classList.add('warning');
+                }
+            }
+
+            /**
+             * Atualizar status visual
+             */
+            function atualizarStatusVisual(tempoRestante) {
+                const section = document.getElementById('userProfileSection');
+                if (!section) return;
+
+                section.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+
+                if (tempoRestante < CONFIG.warningThreshold) {
+                    section.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    section.style.background = 'rgba(239, 68, 68, 0.1)';
+                } else if (tempoRestante < 1800) {
+                    section.style.borderColor = 'rgba(249, 115, 22, 0.3)';
+                    section.style.background = 'rgba(249, 115, 22, 0.1)';
+                } else {
+                    section.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                    section.style.background = 'rgba(255, 255, 255, 0.1)';
+                }
+            }
+
+            /**
+             * Verificar avisos
+             */
+            function verificarAvisos(tempoRestante) {
+                if (tempoRestante < CONFIG.warningThreshold && tempoRestante > CONFIG.warningThreshold - 60) {
+                    mostrarNotificacao('warning', 'Sua sess£o expirar¡ em 5 minutos');
+                }
+
+                if (tempoRestante < 60 && tempoRestante > 50) {
+                    mostrarNotificacao('critical', 'Sua sess£o expirar¡ em menos de 1 minuto!');
+                }
+            }
+
+            /**
+             * Mostrar notifica§£o
+             */
+            function mostrarNotificacao(tipo, mensagem) {
+                if (document.querySelector(`[data-notif-sessao="${tipo}"]`)) {
+                    return;
+                }
+
+                const notifHTML = `
+                <div class="session-notification session-notification-${tipo}" data-notif-sessao="${tipo}" style="
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #fff;
+                    padding: 1rem;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    z-index: 9999;
+                    border-left: 4px solid ${tipo === 'critical' ? '#ef4444' : '#f97316'};
+                    animation: slideIn 0.3s ease;
+                ">
+                    <i class="fas fa-exclamation-triangle" style="color: ${tipo === 'critical' ? '#ef4444' : '#f97316'}; margin-right: 0.5rem;"></i>
+                    <span style="color: #1f2937;">${mensagem}</span>
+                </div>
+            `;
+
+                document.body.insertAdjacentHTML('afterbegin', notifHTML);
+
+                setTimeout(() => {
+                    const notif = document.querySelector(`[data-notif-sessao="${tipo}"]`);
+                    if (notif) notif.remove();
+                }, 8000);
+            }
+
+            /**
+             * Renovar sess£o automaticamente
+             */
+            function renovarSessaoAutomaticamente() {
+                fetch(CONFIG.apiUrl + '?acao=renovar', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.sucesso) {
+                            console.log('âÅâ¦ Sess£o renovada automaticamente');
+                            carregarDadosUsuario();
+                        }
+                    })
+                    .catch(error => console.warn('Erro ao renovar sess£o:', error));
+            }
+
+            /**
+             * Lidar com mudan§a de visibilidade
+             */
+            function handleVisibilidadeChange() {
+                if (document.hidden) {
+                    if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
+                } else {
+                    carregarDadosUsuario();
+                    intervaloAtualizacao = setInterval(carregarDadosUsuario, CONFIG.updateInterval);
+                }
+            }
+
+            /**
+             * Lidar com sess£o expirada
+             */
+            function handleSessaoExpirada() {
+                console.warn('âÅ¡ ï¸ Sess£o expirada ou inv¡lida');
+            }
+
+            /**
+             * Formatar tempo
+             */
+            function formatarTempo(segundos) {
+                const horas = Math.floor(segundos / 3600);
+                const minutos = Math.floor((segundos % 3600) / 60);
+                const segs = segundos % 60;
+
+                return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segs).padStart(2, '0')}`;
+            }
+
+            /**
+             * Limpar recursos
+             */
+            function limpar() {
+                if (intervaloAtualizacao) {
+                    clearInterval(intervaloAtualizacao);
+                }
+            }
+
+            /**
+             * Inicializar
+             */
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', inicializar);
+            } else {
+                inicializar();
+            }
+        })();
+    </script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

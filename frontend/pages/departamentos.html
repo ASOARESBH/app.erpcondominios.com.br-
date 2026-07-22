@@ -1,0 +1,95 @@
+<!-- page: departamentos | css: departamentos -->
+<script>if (typeof AppRouter === 'undefined') window.location.replace('../frontend/layout-base.html?page=departamentos');</script>
+
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Departamentos" data-icon="fa-building" style="display:none;"></div>
+
+<div class="page-wrapper page-departamentos">
+
+    <!-- Breadcrumb -->
+    <nav class="stub-breadcrumb">
+        <span data-page="configuracao" style="cursor:pointer"><i class="fas fa-cog"></i> Configurações</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span data-page="sistema" style="cursor:pointer">Sistema</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span>Departamentos</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-building" style="color:#2563eb;margin-right:10px;"></i>Departamentos</h1>
+            <p>Cadastro centralizado — utilizado por Ordens de Serviço, Usuários, RH e todos os módulos</p>
+        </div>
+        <div class="dept-header-actions">
+            <button class="btn-dept-novo" id="btnNovoDepartamento">
+                <i class="fas fa-plus"></i> Novo Departamento
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="dept-stats" id="dept-stats">
+        <div class="dept-stat-card"><div class="dept-stat-valor">—</div><div class="dept-stat-label">Total</div></div>
+        <div class="dept-stat-card green"><div class="dept-stat-valor">—</div><div class="dept-stat-label">Ativos</div></div>
+        <div class="dept-stat-card gray"><div class="dept-stat-valor">—</div><div class="dept-stat-label">Inativos</div></div>
+    </div>
+
+    <!-- Lista -->
+    <div class="dept-card">
+        <div class="dept-card-header">
+            <span><i class="fas fa-list"></i> Departamentos Cadastrados</span>
+            <div class="dept-busca-wrapper">
+                <input type="text" id="dept-busca" placeholder="Filtrar por nome...">
+            </div>
+            <label class="dept-toggle-inativos">
+                <input type="checkbox" id="dept-mostrar-inativos"> Mostrar inativos
+            </label>
+        </div>
+        <div id="lista-departamentos">
+            <div class="dept-loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+        </div>
+    </div>
+
+    <div class="dept-aviso-uso">
+        <i class="fas fa-info-circle"></i>
+        <span>Os departamentos cadastrados aqui são usados automaticamente pelos módulos de <strong>Ordens de Serviço</strong>, <strong>Usuários</strong>, <strong>Recursos Humanos</strong> e demais áreas do sistema. Desativar um departamento não remove os registros existentes.</span>
+    </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MODAL: CRIAR / EDITAR DEPARTAMENTO                         -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="dept-modal-overlay" id="dept-modal" style="display:none;">
+    <div class="dept-modal">
+        <div class="dept-modal-header">
+            <h3><i class="fas fa-building"></i> <span id="dept-modal-titulo">Novo Departamento</span></h3>
+            <button class="dept-modal-fechar" id="btnFecharModalDept" title="Fechar">×</button>
+        </div>
+        <div class="dept-modal-body">
+            <input type="hidden" id="dept-id">
+            <div class="dept-form-group">
+                <label for="dept-nome">Nome <span class="dept-required">*</span></label>
+                <input type="text" id="dept-nome" placeholder="Ex: MANUTENÇÃO" autocomplete="off" style="text-transform:uppercase">
+                <div class="dept-form-hint">Será convertido automaticamente para maiúsculas</div>
+            </div>
+            <div class="dept-form-group">
+                <label for="dept-descricao">Descrição</label>
+                <input type="text" id="dept-descricao" placeholder="Breve descrição (opcional)" autocomplete="off">
+            </div>
+            <div class="dept-form-group" id="dept-grupo-ativo" style="display:none;">
+                <label class="dept-form-toggle">
+                    <input type="checkbox" id="dept-ativo" checked>
+                    Departamento ativo (visível para seleção nos módulos)
+                </label>
+            </div>
+        </div>
+        <div class="dept-modal-footer">
+            <button class="btn-dept-cancelar" id="btnCancelarDept">Cancelar</button>
+            <button class="btn-dept-salvar" id="btnSalvarDept">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+        </div>
+    </div>
+</div>

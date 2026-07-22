@@ -1,0 +1,227 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alertas de Manutenção - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i>
+                        Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a>
+                </li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                        Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+                        Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                        Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                        Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                        Configuraçµes</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link active"><i class="fas fa-tools"></i>
+                        Manutenção</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                        Administrativo</a></li>
+            </ul>
+        </nav>
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-exclamation-triangle"></i> Alertas de Manutenção Preventiva</h1>
+            </header>
+            <nav class="submenu">
+                <ul>
+                    <li><a href="checklist_veicular.html"><i class="fas fa-arrow-left"></i> Voltar</a></li>
+                    <li><a href="checklist_alertas.html" class="active"><i class="fas fa-exclamation-triangle"></i>
+                            Alertas</a></li>
+                </ul>
+            </nav>
+            <div id="alertaMsg"></div>
+            <div class="section">
+                <h2>Configuração de Alertas</h2>
+                <p>Configure os limites de KM para cada tipo de manutenção preventiva.</p>
+                <table id="tabelaConfig">
+                    <thead>
+                        <tr>
+                            <th>Categoria</th>
+                            <th>Nome do Alerta</th>
+                            <th>KM Limite</th>
+                            <th>Descrição</th>
+                            <th>Status</th>
+                            <th>Açµes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoConfig"></tbody>
+                </table>
+            </div>
+            <div class="section">
+                <h2>Alertas Gerados</h2>
+                <div class="filters">
+                    <select id="filtroStatus">
+                        <option value="pendente">Pendentes</option>
+                        <option value="resolvido">Resolvidos</option>
+                        <option value="ignorado">Ignorados</option>
+                    </select>
+                    <button onclick="carregarAlertas()"><i class="fas fa-filter"></i> Filtrar</button>
+                </div>
+                <table id="tabelaAlertas">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Veículo</th>
+                            <th>Categoria</th>
+                            <th>KM Atual</th>
+                            <th>KM Limite</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                            <th>Açµes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoAlertas"></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarConfiguracoes();
+            carregarAlertas();
+        });
+        function carregarConfiguracoes() {
+            fetch('../api/api_checklist_alertas.php?acao=listar_config')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        renderizarConfiguracoes(data.dados);
+                    }
+                });
+        }
+        function renderizarConfiguracoes(configs) {
+            const tbody = document.getElementById('corpoConfig');
+            tbody.innerHTML = configs.map(config => `
+                <tr>
+                    <td>${config.categoria}</td>
+                    <td>${config.nome_alerta}</td>
+                    <td>${config.km_alerta} km</td>
+                    <td>${config.descricao}</td>
+                    <td><span class="badge ${config.ativo ? 'badge-success' : 'badge-danger'}">${config.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                    <td>
+                        <button class="btn-sm" onclick="editarConfig(${config.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn-sm ${config.ativo ? 'btn-danger' : 'btn-success'}" onclick="toggleConfig(${config.id}, ${config.ativo ? 0 : 1})">
+                            <i class="fas fa-${config.ativo ? 'ban' : 'check'}"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        function carregarAlertas() {
+            const status = document.getElementById('filtroStatus').value;
+            fetch(`../api/api_checklist_alertas.php?acao=listar_alertas&status=${status}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        renderizarAlertas(data.dados);
+                    }
+                });
+        }
+        function renderizarAlertas(alertas) {
+            const tbody = document.getElementById('corpoAlertas');
+            if (alertas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum alerta encontrado</td></tr>';
+                return;
+            }
+            tbody.innerHTML = alertas.map(alerta => `
+                <tr>
+                    <td>${alerta.id}</td>
+                    <td>${alerta.placa}<br><small>${alerta.veiculo_modelo}</small></td>
+                    <td>${alerta.nome_alerta}</td>
+                    <td>${alerta.km_atual} km</td>
+                    <td>${alerta.km_limite} km</td>
+                    <td>${new Date(alerta.data_geracao).toLocaleDateString('pt-BR')}</td>
+                    <td><span class="badge badge-${alerta.status === 'pendente' ? 'warning' : alerta.status === 'resolvido' ? 'success' : 'danger'}">${alerta.status.toUpperCase()}</span></td>
+                    <td>
+                        ${alerta.status === 'pendente' ? `
+                            <button class="btn-sm btn-success" onclick="resolverAlerta(${alerta.id})"><i class="fas fa-check"></i></button>
+                            <button class="btn-sm btn-danger" onclick="ignorarAlerta(${alerta.id})"><i class="fas fa-times"></i></button>
+                        ` : '-'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        function toggleConfig(id, ativo) {
+            const formData = new FormData();
+            formData.append('acao', 'ativar_desativar');
+            formData.append('id', id);
+            formData.append('ativo', ativo);
+            fetch('../api/api_checklist_alertas.php', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        carregarConfiguracoes();
+                    }
+                });
+        }
+        function resolverAlerta(id) {
+            const obs = prompt('Observação sobre a resolução:');
+            if (obs === null) return;
+            const formData = new FormData();
+            formData.append('acao', 'resolver_alerta');
+            formData.append('id', id);
+            formData.append('observacao', obs);
+            fetch('../api/api_checklist_alertas.php', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        carregarAlertas();
+                    }
+                });
+        }
+        function ignorarAlerta(id) {
+            const obs = prompt('Motivo para ignorar o alerta:');
+            if (obs === null) return;
+            const formData = new FormData();
+            formData.append('acao', 'ignorar_alerta');
+            formData.append('id', id);
+            formData.append('observacao', obs);
+            fetch('../api/api_checklist_alertas.php', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        carregarAlertas();
+                    }
+                });
+        }
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+    </script>
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

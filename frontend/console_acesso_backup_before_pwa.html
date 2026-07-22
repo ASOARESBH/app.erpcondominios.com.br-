@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Console de Acesso - Serra da Liberdade</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 1rem;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-card .label {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .main-buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .btn-main {
+            background: rgba(255, 255, 255, 0.95);
+            color: #667eea;
+            border: none;
+            padding: 1.5rem;
+            border-radius: 20px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .btn-main i {
+            font-size: 2rem;
+        }
+
+        .btn-main:active {
+            transform: scale(0.95);
+        }
+
+        .btn-main.btn-qr {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: #fff;
+        }
+
+        .btn-main.btn-portaria {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: #fff;
+        }
+
+        .btn-main.btn-morador {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: #fff;
+        }
+
+        .scanner-container {
+            display: none;
+            background: rgba(0, 0, 0, 0.95);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .scanner-container.active {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #scanner-video {
+            width: 100%;
+            max-width: 500px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .scanner-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 250px;
+            height: 250px;
+            border: 3px solid #f5576c;
+            border-radius: 20px;
+            pointer-events: none;
+        }
+
+        .scanner-overlay::before,
+        .scanner-overlay::after {
+            content: '';
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f5576c;
+        }
+
+        .scanner-overlay::before {
+            top: -4px;
+            left: -4px;
+            border-right: none;
+            border-bottom: none;
+            border-top-left-radius: 20px;
+        }
+
+        .scanner-overlay::after {
+            bottom: -4px;
+            right: -4px;
+            border-left: none;
+            border-top: none;
+            border-bottom-right-radius: 20px;
+        }
+
+        .btn-close-scanner {
+            position: absolute;
+            top: 2rem;
+            right: 2rem;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        .scanner-instructions {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 1.1rem;
+            color: #fff;
+        }
+
+        .result-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .result-modal.active {
+            display: flex;
+        }
+
+        .result-content {
+            background: #fff;
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            color: #333;
+        }
+
+        .result-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .result-icon.success {
+            color: #43e97b;
+        }
+
+        .result-icon.error {
+            color: #f5576c;
+        }
+
+        .result-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .result-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .result-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .result-info-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-info-label {
+            font-weight: 600;
+            color: #6c757d;
+        }
+
+        .result-info-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .btn-close-result {
+            background: #667eea;
+            color: #fff;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .form-temporario {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            color: #333;
+        }
+
+        .form-temporario.active {
+            display: block;
+        }
+
+        .form-temporario h3 {
+            margin-bottom: 1rem;
+            color: #667eea;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-submit {
+            background: #667eea;
+            color: #fff;
+            border: none;
+            padding: 1rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .btn-cancel {
+            background: #6c757d;
+            color: #fff;
+            border: none;
+            padding: 1rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 0.5rem;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.25rem;
+            }
+
+            .btn-main {
+                padding: 1.25rem;
+                font-size: 1rem;
+            }
+
+            .btn-main i {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-shield-alt"></i> Console de Acesso</h1>
+            <p>Serra da Liberdade</p>
+        </div>
+
+        <!-- Estatísticas -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="number" id="statPermitidos">0</div>
+                <div class="label">Permitidos Hoje</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="statNegados">0</div>
+                <div class="label">Negados Hoje</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="statAtivos">0</div>
+                <div class="label">Acessos Ativos</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="statTotal">0</div>
+                <div class="label">Total Hoje</div>
+            </div>
+        </div>
+
+        <!-- Botµes Principais -->
+        <div class="main-buttons">
+            <button class="btn-main btn-qr" onclick="abrirScanner()">
+                <i class="fas fa-qrcode"></i>
+                <span>LER QR CODE</span>
+            </button>
+            <button class="btn-main btn-portaria" onclick="abrirPortaria()">
+                <i class="fas fa-door-open"></i>
+                <span>PORTARIA</span>
+            </button>
+            <button class="btn-main btn-morador" onclick="abrirMorador()">
+                <i class="fas fa-home"></i>
+                <span>MORADOR</span>
+            </button>
+        </div>
+
+        <!-- Formulário QR Code Temporário -->
+        <div class="form-temporario" id="formTemporario">
+            <h3><i class="fas fa-clock"></i> QR Code Temporário (Delivery)</h3>
+            <form id="formDelivery" onsubmit="criarTemporario(event)">
+                <div class="form-group">
+                    <label for="nomeEntregador">Nome do Entregador</label>
+                    <input type="text" id="nomeEntregador" placeholder="Ex: João Silva">
+                </div>
+                <div class="form-group">
+                    <label for="empresa">Empresa</label>
+                    <input type="text" id="empresa" placeholder="Ex: iFood, Rappi">
+                </div>
+                <div class="form-group">
+                    <label for="telefone">Telefone</label>
+                    <input type="tel" id="telefone" placeholder="(31) 99999-9999">
+                </div>
+                <div class="form-group">
+                    <label for="placa">Placa do Veículo</label>
+                    <input type="text" id="placa" placeholder="ABC-1234" maxlength="8" style="text-transform: uppercase;">
+                </div>
+                <div class="form-group">
+                    <label for="unidadeDestino">Unidade Destino *</label>
+                    <input type="text" id="unidadeDestino" placeholder="Ex: Gleba 180" required>
+                </div>
+                <div class="form-group">
+                    <label for="horaInicial">Hora Inicial *</label>
+                    <input type="time" id="horaInicial" required>
+                </div>
+                <div class="form-group">
+                    <label for="horaFinal">Hora Final *</label>
+                    <input type="time" id="horaFinal" required>
+                </div>
+                <div class="form-group">
+                    <label for="tipoAcesso">Tipo de Acesso</label>
+                    <select id="tipoAcesso">
+                        <option value="portaria">Portaria</option>
+                        <option value="externo">Externo</option>
+                        <option value="lagoa">Lagoa</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-submit">
+                    <i class="fas fa-qrcode"></i> Gerar QR Code
+                </button>
+                <button type="button" class="btn-cancel" onclick="fecharFormTemporario()">
+                    Cancelar
+                </button>
+            </form>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processando...</p>
+        </div>
+    </div>
+
+    <!-- Scanner de QR Code -->
+    <div class="scanner-container" id="scannerContainer">
+        <button class="btn-close-scanner" onclick="fecharScanner()">
+            <i class="fas fa-times"></i>
+        </button>
+        <video id="scanner-video" autoplay playsinline></video>
+        <div class="scanner-overlay"></div>
+        <div class="scanner-instructions">
+            <p>Posicione o QR Code dentro do quadro</p>
+        </div>
+    </div>
+
+    <!-- Modal de Resultado -->
+    <div class="result-modal" id="resultModal">
+        <div class="result-content">
+            <div class="result-icon" id="resultIcon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="result-title" id="resultTitle">Acesso Permitido</div>
+            <div class="result-info" id="resultInfo"></div>
+            <button class="btn-close-result" onclick="fecharResultado()">
+                Fechar
+            </button>
+        </div>
+    </div>
+
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <script>
+        let html5QrCode = null;
+        let scannerAtivo = false;
+
+        // Carregar estatísticas ao iniciar
+        window.addEventListener('load', () => {
+            carregarEstatisticas();
+            setInterval(carregarEstatisticas, 30000); // Atualizar a cada 30s
+        });
+
+        // Carregar estatísticas
+        function carregarEstatisticas() {
+            fetch('../api/api_console_acesso.php?action=estatisticas')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        document.getElementById('statPermitidos').textContent = data.dados.acessos_permitidos;
+                        document.getElementById('statNegados').textContent = data.dados.acessos_negados;
+                        document.getElementById('statAtivos').textContent = data.dados.acessos_ativos;
+                        document.getElementById('statTotal').textContent = data.dados.total_validacoes;
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar estatísticas:', error));
+        }
+
+        // Abrir scanner
+        function abrirScanner() {
+            document.getElementById('scannerContainer').classList.add('active');
+            iniciarScanner();
+        }
+
+        // Fechar scanner
+        function fecharScanner() {
+            document.getElementById('scannerContainer').classList.remove('active');
+            pararScanner();
+        }
+
+        // Iniciar scanner
+        function iniciarScanner() {
+            if (scannerAtivo) return;
+
+            html5QrCode = new Html5Qrcode("scanner-video");
+            
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 }
+                },
+                (decodedText) => {
+                    validarQRCode(decodedText);
+                    pararScanner();
+                    fecharScanner();
+                }
+            ).then(() => {
+                scannerAtivo = true;
+            }).catch(err => {
+                console.error('Erro ao iniciar scanner:', err);
+                alert('Erro ao acessar câmera. Verifique as permissµes.');
+                fecharScanner();
+            });
+        }
+
+        // Parar scanner
+        function pararScanner() {
+            if (html5QrCode && scannerAtivo) {
+                html5QrCode.stop().then(() => {
+                    scannerAtivo = false;
+                }).catch(err => {
+                    console.error('Erro ao parar scanner:', err);
+                });
+            }
+        }
+
+        // Validar QR Code
+        function validarQRCode(qrCode) {
+            document.getElementById('loading').classList.add('active');
+
+            fetch('../api/api_console_acesso.php?action=validar_qrcode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    qr_code: qrCode,
+                    console_usuario: 'Portaria'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').classList.remove('active');
+                mostrarResultado(data);
+                carregarEstatisticas();
+            })
+            .catch(error => {
+                document.getElementById('loading').classList.remove('active');
+                console.error('Erro:', error);
+                mostrarResultado({
+                    sucesso: false,
+                    mensagem: 'Erro ao validar QR Code'
+                });
+            });
+        }
+
+        // Mostrar resultado
+        function mostrarResultado(data) {
+            const modal = document.getElementById('resultModal');
+            const icon = document.getElementById('resultIcon');
+            const title = document.getElementById('resultTitle');
+            const info = document.getElementById('resultInfo');
+
+            if (data.sucesso) {
+                icon.className = 'result-icon success';
+                icon.innerHTML = '<i class="fas fa-check-circle"></i>';
+                title.textContent = data.mensagem;
+                title.style.color = '#43e97b';
+
+                let infoHTML = '';
+                if (data.dados.visitante) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Visitante:</span><span class="result-info-value">${data.dados.visitante}</span></div>`;
+                }
+                if (data.dados.entregador) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Entregador:</span><span class="result-info-value">${data.dados.entregador}</span></div>`;
+                }
+                if (data.dados.empresa) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Empresa:</span><span class="result-info-value">${data.dados.empresa}</span></div>`;
+                }
+                if (data.dados.documento) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Documento:</span><span class="result-info-value">${data.dados.documento}</span></div>`;
+                }
+                if (data.dados.tipo_visitante) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Tipo:</span><span class="result-info-value">${data.dados.tipo_visitante}</span></div>`;
+                }
+                if (data.dados.morador) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Morador:</span><span class="result-info-value">${data.dados.morador}</span></div>`;
+                }
+                if (data.dados.unidade) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Unidade:</span><span class="result-info-value">${data.dados.unidade}</span></div>`;
+                }
+                if (data.dados.tipo_acesso) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Acesso:</span><span class="result-info-value">${data.dados.tipo_acesso}</span></div>`;
+                }
+                if (data.dados.horario) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Horário:</span><span class="result-info-value">${data.dados.horario}</span></div>`;
+                }
+                if (data.dados.veiculo) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Veículo:</span><span class="result-info-value">${data.dados.veiculo}</span></div>`;
+                }
+                if (data.dados.valido_ate) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Válido até:</span><span class="result-info-value">${data.dados.valido_ate}</span></div>`;
+                }
+
+                info.innerHTML = infoHTML;
+
+                // Tocar som de sucesso
+                playSound('success');
+            } else {
+                icon.className = 'result-icon error';
+                icon.innerHTML = '<i class="fas fa-times-circle"></i>';
+                title.textContent = data.mensagem;
+                title.style.color = '#f5576c';
+                info.innerHTML = '<p style="text-align: center; color: #6c757d;">Acesso não autorizado</p>';
+
+                // Tocar som de erro
+                playSound('error');
+            }
+
+            modal.classList.add('active');
+        }
+
+        // Fechar resultado
+        function fecharResultado() {
+            document.getElementById('resultModal').classList.remove('active');
+        }
+
+        // Tocar som
+        function playSound(type) {
+            const context = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = context.createOscillator();
+            const gainNode = context.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(context.destination);
+
+            if (type === 'success') {
+                oscillator.frequency.value = 800;
+                gainNode.gain.setValueAtTime(0.3, context.currentTime);
+                oscillator.start(context.currentTime);
+                oscillator.stop(context.currentTime + 0.1);
+            } else {
+                oscillator.frequency.value = 200;
+                gainNode.gain.setValueAtTime(0.3, context.currentTime);
+                oscillator.start(context.currentTime);
+                oscillator.stop(context.currentTime + 0.3);
+            }
+        }
+
+        // Abrir portaria (criar QR Code temporário)
+        function abrirPortaria() {
+            document.getElementById('formTemporario').classList.add('active');
+            
+            // Definir hora inicial como agora e hora final como 1 hora depois
+            const agora = new Date();
+            const horaInicial = agora.toTimeString().slice(0, 5);
+            agora.setHours(agora.getHours() + 1);
+            const horaFinal = agora.toTimeString().slice(0, 5);
+            
+            document.getElementById('horaInicial').value = horaInicial;
+            document.getElementById('horaFinal').value = horaFinal;
+        }
+
+        // Fechar formulário temporário
+        function fecharFormTemporario() {
+            document.getElementById('formTemporario').classList.remove('active');
+            document.getElementById('formDelivery').reset();
+        }
+
+        // Criar QR Code temporário
+        function criarTemporario(event) {
+            event.preventDefault();
+
+            const dados = {
+                nome_entregador: document.getElementById('nomeEntregador').value,
+                empresa: document.getElementById('empresa').value,
+                telefone: document.getElementById('telefone').value,
+                placa: document.getElementById('placa').value,
+                unidade_destino: document.getElementById('unidadeDestino').value,
+                hora_inicial: document.getElementById('horaInicial').value,
+                hora_final: document.getElementById('horaFinal').value,
+                tipo_acesso: document.getElementById('tipoAcesso').value
+            };
+
+            document.getElementById('loading').classList.add('active');
+
+            fetch('../api/api_console_acesso.php?action=criar_temporario', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').classList.remove('active');
+                
+                if (data.sucesso) {
+                    alert(`QR Code temporário criado com sucesso!\n\nCódigo: ${data.dados.qr_code}\n\nVálido até: ${data.dados.valido_ate}`);
+                    fecharFormTemporario();
+                    carregarEstatisticas();
+                } else {
+                    alert('Erro: ' + data.mensagem);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').classList.remove('active');
+                console.error('Erro:', error);
+                alert('Erro ao criar QR Code temporário');
+            });
+        }
+
+        // Abrir morador
+        function abrirMorador() {
+            window.location.href = 'login_morador.html';
+        }
+    </script>
+</body>
+</html>
+

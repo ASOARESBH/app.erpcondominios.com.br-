@@ -1,0 +1,1165 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Design System CSS -->
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.css" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--color-background-tertiary);
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            padding: 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 2rem 1rem 1rem;
+            text-align: center;
+        }
+
+        .sidebar h1 {
+            color: var(--color-background-primary);
+            font-size: 1.3rem;
+            margin-bottom: 0;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+            flex: 1;
+        }
+
+        .sidebar-footer {
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: auto;
+        }
+
+        .sidebar h1 {
+            color: var(--color-background-primary);
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: var(--border-color);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--color-background-primary);
+        }
+
+        .nav-link.active {
+            background: var(--color-primary-600);
+            color: var(--color-background-primary);
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+        }
+
+        /* Blue Header */
+        .header {
+            background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Header, User Profile & Sidebar Footer styles are now handled by user-profile-sidebar.js */
+
+
+        /* Welcome Section */
+        .welcome {
+            background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-800));
+            color: var(--color-background-primary);
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .welcome h2 {
+            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+        }
+
+        .welcome p {
+            opacity: 0.9;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--color-background-primary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            border-left: 4px solid var(--color-primary-600);
+        }
+
+        .stat-card.agua {
+            border-left-color: #06b6d4;
+        }
+
+        .stat-card.abastecimento {
+            border-left-color: var(--color-warning-600);
+        }
+
+        .stat-card h3 {
+            color: var(--color-text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--color-text-primary);
+        }
+
+        .stat-card .subvalue {
+            font-size: 0.85rem;
+            color: var(--color-text-tertiary);
+            margin-top: 0.5rem;
+        }
+
+        .stat-card .icon {
+            float: right;
+            font-size: 2.5rem;
+            opacity: 0.2;
+        }
+
+        /* Sections */
+        .section {
+            background: var(--color-background-primary);
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            color: var(--color-text-primary);
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title i {
+            color: var(--color-primary-600);
+            font-size: 1.5rem;
+        }
+
+        /* Table Styles */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: var(--color-background-secondary);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            border-bottom: 2px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        tr:hover {
+            background: var(--color-background-tertiary);
+        }
+
+        /* Badge Styles */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge.top-1 {
+            background: var(--color-warning-100);
+            color: var(--color-warning-900);
+        }
+
+        .badge.top-2 {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .badge.top-3 {
+            background: #fed7aa;
+            color: var(--color-warning-900);
+        }
+
+        .badge.status-critico {
+            background: var(--color-error-100);
+            color: var(--color-error-900);
+        }
+
+        .badge.status-baixo {
+            background: var(--color-warning-100);
+            color: var(--color-warning-900);
+        }
+
+        .badge.status-normal {
+            background: var(--color-success-100);
+            color: var(--color-success-900);
+        }
+
+        /* Info Box */
+        .info-box {
+            background: #f0f9ff;
+            border-left: 4px solid #0284c7;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-box h4 {
+            color: #0c4a6e;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-box p {
+            color: #0369a1;
+            font-size: 0.9rem;
+            margin: 0.25rem 0;
+        }
+
+        /* Abastecimento Info */
+        .abastecimento-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .abastecimento-item {
+            background: var(--color-background-tertiary);
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--color-warning-600);
+        }
+
+        .abastecimento-item h5 {
+            color: var(--color-text-secondary);
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .abastecimento-item .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--color-text-primary);
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--color-text-tertiary);
+        }
+
+        .loading i {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--color-text-tertiary);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Error State */
+        .error-state {
+            background: var(--color-error-100);
+            border: 1px solid #fecaca;
+            color: var(--color-error-900);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .error-state i {
+            margin-right: 0.5rem;
+        }
+
+        /* User Profile & Sidebar Footer styles are now handled by user-profile-sidebar.js */
+
+        /* Menu Toggle Mobile */
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: var(--color-text-primary);
+            color: var(--color-background-primary);
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.3rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .section {
+                padding: 1rem;
+            }
+
+            .section-title {
+                font-size: 1.1rem;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+
+            .abastecimento-info {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 0.5rem;
+            }
+
+            .section {
+                padding: 0.75rem;
+            }
+
+            .stat-card {
+                padding: 1rem;
+            }
+
+            .stat-card .value {
+                font-size: 1.5rem;
+            }
+
+            th,
+            td {
+                padding: 0.25rem;
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+    <script src="js/sessao_manager.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h1>Serra da Liberdade</h1>
+        </div>
+
+        <!-- Perfil injetado via user-profile-sidebar.js -->
+
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link active"><i class="fas fa-chart-line"></i>
+                    Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a>
+            </li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> VeÃ­culos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                    Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro
+                    Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                    Acesso</a></li>
+            <li class="nav-item"><a href="relatorios.html" class="nav-link"><i class="fas fa-file-alt"></i>
+                    RelatÃ³rios</a></li>
+            <li class="nav-item"><a href="financeiro.html" class="nav-link"><i class="fas fa-money-bill-wave"></i>
+                    Financeiro</a></li>
+            <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                    ConfiguraÃ§Ãµes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> ManutenÃ§Ã£o</a>
+            </li>
+            <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                    Administrativo</a></li>
+            <li class="nav-item" style="margin-top: 1rem;">
+                <a href="#" class="nav-link" id="btn-logout" style="color: #fca5a5;" onclick="fazerLogout(event)">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </a>
+            </li>
+        </ul>
+
+        <!-- Footer injetado via user-profile-sidebar.js -->
+
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1><i class="fas fa-chart-line"></i> Dashboard</h1>
+            <div class="user-mini-profile">
+                <div class="user-info-mini">
+                    <span class="header-user-name">Carregando...</span>
+                </div>
+                <div class="user-avatar">A</div>
+            </div>
+
+        </header>
+
+        <div class="welcome">
+            <h2><i class="fas fa-building"></i> Bem-vindo ao Sistema de Controle de Acesso</h2>
+            <p>CondomÃ­nio Serra da Liberdade</p>
+        </div>
+
+        <!-- ESTATÃSTICAS GERAIS -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <i class="fas fa-users icon"></i>
+                <h3>Total de Moradores</h3>
+                <div class="value" id="totalMoradores">-</div>
+            </div>
+            <div class="stat-card agua">
+                <i class="fas fa-tint icon"></i>
+                <h3>Consumo Total de Ãgua</h3>
+                <div class="value" id="totalConsumoAgua">-</div>
+                <div class="subvalue" id="consumoMedioMorador">-</div>
+            </div>
+            <div class="stat-card agua">
+                <i class="fas fa-dollar-sign icon"></i>
+                <h3>Valor Total de Ãgua</h3>
+                <div class="value" id="totalValorAgua">-</div>
+            </div>
+            <div class="stat-card abastecimento">
+                <i class="fas fa-gas-pump icon"></i>
+                <h3>Saldo de Abastecimento</h3>
+                <div class="value" id="saldoAbastecimento">-</div>
+                <div class="subvalue" id="statusSaldo">-</div>
+            </div>
+        </div>
+
+        <!-- SEÃ‡ÃƒO: TOP 10 MORADORES COM MAIOR CONSUMO DE ÃGUA -->
+        <div class="section">
+            <h2 class="section-title">
+                <i class="fas fa-chart-bar"></i> Top 10 Moradores - Maior Consumo de Ãgua
+            </h2>
+
+            <div id="topConsumoContainer" class="loading">
+                <i class="fas fa-spinner"></i>
+                <p>Carregando dados...</p>
+            </div>
+        </div>
+
+        <!-- SEÃ‡ÃƒO: ABASTECIMENTO DE VEÃCULOS -->
+        <div class="section">
+            <h2 class="section-title">
+                <i class="fas fa-gas-pump"></i> Abastecimento de VeÃ­culos
+            </h2>
+
+            <div id="abastecimentoContainer" class="loading">
+                <i class="fas fa-spinner"></i>
+                <p>Carregando dados...</p>
+            </div>
+        </div>
+
+        <!-- SEÃ‡ÃƒO: HISTÃ“RICO DE ABASTECIMENTOS -->
+        <div class="section">
+            <h2 class="section-title">
+                <i class="fas fa-history"></i> HistÃ³rico de Abastecimentos (Ãšltimos 10)
+            </h2>
+
+            <div id="historicoAbastecimentoContainer" class="loading">
+                <i class="fas fa-spinner"></i>
+                <p>Carregando dados...</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script>
+        // ========== CONFIGURAÃ‡ÃƒO ==========
+        const API_BASE = '../api/api_dashboard_agua.php';
+        const DEBUG = true;
+
+        function log(msg, data = null) {
+            if (DEBUG) {
+                console.log('[Dashboard]', msg, data || '');
+            }
+        }
+
+        // ========== CARREGAMENTO DE DADOS ==========
+        document.addEventListener('DOMContentLoaded', function () {
+            log('Iniciando carregamento de dados...');
+            carregarEstatisticas();
+            carregarTopConsumo();
+            carregarAbastecimento();
+            carregarHistoricoAbastecimento();
+        });
+
+        // ========== ESTATÃSTICAS GERAIS ==========
+        function carregarEstatisticas() {
+            log('Carregando estatÃ­sticas gerais...');
+
+            fetch(API_BASE + '?estatisticas_gerais=1')
+                .then(response => {
+                    log('Resposta recebida:', response.status);
+                    if (!response.ok) throw new Error('Erro HTTP: ' + response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    log('Dados de estatÃ­sticas:', data);
+                    if (data.sucesso && data.dados) {
+                        const d = data.dados;
+                        document.getElementById('totalMoradores').textContent = d.total_moradores || 0;
+                        document.getElementById('totalConsumoAgua').textContent = (d.total_consumo_agua || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mÂ³';
+                        document.getElementById('consumoMedioMorador').textContent = 'MÃ©dia: ' + (d.consumo_medio_por_morador || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mÂ³/morador';
+                        document.getElementById('totalValorAgua').textContent = 'R$ ' + (d.total_valor_agua || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                    }
+                })
+                .catch(error => {
+                    log('Erro ao carregar estatÃ­sticas:', error);
+                    console.error('Erro:', error);
+                });
+
+            fetch(API_BASE + '?saldo_abastecimento=1')
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro HTTP: ' + response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    log('Dados de saldo:', data);
+                    if (data.sucesso && data.dados) {
+                        const saldo = data.dados;
+                        document.getElementById('saldoAbastecimento').textContent = 'R$ ' + (saldo.saldo_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                        const statusEl = document.getElementById('statusSaldo');
+                        statusEl.textContent = saldo.status_saldo || 'Sem dados';
+                        statusEl.style.color = saldo.cor_status || '#6c757d';
+                    }
+                })
+                .catch(error => {
+                    log('Erro ao carregar saldo:', error);
+                    console.error('Erro:', error);
+                });
+        }
+
+        // ========== TOP 10 CONSUMO DE ÃGUA ==========
+        function carregarTopConsumo() {
+            log('Carregando top consumo...');
+
+            fetch(API_BASE + '?top_consumo_agua=1')
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro HTTP: ' + response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    log('Dados de top consumo:', data);
+                    if (data.sucesso && data.dados && data.dados.length > 0) {
+                        renderizarTopConsumo(data.dados);
+                    } else {
+                        document.getElementById('topConsumoContainer').innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>Nenhum dado de consumo disponÃ­vel</p></div>';
+                    }
+                })
+                .catch(error => {
+                    log('Erro ao carregar top consumo:', error);
+                    console.error('Erro:', error);
+                    document.getElementById('topConsumoContainer').innerHTML = '<div class="error-state"><i class="fas fa-exclamation-triangle"></i>Erro ao carregar dados: ' + error.message + '</div>';
+                });
+        }
+
+        function renderizarTopConsumo(dados) {
+            let html = '<div class="table-container"><table>';
+            html += '<thead><tr>';
+            html += '<th style="width: 50px;">Pos.</th>';
+            html += '<th>Unidade</th>';
+            html += '<th>Nome do Morador</th>';
+            html += '<th style="text-align: right;">Consumo (mÂ³)</th>';
+            html += '<th style="text-align: right;">Valor Total</th>';
+            html += '<th>Ãšltima Leitura</th>';
+            html += '<th style="text-align: right;">Leitura Valor</th>';
+            html += '</tr></thead><tbody>';
+
+            dados.forEach((morador, index) => {
+                let badgeClass = 'badge';
+                if (index === 0) badgeClass += ' top-1';
+                else if (index === 1) badgeClass += ' top-2';
+                else if (index === 2) badgeClass += ' top-3';
+
+                html += '<tr>';
+                html += '<td><span class="' + badgeClass + '">#' + morador.posicao + '</span></td>';
+                html += '<td><strong>' + escapeHtml(morador.unidade || '-') + '</strong></td>';
+                html += '<td>' + escapeHtml(morador.nome_morador || '-') + '</td>';
+                html += '<td style="text-align: right;"><strong>' + (morador.consumo_total || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '</strong></td>';
+                html += '<td style="text-align: right;">R$ ' + (morador.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>';
+                html += '<td>' + (morador.ultima_leitura_formatada || 'Sem leitura') + '</td>';
+                html += '<td style="text-align: right;">' + (morador.ultima_leitura_valor || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            document.getElementById('topConsumoContainer').innerHTML = html;
+        }
+
+        // ========== ABASTECIMENTO DE VEÃCULOS ==========
+        function carregarAbastecimento() {
+            log('Carregando abastecimento...');
+
+            fetch(API_BASE + '?ultimo_lancamento_abastecimento=1')
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro HTTP: ' + response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    log('Dados de abastecimento:', data);
+                    if (data.sucesso && data.dados && Object.keys(data.dados).length > 0) {
+                        renderizarAbastecimento(data.dados);
+                    } else {
+                        document.getElementById('abastecimentoContainer').innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>Nenhum lanÃ§amento de abastecimento registrado</p></div>';
+                    }
+                })
+                .catch(error => {
+                    log('Erro ao carregar abastecimento:', error);
+                    console.error('Erro:', error);
+                    document.getElementById('abastecimentoContainer').innerHTML = '<div class="error-state"><i class="fas fa-exclamation-triangle"></i>Erro ao carregar dados: ' + error.message + '</div>';
+                });
+        }
+
+        function renderizarAbastecimento(lancamento) {
+            let html = '<div class="info-box">';
+            html += '<h4><i class="fas fa-info-circle"></i> Ãšltimo LanÃ§amento de Abastecimento</h4>';
+            html += '<p><strong>VeÃ­culo:</strong> ' + escapeHtml(lancamento.modelo || '-') + ' - ' + escapeHtml(lancamento.placa || '-') + '</p>';
+            html += '<p><strong>Data:</strong> ' + (lancamento.data_abastecimento_formatada || '-') + '</p>';
+            html += '<p><strong>Quilometragem:</strong> ' + (lancamento.km_abastecimento || 0).toLocaleString('pt-BR') + ' km</p>';
+            html += '<p><strong>CombustÃ­vel:</strong> ' + escapeHtml(lancamento.tipo_combustivel || '-') + '</p>';
+            html += '<p><strong>Litros:</strong> ' + (lancamento.litros || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' L</p>';
+            html += '<p><strong>Valor:</strong> R$ ' + (lancamento.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</p>';
+            html += '<p><strong>Operador:</strong> ' + escapeHtml(lancamento.usuario_logado || '-') + '</p>';
+            html += '</div>';
+
+            // Carregar saldo
+            fetch(API_BASE + '?saldo_abastecimento=1')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso && data.dados) {
+                        const saldo = data.dados;
+                        html += '<div class="abastecimento-info">';
+                        html += '<div class="abastecimento-item">';
+                        html += '<h5>Saldo Atual</h5>';
+                        html += '<div class="value">R$ ' + (saldo.saldo_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</div>';
+                        html += '</div>';
+                        html += '<div class="abastecimento-item">';
+                        html += '<h5>Saldo MÃ­nimo</h5>';
+                        html += '<div class="value">R$ ' + (saldo.saldo_minimo || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</div>';
+                        html += '</div>';
+                        html += '<div class="abastecimento-item">';
+                        html += '<h5>Status</h5>';
+                        const statusClass = (saldo.status_saldo || 'normal').toLowerCase().replace(/Ã£/g, 'a').replace(/Ã­/g, 'i');
+                        html += '<div class="value"><span class="badge status-' + statusClass + '">' + (saldo.status_saldo || '-') + '</span></div>';
+                        html += '</div>';
+                        html += '<div class="abastecimento-item">';
+                        html += '<h5>Abastecimentos Hoje</h5>';
+                        html += '<div class="value">' + (saldo.abastecimentos_hoje || 0) + '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                        document.getElementById('abastecimentoContainer').innerHTML = html;
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar saldo:', error));
+        }
+
+        // ========== HISTÃ“RICO DE ABASTECIMENTOS ==========
+        function carregarHistoricoAbastecimento() {
+            log('Carregando histÃ³rico de abastecimentos...');
+
+            fetch(API_BASE + '?historico_abastecimentos=1')
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro HTTP: ' + response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    log('Dados de histÃ³rico:', data);
+                    if (data.sucesso && data.dados && data.dados.length > 0) {
+                        renderizarHistoricoAbastecimento(data.dados);
+                    } else {
+                        document.getElementById('historicoAbastecimentoContainer').innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>Nenhum histÃ³rico de abastecimento disponÃ­vel</p></div>';
+                    }
+                })
+                .catch(error => {
+                    log('Erro ao carregar histÃ³rico:', error);
+                    console.error('Erro:', error);
+                    document.getElementById('historicoAbastecimentoContainer').innerHTML = '<div class="error-state"><i class="fas fa-exclamation-triangle"></i>Erro ao carregar dados: ' + error.message + '</div>';
+                });
+        }
+
+        function renderizarHistoricoAbastecimento(dados) {
+            let html = '<div class="table-container"><table>';
+            html += '<thead><tr>';
+            html += '<th>Data</th>';
+            html += '<th>VeÃ­culo</th>';
+            html += '<th>Placa</th>';
+            html += '<th style="text-align: right;">KM</th>';
+            html += '<th style="text-align: right;">Litros</th>';
+            html += '<th>CombustÃ­vel</th>';
+            html += '<th style="text-align: right;">Valor</th>';
+            html += '<th>Operador</th>';
+            html += '</tr></thead><tbody>';
+
+            dados.forEach(abastecimento => {
+                html += '<tr>';
+                html += '<td>' + (abastecimento.data_abastecimento_formatada || '-') + '</td>';
+                html += '<td>' + escapeHtml(abastecimento.modelo || '-') + '</td>';
+                html += '<td><strong>' + escapeHtml(abastecimento.placa || '-') + '</strong></td>';
+                html += '<td style="text-align: right;">' + (abastecimento.km_abastecimento || 0).toLocaleString('pt-BR') + '</td>';
+                html += '<td style="text-align: right;">' + (abastecimento.litros || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>';
+                html += '<td>' + escapeHtml(abastecimento.tipo_combustivel || '-') + '</td>';
+                html += '<td style="text-align: right;">R$ ' + (abastecimento.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '</td>';
+                html += '<td>' + escapeHtml(abastecimento.usuario_logado || '-') + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            document.getElementById('historicoAbastecimentoContainer').innerHTML = html;
+        }
+
+        // ========== FUNÃ‡Ã•ES AUXILIARES ==========
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function toggleFinanceiroMenu(e) {
+            e.preventDefault();
+            const submenu = e.target.closest('.nav-item').querySelector('.nav-submenu');
+            submenu.classList.toggle('active');
+            e.target.closest('.nav-link').classList.toggle('active');
+        }
+
+        // Fechar menu ao clicar fora (mobile)
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        // ========== FUNÃ‡ÃƒO DE LOGOUT ==========
+        function fazerLogout(event) {
+            event.preventDefault();
+
+            if (confirm('Deseja realmente sair do sistema?')) {
+                fetch('../api/logout.php', {
+                    method: 'POST',
+                    credentials: 'include'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.sucesso) {
+                            // Limpar sessionStorage
+                            sessionStorage.clear();
+
+                            // Redirecionar para login
+                            window.location.href = 'login.html';
+                        } else {
+                            alert('Erro ao fazer logout: ' + data.mensagem);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro ao fazer logout:', error);
+                        // Mesmo com erro, limpar e redirecionar
+                        sessionStorage.clear();
+                        window.location.href = 'login.html';
+                    });
+            }
+        }
+    </script>
+
+    <!-- ProteÃ§Ã£o de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+
+    <!-- Script para exibir usuÃ¡rio logado em tempo real -->
+    <script>
+        (function () {
+            'use strict';
+
+            const CONFIG = {
+                apiUrl: '../api/api_usuario_logado.php',
+                updateInterval: 1000,
+                warningThreshold: 300,
+                autoRenewThreshold: 600,
+                enableAutoRenew: true
+            };
+
+            let intervaloAtualizacao = null;
+
+            /**
+             * Inicializar o script
+             */
+            function inicializar() {
+                console.log('ðŸ”§ Dashboard User Display inicializado');
+
+                carregarDadosUsuario();
+                intervaloAtualizacao = setInterval(carregarDadosUsuario, CONFIG.updateInterval);
+
+                document.addEventListener('visibilitychange', handleVisibilidadeChange);
+                window.addEventListener('beforeunload', limpar);
+
+                console.log('âœ… Dashboard User Display pronto');
+            }
+
+            /**
+             * Carregar dados do usuÃ¡rio logado
+             */
+            function carregarDadosUsuario() {
+                fetch(CONFIG.apiUrl, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.sucesso && data.logado) {
+                            atualizarExibicao(data);
+                            verificarAvisos(data.sessao.tempo_restante);
+
+                            if (CONFIG.enableAutoRenew && data.sessao.tempo_restante < CONFIG.autoRenewThreshold) {
+                                renovarSessaoAutomaticamente();
+                            }
+                        } else {
+                            handleSessaoExpirada();
+                        }
+                    })
+                    .catch(error => console.warn('Erro ao carregar dados da sessÃ£o:', error));
+            }
+
+            /**
+             * Atualizar exibiÃ§Ã£o na interface
+             */
+            function atualizarExibicao(data) {
+                atualizarPerfilUsuario(data.usuario);
+                atualizarTempoSessao(data.sessao);
+                atualizarStatusVisual(data.sessao.tempo_restante);
+            }
+
+            /**
+             * Atualizar perfil do usuÃ¡rio
+             */
+            function atualizarPerfilUsuario(usuario) {
+                const section = document.getElementById('userProfileSection');
+                if (!section) return;
+
+                section.style.display = 'block';
+
+                const inicial = usuario.nome.charAt(0).toUpperCase();
+                document.getElementById('userAvatar').textContent = inicial;
+                document.getElementById('userName').textContent = usuario.nome;
+                document.getElementById('userFunction').textContent = usuario.funcao || usuario.permissao || 'UsuÃ¡rio';
+                document.getElementById('userEmail').textContent = usuario.email || '-';
+            }
+
+            /**
+             * Atualizar tempo de sessÃ£o
+             */
+            function atualizarTempoSessao(sessao) {
+                const tempoElement = document.getElementById('sessionTimer');
+                if (!tempoElement) return;
+
+                const tempoRestante = sessao.tempo_restante_formatado || formatarTempo(sessao.tempo_restante);
+                tempoElement.textContent = tempoRestante;
+
+                // Atualizar classe de cor
+                tempoElement.classList.remove('warning', 'critical');
+                if (sessao.tempo_restante < CONFIG.warningThreshold) {
+                    tempoElement.classList.add('critical');
+                } else if (sessao.tempo_restante < 1800) {
+                    tempoElement.classList.add('warning');
+                }
+            }
+
+            /**
+             * Atualizar status visual
+             */
+            function atualizarStatusVisual(tempoRestante) {
+                const section = document.getElementById('userProfileSection');
+                if (!section) return;
+
+                section.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+
+                if (tempoRestante < CONFIG.warningThreshold) {
+                    section.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    section.style.background = 'rgba(239, 68, 68, 0.1)';
+                } else if (tempoRestante < 1800) {
+                    section.style.borderColor = 'rgba(249, 115, 22, 0.3)';
+                    section.style.background = 'rgba(249, 115, 22, 0.1)';
+                } else {
+                    section.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                    section.style.background = 'rgba(255, 255, 255, 0.1)';
+                }
+            }
+
+            /**
+             * Verificar avisos
+             */
+            function verificarAvisos(tempoRestante) {
+                if (tempoRestante < CONFIG.warningThreshold && tempoRestante > CONFIG.warningThreshold - 60) {
+                    mostrarNotificacao('warning', 'Sua sessÃ£o expirarÃ¡ em 5 minutos');
+                }
+
+                if (tempoRestante < 60 && tempoRestante > 50) {
+                    mostrarNotificacao('critical', 'Sua sessÃ£o expirarÃ¡ em menos de 1 minuto!');
+                }
+            }
+
+            /**
+             * Mostrar notificaÃ§Ã£o
+             */
+            function mostrarNotificacao(tipo, mensagem) {
+                if (document.querySelector(`[data-notif-sessao="${tipo}"]`)) {
+                    return;
+                }
+
+                const notifHTML = `
+                <div class="session-notification session-notification-${tipo}" data-notif-sessao="${tipo}" style="
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: var(--color-background-primary);
+                    padding: 1rem;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    z-index: 9999;
+                    border-left: 4px solid ${tipo === 'critical' ? 'var(--color-error-600)' : '#f97316'};
+                    animation: slideIn 0.3s ease;
+                ">
+                    <i class="fas fa-exclamation-triangle" style="color: ${tipo === 'critical' ? 'var(--color-error-600)' : '#f97316'}; margin-right: 0.5rem;"></i>
+                    <span style="color: #1f2937;">${mensagem}</span>
+                </div>
+            `;
+
+                document.body.insertAdjacentHTML('afterbegin', notifHTML);
+
+                setTimeout(() => {
+                    const notif = document.querySelector(`[data-notif-sessao="${tipo}"]`);
+                    if (notif) notif.remove();
+                }, 8000);
+            }
+
+            /**
+             * Renovar sessÃ£o automaticamente
+             */
+            function renovarSessaoAutomaticamente() {
+                fetch(CONFIG.apiUrl + '?acao=renovar', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.sucesso) {
+                            console.log('âœ… SessÃ£o renovada automaticamente');
+                            carregarDadosUsuario();
+                        }
+                    })
+                    .catch(error => console.warn('Erro ao renovar sessÃ£o:', error));
+            }
+
+            /**
+             * Lidar com mudanÃ§a de visibilidade
+             */
+            function handleVisibilidadeChange() {
+                if (document.hidden) {
+                    if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
+                } else {
+                    carregarDadosUsuario();
+                    intervaloAtualizacao = setInterval(carregarDadosUsuario, CONFIG.updateInterval);
+                }
+            }
+
+            /**
+             * Lidar com sessÃ£o expirada
+             */
+            function handleSessaoExpirada() {
+                console.warn('âš ï¸ SessÃ£o expirada ou invÃ¡lida');
+            }
+
+            /**
+             * Formatar tempo
+             */
+            function formatarTempo(segundos) {
+                const horas = Math.floor(segundos / 3600);
+                const minutos = Math.floor((segundos % 3600) / 60);
+                const segs = segundos % 60;
+
+                return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segs).padStart(2, '0')}`;
+            }
+
+            /**
+             * Limpar recursos
+             */
+            function limpar() {
+                if (intervaloAtualizacao) {
+                    clearInterval(intervaloAtualizacao);
+                }
+            }
+
+            /**
+             * Inicializar
+             */
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', inicializar);
+            } else {
+                inicializar();
+            }
+        })();
+    </script>
+    <script src="js/user-profile-sidebar.js"></script>
+</body>
+
+</html>
+

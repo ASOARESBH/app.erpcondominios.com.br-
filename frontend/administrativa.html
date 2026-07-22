@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrativo - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--color-background-primary);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            padding: 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 2rem 1rem 1rem;
+            text-align: center;
+        }
+
+        .sidebar h1 {
+            color: var(--color-background-primary);
+            font-size: 1.3rem;
+            margin-bottom: 0;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+            flex: 1;
+        }
+
+        .sidebar-footer {
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: auto;
+        }
+
+        .sidebar h1 {
+            color: var(--color-background-primary);
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: var(--border-color);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--color-background-primary);
+        }
+
+        .nav-link.active {
+            background: var(--color-primary-600);
+            color: var(--color-background-primary);
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        /* User Profile & Sidebar Footer styles are now handled by user-profile-sidebar.js */
+
+
+        .user-email {
+            color: var(--color-text-tertiary);
+            font-size: 0.85rem;
+            margin: 0.25rem 0 0 0;
+        }
+
+        .session-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        .session-item {}
+
+        .session-label {
+            color: var(--color-text-tertiary);
+            font-size: 0.8rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .session-value {
+            color: var(--color-background-primary);
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .session-timer {
+            color: #10b981;
+            font-weight: 700;
+        }
+
+        .session-timer.warning {
+            color: #f97316;
+        }
+
+        .session-timer.critical {
+            color: var(--color-error-600);
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: var(--color-text-primary);
+            color: var(--color-background-primary);
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+        }
+
+        /* Blue Header - Cleaned for Phase 3 */
+        .header {
+            background: white;
+            color: #1e293b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .submenu {
+            background: var(--color-background-primary);
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: var(--color-background-secondary);
+            color: var(--color-text-secondary);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #10b981;
+            color: var(--color-background-primary);
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--color-background-primary);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            transition: 0.2s;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-icon.green {
+            color: #10b981;
+        }
+
+        .card-icon.blue {
+            color: #3b82f6;
+        }
+
+        .card-icon.yellow {
+            color: #f59e0b;
+        }
+
+        .card-icon.purple {
+            color: #8b5cf6;
+        }
+
+        .card h3 {
+            color: var(--color-text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .card p {
+            color: var(--color-text-secondary);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .card a {
+            display: inline-block;
+            padding: 0.6rem 1.5rem;
+            background: #10b981;
+            color: var(--color-background-primary);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .card a:hover {
+            background: #059669;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .submenu ul {
+                flex-direction: column;
+            }
+
+            .submenu a {
+                display: block;
+                text-align: center;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script src="js/auth-guard.js"></script>
+    <script src="js/session-manager-core.js"></script>
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <!-- Sidebar loaded dynamically -->
+        </nav>
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-briefcase"></i> Administrativo</h1>
+                <div class="user-mini-profile">
+                    <div class="user-info-mini">
+                        <span class="header-user-name">Carregando...</span>
+                    </div>
+                    <div class="user-avatar">A</div>
+                </div>
+            </header>
+            <nav class="submenu">
+                <ul>
+                    <li><a href="administrativa.html"><i class="fas fa-home"></i> Início</a></li>
+                    <li><a href="protocolo.html"><i class="fas fa-box"></i> Protocolos</a></li>
+                    <li><a href="inventario.html"><i class="fas fa-boxes"></i> Inventário</a></li>
+                    <li><a href="relatorios_inventario.html"><i class="fas fa-chart-bar"></i> Relatórios</a></li>
+                    <li><a href="estoque.html"><i class="fas fa-warehouse"></i> Estoque</a></li>
+                    <li><a href="marketplace_admin.html" class="active"><i class="fas fa-store"></i> Marketplace</a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="cards-grid">
+                <!-- Card Protocolos -->
+                <div class="card">
+                    <div class="card-icon green"><i class="fas fa-box"></i></div>
+                    <h3>Protocolo de Mercadorias</h3>
+                    <p>Gerencie o recebimento e entrega de mercadorias para os moradores. Registre encomendas, controle
+                        entregas e mantenha histórico completo.</p>
+                    <a href="protocolo.html">Acessar Protocolos</a>
+                </div>
+
+                <!-- Card Inventário -->
+                <div class="card">
+                    <div class="card-icon blue"><i class="fas fa-boxes"></i></div>
+                    <h3>Inventário de Patrimônio</h3>
+                    <p>Gerencie o patrimônio do condomínio. Cadastre itens, controle responsáveis, registre baixas e
+                        mantenha histórico de bens.</p>
+                    <a href="inventario.html">Acessar Inventário</a>
+                </div>
+
+                <!-- Card Relatórios -->
+                <div class="card">
+                    <div class="card-icon yellow"><i class="fas fa-chart-bar"></i></div>
+                    <h3>Relatórios Administrativos</h3>
+                    <p>Gere relatórios detalhados de protocolos e inventário. Filtre por período, situação, status e
+                        responsável. Exporte para PDF ou Excel.</p>
+                    <a href="relatorios_inventario.html">Ver Relatórios</a>
+                </div>
+
+                <!-- Card Estoque -->
+                <div class="card">
+                    <div class="card-icon purple"><i class="fas fa-warehouse"></i></div>
+                    <h3>Gestão de Estoque</h3>
+                    <p>Controle completo de estoque do condomínio. Gerencie produtos, categorias, entradas e saídas.
+                        Vincule saídas a moradores e gere relatórios detalhados.</p>
+                    <a href="estoque.html">Acessar Estoque</a>
+                </div>
+
+                <!-- Card Informaçµes -->
+                <div class="card">
+                    <div class="card-icon purple"><i class="fas fa-info-circle"></i></div>
+                    <h3>Informaçµes do Sistema</h3>
+                    <p><strong>Funcionalidades Disponíveis:</strong><br>
+                         Protocolo de mercadorias<br>
+                         Inventário de patrimônio<br>
+                         Gestão de estoque<br>
+                         Controle de responsáveis<br>
+                         Relatórios completos</p>
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- Standard Scripts -->
+    <script src="js/user-display.js"></script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <script src="js/menu-controller.js"></script>
+    <script src="js/sidebar-controller.js"></script>
+</body>
+
+</html>

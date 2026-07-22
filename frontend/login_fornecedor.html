@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Fornecedor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .login-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .login-header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .login-header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .login-body {
+            padding: 40px 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-control::placeholder {
+            color: #999;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-loading {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+            font-size: 14px;
+        }
+
+        .alert.active {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .login-footer {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            text-align: center;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .login-footer a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .login-footer a:hover {
+            text-decoration: underline;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: 400;
+            font-size: 13px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .logo-icon {
+            font-size: 32px;
+        }
+
+        .form-divider {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .form-divider::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 100%;
+            height: 1px;
+            background: #e0e0e0;
+        }
+
+        .form-divider span {
+            background: white;
+            padding: 0 10px;
+            position: relative;
+            color: #999;
+            font-size: 12px;
+        }
+
+        @media (max-width: 480px) {
+            .login-header {
+                padding: 30px 20px;
+            }
+
+            .login-body {
+                padding: 30px 20px;
+            }
+
+            .login-footer {
+                padding: 15px 20px;
+            }
+
+            .login-header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="login-card">
+            <!-- HEADER -->
+            <div class="login-header">
+                <h1>
+                    <i class="fas fa-store logo-icon"></i>
+                    Fornecedor
+                </h1>
+                <p>Acesse sua conta para gerenciar produtos e pedidos</p>
+            </div>
+
+            <!-- BODY -->
+            <div class="login-body">
+                <!-- ALERTAS -->
+                <div id="alertSuccess" class="alert alert-success"></div>
+                <div id="alertDanger" class="alert alert-danger"></div>
+                <div id="alertInfo" class="alert alert-info"></div>
+
+                <!-- FORMULRIO DE LOGIN -->
+                <form id="formLogin" onsubmit="fazerLogin(event)">
+                    <div class="form-group">
+                        <label for="email">
+                            <i class="fas fa-envelope"></i> Email
+                        </label>
+                        <input type="email" id="email" class="form-control" placeholder="seu@email.com" required
+                            autocomplete="email">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="senha">
+                            <i class="fas fa-lock"></i> Senha
+                        </label>
+                        <input type="password" id="senha" class="form-control" placeholder="Sua senha" required
+                            autocomplete="current-password">
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="lembrar" name="lembrar">
+                        <label for="lembrar">Lembrar-me neste computador</label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="btnLogin">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Entrar</span>
+                    </button>
+                </form>
+
+                <!-- DIVIDER -->
+                <div class="form-divider">
+                    <span>ou</span>
+                </div>
+
+                <!-- INFORMAES -->
+                <div style="text-align: center; font-size: 13px; color: #666; margin-top: 20px;">
+                    <p>
+                        <i class="fas fa-info-circle"></i>
+                        Use suas credenciais de fornecedor para acessar o painel
+                    </p>
+                </div>
+            </div>
+
+            <!-- FOOTER -->
+            <div class="login-footer">
+                <p>
+                    Não tem uma conta?
+                    <a href="cadastro_fornecedor.html">Cadastre-se aqui</a>
+                </p>
+                <p style="margin-top: 10px; font-size: 12px;">
+                    <a href="#" onclick="recuperarSenha(event)">Esqueceu sua senha?</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '../api/';
+
+        // ===== ALERTAS =====
+        function mostrarAlerta(mensagem, tipo = 'success') {
+            const alertId = tipo === 'success' ? 'alertSuccess' : (tipo === 'danger' ? 'alertDanger' : 'alertInfo');
+            const alert = document.getElementById(alertId);
+            alert.textContent = mensagem;
+            alert.classList.add('active');
+
+            setTimeout(() => {
+                alert.classList.remove('active');
+            }, 5000);
+        }
+
+        async function registrarErroAuditoria(detalhes) {
+            try {
+                const formData = new FormData();
+                formData.append('acao', 'registrar_erro');
+                formData.append('email', detalhes.email || '');
+                formData.append('mensagem', detalhes.mensagem || 'Erro de login');
+                formData.append('contexto', detalhes.contexto || 'login_fornecedor');
+                formData.append('dados', JSON.stringify(detalhes.dados || {}));
+
+                await fetch(API_BASE + 'api_login_fornecedor.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Falha ao registrar erro de auditoria:', error);
+            }
+        }
+
+        // ===== VERIFICAR SE J EST LOGADO =====
+        async function verificarSessaoExistente() {
+            try {
+                const response = await fetch(API_BASE + 'api_sessao_fornecedor.php?acao=verificar', {
+                    credentials: 'include'
+                });
+
+                if (response.status === 200) {
+                    const data = await response.json();
+                    if (data.sucesso && data.logado) {
+                        // Já está logado, redirecionar para painel
+                        window.location.href = 'painel_fornecedor.html';
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.log('Não há sessão ativa');
+            }
+            return false;
+        }
+
+        // ===== LOGIN =====
+        async function fazerLogin(event) {
+            event.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const senha = document.getElementById('senha').value;
+            const lembrar = document.getElementById('lembrar').checked;
+            const btnLogin = document.getElementById('btnLogin');
+
+            // Validar campos
+            if (!email || !senha) {
+                mostrarAlerta('Por favor, preencha todos os campos', 'danger');
+                return;
+            }
+
+            // Desabilitar botão
+            btnLogin.disabled = true;
+            btnLogin.classList.add('btn-loading');
+            btnLogin.innerHTML = '<span class="spinner"></span> <span>Autenticando...</span>';
+
+            try {
+                const formData = new FormData();
+                formData.append('acao', 'login');
+                formData.append('email', email);
+                formData.append('senha', senha);
+                formData.append('lembrar', lembrar ? 1 : 0);
+
+                const response = await fetch(API_BASE + 'api_login_fornecedor.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (parsingError) {
+                    await registrarErroAuditoria({
+                        email,
+                        mensagem: 'Resposta JSON inválida do servidor',
+                        contexto: 'parse_error',
+                        dados: {
+                            status: response.status,
+                            statusText: response.statusText,
+                            body: await response.text()
+                        }
+                    });
+                    throw parsingError;
+                }
+
+                if (data && data.sucesso) {
+                    mostrarAlerta('Login realizado com sucesso! Redirecionando...', 'success');
+
+                    // Aguardar um pouco e redirecionar
+                    setTimeout(() => {
+                        window.location.href = 'painel_fornecedor.html';
+                    }, 1500);
+                } else {
+                    const mensagemErro = (data && data.mensagem) ? data.mensagem : 'Erro ao fazer login';
+                    mostrarAlerta(mensagemErro, 'danger');
+
+                    await registrarErroAuditoria({
+                        email,
+                        mensagem: mensagemErro,
+                        contexto: 'login_negado',
+                        dados: {
+                            status: response.status,
+                            response: data
+                        }
+                    });
+
+                    // Reabilitar botão
+                    btnLogin.disabled = false;
+                    btnLogin.classList.remove('btn-loading');
+                    btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Entrar</span>';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao conectar com o servidor', 'danger');
+
+                await registrarErroAuditoria({
+                    email,
+                    mensagem: error.message || 'Erro não identificado',
+                    contexto: 'fetch_exception',
+                    dados: { stack: error.stack }
+                });
+
+                // Reabilitar botão
+                btnLogin.disabled = false;
+                btnLogin.classList.remove('btn-loading');
+                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Entrar</span>';
+            }
+        }
+
+        // ===== RECUPERAR SENHA =====
+        function recuperarSenha(event) {
+            event.preventDefault();
+            mostrarAlerta('Funcionalidade de recuperação de senha em desenvolvimento', 'info');
+        }
+
+        // ===== INICIALIZAR =====
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Verificar se já está logado
+            await verificarSessaoExistente();
+
+            // Focar no campo de email
+            document.getElementById('email').focus();
+
+            // Permitir login com Enter
+            document.getElementById('formLogin').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    fazerLogin(e);
+                }
+            });
+        });
+
+        // Limpar alertas ao digitar
+        document.getElementById('email').addEventListener('input', () => {
+            document.querySelectorAll('.alert').forEach(alert => {
+                alert.classList.remove('active');
+            });
+        });
+
+        document.getElementById('senha').addEventListener('input', () => {
+            document.querySelectorAll('.alert').forEach(alert => {
+                alert.classList.remove('active');
+            });
+        });
+    </script>
+    <script src="js/visual-identity.js"></script>
+</body>
+
+</html>

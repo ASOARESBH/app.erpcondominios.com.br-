@@ -1,0 +1,893 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planos de Contas - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .nav-submenu {
+            list-style: none;
+            padding-left: 2rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .nav-submenu.active {
+            display: block;
+        }
+
+        .nav-submenu .nav-link {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .nav-item>.nav-link::after {
+            content: '';
+            float: right;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 5px solid #cbd5e1;
+            margin-top: 0.5rem;
+            transition: transform 0.2s;
+        }
+
+        .nav-item>.nav-link.active::after {
+            transform: rotate(180deg);
+        }
+
+        /* Menu Toggle Mobile */
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .header h1 {
+            color: #1e293b;
+            font-size: 1.8rem;
+            margin: 0;
+        }
+
+        /* Submenu */
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            transition: 0.2s;
+            font-weight: 600;
+        }
+
+        .submenu-link:hover {
+            background: #dbeafe;
+            border-color: #93c5fd;
+            color: #1e3a8a;
+        }
+
+        .submenu-link.active {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #fff;
+            border-color: transparent;
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: 0.2s;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-icon.blue {
+            color: #3b82f6;
+        }
+
+        .card h3 {
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .card p {
+            color: #64748b;
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .card a {
+            display: inline-block;
+            padding: 0.6rem 1.5rem;
+            background: #3b82f6;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .card a:hover {
+            background: #1d4ed8;
+        }
+
+        /* Form Section */
+        .form-section {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .form-section h2 {
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .form-section h2 i {
+            color: #3b82f6;
+            font-size: 1.5rem;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.95rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .form-row.full {
+            grid-template-columns: 1fr;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f1f5f9;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: #475569;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 0.9rem;
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge-ativo {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-inativo {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-tipo {
+            background: #dbeafe;
+            color: #0c4a6e;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 1.5rem;
+            color: #1e293b;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #94a3b8;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+
+        .alert-danger {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.3rem;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .submenu ul {
+                flex-direction: column;
+            }
+
+            .submenu-link {
+                display: block;
+                text-align: center;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+
+    <div class="container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>Serra da Liberdade</h1>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i>
+                        Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a>
+                </li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                        Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+                        Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                        Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                        Relatórios</a></li>
+                <li class="nav-item"><a href="financeiro.html" class="nav-link"><i class="fas fa-money-bill-wave"></i>
+                        Financeiro</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                        Configuraçµes</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i>
+                        Manutenção</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                        Administrativo</a></li>
+                <li class="nav-item" style="margin-top: 1rem;">
+                    <a href="#" class="nav-link" id="btn-logout" style="color: #fca5a5;">
+                        <i class="fas fa-sign-out-alt"></i> Sair
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-list"></i> Planos de Contas</h1>
+            </header>
+
+            <nav class="submenu">
+                <ul>
+                    <li><a href="layout-base.html?page=financeiro" class="submenu-link"><i class="fas fa-home"></i> Início</a></li>
+                    <li><a href="contas_pagar.html" class="submenu-link"><i class="fas fa-arrow-up"></i> Contas a Pagar</a></li>
+                    <li><a href="contas_receber.html" class="submenu-link"><i class="fas fa-arrow-down"></i> Contas a Receber</a></li>
+                    <li><a href="planos_contas.html" class="submenu-link active"><i class="fas fa-list"></i> Planos de Contas</a></li>
+                </ul>
+            </nav>
+
+            <div id="alertContainer"></div>
+
+            <!-- Seção de Cadastro -->
+            <div class="form-section">
+                <h2><i class="fas fa-plus-circle"></i> Novo Plano de Contas</h2>
+
+                <form id="formCadastro">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Código *</label>
+                            <input type="text" name="codigo" class="form-control" placeholder="Ex: 1.1.1.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo *</label>
+                            <select name="tipo" class="form-control" required>
+                                <option value="">Selecione...</option>
+                                <option value="ATIVO">Ativo</option>
+                                <option value="PASSIVO">Passivo</option>
+                                <option value="PATRIMONIO">Patrimônio</option>
+                                <option value="RECEITA">Receita</option>
+                                <option value="DESPESA">Despesa</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Nome *</label>
+                        <input type="text" name="nome" class="form-control" placeholder="Ex: Caixa e Bancos" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Natureza *</label>
+                            <select name="natureza" class="form-control" required>
+                                <option value="DEVEDORA">Devedora</option>
+                                <option value="CREDORA">Credora</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Categoria</label>
+                            <input type="text" name="categoria" class="form-control" placeholder="Ex: gua, Energia">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea name="descricao" class="form-control" rows="3"
+                            placeholder="Descrição detalhada..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Cadastrar
+                    </button>
+                </form>
+            </div>
+
+            <!-- Seção de Listagem -->
+            <div class="form-section">
+                <h2><i class="fas fa-table"></i> Planos de Contas Cadastrados</h2>
+
+                <div class="table-container">
+                    <table id="tabelaPlanos">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Nome</th>
+                                <th>Tipo</th>
+                                <th>Natureza</th>
+                                <th>Categoria</th>
+                                <th>Status</th>
+                                <th>Açµes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpoTabela">
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 2rem;">
+                                    <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de Edição -->
+    <div class="modal" id="modalEdicao">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Editar Plano de Contas</h2>
+                <button class="modal-close" onclick="fecharModal()"></button>
+            </div>
+
+            <form id="formEdicao">
+                <input type="hidden" name="id" id="editId">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Código</label>
+                        <input type="text" name="codigo" class="form-control" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo *</label>
+                        <select name="tipo" class="form-control" required>
+                            <option value="ATIVO">Ativo</option>
+                            <option value="PASSIVO">Passivo</option>
+                            <option value="PATRIMONIO">Patrimônio</option>
+                            <option value="RECEITA">Receita</option>
+                            <option value="DESPESA">Despesa</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Nome *</label>
+                    <input type="text" name="nome" class="form-control" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Natureza *</label>
+                        <select name="natureza" class="form-control" required>
+                            <option value="DEVEDORA">Devedora</option>
+                            <option value="CREDORA">Credora</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Categoria</label>
+                        <input type="text" name="categoria" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Descrição</label>
+                    <textarea name="descricao" class="form-control" rows="3"></textarea>
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function toggleMenu() { document.getElementById('sidebar').classList.toggle('active'); }
+        function toggleFinanceiroMenu(e) {
+            e.preventDefault();
+            const submenu = e.target.closest('.nav-item').querySelector('.nav-submenu');
+            submenu.classList.toggle('active');
+            e.target.closest('.nav-link').classList.toggle('active');
+        }
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        function mostrarAlerta(mensagem, tipo = 'info') {
+            const container = document.getElementById('alertContainer');
+            const alerta = document.createElement('div');
+            alerta.className = `alert alert-${tipo}`;
+            alerta.innerHTML = `<i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${mensagem}`;
+            container.innerHTML = '';
+            container.appendChild(alerta);
+            setTimeout(() => alerta.remove(), 5000);
+        }
+
+        async function carregarPlanos() {
+            try {
+                const res = await fetch('../api/api_planos_contas.php?acao=listar');
+                const data = await res.json();
+
+                if (data.sucesso && data.dados) {
+                    const tbody = document.getElementById('corpoTabela');
+                    tbody.innerHTML = '';
+
+                    data.dados.forEach(plano => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td><strong>${plano.codigo}</strong></td>
+                            <td>${plano.nome}</td>
+                            <td><span class="badge badge-tipo">${plano.tipo}</span></td>
+                            <td>${plano.natureza}</td>
+                            <td>${plano.categoria || '-'}</td>
+                            <td><span class="badge ${plano.ativo ? 'badge-ativo' : 'badge-inativo'}">${plano.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                            <td>
+                                <button class="btn btn-primary btn-sm" onclick="editarPlano(${plano.id})">Editar</button>
+                                <button class="btn btn-danger btn-sm" onclick="deletarPlano(${plano.id})">Deletar</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    mostrarAlerta(data.mensagem || 'Erro ao carregar', 'danger');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao carregar planos: ' + error.message, 'danger');
+            }
+        }
+
+        document.getElementById('formCadastro').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.append('acao', 'cadastrar');
+
+            try {
+                const res = await fetch('../api/api_planos_contas.php', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'success');
+                    e.target.reset();
+                    carregarPlanos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'danger');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro: ' + error.message, 'danger');
+            }
+        });
+
+        async function editarPlano(id) {
+            try {
+                const res = await fetch(`../api/api_planos_contas.php?acao=buscar&id=${id}`);
+                const data = await res.json();
+
+                if (data.sucesso) {
+                    const plano = data.dados;
+                    document.getElementById('editId').value = plano.id;
+                    document.querySelector('#formEdicao input[name="codigo"]').value = plano.codigo;
+                    document.querySelector('#formEdicao input[name="nome"]').value = plano.nome;
+                    document.querySelector('#formEdicao select[name="tipo"]').value = plano.tipo;
+                    document.querySelector('#formEdicao select[name="natureza"]').value = plano.natureza;
+                    document.querySelector('#formEdicao input[name="categoria"]').value = plano.categoria || '';
+                    document.querySelector('#formEdicao textarea[name="descricao"]').value = plano.descricao || '';
+                    document.getElementById('modalEdicao').classList.add('active');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao buscar plano: ' + error.message, 'danger');
+            }
+        }
+
+        function fecharModal() {
+            document.getElementById('modalEdicao').classList.remove('active');
+        }
+
+        document.getElementById('formEdicao').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.append('acao', 'atualizar');
+
+            try {
+                const res = await fetch('../api/api_planos_contas.php', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'success');
+                    fecharModal();
+                    carregarPlanos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'danger');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro: ' + error.message, 'danger');
+            }
+        });
+
+        async function deletarPlano(id) {
+            if (!confirm('Tem certeza que deseja deletar este plano?')) return;
+
+            const formData = new FormData();
+            formData.append('acao', 'deletar');
+            formData.append('id', id);
+
+            try {
+                const res = await fetch('../api/api_planos_contas.php', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'success');
+                    carregarPlanos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'danger');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro: ' + error.message, 'danger');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', carregarPlanos);
+
+        document.addEventListener('click', function (event) {
+            const logout = event.target.closest('#btn-logout');
+            if (!logout) return;
+            event.preventDefault();
+            try {
+                SessionManagerCore.getInstance().logout();
+            } catch (error) {
+                console.error('Erro ao executar logout:', error);
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <script src="js/legacy-sidebar-bridge.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

@@ -1,0 +1,411 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Assembleia" data-icon="fa-landmark" style="display:none;"></div>
+
+<!-- Toast -->
+<div id="ass_toast" class="ass-toast" style="display:none;"></div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-assembleia">
+
+    <!-- Breadcrumb -->
+    <nav class="ass-breadcrumb">
+        <span class="ass-bc-link" data-page="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
+        <i class="fas fa-chevron-right ass-bc-sep"></i>
+        <span>Assembleia</span>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-landmark" style="color:#2563eb;margin-right:10px;"></i>Assembleias</h1>
+            <p>Criação, gestão de pautas, votações e acompanhamento de assembleias condominiais</p>
+        </div>
+        <div class="kpi-header-group" id="ass_kpis">
+            <div class="kpi-mini"><span class="kpi-mini-valor" id="ass_kpiTotal">—</span><span class="kpi-mini-label">Total</span></div>
+            <div class="kpi-mini kpi-ativo"><span class="kpi-mini-valor" id="ass_kpiAndamento">—</span><span class="kpi-mini-label">Em Andamento</span></div>
+            <div class="kpi-mini kpi-alerta"><span class="kpi-mini-valor" id="ass_kpiConvocadas">—</span><span class="kpi-mini-label">Convocadas</span></div>
+            <div class="kpi-mini kpi-fechado"><span class="kpi-mini-valor" id="ass_kpiEncerradas">—</span><span class="kpi-mini-label">Encerradas</span></div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" id="ass_tabs">
+        <button class="tab-button active" data-tab="ass-lista">
+            <i class="fas fa-list"></i> Assembleias
+        </button>
+        <button class="tab-button" data-tab="ass-detalhe" id="ass_tabDetalhe" style="display:none;">
+            <i class="fas fa-file-alt"></i> <span id="ass_tabDetalheNome">Detalhes</span>
+        </button>
+        <button class="tab-button" data-tab="ass-votacao" id="ass_tabVotacao" style="display:none;">
+            <i class="fas fa-vote-yea"></i> Votação
+        </button>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: LISTA DE ASSEMBLEIAS
+    ══════════════════════════════════════════════════════ -->
+    <div class="tab-content active" id="ass-lista">
+
+        <!-- Toolbar -->
+        <div class="ass-toolbar">
+            <div class="ass-toolbar-left">
+                <button class="btn-primary" id="ass_btnNova">
+                    <i class="fas fa-plus"></i> Nova Assembleia
+                </button>
+                <div class="ass-filtro-status">
+                    <button class="ass-filtro-btn active" data-status="">Todas</button>
+                    <button class="ass-filtro-btn" data-status="rascunho">Rascunho</button>
+                    <button class="ass-filtro-btn" data-status="convocada">Convocadas</button>
+                    <button class="ass-filtro-btn" data-status="em_andamento">Em Andamento</button>
+                    <button class="ass-filtro-btn" data-status="encerrada">Encerradas</button>
+                </div>
+            </div>
+            <div class="ass-toolbar-right">
+                <div class="ass-busca">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="ass_busca" placeholder="Buscar assembleia...">
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista -->
+        <div id="ass_lista" class="ass-lista-container">
+            <div class="ass-loading"><i class="fas fa-spinner fa-spin"></i> Carregando assembleias...</div>
+        </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: DETALHES DA ASSEMBLEIA
+    ══════════════════════════════════════════════════════ -->
+    <div class="tab-content" id="ass-detalhe">
+
+        <!-- Header do detalhe -->
+        <div class="ass-detalhe-header" id="ass_detalheHeader">
+            <div class="ass-detalhe-info">
+                <div class="ass-detalhe-tipo-badge" id="ass_detalheTipo"></div>
+                <h2 id="ass_detalheNome">—</h2>
+                <div class="ass-detalhe-meta" id="ass_detalheMeta"></div>
+            </div>
+            <div class="ass-detalhe-acoes">
+                <button class="btn-secondary btn-sm" id="ass_btnEditar"><i class="fas fa-edit"></i> Editar</button>
+                <div class="ass-status-dropdown">
+                    <button class="btn-status" id="ass_btnStatus"><i class="fas fa-circle"></i> <span id="ass_statusLabel">—</span> <i class="fas fa-chevron-down"></i></button>
+                    <div class="ass-status-menu" id="ass_statusMenu">
+                        <div class="ass-status-item" data-status="rascunho"><i class="fas fa-pencil-alt"></i> Rascunho</div>
+                        <div class="ass-status-item" data-status="convocada"><i class="fas fa-bell"></i> Convocada</div>
+                        <div class="ass-status-item" data-status="em_andamento"><i class="fas fa-play-circle"></i> Em Andamento</div>
+                        <div class="ass-status-item" data-status="encerrada"><i class="fas fa-check-circle"></i> Encerrada</div>
+                        <div class="ass-status-item danger" data-status="cancelada"><i class="fas fa-times-circle"></i> Cancelada</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sub-tabs do detalhe -->
+        <div class="ass-subtabs" id="ass_subtabs">
+            <button class="ass-subtab active" data-subtab="sub-pautas"><i class="fas fa-list-ol"></i> Pautas</button>
+            <button class="ass-subtab" data-subtab="sub-anexos"><i class="fas fa-paperclip"></i> Documentos <span class="ass-badge" id="ass_badgeAnexos">0</span></button>
+            <button class="ass-subtab" data-subtab="sub-participantes"><i class="fas fa-users"></i> Participantes <span class="ass-badge" id="ass_badgePart">0</span></button>
+            <button class="ass-subtab" data-subtab="sub-resultado"><i class="fas fa-chart-bar"></i> Resultados</button>
+        </div>
+
+        <!-- ── Sub-tab: PAUTAS ── -->
+        <div class="ass-subcontent active" id="sub-pautas">
+            <div class="ass-pautas-toolbar">
+                <button class="btn-primary btn-sm" id="ass_btnNovaPauta">
+                    <i class="fas fa-plus"></i> Adicionar Pauta
+                </button>
+                <span class="ass-pautas-hint">Arraste para reordenar</span>
+            </div>
+            <div id="ass_listaPautas" class="ass-pautas-lista">
+                <div class="ass-empty">Nenhuma pauta cadastrada. Clique em "Adicionar Pauta" para começar.</div>
+            </div>
+        </div>
+
+        <!-- ── Sub-tab: DOCUMENTOS/ANEXOS ── -->
+        <div class="ass-subcontent" id="sub-anexos">
+            <div class="ass-anexos-toolbar">
+                <button class="btn-primary btn-sm" id="ass_btnUpload">
+                    <i class="fas fa-upload"></i> Enviar Documento
+                </button>
+                <span class="ass-pautas-hint">PDF, DOC, DOCX, JPG, PNG — máx. 10MB</span>
+            </div>
+            <!-- Upload form (oculto por padrão) -->
+            <div class="ass-upload-form" id="ass_uploadForm" style="display:none;">
+                <select id="ass_tipoAnexo">
+                    <option value="convocacao">Ata de Convocação</option>
+                    <option value="ata_encerramento">Ata de Encerramento</option>
+                    <option value="documento">Documento</option>
+                    <option value="outro">Outro</option>
+                </select>
+                <label class="ass-file-label">
+                    <i class="fas fa-file-upload"></i>
+                    <span id="ass_fileNome">Clique para selecionar o arquivo</span>
+                    <input type="file" id="ass_fileInput" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.odt" style="display:none;">
+                </label>
+                <div class="ass-upload-btns">
+                    <button class="btn-primary btn-sm" id="ass_btnEnviarArquivo"><i class="fas fa-upload"></i> Enviar</button>
+                    <button class="btn-secondary btn-sm" id="ass_btnCancelarUpload">Cancelar</button>
+                </div>
+            </div>
+            <div id="ass_listaAnexos" class="ass-anexos-lista">
+                <div class="ass-empty">Nenhum documento anexado.</div>
+            </div>
+        </div>
+
+        <!-- ── Sub-tab: PARTICIPANTES ── -->
+        <div class="ass-subcontent" id="sub-participantes">
+            <div class="ass-part-toolbar">
+                <button class="btn-primary btn-sm" id="ass_btnAddPart">
+                    <i class="fas fa-user-plus"></i> Registrar Presença
+                </button>
+            </div>
+            <div class="ass-part-form" id="ass_partForm" style="display:none;">
+                <input type="text" id="ass_partNome" placeholder="Nome do participante" class="ass-input">
+                <input type="text" id="ass_partUnidade" placeholder="Unidade (ex: Lote 5)" class="ass-input">
+                <select id="ass_partTipo" class="ass-input">
+                    <option value="presencial">Presencial</option>
+                    <option value="online">Online</option>
+                    <option value="procuracao">Por Procuração</option>
+                </select>
+                <div class="ass-upload-btns">
+                    <button class="btn-primary btn-sm" id="ass_btnSalvarPart"><i class="fas fa-check"></i> Confirmar</button>
+                    <button class="btn-secondary btn-sm" id="ass_btnCancelarPart">Cancelar</button>
+                </div>
+            </div>
+            <div id="ass_listaParticipantes" class="ass-part-lista">
+                <div class="ass-empty">Nenhum participante registrado.</div>
+            </div>
+        </div>
+
+        <!-- ── Sub-tab: RESULTADOS ── -->
+        <div class="ass-subcontent" id="sub-resultado">
+            <div id="ass_resultados" class="ass-resultados-container">
+                <div class="ass-empty">Nenhuma votação encerrada ainda.</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: VOTAÇÃO (Portal do Morador)
+    ══════════════════════════════════════════════════════ -->
+    <div class="tab-content" id="ass-votacao">
+        <div class="ass-votacao-header">
+            <div class="ass-votacao-info" id="ass_votacaoInfo"></div>
+        </div>
+        <div id="ass_votacaoPautas" class="ass-votacao-pautas">
+            <div class="ass-empty">Selecione uma assembleia para votar.</div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: CRIAR / EDITAR ASSEMBLEIA
+══════════════════════════════════════════════════════════ -->
+<div class="ass-modal-overlay" id="ass_modalAssembleia" style="display:none;">
+    <div class="ass-modal">
+        <div class="ass-modal-header">
+            <h3 id="ass_modalAssTitulo"><i class="fas fa-landmark"></i> Nova Assembleia</h3>
+            <button class="ass-modal-close" id="ass_modalAssClose"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="ass-modal-body">
+            <input type="hidden" id="ass_formId">
+
+            <div class="ass-form-row">
+                <div class="ass-form-group ass-form-full">
+                    <label>Nome da Assembleia <span class="req">*</span></label>
+                    <input type="text" id="ass_formNome" class="ass-input" placeholder="Ex: Assembleia Geral Ordinária 2025">
+                </div>
+            </div>
+
+            <div class="ass-form-row">
+                <div class="ass-form-group">
+                    <label>Tipo <span class="req">*</span></label>
+                    <div class="ass-tipo-cards">
+                        <label class="ass-tipo-card">
+                            <input type="radio" name="ass_tipo" value="ordinaria" checked>
+                            <div class="ass-tipo-card-inner">
+                                <i class="fas fa-calendar-check"></i>
+                                <span>Ordinária</span>
+                                <small>Reunião periódica prevista</small>
+                            </div>
+                        </label>
+                        <label class="ass-tipo-card">
+                            <input type="radio" name="ass_tipo" value="extraordinaria">
+                            <div class="ass-tipo-card-inner">
+                                <i class="fas fa-exclamation-circle"></i>
+                                <span>Extraordinária</span>
+                                <small>Convocada por urgência</small>
+                            </div>
+                        </label>
+                        <label class="ass-tipo-card">
+                            <input type="radio" name="ass_tipo" value="deliberacao">
+                            <div class="ass-tipo-card-inner">
+                                <i class="fas fa-gavel"></i>
+                                <span>Deliberação</span>
+                                <small>Para decisão específica</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ass-form-row">
+                <div class="ass-form-group">
+                    <label>Data e Hora <span class="req">*</span></label>
+                    <input type="datetime-local" id="ass_formData" class="ass-input">
+                </div>
+                <div class="ass-form-group">
+                    <label>Local de Realização</label>
+                    <input type="text" id="ass_formLocal" class="ass-input" placeholder="Ex: Salão de Festas">
+                </div>
+            </div>
+
+            <div class="ass-form-row">
+                <div class="ass-form-group">
+                    <label>Quórum Mínimo (moradores)</label>
+                    <input type="number" id="ass_formQuorum" class="ass-input" min="0" placeholder="0 = sem quórum mínimo">
+                </div>
+            </div>
+
+            <div class="ass-form-row">
+                <div class="ass-form-group ass-form-full">
+                    <label>Descrição / Chamada de Convocação</label>
+                    <textarea id="ass_formDesc" class="ass-textarea" rows="4"
+                        placeholder="Texto da convocação que será exibido aos moradores..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="ass-modal-footer">
+            <button class="btn-secondary" id="ass_modalAssCancelar">Cancelar</button>
+            <button class="btn-primary" id="ass_modalAssSalvar"><i class="fas fa-save"></i> Salvar Assembleia</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: CRIAR / EDITAR PAUTA
+══════════════════════════════════════════════════════════ -->
+<div class="ass-modal-overlay" id="ass_modalPauta" style="display:none;">
+    <div class="ass-modal">
+        <div class="ass-modal-header">
+            <h3 id="ass_modalPautaTitulo"><i class="fas fa-list-ol"></i> Nova Pauta</h3>
+            <button class="ass-modal-close" id="ass_modalPautaClose"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="ass-modal-body">
+            <input type="hidden" id="ass_pautaId">
+
+            <div class="ass-form-row">
+                <div class="ass-form-group ass-form-full">
+                    <label>Título da Pauta <span class="req">*</span></label>
+                    <input type="text" id="ass_pautaTitulo" class="ass-input" placeholder="Ex: Aprovação do orçamento 2025">
+                </div>
+            </div>
+
+            <div class="ass-form-row">
+                <div class="ass-form-group ass-form-full">
+                    <label>Tipo de Pauta</label>
+                    <div class="ass-tipo-cards ass-tipo-cards-sm">
+                        <label class="ass-tipo-card">
+                            <input type="radio" name="ass_pautaTipo" value="informativo" checked>
+                            <div class="ass-tipo-card-inner">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Informativo</span>
+                                <small>Somente texto, sem votação</small>
+                            </div>
+                        </label>
+                        <label class="ass-tipo-card">
+                            <input type="radio" name="ass_pautaTipo" value="votacao">
+                            <div class="ass-tipo-card-inner">
+                                <i class="fas fa-vote-yea"></i>
+                                <span>Com Votação</span>
+                                <small>Aprovo / Não Aprovo / Anular</small>
+                            </div>
+                        </label>
+                        <label class="ass-tipo-card">
+                            <input type="radio" name="ass_pautaTipo" value="tema">
+                            <div class="ass-tipo-card-inner">
+                                <i class="fas fa-comments"></i>
+                                <span>Tema Livre</span>
+                                <small>Discussão aberta</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ass-form-row">
+                <div class="ass-form-group ass-form-full">
+                    <label>Descrição / Texto da Pauta</label>
+                    <textarea id="ass_pautaDesc" class="ass-textarea" rows="5"
+                        placeholder="Descreva o conteúdo desta pauta em detalhes..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="ass-modal-footer">
+            <button class="btn-secondary" id="ass_modalPautaCancelar">Cancelar</button>
+            <button class="btn-primary" id="ass_modalPautaSalvar"><i class="fas fa-save"></i> Salvar Pauta</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: VOTAÇÃO (Morador vota em uma pauta)
+══════════════════════════════════════════════════════════ -->
+<div class="ass-modal-overlay" id="ass_modalVotar" style="display:none;">
+    <div class="ass-modal ass-modal-voto">
+        <div class="ass-modal-header">
+            <h3><i class="fas fa-vote-yea"></i> Registrar Voto</h3>
+            <button class="ass-modal-close" id="ass_modalVotarClose"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="ass-modal-body">
+            <input type="hidden" id="ass_votarPautaId">
+            <div class="ass-voto-pauta-titulo" id="ass_votarTitulo"></div>
+            <div class="ass-voto-pauta-desc" id="ass_votarDesc"></div>
+
+            <div class="ass-voto-opcoes">
+                <label class="ass-voto-card ass-voto-aprovado">
+                    <input type="radio" name="ass_votoOpcao" value="aprovado">
+                    <div class="ass-voto-card-inner">
+                        <i class="fas fa-thumbs-up"></i>
+                        <span>Aprovo</span>
+                    </div>
+                </label>
+                <label class="ass-voto-card ass-voto-reprovado">
+                    <input type="radio" name="ass_votoOpcao" value="reprovado">
+                    <div class="ass-voto-card-inner">
+                        <i class="fas fa-thumbs-down"></i>
+                        <span>Não Aprovo</span>
+                    </div>
+                </label>
+                <label class="ass-voto-card ass-voto-anulado">
+                    <input type="radio" name="ass_votoOpcao" value="anulado">
+                    <div class="ass-voto-card-inner">
+                        <i class="fas fa-ban"></i>
+                        <span>Anular</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="ass-form-row" id="ass_votarIdentRow">
+                <div class="ass-form-group">
+                    <label>Seu Nome</label>
+                    <input type="text" id="ass_votarNome" class="ass-input" placeholder="Nome do votante">
+                </div>
+                <div class="ass-form-group">
+                    <label>Sua Unidade</label>
+                    <input type="text" id="ass_votarUnidade" class="ass-input" placeholder="Ex: Lote 5">
+                </div>
+            </div>
+        </div>
+        <div class="ass-modal-footer">
+            <button class="btn-secondary" id="ass_modalVotarCancelar">Cancelar</button>
+            <button class="btn-primary btn-voto" id="ass_modalVotarConfirmar">
+                <i class="fas fa-check-circle"></i> Confirmar Voto
+            </button>
+        </div>
+    </div>
+</div>

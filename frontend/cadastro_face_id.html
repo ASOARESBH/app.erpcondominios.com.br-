@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Face ID - ERP Serra</title>
+    
+    <!-- Face-API.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            color: #667eea;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .logo p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .step {
+            display: none;
+        }
+        
+        .step.active {
+            display: block;
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        
+        .step-item {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+        
+        .step-item::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            width: 100%;
+            height: 2px;
+            background: #ddd;
+            z-index: -1;
+        }
+        
+        .step-item:first-child::before {
+            display: none;
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #ddd;
+            color: #666;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .step-item.active .step-number {
+            background: #667eea;
+            color: white;
+        }
+        
+        .step-item.completed .step-number {
+            background: #10b981;
+            color: white;
+        }
+        
+        .step-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .info-box {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .info-box h3 {
+            color: #1e40af;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .info-box p {
+            color: #1e3a8a;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        #video {
+            width: 100%;
+            display: block;
+        }
+        
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        .face-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 250px;
+            height: 300px;
+            border: 3px solid #10b981;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            pointer-events: none;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #059669;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        
+        .alert-warning {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .status.detecting {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status.detected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .success-icon {
+            font-size: 80px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .visitor-info {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .visitor-info p {
+            margin: 5px 0;
+            color: #374151;
+        }
+        
+        .visitor-info strong {
+            color: #1f2937;
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>?? Cadastro de Face ID</h1>
+            <p>Sistema de Reconhecimento Facial</p>
+        </div>
+        
+        <!-- Indicador de Passos -->
+        <div class="step-indicator">
+            <div class="step-item active" id="indicator-1">
+                <div class="step-number">1</div>
+                <div class="step-label">Validação</div>
+            </div>
+            <div class="step-item" id="indicator-2">
+                <div class="step-number">2</div>
+                <div class="step-label">Captura</div>
+            </div>
+            <div class="step-item" id="indicator-3">
+                <div class="step-number">3</div>
+                <div class="step-label">Confirmação</div>
+            </div>
+        </div>
+        
+        <!-- PASSO 1: Validação do Token -->
+        <div class="step active" id="step-1">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Validando seu link de acesso...</p>
+            </div>
+        </div>
+        
+        <!-- PASSO 2: Captura de Face -->
+        <div class="step" id="step-2">
+            <div class="info-box">
+                <h3>?? Instruçµes para Captura</h3>
+                <p>
+                     Posicione seu rosto dentro do contorno<br>
+                     Mantenha boa iluminação<br>
+                     Olhe diretamente para a câmera<br>
+                     Aguarde a detecção automática
+                </p>
+            </div>
+            
+            <div class="visitor-info" id="visitor-info">
+                <!-- Será preenchido via JavaScript -->
+            </div>
+            
+            <div id="status" class="status detecting" style="display: none;">
+                ?? Detectando rosto...
+            </div>
+            
+            <div class="camera-container">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+                <div class="face-overlay"></div>
+            </div>
+            
+            <button class="btn btn-primary" id="btn-iniciar-camera">
+                ?? Iniciar Câmera
+            </button>
+            
+            <button class="btn btn-success" id="btn-capturar" style="display: none;" disabled>
+                ? Capturar Face ID
+            </button>
+        </div>
+        
+        <!-- PASSO 3: Sucesso -->
+        <div class="step" id="step-3">
+            <div class="success-icon">?</div>
+            
+            <div class="alert alert-success">
+                <h3 style="margin-bottom: 10px;">Face ID Cadastrado com Sucesso!</h3>
+                <p>Seu reconhecimento facial foi registrado e já está ativo para acesso.</p>
+            </div>
+            
+            <div class="visitor-info" id="visitor-info-final">
+                <!-- Será preenchido via JavaScript -->
+            </div>
+            
+            <p style="text-align: center; color: #666; margin-top: 20px;">
+                Vocª pode fechar esta página agora.
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        // ========================================
+        // VARIVEIS GLOBAIS
+        // ========================================
+        let token = '';
+        let visitanteData = null;
+        let video = null;
+        let canvas = null;
+        let ctx = null;
+        let faceDetected = false;
+        let faceDescriptor = null;
+        let stream = null;
+        
+        // ========================================
+        // OBTER TOKEN DA URL
+        // ========================================
+        function obterToken() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('token');
+        }
+        
+        // ========================================
+        // VALIDAR TOKEN
+        // ========================================
+        async function validarToken() {
+            token = obterToken();
+            
+            if (!token) {
+                mostrarErro('Link inválido. Token não encontrado.');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`../api/api_face_id.php?action=validar_token&token=${token}`);
+                const result = await response.json();
+                
+                if (result.sucesso) {
+                    visitanteData = result.dados;
+                    irParaPasso(2);
+                } else {
+                    mostrarErro(result.mensagem);
+                }
+            } catch (error) {
+                console.error('[ERRO]', error);
+                mostrarErro('Erro ao validar token. Tente novamente.');
+            }
+        }
+        
+        // ========================================
+        // MOSTRAR ERRO
+        // ========================================
+        function mostrarErro(mensagem) {
+            document.getElementById('step-1').innerHTML = `
+                <div class="alert alert-error">
+                    <h3 style="margin-bottom: 10px;">? Erro</h3>
+                    <p>${mensagem}</p>
+                </div>
+                <p style="text-align: center; color: #666; margin-top: 20px;">
+                    Entre em contato com o administrador se o problema persistir.
+                </p>
+            `;
+        }
+        
+        // ========================================
+        // IR PARA PASSO
+        // ========================================
+        function irParaPasso(numero) {
+            // Esconder todos os passos
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active');
+            });
+            
+            // Mostrar passo atual
+            document.getElementById(`step-${numero}`).classList.add('active');
+            
+            // Atualizar indicadores
+            document.querySelectorAll('.step-item').forEach((item, index) => {
+                item.classList.remove('active', 'completed');
+                if (index + 1 < numero) {
+                    item.classList.add('completed');
+                } else if (index + 1 === numero) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Preencher informaçµes do visitante
+            if (numero === 2 && visitanteData) {
+                document.getElementById('visitor-info').innerHTML = `
+                    <p><strong>Visitante:</strong> ${visitanteData.visitante_nome}</p>
+                    <p><strong>Documento:</strong> ${visitanteData.visitante_documento}</p>
+                    ${visitanteData.visitante_telefone ? `<p><strong>Telefone:</strong> ${visitanteData.visitante_telefone}</p>` : ''}
+                `;
+            }
+            
+            if (numero === 3 && visitanteData) {
+                document.getElementById('visitor-info-final').innerHTML = `
+                    <p><strong>Visitante:</strong> ${visitanteData.visitante_nome}</p>
+                    <p><strong>Documento:</strong> ${visitanteData.visitante_documento}</p>
+                    <p><strong>Status:</strong> <span style="color: #10b981;">? Face ID Ativo</span></p>
+                `;
+            }
+        }
+        
+        // ========================================
+        // CARREGAR MODELOS DO FACE-API.JS
+        // ========================================
+        async function carregarModelos() {
+            console.log('[FACE-API] Carregando modelos...');
+            
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+            
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ]);
+            
+            console.log('[FACE-API] Modelos carregados com sucesso');
+        }
+        
+        // ========================================
+        // INICIAR CMERA
+        // ========================================
+        async function iniciarCamera() {
+            try {
+                console.log('[CAMERA] Solicitando acesso...');
+                
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user', // Câmera frontal
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+                
+                video.srcObject = stream;
+                
+                // Aguardar vídeo carregar
+                await new Promise(resolve => {
+                    video.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+                
+                // Configurar canvas
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                console.log('[CAMERA] Câmera iniciada');
+                
+                // Esconder botão de iniciar
+                document.getElementById('btn-iniciar-camera').style.display = 'none';
+                
+                // Mostrar status
+                document.getElementById('status').style.display = 'block';
+                
+                // Iniciar detecção
+                detectarFace();
+                
+            } catch (error) {
+                console.error('[CAMERA] Erro:', error);
+                alert('Erro ao acessar câmera. Verifique as permissµes.');
+            }
+        }
+        
+        // ========================================
+        // DETECTAR FACE
+        // ========================================
+        async function detectarFace() {
+            const status = document.getElementById('status');
+            const btnCapturar = document.getElementById('btn-capturar');
+            
+            const deteccao = await faceapi
+                .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+            
+            if (deteccao) {
+                // Desenhar detecção no canvas
+                const dims = faceapi.matchDimensions(canvas, video, true);
+                const resizedDetection = faceapi.resizeResults(deteccao, dims);
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                faceapi.draw.drawDetections(canvas, resizedDetection);
+                faceapi.draw.drawFaceLandmarks(canvas, resizedDetection);
+                
+                // Face detectada
+                if (!faceDetected) {
+                    console.log('[FACE-API] Rosto detectado');
+                    faceDetected = true;
+                    faceDescriptor = deteccao.descriptor;
+                    
+                    status.className = 'status detected';
+                    status.textContent = '? Rosto detectado! Clique em "Capturar"';
+                    
+                    btnCapturar.style.display = 'block';
+                    btnCapturar.disabled = false;
+                }
+            } else {
+                // Face não detectada
+                if (faceDetected) {
+                    console.log('[FACE-API] Rosto perdido');
+                    faceDetected = false;
+                    faceDescriptor = null;
+                    
+                    status.className = 'status detecting';
+                    status.textContent = '?? Detectando rosto...';
+                    
+                    btnCapturar.disabled = true;
+                }
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // Continuar detecção
+            requestAnimationFrame(detectarFace);
+        }
+        
+        // ========================================
+        // CAPTURAR FACE ID
+        // ========================================
+        async function capturarFaceID() {
+            if (!faceDescriptor) {
+                alert('Nenhum rosto detectado. Tente novamente.');
+                return;
+            }
+            
+            console.log('[FACE-API] Capturando Face ID...');
+            
+            // Desabilitar botão
+            const btnCapturar = document.getElementById('btn-capturar');
+            btnCapturar.disabled = true;
+            btnCapturar.textContent = '? Enviando...';
+            
+            // Capturar foto
+            const fotoCanvas = document.createElement('canvas');
+            fotoCanvas.width = video.videoWidth;
+            fotoCanvas.height = video.videoHeight;
+            const fotoCtx = fotoCanvas.getContext('2d');
+            fotoCtx.drawImage(video, 0, 0);
+            const fotoBase64 = fotoCanvas.toDataURL('image/jpeg', 0.8);
+            
+            // Converter descritor para array
+            const descritorArray = Array.from(faceDescriptor);
+            
+            try {
+                const response = await fetch('../api/api_face_id.php?action=cadastrar_descritor', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: token,
+                        descritor: descritorArray,
+                        foto: fotoBase64
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.sucesso) {
+                    console.log('[FACE-API] Face ID cadastrado com sucesso');
+                    
+                    // Parar câmera
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
+                    
+                    // Ir para passo 3
+                    irParaPasso(3);
+                } else {
+                    alert('Erro: ' + result.mensagem);
+                    btnCapturar.disabled = false;
+                    btnCapturar.textContent = '? Capturar Face ID';
+                }
+            } catch (error) {
+                console.error('[ERRO]', error);
+                alert('Erro ao enviar Face ID. Tente novamente.');
+                btnCapturar.disabled = false;
+                btnCapturar.textContent = '? Capturar Face ID';
+            }
+        }
+        
+        // ========================================
+        // INICIALIZAO
+        // ========================================
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log('[INIT] Iniciando aplicação...');
+            
+            // Obter elementos
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            // Carregar modelos
+            await carregarModelos();
+            
+            // Validar token
+            await validarToken();
+            
+            // Event listeners
+            document.getElementById('btn-iniciar-camera').addEventListener('click', iniciarCamera);
+            document.getElementById('btn-capturar').addEventListener('click', capturarFaceID);
+        });
+    </script>
+</body>
+</html>
+

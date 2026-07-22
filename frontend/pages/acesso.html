@@ -1,0 +1,99 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Controle de Acesso" data-icon="fa-door-open" style="display:none;"></div>
+
+<div class="page-wrapper page-acesso">
+    <div class="page-header">
+        <h1>Controle de Acesso</h1>
+        <p>Verificacao de acesso via TAG RFID e monitoramento de liberacoes</p>
+    </div>
+
+    <div id="rfidStatus" class="rfid-status rfid-offline">
+        <i class="fas fa-wifi"></i> Status RFID: aguardando verificacao...
+    </div>
+
+    <div class="page-card">
+        <h2>Verificacao de Acesso</h2>
+        <p class="card-subtitle">Digite a TAG RFID (ou identificador recebido no leitor).</p>
+
+        <form id="acessoForm">
+            <div class="form-grid single-column">
+                <div>
+                    <label>TAG RFID / Identificador *</label>
+                    <input type="text" id="entradaAcesso" required placeholder="Ex: MAJJHAG0022" autocomplete="off" autofocus>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary-modern" id="btnValidarAcesso">
+                    <i class="fas fa-check-circle"></i> Verificar Acesso
+                </button>
+                <label class="audio-toggle">
+                    <input type="checkbox" id="habilitarSomAcesso" checked>
+                    Som de feedback
+                </label>
+            </div>
+        </form>
+
+        <div id="mensagemAcesso" class="mensagem-box" style="display:none;"></div>
+        <div id="infoAcesso" class="info-morador" style="display:none;"></div>
+    </div>
+
+    <div class="page-card">
+        <div class="table-header-actions">
+            <h2>Ultimos Acessos Liberados</h2>
+            <div class="table-tools">
+                <input type="text" id="filtroAcessosLocal" class="input-filtro-tabela" placeholder="Filtrar tabela...">
+                <label class="auto-refresh-toggle">
+                    <input type="checkbox" id="autoRefreshAcesso" checked>
+                    Atualizacao automatica (5s)
+                </label>
+                <button class="btn-secondary-modern" type="button" id="btnAtualizarAcessos">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+        </div>
+
+        <div id="loadingAcessos" class="loading" style="display:none;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Carregando acessos...</p>
+        </div>
+
+        <div class="table-container">
+            <table id="tabelaAcessos">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Hora</th>
+                        <th>TAG RFID</th>
+                        <th>Placa</th>
+                        <th>Modelo</th>
+                        <th>Unidade</th>
+                        <th>Morador</th>
+                        <th>Status</th>
+                        <th>Acoes</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal-overlay page-acesso-modal" id="modalDetalheAcesso" aria-hidden="true">
+        <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalDetalheAcessoTitulo">
+            <div class="modal-header">
+                <h3 id="modalDetalheAcessoTitulo"><i class="fas fa-eye"></i> Visualizar Acesso</h3>
+                <button type="button" class="modal-close" id="btnFecharModalAcesso" title="Fechar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="detalhe-grid" id="detalheAcessoConteudo"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary-modern" id="btnFecharModalAcessoFooter">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

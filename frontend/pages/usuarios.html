@@ -1,0 +1,457 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Usuários" data-icon="fa-user-shield" style="display:none;"></div>
+
+<style>
+/* ── Tabs ────────────────────────────────────────────────────────── */
+.usr-tabs { display:flex; gap:0; border-bottom:2px solid #e2e8f0; margin-bottom:1.5rem; }
+.usr-tab  { padding:0.65rem 1.4rem; font-size:0.9rem; font-weight:600; color:#64748b;
+            cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px;
+            transition:all 0.2s; display:flex; align-items:center; gap:0.5rem; }
+.usr-tab:hover  { color:#2563eb; background:#f1f5ff; border-radius:6px 6px 0 0; }
+.usr-tab.active { color:#2563eb; border-bottom-color:#2563eb; }
+
+/* ── Painel de Módulos ───────────────────────────────────────────── */
+#painelModulos { display:none; }
+#painelModulos.show { display:block; }
+
+/* ── Seletor de Usuário ──────────────────────────────────────────── */
+.mod-user-selector {
+    background:linear-gradient(135deg,#f8fafc,#f1f5f9);
+    border:1.5px solid #e2e8f0; border-radius:12px;
+    padding:1.25rem 1.5rem; margin-bottom:1.5rem;
+    display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+}
+.mod-user-selector label {
+    font-size:0.85rem; font-weight:700; color:#374151;
+    white-space:nowrap; display:flex; align-items:center; gap:0.5rem;
+}
+.mod-user-selector select {
+    flex:1; min-width:220px; padding:0.55rem 1rem;
+    border:1.5px solid #d1d5db; border-radius:8px;
+    font-size:0.9rem; outline:none; transition:border-color 0.2s;
+    background:#fff; color:#1e293b;
+}
+.mod-user-selector select:focus { border-color:#2563eb; }
+
+/* ── Header do usuário selecionado ───────────────────────────────── */
+.mod-header {
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;
+    padding:1rem 1.25rem;
+    background:linear-gradient(135deg,#eff6ff,#dbeafe);
+    border:1.5px solid #93c5fd; border-radius:10px;
+}
+.mod-header-info { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
+.mod-usuario-badge {
+    background:linear-gradient(135deg,#1e3a8a,#2563eb);
+    color:#fff; padding:0.5rem 1.1rem; border-radius:20px;
+    font-size:0.85rem; font-weight:700; display:flex; align-items:center; gap:0.5rem;
+}
+.mod-perfil-badge {
+    padding:0.35rem 0.9rem; border-radius:20px;
+    font-size:0.8rem; font-weight:600;
+}
+.mod-perfil-admin       { background:#fee2e2; color:#b91c1c; }
+.mod-perfil-gerente     { background:#fef3c7; color:#92400e; }
+.mod-perfil-operador    { background:#dbeafe; color:#1e40af; }
+.mod-perfil-visualizador{ background:#f0fdf4; color:#166534; }
+
+.mod-actions { display:flex; gap:0.75rem; flex-wrap:wrap; }
+.mod-btn { padding:0.5rem 1.1rem; border-radius:6px; font-size:0.85rem; font-weight:600;
+           cursor:pointer; border:none; display:flex; align-items:center; gap:0.5rem;
+           transition:all 0.2s; }
+.mod-btn-primary { background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; }
+.mod-btn-primary:hover { opacity:0.9; transform:translateY(-1px); }
+.mod-btn-warning { background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; }
+.mod-btn-warning:hover { opacity:0.9; }
+.mod-btn-danger  { background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; }
+.mod-btn-danger:hover  { opacity:0.9; }
+.mod-btn-success { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; }
+.mod-btn-success:hover { opacity:0.9; }
+.mod-btn-outline { background:#fff; color:#374151; border:1.5px solid #d1d5db; }
+.mod-btn-outline:hover { background:#f9fafb; }
+
+/* ── Admin banner ────────────────────────────────────────────────── */
+.mod-admin-banner {
+    background:linear-gradient(135deg,#fef3c7,#fde68a);
+    border:1.5px solid #fbbf24; border-radius:10px;
+    padding:1.25rem 1.5rem; text-align:center; display:none;
+    margin-bottom:1.5rem;
+}
+.mod-admin-banner.show { display:block; }
+.mod-admin-banner h4 { color:#92400e; font-size:1rem; margin-bottom:0.5rem; }
+.mod-admin-banner p  { color:#78350f; font-size:0.85rem; margin:0; }
+
+/* ── Legenda ─────────────────────────────────────────────────────── */
+.mod-legenda {
+    display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;
+    font-size:0.78rem; color:#64748b; align-items:center;
+}
+.mod-legenda-item { display:flex; align-items:center; gap:5px; }
+.mod-legenda-dot  { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+/* ── Busca ───────────────────────────────────────────────────────── */
+.mod-search {
+    width:100%; padding:0.6rem 1rem; border:1.5px solid #e2e8f0;
+    border-radius:8px; font-size:0.9rem; margin-bottom:1.25rem;
+    outline:none; transition:border-color 0.2s; box-sizing:border-box;
+}
+.mod-search:focus { border-color:#2563eb; }
+
+/* ── Grupos de Módulos ───────────────────────────────────────────── */
+.mod-grupo { margin-bottom:1.5rem; }
+.mod-grupo-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0.6rem 1rem; background:#f8fafc;
+    border:1px solid #e2e8f0; border-radius:8px 8px 0 0;
+    cursor:pointer; user-select:none;
+}
+.mod-grupo-titulo {
+    font-size:0.85rem; font-weight:700; color:#374151; text-transform:uppercase;
+    letter-spacing:0.05em; display:flex; align-items:center; gap:0.5rem;
+}
+.mod-grupo-badge {
+    font-size:0.75rem; background:#e2e8f0; color:#64748b;
+    padding:2px 8px; border-radius:10px; font-weight:600;
+}
+.mod-grupo-toggle { display:flex; gap:0.5rem; align-items:center; }
+.mod-grupo-btn { font-size:0.75rem; padding:3px 10px; border-radius:4px;
+                 cursor:pointer; border:1px solid #d1d5db; background:#fff;
+                 color:#374151; font-weight:600; transition:all 0.15s; }
+.mod-grupo-btn:hover { background:#f1f5ff; color:#2563eb; border-color:#93c5fd; }
+
+.mod-grid {
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));
+    gap:0.75rem; padding:1rem;
+    border:1px solid #e2e8f0; border-top:none; border-radius:0 0 8px 8px;
+    background:#fff;
+}
+
+/* ── Card de Módulo ──────────────────────────────────────────────── */
+.mod-card {
+    border:1.5px solid #e2e8f0; border-radius:8px; padding:0.9rem 1rem;
+    transition:all 0.2s; background:#fff; position:relative;
+}
+.mod-card.habilitado  { border-color:#93c5fd; background:#f0f7ff; }
+.mod-card.bloqueado   { border-color:#fca5a5; background:#fff5f5; opacity:0.75; }
+.mod-card.perfil-sem-acesso { border-color:#e2e8f0; background:#f8fafc; }
+
+.mod-card-top { display:flex; align-items:flex-start; gap:0.75rem; margin-bottom:0.6rem; }
+.mod-card-icon {
+    width:36px; height:36px; border-radius:8px;
+    background:linear-gradient(135deg,#1e3a8a,#2563eb);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:0.9rem; flex-shrink:0;
+}
+.mod-card.perfil-sem-acesso .mod-card-icon { background:linear-gradient(135deg,#94a3b8,#64748b); }
+.mod-card-info { flex:1; min-width:0; }
+.mod-card-nome { font-size:0.88rem; font-weight:700; color:#1e293b; margin-bottom:2px; }
+.mod-card-desc { font-size:0.75rem; color:#64748b; line-height:1.3; }
+.mod-card-toggle { flex-shrink:0; }
+
+/* Toggle Switch */
+.toggle-switch { position:relative; display:inline-block; width:44px; height:24px; }
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-slider {
+    position:absolute; cursor:pointer; inset:0;
+    background:#d1d5db; border-radius:24px; transition:0.3s;
+}
+.toggle-slider:before {
+    content:''; position:absolute; width:18px; height:18px;
+    left:3px; bottom:3px; background:#fff; border-radius:50%; transition:0.3s;
+    box-shadow:0 1px 3px rgba(0,0,0,0.2);
+}
+input:checked + .toggle-slider { background:#2563eb; }
+input:checked + .toggle-slider:before { transform:translateX(20px); }
+input:disabled + .toggle-slider { cursor:not-allowed; opacity:0.5; }
+
+/* ── Permissões granulares ───────────────────────────────────────── */
+.mod-card-perms {
+    display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.6rem;
+    padding-top:0.6rem; border-top:1px solid #e2e8f0;
+}
+.mod-perm-chip {
+    display:flex; align-items:center; gap:4px;
+    font-size:0.72rem; font-weight:600; padding:4px 9px;
+    border-radius:4px; cursor:pointer; user-select:none;
+    border:1px solid transparent; transition:all 0.15s;
+}
+.mod-perm-chip.on  { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+.mod-perm-chip.off { background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0; }
+.mod-perm-chip.disabled { cursor:not-allowed; opacity:0.4; pointer-events:none; }
+.mod-perm-chip:not(.disabled):hover { opacity:0.8; transform:scale(1.05); }
+
+/* Badge de permissão mínima */
+.mod-min-badge {
+    display:inline-flex; align-items:center; gap:3px;
+    font-size:0.7rem; padding:2px 7px; border-radius:10px;
+    font-weight:600; margin-top:4px;
+}
+.mod-min-visualizador { background:#f0fdf4; color:#166534; }
+.mod-min-operador     { background:#dbeafe; color:#1e40af; }
+.mod-min-gerente      { background:#fef3c7; color:#92400e; }
+.mod-min-admin        { background:#fee2e2; color:#b91c1c; }
+
+/* ── Rastreabilidade / Auditoria ─────────────────────────────────── */
+.mod-auditoria-bar {
+    background:linear-gradient(135deg,#f0fdf4,#dcfce7);
+    border:1.5px solid #86efac; border-radius:10px;
+    padding:0.75rem 1.25rem; margin-bottom:1.25rem;
+    display:none; align-items:center; gap:1rem; flex-wrap:wrap;
+    font-size:0.8rem; color:#166534;
+}
+.mod-auditoria-bar.show { display:flex; }
+.mod-auditoria-bar strong { color:#15803d; }
+.mod-auditoria-bar .mod-audit-item { display:flex; align-items:center; gap:0.35rem; }
+.mod-audit-sep { color:#86efac; }
+
+/* ── Contador de alterações pendentes ───────────────────────────── */
+.mod-pending-badge {
+    display:none; background:#ef4444; color:#fff;
+    font-size:0.7rem; padding:1px 7px; border-radius:10px;
+    font-weight:700; margin-left:6px; animation:pulse 1.5s infinite;
+}
+.mod-pending-badge.show { display:inline-block; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+/* ── Responsivo ──────────────────────────────────────────────────── */
+@media (max-width:640px) {
+    .mod-grid { grid-template-columns:1fr; }
+    .mod-header { flex-direction:column; align-items:flex-start; }
+    .mod-actions { width:100%; }
+    .mod-btn { flex:1; justify-content:center; }
+    .mod-user-selector { flex-direction:column; align-items:flex-start; }
+    .mod-user-selector select { width:100%; }
+}
+</style>
+
+<div class="page-wrapper page-usuarios">
+
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb">
+    <span data-page="configuracao"><i class="fas fa-cog"></i> Configurações</span>
+    <span style="color:#cbd5e1;font-size:0.7rem;"><i class="fas fa-chevron-right"></i></span>
+    <span>Usuários</span>
+  </nav>
+
+  <div class="page-header">
+    <h1><i class="fas fa-user-shield"></i> Gerenciamento de Usuários</h1>
+    <p>Gerencie os usuários do sistema. Cadastre, edite permissões e controle o acesso por módulo.</p>
+  </div>
+
+  <div id="alertContainer"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       FORMULÁRIO DE CADASTRO / EDIÇÃO
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="page-card form-section">
+    <h3><i class="fas fa-user-plus"></i> <span id="formTitle">Novo Usuário</span></h3>
+    <form id="formUsuario">
+      <input type="hidden" id="usuarioId">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Nome Completo *</label>
+          <input type="text" id="nome" required placeholder="Nome completo do usuário">
+        </div>
+        <div class="form-group">
+          <label>Email *</label>
+          <input type="email" id="email" required placeholder="email@exemplo.com">
+        </div>
+        <div class="form-group">
+          <label>Senha *</label>
+          <input type="password" id="senha" required placeholder="Senha segura">
+        </div>
+        <div class="form-group">
+          <label>Função *</label>
+          <input type="text" id="funcao" placeholder="Ex: Porteiro, Gerente" required>
+        </div>
+        <div class="form-group">
+          <label>Departamento</label>
+          <select id="departamento">
+            <option value="">— Selecione —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Permissão *</label>
+          <select id="permissao" required>
+            <option value="visualizador">Visualizador</option>
+            <option value="operador">Operador</option>
+            <option value="gerente">Gerente</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Sessão Inativa -->
+      <div class="form-group" style="margin-top:1rem;">
+        <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:10px;padding:1rem 1.25rem;display:flex;align-items:flex-start;gap:1rem;">
+          <div style="padding-top:2px;">
+            <input type="checkbox" id="sessao_inativa" style="width:18px;height:18px;cursor:pointer;accent-color:#16a34a;">
+          </div>
+          <div>
+            <label for="sessao_inativa" style="font-weight:600;color:#15803d;cursor:pointer;font-size:0.95rem;display:block;margin-bottom:0.25rem;">
+              <i class="fas fa-infinity" style="margin-right:6px;"></i> Sessão Inativa (Nunca Expira)
+            </label>
+            <p style="font-size:0.82rem;color:#166534;margin:0;line-height:1.4;">
+              Quando ativado, o sistema <strong>nunca fará logout automático</strong> deste usuário,
+              independente do tempo de inatividade. Ideal para portaria e monitoramento 24h.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions" style="display:flex;gap:1rem;margin-top:1.5rem;">
+        <button type="submit" class="btn-primary-modern" id="btnSalvar">
+          <i class="fas fa-save"></i> <span id="btnSalvarTexto">Salvar Usuário</span>
+        </button>
+        <button type="button" class="btn-secondary-modern" id="btnLimpar">
+          <i class="fas fa-times"></i> Limpar
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       LISTA DE USUÁRIOS COM TABS
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="page-card table-section">
+
+    <!-- Tabs -->
+    <div class="usr-tabs">
+      <div class="usr-tab active" id="tabUsuarios" onclick="UsuariosPage.mostrarTab('usuarios')">
+        <i class="fas fa-list"></i> Lista de Usuários
+      </div>
+      <div class="usr-tab" id="tabModulos" onclick="UsuariosPage.mostrarTab('modulos')">
+        <i class="fas fa-th-large"></i> Módulos &amp; Permissões
+        <span id="modBadgeUsuario" style="display:none;background:#2563eb;color:#fff;font-size:0.7rem;padding:1px 7px;border-radius:10px;margin-left:4px;"></span>
+        <span class="mod-pending-badge" id="modPendingBadge">● não salvo</span>
+      </div>
+    </div>
+
+    <!-- ── Painel: Lista de Usuários ── -->
+    <div id="painelUsuarios">
+      <div class="loading" id="loading" style="display:none;text-align:center;padding:2rem;">
+        <i class="fas fa-spinner fa-spin fa-2x"></i><p>Carregando...</p>
+      </div>
+      <div class="table-container" style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Nome</th><th>Email</th><th>Função</th>
+              <th>Departamento</th><th>Permissão</th><th>Status</th>
+              <th style="text-align:center;">Sessão</th><th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaUsuarios">
+            <tr><td colspan="9" style="text-align:center;">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Painel: Módulos & Permissões ── -->
+    <div id="painelModulos">
+
+      <!-- Seletor de usuário — sempre visível -->
+      <div class="mod-user-selector">
+        <label for="modSelectUsuario">
+          <i class="fas fa-user-cog" style="color:#2563eb;"></i>
+          Configurar permissões de:
+        </label>
+        <select id="modSelectUsuario" onchange="UsuariosPage.selecionarUsuarioModulos(this.value)">
+          <option value="">— Selecione um usuário —</option>
+        </select>
+      </div>
+
+      <!-- Banner Admin -->
+      <div class="mod-admin-banner" id="modAdminBanner">
+        <h4><i class="fas fa-crown" style="color:#f59e0b;margin-right:6px;"></i> Administrador — Acesso Total</h4>
+        <p>Administradores têm acesso irrestrito a <strong>todos os módulos</strong> do sistema automaticamente.<br>
+           Não é necessário configurar permissões individuais para este perfil.</p>
+      </div>
+
+      <!-- Header do usuário selecionado -->
+      <div class="mod-header" id="modHeader" style="display:none;">
+        <div class="mod-header-info">
+          <div class="mod-usuario-badge" id="modUsuarioBadge">
+            <i class="fas fa-user"></i> <span id="modUsuarioNome">—</span>
+          </div>
+          <div>
+            <span class="mod-perfil-badge" id="modPerfilBadge">—</span>
+            <div style="font-size:0.75rem;color:#64748b;margin-top:3px;" id="modPerfilDesc">—</div>
+          </div>
+        </div>
+        <div class="mod-actions">
+          <button class="mod-btn mod-btn-success" onclick="UsuariosPage.habilitarTodos()">
+            <i class="fas fa-check-double"></i> Habilitar Todos
+          </button>
+          <button class="mod-btn mod-btn-danger" onclick="UsuariosPage.desabilitarTodos()">
+            <i class="fas fa-ban"></i> Desabilitar Todos
+          </button>
+          <button class="mod-btn mod-btn-warning" onclick="UsuariosPage.resetarParaPerfil()">
+            <i class="fas fa-undo"></i> Resetar para Perfil
+          </button>
+          <button class="mod-btn mod-btn-primary" id="btnSalvarPermissoes" onclick="UsuariosPage.salvarPermissoes()">
+            <i class="fas fa-save"></i> Salvar Permissões
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra de rastreabilidade / auditoria -->
+      <div class="mod-auditoria-bar" id="modAuditoriaBar">
+        <div class="mod-audit-item">
+          <i class="fas fa-history"></i>
+          <span>Última atualização:</span>
+          <strong id="modAuditData">—</strong>
+        </div>
+        <span class="mod-audit-sep">|</span>
+        <div class="mod-audit-item">
+          <i class="fas fa-user-edit"></i>
+          <span>Alterado por:</span>
+          <strong id="modAuditAutor">—</strong>
+        </div>
+        <span class="mod-audit-sep">|</span>
+        <div class="mod-audit-item">
+          <i class="fas fa-database"></i>
+          <span>Origem:</span>
+          <strong id="modAuditOrigem">—</strong>
+        </div>
+      </div>
+
+      <!-- Legenda -->
+      <div class="mod-legenda" id="modLegenda" style="display:none;">
+        <div class="mod-legenda-item"><div class="mod-legenda-dot" style="background:#2563eb;"></div> Habilitado</div>
+        <div class="mod-legenda-item"><div class="mod-legenda-dot" style="background:#94a3b8;"></div> Desabilitado</div>
+        <div class="mod-legenda-item"><div class="mod-legenda-dot" style="background:#e2e8f0;"></div> Perfil sem acesso</div>
+        <div class="mod-legenda-item" style="margin-left:auto;">
+          <i class="fas fa-info-circle" style="color:#93c5fd;"></i>
+          <span style="color:#64748b;">Clique nos chips <strong>Ver / Criar / Editar / Excluir / Exportar</strong> para configurar permissões granulares</span>
+        </div>
+      </div>
+
+      <!-- Busca de módulos -->
+      <input type="text" class="mod-search" id="modBusca"
+             placeholder="🔍  Buscar módulo por nome ou grupo..."
+             oninput="UsuariosPage.filtrarModulos(this.value)" style="display:none;">
+
+      <!-- Loading módulos -->
+      <div id="modLoading" style="display:none;text-align:center;padding:2rem;">
+        <i class="fas fa-spinner fa-spin fa-2x" style="color:#2563eb;"></i>
+        <p style="color:#64748b;margin-top:0.5rem;">Carregando módulos...</p>
+      </div>
+
+      <!-- Container dos grupos de módulos -->
+      <div id="modGruposContainer"></div>
+
+      <!-- Estado vazio (nenhum usuário selecionado) -->
+      <div id="modEstadoVazio" style="text-align:center;padding:3rem 1rem;">
+        <div style="font-size:3.5rem;color:#cbd5e1;margin-bottom:1rem;"><i class="fas fa-user-lock"></i></div>
+        <h3 style="color:#374151;font-size:1rem;margin-bottom:0.5rem;">Selecione um usuário</h3>
+        <p style="color:#64748b;font-size:0.9rem;max-width:380px;margin:0 auto;">
+          Escolha um usuário no seletor acima para configurar quais módulos e funcionalidades ele pode acessar.
+        </p>
+      </div>
+
+    </div><!-- /painelModulos -->
+  </div><!-- /page-card -->
+</div><!-- /page-wrapper -->

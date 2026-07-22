@@ -1,0 +1,921 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs do Sistema - Serra da Liberdade</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        /* Menu Toggle Mobile */
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Submenu */
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card p {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .stat-card i {
+            font-size: 2rem;
+            color: #3b82f6;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Filter Section */
+        .filter-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .filter-section h3 {
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-group label {
+            margin-bottom: 0.5rem;
+            color: #475569;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        /* Buttons */
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: 0.2s;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            opacity: 0.9;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+        }
+
+        /* Table Section */
+        .table-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .table-section h3 {
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: inline-block;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-primary {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .badge-secondary {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .pagination button {
+            padding: 0.5rem 1rem;
+            background: #f1f5f9;
+            color: #334155;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 0.25rem;
+        }
+
+        .pagination button:hover {
+            background: #e2e8f0;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination .active {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border-left: 4px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border-left: 4px solid #f87171;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .filter-section,
+            .table-section {
+                padding: 1rem;
+            }
+
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <nav class="sidebar" id="sidebar">
+        <h1>Serra da Liberdade</h1>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                    Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a>
+            </li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                    Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro
+                    Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                    Acesso</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                    Relatórios</a></li>
+            <li class="nav-item"><a href="configuracao.html" class="nav-link active"><i class="fas fa-cog"></i>
+                    Configuraçµes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a>
+            </li>
+            <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                    Administrativo</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1><i class="fas fa-clipboard-list"></i> Logs do Sistema - Auditoria e Monitoramento</h1>
+            <p style="color: #64748b; margin-top: 0.5rem;">Visualize e analise todos os eventos, açµes e erros
+                registrados no sistema</p>
+        </header>
+
+        <nav class="submenu">
+            <ul>
+                <li><a href="configuracao.html"><i class="fas fa-home"></i> Início</a></li>
+                <li><a href="cadastros.html"><i class="fas fa-building"></i> Unidades</a></li>
+                <li><a href="usuarios.html"><i class="fas fa-user-shield"></i> Usuários</a></li>
+                <li><a href="logs_sistema.html" class="active"><i class="fas fa-clipboard-list"></i> Logs do Sistema</a>
+                </li>
+            </ul>
+        </nav>
+
+        <div id="alertContainer"></div>
+
+        <!-- Estatísticas -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <i class="fas fa-list"></i>
+                <h3 id="statTotal">0</h3>
+                <p>Total de Logs</p>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-calendar-day"></i>
+                <h3 id="statHoje">0</h3>
+                <p>Logs Hoje</p>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-tags"></i>
+                <h3 id="statTipos">0</h3>
+                <p>Tipos Diferentes</p>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-users"></i>
+                <h3 id="statUsuarios">0</h3>
+                <p>Usuários Ativos</p>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <section class="filter-section">
+            <h3><i class="fas fa-filter"></i> Filtros de Busca</h3>
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label>Tipo de Log</label>
+                    <select id="filtroTipo">
+                        <option value="">Todos os tipos</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Usuário</label>
+                    <input type="text" id="filtroUsuario" placeholder="Nome do usuário...">
+                </div>
+                <div class="filter-group">
+                    <label>Data Início</label>
+                    <input type="date" id="filtroDataInicio">
+                </div>
+                <div class="filter-group">
+                    <label>Data Fim</label>
+                    <input type="date" id="filtroDataFim">
+                </div>
+                <div class="filter-group">
+                    <label>Busca Geral</label>
+                    <input type="text" id="filtroBusca" placeholder="Buscar em descrição, tipo ou usuário...">
+                </div>
+                <div class="filter-group">
+                    <label>Registros por Página</label>
+                    <select id="filtroLimite">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button class="btn-primary" onclick="buscarLogs()"><i class="fas fa-search"></i> Buscar</button>
+                <button class="btn-secondary" onclick="limparFiltros()"><i class="fas fa-eraser"></i> Limpar
+                    Filtros</button>
+                <button class="btn-success" onclick="exportarLogs()"><i class="fas fa-file-export"></i> Exportar
+                    CSV</button>
+                <button class="btn-warning" onclick="carregarEstatisticas()"><i class="fas fa-chart-bar"></i> Atualizar
+                    Estatísticas</button>
+                <button class="btn-danger" onclick="confirmarLimpeza()"><i class="fas fa-trash"></i> Limpar Logs
+                    Antigos</button>
+            </div>
+        </section>
+
+        <!-- Tabela de Logs -->
+        <section class="table-section">
+            <h3><i class="fas fa-list"></i> Registros de Logs <span id="totalRegistros"
+                    style="color: #64748b; font-size: 0.9rem;"></span></h3>
+
+            <div class="loading" id="loading">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p>Carregando logs...</p>
+            </div>
+
+            <div class="table-container">
+                <table id="tabelaLogs">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Data/Hora</th>
+                            <th>Tipo</th>
+                            <th>Descrição</th>
+                            <th>Usuário</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            <div class="pagination" id="paginacao"></div>
+        </section>
+    </main>
+
+    <script>
+        let paginaAtual = 1;
+        let totalPaginas = 1;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarTiposLogs();
+            carregarLogs();
+            carregarEstatisticas();
+
+            // Definir data padrão (ºltimos 30 dias)
+            const hoje = new Date();
+            const trintaDiasAtras = new Date(hoje.getTime() - (30 * 24 * 60 * 60 * 1000));
+            document.getElementById('filtroDataInicio').value = trintaDiasAtras.toISOString().split('T')[0];
+            document.getElementById('filtroDataFim').value = hoje.toISOString().split('T')[0];
+
+            // Enter para buscar
+            ['filtroUsuario', 'filtroBusca'].forEach(id => {
+                document.getElementById(id).addEventListener('keypress', function (e) {
+                    if (e.key === 'Enter') {
+                        buscarLogs();
+                    }
+                });
+            });
+        });
+
+        function carregarTiposLogs() {
+            fetch('../api/api_logs_sistema.php?action=tipos')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const select = document.getElementById('filtroTipo');
+                        select.innerHTML = '<option value="">Todos os tipos</option>';
+                        data.dados.forEach(tipo => {
+                            select.innerHTML += `<option value="${tipo.tipo}">${tipo.tipo} (${tipo.total})</option>`;
+                        });
+                        document.getElementById('statTipos').textContent = data.dados.length;
+                    }
+                })
+                .catch(err => console.error('Erro ao carregar tipos:', err));
+        }
+
+        function carregarLogs(pagina = 1) {
+            paginaAtual = pagina;
+            document.getElementById('loading').classList.add('active');
+
+            const params = new URLSearchParams();
+            params.append('pagina', pagina);
+            params.append('limite', document.getElementById('filtroLimite').value);
+
+            const tipo = document.getElementById('filtroTipo').value;
+            const usuario = document.getElementById('filtroUsuario').value;
+            const dataInicio = document.getElementById('filtroDataInicio').value;
+            const dataFim = document.getElementById('filtroDataFim').value;
+            const busca = document.getElementById('filtroBusca').value;
+
+            if (tipo) params.append('tipo', tipo);
+            if (usuario) params.append('usuario', usuario);
+            if (dataInicio) params.append('data_inicio', dataInicio);
+            if (dataFim) params.append('data_fim', dataFim);
+            if (busca) params.append('busca', busca);
+
+            fetch('../api/api_logs_sistema.php?' + params.toString())
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('loading').classList.remove('active');
+                    if (data.sucesso) {
+                        renderizarTabela(data.dados.logs);
+                        renderizarPaginacao(data.dados.paginacao);
+                        document.getElementById('statTotal').textContent = data.dados.paginacao.total_registros;
+                        document.getElementById('totalRegistros').textContent = `(${data.dados.paginacao.total_registros} registros)`;
+                    } else {
+                        mostrarAlerta('error', data.mensagem);
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('loading').classList.remove('active');
+                    mostrarAlerta('error', 'Erro ao carregar logs: ' + err.message);
+                });
+        }
+
+        function renderizarTabela(logs) {
+            const tbody = document.querySelector('#tabelaLogs tbody');
+            tbody.innerHTML = '';
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhum log encontrado</td></tr>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${log.id}</td>
+                    <td>${log.data_hora_formatada}</td>
+                    <td><span class="badge badge-${getBadgeTipo(log.tipo)}">${log.tipo}</span></td>
+                    <td style="max-width: 400px;">${log.descricao}</td>
+                    <td>${log.usuario || '<em>Sistema</em>'}</td>
+                    <td>${log.ip || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function getBadgeTipo(tipo) {
+            const badges = {
+                'ACESSO_RFID': 'success',
+                'ACESSO_NEGADO_RFID': 'danger',
+                'LOGIN_SUCESSO': 'success',
+                'LOGIN_FALHA': 'danger',
+                'MORADOR_CRIADO': 'info',
+                'MORADOR_ATUALIZADO': 'warning',
+                'MORADOR_EXCLUIDO': 'danger',
+                'VEICULO_CRIADO': 'info',
+                'VEICULO_ATUALIZADO': 'warning',
+                'VEICULO_EXCLUIDO': 'danger',
+                'USUARIO_CRIADO': 'info',
+                'USUARIO_ATUALIZADO': 'warning',
+                'USUARIO_EXCLUIDO': 'danger',
+                'REGISTRO_CRIADO': 'primary',
+                'SENHA_ATUALIZADA': 'warning',
+                'LIMPEZA_LOGS': 'secondary'
+            };
+            return badges[tipo] || 'secondary';
+        }
+
+        function renderizarPaginacao(paginacao) {
+            totalPaginas = paginacao.total_paginas;
+            const container = document.getElementById('paginacao');
+            container.innerHTML = '';
+
+            // Botão Anterior
+            const btnAnterior = document.createElement('button');
+            btnAnterior.innerHTML = '<i class="fas fa-chevron-left"></i> Anterior';
+            btnAnterior.disabled = paginaAtual === 1;
+            btnAnterior.onclick = () => carregarLogs(paginaAtual - 1);
+            container.appendChild(btnAnterior);
+
+            // Páginas
+            const maxPaginas = 5;
+            let inicio = Math.max(1, paginaAtual - Math.floor(maxPaginas / 2));
+            let fim = Math.min(totalPaginas, inicio + maxPaginas - 1);
+
+            if (fim - inicio < maxPaginas - 1) {
+                inicio = Math.max(1, fim - maxPaginas + 1);
+            }
+
+            for (let i = inicio; i <= fim; i++) {
+                const btnPagina = document.createElement('button');
+                btnPagina.textContent = i;
+                btnPagina.className = i === paginaAtual ? 'active' : '';
+                btnPagina.onclick = () => carregarLogs(i);
+                container.appendChild(btnPagina);
+            }
+
+            // Botão Próximo
+            const btnProximo = document.createElement('button');
+            btnProximo.innerHTML = 'Próximo <i class="fas fa-chevron-right"></i>';
+            btnProximo.disabled = paginaAtual === totalPaginas;
+            btnProximo.onclick = () => carregarLogs(paginaAtual + 1);
+            container.appendChild(btnProximo);
+
+            // Info de paginação
+            const info = document.createElement('span');
+            info.style.marginLeft = '1rem';
+            info.style.color = '#64748b';
+            info.textContent = `Página ${paginaAtual} de ${totalPaginas}`;
+            container.appendChild(info);
+        }
+
+        function buscarLogs() {
+            carregarLogs(1);
+        }
+
+        function limparFiltros() {
+            document.getElementById('filtroTipo').value = '';
+            document.getElementById('filtroUsuario').value = '';
+            document.getElementById('filtroDataInicio').value = '';
+            document.getElementById('filtroDataFim').value = '';
+            document.getElementById('filtroBusca').value = '';
+            document.getElementById('filtroLimite').value = '100';
+            carregarLogs(1);
+        }
+
+        function carregarEstatisticas() {
+            const dataInicio = document.getElementById('filtroDataInicio').value || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const dataFim = document.getElementById('filtroDataFim').value || new Date().toISOString().split('T')[0];
+
+            const formData = new FormData();
+            formData.append('data_inicio', dataInicio);
+            formData.append('data_fim', dataFim);
+
+            fetch('../api/api_logs_sistema.php?action=estatisticas', {
+                method: 'POST',
+                body: formData
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        document.getElementById('statTotal').textContent = data.dados.total_geral;
+                        document.getElementById('statUsuarios').textContent = data.dados.logs_por_usuario.length;
+                        mostrarAlerta('success', 'Estatísticas atualizadas com sucesso!');
+                    }
+                })
+                .catch(err => mostrarAlerta('error', 'Erro ao carregar estatísticas'));
+        }
+
+        function exportarLogs() {
+            const params = new URLSearchParams();
+            params.append('action', 'exportar');
+
+            const tipo = document.getElementById('filtroTipo').value;
+            const dataInicio = document.getElementById('filtroDataInicio').value;
+            const dataFim = document.getElementById('filtroDataFim').value;
+
+            if (tipo) params.append('tipo', tipo);
+            if (dataInicio) params.append('data_inicio', dataInicio);
+            if (dataFim) params.append('data_fim', dataFim);
+
+            fetch('../api/api_logs_sistema.php?' + params.toString())
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const logs = data.dados;
+
+                        // Criar CSV
+                        let csv = 'ID,Data/Hora,Tipo,Descrição,Usuário,IP\n';
+                        logs.forEach(log => {
+                            csv += `${log.id},"${log.data_hora}","${log.tipo}","${log.descricao.replace(/"/g, '""')}","${log.usuario || 'Sistema'}","${log.ip || '-'}"\n`;
+                        });
+
+                        // Download
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(blob);
+                        link.download = `logs_sistema_${new Date().toISOString().split('T')[0]}.csv`;
+                        link.click();
+
+                        mostrarAlerta('success', `${logs.length} logs exportados com sucesso!`);
+                    }
+                })
+                .catch(err => mostrarAlerta('error', 'Erro ao exportar logs'));
+        }
+
+        function confirmarLimpeza() {
+            const dias = prompt('Limpar logs com mais de quantos dias?\n\n(Mínimo: 30 dias)\n(Recomendado: 90 dias)', '90');
+
+            if (dias === null) return;
+
+            const diasInt = parseInt(dias);
+            if (isNaN(diasInt) || diasInt < 30) {
+                mostrarAlerta('error', 'Nºmero de dias inválido. Mínimo: 30 dias');
+                return;
+            }
+
+            if (!confirm(`Deseja realmente limpar logs com mais de ${diasInt} dias?\n\nEsta ação não pode ser desfeita!`)) {
+                return;
+            }
+
+            fetch('../api/api_logs_sistema.php?action=limpar', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dias: diasInt })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta('success', `${data.dados.registros_excluidos} logs foram removidos com sucesso!`);
+                        carregarLogs(1);
+                        carregarEstatisticas();
+                    } else {
+                        mostrarAlerta('error', data.mensagem);
+                    }
+                })
+                .catch(err => mostrarAlerta('error', 'Erro ao limpar logs'));
+        }
+
+        function mostrarAlerta(tipo, mensagem) {
+            const container = document.getElementById('alertContainer');
+            const div = document.createElement('div');
+            div.className = `alert alert-${tipo}`;
+            div.innerHTML = `<i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${mensagem}`;
+            container.appendChild(div);
+            setTimeout(() => div.remove(), 5000);
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    </script>
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

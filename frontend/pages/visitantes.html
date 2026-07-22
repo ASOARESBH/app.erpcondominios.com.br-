@@ -1,0 +1,380 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Visitantes" data-icon="fa-user-friends" style="display:none;"></div>
+<div class="page-wrapper page-visitantes">
+    <div class="page-header">
+        <h1><i class="fas fa-user-friends" style="color:#2563eb;margin-right:10px;"></i>Visitantes</h1>
+        <p>Cadastro e hist&#243;rico de visitas do condom&#237;nio</p>
+    </div>
+    <div class="vis-kpi-grid" id="visKpiGrid">
+        <div class="vis-kpi-card"><div class="vis-kpi-icon blue"><i class="fas fa-users"></i></div><div class="vis-kpi-content"><div class="vis-kpi-valor" id="kpiTotalVisitantes">-</div><div class="vis-kpi-label">Total Cadastrados</div></div></div>
+        <div class="vis-kpi-card"><div class="vis-kpi-icon green"><i class="fas fa-user-check"></i></div><div class="vis-kpi-content"><div class="vis-kpi-valor" id="kpiAtivos">-</div><div class="vis-kpi-label">Ativos</div></div></div>
+        <div class="vis-kpi-card"><div class="vis-kpi-icon amber"><i class="fas fa-camera"></i></div><div class="vis-kpi-content"><div class="vis-kpi-valor" id="kpiComFoto">-</div><div class="vis-kpi-label">Com Foto</div></div></div>
+        <div class="vis-kpi-card"><div class="vis-kpi-icon purple"><i class="fas fa-file-alt"></i></div><div class="vis-kpi-content"><div class="vis-kpi-valor" id="kpiComDoc">-</div><div class="vis-kpi-label">Com Documento</div></div></div>
+    </div>
+    <div class="vis-tabs">
+        <button class="vis-tab-btn active" data-tab="cadastro"><i class="fas fa-user-plus"></i> Cadastro</button>
+        <button class="vis-tab-btn" data-tab="listagem"><i class="fas fa-list"></i> Listagem</button>
+        <button class="vis-tab-btn" data-tab="relatorios"><i class="fas fa-chart-bar"></i> Relat&#243;rios</button>
+    </div>
+    <div id="vis-tab-cadastro" class="vis-tab-content active">
+        <div class="page-card">
+            <h2 id="tituloFormVisitante"><i class="fas fa-user-plus"></i> Cadastro de Visitante</h2>
+            <div id="alertBoxVisitante"></div>
+            <form id="visitanteForm" novalidate>
+            <input type="hidden" id="visitanteId" value="">
+
+            <!-- BLOCO 1: Identificação -->
+            <div class="form-section-title">Identificação</div>
+            <div class="form-grid form-grid-3">
+                <div class="form-group">
+                    <label for="nomeVisitante">Nome Completo *</label>
+                    <input type="text" id="nomeVisitante" required placeholder="Ex: Maria da Silva"
+                           autocomplete="off" autocapitalize="words">
+                </div>
+
+                <div class="form-group">
+                    <label for="tipoDocumento">Tipo de Documento *</label>
+                    <select id="tipoDocumento" required>
+                        <option value="CPF">CPF</option>
+                        <option value="RG">RG</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="documento">Número do Documento *</label>
+                    <input type="text" id="documento" required placeholder="000.000.000-00"
+                           autocomplete="off" inputmode="numeric">
+                </div>
+            </div>
+
+            <!-- BLOCO 2: Contato -->
+            <div class="form-section-title">Contato</div>
+            <div class="form-grid form-grid-3">
+                <div class="form-group">
+                    <label for="telefoneContato">Telefone de Contato *</label>
+                    <input type="tel" id="telefoneContato" required placeholder="(00) 00000-0000"
+                           inputmode="numeric" maxlength="15">
+                </div>
+                <div class="form-group">
+                    <label for="celularVisitante">Celular</label>
+                    <input type="tel" id="celularVisitante" placeholder="(00) 00000-0000"
+                           inputmode="numeric" maxlength="15">
+                </div>
+                <div class="form-group">
+                    <label for="emailVisitante">E-mail</label>
+                    <input type="email" id="emailVisitante" placeholder="email@exemplo.com"
+                           autocapitalize="none" autocorrect="off">
+                </div>
+            </div>
+
+            <!-- Observação -->
+            <div class="form-grid form-grid-3">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="observacaoVisitante">Observação</label>
+                    <input type="text" id="observacaoVisitante" placeholder="Informações adicionais">
+                </div>
+            </div>
+
+            <!-- BLOCO 4: Foto e Documento -->
+            <div class="form-section-title">Foto e Documento</div>
+            <div class="form-grid form-grid-2">
+                <!-- Foto do visitante -->
+                <div class="form-group upload-group">
+                    <label>Foto do Visitante</label>
+                    <div class="upload-preview-box" id="fotoPreviewBox">
+                        <img id="fotoPreview" src="" alt="Foto do visitante" style="display:none; max-width:120px; max-height:120px; border-radius:8px; object-fit:cover;">
+                        <div id="fotoPlaceholder" class="upload-placeholder">
+                            <i class="fas fa-camera fa-2x"></i>
+                            <span>Clique para adicionar foto</span>
+                        </div>
+                    </div>
+                    <input type="file" id="fotoInput" accept="image/jpeg,image/png,image/webp" style="display:none">
+                    <div class="upload-actions">
+                        <button type="button" class="btn-upload" id="btnSelecionarFoto" title="Capturar foto pela webcam">
+                            <i class="fas fa-camera"></i> Capturar Foto
+                        </button>
+                        <button type="button" class="btn-upload btn-upload-file" id="btnEscolherArquivoFoto" title="Escolher arquivo do computador">
+                            <i class="fas fa-folder-open"></i> Escolher Arquivo
+                        </button>
+                        <button type="button" class="btn-upload-remove" id="btnRemoverFoto" style="display:none">
+                            <i class="fas fa-times"></i> Remover
+                        </button>
+                    </div>
+                    <small class="upload-hint">📷 Webcam ou arquivo JPG/PNG/WEBP — máx. 500KB comprimido</small>
+                </div>
+
+                <!-- Documento digitalizado -->
+                <div class="form-group upload-group">
+                    <label>Documento Digitalizado</label>
+                    <div class="upload-preview-box" id="docPreviewBox">
+                        <div id="docPreview" style="display:none; padding:10px; text-align:center;">
+                            <i class="fas fa-file-alt fa-3x" style="color:#4a90d9;"></i>
+                            <p id="docNomeArquivo" style="font-size:12px; margin-top:5px; word-break:break-all;"></p>
+                        </div>
+                        <div id="docPlaceholder" class="upload-placeholder">
+                            <i class="fas fa-file-upload fa-2x"></i>
+                            <span>Clique para importar documento</span>
+                        </div>
+                    </div>
+                    <input type="file" id="docInput" accept="image/jpeg,image/png,image/webp,application/pdf" style="display:none">
+                    <div class="upload-actions">
+                        <button type="button" class="btn-upload" id="btnSelecionarDoc">
+                            <i class="fas fa-file-upload"></i> Importar Documento
+                        </button>
+                        <button type="button" class="btn-upload-remove" id="btnRemoverDoc" style="display:none">
+                            <i class="fas fa-times"></i> Remover
+                        </button>
+                    </div>
+                    <small class="upload-hint">JPG, PNG, WEBP ou PDF — máx. 5MB</small>
+                </div>
+            </div>
+
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary-modern" id="btnSalvarVisitante">
+                    <i class="fas fa-save"></i> Salvar Visitante
+                </button>
+                <button type="button" class="btn-secondary-modern" id="btnCancelarEdicaoVisitante" style="display:none;">
+                    <i class="fas fa-times"></i> Cancelar Edição
+                </button>
+            </div>
+        </form>
+        </div>
+    </div>
+    <div id="vis-tab-listagem" class="vis-tab-content">
+        <div class="page-card">
+            <h2><i class="fas fa-list"></i> Visitantes Cadastrados</h2>
+            <div class="search-box">
+                <input type="text" id="searchVisitante" placeholder="Pesquisar por nome, documento ou telefone...">
+                <button class="btn-primary-modern" type="button" id="btnBuscarVisitante"><i class="fas fa-search"></i> Buscar</button>
+            </div>
+            <div id="loadingVisitantes" class="loading" style="display:none;"><i class="fas fa-spinner fa-spin"></i><p>Carregando dados...</p></div>
+            <div class="table-container"><table id="tabelaVisitantes">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Foto</th>
+                        <th>Nome</th>
+                        <th>Tipo Doc.</th>
+                        <th>Documento</th>
+                        <th>Telefone</th>
+                        <th>Doc. Digitalizado</th>
+                        <th>Ativo</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table></div>
+        </div>
+    </div>
+    <div id="vis-tab-relatorios" class="vis-tab-content">
+        <div class="vis-rel-kpis" id="relKpisVisitantes" style="display:none;">
+            <div class="vis-rel-kpi"><div class="vis-rel-kpi-valor" id="relKpiTotal">0</div><div class="vis-rel-kpi-label">Total Filtrado</div></div>
+            <div class="vis-rel-kpi green"><div class="vis-rel-kpi-valor" id="relKpiAtivos">0</div><div class="vis-rel-kpi-label">Ativos</div></div>
+            <div class="vis-rel-kpi amber"><div class="vis-rel-kpi-valor" id="relKpiInativos">0</div><div class="vis-rel-kpi-label">Inativos</div></div>
+            <div class="vis-rel-kpi blue"><div class="vis-rel-kpi-valor" id="relKpiComFoto">0</div><div class="vis-rel-kpi-label">Com Foto</div></div>
+            <div class="vis-rel-kpi purple"><div class="vis-rel-kpi-valor" id="relKpiComDoc">0</div><div class="vis-rel-kpi-label">Com Documento</div></div>
+        </div>
+        <div class="page-card" id="cardRelatoriosVisitantes">
+            <h2><i class="fas fa-chart-bar"></i> Relat&#243;rios de Visitantes</h2>
+            <div class="rel-filtros-grid">
+                <div class="form-group"><label for="relNome">Nome do Visitante</label><input type="text" id="relNome" placeholder="Filtrar por nome..."></div>
+                <div class="form-group"><label for="relCpf">CPF / RG</label><input type="text" id="relCpf" placeholder="000.000.000-00"></div>
+                <div class="form-group"><label for="relEmail">E-mail</label><input type="email" id="relEmail" placeholder="email@exemplo.com"></div>
+                <div class="form-group"><label for="relTemFoto">Possui Foto</label><select id="relTemFoto"><option value="">Todos</option><option value="sim">Com foto</option><option value="nao">Sem foto</option></select></div>
+                <div class="form-group"><label for="relTemDoc">Possui Documento</label><select id="relTemDoc"><option value="">Todos</option><option value="sim">Com documento</option><option value="nao">Sem documento</option></select></div>
+                <div class="form-group"><label for="relAtivo">Status</label><select id="relAtivo"><option value="">Todos</option><option value="1">Somente ativos</option><option value="0">Somente inativos</option></select></div>
+            </div>
+            <div class="rel-acoes">
+                <button class="btn-primary-modern" type="button" onclick="window.VisitantesPage?.relAtualizar()"><i class="fas fa-sync-alt"></i> Atualizar</button>
+                <button class="btn-rel-csv" type="button" onclick="window.VisitantesPage?.relExportarCSV()"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+                <button class="btn-rel-pdf" type="button" onclick="window.VisitantesPage?.relGerarPDF()"><i class="fas fa-file-pdf"></i> Gerar PDF</button>
+            </div>
+            <div id="relPreviewVisitantes" style="margin-top:16px;"></div>
+        </div>
+    </div>
+</div>
+<style>
+/* ===== ESTILOS DO MÓDULO VISITANTES v2 ===== */
+.form-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #4a90d9;
+    border-bottom: 2px solid #e8f0fe;
+    padding-bottom: 6px;
+    margin: 18px 0 12px;
+}
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+@media (max-width: 768px) {
+    .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
+}
+.upload-group { display: flex; flex-direction: column; gap: 8px; }
+.upload-preview-box {
+    border: 2px dashed #c5d5e8;
+    border-radius: 10px;
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8faff;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    padding: 10px;
+}
+.upload-preview-box:hover { border-color: #4a90d9; }
+.upload-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: #8aa3c0;
+    font-size: 13px;
+}
+.upload-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-upload {
+    background: #4a90d9;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-upload:hover { background: #357abd; }
+.btn-upload-file { background: #16a34a !important; }
+.btn-upload-file:hover { background: #15803d !important; }
+.btn-upload-remove {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.upload-hint { font-size: 11px; color: #8aa3c0; }
+.foto-thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e0e8f5;
+}
+.doc-link { color: #4a90d9; font-size: 12px; }
+
+/* ===== ESTILOS DA SECAO DE RELATORIOS ===== */
+.rel-filtros-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+}
+@media (max-width: 768px) {
+    .rel-filtros-grid { grid-template-columns: 1fr; }
+}
+.rel-acoes {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 14px 0 4px;
+    border-top: 1px solid #e2e8f0;
+}
+.btn-rel-csv {
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 9px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: background .15s;
+}
+.btn-rel-csv:hover { background: #15803d; }
+.btn-rel-pdf {
+    background: linear-gradient(135deg, #1e3a8a, #2563eb);
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 9px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+    transition: transform .15s;
+}
+.btn-rel-pdf:hover { transform: translateY(-1px); }
+#relPreviewVisitantes table {
+    width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px;
+}
+#relPreviewVisitantes thead tr {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb); color: #fff;
+}
+#relPreviewVisitantes thead th {
+    padding: 8px 10px; text-align: left; font-size: 10px;
+    text-transform: uppercase; letter-spacing: .5px;
+}
+#relPreviewVisitantes tbody tr { border-bottom: 1px solid #f1f5f9; }
+#relPreviewVisitantes tbody tr:nth-child(even) { background: #f8fafc; }
+#relPreviewVisitantes tbody td { padding: 7px 10px; vertical-align: middle; }
+.rel-kpis {
+    display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.rel-kpi {
+    background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 8px; padding: 10px 18px; text-align: center;
+    min-width: 100px;
+}
+.rel-kpi-valor { font-size: 20px; font-weight: 800; color: #1e3a8a; }
+.rel-kpi-label { font-size: 9px; text-transform: uppercase; color: #64748b; margin-top: 2px; }
+.rel-badge { display:inline-block; padding:2px 7px; border-radius:20px; font-size:9px; font-weight:700; }
+.rel-badge-sim  { background:#dbeafe; color:#1d4ed8; }
+.rel-badge-nao  { background:#f1f5f9; color:#64748b; }
+.rel-badge-ativo   { background:#dcfce7; color:#166534; }
+.rel-badge-inativo { background:#fee2e2; color:#991b1b; }
+.page-visitantes .vis-tabs{display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid #e2e8f0;flex-wrap:wrap}
+.page-visitantes .vis-tab-btn{display:inline-flex;align-items:center;gap:7px;padding:11px 22px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;color:#64748b;font-weight:600;font-size:.9rem;font-family:inherit;transition:all .2s;white-space:nowrap}
+.page-visitantes .vis-tab-btn:hover{color:#2563eb;background:rgba(37,99,235,.04)}
+.page-visitantes .vis-tab-btn.active{color:#2563eb;border-bottom-color:#2563eb}
+.page-visitantes .vis-tab-content{display:none}
+.page-visitantes .vis-tab-content.active{display:block;animation:visFadeIn .25s ease}
+@keyframes visFadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.page-visitantes .vis-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem}
+@media(max-width:900px){.page-visitantes .vis-kpi-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.page-visitantes .vis-kpi-grid{grid-template-columns:1fr}}
+.page-visitantes .vis-kpi-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:16px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.page-visitantes .vis-kpi-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.page-visitantes .vis-kpi-icon.blue{background:#eff6ff;color:#2563eb}
+.page-visitantes .vis-kpi-icon.green{background:#f0fdf4;color:#16a34a}
+.page-visitantes .vis-kpi-icon.amber{background:#fffbeb;color:#d97706}
+.page-visitantes .vis-kpi-icon.purple{background:#faf5ff;color:#7c3aed}
+.page-visitantes .vis-kpi-valor{font-size:24px;font-weight:800;color:#1e293b;line-height:1}
+.page-visitantes .vis-kpi-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
+.page-visitantes .vis-rel-kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1rem}
+.page-visitantes .vis-rel-kpi{background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 20px;text-align:center;min-width:110px;flex:1}
+.page-visitantes .vis-rel-kpi.green{background:#f0fdf4;border-color:#bbf7d0}
+.page-visitantes .vis-rel-kpi.amber{background:#fffbeb;border-color:#fde68a}
+.page-visitantes .vis-rel-kpi.purple{background:#faf5ff;border-color:#e9d5ff}
+.page-visitantes .vis-rel-kpi-valor{font-size:22px;font-weight:800;color:#1e3a8a}
+.page-visitantes .vis-rel-kpi.green .vis-rel-kpi-valor{color:#166534}
+.page-visitantes .vis-rel-kpi.amber .vis-rel-kpi-valor{color:#92400e}
+.page-visitantes .vis-rel-kpi.purple .vis-rel-kpi-valor{color:#5b21b6}
+.page-visitantes .vis-rel-kpi-label{font-size:10px;text-transform:uppercase;color:#64748b;margin-top:3px;letter-spacing:.4px}
+.rel-acoes{display:flex;gap:10px;flex-wrap:wrap;padding:14px 0 4px;border-top:1px solid #e2e8f0}
+.btn-rel-csv{background:#16a34a;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .15s}
+.btn-rel-csv:hover{background:#15803d}
+.btn-rel-pdf{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 2px 8px rgba(37,99,235,.3);transition:transform .15s}
+.btn-rel-pdf:hover{transform:translateY(-1px)}
+</style>

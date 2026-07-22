@@ -1,0 +1,29 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Contratos" data-icon="fa-file-contract" style="display:none;"></div>
+
+<div class="page-wrapper page-contratos">
+
+  <!-- Breadcrumb -->
+  <nav class="stub-breadcrumb">
+    <span data-page="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
+    <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+    <span>Contratos</span>
+  </nav>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1><i class="fas fa-file-contract"></i> Contratos</h1>
+    <p>Controle de contratos com fornecedores, vigências e renovações</p>
+  </div>
+
+  <!-- Em desenvolvimento -->
+  <div class="page-card stub-card">
+    <i class="fas fa-file-contract stub-icon"></i>
+    <h3>Módulo em Desenvolvimento</h3>
+    <p>O módulo de Contratos estará disponível em breve.</p>
+    <button class="stub-btn-back" data-page="administrativa">
+      <i class="fas fa-arrow-left"></i> Voltar ao Administrativo
+    </button>
+  </div>
+
+</div>

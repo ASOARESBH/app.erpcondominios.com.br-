@@ -1,0 +1,507 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notificaçµes - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; display: flex; }
+        .sidebar { position: fixed; top: 0; left: 0; width: 260px; height: 100vh; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 2rem 0; overflow-y: auto; }
+        .sidebar h1 { color: #fff; font-size: 1.3rem; text-align: center; margin-bottom: 2rem; }
+        .nav-menu { list-style: none; padding: 1rem; }
+        .nav-item { margin-bottom: 0.5rem; }
+        .nav-link { display: flex; align-items: center; padding: 0.75rem 1rem; color: #cbd5e1; text-decoration: none; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .nav-link i { margin-right: 0.75rem; width: 20px; }
+        .main-content { margin-left: 260px; padding: 2rem; width: 100%; }
+        .header { background: #fff; padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .submenu { background: #fff; padding: 1rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .submenu ul { list-style: none; display: flex; gap: 1rem; flex-wrap: wrap; }
+        .submenu a { display: inline-block; padding: 0.75rem 1.5rem; background: #f1f5f9; color: #334155; text-decoration: none; border-radius: 8px; transition: 0.2s; }
+        .submenu a:hover, .submenu a.active { background: #10b981; color: #fff; }
+        .form-section, .table-section { background: #fff; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        input, select, textarea { width: 100%; padding: 0.6rem; margin-bottom: 0.5rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        textarea { min-height: 100px; resize: vertical; }
+        button { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 0.6rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; margin-right: 0.5rem; }
+        button:hover { opacity: 0.9; transform: scale(1.02); }
+        .btn-edit { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .btn-delete { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .btn-cancel { background: linear-gradient(135deg, #6b7280, #4b5563); }
+        .btn-view { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #f1f5f9; text-align: left; }
+        th { background: #f8fafc; font-weight: 600; }
+        .actions button { margin-right: 0.5rem; padding: 0.4rem 0.8rem; font-size: 0.9rem; }
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-weight: 500; }
+        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #22c55e; }
+        .alert-error { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
+        .loading { display: none; text-align: center; padding: 2rem; }
+        .loading.active { display: block; }
+        .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+        .file-upload { border: 2px dashed #cbd5e1; padding: 2rem; text-align: center; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .file-upload:hover { border-color: #3b82f6; background: #f8fafc; }
+        .file-upload input[type="file"] { display: none; }
+        .file-preview { margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px; display: none; }
+        .file-preview.active { display: block; }
+        
+        /* Modal */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .modal-content { background: #fff; padding: 2rem; border-radius: 12px; max-width: 90%; max-height: 90vh; overflow-y: auto; position: relative; }
+        .modal-close { position: absolute; top: 1rem; right: 1rem; font-size: 1.5rem; cursor: pointer; color: #64748b; }
+        .modal-close:hover { color: #1e293b; }
+        
+        /* Menu Toggle Mobile */
+        .menu-toggle { display: none; position: fixed; top: 1rem; left: 1rem; z-index: 1001; background: #1e293b; color: #fff; border: none; padding: 0.75rem; border-radius: 8px; cursor: pointer; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.3s; }
+            .sidebar.active { transform: translateX(0); }
+            .menu-toggle { display: block; }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .header { padding: 1rem; }
+            .form-section, .table-section { padding: 1rem; }
+            .submenu ul { flex-direction: column; }
+            .submenu a { display: block; text-align: center; }
+            th, td { padding: 0.5rem; font-size: 0.85rem; }
+        }
+        
+        @media (max-width: 480px) {
+            .form-grid { grid-template-columns: 1fr; }
+            button { width: 100%; margin-bottom: 0.5rem; margin-right: 0; }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+    <nav class="sidebar" id="sidebar">
+        <h1>Serra da Liberdade</h1>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i> Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de Acesso</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i> Relatórios</a></li>
+            <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i> Configuraçµes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a></li>
+            <li class="nav-item"><a href="administrativa.html" class="nav-link active"><i class="fas fa-briefcase"></i> Administrativo</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1><i class="fas fa-bell"></i> Notificaçµes para Moradores</h1>
+        </header>
+
+        <nav class="submenu">
+            <ul>
+                <li><a href="administrativa.html"><i class="fas fa-home"></i> Início</a></li>
+                <li><a href="protocolo.html"><i class="fas fa-box"></i> Protocolos</a></li>
+                <li><a href="inventario.html"><i class="fas fa-boxes"></i> Inventário</a></li>
+                <li><a href="relatorios_inventario.html"><i class="fas fa-chart-bar"></i> Relatórios</a></li>
+                <li><a href="estoque.html"><i class="fas fa-warehouse"></i> Estoque</a></li>
+                <li><a href="notificacoes.html" class="active"><i class="fas fa-bell"></i> Notificaçµes</a></li>
+            </ul>
+        </nav>
+
+        <div id="alertBox"></div>
+
+        <section class="form-section">
+            <h2 id="formTitle">Nova Notificação</h2>
+            <form id="notificacaoForm" enctype="multipart/form-data">
+                <input type="hidden" id="notificacaoId">
+                <div class="form-grid">
+                    <div>
+                        <label>Data e Hora *</label>
+                        <input type="datetime-local" id="dataHora" required>
+                    </div>
+                    <div>
+                        <label>Assunto *</label>
+                        <input type="text" id="assunto" required>
+                    </div>
+                </div>
+                <div>
+                    <label>Resumo / Mensagem *</label>
+                    <textarea id="resumo" required placeholder="Digite a mensagem que será enviada para todos os moradores..."></textarea>
+                </div>
+                <div>
+                    <label>Anexo (PDF ou Imagem)</label>
+                    <div class="file-upload" onclick="document.getElementById('anexo').click()">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; color: #3b82f6; margin-bottom: 0.5rem;"></i>
+                        <p>Clique para selecionar um arquivo</p>
+                        <small>Formatos aceitos: PDF, JPG, PNG (máx. 10MB)</small>
+                        <input type="file" id="anexo" accept=".pdf,.jpg,.jpeg,.png" onchange="previewFile()">
+                    </div>
+                    <div class="file-preview" id="filePreview">
+                        <p><strong>Arquivo selecionado:</strong> <span id="fileName"></span></p>
+                        <button type="button" class="btn-cancel" onclick="removeFile()">Remover Arquivo</button>
+                    </div>
+                </div>
+                <button type="submit" id="btnSalvar"><i class="fas fa-save"></i> Salvar Notificação</button>
+                <button type="button" class="btn-cancel" id="btnCancelar" style="display:none;" onclick="cancelarEdicao()"><i class="fas fa-times"></i> Cancelar</button>
+            </form>
+        </section>
+
+        <section class="table-section">
+            <h2>Lista de Notificaçµes</h2>
+            <div class="loading" id="loading">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p>Carregando...</p>
+            </div>
+            <table id="notificacoesTable">
+                <thead>
+                    <tr>
+                        <th>Nº</th>
+                        <th>Data/Hora</th>
+                        <th>Assunto</th>
+                        <th>Anexo</th>
+                        <th>Visualizaçµes</th>
+                        <th>Downloads</th>
+                        <th>Açµes</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+    </main>
+
+    <!-- Modal de Relatório -->
+    <div class="modal" id="modalRelatorio">
+        <div class="modal-content" style="max-width: 1000px;">
+            <span class="modal-close" onclick="fecharModal()">&times;</span>
+            <h2 id="modalTitulo">Relatório da Notificação</h2>
+            <div id="modalConteudo"></div>
+        </div>
+    </div>
+
+    <script>
+        let editandoId = null;
+
+        // Carregar notificaçµes ao iniciar
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarNotificacoes();
+            setDataHoraAtual();
+        });
+
+        // Definir data/hora atual
+        function setDataHoraAtual() {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('dataHora').value = now.toISOString().slice(0, 16);
+        }
+
+        // Preview do arquivo
+        function previewFile() {
+            const input = document.getElementById('anexo');
+            const preview = document.getElementById('filePreview');
+            const fileName = document.getElementById('fileName');
+            
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const maxSize = 10 * 1024 * 1024; // 10MB
+                
+                if (file.size > maxSize) {
+                    mostrarAlerta('Arquivo muito grande! Tamanho máximo: 10MB', 'error');
+                    input.value = '';
+                    return;
+                }
+                
+                fileName.textContent = file.name;
+                preview.classList.add('active');
+            }
+        }
+
+        // Remover arquivo
+        function removeFile() {
+            document.getElementById('anexo').value = '';
+            document.getElementById('filePreview').classList.remove('active');
+        }
+
+        // Toggle menu mobile
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        // Carregar notificaçµes
+        function carregarNotificacoes() {
+            document.getElementById('loading').classList.add('active');
+            
+            fetch('../api/api_notificacoes.php')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loading').classList.remove('active');
+                    
+                    if (data.sucesso) {
+                        const tbody = document.querySelector('#notificacoesTable tbody');
+                        tbody.innerHTML = '';
+                        
+                        if (data.dados.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Nenhuma notificação cadastrada</td></tr>';
+                        } else {
+                            data.dados.forEach(notif => {
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `
+                                    <td><strong>#${notif.numero_sequencial}</strong></td>
+                                    <td>${notif.data_hora_formatada}</td>
+                                    <td>${notif.assunto}</td>
+                                    <td>${notif.anexo_nome ? '<span class="badge badge-success"><i class="fas fa-paperclip"></i> Sim</span>' : '-'}</td>
+                                    <td><span class="badge badge-info">${notif.total_visualizacoes || 0}</span></td>
+                                    <td><span class="badge badge-info">${notif.total_downloads || 0}</span></td>
+                                    <td class="actions">
+                                        <button class="btn-view" onclick="verRelatorio(${notif.id})">
+                                            <i class="fas fa-chart-bar"></i> Relatório
+                                        </button>
+                                        <button class="btn-edit" onclick="editarNotificacao(${notif.id})">
+                                            <i class="fas fa-edit"></i> Editar
+                                        </button>
+                                        <button class="btn-delete" onclick="excluirNotificacao(${notif.id})">
+                                            <i class="fas fa-trash"></i> Excluir
+                                        </button>
+                                    </td>
+                                `;
+                                tbody.appendChild(tr);
+                            });
+                        }
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    document.getElementById('loading').classList.remove('active');
+                    mostrarAlerta('Erro ao carregar notificaçµes', 'error');
+                });
+        }
+
+        // Salvar notificação
+        document.getElementById('notificacaoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const btnSalvar = document.getElementById('btnSalvar');
+            btnSalvar.disabled = true;
+            btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            
+            const formData = new FormData();
+            formData.append('id', document.getElementById('notificacaoId').value);
+            formData.append('data_hora', document.getElementById('dataHora').value);
+            formData.append('assunto', document.getElementById('assunto').value);
+            formData.append('resumo', document.getElementById('resumo').value);
+            
+            const anexo = document.getElementById('anexo').files[0];
+            if (anexo) {
+                formData.append('anexo', anexo);
+            }
+            
+            fetch('../api/api_notificacoes.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'success');
+                    document.getElementById('notificacaoForm').reset();
+                    removeFile();
+                    cancelarEdicao();
+                    carregarNotificacoes();
+                    setDataHoraAtual();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Notificação';
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao salvar notificação', 'error');
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Notificação';
+            });
+        });
+
+        // Editar notificação
+        function editarNotificacao(id) {
+            fetch(`../api/api_notificacoes.php?id=${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso && data.dados) {
+                        const notif = data.dados;
+                        editandoId = id;
+                        document.getElementById('notificacaoId').value = id;
+                        document.getElementById('dataHora').value = notif.data_hora_input;
+                        document.getElementById('assunto').value = notif.assunto;
+                        document.getElementById('resumo').value = notif.resumo;
+                        document.getElementById('formTitle').textContent = 'Editar Notificação';
+                        document.getElementById('btnCancelar').style.display = 'inline-block';
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro ao carregar notificação', 'error');
+                });
+        }
+
+        // Cancelar edição
+        function cancelarEdicao() {
+            editandoId = null;
+            document.getElementById('notificacaoForm').reset();
+            document.getElementById('notificacaoId').value = '';
+            document.getElementById('formTitle').textContent = 'Nova Notificação';
+            document.getElementById('btnCancelar').style.display = 'none';
+            removeFile();
+            setDataHoraAtual();
+        }
+
+        // Excluir notificação
+        function excluirNotificacao(id) {
+            if (!confirm('Deseja realmente excluir esta notificação?')) {
+                return;
+            }
+            
+            fetch('../api/api_notificacoes.php', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'success');
+                    carregarNotificacoes();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao excluir notificação', 'error');
+            });
+        }
+
+        // Ver relatório
+        function verRelatorio(id) {
+            fetch(`../api/api_notificacoes.php?relatorio=${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const notif = data.dados.notificacao;
+                        const moradores = data.dados.moradores;
+                        
+                        let html = `
+                            <div style="margin-bottom: 2rem;">
+                                <h3>Notificação #${notif.numero_sequencial}</h3>
+                                <p><strong>Assunto:</strong> ${notif.assunto}</p>
+                                <p><strong>Data/Hora:</strong> ${notif.data_hora_formatada}</p>
+                                <p><strong>Resumo:</strong> ${notif.resumo}</p>
+                                ${notif.anexo_nome ? `<p><strong>Anexo:</strong> ${notif.anexo_nome}</p>` : ''}
+                            </div>
+                            
+                            <h3>Estatísticas</h3>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                                <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 2rem; color: #3b82f6; font-weight: bold;">${moradores.length}</div>
+                                    <div style="color: #64748b;">Total de Moradores</div>
+                                </div>
+                                <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 2rem; color: #10b981; font-weight: bold;">${moradores.filter(m => m.visualizou).length}</div>
+                                    <div style="color: #64748b;">Visualizaram</div>
+                                </div>
+                                <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 2rem; color: #f59e0b; font-weight: bold;">${moradores.filter(m => m.baixou).length}</div>
+                                    <div style="color: #64748b;">Baixaram Anexo</div>
+                                </div>
+                            </div>
+                            
+                            <h3>Detalhamento por Morador</h3>
+                            <table style="width: 100%; margin-top: 1rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Morador</th>
+                                        <th>Unidade</th>
+                                        <th>Visualizou</th>
+                                        <th>Baixou</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+                        
+                        moradores.forEach(morador => {
+                            html += `
+                                <tr>
+                                    <td>${morador.nome}</td>
+                                    <td>${morador.unidade}</td>
+                                    <td>${morador.visualizou ? '<span class="badge badge-success">Sim</span>' : '<span class="badge" style="background: #f1f5f9; color: #64748b;">Não</span>'}</td>
+                                    <td>${morador.baixou ? '<span class="badge badge-success">Sim</span>' : '<span class="badge" style="background: #f1f5f9; color: #64748b;">Não</span>'}</td>
+                                </tr>
+                            `;
+                        });
+                        
+                        html += '</tbody></table>';
+                        
+                        document.getElementById('modalConteudo').innerHTML = html;
+                        document.getElementById('modalRelatorio').classList.add('active');
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro ao carregar relatório', 'error');
+                });
+        }
+
+        // Fechar modal
+        function fecharModal() {
+            document.getElementById('modalRelatorio').classList.remove('active');
+        }
+
+        // Mostrar alerta
+        function mostrarAlerta(mensagem, tipo) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.innerHTML = `<div class="alert alert-${tipo}"><i class="fas fa-${tipo === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${mensagem}</div>`;
+            
+            setTimeout(() => {
+                alertBox.innerHTML = '';
+            }, 5000);
+        }
+
+        // Fechar modal ao clicar fora
+        window.onclick = function(event) {
+            const modal = document.getElementById('modalRelatorio');
+            if (event.target == modal) {
+                fecharModal();
+            }
+        }
+    </script>
+    
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

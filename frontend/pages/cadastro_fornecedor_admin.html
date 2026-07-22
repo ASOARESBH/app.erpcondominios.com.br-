@@ -1,0 +1,231 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Cadastro de Fornecedor" data-icon="fa-store" style="display:none;"></div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-cfa">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-store" style="color:#2563eb;margin-right:10px;"></i>Cadastro de Fornecedor</h1>
+            <p>Gerenciamento completo de fornecedores do Marketplace — cadastro, edição, aprovação e status</p>
+        </div>
+    </div>
+
+    <!-- Submenu de navegação -->
+    <div class="tabs" id="cfa-tabs">
+        <button class="tab-button" data-page="administrativa"><i class="fas fa-home"></i> Início</button>
+        <button class="tab-button" data-page="marketplace"><i class="fas fa-store"></i> Marketplace</button>
+        <button class="tab-button active" data-page="cadastro_fornecedor_admin"><i class="fas fa-user-plus"></i> Fornecedores</button>
+    </div>
+
+    <!-- Toast de notificação -->
+    <div id="cfa-toast" style="
+        position:fixed;top:20px;right:20px;z-index:9999;
+        display:none;min-width:280px;max-width:400px;
+        padding:14px 18px;border-radius:8px;
+        font-size:14px;font-weight:500;
+        box-shadow:0 4px 20px rgba(0,0,0,0.15);
+        animation:cfa-fadeIn 0.3s ease;
+    "></div>
+
+    <!-- KPI Cards -->
+    <div class="cfa-kpi-grid" id="cfa-kpi-grid">
+        <div class="cfa-kpi-card cfa-kpi-blue">
+            <div class="cfa-kpi-label">Total de Fornecedores</div>
+            <div class="cfa-kpi-value" id="cfa-kpi-total">—</div>
+        </div>
+        <div class="cfa-kpi-card cfa-kpi-green">
+            <div class="cfa-kpi-label">Ativos</div>
+            <div class="cfa-kpi-value" id="cfa-kpi-ativos">—</div>
+        </div>
+        <div class="cfa-kpi-card cfa-kpi-red">
+            <div class="cfa-kpi-label">Inativos</div>
+            <div class="cfa-kpi-value" id="cfa-kpi-inativos">—</div>
+        </div>
+        <div class="cfa-kpi-card cfa-kpi-yellow">
+            <div class="cfa-kpi-label">Aguardando Aprovação</div>
+            <div class="cfa-kpi-value" id="cfa-kpi-pendentes">—</div>
+        </div>
+    </div>
+
+    <!-- Barra de alerta para pendentes -->
+    <div id="cfa-alert-bar" style="display:none;
+        background:#fef3c7;border-left:4px solid #f59e0b;
+        padding:12px 18px;border-radius:6px;margin-bottom:16px;
+        font-size:14px;color:#92400e;
+    ">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="cfa-alert-msg"></span>
+    </div>
+
+    <!-- Toolbar: filtros + botão novo -->
+    <div class="cfa-toolbar">
+        <div class="cfa-filters">
+            <input type="text" id="cfa-busca" class="form-control-sm" placeholder="Buscar por nome, CPF/CNPJ ou e-mail..." style="min-width:260px;">
+            <select id="cfa-filtro-status" class="form-control-sm">
+                <option value="">Status: Todos</option>
+                <option value="1">Ativos</option>
+                <option value="0">Inativos</option>
+            </select>
+            <select id="cfa-filtro-aprovacao" class="form-control-sm">
+                <option value="">Aprovação: Todos</option>
+                <option value="1">Aprovados</option>
+                <option value="0">Pendentes</option>
+            </select>
+            <button class="btn-sm btn-outline" onclick="window.CadastroFornecedorAdmin.filtrar()">
+                <i class="fas fa-search"></i> Filtrar
+            </button>
+            <button class="btn-sm btn-outline-gray" onclick="window.CadastroFornecedorAdmin.limparFiltros()">
+                <i class="fas fa-times"></i> Limpar
+            </button>
+        </div>
+        <button class="btn-sm btn-primary-cfa" onclick="window.CadastroFornecedorAdmin.abrirModal()">
+            <i class="fas fa-plus"></i> Novo Fornecedor
+        </button>
+    </div>
+
+    <!-- Tabela de fornecedores -->
+    <div class="cfa-table-card">
+        <div class="cfa-table-header">
+            <i class="fas fa-list"></i> Lista de Fornecedores
+        </div>
+        <div id="cfa-tabela-container">
+            <div class="cfa-loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: CADASTRO / EDIÇÃO ===== -->
+    <div id="cfa-modal" class="cfa-modal-overlay" style="display:none;">
+        <div class="cfa-modal-box">
+            <div class="cfa-modal-header">
+                <h2 id="cfa-modal-titulo"><i class="fas fa-user-plus"></i> Novo Fornecedor</h2>
+                <button class="cfa-modal-close" onclick="window.CadastroFornecedorAdmin.fecharModal()">&times;</button>
+            </div>
+            <div class="cfa-modal-body">
+                <form id="cfa-form" novalidate>
+                    <input type="hidden" id="cfa-id" name="id" value="">
+
+                    <!-- Linha 1: CPF/CNPJ + Ramo -->
+                    <div class="cfa-form-row">
+                        <div class="cfa-form-group">
+                            <label for="cfa-cpf_cnpj">CPF/CNPJ <span class="cfa-req">*</span></label>
+                            <input type="text" id="cfa-cpf_cnpj" name="cpf_cnpj" class="cfa-input"
+                                placeholder="000.000.000-00 ou 00.000.000/0000-00" required>
+                            <span class="cfa-field-error" id="cfa-err-cpf_cnpj"></span>
+                        </div>
+                        <div class="cfa-form-group">
+                            <label for="cfa-ramo_atividade_id">Ramo de Atividade <span class="cfa-req">*</span></label>
+                            <select id="cfa-ramo_atividade_id" name="ramo_atividade_id" class="cfa-input" required>
+                                <option value="">Carregando ramos...</option>
+                            </select>
+                            <span class="cfa-field-error" id="cfa-err-ramo"></span>
+                        </div>
+                    </div>
+
+                    <!-- Linha 2: Nome do Estabelecimento -->
+                    <div class="cfa-form-group">
+                        <label for="cfa-nome_estabelecimento">Nome do Estabelecimento <span class="cfa-req">*</span></label>
+                        <input type="text" id="cfa-nome_estabelecimento" name="nome_estabelecimento" class="cfa-input"
+                            placeholder="Ex: Padaria da Liberdade" required>
+                        <span class="cfa-field-error" id="cfa-err-nome"></span>
+                    </div>
+
+                    <!-- Linha 3: E-mail + Senha -->
+                    <div class="cfa-form-row">
+                        <div class="cfa-form-group">
+                            <label for="cfa-email">E-mail <span class="cfa-req">*</span></label>
+                            <input type="email" id="cfa-email" name="email" class="cfa-input"
+                                placeholder="fornecedor@email.com" required>
+                            <span class="cfa-field-error" id="cfa-err-email"></span>
+                        </div>
+                        <div class="cfa-form-group" id="cfa-grupo-senha">
+                            <label for="cfa-senha">Senha <span class="cfa-req" id="cfa-senha-req">*</span>
+                                <small id="cfa-senha-hint" style="font-weight:400;color:#64748b;"> (mín. 6 caracteres)</small>
+                            </label>
+                            <input type="password" id="cfa-senha" name="senha" class="cfa-input"
+                                placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+                            <span class="cfa-field-error" id="cfa-err-senha"></span>
+                            <small id="cfa-senha-edit-hint" style="display:none;color:#64748b;font-size:11px;">
+                                Deixe em branco para manter a senha atual
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Linha 4: Telefone + Responsável -->
+                    <div class="cfa-form-row">
+                        <div class="cfa-form-group">
+                            <label for="cfa-telefone">Telefone</label>
+                            <input type="tel" id="cfa-telefone" name="telefone" class="cfa-input"
+                                placeholder="(31) 99999-9999">
+                        </div>
+                        <div class="cfa-form-group">
+                            <label for="cfa-nome_responsavel">Nome do Responsável</label>
+                            <input type="text" id="cfa-nome_responsavel" name="nome_responsavel" class="cfa-input"
+                                placeholder="Nome completo">
+                        </div>
+                    </div>
+
+                    <!-- Linha 5: Endereço -->
+                    <div class="cfa-form-group">
+                        <label for="cfa-endereco">Endereço</label>
+                        <textarea id="cfa-endereco" name="endereco" class="cfa-input" rows="3"
+                            placeholder="Rua, número, complemento, bairro, cidade"></textarea>
+                    </div>
+
+                    <!-- Linha 6: Status + Aprovação (apenas na edição) -->
+                    <div class="cfa-form-row" id="cfa-grupo-status" style="display:none;">
+                        <div class="cfa-form-group">
+                            <label for="cfa-ativo">Status</label>
+                            <select id="cfa-ativo" name="ativo" class="cfa-input">
+                                <option value="1">Ativo</option>
+                                <option value="0">Inativo</option>
+                            </select>
+                        </div>
+                        <div class="cfa-form-group">
+                            <label for="cfa-aprovado">Aprovação</label>
+                            <select id="cfa-aprovado" name="aprovado" class="cfa-input">
+                                <option value="0">Pendente</option>
+                                <option value="1">Aprovado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Rodapé do formulário -->
+                    <div class="cfa-modal-footer">
+                        <button type="button" class="btn-sm btn-outline-gray"
+                            onclick="window.CadastroFornecedorAdmin.fecharModal()">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                        <button type="submit" class="btn-sm btn-primary-cfa" id="cfa-btn-salvar">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: CONFIRMAÇÃO DE EXCLUSÃO ===== -->
+    <div id="cfa-modal-confirm" class="cfa-modal-overlay" style="display:none;">
+        <div class="cfa-modal-box" style="max-width:420px;">
+            <div class="cfa-modal-header">
+                <h2><i class="fas fa-exclamation-triangle" style="color:#dc2626;"></i> Confirmar Exclusão</h2>
+                <button class="cfa-modal-close" onclick="window.CadastroFornecedorAdmin.fecharConfirm()">&times;</button>
+            </div>
+            <div class="cfa-modal-body" style="padding:20px 24px;">
+                <p id="cfa-confirm-msg" style="font-size:15px;color:#374151;margin-bottom:20px;"></p>
+                <div class="cfa-modal-footer">
+                    <button class="btn-sm btn-outline-gray" onclick="window.CadastroFornecedorAdmin.fecharConfirm()">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button class="btn-sm btn-danger-cfa" id="cfa-btn-confirm-ok">
+                        <i class="fas fa-trash"></i> Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+<!-- /page-wrapper -->

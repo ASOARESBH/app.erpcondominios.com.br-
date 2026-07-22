@@ -1,0 +1,938 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Ordens de Serviço" data-icon="fa-wrench" style="display:none;"></div>
+
+<!-- Wrapper principal -->
+<div class="page-wrapper page-ordens-servico">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-wrench" style="color:#ea580c;margin-right:10px;"></i>Ordens de Serviço</h1>
+            <p>Gestão completa de chamados, manutenções e acompanhamento de atendimentos</p>
+        </div>
+        <div class="page-header-actions">
+            <button class="btn-os-voltar" onclick="window.AppRouter && window.AppRouter.loadPage('manutencao')">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </button>
+            <button class="btn-os-novo" id="btnNovaOS">
+                <i class="fas fa-plus"></i> + Nova O.S
+            </button>
+        </div>
+    </div>
+
+    <!-- Abas internas -->
+    <div class="os-tabs">
+        <button class="os-tab-btn active" data-tab="dashboard">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </button>
+        <button class="os-tab-btn" data-tab="chamados">
+            <i class="fas fa-list-alt"></i> Chamados
+        </button>
+        <button class="os-tab-btn" data-tab="configuracoes">
+            <i class="fas fa-cog"></i> Configurações
+        </button>
+        <button class="os-tab-btn" data-tab="relatorios">
+            <i class="fas fa-chart-bar"></i> Relatórios
+        </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ABA: DASHBOARD                                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="os-tab-content active" id="os-tab-dashboard">
+
+        <!-- KPI Cards -->
+        <div class="os-kpi-grid">
+            <div class="os-kpi-card">
+                <div class="os-kpi-icon orange"><i class="fas fa-folder-open"></i></div>
+                <div class="os-kpi-info">
+                    <div class="os-kpi-valor" id="kpi-abertos">—</div>
+                    <div class="os-kpi-label">Em Aberto</div>
+                </div>
+            </div>
+            <div class="os-kpi-card">
+                <div class="os-kpi-icon blue"><i class="fas fa-spinner"></i></div>
+                <div class="os-kpi-info">
+                    <div class="os-kpi-valor" id="kpi-andamento">—</div>
+                    <div class="os-kpi-label">Em Andamento</div>
+                </div>
+            </div>
+            <div class="os-kpi-card">
+                <div class="os-kpi-icon green"><i class="fas fa-check-circle"></i></div>
+                <div class="os-kpi-info">
+                    <div class="os-kpi-valor" id="kpi-finalizados">—</div>
+                    <div class="os-kpi-label">Finalizadas</div>
+                </div>
+            </div>
+            <div class="os-kpi-card">
+                <div class="os-kpi-icon red"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="os-kpi-info">
+                    <div class="os-kpi-valor" id="kpi-urgentes">—</div>
+                    <div class="os-kpi-label">Urgentes Abertas</div>
+                </div>
+            </div>
+            <div class="os-kpi-card">
+                <div class="os-kpi-icon purple"><i class="fas fa-clock"></i></div>
+                <div class="os-kpi-info">
+                    <div class="os-kpi-valor" id="kpi-tempo-medio">—</div>
+                    <div class="os-kpi-label">Tempo Médio (h)</div>
+                </div>
+            </div>
+            <div class="os-kpi-card">
+                <div class="os-kpi-icon amber"><i class="fas fa-calendar-times"></i></div>
+                <div class="os-kpi-info">
+                    <div class="os-kpi-valor" id="kpi-prazo-vencido">—</div>
+                    <div class="os-kpi-label">Prazo Vencido</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico de prioridades + Últimas OS -->
+        <div class="os-dashboard-grid">
+            <!-- Prioridades -->
+            <div class="os-card">
+                <div class="os-card-header">
+                    <i class="fas fa-flag"></i> OS Abertas por Prioridade
+                </div>
+                <div class="os-card-body">
+                    <div class="os-prioridade-bars" id="prioridade-bars">
+                        <div class="os-loading-text">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Últimas OS -->
+            <div class="os-card">
+                <div class="os-card-header">
+                    <i class="fas fa-history"></i> Últimas Ordens de Serviço
+                </div>
+                <div class="os-card-body">
+                    <div id="ultimas-os-lista">
+                        <div class="os-loading-text">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico Departamento + Ranking Unidades -->
+        <div class="os-dashboard-bottom-grid">
+
+            <!-- Gráfico por Departamento -->
+            <div class="os-card os-card-dept-chart">
+                <div class="os-card-header">
+                    <span><i class="fas fa-building"></i> Chamados por Departamento</span>
+                    <span class="os-dept-legenda">
+                        <span class="os-dept-leg-item os-dept-leg-aberta"><i class="fas fa-circle"></i> Em aberto</span>
+                        <span class="os-dept-leg-item os-dept-leg-final"><i class="fas fa-circle"></i> Finalizadas</span>
+                    </span>
+                </div>
+                <div class="os-card-body">
+                    <div id="departamento-chart">
+                        <div class="os-loading-text">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ranking de Unidades -->
+            <div class="os-card">
+                <div class="os-card-header">
+                    <i class="fas fa-trophy"></i> Top 5 Unidades com Mais Chamados
+                </div>
+                <div class="os-card-body">
+                    <div id="ranking-unidades">
+                        <div class="os-loading-text">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div><!-- /dashboard -->
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ABA: CHAMADOS                                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="os-tab-content" id="os-tab-chamados">
+
+        <!-- Filtros -->
+        <div class="os-filtros">
+            <div class="os-filtro-group">
+                <label>Status</label>
+                <select id="filtro-status">
+                    <option value="">Todos</option>
+                    <option value="aberto">Aberto</option>
+                    <option value="andamento">Em Andamento</option>
+                    <option value="finalizado">Finalizado</option>
+                    <option value="cancelado">Cancelado</option>
+                </select>
+            </div>
+            <div class="os-filtro-group">
+                <label>Prioridade</label>
+                <select id="filtro-prioridade">
+                    <option value="">Todas</option>
+                    <option value="urgente">Urgente</option>
+                    <option value="alta">Alta</option>
+                    <option value="media">Média</option>
+                    <option value="baixa">Baixa</option>
+                </select>
+            </div>
+            <div class="os-filtro-group">
+                <label>Departamento</label>
+                <select id="filtro-departamento">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="os-filtro-group os-filtro-data">
+                <label>De</label>
+                <input type="date" id="filtro-data-ini" title="Data de abertura inicial">
+            </div>
+            <div class="os-filtro-group os-filtro-data">
+                <label>Até</label>
+                <input type="date" id="filtro-data-fim" title="Data de abertura final">
+            </div>
+            <div class="os-filtro-group os-filtro-busca">
+                <label>Buscar <span class="os-filtro-hint">número · título · morador · unidade · atendente · descrição</span></label>
+                <div class="os-busca-wrapper">
+                    <i class="fas fa-search os-busca-icon"></i>
+                    <input type="text" id="filtro-busca" placeholder="Ex: Gleba 93, João Silva, elétrica, #O.S-2026-0037..." autocomplete="off">
+                    <button class="os-busca-limpar" id="btnLimparBusca" title="Limpar busca" style="display:none">×</button>
+                </div>
+            </div>
+            <div class="os-filtros-acoes">
+                <button class="btn-os-filtrar" id="btnFiltrar">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+                <button class="btn-os-limpar" id="btnLimparFiltros" title="Limpar todos os filtros">
+                    <i class="fas fa-times"></i> Limpar
+                </button>
+            </div>
+        </div>
+        <!-- Chips de filtros ativos -->
+        <div class="os-chips-ativos" id="osChipsAtivos" style="display:none"></div>
+
+        <!-- Tabela de OS -->
+        <div class="os-table-wrapper">
+            <table class="os-table" id="tabela-os">
+                <thead>
+                    <tr>
+                        <th>Número</th>
+                        <th>Título / Assunto</th>
+                        <th>Morador</th>
+                        <th>Departamento</th>
+                        <th>Prioridade</th>
+                        <th>Status</th>
+                        <th>Abertura</th>
+                        <th>Atendente</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-os">
+                    <tr><td colspan="9" class="os-loading-text">Carregando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginação -->
+        <div class="os-paginacao" id="os-paginacao"></div>
+
+    </div><!-- /chamados -->
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ABA: CONFIGURAÇÕES                                      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="os-tab-content" id="os-tab-configuracoes">
+
+        <div class="os-config-grid">
+
+            <!-- Assuntos -->
+            <div class="os-card">
+                <div class="os-card-header">
+                    <i class="fas fa-tags"></i> Assuntos / Categorias
+                    <button class="btn-os-add-small" id="btnNovoAssunto">
+                        <i class="fas fa-plus"></i> Novo
+                    </button>
+                </div>
+                <div class="os-card-body">
+                    <div id="lista-assuntos">
+                        <div class="os-loading-text">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Homem-hora -->
+            <div class="os-card">
+                <div class="os-card-header">
+                    <i class="fas fa-user-clock"></i> Homem-Hora por Serviço
+                    <button class="btn-os-add-small" id="btnNovaConfig">
+                        <i class="fas fa-plus"></i> Novo
+                    </button>
+                </div>
+                <div class="os-card-body">
+                    <div id="lista-config-hh">
+                        <div class="os-loading-text">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Etapas (Módulo Projetos) -->
+            <div class="os-card">
+                <div class="os-card-header">
+                    <i class="fas fa-list-ol"></i> Etapas de Projeto
+                    <button class="btn-os-add-small" id="btnNovaEtapa">
+                        <i class="fas fa-plus"></i> Novo
+                    </button>
+                </div>
+                <div class="os-card-body">
+                    <div id="lista-etapas">
+                        <div class="os-loading-text">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div><!-- /configuracoes -->
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ABA: RELATÓRIOS                                         -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="os-tab-content" id="os-tab-relatorios">
+
+        <!-- Seletor de tipo de relatório -->
+        <div class="os-rel-tipos-grid">
+            <div class="os-rel-tipo-card" data-tipo="listagem_geral">
+                <i class="fas fa-list-ul"></i>
+                <span>Listagem Geral</span>
+            </div>
+            <div class="os-rel-tipo-card" data-tipo="unidades_abertas">
+                <i class="fas fa-home"></i>
+                <span>Unidades em Aberto</span>
+            </div>
+            <div class="os-rel-tipo-card" data-tipo="os_finalizadas">
+                <i class="fas fa-check-circle"></i>
+                <span>OS Finalizadas</span>
+            </div>
+            <div class="os-rel-tipo-card" data-tipo="por_atendente">
+                <i class="fas fa-user-hard-hat"></i>
+                <span>Por Atendente</span>
+            </div>
+            <div class="os-rel-tipo-card" data-tipo="por_departamento">
+                <i class="fas fa-building"></i>
+                <span>Por Departamento</span>
+            </div>
+            <div class="os-rel-tipo-card" data-tipo="prazo_vencido">
+                <i class="fas fa-calendar-times"></i>
+                <span>Prazo Vencido</span>
+            </div>
+            <div class="os-rel-tipo-card" data-tipo="tempo_resolucao">
+                <i class="fas fa-stopwatch"></i>
+                <span>Tempo de Resolução</span>
+            </div>
+            <div class="os-rel-tipo-card" data-tipo="ranking_ocorrencias">
+                <i class="fas fa-trophy"></i>
+                <span>Ranking de Ocorrências</span>
+            </div>
+        </div>
+
+        <!-- Descrição do tipo selecionado -->
+        <div class="os-rel-descricao" id="rel-descricao-box">
+            <i class="fas fa-info-circle"></i>
+            <span id="rel-descricao-texto">Selecione um tipo de relatório acima para começar.</span>
+        </div>
+
+        <!-- Filtros -->
+        <div class="os-rel-filtros">
+            <input type="hidden" id="rel-tipo" value="listagem_geral">
+            <div class="os-filtro-group">
+                <label>Data Início</label>
+                <input type="date" id="rel-data-inicio">
+            </div>
+            <div class="os-filtro-group">
+                <label>Data Fim</label>
+                <input type="date" id="rel-data-fim">
+            </div>
+            <div class="os-filtro-group" id="rel-grupo-departamento">
+                <label>Departamento</label>
+                <select id="rel-departamento">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="os-filtro-group" id="rel-grupo-unidade">
+                <label>Unidade</label>
+                <input type="text" id="rel-unidade" placeholder="Ex: Gleba 3, Apto 42...">
+            </div>
+            <button class="btn-os-filtrar" id="btnGerarRelatorio">
+                <i class="fas fa-chart-bar"></i> Gerar
+            </button>
+        </div>
+
+        <!-- Área de resultado -->
+        <div id="rel-resultado" style="display:none;">
+
+            <!-- KPI resumo dinâmico -->
+            <div class="os-rel-kpis" id="rel-kpis"></div>
+
+            <!-- Header da tabela com título e ações -->
+            <div class="os-rel-tabela-header">
+                <div>
+                    <div class="os-rel-tabela-titulo" id="rel-tabela-titulo"></div>
+                    <div class="os-rel-tabela-contagem" id="rel-tabela-contagem"></div>
+                </div>
+                <div class="os-rel-acoes">
+                    <button class="btn-rel-csv" id="btnExportarCSV">
+                        <i class="fas fa-file-csv"></i> CSV
+                    </button>
+                    <button class="btn-rel-pdf" id="btnExportarPDF">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabela dinâmica -->
+            <div class="os-table-wrapper" id="rel-tabela-wrapper">
+                <table class="os-table" id="tabela-relatorio">
+                    <thead id="thead-relatorio"><tr></tr></thead>
+                    <tbody id="tbody-relatorio"></tbody>
+                </table>
+            </div>
+
+        </div>
+
+    </div><!-- /relatorios -->
+
+</div><!-- /page-wrapper -->
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MODAL: NOVA / EDITAR O.S                                     -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="os-modal-overlay" id="modal-os" style="display:none;">
+    <div class="os-modal">
+        <div class="os-modal-header">
+            <h2 id="modal-os-titulo"><i class="fas fa-wrench"></i> Nova Ordem de Serviço</h2>
+            <button class="os-modal-close" id="btnFecharModalOS">&times;</button>
+        </div>
+        <div class="os-modal-body">
+
+            <input type="hidden" id="os-id">
+            <input type="hidden" id="os-numero-display">
+
+            <!-- Número (somente leitura ao editar) -->
+            <div class="os-form-row" id="row-numero" style="display:none;">
+                <div class="os-form-group">
+                    <label>Número da O.S</label>
+                    <input type="text" id="os-numero-view" readonly class="os-input-readonly">
+                </div>
+            </div>
+
+            <!-- Linha 1: Título + Prioridade -->
+            <div class="os-form-row">
+                <div class="os-form-group os-form-group-flex2">
+                    <label>Título <span class="os-required">*</span></label>
+                    <input type="text" id="os-titulo" placeholder="Descreva brevemente o problema ou serviço">
+                </div>
+                <div class="os-form-group">
+                    <label>Prioridade <span class="os-required">*</span></label>
+                    <select id="os-prioridade">
+                        <option value="baixa">Baixa</option>
+                        <option value="media" selected>Média</option>
+                        <option value="alta">Alta</option>
+                        <option value="urgente">Urgente</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Linha 2: Assunto + Departamento -->
+            <div class="os-form-row">
+                <div class="os-form-group">
+                    <label>Assunto</label>
+                    <select id="os-assunto">
+                        <option value="">— Selecione —</option>
+                    </select>
+                </div>
+                <div class="os-form-group">
+                    <label>Departamento</label>
+                    <select id="os-departamento">
+                        <option value="">— Selecione —</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Linha 3: Morador / Cliente (largura total) -->
+            <div class="os-form-row">
+                <div class="os-form-group os-form-group-flex2">
+                    <label>Morador / Cliente</label>
+                    <div class="os-autocomplete-wrapper">
+                        <input type="text" id="os-morador-busca" placeholder="Digite nome ou unidade para buscar...">
+                        <div class="os-autocomplete-list" id="os-morador-lista"></div>
+                    </div>
+                    <input type="hidden" id="os-morador-id">
+                    <input type="hidden" id="os-morador-nome">
+                    <input type="hidden" id="os-morador-unidade">
+                    <div class="os-morador-selecionado" id="os-morador-tag" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- Linha 4: Atendente + Previsão de Conclusão -->
+            <div class="os-form-row">
+                <div class="os-form-group" style="flex:1;">
+                    <label>Atendente Responsável</label>
+                    <select id="os-atendente">
+                        <option value="">— Selecione —</option>
+                    </select>
+                </div>
+                <div class="os-form-group">
+                    <label>Previsão de Conclusão <span class="os-previsao-hint">(opcional)</span></label>
+                    <input type="date" id="os-data-previsao" title="Se preenchida, o atendente responsável será notificado">
+                </div>
+            </div>
+
+            <!-- Recursos Humanos -->
+            <div class="os-form-group">
+                <label>Recursos Humanos (Colaboradores)</label>
+                <div class="os-autocomplete-wrapper">
+                    <input type="text" id="os-rh-busca" placeholder="Buscar colaborador por nome...">
+                    <div class="os-autocomplete-list" id="os-rh-lista"></div>
+                </div>
+                <div class="os-rh-tags" id="os-rh-tags"></div>
+            </div>
+
+            <!-- Descrição / Mensagem (rich text simples) -->
+            <div class="os-form-group">
+                <label>Descrição / Mensagem</label>
+                <div class="os-editor-toolbar">
+                    <button type="button" class="os-editor-btn" data-cmd="bold" title="Negrito"><b>B</b></button>
+                    <button type="button" class="os-editor-btn" data-cmd="italic" title="Itálico"><i>I</i></button>
+                    <button type="button" class="os-editor-btn" data-cmd="underline" title="Sublinhado"><u>U</u></button>
+                    <button type="button" class="os-editor-btn" data-cmd="insertUnorderedList" title="Lista"><i class="fas fa-list-ul"></i></button>
+                    <button type="button" class="os-editor-btn" id="btnInserirImagem" title="Inserir Imagem"><i class="fas fa-image"></i></button>
+                    <input type="file" id="inputImagem" accept="image/*" style="display:none;">
+                </div>
+                <div class="os-editor" id="os-descricao" contenteditable="true" placeholder="Descreva o problema, sintomas, localização..."></div>
+            </div>
+
+            <!-- O.S Dependente (vincular a outra O.S) -->
+            <div class="os-form-group">
+                <label>Depende de (O.S Pai)</label>
+                <input type="text" id="os-pai-busca" placeholder="Número da O.S pai (ex: O.S-2024-0001)">
+                <input type="hidden" id="os-pai-id">
+                <div class="os-pai-tag" id="os-pai-tag" style="display:none;"></div>
+            </div>
+
+            <!-- Projeto Público — classificação da própria O.S, sem cadastro próprio -->
+            <div class="os-form-group">
+                <label class="os-checkbox-label" for="os-projeto-publico">
+                    <input type="checkbox" id="os-projeto-publico">
+                    Publicar como Projeto <span class="os-previsao-hint">(aparece no Portal do Morador e na página pública de transparência)</span>
+                </label>
+            </div>
+
+            <!-- Campos de Projeto — ocultos por padrão; revelados via JS (sem reload)
+                 somente quando "Publicar como Projeto" estiver marcado -->
+            <div class="os-projeto-campos-extra" id="os-projeto-campos-extra">
+                <div class="os-form-row">
+                    <div class="os-form-group">
+                        <label>Etapa <span class="os-required">*</span></label>
+                        <select id="os-projeto-etapa">
+                            <option value="">— Selecione a etapa —</option>
+                        </select>
+                    </div>
+                    <div class="os-form-group">
+                        <label>Conclusão (%)</label>
+                        <select id="os-projeto-percentual">
+                            <option value="0">0%</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="os-editor-anexo-hint">
+                    Fotos da obra e publicação de atualizações para os moradores ficam disponíveis
+                    na aba <strong>Interações</strong> após salvar esta O.S.
+                </div>
+            </div>
+
+            <input type="hidden" id="os-horas-estimadas">
+
+        </div>
+        <div class="os-modal-footer">
+            <button class="btn-os-cancelar" id="btnCancelarOS">Cancelar</button>
+            <button class="btn-os-salvar" id="btnSalvarOS">
+                <i class="fas fa-save"></i> Salvar O.S
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MODAL: DETALHE / ATENDIMENTO DA OS                          -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="os-modal-overlay" id="modal-detalhe" style="display:none;">
+    <div class="os-modal os-modal-large">
+        <div class="os-modal-header">
+            <div>
+                <h2 id="detalhe-titulo"><i class="fas fa-wrench"></i> O.S #</h2>
+                <div class="os-detalhe-badges" id="detalhe-badges"></div>
+            </div>
+            <button class="os-modal-close" id="btnFecharDetalhe">&times;</button>
+        </div>
+        <div class="os-modal-body">
+
+            <!-- Sub-abas do detalhe -->
+            <div class="os-detalhe-tabs">
+                <button class="os-detalhe-tab active" data-dtab="info">
+                    <i class="fas fa-info-circle"></i> Informações
+                </button>
+                <button class="os-detalhe-tab" data-dtab="interacoes">
+                    <i class="fas fa-comments"></i> Interações
+                </button>
+                <button class="os-detalhe-tab" data-dtab="materiais">
+                    <i class="fas fa-boxes"></i> Materiais / Estoque
+                </button>
+                <button class="os-detalhe-tab" data-dtab="rh">
+                    <i class="fas fa-users"></i> Equipe
+                </button>
+                <button class="os-detalhe-tab" data-dtab="projeto">
+                    <i class="fas fa-hard-hat"></i> Projeto
+                </button>
+            </div>
+
+            <!-- Sub-aba: Informações -->
+            <div class="os-detalhe-content active" id="dtab-info">
+                <div class="os-detalhe-grid">
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Número</span><span id="d-numero">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Status</span><span id="d-status">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Prioridade</span><span id="d-prioridade">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Assunto</span><span id="d-assunto">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Departamento</span><span id="d-departamento">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Morador</span><span id="d-morador">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Unidade</span><span id="d-unidade">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Atendente</span><span id="d-atendente">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Abertura</span><span id="d-abertura">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Previsão</span><span id="d-previsao">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Horas Estimadas</span><span id="d-horas-est">—</span></div>
+                    <div class="os-detalhe-item"><span class="os-detalhe-label">Horas Totais</span><span id="d-horas-tot">—</span></div>
+                </div>
+                <div class="os-detalhe-descricao">
+                    <div class="os-detalhe-label">Descrição</div>
+                    <div id="d-descricao" class="os-detalhe-desc-content">—</div>
+                </div>
+            </div>
+
+            <!-- Sub-aba: Interações -->
+            <div class="os-detalhe-content" id="dtab-interacoes">
+                <div class="os-timeline" id="os-timeline">
+                    <div class="os-loading-text">Carregando interações...</div>
+                </div>
+
+                <!-- Formulário de nova interação -->
+                <div class="os-nova-interacao" id="os-nova-interacao-form">
+                    <div class="os-form-row">
+                        <div class="os-form-group">
+                            <label>Tipo de Interação</label>
+                            <select id="int-tipo">
+                                <option value="comentario">Comentário</option>
+                                <option value="andamento">Andamento</option>
+                                <option value="nota_interna">Nota Interna</option>
+                                <option value="solucao">Solução</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Campos extras exibidos apenas quando Tipo = Andamento e a O.S é um Projeto Público -->
+                    <div class="os-andamento-extra" id="int-andamento-extra">
+                        <div class="os-form-row">
+                            <div class="os-form-group">
+                                <label>Etapa <span class="os-required">*</span></label>
+                                <select id="int-etapa">
+                                    <option value="">— Selecione a etapa —</option>
+                                </select>
+                            </div>
+                            <div class="os-form-group">
+                                <label>Conclusão (%)</label>
+                                <select id="int-percentual">
+                                    <option value="">— Não alterar —</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="os-form-row">
+                            <div class="os-form-group">
+                                <label>Fotos da Obra</label>
+                                <input type="file" id="int-fotos" accept="image/*" multiple>
+                                <span class="os-editor-anexo-hint" id="intFotosCount"></span>
+                                <label class="os-checkbox-label" for="int-definir-capa" style="margin-top:6px;font-weight:400;">
+                                    <input type="checkbox" id="int-definir-capa">
+                                    Definir a primeira foto como imagem de capa do projeto
+                                </label>
+                            </div>
+                            <div class="os-form-group" style="align-self:flex-end;">
+                                <label class="os-checkbox-label" for="int-publica">
+                                    <input type="checkbox" id="int-publica" checked>
+                                    Publicar no Portal / Página Pública
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="os-form-group">
+                        <label>Mensagem <span class="os-required">*</span></label>
+                        <div class="os-editor-toolbar" id="int-editor-toolbar">
+                            <button type="button" class="os-editor-btn" data-int-cmd="bold" title="Negrito"><b>B</b></button>
+                            <button type="button" class="os-editor-btn" data-int-cmd="italic" title="Itálico"><i>I</i></button>
+                            <button type="button" class="os-editor-btn" data-int-cmd="underline" title="Sublinhado"><u>U</u></button>
+                            <button type="button" class="os-editor-btn" data-int-cmd="insertUnorderedList" title="Lista"><i class="fas fa-list-ul"></i></button>
+                            <button type="button" class="os-editor-btn" id="btnIntImagem" title="Inserir imagem inline"><i class="fas fa-image"></i></button>
+                            <input type="file" id="intInputImagem" accept="image/*" style="display:none;">
+                            <div class="os-editor-sep"></div>
+                            <button type="button" class="os-editor-btn os-editor-btn-anexar" id="btnIntAnexar" title="Anexar arquivo (PDF, DOC, XLS…)">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <input type="file" id="intInputAnexo" multiple style="display:none;">
+                            <span class="os-editor-anexo-hint" id="intAnexoCount"></span>
+                        </div>
+                        <div class="os-editor os-int-editor" id="int-mensagem-editor"
+                             contenteditable="true"
+                             placeholder="Descreva o andamento, ação tomada ou observação..."></div>
+                        <div class="os-anexos-lista" id="int-anexos-lista"></div>
+                    </div>
+                    <div class="os-interacao-actions">
+                        <button class="btn-os-salvar" id="btnAdicionarInteracao">
+                            <i class="fas fa-paper-plane"></i> Enviar Interação
+                        </button>
+                <button class="btn-os-finalizar" id="btnIniciarFinalizacao">
+                    <i class="fas fa-flag-checkered"></i> Finalizar O.S
+                </button>
+                    </div>
+                </div>
+
+                <!-- Formulário de finalização -->
+                <div class="os-finalizar-form" id="os-finalizar-form" style="display:none;">
+                    <h3><i class="fas fa-flag-checkered"></i> Finalizar Ordem de Serviço</h3>
+                    <div class="os-form-row">
+                        <div class="os-form-group">
+                            <label>Horas Estimadas</label>
+                            <input type="number" id="fin-horas-estimadas" placeholder="Ex: 2.5" min="0" step="0.5">
+                        </div>
+                        <div class="os-form-group">
+                            <label>Horas Totais Trabalhadas</label>
+                            <input type="number" id="fin-horas" placeholder="Ex: 3.5" min="0" step="0.5">
+                        </div>
+                    </div>
+                    <div class="os-form-group">
+                        <label>Observação de Finalização</label>
+                        <textarea id="fin-observacao" rows="3" placeholder="Descreva o que foi feito, solução aplicada..."></textarea>
+                    </div>
+                    <div class="os-interacao-actions">
+                        <button class="btn-os-cancelar" id="btnCancelarFinalizacao">Cancelar</button>
+                        <button class="btn-os-finalizar" id="btnConfirmarFinalizacao">
+                            <i class="fas fa-check"></i> Confirmar Finalização
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sub-aba: Materiais -->
+            <div class="os-detalhe-content" id="dtab-materiais">
+                <div class="os-mat-busca">
+                    <div class="os-autocomplete-wrapper">
+                        <input type="text" id="mat-produto-busca" placeholder="Buscar produto no estoque...">
+                        <div class="os-autocomplete-list" id="mat-produto-lista"></div>
+                    </div>
+                    <input type="number" id="mat-quantidade" placeholder="Qtd" min="0.001" step="0.001" value="1">
+                    <button class="btn-os-add-small" id="btnAdicionarMaterial">
+                        <i class="fas fa-plus"></i> Adicionar
+                    </button>
+                </div>
+                <input type="hidden" id="mat-produto-id">
+                <input type="hidden" id="mat-produto-nome">
+                <input type="hidden" id="mat-preco-unitario">
+                <input type="hidden" id="mat-estoque-disponivel">
+
+                <div id="lista-materiais-os">
+                    <div class="os-loading-text">Carregando materiais...</div>
+                </div>
+            </div>
+
+            <!-- Sub-aba: Equipe (RH) -->
+            <div class="os-detalhe-content" id="dtab-rh">
+                <div id="lista-rh-os">
+                    <div class="os-loading-text">Carregando equipe...</div>
+                </div>
+            </div>
+
+            <!-- Sub-aba: Projeto (Portal do Morador + Página Pública de Transparência) -->
+            <div class="os-detalhe-content" id="dtab-projeto">
+                <div id="projeto-progresso-resumo" class="os-projeto-progresso-grande" style="display:none;">
+                    <span class="os-detalhe-label">Progresso Público</span>
+                    <div><span class="os-progresso-pct" id="projeto-pct-display">0%</span></div>
+                    <div class="os-projeto-progresso-barra"><div id="projeto-pct-barra" style="width:0%"></div></div>
+                </div>
+
+                <div class="os-form-row">
+                    <div class="os-form-group">
+                        <label>Etapa Atual</label>
+                        <select id="projeto-etapa-atual">
+                            <option value="">— Selecione a etapa —</option>
+                        </select>
+                    </div>
+                    <div class="os-form-group">
+                        <label>Conclusão Atual (%)</label>
+                        <select id="projeto-percentual-atual">
+                            <option value="0">0%</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="os-editor-anexo-hint" style="margin:-6px 0 14px;">
+                    Alterar Etapa/Conclusão aqui atualiza o projeto imediatamente e fica registrado
+                    na auditoria. Para publicar uma atualização com fotos na Timeline do Portal,
+                    use a aba <strong>Interações</strong>.
+                </div>
+
+                <!-- Título, departamento, responsável e datas NÃO são cadastrados aqui —
+                     são sempre lidos da própria O.S (aba Informações) para evitar cadastro
+                     duplicado. Esta aba contém apenas o que é exclusivo do acompanhamento
+                     público da obra. -->
+
+                <div class="os-projeto-capa-wrap">
+                    <img id="projeto-capa-preview" class="os-projeto-capa-preview" src="" alt="Imagem de capa do projeto" style="display:none;">
+                    <div>
+                        <input type="file" id="projeto-capa-input" accept="image/*">
+                        <div class="os-editor-anexo-hint">Imagem de capa (usada no Portal, Site, Dashboard e Timeline)</div>
+                    </div>
+                </div>
+
+                <div class="os-interacao-actions">
+                    <button class="btn-os-salvar" id="btnSalvarProjeto"><i class="fas fa-save"></i> Salvar Informações do Projeto</button>
+                </div>
+
+                <hr style="margin:20px 0;border-color:#f1f5f9;">
+
+                <h3><i class="fas fa-timeline"></i> Linha do Tempo Pública</h3>
+                <div id="projeto-timeline-preview" class="os-projeto-timeline">
+                    <div class="os-loading-text">As etapas marcadas como "Andamento" na aba Interações aparecem aqui.</div>
+                </div>
+
+                <hr style="margin:20px 0;border-color:#f1f5f9;">
+
+                <h3><i class="fas fa-folder-open"></i> Documentos do GED vinculados a este Projeto</h3>
+                <div id="projeto-docs-lista" class="os-projeto-docs-lista">
+                    <div class="os-loading-text">Carregando documentos...</div>
+                </div>
+            </div>
+
+        </div>
+        <div class="os-modal-footer">
+            <button class="btn-os-cancelar" id="btnFecharDetalhe2">Fechar</button>
+            <button class="btn-os-editar" id="btnEditarOS">
+                <i class="fas fa-edit"></i> Editar O.S
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MODAL: ASSUNTO                                              -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="os-modal-overlay" id="modal-assunto" style="display:none;">
+    <div class="os-modal os-modal-small">
+        <div class="os-modal-header">
+            <h2 id="modal-assunto-titulo"><i class="fas fa-tag"></i> Novo Assunto</h2>
+            <button class="os-modal-close" id="btnFecharModalAssunto">&times;</button>
+        </div>
+        <div class="os-modal-body">
+            <input type="hidden" id="assunto-id">
+            <div class="os-form-group">
+                <label>Nome <span class="os-required">*</span></label>
+                <input type="text" id="assunto-nome" placeholder="Ex: Elétrica, Hidráulica, Limpeza...">
+            </div>
+            <div class="os-form-group">
+                <label>Descrição</label>
+                <input type="text" id="assunto-descricao" placeholder="Descrição opcional">
+            </div>
+            <div class="os-form-group">
+                <label>Departamento</label>
+                <select id="assunto-departamento">
+                    <option value="">— Todos —</option>
+                </select>
+            </div>
+        </div>
+        <div class="os-modal-footer">
+            <button class="btn-os-cancelar" id="btnCancelarAssunto">Cancelar</button>
+            <button class="btn-os-salvar" id="btnSalvarAssunto">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MODAL: CONFIG HOMEM-HORA                                    -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="os-modal-overlay" id="modal-config-hh" style="display:none;">
+    <div class="os-modal os-modal-small">
+        <div class="os-modal-header">
+            <h2 id="modal-hh-titulo"><i class="fas fa-user-clock"></i> Configuração Homem-Hora</h2>
+            <button class="os-modal-close" id="btnFecharModalHH">&times;</button>
+        </div>
+        <div class="os-modal-body">
+            <input type="hidden" id="hh-id">
+            <div class="os-form-group">
+                <label>Assunto Relacionado</label>
+                <select id="hh-assunto">
+                    <option value="">— Nenhum —</option>
+                </select>
+            </div>
+            <div class="os-form-group">
+                <label>Descrição do Serviço <span class="os-required">*</span></label>
+                <input type="text" id="hh-descricao" placeholder="Ex: Instalação elétrica simples">
+            </div>
+            <div class="os-form-row">
+                <div class="os-form-group">
+                    <label>Horas Estimadas</label>
+                    <input type="number" id="hh-horas" placeholder="Ex: 2" min="0" step="0.5" value="1">
+                </div>
+                <div class="os-form-group">
+                    <label>Custo por Hora (R$)</label>
+                    <input type="number" id="hh-custo" placeholder="Ex: 80.00" min="0" step="0.01" value="0">
+                </div>
+            </div>
+        </div>
+        <div class="os-modal-footer">
+            <button class="btn-os-cancelar" id="btnCancelarHH">Cancelar</button>
+            <button class="btn-os-salvar" id="btnSalvarHH">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MODAL: ETAPA (Módulo Projetos)                               -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="os-modal-overlay" id="modal-etapa" style="display:none;">
+    <div class="os-modal os-modal-small">
+        <div class="os-modal-header">
+            <h2 id="modal-etapa-titulo"><i class="fas fa-list-ol"></i> Nova Etapa</h2>
+            <button class="os-modal-close" id="btnFecharModalEtapa">&times;</button>
+        </div>
+        <div class="os-modal-body">
+            <input type="hidden" id="etapa-id">
+            <div class="os-form-group">
+                <label>Nome <span class="os-required">*</span></label>
+                <input type="text" id="etapa-nome" placeholder="Ex: Levantamento Técnico">
+            </div>
+            <div class="os-form-group">
+                <label>Ordem</label>
+                <input type="number" id="etapa-ordem" placeholder="Ex: 1" min="0" step="1" value="0">
+            </div>
+        </div>
+        <div class="os-modal-footer">
+            <button class="btn-os-cancelar" id="btnCancelarEtapa">Cancelar</button>
+            <button class="btn-os-salvar" id="btnSalvarEtapa">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast de notificação -->
+<div class="os-toast" id="os-toast" style="display:none;"></div>
+
+

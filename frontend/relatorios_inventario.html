@@ -1,0 +1,709 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios de Inventário - Serra da Liberdade</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        /* Menu Toggle Mobile */
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Submenu */
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #10b981;
+            color: #fff;
+        }
+
+        /* Cards de Resumo */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-icon.blue {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .card-icon.green {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .card-icon.red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .card-icon.yellow {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .card h3 {
+            font-size: 2rem;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .card p {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        /* Section */
+        .section {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .section h2 {
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+        }
+
+        /* Form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 0.5rem;
+            color: #475569;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #10b981;
+        }
+
+        /* Buttons */
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: 0.2s;
+            margin-right: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            opacity: 0.9;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-primary {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <nav class="sidebar" id="sidebar">
+        <h1>Serra da Liberdade</h1>
+        <!-- User Profile Section -->
+        <div class="user-profile-section" id="userProfileSection" style="display: none;">
+            <div class="user-profile-header">
+                <div class="user-avatar" id="userAvatar">-</div>
+                <div class="user-info">
+                    <p class="user-name" id="userName">Carregando...</p>
+                    <p class="user-function" id="userFunction">-</p>
+                    <p class="user-email" id="userEmail">-</p>
+                </div>
+            </div>
+            <div class="session-info">
+                <div class="session-item">
+                    <div class="session-label">Tempo de Sessão</div>
+                    <div class="session-value session-timer" id="sessionTimer">00:00:00</div>
+                </div>
+                <div class="session-item">
+                    <div class="session-label">Status</div>
+                    <div class="session-value" id="sessionStatus"><i class="fas fa-circle"
+                            style="color: #10b981; font-size: 0.6rem;"></i> Ativo</div>
+                </div>
+            </div>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                    Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a>
+            </li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                    Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro
+                    Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                    Acesso</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                    Relatórios</a></li>
+            <li class="nav-item"><a href="financeiro.html" class="nav-link"><i class="fas fa-money-bill-wave"></i>
+                    Financeiro</a></li>
+            <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                    Configuraçµes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a>
+            </li>
+            <li class="nav-item"><a href="administrativa.html" class="nav-link active"><i class="fas fa-briefcase"></i>
+                    Administrativo</a></li>
+
+            <li class="nav-item"
+                style="margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <a href="#" class="nav-link" id="btn-logout" style="background: rgba(239, 68, 68, 0.1); color: #fca5a5;"
+                    >
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </a>
+            </li>
+            <\ /ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1><i class="fas fa-chart-bar"></i> Relatórios de Inventário</h1>
+        </header>
+
+        <nav class="submenu">
+            <ul>
+                <li><a href="administrativa.html"><i class="fas fa-home"></i> Início</a></li>
+                <li><a href="protocolo.html"><i class="fas fa-box"></i> Protocolos</a></li>
+                <li><a href="inventario.html"><i class="fas fa-boxes"></i> Inventário</a></li>
+                <li><a href="relatorios_inventario.html" class="active"><i class="fas fa-chart-bar"></i> Relatórios</a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Cards de Resumo -->
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-icon blue">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <h3 id="totalItens">0</h3>
+                <p>Total de Itens</p>
+            </div>
+            <div class="card">
+                <div class="card-icon green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h3 id="totalAtivos">0</h3>
+                <p>Itens Ativos</p>
+            </div>
+            <div class="card">
+                <div class="card-icon red">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <h3 id="totalInativos">0</h3>
+                <p>Itens Inativos</p>
+            </div>
+            <div class="card">
+                <div class="card-icon yellow">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+                <h3 id="valorTotal">R$ 0,00</h3>
+                <p>Valor Total</p>
+            </div>
+        </div>
+
+        <!-- Filtros de Relatório -->
+        <section class="section">
+            <h2><i class="fas fa-filter"></i> Filtros de Relatório</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Tipo de Relatório</label>
+                    <select id="tipoRelatorio" onchange="atualizarRelatorio()">
+                        <option value="geral">Relatório Geral</option>
+                        <option value="situacao">Por Situação</option>
+                        <option value="status">Por Status</option>
+                        <option value="responsavel">Por Responsável</option>
+                        <option value="baixas">Itens Baixados</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Situação</label>
+                    <select id="filtroSituacao" onchange="atualizarRelatorio()">
+                        <option value="">Todas</option>
+                        <option value="imobilizado">Imobilizado</option>
+                        <option value="circulante">Circulante</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="filtroStatus" onchange="atualizarRelatorio()">
+                        <option value="">Todos</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Responsável</label>
+                    <select id="filtroResponsavel" onchange="atualizarRelatorio()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn-primary" onclick="gerarRelatorio()">
+                    <i class="fas fa-file-pdf"></i> Gerar PDF
+                </button>
+                <button class="btn-secondary" onclick="exportarExcel()">
+                    <i class="fas fa-file-excel"></i> Exportar Excel
+                </button>
+            </div>
+        </section>
+
+        <!-- Tabela de Resultados -->
+        <section class="section">
+            <h2><i class="fas fa-table"></i> <span id="tituloRelatorio">Relatório Geral</span></h2>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead id="cabecalhoTabela">
+                        <tr>
+                            <th>Patrimônio</th>
+                            <th>Nome do Item</th>
+                            <th>Fabricante</th>
+                            <th>Situação</th>
+                            <th>Status</th>
+                            <th>Valor</th>
+                            <th>Responsável</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaRelatorio">
+                        <tr>
+                            <td colspan="7" style="text-align: center;">Carregando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Relatório de Baixas -->
+        <section class="section" id="secaoBaixas" style="display: none;">
+            <h2><i class="fas fa-exclamation-triangle"></i> Detalhamento de Baixas</h2>
+            <div id="listaBaixas"></div>
+        </section>
+    </main>
+
+    <script>
+        let todosItens = [];
+        let usuarios = [];
+
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarUsuarios();
+            carregarDados();
+        });
+
+        function carregarUsuarios() {
+            fetch('../api/api_usuarios.php')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        usuarios = data.dados.filter(u => u.ativo == 1);
+                        const select = document.getElementById('filtroResponsavel');
+                        select.innerHTML = '<option value="">Todos</option>';
+                        usuarios.forEach(u => {
+                            select.innerHTML += `<option value="${u.id}">${u.nome}</option>`;
+                        });
+                    }
+                });
+        }
+
+        function carregarDados() {
+            fetch('../api/api_inventario.php')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        todosItens = data.dados;
+                        atualizarCards();
+                        atualizarRelatorio();
+                    }
+                });
+        }
+
+        function atualizarCards() {
+            const totalItens = todosItens.length;
+            const totalAtivos = todosItens.filter(i => i.status === 'ativo').length;
+            const totalInativos = todosItens.filter(i => i.status === 'inativo').length;
+            const valorTotal = todosItens.reduce((sum, i) => sum + parseFloat(i.valor || 0), 0);
+
+            document.getElementById('totalItens').textContent = totalItens;
+            document.getElementById('totalAtivos').textContent = totalAtivos;
+            document.getElementById('totalInativos').textContent = totalInativos;
+            document.getElementById('valorTotal').textContent = `R$ ${valorTotal.toFixed(2).replace('.', ',')}`;
+        }
+
+        function atualizarRelatorio() {
+            const tipo = document.getElementById('tipoRelatorio').value;
+            const situacao = document.getElementById('filtroSituacao').value;
+            const status = document.getElementById('filtroStatus').value;
+            const responsavel = document.getElementById('filtroResponsavel').value;
+
+            let itensFiltrados = todosItens.filter(item => {
+                if (situacao && item.situacao !== situacao) return false;
+                if (status && item.status !== status) return false;
+                if (responsavel && item.tutela_usuario_id != responsavel) return false;
+                return true;
+            });
+
+            // Atualizar título
+            const titulos = {
+                'geral': 'Relatório Geral',
+                'situacao': 'Relatório por Situação',
+                'status': 'Relatório por Status',
+                'responsavel': 'Relatório por Responsável',
+                'baixas': 'Relatório de Itens Baixados'
+            };
+            document.getElementById('tituloRelatorio').textContent = titulos[tipo];
+
+            // Filtrar por tipo
+            if (tipo === 'baixas') {
+                itensFiltrados = itensFiltrados.filter(i => i.status === 'inativo');
+                renderizarTabelaBaixas(itensFiltrados);
+                document.getElementById('secaoBaixas').style.display = 'block';
+            } else {
+                document.getElementById('secaoBaixas').style.display = 'none';
+            }
+
+            renderizarTabela(itensFiltrados);
+        }
+
+        function renderizarTabela(itens) {
+            const tbody = document.getElementById('tabelaRelatorio');
+
+            if (itens.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Nenhum item encontrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = itens.map(item => `
+                <tr>
+                    <td><strong>${item.numero_patrimonio}</strong></td>
+                    <td>${item.nome_item}</td>
+                    <td>${item.fabricante || '-'}</td>
+                    <td><span class="badge badge-${item.situacao === 'imobilizado' ? 'primary' : 'warning'}">${item.situacao === 'imobilizado' ? 'Imobilizado' : 'Circulante'}</span></td>
+                    <td><span class="badge badge-${item.status === 'ativo' ? 'success' : 'danger'}">${item.status === 'ativo' ? 'Ativo' : 'Inativo'}</span></td>
+                    <td>R$ ${parseFloat(item.valor || 0).toFixed(2)}</td>
+                    <td>${item.tutela_nome || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderizarTabelaBaixas(itens) {
+            const container = document.getElementById('listaBaixas');
+
+            if (itens.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #64748b;">Nenhum item baixado encontrado</p>';
+                return;
+            }
+
+            container.innerHTML = itens.map(item => `
+                <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #ef4444;">
+                    <h4 style="color: #1e293b; margin-bottom: 0.5rem;">${item.numero_patrimonio} - ${item.nome_item}</h4>
+                    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                        <strong>Data da Baixa:</strong> ${item.data_baixa_formatada || 'Não informada'}
+                    </p>
+                    <p style="color: #64748b; font-size: 0.9rem;">
+                        <strong>Motivo:</strong> ${item.motivo_baixa || 'Não informado'}
+                    </p>
+                </div>
+            `).join('');
+        }
+
+        function gerarRelatorio() {
+            alert('Funcionalidade de geração de PDF será implementada em breve!');
+            // Aqui vocª pode integrar com uma biblioteca de PDF como jsPDF
+        }
+
+        function exportarExcel() {
+            alert('Funcionalidade de exportação para Excel será implementada em breve!');
+            // Aqui vocª pode integrar com uma biblioteca como SheetJS
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    </script>
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

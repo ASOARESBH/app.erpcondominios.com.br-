@@ -1,0 +1,110 @@
+/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES ONLY - MANUTENCAO
+|--------------------------------------------------------------------------
+*/
+
+.page-manutencao .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.page-manutencao .page-card.interactive {
+    text-align: center;
+    padding: 2.5rem 2rem 1.5rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.page-manutencao .page-card.interactive:hover {
+    border-color: rgba(37, 99, 235, 0.1);
+    background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+}
+
+.page-manutencao .page-card.interactive .card-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.25rem auto;
+    transition: all 0.2s ease;
+}
+
+.page-manutencao .page-card.interactive .card-icon i {
+    font-size: 1.75rem;
+    transition: color 0.2s ease;
+}
+
+.page-manutencao .page-card.interactive h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.75rem;
+}
+
+.page-manutencao .page-card.interactive p {
+    color: #64748b;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+}
+
+.page-manutencao .page-card.interactive .card-footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.page-manutencao .page-card.interactive .card-footer .card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #2563eb;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: gap 0.2s ease;
+}
+
+.page-manutencao .page-card.interactive:hover .card-footer .card-link {
+    gap: 10px;
+}
+
+.page-manutencao .tabs {
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+    .page-manutencao .cards-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    .page-manutencao .page-card.interactive {
+        padding: 1.5rem 1rem 1rem;
+    }
+    .page-manutencao .page-card.interactive .card-icon {
+        width: 48px;
+        height: 48px;
+    }
+    .page-manutencao .page-card.interactive .card-icon i {
+        font-size: 1.25rem;
+    }
+    .page-manutencao .page-card.interactive h3 {
+        font-size: 0.95rem;
+    }
+    .page-manutencao .page-card.interactive p {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .page-manutencao .cards-grid {
+        grid-template-columns: 1fr;
+    }
+}

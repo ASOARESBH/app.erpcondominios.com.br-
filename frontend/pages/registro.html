@@ -1,0 +1,340 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Registro Manual" data-icon="fa-clipboard-list" style="display:none;"></div>
+
+<div class="page-wrapper page-registro">
+    <div class="page-header">
+        <h1><i class="fas fa-clipboard-list"></i> Registro Manual</h1>
+        <p>Lançamento manual de entradas e saídas de acesso</p>
+    </div>
+
+    <div id="alertBox"></div>
+
+    <div class="page-card">
+        <h2><i class="fas fa-plus-circle"></i> Registrar Acesso</h2>
+
+        <div class="info-box">
+            <i class="fas fa-info-circle"></i>
+            <strong>Registro Manual:</strong> use para visitantes, prestadores ou morador sem leitura automática.
+            Para <strong>Visitante</strong> ou <strong>Prestador</strong>, informe o RG ou CPF para buscar o cadastro automaticamente.
+        </div>
+
+        <!-- Box de veículo encontrado (morador) -->
+        <div id="veiculoEncontrado" class="veiculo-encontrado" style="display:none;"></div>
+
+        <!-- Box de visitante/prestador encontrado -->
+        <div id="visitanteEncontrado" class="visitante-encontrado" style="display:none;"></div>
+
+        <form id="registroForm">
+            <input type="hidden" id="moradorId"          name="moradorId">
+            <input type="hidden" id="veiculoId"          name="veiculoId">
+            <input type="hidden" id="visitanteIdRegistro" name="visitanteIdRegistro">
+
+            <!-- LINHA 1: Data/Hora, Placa, Tipo, Entrada/Saída -->
+            <div class="form-grid reg-grid-4">
+                <div>
+                    <label>Data e Hora *</label>
+                    <input type="datetime-local" id="dataHoraRegistro" required>
+                </div>
+                <div>
+                    <label>Placa *</label>
+                    <input type="text" id="placaRegistro" maxlength="8" required placeholder="ABC-1D23"
+                           autocomplete="off" style="text-transform:uppercase">
+                </div>
+                <div>
+                    <label>Tipo *</label>
+                    <select id="tipoRegistro" required>
+                        <option value="">Selecione...</option>
+                        <option value="Morador">Morador</option>
+                        <option value="Visitante">Visitante</option>
+                        <option value="Prestador">Prestador</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Entrada / Saída *</label>
+                    <div class="tipo-acesso-group">
+                        <label class="tipo-acesso-btn" id="btnEntrada">
+                            <input type="radio" name="tipo_acesso" value="Entrada" checked>
+                            <i class="fas fa-sign-in-alt"></i> Entrada
+                        </label>
+                        <label class="tipo-acesso-btn" id="btnSaida">
+                            <input type="radio" name="tipo_acesso" value="Saída">
+                            <i class="fas fa-sign-out-alt"></i> Saída
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LINHA 2: Modelo, Cor, Observação -->
+            <div class="form-grid reg-grid-3">
+                <div>
+                    <label>Modelo do Veículo</label>
+                    <input type="text" id="modeloRegistro" placeholder="Ex: Corolla, HB20, Strada...">
+                </div>
+                <div>
+                    <label>Cor do Veículo</label>
+                    <input type="text" id="corRegistro" placeholder="Ex: Prata, Branco, Preto...">
+                </div>
+                <div>
+                    <label>Observação</label>
+                    <input type="text" id="observacaoRegistro" placeholder="Observações adicionais">
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 BLOCO MORADOR (exibido quando Tipo = Morador)
+            ═══════════════════════════════════════════════════════════ -->
+            <div id="camposMorador" style="display:none;">
+                <div class="form-section-title-reg">
+                    <i class="fas fa-home"></i> Identificação do Morador
+                </div>
+
+                <div class="form-grid reg-grid-3">
+                    <!-- Unidade -->
+                    <div>
+                        <label>Unidade *</label>
+                        <select id="unidadeMoradorRegistro">
+                            <option value="">Selecione a unidade...</option>
+                        </select>
+                    </div>
+                    <!-- Morador -->
+                    <div>
+                        <label>Morador *</label>
+                        <select id="moradorSelecionadoRegistro" disabled>
+                            <option value="">Selecione a unidade primeiro</option>
+                        </select>
+                    </div>
+                    <!-- Info do morador -->
+                    <div id="moradorInfoWrap" style="display:none;">
+                        <label>Unidade do Morador</label>
+                        <div id="moradorInfoBox" class="morador-info-box"></div>
+                    </div>
+                </div>
+
+                <!-- Checkbox dependente -->
+                <div class="dependente-toggle-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="checkDependente">
+                        <span class="checkbox-custom"></span>
+                        Acesso de <strong>Dependente</strong> (familiar do morador)
+                    </label>
+                </div>
+
+                <!-- Select de dependente (oculto até marcar checkbox) -->
+                <div id="dependenteWrap" style="display:none;">
+                    <div class="form-grid reg-grid-2">
+                        <div>
+                            <label>Dependente *</label>
+                            <select id="dependenteSelecionadoRegistro" disabled>
+                                <option value="">Selecione o morador primeiro</option>
+                            </select>
+                        </div>
+                        <div id="dependenteInfoWrap" style="display:none;">
+                            <label>Parentesco</label>
+                            <div id="dependenteInfoBox" class="morador-info-box"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════
+                 BLOCO VISITANTE / PRESTADOR
+            ═══════════════════════════════════════════════════════════ -->
+            <div id="extraCampos" style="display:none;">
+
+                <!-- Busca por documento -->
+                <div class="form-section-title-reg">
+                    <i class="fas fa-id-card"></i> Identificação do Visitante / Prestador
+                </div>
+                <div class="form-grid reg-grid-3">
+                    <div>
+                        <label>Tipo de Documento *</label>
+                        <select id="tipoDocRegistro">
+                            <option value="CPF">CPF</option>
+                            <option value="RG">RG</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Número do Documento *</label>
+                        <div style="display:flex; gap:6px; align-items:flex-end;">
+                            <input type="text" id="documentoRegistro" placeholder="000.000.000-00"
+                                   inputmode="numeric" autocomplete="off" style="flex:1">
+                            <button type="button" class="btn-buscar-doc" id="btnBuscarDocRegistro" title="Buscar cadastro">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label>Nome *</label>
+                        <input type="text" id="nomeVisitanteRegistro" name="nomeVisitante" placeholder="Nome completo">
+                    </div>
+                </div>
+
+                <!-- Unidade e Morador destino -->
+                <div class="form-section-title-reg">
+                    <i class="fas fa-map-marker-alt"></i> Destino
+                </div>
+                <div class="form-grid reg-grid-3">
+                    <div>
+                        <label>Unidade *</label>
+                        <select id="unidadeDestinoRegistro" name="unidadeDestino">
+                            <option value="">Selecione a unidade...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Morador *</label>
+                        <select id="moradorDestinoRegistro" name="moradorDestino" disabled>
+                            <option value="">Selecione a unidade primeiro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Dias de Permanência</label>
+                        <input type="number" id="diasPermanenciaRegistro" min="1" placeholder="Ex: 1">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-primary-modern" id="btnSalvarRegistro">
+                    <i class="fas fa-save"></i> Registrar Acesso
+                </button>
+                <button type="button" class="btn-secondary-modern" id="btnLimparRegistro">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         REGISTROS RECENTES
+    ═══════════════════════════════════════════════════════════ -->
+    <div class="page-card">
+        <h2><i class="fas fa-list"></i> Registros Recentes</h2>
+
+        <div class="search-box">
+            <input type="text" id="buscaRegistro" placeholder="Pesquisar por placa, nome, tipo, status, unidade ou entrada/saída...">
+            <button class="btn-primary-modern" type="button" id="btnBuscarRegistro">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+        </div>
+
+        <div id="loadingRegistros" class="loading" style="display:none;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Carregando registros...</p>
+        </div>
+
+        <div class="table-container">
+            <table id="tabelaRegistros">
+                <thead>
+                    <tr>
+                        <th>Data/Hora</th>
+                        <th>Placa</th>
+                        <th>Modelo</th>
+                        <th>Cor</th>
+                        <th>Tipo</th>
+                        <th>Nome</th>
+                        <th>Unidade</th>
+                        <th>Entrada/Saída</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ── Grid layouts ─────────────────────────────────────────── */
+.reg-grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px; margin-bottom:14px; }
+.reg-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:14px; }
+.reg-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+@media (max-width:900px) { .reg-grid-4 { grid-template-columns:1fr 1fr; } }
+@media (max-width:768px) { .reg-grid-4,.reg-grid-3,.reg-grid-2 { grid-template-columns:1fr; } }
+
+/* ── Seção título ─────────────────────────────────────────── */
+.form-section-title-reg {
+    font-size:12px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.5px; color:#2563eb;
+    border-bottom:2px solid #e8f0fe;
+    padding-bottom:5px; margin:18px 0 12px;
+    display:flex; align-items:center; gap:6px;
+}
+
+/* ── Botão buscar doc ─────────────────────────────────────── */
+.btn-buscar-doc {
+    background:#2563eb; color:#fff; border:none;
+    border-radius:6px; padding:8px 12px;
+    cursor:pointer; white-space:nowrap;
+}
+.btn-buscar-doc:hover { background:#1d4ed8; }
+
+/* ── Boxes de info ────────────────────────────────────────── */
+.visitante-encontrado, .veiculo-encontrado {
+    border-radius:8px; padding:10px 14px;
+    margin-bottom:14px; font-size:13px;
+    display:flex; align-items:center; gap:8px;
+}
+.visitante-encontrado { background:#e8f5e9; border:1px solid #81c784; color:#2e7d32; }
+.veiculo-encontrado   { background:#e3f2fd; border:1px solid #90caf9; color:#1565c0; }
+
+/* ── Morador info box ─────────────────────────────────────── */
+.morador-info-box {
+    background:#f0f7ff; border:1px solid #bfdbfe;
+    border-radius:6px; padding:8px 12px;
+    font-size:13px; color:#1e40af; font-weight:500;
+    min-height:38px; display:flex; align-items:center;
+}
+
+/* ── Toggle Entrada/Saída ─────────────────────────────────── */
+.tipo-acesso-group {
+    display:flex; gap:8px;
+}
+.tipo-acesso-btn {
+    flex:1; display:flex; align-items:center; justify-content:center;
+    gap:6px; padding:9px 10px; border-radius:8px; cursor:pointer;
+    border:2px solid #e2e8f0; background:#f8fafc;
+    font-size:13px; font-weight:600; transition:all .15s;
+    user-select:none;
+}
+.tipo-acesso-btn input[type="radio"] { display:none; }
+.tipo-acesso-btn.entrada-ativo {
+    border-color:#22c55e; background:#f0fdf4; color:#16a34a;
+}
+.tipo-acesso-btn.saida-ativo {
+    border-color:#ef4444; background:#fef2f2; color:#dc2626;
+}
+.tipo-acesso-btn:not(.entrada-ativo):not(.saida-ativo):hover {
+    border-color:#94a3b8; background:#f1f5f9;
+}
+
+/* ── Checkbox dependente ──────────────────────────────────── */
+.dependente-toggle-row {
+    margin:14px 0 10px;
+    padding:10px 14px;
+    background:#fafafa;
+    border:1px solid #e2e8f0;
+    border-radius:8px;
+}
+.checkbox-label {
+    display:flex; align-items:center; gap:10px;
+    cursor:pointer; font-size:14px; color:#374151;
+}
+.checkbox-label input[type="checkbox"] { display:none; }
+.checkbox-custom {
+    width:18px; height:18px; border:2px solid #94a3b8;
+    border-radius:4px; background:#fff; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    transition:all .15s;
+}
+.checkbox-label input[type="checkbox"]:checked + .checkbox-custom {
+    background:#2563eb; border-color:#2563eb;
+}
+.checkbox-label input[type="checkbox"]:checked + .checkbox-custom::after {
+    content:'✓'; color:#fff; font-size:12px; font-weight:700;
+}
+
+/* ── Badge entrada/saída na tabela ────────────────────────── */
+.badge-entrada { background:#dcfce7; color:#16a34a; padding:2px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+.badge-saida   { background:#fee2e2; color:#dc2626; padding:2px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+</style>

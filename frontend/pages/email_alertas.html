@@ -1,0 +1,677 @@
+<!-- page: email_alertas | css: email_alertas -->
+<div class="page-wrapper page-email-alertas">
+
+  <!-- ── PAGE HEADER ──────────────────────────────────────────── -->
+  <div class="page-header">
+    <div class="page-header-icon"><i class="fas fa-envelope"></i></div>
+    <div>
+      <h1 class="page-title">E-mail e Alertas</h1>
+      <p class="page-subtitle">Configure o servidor de envio, provedores e alertas automáticos do sistema</p>
+    </div>
+    <div style="margin-left:auto">
+      <button type="button" class="btn-secondary-modern btn-sm" onclick="EmailAlertasPage.carregarDashboard()" id="btn-refresh-dashboard" title="Atualizar painel">
+        <i class="fas fa-sync-alt"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── DASHBOARD KPI ─────────────────────────────────────────── -->
+  <div class="email-dashboard-grid" id="email-dashboard">
+
+    <!-- Card: Provedor Ativo -->
+    <div class="page-card email-kpi-card" id="kpi-provedor">
+      <div class="email-kpi-header">
+        <span class="email-kpi-icon email-kpi-icon--blue"><i class="fas fa-plug"></i></span>
+        <span class="email-kpi-label">Provedor Ativo</span>
+      </div>
+      <div class="email-kpi-main" id="kpi-provedor-nome">—</div>
+      <div class="email-kpi-meta">
+        <span id="kpi-provedor-remetente" class="email-kpi-sub">Carregando...</span>
+      </div>
+      <div class="email-kpi-footer">
+        <span class="email-kpi-badge" id="kpi-provedor-badge">—</span>
+        <span class="email-kpi-date" id="kpi-provedor-ultimo-teste"></span>
+      </div>
+    </div>
+
+    <!-- Card: Saúde do Serviço -->
+    <div class="page-card email-kpi-card" id="kpi-saude">
+      <div class="email-kpi-header">
+        <span class="email-kpi-icon email-kpi-icon--green"><i class="fas fa-heartbeat"></i></span>
+        <span class="email-kpi-label">Saúde do Serviço</span>
+      </div>
+      <div class="email-kpi-main" id="kpi-saude-status">—</div>
+      <div class="email-kpi-meta">
+        <span class="email-kpi-sub">Último envio: <span id="kpi-saude-ultimo-envio">—</span></span>
+      </div>
+      <div class="email-kpi-footer">
+        <button class="btn-link-inline" onclick="EmailAlertasPage.trocarAba('monitoramento')">
+          <i class="fas fa-stethoscope"></i> Ver diagnóstico completo
+        </button>
+      </div>
+    </div>
+
+    <!-- Card: Estatísticas -->
+    <div class="page-card email-kpi-card" id="kpi-stats">
+      <div class="email-kpi-header">
+        <span class="email-kpi-icon email-kpi-icon--purple"><i class="fas fa-chart-bar"></i></span>
+        <span class="email-kpi-label">Estatísticas de Hoje</span>
+      </div>
+      <div class="email-stats-row">
+        <div class="email-stat-item">
+          <span class="email-stat-num email-stat-num--green" id="kpi-enviados">—</span>
+          <span class="email-stat-desc">Enviados</span>
+        </div>
+        <div class="email-stat-sep"></div>
+        <div class="email-stat-item">
+          <span class="email-stat-num email-stat-num--red" id="kpi-falhas">—</span>
+          <span class="email-stat-desc">Falhas</span>
+        </div>
+        <div class="email-stat-sep"></div>
+        <div class="email-stat-item">
+          <span class="email-stat-num email-stat-num--blue" id="kpi-taxa">—</span>
+          <span class="email-stat-desc">Taxa entrega</span>
+        </div>
+      </div>
+      <div class="email-kpi-footer">
+        <span class="email-kpi-sub">Tempo médio: <span id="kpi-tempo">—</span></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── ABAS ─────────────────────────────────────────────────── -->
+  <div class="page-card" style="padding:0;margin-bottom:0;overflow:hidden">
+    <div class="tabs-container">
+      <button class="tab-btn active" data-tab="provedor" onclick="EmailAlertasPage.trocarAba('provedor')">
+        <i class="fas fa-plug"></i> Provedor de E-mail
+      </button>
+      <button class="tab-btn" data-tab="teste" onclick="EmailAlertasPage.trocarAba('teste')">
+        <i class="fas fa-flask"></i> Testar Conexão
+      </button>
+      <button class="tab-btn" data-tab="alertas" onclick="EmailAlertasPage.trocarAba('alertas')">
+        <i class="fas fa-bell"></i> Alertas
+      </button>
+      <button class="tab-btn" data-tab="logs" onclick="EmailAlertasPage.trocarAba('logs')">
+        <i class="fas fa-list-alt"></i> Log de Envios
+      </button>
+      <button class="tab-btn" data-tab="docs" onclick="EmailAlertasPage.trocarAba('docs')">
+        <i class="fas fa-book"></i> Documentação
+      </button>
+      <button class="tab-btn" data-tab="monitoramento" onclick="EmailAlertasPage.trocarAba('monitoramento')">
+        <i class="fas fa-stethoscope"></i> Monitoramento
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ABA: PROVEDOR SMTP                                           -->
+  <!-- ============================================================ -->
+  <div id="tab-provedor" class="tab-content active">
+
+    <!-- Status atual -->
+    <div class="page-card" style="margin-bottom:16px">
+      <div class="smtp-status-card">
+        <div class="smtp-status-info">
+          <div class="smtp-status-icon" id="smtp-status-icon">
+            <i class="fas fa-envelope" style="color:#94a3b8"></i>
+          </div>
+          <div>
+            <div class="smtp-status-title" id="smtp-status-titulo">Nenhuma configuração ativa</div>
+            <div class="smtp-status-detail" id="smtp-status-detalhe">Configure um provedor para habilitar o envio de e-mails</div>
+          </div>
+        </div>
+        <div id="smtp-status-badge" style="display:none">
+          <span class="badge-log enviado"><i class="fas fa-check-circle"></i> <span id="smtp-status-badge-texto">Configurado</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seleção do TIPO de provedor (Brevo / Resend / SMTP) -->
+    <div class="page-card" style="margin-bottom:16px">
+      <div class="card-header-row">
+        <h3><i class="fas fa-plug"></i> Provedor de E-mail</h3>
+      </div>
+
+      <!-- Banner recomendação -->
+      <div class="provider-banner-info">
+        <i class="fas fa-star"></i>
+        <span>Recomendamos o <strong>Brevo</strong> como provedor padrão — gratuito até 300 e-mails/dia, sem necessidade de configurar servidor SMTP. <a onclick="EmailAlertasPage.trocarAba('docs')" class="banner-link">Ver documentação</a></span>
+      </div>
+
+      <div class="email-provider-grid">
+        <div class="email-provider-card active" data-email-provider="brevo"
+             onclick="EmailAlertasPage.selecionarEmailProvider('brevo')">
+          <div class="email-provider-icon">📧</div>
+          <div class="email-provider-nome">Brevo</div>
+          <div class="email-provider-desc">API REST oficial</div>
+          <span class="email-provider-badge">Padrão</span>
+        </div>
+        <div class="email-provider-card" data-email-provider="resend"
+             onclick="EmailAlertasPage.selecionarEmailProvider('resend')">
+          <div class="email-provider-icon">✉️</div>
+          <div class="email-provider-nome">Resend</div>
+          <div class="email-provider-desc">API REST moderna</div>
+        </div>
+        <div class="email-provider-card" data-email-provider="smtp"
+             onclick="EmailAlertasPage.selecionarEmailProvider('smtp')">
+          <div class="email-provider-icon">🖥️</div>
+          <div class="email-provider-nome">SMTP</div>
+          <div class="email-provider-desc">Personalizado</div>
+        </div>
+      </div>
+
+      <!-- Indicador da configuração ativa -->
+      <div id="provider-config-atual" style="display:none" class="provider-config-row">
+        <i class="fas fa-check-circle" style="color:#22c55e"></i>
+        <span style="font-size:13px;color:#475569">Configuração ativa:</span>
+        <span id="provider-config-badge" class="provider-badge-atual"></span>
+        <span id="provider-config-status" class="provider-badge-status"></span>
+      </div>
+
+      <!-- Presets SMTP — só visível em modo SMTP -->
+      <div id="smtp-presets-wrap" style="display:none;margin-top:20px;border-top:1px solid #e2e8f0;padding-top:16px">
+        <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.4px">
+          <i class="fas fa-server"></i> Usar configuração pré-definida:
+        </div>
+        <div class="provedores-grid" id="provedores-grid">
+          <!-- Preenchido via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulário do Provedor -->
+    <div class="page-card">
+      <div class="card-header-row">
+        <h3><i class="fas fa-cog"></i> Configuração do Provedor</h3>
+      </div>
+
+      <!-- Ajuda do provedor (SMTP presets) -->
+      <div id="provedor-ajuda" class="provedor-ajuda-box" style="display:none">
+        <i class="fas fa-info-circle"></i>
+        <div>
+          <div class="provedor-ajuda-texto" id="provedor-ajuda-texto"></div>
+          <a id="provedor-ajuda-link" href="#" target="_blank" class="provedor-ajuda-link" style="display:none">
+            <i class="fas fa-external-link-alt"></i> Ver documentação
+          </a>
+        </div>
+      </div>
+
+      <!-- ── CAMPOS API (Brevo / Resend) ── -->
+      <div id="campos-api" style="display:none">
+        <div class="api-info-box">
+          <i class="fas fa-shield-alt"></i>
+          <span>A API Key será <strong>criptografada</strong> antes de ser armazenada. Nunca é exposta em texto puro.</span>
+        </div>
+        <div class="form-grid-2">
+          <div style="grid-column:1/-1">
+            <label class="form-label">API Key <span style="color:#ef4444">*</span></label>
+            <div class="senha-wrap">
+              <input type="password" id="api-key" placeholder="Cole aqui sua API Key">
+              <button type="button" class="btn-toggle-senha" onclick="EmailAlertasPage.toggleApiKey()">
+                <i class="fas fa-eye" id="api-key-icon"></i>
+              </button>
+            </div>
+            <span class="input-hint" id="api-key-mask">Deixe em branco para manter a chave atual</span>
+          </div>
+          <div>
+            <label class="form-label">E-mail Remetente <span style="color:#ef4444">*</span></label>
+            <input type="email" id="sender-email" placeholder="noreply@seudominio.com.br">
+          </div>
+          <div>
+            <label class="form-label">Nome Remetente <span style="color:#ef4444">*</span></label>
+            <input type="text" id="sender-name" placeholder="Serra da Liberdade">
+          </div>
+        </div>
+
+        <!-- Docs rápidos (colapsável por JS ao trocar de provider) -->
+        <div id="api-docs-brevo" class="api-docs-box" style="display:none">
+          <div class="api-docs-titulo"><i class="fas fa-book"></i> Como obter a API Key do Brevo</div>
+          <ol class="api-docs-steps">
+            <li>Acesse <strong>app.brevo.com</strong> e crie uma conta gratuita (até 300 e-mails/dia).</li>
+            <li>Clique no seu nome → <strong>SMTP &amp; API</strong> → aba <strong>API Keys</strong>.</li>
+            <li>Clique em <strong>Create a new API key</strong>, copie e cole acima.</li>
+            <li>Em <strong>Senders → Add a new sender</strong> verifique o e-mail remetente.</li>
+          </ol>
+        </div>
+        <div id="api-docs-resend" class="api-docs-box" style="display:none">
+          <div class="api-docs-titulo"><i class="fas fa-book"></i> Como obter a API Key do Resend</div>
+          <ol class="api-docs-steps">
+            <li>Acesse <strong>resend.com</strong> e crie uma conta (3.000 e-mails/mês grátis).</li>
+            <li>Vá em <strong>API Keys</strong> → <strong>Create API Key</strong>.</li>
+            <li>Em <strong>Domains</strong>, adicione e verifique seu domínio de envio.</li>
+            <li>Cole a API Key acima e use um e-mail do domínio verificado como remetente.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- ── CAMPOS SMTP ── -->
+      <div id="campos-smtp" style="display:none">
+        <div class="form-grid-2">
+          <div>
+            <label class="form-label">Host SMTP *</label>
+            <input type="text" id="smtp-host" placeholder="smtp.gmail.com">
+          </div>
+          <div>
+            <label class="form-label">Porta *</label>
+            <input type="number" id="smtp-port" placeholder="587" value="587">
+          </div>
+          <div>
+            <label class="form-label">Usuário / E-mail *</label>
+            <input type="email" id="smtp-usuario" placeholder="seu@email.com">
+          </div>
+          <div>
+            <label class="form-label">Senha / App Password *</label>
+            <div class="senha-wrap">
+              <input type="password" id="smtp-senha" placeholder="••••••••••••">
+              <button type="button" class="btn-toggle-senha" onclick="EmailAlertasPage.toggleSenha()">
+                <i class="fas fa-eye" id="smtp-senha-icon"></i>
+              </button>
+            </div>
+            <span class="input-hint">Deixe em branco para manter a senha atual</span>
+          </div>
+          <div>
+            <label class="form-label">E-mail de Envio (De:) *</label>
+            <input type="email" id="smtp-de-email" placeholder="noreply@seudominio.com">
+          </div>
+          <div>
+            <label class="form-label">Nome do Remetente</label>
+            <input type="text" id="smtp-de-nome" placeholder="Sistema ERP" value="Sistema ERP">
+          </div>
+          <div>
+            <label class="form-label">Segurança</label>
+            <select id="smtp-seguranca">
+              <option value="tls">TLS (recomendado — porta 587)</option>
+              <option value="ssl">SSL (porta 465)</option>
+              <option value="none">Nenhuma (não recomendado)</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Timeout (segundos)</label>
+            <input type="number" id="smtp-timeout" value="30" min="5" max="120">
+          </div>
+        </div>
+      </div>
+
+      <!-- Status (ativo/inativo) — comum a todos os providers -->
+      <div class="form-status-row">
+        <div>
+          <label class="form-label">Status da Configuração</label>
+          <select id="smtp-ativo" title="Status da configuração de e-mail">
+            <option value="1">Ativo — envios habilitados</option>
+            <option value="0">Inativo — envios desabilitados</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
+        <button class="btn-primary-modern" onclick="EmailAlertasPage.salvarSMTP()">
+          <i class="fas fa-save"></i> Salvar Configuração
+        </button>
+        <button class="btn-secondary-modern" onclick="EmailAlertasPage.trocarAba('teste')">
+          <i class="fas fa-flask"></i> Testar Conexão
+        </button>
+        <button class="btn-secondary-modern" onclick="EmailAlertasPage.recarregarConfig()">
+          <i class="fas fa-sync"></i> Recarregar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ABA: TESTAR CONEXÃO                                          -->
+  <!-- ============================================================ -->
+  <div id="tab-teste" class="tab-content">
+    <div class="page-card" style="max-width:620px">
+      <div class="card-header-row">
+        <h3><i class="fas fa-flask"></i> Testar Conexão SMTP</h3>
+      </div>
+      <p style="color:#64748b;margin-bottom:20px;font-size:14px">
+        Informe um e-mail para receber o e-mail de teste e verificar se a configuração está funcionando corretamente.
+      </p>
+
+      <div style="margin-bottom:20px">
+        <label class="form-label">E-mail para Teste *</label>
+        <input type="email" id="teste-email" placeholder="seu@email.com">
+      </div>
+
+      <button class="btn-primary-modern" onclick="EmailAlertasPage.testarSMTP()" id="btn-testar">
+        <i class="fas fa-paper-plane"></i> Enviar E-mail de Teste
+      </button>
+
+      <div id="teste-resultado" class="teste-resultado" style="display:none"></div>
+    </div>
+
+    <!-- Config resumo -->
+    <div class="page-card" style="max-width:620px;margin-top:16px">
+      <div class="card-header-row">
+        <h3><i class="fas fa-info-circle"></i> Configuração Atual</h3>
+      </div>
+      <div id="smtp-resumo" class="smtp-resumo-grid">
+        <div class="smtp-resumo-item">
+          <div class="smtp-resumo-label">Status</div>
+          <div class="smtp-resumo-valor" style="color:#94a3b8">Carregando...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ABA: ALERTAS                                                 -->
+  <!-- ============================================================ -->
+  <div id="tab-alertas" class="tab-content">
+
+    <!-- Filtro por módulo -->
+    <div class="page-card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-weight:600;color:#334155;font-size:14px">Filtrar por módulo:</span>
+        <div id="alertas-filtros" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-modulo-filtro active" data-modulo="" onclick="EmailAlertasPage.filtrarAlertas('')">Todos</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista de alertas por grupo -->
+    <div id="alertas-container">
+      <div class="empty-state">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Carregando alertas...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ABA: LOG DE ENVIOS                                           -->
+  <!-- ============================================================ -->
+  <div id="tab-logs" class="tab-content">
+    <div class="page-card" style="margin-bottom:16px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <div>
+          <label class="form-label">Status</label>
+          <select id="log-filtro-status" style="min-width:140px" onchange="EmailAlertasPage.carregarLogs()">
+            <option value="">Todos</option>
+            <option value="enviado">Enviados</option>
+            <option value="erro">Com Erro</option>
+            <option value="pendente">Pendentes</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Tipo</label>
+          <select id="log-filtro-tipo" style="min-width:160px" onchange="EmailAlertasPage.carregarLogs()">
+            <option value="">Todos</option>
+            <option value="teste">Teste</option>
+            <option value="alerta">Alerta</option>
+            <option value="reset_senha">Reset de Senha</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Buscar</label>
+          <input type="text" id="log-busca" placeholder="E-mail ou assunto..." oninput="EmailAlertasPage.carregarLogs()" style="min-width:200px">
+        </div>
+        <button class="btn-secondary-modern" onclick="EmailAlertasPage.carregarLogs()">
+          <i class="fas fa-sync"></i> Atualizar
+        </button>
+        <button class="btn-danger-modern" onclick="EmailAlertasPage.limparLogs()" style="margin-left:auto">
+          <i class="fas fa-trash"></i> Limpar Logs Antigos
+        </button>
+      </div>
+    </div>
+
+    <div class="page-card" style="padding:0;overflow:hidden">
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Tipo / Alerta</th>
+              <th>Destinatário</th>
+              <th>Assunto</th>
+              <th>Status</th>
+              <th>Detalhes</th>
+            </tr>
+          </thead>
+          <tbody id="log-tbody">
+            <tr><td colspan="6" style="text-align:center;padding:40px;color:#94a3b8">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="pag-wrap" id="log-paginacao"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ABA: DOCUMENTAÇÃO                                            -->
+  <!-- ============================================================ -->
+  <div id="tab-docs" class="tab-content">
+
+    <div class="page-card" style="margin-bottom:16px">
+      <div class="card-header-row">
+        <h3><i class="fas fa-book"></i> Como Configurar cada Provedor</h3>
+      </div>
+
+      <!-- Tabs de doc -->
+      <div class="docs-tabs-bar">
+        <button class="docs-tab-btn active" data-doc="brevo" onclick="EmailAlertasPage.trocarDocTab('brevo', this)">
+          📧 Brevo
+        </button>
+        <button class="docs-tab-btn" data-doc="resend" onclick="EmailAlertasPage.trocarDocTab('resend', this)">
+          ✉️ Resend
+        </button>
+        <button class="docs-tab-btn" data-doc="smtp" onclick="EmailAlertasPage.trocarDocTab('smtp', this)">
+          🖥️ SMTP Personalizado
+        </button>
+      </div>
+
+      <!-- Brevo -->
+      <div class="docs-panel active" id="doc-panel-brevo">
+        <div class="docs-alert-info">
+          <i class="fas fa-gift"></i>
+          <span><strong>Gratuito:</strong> até 300 e-mails/dia e 9.000/mês. Sem necessidade de configurar servidor SMTP.</span>
+        </div>
+        <div class="docs-step"><div class="docs-step-num">1</div><div>Acesse <strong>app.brevo.com</strong> e crie uma conta gratuita.</div></div>
+        <div class="docs-step"><div class="docs-step-num">2</div><div>No menu superior, clique no seu nome → <strong>SMTP &amp; API</strong>.</div></div>
+        <div class="docs-step"><div class="docs-step-num">3</div><div>Vá em <strong>API Keys</strong> → <strong>Create a new API key</strong>.</div></div>
+        <div class="docs-step"><div class="docs-step-num">4</div><div>Copie a chave gerada e cole no campo <strong>API Key</strong> da aba Provedor de E-mail.</div></div>
+        <div class="docs-step"><div class="docs-step-num">5</div><div>Em <strong>Senders → Add a new sender</strong>, verifique o e-mail que usará como remetente.</div></div>
+        <pre class="docs-code-block">Endpoint: https://api.brevo.com/v3/smtp/email
+Auth:     Header → api-key: SUA_API_KEY
+Grátis:   300 e-mails/dia · 9.000/mês · sem cartão de crédito</pre>
+        <div class="docs-action-row">
+          <button type="button" class="btn-secondary-modern btn-sm" onclick="EmailAlertasPage.selecionarEmailProvider('brevo');EmailAlertasPage.trocarAba('provedor')">
+            <i class="fas fa-arrow-left"></i> Configurar Brevo agora
+          </button>
+        </div>
+      </div>
+
+      <!-- Resend -->
+      <div class="docs-panel" id="doc-panel-resend">
+        <div class="docs-alert-info">
+          <i class="fas fa-gift"></i>
+          <span><strong>Gratuito:</strong> até 3.000 e-mails/mês no plano free. API moderna com alta entregabilidade.</span>
+        </div>
+        <div class="docs-step"><div class="docs-step-num">1</div><div>Acesse <strong>resend.com</strong> e crie uma conta.</div></div>
+        <div class="docs-step"><div class="docs-step-num">2</div><div>Vá em <strong>API Keys</strong> → <strong>Create API Key</strong> e copie a chave.</div></div>
+        <div class="docs-step"><div class="docs-step-num">3</div><div>Em <strong>Domains</strong>, adicione e verifique o seu domínio de envio (verificação via DNS).</div></div>
+        <div class="docs-step"><div class="docs-step-num">4</div><div>Use um e-mail do domínio verificado no campo <strong>E-mail Remetente</strong>.</div></div>
+        <pre class="docs-code-block">Endpoint: https://api.resend.com/emails
+Auth:     Header → Authorization: Bearer SUA_API_KEY
+Grátis:   3.000 e-mails/mês · 1 domínio personalizado</pre>
+        <div class="docs-action-row">
+          <button type="button" class="btn-secondary-modern btn-sm" onclick="EmailAlertasPage.selecionarEmailProvider('resend');EmailAlertasPage.trocarAba('provedor')">
+            <i class="fas fa-arrow-left"></i> Configurar Resend agora
+          </button>
+        </div>
+      </div>
+
+      <!-- SMTP -->
+      <div class="docs-panel" id="doc-panel-smtp">
+        <div class="docs-alert-warning">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>SMTP é um fallback opcional. Para produção em condomínios, prefira <strong>Brevo</strong> ou <strong>Resend</strong> — sem bloqueio de porta 587 por ISP.</span>
+        </div>
+
+        <h4 class="docs-sub-titulo">HostGator / cPanel</h4>
+        <pre class="docs-code-block">Servidor:  mail.seudominio.com.br
+Porta:     465 (SSL)  ou  587 (TLS)
+Segurança: SSL para 465  /  TLS para 587
+Usuário:   email@seudominio.com.br
+Senha:     senha da caixa de e-mail</pre>
+
+        <h4 class="docs-sub-titulo docs-sub-titulo--gap">Gmail (Senha de Aplicativo)</h4>
+        <div class="docs-alert-warning docs-alert-warning--sm">
+          <i class="fas fa-info-circle"></i>
+          <span>Requer <strong>Verificação em 2 etapas</strong> ativa e uma <strong>Senha de Aplicativo</strong> gerada em Conta Google → Segurança.</span>
+        </div>
+        <pre class="docs-code-block">Servidor:  smtp.gmail.com
+Porta:     587
+Segurança: TLS
+Usuário:   seuemail@gmail.com
+Senha:     senha de app de 16 dígitos (não a senha normal)</pre>
+
+        <h4 class="docs-sub-titulo docs-sub-titulo--gap">Outlook / Office 365</h4>
+        <pre class="docs-code-block">Servidor:  smtp.office365.com
+Porta:     587
+Segurança: TLS (STARTTLS)
+Usuário:   seuemail@outlook.com
+Senha:     senha da conta Microsoft</pre>
+        <div class="docs-action-row">
+          <button type="button" class="btn-secondary-modern btn-sm" onclick="EmailAlertasPage.selecionarEmailProvider('smtp');EmailAlertasPage.trocarAba('provedor')">
+            <i class="fas fa-arrow-left"></i> Configurar SMTP agora
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ABA: MONITORAMENTO                                           -->
+  <!-- ============================================================ -->
+  <div id="tab-monitoramento" class="tab-content">
+
+    <div class="page-card" style="margin-bottom:16px">
+      <div class="card-header-row">
+        <h3><i class="fas fa-stethoscope"></i> Verificar Ambiente de E-mail</h3>
+        <button type="button" class="btn-primary-modern" id="btn-monitorar" onclick="EmailAlertasPage.executarMonitoramento()">
+          <i class="fas fa-play-circle"></i> Verificar Ambiente
+        </button>
+      </div>
+      <p style="color:#64748b;font-size:13px;margin-top:8px">
+        Verifica conectividade com as APIs (Brevo/Resend), porta SMTP, registros DNS, SPF, DMARC e DKIM do domínio remetente.
+      </p>
+    </div>
+
+    <!-- Resultado do monitoramento -->
+    <div id="monitoramento-resultado" style="display:none">
+
+      <!-- Resumo -->
+      <div class="page-card email-monitor-resumo" id="monitor-resumo-card" style="margin-bottom:16px">
+        <div class="email-monitor-resumo-items">
+          <div class="email-monitor-resumo-item">
+            <span class="email-monitor-resumo-num email-stat-num--green" id="monitor-ok">0</span>
+            <span class="email-monitor-resumo-label">OK</span>
+          </div>
+          <div class="email-stat-sep"></div>
+          <div class="email-monitor-resumo-item">
+            <span class="email-monitor-resumo-num" style="color:#f59e0b" id="monitor-avisos">0</span>
+            <span class="email-monitor-resumo-label">Avisos</span>
+          </div>
+          <div class="email-stat-sep"></div>
+          <div class="email-monitor-resumo-item">
+            <span class="email-monitor-resumo-num email-stat-num--red" id="monitor-erros">0</span>
+            <span class="email-monitor-resumo-label">Erros</span>
+          </div>
+        </div>
+        <span class="email-kpi-sub" id="monitor-timestamp"></span>
+      </div>
+
+      <!-- Cards de resultado por serviço -->
+      <div class="email-monitor-grid" id="monitor-cards">
+        <!-- preenchido via JS -->
+      </div>
+
+    </div>
+
+    <!-- Estado vazio inicial -->
+    <div id="monitoramento-vazio" class="empty-state">
+      <i class="fas fa-stethoscope" style="font-size:2.5rem;color:#cbd5e1;margin-bottom:12px"></i>
+      <p style="color:#94a3b8">Clique em <strong>Verificar Ambiente</strong> para iniciar o diagnóstico.</p>
+    </div>
+
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: EDITAR ALERTA                                         -->
+  <!-- ============================================================ -->
+  <div id="modal-alerta" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><i class="fas fa-bell"></i> <span id="modal-alerta-titulo">Configurar Alerta</span></h3>
+        <button class="modal-close" onclick="EmailAlertasPage.fecharModalAlerta()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="modal-alerta-id">
+
+        <div class="form-grid-2" style="margin-bottom:16px">
+          <div style="grid-column:1/-1">
+            <label class="form-label">Assunto do E-mail *</label>
+            <input type="text" id="modal-assunto" placeholder="Assunto com {{variaveis}} disponíveis">
+          </div>
+          <div>
+            <label class="form-label">Destinatário</label>
+            <select id="modal-dest-tipo" onchange="EmailAlertasPage.toggleDestEmail()">
+              <option value="morador">Morador vinculado</option>
+              <option value="admin">Administrador do sistema</option>
+              <option value="todos_admins">Todos os administradores</option>
+              <option value="email_fixo">E-mail fixo</option>
+            </select>
+          </div>
+          <div id="modal-dest-email-wrap" style="display:none">
+            <label class="form-label">E-mail Fixo</label>
+            <input type="email" id="modal-dest-email" placeholder="destino@email.com">
+          </div>
+          <div style="grid-column:1/-1">
+            <label class="form-label">CC (cópia — separar por vírgula)</label>
+            <input type="text" id="modal-cc" placeholder="cc1@email.com, cc2@email.com">
+          </div>
+        </div>
+
+        <!-- Variáveis disponíveis -->
+        <div id="modal-variaveis-wrap" class="variaveis-box">
+          <div class="variaveis-titulo">Variáveis disponíveis — clique para inserir no corpo:</div>
+          <div id="modal-variaveis-lista"></div>
+        </div>
+
+        <!-- Editor do corpo HTML -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <label class="form-label" style="margin:0">Corpo do E-mail (HTML)</label>
+            <div style="display:flex;gap:8px">
+              <button class="btn-secondary-modern btn-sm" onclick="EmailAlertasPage.previewAlerta()">
+                <i class="fas fa-eye"></i> Preview
+              </button>
+              <button class="btn-secondary-modern btn-sm" onclick="EmailAlertasPage.resetarTemplate()">
+                <i class="fas fa-undo"></i> Restaurar Padrão
+              </button>
+            </div>
+          </div>
+          <textarea id="modal-corpo" rows="14" style="font-family:monospace;font-size:12px;resize:vertical" placeholder="<html>...</html>"></textarea>
+        </div>
+
+        <!-- Preview -->
+        <div id="modal-preview-wrap" class="preview-box" style="display:none">
+          <div class="preview-titulo">Preview do E-mail:</div>
+          <div id="modal-preview-conteudo" style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary-modern" onclick="EmailAlertasPage.fecharModalAlerta()">Cancelar</button>
+        <button class="btn-primary-modern" onclick="EmailAlertasPage.salvarAlerta()">
+          <i class="fas fa-save"></i> Salvar Alerta
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .page-wrapper -->
+

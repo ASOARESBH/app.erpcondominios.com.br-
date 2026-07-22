@@ -1,0 +1,832 @@
+/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES - ABASTECIMENTO
+|--------------------------------------------------------------------------
+| CSS autossuficiente: o router carrega APENAS este arquivo para a página
+| de abastecimento. Não herda nenhum outro CSS de página.
+|
+| Proibido: redefinir .page-wrapper, .page-header, .page-card, .sidebar
+|--------------------------------------------------------------------------
+*/
+
+/* ============================================
+   PAGE HEADER COM KPI DE SALDO
+   ============================================ */
+.page-abastecimento .page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-abastecimento .page-header-content h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+
+.page-abastecimento .page-header-content p {
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* KPI de Saldo no Header */
+.page-abastecimento .saldo-kpi {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border: 1px solid #bfdbfe;
+    border-radius: 14px;
+    padding: 1rem 1.5rem;
+    text-align: center;
+    min-width: 180px;
+    transition: all 0.3s ease;
+}
+
+.page-abastecimento .saldo-kpi.negativo {
+    background: linear-gradient(135deg, #fef2f2, #fecaca);
+    border-color: #fca5a5;
+}
+
+.page-abastecimento .saldo-kpi.alerta {
+    background: linear-gradient(135deg, #fffbeb, #fde68a);
+    border-color: #fcd34d;
+}
+
+.page-abastecimento .saldo-kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.page-abastecimento .saldo-kpi-valor {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #1e40af;
+    line-height: 1;
+}
+
+.page-abastecimento .saldo-kpi.negativo .saldo-kpi-valor {
+    color: #dc2626;
+}
+
+.page-abastecimento .saldo-kpi.alerta .saldo-kpi-valor {
+    color: #d97706;
+}
+
+/* Botão Sincronizar Saldo */
+.page-abastecimento .btn-sincronizar-saldo {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #2563eb;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid #93c5fd;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.3px;
+    font-family: inherit;
+}
+.page-abastecimento .btn-sincronizar-saldo:hover {
+    background: #fff;
+    border-color: #2563eb;
+    box-shadow: 0 2px 6px rgba(37,99,235,0.15);
+}
+.page-abastecimento .btn-sincronizar-saldo:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.page-abastecimento .saldo-kpi.negativo .btn-sincronizar-saldo {
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+.page-abastecimento .saldo-kpi.alerta .btn-sincronizar-saldo {
+    color: #d97706;
+    border-color: #fcd34d;
+}
+
+/* ============================================
+   TABS NAVIGATION
+   ============================================ */
+.page-abastecimento .tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+
+.page-abastecimento .tab-button {
+    padding: 0.875rem 1.5rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.page-abastecimento .tab-button i {
+    font-size: 15px;
+}
+
+.page-abastecimento .tab-button:hover {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.04);
+    border-radius: 6px 6px 0 0;
+}
+
+.page-abastecimento .tab-button.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+}
+
+/* Tab Content — CRÍTICO: oculta abas inativas */
+.page-abastecimento .tab-content {
+    display: none;
+    animation: abastFadeIn 0.3s ease;
+}
+
+.page-abastecimento .tab-content.active {
+    display: block;
+}
+
+@keyframes abastFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   CARD HEADER COM AÇÕES
+   ============================================ */
+.page-abastecimento .card-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.page-abastecimento .card-header-actions h2 {
+    margin: 0;
+}
+
+.page-abastecimento .search-inline {
+    flex: 1;
+    max-width: 320px;
+}
+
+.page-abastecimento .search-inline input {
+    width: 100%;
+    padding: 9px 14px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    font-size: 13px;
+    font-family: inherit;
+    color: #1e293b;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.page-abastecimento .search-inline input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+/* ============================================
+   FORM GRID
+   ============================================ */
+.page-abastecimento .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-abastecimento .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.page-abastecimento label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.page-abastecimento input,
+.page-abastecimento select,
+.page-abastecimento textarea {
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #1e293b;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.page-abastecimento input:focus,
+.page-abastecimento select:focus,
+.page-abastecimento textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.page-abastecimento input:disabled,
+.page-abastecimento select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: #f1f5f9;
+}
+
+.page-abastecimento .form-hint {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+/* ============================================
+   CALC PREVIEW
+   ============================================ */
+.page-abastecimento .calc-preview {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: none;
+}
+
+.page-abastecimento .calc-preview.show {
+    display: block;
+}
+
+.page-abastecimento .calc-preview h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #166534;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-abastecimento .calc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+
+.page-abastecimento .calc-item label {
+    font-size: 11px;
+    color: #166534;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.page-abastecimento .calc-item span {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #15803d;
+}
+
+.page-abastecimento .calc-item span.negativo {
+    color: #dc2626;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.page-abastecimento .btn-primary {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border: none;
+    border-radius: 8px;
+    padding: 11px 22px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.page-abastecimento .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.3);
+    filter: brightness(1.08);
+}
+
+.page-abastecimento .btn-secondary {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 11px 22px;
+    color: #475569;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-abastecimento .btn-secondary:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.page-abastecimento .btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-abastecimento .btn-danger:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+}
+
+.page-abastecimento .btn-info {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-abastecimento .btn-info:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+}
+
+.page-abastecimento .btn-primary:disabled,
+.page-abastecimento .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    filter: none;
+    box-shadow: none;
+}
+
+.page-abastecimento .btn-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+/* ============================================
+   ALERT / INFO BOX
+   ============================================ */
+.page-abastecimento .alert {
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 1.25rem;
+    font-size: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.page-abastecimento .alert i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+.page-abastecimento .alert-info    { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.page-abastecimento .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.page-abastecimento .alert-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.page-abastecimento .alert-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* ============================================
+   TABLE
+   ============================================ */
+.page-abastecimento .table-container {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    overflow-x: auto;
+}
+
+.page-abastecimento table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+.page-abastecimento thead {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+}
+
+.page-abastecimento th {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 14px 16px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.page-abastecimento td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.page-abastecimento tbody tr {
+    transition: background 0.15s ease;
+}
+
+.page-abastecimento tbody tr:hover {
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.page-abastecimento tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.page-abastecimento .empty-row td {
+    text-align: center;
+    padding: 2.5rem;
+    color: #94a3b8;
+}
+
+.page-abastecimento .empty-row i {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+/* ============================================
+   KPI STATS GRID (RELATÓRIO)
+   ============================================ */
+.page-abastecimento .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-abastecimento .kpi-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+}
+
+.page-abastecimento .kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.page-abastecimento .kpi-icon.blue   { background: #eff6ff; color: #2563eb; }
+.page-abastecimento .kpi-icon.green  { background: #f0fdf4; color: #16a34a; }
+.page-abastecimento .kpi-icon.amber  { background: #fffbeb; color: #d97706; }
+.page-abastecimento .kpi-icon.purple { background: #f5f3ff; color: #7c3aed; }
+
+.page-abastecimento .kpi-content h3 {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 4px;
+}
+
+.page-abastecimento .kpi-content .value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1;
+}
+
+/* ============================================
+   LOADING STATE
+   ============================================ */
+.page-abastecimento .loading-state {
+    padding: 2.5rem;
+    text-align: center;
+    color: #3b82f6;
+}
+
+.page-abastecimento .loading-state i {
+    font-size: 1.8rem;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.page-abastecimento .loading-state p {
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* ============================================
+   MODAL
+   ============================================ */
+.modal-overlay.modal-abastecimento {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    backdrop-filter: blur(2px);
+}
+
+.modal-overlay.modal-abastecimento.show {
+    display: flex;
+}
+
+.modal-overlay.modal-abastecimento .modal-box {
+    background: #fff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from { transform: translateY(-20px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+
+.modal-overlay.modal-abastecimento .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.modal-overlay.modal-abastecimento .modal-header h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-overlay.modal-abastecimento .modal-header h3 i {
+    color: #2563eb;
+}
+
+.modal-overlay.modal-abastecimento .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    padding: 6px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.modal-overlay.modal-abastecimento .modal-close:hover {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.modal-overlay.modal-abastecimento .modal-body {
+    padding: 1.5rem;
+}
+
+.modal-overlay.modal-abastecimento .modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+/* Info Box no Modal */
+.page-abastecimento .info-box,
+.modal-overlay.modal-abastecimento .info-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.page-abastecimento .info-box strong,
+.modal-overlay.modal-abastecimento .info-box strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.page-abastecimento .info-box p,
+.modal-overlay.modal-abastecimento .info-box p {
+    font-size: 14px;
+    color: #475569;
+    margin-bottom: 4px;
+}
+
+/* ============================================
+   TOAST NOTIFICATION
+   ============================================ */
+.toast-container-abast {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    pointer-events: none;
+}
+
+.toast-container-abast .toast {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 280px;
+    max-width: 380px;
+    pointer-events: all;
+    animation: toastAbastIn 0.3s ease;
+    border-left: 4px solid #2563eb;
+}
+
+.toast-container-abast .toast.success { border-left-color: #16a34a; }
+.toast-container-abast .toast.error   { border-left-color: #ef4444; }
+.toast-container-abast .toast.warning { border-left-color: #d97706; }
+
+.toast-container-abast .toast i { font-size: 1.1rem; flex-shrink: 0; }
+.toast-container-abast .toast.success i { color: #16a34a; }
+.toast-container-abast .toast.error   i { color: #ef4444; }
+.toast-container-abast .toast.warning i { color: #d97706; }
+.toast-container-abast .toast.info    i { color: #2563eb; }
+
+.toast-container-abast .toast span {
+    font-size: 14px;
+    color: #1e293b;
+    font-weight: 500;
+    flex: 1;
+}
+
+@keyframes toastAbastIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    .page-abastecimento .page-header {
+        flex-direction: column;
+    }
+
+    .page-abastecimento .saldo-kpi {
+        width: 100%;
+    }
+
+    .page-abastecimento .tabs {
+        gap: 0.25rem;
+    }
+
+    .page-abastecimento .tab-button {
+        padding: 0.75rem 1rem;
+        font-size: 0.82rem;
+    }
+
+    .page-abastecimento .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-abastecimento .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .page-abastecimento .card-header-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .page-abastecimento .search-inline {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .page-abastecimento .btn-actions {
+        flex-direction: column;
+    }
+
+    .page-abastecimento .btn-actions button {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ============================================
+   BOTÃO GERAR PDF
+   ============================================ */
+.page-abastecimento .btn-pdf {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    border: none;
+    border-radius: 8px;
+    padding: 11px 22px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+    font-family: inherit;
+}
+
+.page-abastecimento .btn-pdf:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(220, 38, 38, 0.35);
+    filter: brightness(1.08);
+}
+
+.page-abastecimento .btn-pdf:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.2);
+}
+
+.page-abastecimento .btn-pdf i {
+    font-size: 15px;
+}

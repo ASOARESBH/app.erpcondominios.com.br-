@@ -1,0 +1,101 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Meu Perfil" data-icon="fa-user-circle" style="display:none;"></div>
+
+<div class="page-wrapper page-meu-perfil">
+
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb-mp">
+    <span data-page="configuracao"><i class="fas fa-cog"></i> Configurações</span>
+    <span class="sep-mp"><i class="fas fa-chevron-right"></i></span>
+    <span class="current-mp">Meu Perfil</span>
+  </nav>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1><i class="fas fa-user-circle"></i> Meu Perfil</h1>
+    <p>Visualize seus dados e altere sua senha de acesso</p>
+  </div>
+
+  <!-- Feedback -->
+  <div id="mpAlertBox"></div>
+
+  <!-- Grid principal -->
+  <div class="mp-grid">
+
+    <!-- Card: Dados do perfil -->
+    <div class="page-card mp-card-perfil">
+      <div class="mp-avatar" id="mpAvatar">A</div>
+      <h3 id="mpNome" class="mp-nome">Carregando...</h3>
+      <p id="mpEmail" class="mp-email">--</p>
+      <span class="mp-badge-perm" id="mpPermissao">--</span>
+
+      <div class="mp-meta">
+        <div class="mp-meta-item">
+          <i class="fas fa-briefcase"></i>
+          <span id="mpFuncao">--</span>
+        </div>
+        <div class="mp-meta-item">
+          <i class="fas fa-building"></i>
+          <span id="mpDepartamento">--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card: Sessão atual -->
+    <div class="page-card mp-card-sessao">
+      <h4 class="mp-section-title"><i class="fas fa-clock"></i> Sessão Atual</h4>
+      <div class="mp-sessao-list">
+        <div class="mp-sessao-row">
+          <span class="mp-sessao-label">Tempo decorrido</span>
+          <span class="mp-sessao-value" id="mpSessaoDecorrido">--</span>
+        </div>
+        <div class="mp-sessao-row">
+          <span class="mp-sessao-label">Tempo restante</span>
+          <span class="mp-sessao-value" id="mpSessaoRestante">--</span>
+        </div>
+        <div class="mp-sessao-row">
+          <span class="mp-sessao-label">IP de acesso</span>
+          <span class="mp-sessao-value" id="mpSessaoIP">--</span>
+        </div>
+        <div class="mp-sessao-row">
+          <span class="mp-sessao-label">Login em</span>
+          <span class="mp-sessao-value" id="mpSessaoLogin">--</span>
+        </div>
+      </div>
+      <div class="mp-progress-wrap">
+        <div class="mp-progress-bar" id="mpProgressBar" style="width: 0%"></div>
+      </div>
+      <button class="mp-btn-renovar" id="mpBtnRenovar">
+        <i class="fas fa-sync-alt"></i> Renovar Sessão
+      </button>
+    </div>
+
+  </div><!-- /mp-grid -->
+
+  <!-- Card: Alterar senha -->
+  <div class="page-card mp-card-senha">
+    <h4 class="mp-section-title"><i class="fas fa-key"></i> Alterar Minha Senha</h4>
+    <form id="mpFormSenha" autocomplete="off">
+      <div class="mp-form-row">
+        <div class="mp-form-group">
+          <label for="mpSenhaAtual">Senha Atual <span class="mp-required">*</span></label>
+          <input type="password" id="mpSenhaAtual" placeholder="Sua senha atual" required autocomplete="current-password">
+        </div>
+        <div class="mp-form-group">
+          <label for="mpSenhaNova">Nova Senha <span class="mp-required">*</span></label>
+          <input type="password" id="mpSenhaNova" placeholder="Mínimo 6 caracteres" required autocomplete="new-password">
+        </div>
+        <div class="mp-form-group">
+          <label for="mpSenhaConfirm">Confirmar Nova Senha <span class="mp-required">*</span></label>
+          <input type="password" id="mpSenhaConfirm" placeholder="Repita a nova senha" required autocomplete="new-password">
+        </div>
+      </div>
+      <div class="mp-form-actions">
+        <button type="submit" class="mp-btn-primary">
+          <i class="fas fa-key"></i> Alterar Senha
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div><!-- /page-wrapper -->

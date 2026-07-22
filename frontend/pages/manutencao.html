@@ -1,0 +1,114 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Manutenção" data-icon="fa-tools" style="display:none;"></div>
+<!-- Modern Page Wrapper -->
+<div class="page-wrapper page-manutencao">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-tools" style="color:#2563eb;margin-right:10px;"></i>Módulos de Manutenção</h1>
+            <p>Gestão de hidrômetros, abastecimento, estoque, ordens de serviço e documentos institucionais</p>
+        </div>
+    </div>
+    <!-- Submenu (Tabs-like) — usa data-page para o listener global do layout-base -->
+    <div class="tabs">
+        <button class="tab-button active">
+            <i class="fas fa-home"></i> Início
+        </button>
+        <button class="tab-button" data-page="hidrometro">
+            <i class="fas fa-tint"></i> Hidrômetros
+        </button>
+        <button class="tab-button" data-page="abastecimento">
+            <i class="fas fa-gas-pump"></i> Abastecimento
+        </button>
+        <button class="tab-button" data-page="estoque">
+            <i class="fas fa-boxes"></i> Estoque
+        </button>
+        <button class="tab-button" data-page="ordens_servico">
+            <i class="fas fa-wrench"></i> Ordens de Serviço
+        </button>
+        <button class="tab-button" data-page="checklists">
+            <i class="fas fa-clipboard-check"></i> Checklists
+        </button>
+        <button class="tab-button" data-page="pwa_central">
+            <i class="fas fa-mobile-alt"></i> Central PWA
+        </button>
+        <button class="tab-button" data-page="documentos">
+            <i class="fas fa-folder-open"></i> Documentos (GED)
+        </button>
+    </div>
+    <!-- Content Card Grid — usa data-page (padrão do sistema) para navegação -->
+    <div class="cards-grid">
+        <div class="page-card interactive" data-page="hidrometro" role="button" tabindex="0"
+            title="Acessar módulo de Hidrômetros">
+            <div class="card-icon" style="background:#eff6ff;">
+                <i class="fas fa-tint" style="color:#2563eb;"></i>
+            </div>
+            <h3>Hidrômetros</h3>
+            <p>Cadastro, leituras, consumo por unidade e relatórios de hidrômetros do condomínio</p>
+            <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
+        </div>
+        <div class="page-card interactive" data-page="abastecimento" role="button" tabindex="0"
+            title="Acessar módulo de Abastecimento">
+            <div class="card-icon" style="background:#fef3c7;">
+                <i class="fas fa-gas-pump" style="color:#d97706;"></i>
+            </div>
+            <h3>Abastecimento</h3>
+            <p>Gestão de combustível, controle de bombas e registros de abastecimento por veículo</p>
+            <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
+        </div>
+        <div class="page-card interactive" data-page="estoque" role="button" tabindex="0"
+            title="Acessar módulo de Estoque">
+            <div class="card-icon" style="background:#ecfdf5;">
+                <i class="fas fa-boxes" style="color:#059669;"></i>
+            </div>
+            <h3>Estoque</h3>
+            <p>Controle de materiais, ferramentas, insumos e movimentações de almoxarifado</p>
+            <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
+        </div>
+        <div class="page-card interactive" data-page="ordens_servico" role="button" tabindex="0"
+            title="Acessar módulo de Ordens de Serviço">
+            <div class="card-icon" style="background:#fff7ed;">
+                <i class="fas fa-wrench" style="color:#ea580c;"></i>
+            </div>
+            <h3>Ordens de Serviço</h3>
+            <p>Gestão de manutenções preventivas e corretivas, histórico e responsáveis técnicos</p>
+            <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
+        </div>
+        <div class="page-card interactive" data-page="checklists" role="button" tabindex="0"
+            title="Acessar módulo de Checklists">
+            <div class="card-icon" style="background:#f0fdf4;">
+                <i class="fas fa-clipboard-check" style="color:#16a34a;"></i>
+            </div>
+            <h3>Checklists</h3>
+            <p>Roteiros de inspeção, verificações periódicas e conformidade de equipamentos</p>
+            <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
+        </div>
+        <div class="page-card interactive" data-page="documentos" role="button" tabindex="0"
+            title="Acessar módulo GED — Gestão Eletrônica de Documentos">
+            <div class="card-icon" style="background:#eff6ff;">
+                <i class="fas fa-folder-open" style="color:#2563eb;"></i>
+            </div>
+            <h3>Documentos (GED)</h3>
+            <p>Gestão eletrônica de documentos institucionais com controle de acesso, versionamento e rastreabilidade</p>
+            <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
+        </div>
+        <div class="page-card interactive" data-page="relatorios" role="button" tabindex="0"
+            title="Acessar Relatórios de Manutenção">
+            <div class="card-icon" style="background:#faf5ff;">
+                <i class="fas fa-chart-bar" style="color:#7c3aed;"></i>
+            </div>
+            <h3>Relatórios</h3>
+            <p>Relatórios consolidados de manutenção, consumo, estoque e indicadores operacionais</p>
+            <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
+        </div>
+        <div class="page-card interactive" data-page="pwa_central" role="button" tabindex="0"
+            title="Acessar Central PWA">
+            <div class="card-icon" style="background:#eef2ff;">
+                <i class="fas fa-mobile-alt" style="color:#6366f1;"></i>
+            </div>
+            <h3>Central PWA</h3>
+            <p>Gestão de dispositivos, notificações push, versões do app e diagnóstico do Portal do Morador</p>
+            <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
+        </div>
+    </div>
+</div>

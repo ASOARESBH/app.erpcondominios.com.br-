@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local de Acessos - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .config-submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .config-submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .config-submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+        }
+
+        .config-submenu a:hover,
+        .config-submenu a.active {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        .submenu-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .submenu-toggle {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+            cursor: pointer;
+            border: none;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .submenu-toggle:hover,
+        .submenu-toggle.active {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        .submenu-toggle::after {
+            content: ' \f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            margin-left: 0.5rem;
+            transition: transform 0.3s;
+            display: inline-block;
+        }
+
+        .submenu-toggle.active::after {
+            transform: rotate(180deg);
+        }
+
+        .submenu-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            min-width: 280px;
+            margin-top: 0.5rem;
+        }
+
+        .submenu-content.show {
+            display: block;
+        }
+
+        .submenu-item {
+            display: block;
+            padding: 0.75rem 1.5rem;
+            color: #334155;
+            text-decoration: none;
+            transition: 0.2s;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .submenu-item:last-child {
+            border-bottom: none;
+        }
+
+        .submenu-item:hover {
+            background: #f8fafc;
+            color: #3b82f6;
+            padding-left: 2rem;
+        }
+
+        .submenu-item i {
+            margin-right: 0.5rem;
+            width: 16px;
+        }
+
+        .form-section,
+        .table-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.6rem;
+            margin-bottom: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-family: inherit;
+        }
+
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 0.6rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-right: 0.5rem;
+        }
+
+        .btn-cancel {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+        }
+
+        .btn-edit {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #f87171;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .badge-ativo {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-inativo {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link active"><i class="fas fa-cog"></i>
+                        Configuraçµes</a></li>
+                <li class="nav-item"
+                    style="margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                    <a href="#" class="nav-link" id="btn-logout"
+                        style="background: rgba(239, 68, 68, 0.1); color: #fca5a5;" >
+                        <i class="fas fa-sign-out-alt"></i> Sair
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-door-open"></i> Local de Acessos</h1>
+            </header>
+            <nav class="config-submenu">
+                <ul>
+                    <li><a href="configuracao.html"><i class="fas fa-home"></i> Início</a></li>
+
+                    <li class="submenu-container">
+                        <button class="submenu-toggle" onclick="toggleSubmenu(event, 'empresa-menu')"><i
+                                class="fas fa-building"></i> Empresa</button>
+                        <div class="submenu-content" id="empresa-menu">
+                            <a href="empresa.html" class="submenu-item"><i class="fas fa-info-circle"></i> Dados da
+                                Empresa</a>
+                            <a href="empresa.html#resumo" class="submenu-item"><i class="fas fa-chart-pie"></i>
+                                Resumo</a>
+                            <a href="empresa.html#contatos" class="submenu-item"><i class="fas fa-phone"></i>
+                                Contatos</a>
+                        </div>
+                    </li>
+
+                    <li class="submenu-container">
+                        <button class="submenu-toggle active" onclick="toggleSubmenu(event, 'acessos-menu')"><i
+                                class="fas fa-door-open"></i> Acessos</button>
+                        <div class="submenu-content show" id="acessos-menu">
+                            <a href="local_acessos.html" class="submenu-item"><i class="fas fa-list"></i> Listar
+                                Locais</a>
+                            <a href="local_acessos.html#novo" class="submenu-item"><i class="fas fa-plus"></i> Novo
+                                Local</a>
+                            <a href="local_acessos.html#tipos" class="submenu-item"><i class="fas fa-users"></i> Tipos
+                                de Usuário</a>
+                        </div>
+                    </li>
+
+                    <li><a href="cadastros.html"><i class="fas fa-building"></i> Unidades</a></li>
+                    <li><a href="usuarios.html"><i class="fas fa-user-shield"></i> Usuários</a></li>
+                    <li><a href="logs_sistema.html"><i class="fas fa-clipboard-list"></i> Logs do Sistema</a></li>
+                    <li><a href="dispositivos_console.html"><i class="fas fa-microchip"></i> Dispositivos</a></li>
+                </ul>
+            </nav>
+            <div id="alertBox"></div>
+            <section class="form-section">
+                <h2 id="formTitle"><i class="fas fa-plus"></i> Novo Local de Acesso</h2>
+                <form id="localAcessoForm">
+                    <input type="hidden" id="localId">
+                    <div class="form-grid">
+                        <div><label>Nome do Local *</label><input type="text" id="nome"
+                                placeholder="Ex: Portaria Principal, Garagem" required></div>
+                        <div><label>Situação *</label><select id="situacao" required>
+                                <option value="ativo">Ativo</option>
+                                <option value="inativo">Inativo</option>
+                            </select></div>
+                    </div>
+                    <div class="form-grid" style="grid-column: 1 / -1;">
+                        <div><label>Descrição</label><textarea id="descricao"
+                                placeholder="Descrição do local de acesso"></textarea></div>
+                    </div>
+                    <div class="form-grid" style="grid-column: 1 / -1;">
+                        <div><label>Observação</label><textarea id="observacao"
+                                placeholder="Observaçµes adicionais"></textarea></div>
+                    </div>
+                    <div><button type="submit" id="btnSalvar"><i class="fas fa-save"></i> Salvar Local</button><button
+                            type="button" class="btn-cancel" onclick="cancelarEdicao()"><i class="fas fa-times"></i>
+                            Cancelar</button></div>
+                </form>
+            </section>
+            <section class="table-section">
+                <h2><i class="fas fa-list"></i> Locais de Acesso Cadastrados</h2>
+                <table id="locaisTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th>Situação</th>
+                            <th>Data Criação</th>
+                            <th>Açµes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="locaisTableBody">
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 2rem;">Carregando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+    <script>
+        const apiBase = '../api/';
+        function toggleMenu() { document.getElementById('sidebar').classList.toggle('active'); }
+
+        function toggleSubmenu(event, menuId) {
+            event.preventDefault();
+            const button = event.target.closest('.submenu-toggle');
+            const menu = document.getElementById(menuId);
+            document.querySelectorAll('.submenu-content.show').forEach(m => {
+                if (m.id !== menuId) m.classList.remove('show');
+            });
+            document.querySelectorAll('.submenu-toggle.active').forEach(b => {
+                if (b !== button) b.classList.remove('active');
+            });
+            button.classList.toggle('active');
+            menu.classList.toggle('show');
+        }
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.submenu-container')) {
+                document.querySelectorAll('.submenu-toggle').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.submenu-content').forEach(m => m.classList.remove('show'));
+            }
+        });
+
+        function mostrarAlerta(msg, tipo = 'success') { const box = document.getElementById('alertBox'); box.innerHTML = `<div class="alert alert-${tipo}"><i class="fas fa-${tipo === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${msg}</div>`; setTimeout(() => { box.innerHTML = ''; }, 5000); }
+        async function carregarLocais() { try { const r = await fetch(`${apiBase}api_local_acessos.php?action=listar`); const d = await r.json(); if (d.sucesso && d.dados) { const tb = document.getElementById('locaisTableBody'); tb.innerHTML = ''; d.dados.forEach(l => { const dc = new Date(l.data_criacao).toLocaleDateString('pt-BR'); const b = `<span class="badge badge-${l.situacao}">${l.situacao === 'ativo' ? 'Ativo' : 'Inativo'}</span>`; tb.innerHTML += `<tr><td>${l.id}</td><td><strong>${l.nome}</strong></td><td>${l.descricao || '-'}</td><td>${b}</td><td>${dc}</td><td><button class="btn-edit" onclick="editarLocal(${l.id})"><i class="fas fa-edit"></i> Editar</button><button class="btn-delete" onclick="deletarLocal(${l.id})"><i class="fas fa-trash"></i> Deletar</button></td></tr>`; }); } } catch (e) { mostrarAlerta('Erro ao carregar locais', 'error'); } }
+        async function editarLocal(id) { try { const r = await fetch(`${apiBase}api_local_acessos.php?action=buscar&id=${id}`); const d = await r.json(); if (d.sucesso && d.dados) { const l = d.dados; document.getElementById('localId').value = l.id; document.getElementById('nome').value = l.nome; document.getElementById('descricao').value = l.descricao || ''; document.getElementById('observacao').value = l.observacao || ''; document.getElementById('situacao').value = l.situacao; document.getElementById('formTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Local de Acesso'; document.getElementById('btnSalvar').innerHTML = '<i class="fas fa-save"></i> Atualizar Local'; window.scrollTo(0, 0); } } catch (e) { mostrarAlerta('Erro ao editar local', 'error'); } }
+        async function deletarLocal(id) { if (!confirm('Tem certeza que deseja deletar este local?')) return; try { const r = await fetch(`${apiBase}api_local_acessos.php?action=deletar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) }); const d = await r.json(); if (d.sucesso) { mostrarAlerta('Local deletado com sucesso!', 'success'); carregarLocais(); } else { mostrarAlerta(d.mensagem, 'error'); } } catch (e) { mostrarAlerta('Erro ao deletar local', 'error'); } }
+        function cancelarEdicao() { document.getElementById('localAcessoForm').reset(); document.getElementById('localId').value = ''; document.getElementById('formTitle').innerHTML = '<i class="fas fa-plus"></i> Novo Local de Acesso'; document.getElementById('btnSalvar').innerHTML = '<i class="fas fa-save"></i> Salvar Local'; }
+        document.getElementById('localAcessoForm').addEventListener('submit', async function (e) { e.preventDefault(); const id = document.getElementById('localId').value; const dados = { nome: document.getElementById('nome').value, descricao: document.getElementById('descricao').value, observacao: document.getElementById('observacao').value, situacao: document.getElementById('situacao').value }; if (id) dados.id = id; try { const action = id ? 'atualizar' : 'criar'; const r = await fetch(`${apiBase}api_local_acessos.php?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) }); const d = await r.json(); if (d.sucesso) { mostrarAlerta(id ? 'Local atualizado com sucesso!' : 'Local criado com sucesso!', 'success'); cancelarEdicao(); carregarLocais(); } else { mostrarAlerta(d.mensagem, 'error'); } } catch (e) { mostrarAlerta('Erro ao salvar local', 'error'); } });
+        function fazerLogout(event) { event.preventDefault(); if (confirm('Deseja realmente sair do sistema?')) { fetch('../api/api_logout.php', { method: 'POST' }).then(() => { window.location.href = 'login.html'; }).catch(() => { window.location.href = 'login.html'; }); } }
+        window.addEventListener('load', carregarLocais);
+    </script>
+</body>
+
+</html>

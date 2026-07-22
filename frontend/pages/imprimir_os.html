@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ordem de Serviço — Impressão</title>
+    <style>
+        /* ── Reset e Base ── */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Arial', 'Helvetica Neue', sans-serif;
+            font-size: 11pt;
+            color: #1a1a1a;
+            background: #f0f0f0;
+            line-height: 1.4;
+        }
+
+        /* ── Página A4 ── */
+        .pagina {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 20px auto;
+            background: #fff;
+            padding: 15mm 18mm 15mm 18mm;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+            position: relative;
+        }
+
+        /* ── Cabeçalho ── */
+        .cabecalho {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 3px solid #e05a00;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+        }
+
+        .cabecalho-logo {
+            width: 90px;
+            height: 70px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .cabecalho-logo-placeholder {
+            width: 90px;
+            height: 70px;
+            background: #f5f5f5;
+            border: 2px dashed #ccc;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9pt;
+            color: #aaa;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .cabecalho-empresa {
+            flex: 1;
+            padding: 0 16px;
+        }
+
+        .cabecalho-empresa .razao-social {
+            font-size: 14pt;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1.2;
+        }
+
+        .cabecalho-empresa .nome-fantasia {
+            font-size: 10pt;
+            color: #555;
+            margin-top: 2px;
+        }
+
+        .cabecalho-empresa .empresa-info {
+            font-size: 8.5pt;
+            color: #666;
+            margin-top: 4px;
+            line-height: 1.5;
+        }
+
+        .cabecalho-os {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .cabecalho-os .os-numero-label {
+            font-size: 8pt;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .cabecalho-os .os-numero-valor {
+            font-size: 18pt;
+            font-weight: 700;
+            color: #e05a00;
+            line-height: 1.1;
+        }
+
+        .cabecalho-os .os-status-badge {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 8.5pt;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-aberto    { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        .badge-andamento { background: #cce5ff; color: #004085; border: 1px solid #004085; }
+        .badge-finalizado{ background: #d4edda; color: #155724; border: 1px solid #28a745; }
+        .badge-cancelado { background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
+
+        /* ── Título do documento ── */
+        .doc-titulo {
+            text-align: center;
+            margin: 10px 0 14px;
+            padding: 8px 0;
+            border-top: 1px solid #e0e0e0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .doc-titulo h1 {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .doc-titulo .doc-data-emissao {
+            font-size: 8.5pt;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        /* ── Seções ── */
+        .secao {
+            margin-bottom: 14px;
+        }
+
+        .secao-titulo {
+            background: #e05a00;
+            color: #fff;
+            font-size: 9pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 10px;
+            border-radius: 3px;
+            margin-bottom: 8px;
+        }
+
+        /* ── Grid de dados ── */
+        .dados-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px 12px;
+        }
+
+        .dados-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px 12px;
+        }
+
+        .dados-grid-full {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+        }
+
+        .dado-item {
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 4px;
+        }
+
+        .dado-label {
+            font-size: 7.5pt;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            font-weight: 600;
+        }
+
+        .dado-valor {
+            font-size: 10pt;
+            color: #1a1a1a;
+            font-weight: 500;
+            min-height: 14px;
+        }
+
+        .dado-valor.destaque {
+            color: #e05a00;
+            font-weight: 700;
+        }
+
+        /* ── Badge de prioridade ── */
+        .prioridade-badge {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 9pt;
+            font-weight: 600;
+        }
+
+        .prio-baixa   { background: #e8f5e9; color: #2e7d32; }
+        .prio-media   { background: #fff8e1; color: #f57f17; }
+        .prio-alta    { background: #fff3e0; color: #e65100; }
+        .prio-urgente { background: #fce4ec; color: #b71c1c; }
+
+        /* ── Descrição / Mensagem ── */
+        .descricao-box {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px 10px;
+            min-height: 60px;
+            font-size: 10pt;
+            color: #1a1a1a;
+            line-height: 1.5;
+            background: #fafafa;
+        }
+
+        .descricao-box img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 3px;
+            margin: 4px 0;
+        }
+
+        /* ── Tabela de Equipe ── */
+        table.tabela-os {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9.5pt;
+        }
+
+        table.tabela-os thead tr {
+            background: #f5f5f5;
+        }
+
+        table.tabela-os th {
+            padding: 5px 8px;
+            text-align: left;
+            font-size: 8.5pt;
+            font-weight: 700;
+            color: #555;
+            text-transform: uppercase;
+            border-bottom: 2px solid #ddd;
+        }
+
+        table.tabela-os td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #eee;
+            color: #1a1a1a;
+        }
+
+        table.tabela-os tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* ── Campos para preenchimento manual ── */
+        .campo-manual {
+            margin-bottom: 10px;
+        }
+
+        .campo-manual label {
+            display: block;
+            font-size: 8.5pt;
+            font-weight: 700;
+            color: #555;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+
+        .linha-preenchimento {
+            border: none;
+            border-bottom: 1.5px solid #555;
+            width: 100%;
+            height: 22px;
+            background: transparent;
+            display: block;
+        }
+
+        .campos-manuais-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px 20px;
+            margin-bottom: 10px;
+        }
+
+        /* ── Tabela de materiais gastos (para preenchimento) ── */
+        .tabela-materiais-manual {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9.5pt;
+        }
+
+        .tabela-materiais-manual th {
+            background: #f5f5f5;
+            padding: 5px 8px;
+            text-align: left;
+            font-size: 8.5pt;
+            font-weight: 700;
+            color: #555;
+            text-transform: uppercase;
+            border: 1px solid #ddd;
+        }
+
+        .tabela-materiais-manual td {
+            border: 1px solid #ddd;
+            padding: 5px 8px;
+            height: 24px;
+        }
+
+        .tabela-materiais-manual .linha-vazia td {
+            height: 22px;
+        }
+
+        /* ── Assinaturas ── */
+        .assinaturas-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 8px;
+        }
+
+        .assinatura-item {
+            text-align: center;
+        }
+
+        .assinatura-nome {
+            font-size: 9pt;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 2px;
+            min-height: 14px;
+        }
+
+        .assinatura-cargo {
+            font-size: 8pt;
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .assinatura-linha {
+            border-top: 1.5px solid #555;
+            margin-top: 4px;
+            padding-top: 3px;
+            font-size: 8pt;
+            color: #888;
+        }
+
+        /* ── Rodapé ── */
+        .rodape {
+            margin-top: 16px;
+            padding-top: 8px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 8pt;
+            color: #aaa;
+        }
+
+        /* ── Botões de ação (não imprimem) ── */
+        .acoes-impressao {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 9999;
+        }
+
+        .btn-imprimir {
+            background: #e05a00;
+            color: #fff;
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 11pt;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-fechar {
+            background: #fff;
+            color: #333;
+            border: 1px solid #ccc;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 11pt;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* ── Carregando ── */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            font-size: 14pt;
+            color: #e05a00;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f0f0f0;
+            border-top: 4px solid #e05a00;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Modo resumo (status ≠ finalizado) ── */
+        .modo-resumo #secao-rh,
+        .modo-resumo #secao-materiais-cadastrados,
+        .modo-resumo #secao-horas,
+        .modo-resumo #secao-materiais-campo,
+        .modo-resumo #secao-observacoes { display: none; }
+
+        /* ── Aviso de modo ── */
+        .aviso-modo {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 8.5pt;
+            color: #856404;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .modo-resumo .aviso-modo { display: block; }
+        .aviso-modo { display: none; }
+
+        /* ── Impressão ── */
+        @media print {
+            body { background: #fff; }
+            .pagina {
+                margin: 0;
+                padding: 10mm 14mm 10mm 14mm;
+                box-shadow: none;
+                width: 100%;
+            }
+            .acoes-impressao { display: none !important; }
+            .loading-overlay { display: none !important; }
+
+            /* Evitar quebra de página dentro de seções importantes */
+            .secao { page-break-inside: avoid; }
+            .assinaturas-grid { page-break-inside: avoid; }
+            .tabela-materiais-manual { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Overlay de carregamento -->
+<div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+    <span>Carregando dados da O.S...</span>
+</div>
+
+<!-- Botões de ação (não imprimem) -->
+<div class="acoes-impressao" id="acoes-impressao" style="display:none;">
+    <button class="btn-fechar" onclick="window.close()">✕ Fechar</button>
+    <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+</div>
+
+<!-- Página de impressão -->
+<div class="pagina" id="pagina-os">
+
+    <!-- CABEÇALHO -->
+    <div class="cabecalho">
+        <div id="logo-container">
+            <div class="cabecalho-logo-placeholder">SEM<br>LOGO</div>
+        </div>
+        <div class="cabecalho-empresa">
+            <div class="razao-social" id="emp-razao-social">—</div>
+            <div class="nome-fantasia" id="emp-nome-fantasia"></div>
+            <div class="empresa-info" id="emp-info"></div>
+        </div>
+        <div class="cabecalho-os">
+            <div class="os-numero-label">Ordem de Serviço</div>
+            <div class="os-numero-valor" id="os-numero">—</div>
+            <div id="os-status-badge"></div>
+        </div>
+    </div>
+
+    <!-- TÍTULO DO DOCUMENTO -->
+    <div class="doc-titulo">
+        <h1 id="doc-titulo-h1">Ordem de Serviço — Ficha de Atendimento</h1>
+        <div class="doc-data-emissao" id="doc-data-emissao"></div>
+    </div>
+
+    <!-- Aviso resumo (visível apenas no modo não-finalizado) -->
+    <div class="aviso-modo">
+        ⚠️ Impressão resumida — versão completa disponível após a finalização do chamado.
+    </div>
+
+    <!-- SEÇÃO: DADOS DA O.S -->
+    <div class="secao">
+        <div class="secao-titulo">📋 Dados da Ordem de Serviço</div>
+        <div class="dados-grid">
+            <div class="dado-item">
+                <div class="dado-label">Número</div>
+                <div class="dado-valor destaque" id="d-numero">—</div>
+            </div>
+            <div class="dado-item">
+                <div class="dado-label">Data de Abertura</div>
+                <div class="dado-valor" id="d-abertura">—</div>
+            </div>
+            <div class="dado-item">
+                <div class="dado-label">Status</div>
+                <div class="dado-valor" id="d-status">—</div>
+            </div>
+            <div class="dado-item">
+                <div class="dado-label">Prioridade</div>
+                <div class="dado-valor" id="d-prioridade">—</div>
+            </div>
+            <div class="dado-item">
+                <div class="dado-label">Departamento</div>
+                <div class="dado-valor" id="d-departamento">—</div>
+            </div>
+            <div class="dado-item">
+                <div class="dado-label">Assunto / Categoria</div>
+                <div class="dado-valor" id="d-assunto">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: TÍTULO E DESCRIÇÃO -->
+    <div class="secao">
+        <div class="secao-titulo">📝 Título e Descrição do Serviço</div>
+        <div class="dado-item" style="margin-bottom:8px;">
+            <div class="dado-label">Título</div>
+            <div class="dado-valor" id="d-titulo" style="font-size:12pt; font-weight:700;">—</div>
+        </div>
+        <div class="dado-label" style="margin-bottom:4px;">Descrição / Mensagem</div>
+        <div class="descricao-box" id="d-descricao">—</div>
+    </div>
+
+    <!-- SEÇÃO: MORADOR / CLIENTE E ATENDENTE -->
+    <div class="secao">
+        <div class="secao-titulo">👤 Solicitante e Atendimento</div>
+        <div class="dados-grid-2">
+            <div class="dado-item">
+                <div class="dado-label">Morador / Cliente</div>
+                <div class="dado-valor" id="d-morador">—</div>
+            </div>
+            <div class="dado-item">
+                <div class="dado-label">Unidade</div>
+                <div class="dado-valor" id="d-unidade">—</div>
+            </div>
+            <div class="dado-item">
+                <div class="dado-label">Atendente Responsável</div>
+                <div class="dado-valor" id="d-atendente">—</div>
+            </div>
+            <div class="dado-item">
+                <div class="dado-label">O.S Pai (Dependência)</div>
+                <div class="dado-valor" id="d-os-pai">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: EQUIPE / RECURSOS HUMANOS -->
+    <div class="secao" id="secao-rh">
+        <div class="secao-titulo">👷 Equipe de Execução (Recursos Humanos)</div>
+        <table class="tabela-os" id="tabela-rh">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Nome do Colaborador</th>
+                    <th>Cargo / Função</th>
+                    <th>Departamento</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-rh">
+                <tr><td colspan="4" style="color:#aaa; font-style:italic; text-align:center;">Nenhum colaborador vinculado</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SEÇÃO: MATERIAIS UTILIZADOS (pré-cadastrados) -->
+    <div class="secao" id="secao-materiais-cadastrados">
+        <div class="secao-titulo">📦 Materiais Registrados no Sistema</div>
+        <table class="tabela-os" id="tabela-materiais">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Produto / Material</th>
+                    <th>Quantidade</th>
+                    <th>Valor Unitário</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-materiais">
+                <tr><td colspan="5" style="color:#aaa; font-style:italic; text-align:center;">Nenhum material registrado</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SEÇÃO DE PREENCHIMENTO MANUAL (campo a campo)              -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+
+    <!-- SEÇÃO: Horas e Datas (preenchimento manual) -->
+    <div class="secao" id="secao-horas">
+        <div class="secao-titulo">⏱️ Controle de Horas e Prazo — Preenchimento em Campo</div>
+        <div class="campos-manuais-grid">
+            <div class="campo-manual">
+                <label>Data de Início do Serviço</label>
+                <span class="linha-preenchimento"></span>
+            </div>
+            <div class="campo-manual">
+                <label>Data de Conclusão</label>
+                <span class="linha-preenchimento"></span>
+            </div>
+            <div class="campo-manual">
+                <label>Hora de Início</label>
+                <span class="linha-preenchimento"></span>
+            </div>
+            <div class="campo-manual">
+                <label>Hora de Término</label>
+                <span class="linha-preenchimento"></span>
+            </div>
+            <div class="campo-manual">
+                <label>Total de Horas Trabalhadas</label>
+                <span class="linha-preenchimento"></span>
+            </div>
+            <div class="campo-manual">
+                <label>Horas Extras (se houver)</label>
+                <span class="linha-preenchimento"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: Materiais Gastos em Campo (preenchimento manual) -->
+    <div class="secao" id="secao-materiais-campo">
+        <div class="secao-titulo">🔧 Materiais Gastos em Campo — Preenchimento Manual</div>
+        <table class="tabela-materiais-manual">
+            <thead>
+                <tr>
+                    <th style="width:30px;">#</th>
+                    <th>Descrição do Material / Produto</th>
+                    <th style="width:80px;">Qtd</th>
+                    <th style="width:100px;">Valor Unit.</th>
+                    <th style="width:100px;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="linha-vazia"><td>1</td><td></td><td></td><td></td><td></td></tr>
+                <tr class="linha-vazia"><td>2</td><td></td><td></td><td></td><td></td></tr>
+                <tr class="linha-vazia"><td>3</td><td></td><td></td><td></td><td></td></tr>
+                <tr class="linha-vazia"><td>4</td><td></td><td></td><td></td><td></td></tr>
+                <tr class="linha-vazia"><td>5</td><td></td><td></td><td></td><td></td></tr>
+                <tr>
+                    <td colspan="4" style="text-align:right; font-weight:700; font-size:9pt; padding-right:8px;">TOTAL GERAL:</td>
+                    <td style="border: 1px solid #ddd;"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SEÇÃO: Observações em Campo -->
+    <div class="secao" id="secao-observacoes">
+        <div class="secao-titulo">📌 Observações / Solução Aplicada</div>
+        <div style="border: 1px solid #ddd; border-radius:4px; min-height: 55px; padding: 6px 8px; background:#fafafa;">
+            <span style="color:#ccc; font-size:9pt;">Descreva aqui a solução aplicada, observações técnicas ou pendências...</span>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: Assinaturas -->
+    <div class="secao">
+        <div class="secao-titulo">✍️ Assinaturas</div>
+        <div class="assinaturas-grid" id="assinaturas-grid">
+            <!-- Preenchido via JS com base na equipe -->
+        </div>
+    </div>
+
+    <!-- RODAPÉ -->
+    <div class="rodape">
+        <span id="rodape-empresa">—</span>
+        <span id="rodape-data">Emitido em: —</span>
+        <span>Sistema ERP Condomínios</span>
+    </div>
+
+</div><!-- /pagina -->
+
+<script>
+    // ── Configuração ──
+    const BASE = window.location.origin;
+    const API_OS      = BASE + '/api/api_ordens_servico.php';
+    const API_EMPRESA = BASE + '/api/api_empresa.php';
+
+    // ── Utilitários ──
+    function formatarData(str) {
+        if (!str) return '—';
+        try {
+            const d = new Date(str.replace(' ', 'T'));
+            return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } catch { return str; }
+    }
+
+    function formatarDataSimples(str) {
+        if (!str) return '—';
+        try {
+            const d = new Date(str.replace(' ', 'T'));
+            return d.toLocaleDateString('pt-BR');
+        } catch { return str; }
+    }
+
+    function formatarMoeda(v) {
+        if (!v && v !== 0) return '—';
+        return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
+    function statusLabel(s) {
+        const m = { aberto: 'Aberto', andamento: 'Em Andamento', finalizado: 'Finalizado', cancelado: 'Cancelado' };
+        return m[s] || s;
+    }
+
+    function statusBadgeClass(s) {
+        const m = { aberto: 'badge-aberto', andamento: 'badge-andamento', finalizado: 'badge-finalizado', cancelado: 'badge-cancelado' };
+        return m[s] || 'badge-aberto';
+    }
+
+    function prioridadeLabel(p) {
+        const m = { baixa: 'Baixa', media: 'Média', alta: 'Alta', urgente: 'Urgente' };
+        return m[p] || p;
+    }
+
+    function prioridadeBadgeClass(p) {
+        const m = { baixa: 'prio-baixa', media: 'prio-media', alta: 'prio-alta', urgente: 'prio-urgente' };
+        return m[p] || 'prio-media';
+    }
+
+    function set(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = val || '—';
+    }
+
+    // ── Carregar dados ──
+    async function carregar() {
+        const params = new URLSearchParams(window.location.search);
+        const osId = params.get('id');
+
+        if (!osId) {
+            document.getElementById('loading').innerHTML = '<span style="color:red;">❌ ID da O.S não informado na URL.</span>';
+            return;
+        }
+
+        try {
+            // Buscar dados da empresa e da OS em paralelo
+            const [resEmpresa, resOS] = await Promise.all([
+                fetch(API_EMPRESA + '?action=obter').then(r => r.json()),
+                fetch(API_OS + '?acao=buscar&id=' + osId).then(r => r.json())
+            ]);
+
+            // ── Empresa ──
+            const emp = resEmpresa.dados;
+            if (emp) {
+                // Logo
+                if (emp.logo_url) {
+                    document.getElementById('logo-container').innerHTML =
+                        `<img src="${emp.logo_url}" class="cabecalho-logo" alt="Logo">`;
+                }
+
+                // Razão social e nome fantasia
+                set('emp-razao-social', emp.razao_social || emp.nome_fantasia || 'Empresa');
+                if (emp.nome_fantasia && emp.nome_fantasia !== emp.razao_social) {
+                    set('emp-nome-fantasia', emp.nome_fantasia);
+                }
+
+                // Endereço e contatos
+                let infoEmp = '';
+                if (emp.cnpj)           infoEmp += `CNPJ: ${emp.cnpj}`;
+                if (emp.endereco_rua) {
+                    infoEmp += (infoEmp ? ' | ' : '') +
+                        `${emp.endereco_rua}, ${emp.endereco_numero || 's/n'}` +
+                        (emp.endereco_complemento ? ` — ${emp.endereco_complemento}` : '') +
+                        (emp.endereco_bairro ? `, ${emp.endereco_bairro}` : '') +
+                        (emp.endereco_cidade ? ` — ${emp.endereco_cidade}/${emp.endereco_estado}` : '');
+                }
+                if (emp.telefone)       infoEmp += (infoEmp ? '\n' : '') + `Tel: ${emp.telefone}`;
+                if (emp.email_principal) infoEmp += (infoEmp ? ' | ' : '') + `E-mail: ${emp.email_principal}`;
+                document.getElementById('emp-info').innerText = infoEmp;
+
+                // Rodapé
+                set('rodape-empresa', emp.razao_social || emp.nome_fantasia || '');
+            }
+
+            // ── O.S ──
+            if (!resOS.sucesso || !resOS.dados) {
+                document.getElementById('loading').innerHTML = '<span style="color:red;">❌ O.S não encontrada.</span>';
+                return;
+            }
+
+            const os = resOS.dados;
+
+            // Cabeçalho
+            set('os-numero', os.numero);
+            document.getElementById('os-status-badge').innerHTML =
+                `<span class="os-status-badge ${statusBadgeClass(os.status)}">${statusLabel(os.status)}</span>`;
+
+            // Data de emissão
+            const agora = new Date().toLocaleString('pt-BR');
+            set('doc-data-emissao', `Emitido em: ${agora} | Abertura: ${formatarData(os.data_abertura)}`);
+            set('rodape-data', `Emitido em: ${agora}`);
+
+            // Dados principais
+            set('d-numero', os.numero);
+            set('d-abertura', formatarData(os.data_abertura));
+            set('d-status', `<span class="os-status-badge ${statusBadgeClass(os.status)}">${statusLabel(os.status)}</span>`);
+            set('d-prioridade', `<span class="prioridade-badge ${prioridadeBadgeClass(os.prioridade)}">${prioridadeLabel(os.prioridade)}</span>`);
+            set('d-departamento', os.departamento || '—');
+            set('d-assunto', os.assunto_nome || '—');
+
+            // Título e descrição
+            set('d-titulo', os.titulo);
+            document.getElementById('d-descricao').innerHTML = os.descricao || '<em style="color:#aaa;">Sem descrição</em>';
+
+            // Solicitante
+            set('d-morador', os.morador_nome || '—');
+            set('d-unidade', os.morador_unidade || '—');
+            set('d-atendente', os.atendente_nome || '—');
+            set('d-os-pai', os.os_pai_numero || (os.os_pai_id ? `ID #${os.os_pai_id}` : '—'));
+
+            // ── Equipe / RH ──
+            const rh = os.recursos_humanos || [];
+            const tbodyRH = document.getElementById('tbody-rh');
+            if (rh.length > 0) {
+                tbodyRH.innerHTML = rh.map((r, i) =>
+                    `<tr>
+                        <td>${i + 1}</td>
+                        <td>${r.colaborador_nome || '—'}</td>
+                        <td>${r.cargo || '—'}</td>
+                        <td>${r.departamento || '—'}</td>
+                    </tr>`
+                ).join('');
+
+                // Assinaturas dinâmicas baseadas na equipe
+                const assinaturasGrid = document.getElementById('assinaturas-grid');
+                let assinaturasHtml = rh.map(r =>
+                    `<div class="assinatura-item">
+                        <div class="assinatura-nome">${r.colaborador_nome || ''}</div>
+                        <div class="assinatura-cargo">${r.cargo || ''}</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>`
+                ).join('');
+
+                // Adicionar campo de assinatura do solicitante/responsável
+                assinaturasHtml += `
+                    <div class="assinatura-item">
+                        <div class="assinatura-nome">${os.atendente_nome || 'Atendente Responsável'}</div>
+                        <div class="assinatura-cargo">Responsável pelo Atendimento</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>
+                    <div class="assinatura-item">
+                        <div class="assinatura-nome">${os.morador_nome || 'Solicitante'}</div>
+                        <div class="assinatura-cargo">Solicitante / Morador</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>`;
+
+                assinaturasGrid.innerHTML = assinaturasHtml;
+            } else {
+                // Sem equipe: apenas atendente e solicitante
+                document.getElementById('assinaturas-grid').innerHTML = `
+                    <div class="assinatura-item">
+                        <div class="assinatura-nome">${os.atendente_nome || 'Atendente Responsável'}</div>
+                        <div class="assinatura-cargo">Responsável pelo Atendimento</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>
+                    <div class="assinatura-item">
+                        <div class="assinatura-nome">${os.morador_nome || 'Solicitante'}</div>
+                        <div class="assinatura-cargo">Solicitante / Morador</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>
+                    <div class="assinatura-item">
+                        <div class="assinatura-nome"></div>
+                        <div class="assinatura-cargo">Supervisor / Gestor</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>`;
+            }
+
+            // ── Materiais cadastrados no sistema ──
+            const mats = os.materiais || [];
+            const tbodyMats = document.getElementById('tbody-materiais');
+            if (mats.length > 0) {
+                let totalGeral = 0;
+                tbodyMats.innerHTML = mats.map((m, i) => {
+                    const total = (parseFloat(m.quantidade) || 0) * (parseFloat(m.preco_unitario) || 0);
+                    totalGeral += total;
+                    return `<tr>
+                        <td>${i + 1}</td>
+                        <td>${m.produto_nome || '—'}</td>
+                        <td>${parseFloat(m.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</td>
+                        <td>${formatarMoeda(m.preco_unitario)}</td>
+                        <td>${formatarMoeda(total)}</td>
+                    </tr>`;
+                }).join('') +
+                `<tr style="font-weight:700; background:#f9f9f9;">
+                    <td colspan="4" style="text-align:right; padding-right:8px;">TOTAL:</td>
+                    <td>${formatarMoeda(totalGeral)}</td>
+                </tr>`;
+            }
+
+            // ── Modo resumo vs. completo ──
+            const finalizado = os.status === 'finalizado';
+            const pagina = document.getElementById('pagina-os');
+            if (finalizado) {
+                pagina.classList.add('modo-completo');
+                document.getElementById('doc-titulo-h1').textContent = 'Ordem de Serviço — Comprovante de Finalização';
+            } else {
+                pagina.classList.add('modo-resumo');
+                // Na versão resumo, assinaturas simplificadas
+                document.getElementById('assinaturas-grid').innerHTML = `
+                    <div class="assinatura-item">
+                        <div class="assinatura-nome">${os.atendente_nome || 'Atendente Responsável'}</div>
+                        <div class="assinatura-cargo">Responsável pelo Atendimento</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>
+                    <div class="assinatura-item">
+                        <div class="assinatura-nome">${os.morador_nome || 'Solicitante'}</div>
+                        <div class="assinatura-cargo">Solicitante / Morador</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>
+                    <div class="assinatura-item">
+                        <div class="assinatura-nome"></div>
+                        <div class="assinatura-cargo">Supervisor / Gestor</div>
+                        <div class="assinatura-linha">Assinatura</div>
+                    </div>`;
+            }
+
+            // Título da aba do navegador
+            document.title = `O.S ${os.numero} — ${os.titulo}`;
+
+            // Ocultar loading e mostrar botões
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('acoes-impressao').style.display = 'flex';
+
+        } catch (err) {
+            console.error('Erro ao carregar O.S para impressão:', err);
+            document.getElementById('loading').innerHTML =
+                `<span style="color:red;">❌ Erro ao carregar dados: ${err.message}</span>`;
+        }
+    }
+
+    // Iniciar ao carregar
+    window.addEventListener('DOMContentLoaded', carregar);
+</script>
+</body>
+</html>

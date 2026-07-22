@@ -1,0 +1,273 @@
+{
+  "timestamp": "2026-02-07T03:33:49.837Z",
+  "base": "https://asl.erpcondominios.com.br",
+  "authMode": "header-injection",
+  "pages": [
+    {
+      "page": "/frontend/TEST_FASE6_QA.html",
+      "url": "https://asl.erpcondominios.com.br/frontend/TEST_FASE6_QA.html",
+      "checks": {
+        "basic": {
+          "hasSessionManager": false,
+          "isInstance": false,
+          "isAuthenticated": null,
+          "eventsRegistered": false,
+          "storage": {
+            "present": false
+          },
+          "currentUser": null
+        },
+        "renew": {
+          "triggered": false,
+          "apiCallsDuringRenew": 0,
+          "hasCredentials": false,
+          "duration": null
+        },
+        "logout": {
+          "attempted": false,
+          "redirected": false,
+          "storageCleared": true
+        }
+      },
+      "events": [],
+      "apiRequests": [],
+      "notes": [],
+      "metrics": {
+        "observedApiCount": 0,
+        "perMinute": 0,
+        "baselinePollingPerMin": 360,
+        "reduction": 100
+      },
+      "status": "ok"
+    },
+    {
+      "page": "/frontend/dashboard.html",
+      "url": "https://asl.erpcondominios.com.br/frontend/dashboard.html",
+      "checks": {
+        "basic": {
+          "hasSessionManager": false,
+          "isInstance": false,
+          "isAuthenticated": null,
+          "eventsRegistered": false,
+          "storage": {
+            "present": false
+          },
+          "currentUser": null
+        },
+        "renew": {
+          "triggered": false,
+          "apiCallsDuringRenew": 10,
+          "hasCredentials": true,
+          "duration": null
+        },
+        "logout": {
+          "attempted": false,
+          "redirected": true,
+          "storageCleared": true
+        }
+      },
+      "events": [],
+      "apiRequests": [
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao_completa.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao_completa.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_dashboard_agua.php?estatisticas_gerais=1",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_dashboard_agua.php?saldo_abastecimento=1",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_dashboard_agua.php?top_consumo_agua=1",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_dashboard_agua.php?ultimo_lancamento_abastecimento=1",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_dashboard_agua.php?historico_abastecimentos=1",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_dashboard_agua.php?saldo_abastecimento=1",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_empresa.php?action=obter",
+          "method": "GET",
+          "hasCookie": true
+        }
+      ],
+      "notes": [],
+      "metrics": {
+        "observedApiCount": 10,
+        "perMinute": 120,
+        "baselinePollingPerMin": 360,
+        "reduction": 67
+      },
+      "status": "ok"
+    },
+    {
+      "page": "/frontend/estoque.html",
+      "url": "https://asl.erpcondominios.com.br/frontend/estoque.html",
+      "checks": {
+        "basic": {
+          "hasSessionManager": false,
+          "isInstance": false,
+          "isAuthenticated": null,
+          "eventsRegistered": false,
+          "storage": {
+            "present": false
+          },
+          "currentUser": null
+        },
+        "renew": {
+          "triggered": false,
+          "apiCallsDuringRenew": 6,
+          "hasCredentials": true,
+          "duration": null
+        },
+        "logout": {
+          "attempted": false,
+          "redirected": true,
+          "storageCleared": true
+        }
+      },
+      "events": [],
+      "apiRequests": [
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao_completa.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao_completa.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_estoque.php?action=dashboard",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_estoque.php?action=categorias",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_empresa.php?action=obter",
+          "method": "GET",
+          "hasCookie": true
+        }
+      ],
+      "notes": [],
+      "metrics": {
+        "observedApiCount": 6,
+        "perMinute": 72,
+        "baselinePollingPerMin": 360,
+        "reduction": 80
+      },
+      "status": "ok"
+    },
+    {
+      "page": "/frontend/acesso.html",
+      "url": "https://asl.erpcondominios.com.br/frontend/acesso.html",
+      "checks": {
+        "basic": {
+          "hasSessionManager": false,
+          "isInstance": false,
+          "isAuthenticated": null,
+          "eventsRegistered": false,
+          "storage": {
+            "present": false
+          },
+          "currentUser": null
+        },
+        "renew": {
+          "triggered": false,
+          "apiCallsDuringRenew": 7,
+          "hasCredentials": true,
+          "duration": null
+        },
+        "logout": {
+          "attempted": false,
+          "redirected": true,
+          "storageCleared": true
+        }
+      },
+      "events": [],
+      "apiRequests": [
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao_completa.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao_completa.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_empresa.php?action=obter",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_rfid.php?acao=ultimos_acessos&limite=20",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_rfid.php?acao=testar_conexao",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/verificar_sessao.php",
+          "method": "GET",
+          "hasCookie": true
+        },
+        {
+          "url": "https://asl.erpcondominios.com.br/api/api_empresa.php?action=obter",
+          "method": "GET",
+          "hasCookie": true
+        }
+      ],
+      "notes": [],
+      "metrics": {
+        "observedApiCount": 7,
+        "perMinute": 84,
+        "baselinePollingPerMin": 360,
+        "reduction": 77
+      },
+      "status": "ok"
+    }
+  ]
+}

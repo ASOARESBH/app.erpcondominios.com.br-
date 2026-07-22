@@ -1,0 +1,413 @@
+/**
+ * =====================================================
+ * UNIFIED HEADER - Estilos para Interface Unificada
+ * =====================================================
+ * Cabeçalho com perfil do usuário à direita
+ * Mantém integridade de IDs de sistema
+ * 
+ * IDs Preservados:
+ * - userProfileSection
+ * - userAvatar
+ * - userName
+ * - userFunction
+ * - sessionTimer
+ * - sessionStatus
+ * - btn-logout
+ */
+
+/* ============================================
+   CABEÇALHO UNIFICADO
+   ============================================ */
+
+.header {
+    background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+.header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #ffffff;
+}
+
+.header h1 i {
+    font-size: 1.75rem;
+    color: #3b82f6;
+}
+
+/* ============================================
+   BLOCO DE PERFIL DO USUÁRIO (À DIREITA)
+   ============================================ */
+
+.header-user-profile {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Avatar */
+.header-user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.25rem;
+    color: white;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    flex-shrink: 0;
+}
+
+/* Informações do usuário */
+.header-user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 180px;
+}
+
+.header-user-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+}
+
+.header-user-function {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+}
+
+.header-user-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+    }
+    50% {
+        opacity: 0.7;
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.8);
+    }
+}
+
+/* ============================================
+   SESSÃO E TEMPO
+   ============================================ */
+
+.header-session-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    text-align: right;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    padding-left: 1.5rem;
+    min-width: 100px;
+}
+
+.session-timer {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fbbf24;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+}
+
+.session-status {
+    font-size: 0.75rem;
+    color: #10b981;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* ============================================
+   BOTÃO DE LOGOUT (REMOVIDO DO HEADER)
+   Agora está no rodapé da sidebar
+   ============================================ */
+
+/* ============================================
+   SIDEBAR MINIMALISTA (SEM PERFIL)
+   ============================================ */
+
+.sidebar-header {
+    padding: 2rem 1rem 1rem;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+}
+
+.sidebar-logo {
+    max-width: 100%;
+    max-height: 100px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.sidebar h1 {
+    color: #ffffff;
+    font-size: 1.2rem;
+    margin: 0;
+    text-align: center;
+    padding: 1rem;
+    font-weight: 600;
+}
+
+/* ============================================
+   RODAPÉ DA SIDEBAR (LOGOUT)
+   ============================================ */
+
+.sidebar-footer {
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: auto;
+}
+
+.sidebar-footer #btn-logout {
+    width: 100%;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.sidebar-footer #btn-logout:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+}
+
+.sidebar-footer #btn-logout:active {
+    transform: translateY(0);
+}
+
+.sidebar-footer #btn-logout i {
+    font-size: 0.9rem;
+}
+
+/* ============================================
+   RESPONSIVO
+   ============================================ */
+
+@media (max-width: 1200px) {
+    .header-user-profile {
+        gap: 1rem;
+        padding: 0.6rem 1rem;
+    }
+
+    .header-user-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+    }
+
+    .header-user-info {
+        min-width: 150px;
+    }
+
+    .header-user-name {
+        font-size: 0.9rem;
+    }
+
+    .header-user-function {
+        font-size: 0.75rem;
+    }
+
+    .header-session-info {
+        min-width: 80px;
+        padding-left: 1rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .header {
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .header h1 {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .header-user-profile {
+        flex: 1;
+        min-width: 300px;
+        justify-content: space-between;
+    }
+
+    .header-session-info {
+        display: none;
+    }
+
+    #btn-logout {
+        margin-left: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .header h1 {
+        font-size: 1.3rem;
+    }
+
+    .header-user-profile {
+        width: 100%;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem;
+    }
+
+    .header-user-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+
+    .header-user-info {
+        flex: 1;
+        min-width: auto;
+    }
+
+    .header-user-name {
+        font-size: 0.85rem;
+    }
+
+    .header-user-function {
+        font-size: 0.7rem;
+    }
+
+    .header-user-status {
+        font-size: 0.7rem;
+    }
+
+    .sidebar-header {
+        padding: 1.5rem 1rem;
+        min-height: 100px;
+    }
+
+    .sidebar-logo {
+        max-height: 80px;
+    }
+}
+
+@media (max-width: 480px) {
+    .header {
+        padding: 0.75rem;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .header h1 {
+        font-size: 1.1rem;
+        width: 100%;
+    }
+
+    .header-user-profile {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .header-user-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
+    }
+
+    .header-user-info {
+        flex: 1;
+        min-width: 150px;
+    }
+
+    .header-user-name {
+        font-size: 0.8rem;
+    }
+
+    .header-user-function {
+        font-size: 0.65rem;
+    }
+}
+
+/* ============================================
+   ESTADO DE CARREGAMENTO
+   ============================================ */
+
+.header-user-profile.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.header-user-avatar.loading {
+    background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}

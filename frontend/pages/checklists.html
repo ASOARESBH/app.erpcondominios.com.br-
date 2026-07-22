@@ -1,0 +1,665 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Checklist Veicular" data-icon="fa-clipboard-check" style="display:none;"></div>
+
+<!-- Toast Container -->
+<div id="chk_toastContainer" class="chk-toast-container"></div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-checklists">
+
+    <!-- Breadcrumb -->
+    <nav class="stub-breadcrumb">
+        <span data-page="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span>Checklist Veicular</span>
+    </nav>
+
+    <!-- Page Header com KPIs -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-clipboard-check" style="color:#2563eb;margin-right:10px;"></i>Checklist Veicular</h1>
+            <p>Controle de inspeção e manutenção preventiva da frota</p>
+        </div>
+        <div class="kpi-header-group">
+            <div class="kpi-mini">
+                <span class="kpi-mini-valor" id="chk_kpiTotal">—</span>
+                <span class="kpi-mini-label">Total</span>
+            </div>
+            <div class="kpi-mini kpi-aberto">
+                <span class="kpi-mini-valor" id="chk_kpiAbertos">—</span>
+                <span class="kpi-mini-label">Abertos</span>
+            </div>
+            <div class="kpi-mini kpi-fechado">
+                <span class="kpi-mini-valor" id="chk_kpiFechados">—</span>
+                <span class="kpi-mini-label">Fechados</span>
+            </div>
+            <div class="kpi-mini kpi-alerta">
+                <span class="kpi-mini-valor" id="chk_kpiAlertas">—</span>
+                <span class="kpi-mini-label">Alertas</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="chk-novo">
+            <i class="fas fa-plus-circle"></i> Novo Checklist
+        </button>
+        <button class="tab-button" data-tab="chk-abertos">
+            <i class="fas fa-folder-open"></i> Abertos
+            <span class="badge-tab" id="chk_badgeAbertos" style="display:none;">0</span>
+        </button>
+        <button class="tab-button" data-tab="chk-historico">
+            <i class="fas fa-history"></i> Histórico
+        </button>
+        <button class="tab-button" data-tab="chk-alertas">
+            <i class="fas fa-bell"></i> Alertas
+            <span class="badge-tab chk-badge-danger" id="chk_badgeAlertas" style="display:none;">0</span>
+        </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: NOVO CHECKLIST
+    ═══════════════════════════════════════════════════════ -->
+    <div id="tab-chk-novo" class="tab-content active">
+        <div class="page-card">
+            <h2 id="chk_formTitulo"><i class="fas fa-plus-circle" style="color:#2563eb;margin-right:8px;"></i>Abrir Novo Checklist</h2>
+
+            <!-- Info box -->
+            <div class="chk-info-box" id="chk_alertFormInfo">
+                <i class="fas fa-info-circle"></i>
+                <span>Selecione o <strong>veículo</strong> e informe o <strong>KM inicial</strong> para abrir o checklist de inspeção.</span>
+            </div>
+
+            <!-- ETAPA 1: Dados de abertura -->
+            <div id="chk_etapa1">
+                <form id="chk_formAbertura" autocomplete="off">
+                    <input type="hidden" id="chk_editId" value="0">
+
+                    <div class="chk-form-section">
+                        <h4 class="chk-section-title"><i class="fas fa-car"></i> Veículo e Operador</h4>
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label class="form-label">Veículo <span class="required">*</span></label>
+                                <select id="chk_veiculo" class="form-control" required>
+                                    <option value="">Selecione o veículo...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Operador <span class="required">*</span></label>
+                                <select id="chk_operador" class="form-control" required>
+                                    <option value="">Selecione o operador...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label class="form-label">KM Inicial <span class="required">*</span></label>
+                                <input type="number" id="chk_kmInicial" class="form-control" placeholder="Ex: 45320" min="1" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Data / Hora de Abertura <span class="required">*</span></label>
+                                <input type="datetime-local" id="chk_dataAbertura" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Observações de Abertura</label>
+                            <textarea id="chk_obsAbertura" class="form-control" rows="2" placeholder="Condições do veículo, observações iniciais..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- ITENS DE NÍVEL -->
+                    <div class="chk-form-section">
+                        <h4 class="chk-section-title"><i class="fas fa-tint"></i> Itens de Nível</h4>
+                        <p class="chk-section-hint">Verifique e informe o nível de cada item abaixo.</p>
+
+                        <div class="chk-items-grid">
+                            <!-- Nível do Óleo -->
+                            <div class="chk-item-card" data-categoria="nivel_oleo">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-oil-can chk-item-icon"></i>
+                                    <span class="chk-item-nome">1. Nível do Óleo do Motor</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-nivel-min">
+                                        <input type="radio" name="nivel_oleo" value="minimo" required>
+                                        <i class="fas fa-exclamation-triangle"></i> Mínimo
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-med">
+                                        <input type="radio" name="nivel_oleo" value="medio">
+                                        <i class="fas fa-minus-circle"></i> Médio
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-max">
+                                        <input type="radio" name="nivel_oleo" value="maximo">
+                                        <i class="fas fa-check-circle"></i> Máximo
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Nível da Água -->
+                            <div class="chk-item-card" data-categoria="nivel_agua">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-water chk-item-icon"></i>
+                                    <span class="chk-item-nome">2. Nível da Água do Radiador</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-nivel-min">
+                                        <input type="radio" name="nivel_agua" value="minimo" required>
+                                        <i class="fas fa-exclamation-triangle"></i> Mínimo
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-med">
+                                        <input type="radio" name="nivel_agua" value="medio">
+                                        <i class="fas fa-minus-circle"></i> Médio
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-max">
+                                        <input type="radio" name="nivel_agua" value="maximo">
+                                        <i class="fas fa-check-circle"></i> Máximo
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Pneu Dianteiro Esq -->
+                            <div class="chk-item-card" data-categoria="pneu_dianteiro_esq">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-circle chk-item-icon"></i>
+                                    <span class="chk-item-nome">3. Pneu Dianteiro Esq. (LD)</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-nivel-min">
+                                        <input type="radio" name="pneu_dianteiro_esq" value="minimo" required>
+                                        <i class="fas fa-exclamation-triangle"></i> Mínimo
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-med">
+                                        <input type="radio" name="pneu_dianteiro_esq" value="medio">
+                                        <i class="fas fa-minus-circle"></i> Médio
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-max">
+                                        <input type="radio" name="pneu_dianteiro_esq" value="maximo">
+                                        <i class="fas fa-check-circle"></i> Máximo
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Pneu Dianteiro Dir -->
+                            <div class="chk-item-card" data-categoria="pneu_dianteiro_dir">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-circle chk-item-icon"></i>
+                                    <span class="chk-item-nome">4. Pneu Dianteiro Dir. (LE)</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-nivel-min">
+                                        <input type="radio" name="pneu_dianteiro_dir" value="minimo" required>
+                                        <i class="fas fa-exclamation-triangle"></i> Mínimo
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-med">
+                                        <input type="radio" name="pneu_dianteiro_dir" value="medio">
+                                        <i class="fas fa-minus-circle"></i> Médio
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-max">
+                                        <input type="radio" name="pneu_dianteiro_dir" value="maximo">
+                                        <i class="fas fa-check-circle"></i> Máximo
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Pneu Traseiro Esq -->
+                            <div class="chk-item-card" data-categoria="pneu_traseiro_esq">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-circle chk-item-icon"></i>
+                                    <span class="chk-item-nome">5. Pneu Traseiro Esq. (LD)</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-nivel-min">
+                                        <input type="radio" name="pneu_traseiro_esq" value="minimo" required>
+                                        <i class="fas fa-exclamation-triangle"></i> Mínimo
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-med">
+                                        <input type="radio" name="pneu_traseiro_esq" value="medio">
+                                        <i class="fas fa-minus-circle"></i> Médio
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-max">
+                                        <input type="radio" name="pneu_traseiro_esq" value="maximo">
+                                        <i class="fas fa-check-circle"></i> Máximo
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Pneu Traseiro Dir -->
+                            <div class="chk-item-card" data-categoria="pneu_traseiro_dir">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-circle chk-item-icon"></i>
+                                    <span class="chk-item-nome">6. Pneu Traseiro Dir. (LE)</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-nivel-min">
+                                        <input type="radio" name="pneu_traseiro_dir" value="minimo" required>
+                                        <i class="fas fa-exclamation-triangle"></i> Mínimo
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-med">
+                                        <input type="radio" name="pneu_traseiro_dir" value="medio">
+                                        <i class="fas fa-minus-circle"></i> Médio
+                                    </label>
+                                    <label class="chk-radio-opt chk-nivel-max">
+                                        <input type="radio" name="pneu_traseiro_dir" value="maximo">
+                                        <i class="fas fa-check-circle"></i> Máximo
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ITENS FUNCIONAIS -->
+                    <div class="chk-form-section">
+                        <h4 class="chk-section-title"><i class="fas fa-check-square"></i> Itens Funcionais</h4>
+                        <p class="chk-section-hint">Verifique o funcionamento de cada componente.</p>
+
+                        <div class="chk-items-grid">
+                            <!-- Buzina -->
+                            <div class="chk-item-card" data-categoria="buzina">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-volume-up chk-item-icon"></i>
+                                    <span class="chk-item-nome">7. Buzina</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-func-sim">
+                                        <input type="radio" name="buzina" value="sim" required>
+                                        <i class="fas fa-check-circle"></i> Sim
+                                    </label>
+                                    <label class="chk-radio-opt chk-func-nao">
+                                        <input type="radio" name="buzina" value="nao">
+                                        <i class="fas fa-times-circle"></i> Não
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Faróis -->
+                            <div class="chk-item-card" data-categoria="farois">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-lightbulb chk-item-icon"></i>
+                                    <span class="chk-item-nome">8. Faróis Alto</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-func-sim">
+                                        <input type="radio" name="farois" value="sim" required>
+                                        <i class="fas fa-check-circle"></i> Sim
+                                    </label>
+                                    <label class="chk-radio-opt chk-func-nao">
+                                        <input type="radio" name="farois" value="nao">
+                                        <i class="fas fa-times-circle"></i> Não
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Freios -->
+                            <div class="chk-item-card" data-categoria="freios">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-stop-circle chk-item-icon"></i>
+                                    <span class="chk-item-nome">9. Luzes de Freio</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-func-sim">
+                                        <input type="radio" name="luzes_freio" value="sim" required>
+                                        <i class="fas fa-check-circle"></i> Sim
+                                    </label>
+                                    <label class="chk-radio-opt chk-func-nao">
+                                        <input type="radio" name="luzes_freio" value="nao">
+                                        <i class="fas fa-times-circle"></i> Não
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Cintos -->
+                            <div class="chk-item-card" data-categoria="cintos">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-shield-alt chk-item-icon"></i>
+                                    <span class="chk-item-nome">10. Cintos de Segurança</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-func-sim">
+                                        <input type="radio" name="cintos" value="sim" required>
+                                        <i class="fas fa-check-circle"></i> Sim
+                                    </label>
+                                    <label class="chk-radio-opt chk-func-nao">
+                                        <input type="radio" name="cintos" value="nao">
+                                        <i class="fas fa-times-circle"></i> Não
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Limpadores -->
+                            <div class="chk-item-card" data-categoria="limpadores">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-wind chk-item-icon"></i>
+                                    <span class="chk-item-nome">11. Limpadores de Para-brisa</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-func-sim">
+                                        <input type="radio" name="limpadores" value="sim" required>
+                                        <i class="fas fa-check-circle"></i> Sim
+                                    </label>
+                                    <label class="chk-radio-opt chk-func-nao">
+                                        <input type="radio" name="limpadores" value="nao">
+                                        <i class="fas fa-times-circle"></i> Não
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Extintor -->
+                            <div class="chk-item-card" data-categoria="extintor">
+                                <div class="chk-item-header">
+                                    <i class="fas fa-fire-extinguisher chk-item-icon"></i>
+                                    <span class="chk-item-nome">12. Extintor de Incêndio</span>
+                                </div>
+                                <div class="chk-radio-group">
+                                    <label class="chk-radio-opt chk-func-sim">
+                                        <input type="radio" name="extintor" value="sim" required>
+                                        <i class="fas fa-check-circle"></i> Sim
+                                    </label>
+                                    <label class="chk-radio-opt chk-func-nao">
+                                        <input type="radio" name="extintor" value="nao">
+                                        <i class="fas fa-times-circle"></i> Não
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-actions">
+                        <button type="submit" class="btn-primary" id="chk_btnAbrirChecklist">
+                            <i class="fas fa-clipboard-check"></i> Abrir Checklist
+                        </button>
+                        <button type="button" class="btn-secondary" id="chk_btnLimparForm">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: CHECKLISTS ABERTOS
+    ═══════════════════════════════════════════════════════ -->
+    <div id="tab-chk-abertos" class="tab-content">
+        <div class="page-card">
+            <div class="toolbar">
+                <h3 style="color:#1d4ed8;"><i class="fas fa-folder-open" style="margin-right:6px;"></i>Checklists em Aberto</h3>
+                <button class="btn-secondary" id="chk_btnAtualizarAbertos">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Veículo</th>
+                            <th>Operador</th>
+                            <th>KM Inicial</th>
+                            <th>Abertura</th>
+                            <th>Observação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="chk_tabelaAbertos">
+                        <tr class="empty-row">
+                            <td colspan="7">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Carregando...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: HISTÓRICO
+    ═══════════════════════════════════════════════════════ -->
+    <div id="tab-chk-historico" class="tab-content">
+        <div class="page-card">
+            <div class="toolbar">
+                <div class="filter-group">
+                    <select id="chk_filtroStatus" class="form-control-sm">
+                        <option value="">Todos os status</option>
+                        <option value="aberto">Abertos</option>
+                        <option value="fechado">Fechados</option>
+                    </select>
+                    <select id="chk_filtroVeiculo" class="form-control-sm">
+                        <option value="">Todos os veículos</option>
+                    </select>
+                    <input type="date" id="chk_filtroDataIni" class="form-control-sm" title="Data inicial">
+                    <input type="date" id="chk_filtroDataFim" class="form-control-sm" title="Data final">
+                    <button class="btn-primary" id="chk_btnFiltrar">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <button class="btn-secondary" id="chk_btnAtualizarHist">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Veículo</th>
+                            <th>Operador</th>
+                            <th>KM Inicial</th>
+                            <th>KM Final</th>
+                            <th>KM Percorrido</th>
+                            <th>Abertura</th>
+                            <th>Fechamento</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="chk_tabelaHistorico">
+                        <tr class="empty-row">
+                            <td colspan="10">
+                                <i class="fas fa-filter"></i>
+                                <p>Use os filtros acima para buscar checklists</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB: ALERTAS
+    ═══════════════════════════════════════════════════════ -->
+    <div id="tab-chk-alertas" class="tab-content">
+        <div class="page-card">
+            <div class="toolbar">
+                <h3 style="color:#b45309;"><i class="fas fa-bell" style="margin-right:6px;"></i>Alertas de Manutenção Preventiva</h3>
+                <div class="filter-group">
+                    <select id="chk_filtroAlertaStatus" class="form-control-sm">
+                        <option value="pendente">Pendentes</option>
+                        <option value="resolvido">Resolvidos</option>
+                        <option value="ignorado">Ignorados</option>
+                        <option value="">Todos</option>
+                    </select>
+                    <button class="btn-secondary" id="chk_btnAtualizarAlertas">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Veículo</th>
+                            <th>Categoria</th>
+                            <th>Descrição</th>
+                            <th>KM Atual</th>
+                            <th>KM Limite</th>
+                            <th>Excedido</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="chk_tabelaAlertas">
+                        <tr class="empty-row">
+                            <td colspan="10">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Carregando alertas...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /page-wrapper -->
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: FECHAR CHECKLIST
+═══════════════════════════════════════════════════════ -->
+<div id="chk_modalFechar" class="modal-overlay page-checklists" style="display:none;">
+    <div class="modal-box modal-lg">
+        <div class="modal-header">
+            <h3><i class="fas fa-flag-checkered" style="margin-right:8px;"></i>Fechar Checklist</h3>
+            <button class="modal-close" id="chk_btnFecharModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Info do checklist -->
+            <div class="chk-modal-info" id="chk_infoFechar">
+                <i class="fas fa-car"></i>
+                <span id="chk_infoFecharTexto">—</span>
+            </div>
+
+            <form id="chk_formFechar" autocomplete="off">
+                <input type="hidden" id="chk_fecharId">
+                <input type="hidden" id="chk_fecharKmInicial">
+
+                <div class="chk-form-section">
+                    <h4 class="chk-section-title"><i class="fas fa-tachometer-alt"></i> Dados de Fechamento</h4>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">KM Final <span class="required">*</span></label>
+                            <input type="number" id="chk_kmFinal" class="form-control" placeholder="KM final do veículo" min="1" required>
+                            <span class="form-hint" id="chk_kmFinalHint"></span>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Data / Hora de Fechamento <span class="required">*</span></label>
+                            <input type="datetime-local" id="chk_dataFechamento" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Observações de Fechamento</label>
+                        <textarea id="chk_obsFechamento" class="form-control" rows="2" placeholder="Ocorrências durante o uso, condições de retorno..."></textarea>
+                    </div>
+                </div>
+
+                <!-- ITENS DE FECHAMENTO - Nível -->
+                <div class="chk-form-section">
+                    <h4 class="chk-section-title"><i class="fas fa-tint"></i> Itens de Nível — Fechamento</h4>
+                    <div class="chk-items-grid" id="chk_itensNivelFechamento">
+                        <!-- Preenchido via JS com os itens da abertura -->
+                    </div>
+                </div>
+
+                <!-- ITENS DE FECHAMENTO - Funcional -->
+                <div class="chk-form-section">
+                    <h4 class="chk-section-title"><i class="fas fa-check-square"></i> Itens Funcionais — Fechamento</h4>
+                    <div class="chk-items-grid" id="chk_itensFuncFechamento">
+                        <!-- Preenchido via JS com os itens da abertura -->
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-primary" id="chk_btnConfirmarFechar">
+                <i class="fas fa-flag-checkered"></i> Confirmar Fechamento
+            </button>
+            <button class="btn-secondary" id="chk_btnCancelarFechar">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: VISUALIZAR CHECKLIST
+═══════════════════════════════════════════════════════ -->
+<div id="chk_modalVisualizar" class="modal-overlay page-checklists" style="display:none;">
+    <div class="modal-box modal-lg">
+        <div class="modal-header">
+            <h3><i class="fas fa-eye" style="margin-right:8px;"></i>Detalhes do Checklist</h3>
+            <button class="modal-close" id="chk_btnVisualizarClose">&times;</button>
+        </div>
+        <div class="modal-body" id="chk_visualizarConteudo">
+            <!-- Preenchido via JS -->
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="chk_btnFecharVisualizar">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: RESOLVER / IGNORAR ALERTA
+═══════════════════════════════════════════════════════ -->
+<div id="chk_modalAlerta" class="modal-overlay page-checklists" style="display:none;">
+    <div class="modal-box modal-sm">
+        <div class="modal-header">
+            <h3 id="chk_modalAlertaTitulo"><i class="fas fa-bell" style="margin-right:8px;"></i>Resolver Alerta</h3>
+            <button class="modal-close" id="chk_btnAlertaClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="chk-modal-info" id="chk_infoAlerta">
+                <i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i>
+                <span id="chk_infoAlertaTexto">—</span>
+            </div>
+            <form id="chk_formAlerta">
+                <input type="hidden" id="chk_alertaId">
+                <input type="hidden" id="chk_alertaAcao">
+                <div class="form-group">
+                    <label class="form-label">Observação <span class="required">*</span></label>
+                    <textarea id="chk_alertaObs" class="form-control" rows="3" placeholder="Descreva a ação tomada ou motivo para ignorar..." required></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-primary" id="chk_btnConfirmarAlerta">
+                <i class="fas fa-check"></i> Confirmar
+            </button>
+            <button class="btn-secondary" id="chk_btnCancelarAlerta">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: EXCLUIR CHECKLIST
+═══════════════════════════════════════════════════════ -->
+<div id="chk_modalExcluir" class="modal-overlay page-checklists" style="display:none;">
+    <div class="modal-box modal-sm">
+        <div class="modal-header">
+            <h3><i class="fas fa-trash" style="margin-right:8px;color:#ef4444;"></i>Excluir Checklist</h3>
+            <button class="modal-close" id="chk_btnExcluirClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Tem certeza que deseja excluir o checklist <strong id="chk_excluirNome"></strong>?</p>
+            <p style="color:#64748b;font-size:.9rem;margin-top:.5rem;">Apenas checklists <strong>abertos</strong> podem ser excluídos. Esta ação não pode ser desfeita.</p>
+            <input type="hidden" id="chk_excluirId">
+        </div>
+        <div class="modal-footer">
+            <button class="btn-danger" id="chk_btnConfirmarExcluir">
+                <i class="fas fa-trash"></i> Sim, Excluir
+            </button>
+            <button class="btn-secondary" id="chk_btnCancelarExcluir">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+    </div>
+</div>

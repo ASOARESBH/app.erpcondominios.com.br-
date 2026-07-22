@@ -1,0 +1,41 @@
+[29-Jan-2026 08:46:58 America/Sao_Paulo] PHP Fatal error:  Uncaught ArgumentCountError: The number of elements in the type definition string must match the number of bind variables in /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php:183
+Stack trace:
+#0 /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php(183): mysqli_stmt->bind_param('isisissssis', '4', '2026-01-29', '2026-01-31', 3, 'portaria', 'ABC-3454', 'gol', 'preto', 'visitante', '185', 'Gleba 133', 'ACESSO-697B48B2...', 'b7ed412ced4388d...')
+#1 {main}
+  thrown in /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php on line 183
+[29-Jan-2026 08:50:43 America/Sao_Paulo] PHP Fatal error:  Uncaught ArgumentCountError: The number of elements in the type definition string must match the number of bind variables in /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php:183
+Stack trace:
+#0 /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php(183): mysqli_stmt->bind_param('isisssssiss', '4', '2026-01-29', '2026-01-31', 3, 'portaria', 'ABC-3454', 'gol', 'preto', 'visitante', '185', 'Gleba 133', 'ACESSO-697B4993...', '3f7fbbfc344f604...')
+#1 {main}
+  thrown in /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php on line 183
+[29-Jan-2026 08:51:21 America/Sao_Paulo] PHP Fatal error:  Uncaught ArgumentCountError: The number of elements in the type definition string must match the number of bind variables in /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php:183
+Stack trace:
+#0 /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php(183): mysqli_stmt->bind_param('isisssssiss', '4', '2026-01-29', '2026-01-31', 3, 'portaria', 'ABC-3454', 'gol', 'preto', 'visitante', '185', 'Gleba 133', 'ACESSO-697B49B9...', 'acd97b0e1de11a1...')
+#1 {main}
+  thrown in /home2/inlaud99/asl.erpcondominios.com.br/api/api_acessos_visitantes.php on line 183
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [DEBUG QR] Iniciando geração de QR Code
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [DEBUG QR] ID do acesso: 3
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [DEBUG QR] Buscando dados do acesso no banco
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [DEBUG QR] Acesso encontrado: VISITANTE TESTE
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [QR NATIVO] Iniciando geração de QR Code nativo com token seguro
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [QR NATIVO] Token gerado: 2c42e7c1e34922c10f0dab74b9f26952 (expira em: 2026-01-30 08:52:50)
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [QR NATIVO] Dados do QR Code preparados. Tamanho: 242 bytes
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [QR NATIVO] QR Code gerado com sucesso. Tamanho: 7948 bytes
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [QR NATIVO] QR Code gerado com sucesso. Tamanho base64: 10622 bytes
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [DEBUG QR] Salvando QR Code no banco de dados...
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [DEBUG QR] QR Code salvo no banco com sucesso
+[29-Jan-2026 08:52:50 America/Sao_Paulo] [QR NATIVO] Retornando QR Code para o cliente
+[29-Jan-2026 08:55:07 America/Sao_Paulo] Erro em api_dependentes.php: Unknown column 'nome' in 'order clause'
+[29-Jan-2026 08:55:15 America/Sao_Paulo] Erro em api_dependentes.php: Unknown column 'nome' in 'order clause'
+[29-Jan-2026 23:28:32 America/Sao_Paulo] [API EMPRESA] Diretório de upload: /home2/inlaud99/asl.erpcondominios.com.br/uploads/logo
+[29-Jan-2026 23:28:32 America/Sao_Paulo] [API EMPRESA] URL relativa: ../uploads/logo/logo_1769740112.jpeg
+[29-Jan-2026 23:28:32 America/Sao_Paulo] [API EMPRESA] Logo enviada com sucesso: logo_1769740112.jpeg em /home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
+[29-Jan-2026 23:28:32 America/Sao_Paulo] [API EMPRESA] URL retornada: ../uploads/logo/logo_1769740112.jpeg
+[29-Jan-2026 23:29:09 America/Sao_Paulo] [API EMPRESA] Empresa atualizada: ID 1
+[29-Jan-2026 23:29:15 America/Sao_Paulo] [API EMPRESA] Empresa atualizada: ID 1
+[29-Jan-2026 23:29:16 America/Sao_Paulo] [API EMPRESA] Empresa atualizada: ID 1
+[02-Feb-2026 09:37:18 America/Sao_Paulo] Erro de conexão ao banco: Access denied for user 'root'@'localhost' (using password: NO)
+[02-Feb-2026 09:37:18 America/Sao_Paulo] Stack trace: #0 /home2/inlaud99/asl.erpcondominios.com.br/api/config.php(24): mysqli->__construct('localhost', 'root', Object(SensitiveParameterValue), 'inlaud99_erpser...')
+#1 /home2/inlaud99/asl.erpcondominios.com.br/api/validar_login.php(69): conectar_banco()
+#2 {main}
+[05-Feb-2026 19:12:19 America/Sao_Paulo] PHP Warning:  Undefined array key "total" in /home2/inlaud99/asl.erpcondominios.com.br/api/api_logs_sistema.php on line 185

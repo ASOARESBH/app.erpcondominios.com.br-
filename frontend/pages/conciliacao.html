@@ -1,0 +1,220 @@
+<!-- =====================================================
+     CONCILIAÇÃO BANCÁRIA — Módulo Financeiro
+     page: conciliacao | css: conciliacao
+     ===================================================== -->
+<link rel="stylesheet" href="/assets/css/pages/conciliacao.css">
+
+<!-- ── Cabeçalho ─────────────────────────────────────── -->
+<div class="conc-header">
+  <div class="conc-header-left">
+    <button class="btn-voltar" onclick="AppRouter.navigate('financeiro')" title="Voltar para Financeiro">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </button>
+    <span class="conc-header-icon"><i class="fas fa-balance-scale"></i></span>
+    <div>
+      <h1 class="conc-titulo">Conciliação Bancária</h1>
+      <p class="conc-subtitulo">Vincule movimentações bancárias aos títulos financeiros</p>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <select id="conc-sel-conta" onchange="ConciliacaoPage.mudarConta()" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff;min-width:180px;">
+      <option value="0">Todas as Contas</option>
+    </select>
+  </div>
+</div>
+
+<!-- ── KPIs ─────────────────────────────────────────── -->
+<div class="conc-kpis" id="conc-kpis">
+  <div class="conc-kpi">
+    <div class="conc-kpi-icon amarelo"><i class="fas fa-clock"></i></div>
+    <div class="conc-kpi-info">
+      <span class="conc-kpi-valor amarelo" id="conc-kpi-pendentes">—</span>
+      <span class="conc-kpi-label">Pendentes</span>
+    </div>
+  </div>
+  <div class="conc-kpi">
+    <div class="conc-kpi-icon verde"><i class="fas fa-check-circle"></i></div>
+    <div class="conc-kpi-info">
+      <span class="conc-kpi-valor verde" id="conc-kpi-conciliados">—</span>
+      <span class="conc-kpi-label">Conciliados</span>
+    </div>
+  </div>
+  <div class="conc-kpi">
+    <div class="conc-kpi-icon azul"><i class="fas fa-robot"></i></div>
+    <div class="conc-kpi-info">
+      <span class="conc-kpi-valor" id="conc-kpi-auto">—</span>
+      <span class="conc-kpi-label">Auto-conciliados</span>
+    </div>
+  </div>
+  <div class="conc-kpi">
+    <div class="conc-kpi-icon teal"><i class="fas fa-percent"></i></div>
+    <div class="conc-kpi-info">
+      <span class="conc-kpi-valor" id="conc-kpi-taxa">—</span>
+      <span class="conc-kpi-label">Taxa de Conciliação</span>
+    </div>
+  </div>
+  <div class="conc-kpi">
+    <div class="conc-kpi-icon cinza"><i class="fas fa-eye-slash"></i></div>
+    <div class="conc-kpi-info">
+      <span class="conc-kpi-valor" id="conc-kpi-ignorados">—</span>
+      <span class="conc-kpi-label">Ignorados</span>
+    </div>
+  </div>
+</div>
+
+<!-- Barra de progresso de taxa -->
+<div class="conc-taxa-wrap">
+  <div class="conc-taxa-label">
+    <span>Taxa de conciliação</span>
+    <span id="conc-taxa-pct">—%</span>
+  </div>
+  <div class="conc-taxa-barra">
+    <div class="conc-taxa-fill" id="conc-taxa-fill" style="width:0%"></div>
+  </div>
+</div>
+
+<!-- ── Tabs ──────────────────────────────────────────── -->
+<div class="conc-tabs">
+  <button class="conc-tab ativa" onclick="ConciliacaoPage.mudarAba('pendentes')">
+    <i class="fas fa-clock"></i> Pendentes
+    <span class="conc-tab-badge" id="conc-badge-pend" style="display:none"></span>
+  </button>
+  <button class="conc-tab" onclick="ConciliacaoPage.mudarAba('conciliadas')">
+    <i class="fas fa-check-circle"></i> Conciliadas
+  </button>
+  <button class="conc-tab" onclick="ConciliacaoPage.mudarAba('historico')">
+    <i class="fas fa-history"></i> Histórico de Ações
+  </button>
+</div>
+
+<!-- ── PAINEL: PENDENTES ─────────────────────────────── -->
+<div class="conc-panel" id="panel-pendentes">
+  <div class="conc-filtros">
+    <select id="pend-filtro-tipo" onchange="ConciliacaoPage.filtrarPendentes()">
+      <option value="">Todos os tipos</option>
+      <option value="credito">Créditos</option>
+      <option value="debito">Débitos</option>
+    </select>
+    <input type="date" id="pend-filtro-dt-ini" onchange="ConciliacaoPage.filtrarPendentes()" title="Data início">
+    <input type="date" id="pend-filtro-dt-fim" onchange="ConciliacaoPage.filtrarPendentes()" title="Data fim">
+    <input type="search" id="pend-busca" placeholder="Buscar descrição, favorecido..."
+           oninput="ConciliacaoPage.filtrarPendentes()">
+    <span class="conc-total-badge" id="pend-total-badge">0 pendentes</span>
+  </div>
+
+  <div class="conc-tabela-wrap">
+    <table class="conc-tabela">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Conta</th>
+          <th>Descrição / Favorecido</th>
+          <th>Doc.</th>
+          <th>Tipo</th>
+          <th class="text-right">Valor</th>
+          <th style="text-align:center">Candidatos</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-pendentes">
+        <tr><td colspan="8" class="conc-loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="conc-paginacao" id="paginacao-pendentes"></div>
+</div>
+
+<!-- ── PAINEL: CONCILIADAS ───────────────────────────── -->
+<div class="conc-panel conc-oculto" id="panel-conciliadas">
+  <div class="conc-filtros">
+    <select id="conc-filtro-tipo" onchange="ConciliacaoPage.filtrarConciliadas()">
+      <option value="">Todos os tipos</option>
+      <option value="credito">Créditos</option>
+      <option value="debito">Débitos</option>
+    </select>
+    <input type="date" id="conc-filtro-dt-ini" onchange="ConciliacaoPage.filtrarConciliadas()">
+    <input type="date" id="conc-filtro-dt-fim" onchange="ConciliacaoPage.filtrarConciliadas()">
+    <input type="search" id="conc-busca" placeholder="Buscar..."
+           oninput="ConciliacaoPage.filtrarConciliadas()">
+    <span class="conc-total-badge" id="conc-total-badge">0 conciliadas</span>
+  </div>
+
+  <div class="conc-tabela-wrap">
+    <table class="conc-tabela">
+      <thead>
+        <tr>
+          <th>Data Mov.</th>
+          <th>Conta</th>
+          <th>Descrição</th>
+          <th>Tipo</th>
+          <th class="text-right">Valor</th>
+          <th>Título Vinculado</th>
+          <th style="text-align:center">Tipo Conc.</th>
+          <th>Score</th>
+          <th>Conciliado Por</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-conciliadas">
+        <tr><td colspan="10" class="conc-vazio">Selecione uma conta e carregue os dados</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="conc-paginacao" id="paginacao-conciliadas"></div>
+</div>
+
+<!-- ── PAINEL: HISTÓRICO ─────────────────────────────── -->
+<div class="conc-panel conc-oculto" id="panel-historico">
+  <div class="conc-filtros">
+    <select id="hist-filtro-tipo" onchange="ConciliacaoPage.filtrarHistorico()">
+      <option value="">Todos</option>
+      <option value="automatica">Automática</option>
+      <option value="manual">Manual</option>
+    </select>
+    <input type="date" id="hist-filtro-dt-ini" onchange="ConciliacaoPage.filtrarHistorico()">
+    <input type="date" id="hist-filtro-dt-fim" onchange="ConciliacaoPage.filtrarHistorico()">
+    <span class="conc-total-badge" id="hist-total-badge">0 eventos</span>
+  </div>
+
+  <div class="conc-tabela-wrap">
+    <table class="conc-tabela">
+      <thead>
+        <tr>
+          <th>Data Conc.</th>
+          <th>Conta</th>
+          <th>Movimentação</th>
+          <th>Título Vinculado</th>
+          <th style="text-align:center">Tipo</th>
+          <th>Score</th>
+          <th>Por</th>
+          <th style="text-align:center">Status</th>
+          <th>Desfeita Por</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-historico">
+        <tr><td colspan="9" class="conc-vazio">Selecione uma conta e carregue os dados</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="conc-paginacao" id="paginacao-historico"></div>
+</div>
+
+<!-- ── MODAL: CANDIDATOS ─────────────────────────────── -->
+<div class="conc-modal-overlay" id="modal-candidatos" style="display:none">
+  <div class="conc-modal">
+    <div class="conc-modal-header">
+      <h3><i class="fas fa-search"></i> Candidatos à Conciliação</h3>
+      <button class="conc-modal-fechar" onclick="ConciliacaoPage.fecharModal()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="conc-modal-body" id="modal-candidatos-body">
+      <div style="text-align:center;padding:32px;color:#64748b;">
+        <i class="fas fa-spinner fa-spin"></i> Buscando candidatos...
+      </div>
+    </div>
+    <div class="conc-modal-footer">
+      <button class="btn-outline" onclick="ConciliacaoPage.fecharModal()">Fechar</button>
+    </div>
+  </div>
+</div>

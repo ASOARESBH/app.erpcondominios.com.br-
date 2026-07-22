@@ -1,0 +1,401 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastros - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; }
+        
+        /* Layout Responsivo */
+        .container { display: flex; min-height: 100vh; }
+        
+        /* Sidebar */
+        .sidebar { position: fixed; top: 0; left: 0; width: 260px; height: 100vh; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 2rem 0; overflow-y: auto; z-index: 1000; transition: transform 0.3s; }
+        .sidebar h1 { color: #fff; font-size: 1.3rem; text-align: center; margin-bottom: 2rem; }
+        .nav-menu { list-style: none; padding: 1rem; }
+        .nav-item { margin-bottom: 0.5rem; }
+        .nav-link { display: flex; align-items: center; padding: 0.75rem 1rem; color: #cbd5e1; text-decoration: none; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .nav-link i { margin-right: 0.75rem; width: 20px; }
+        
+        /* Menu Toggle Mobile */
+        .menu-toggle { display: none; position: fixed; top: 1rem; left: 1rem; z-index: 1001; background: #1e293b; color: #fff; border: none; padding: 0.75rem; border-radius: 8px; cursor: pointer; }
+        
+        /* Main Content */
+        .main-content { margin-left: 260px; padding: 2rem; width: 100%; transition: margin-left 0.3s; }
+        .header { background: #fff; padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        
+        /* Submenu de Configuraçµes */
+        .config-submenu { background: #fff; padding: 1rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .config-submenu ul { list-style: none; display: flex; gap: 1rem; flex-wrap: wrap; }
+        .config-submenu a { display: inline-block; padding: 0.75rem 1.5rem; background: #f1f5f9; color: #334155; text-decoration: none; border-radius: 8px; transition: 0.2s; }
+        .config-submenu a:hover, .config-submenu a.active { background: #3b82f6; color: #fff; }
+        
+        /* Sections */
+        .form-section, .table-section { background: #fff; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+        
+        /* Form Elements */
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.9rem; }
+        input, select, textarea { width: 100%; padding: 0.6rem; margin-bottom: 0.5rem; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        
+        /* Buttons */
+        button { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 0.6rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; margin-right: 0.5rem; }
+        button:hover { opacity: 0.9; transform: scale(1.02); }
+        .btn-cancel { background: linear-gradient(135deg, #6b7280, #4b5563); }
+        .btn-edit { background: linear-gradient(135deg, #f59e0b, #d97706); padding: 0.4rem 0.8rem; font-size: 0.9rem; }
+        .btn-delete { background: linear-gradient(135deg, #ef4444, #dc2626); padding: 0.4rem 0.8rem; font-size: 0.9rem; }
+        
+        /* Table */
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #f1f5f9; text-align: left; font-size: 0.9rem; }
+        th { background: #f8fafc; font-weight: 600; white-space: nowrap; }
+        
+        /* Alerts */
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-weight: 500; }
+        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #22c55e; }
+        .alert-error { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
+        
+        /* Loading */
+        .loading { display: none; text-align: center; padding: 2rem; }
+        .loading.active { display: block; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.active { transform: translateX(0); }
+            .menu-toggle { display: block; }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .header { padding: 1rem; }
+            .form-section, .table-section { padding: 1rem; }
+            .config-submenu ul { flex-direction: column; }
+            .config-submenu a { display: block; text-align: center; }
+            th, td { padding: 0.5rem; font-size: 0.85rem; }
+        }
+        
+        @media (max-width: 480px) {
+            .form-grid { grid-template-columns: 1fr; }
+            button { width: 100%; margin-bottom: 0.5rem; }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i> Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i> Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link active"><i class="fas fa-cog"></i> Configuraçµes</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-cog"></i> Configuraçµes - Cadastros</h1>
+            </header>
+
+            <nav class="config-submenu">
+                <ul>
+                    <li><a href="cadastros.html" class="active"><i class="fas fa-building"></i> Unidades</a></li>
+                    <li><a href="configuracao.html"><i class="fas fa-sliders-h"></i> Geral</a></li>
+                </ul>
+            </nav>
+
+            <div id="alertBox"></div>
+
+            <section class="form-section">
+                <h2 id="formTitle">Nova Unidade</h2>
+                
+                <form id="unidadeForm">
+                    <input type="hidden" id="unidadeId">
+                    
+                    <div class="form-grid">
+                        <div>
+                            <label>Nome da Unidade *</label>
+                            <input type="text" id="nome" required placeholder="Ex: 101, GLEBA 133">
+                        </div>
+                        <div>
+                            <label>Bloco/Torre</label>
+                            <input type="text" id="bloco" placeholder="Ex: Bloco A, Torre 1">
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div style="grid-column: 1 / -1;">
+                            <label>Descrição</label>
+                            <input type="text" id="descricao" placeholder="Descrição adicional da unidade">
+                        </div>
+                    </div>
+
+                    <div>
+                        <button type="submit" id="btnSalvar">Salvar Unidade</button>
+                        <button type="button" class="btn-cancel" onclick="cancelarEdicao()">Cancelar</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="table-section">
+                <h2>Lista de Unidades</h2>
+                
+                <div class="loading" id="loading">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p>Carregando...</p>
+                </div>
+
+                <div class="table-wrapper">
+                    <table id="unidadesTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>Bloco/Torre</th>
+                                <th>Descrição</th>
+                                <th>Status</th>
+                                <th>Açµes</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        let editandoId = null;
+
+        // Carregar ao iniciar
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarUnidades();
+        });
+
+        // Toggle menu mobile
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        // Fechar menu ao clicar fora (mobile)
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        // Carregar unidades
+        function carregarUnidades() {
+            document.getElementById('loading').classList.add('active');
+            
+            fetch('../api/api_unidades.php')
+                .then(response => response.text())
+                .then(text => {
+                    document.getElementById('loading').classList.remove('active');
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.sucesso) {
+                            renderizarTabela(data.dados);
+                        } else {
+                            mostrarAlerta('error', data.mensagem);
+                        }
+                    } catch (e) {
+                        console.error('Erro ao processar unidades:', text);
+                        mostrarAlerta('error', 'Erro ao carregar unidades');
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').classList.remove('active');
+                    mostrarAlerta('error', 'Erro ao carregar unidades: ' + error.message);
+                });
+        }
+
+        // Renderizar tabela
+        function renderizarTabela(unidades) {
+            const tbody = document.querySelector('#unidadesTable tbody');
+            tbody.innerHTML = '';
+
+            if (unidades.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma unidade cadastrada</td></tr>';
+                return;
+            }
+
+            unidades.forEach(u => {
+                const tr = document.createElement('tr');
+                const status = u.ativo == 1 ? '<span style="color: #22c55e;">?</span> Ativa' : '<span style="color: #ef4444;">?</span> Inativa';
+                
+                tr.innerHTML = `
+                    <td>${u.id}</td>
+                    <td><strong>${u.nome}</strong></td>
+                    <td>${u.bloco || '-'}</td>
+                    <td>${u.descricao || '-'}</td>
+                    <td>${status}</td>
+                    <td>
+                        <button class="btn-edit" onclick="editarUnidade(${u.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn-delete" onclick="excluirUnidade(${u.id}, '${u.nome}')"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Salvar unidade
+        document.getElementById('unidadeForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const dados = {
+                nome: document.getElementById('nome').value.toUpperCase(),
+                descricao: document.getElementById('descricao').value,
+                bloco: document.getElementById('bloco').value
+            };
+
+            const metodo = editandoId ? 'PUT' : 'POST';
+            if (editandoId) {
+                dados.id = editandoId;
+            }
+
+            fetch('../api/api_unidades.php', {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            })
+            .then(response => response.text())
+            .then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    if (data.sucesso) {
+                        mostrarAlerta('success', data.mensagem);
+                        limparFormulario();
+                        carregarUnidades();
+                    } else {
+                        mostrarAlerta('error', data.mensagem);
+                    }
+                } catch (e) {
+                    console.error('Resposta do servidor:', text);
+                    mostrarAlerta('error', 'Erro ao processar resposta. Verifique se o cadastro foi realizado.');
+                    carregarUnidades();
+                }
+            })
+            .catch(error => {
+                mostrarAlerta('error', 'Erro ao salvar: ' + error.message);
+            });
+        });
+
+        // Editar unidade
+        function editarUnidade(id) {
+            fetch('../api/api_unidades.php')
+                .then(response => response.text())
+                .then(text => {
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.sucesso) {
+                            const unidade = data.dados.find(u => u.id == id);
+                            if (unidade) {
+                                editandoId = id;
+                                document.getElementById('formTitle').textContent = 'Editar Unidade';
+                                document.getElementById('unidadeId').value = unidade.id;
+                                document.getElementById('nome').value = unidade.nome;
+                                document.getElementById('descricao').value = unidade.descricao || '';
+                                document.getElementById('bloco').value = unidade.bloco || '';
+                                
+                                document.getElementById('btnSalvar').textContent = 'Atualizar Unidade';
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Erro ao carregar unidade:', e);
+                    }
+                });
+        }
+
+        // Excluir unidade
+        function excluirUnidade(id, nome) {
+            if (!confirm(`Deseja realmente excluir a unidade "${nome}"?\n\nATENO: Não será possível excluir se houver moradores vinculados.`)) {
+                return;
+            }
+
+            fetch('../api/api_unidades.php', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+            .then(response => response.text())
+            .then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    if (data.sucesso) {
+                        mostrarAlerta('success', data.mensagem);
+                        carregarUnidades();
+                    } else {
+                        mostrarAlerta('error', data.mensagem);
+                    }
+                } catch (e) {
+                    console.error('Erro ao excluir:', text);
+                    mostrarAlerta('error', 'Erro ao excluir unidade');
+                }
+            })
+            .catch(error => {
+                mostrarAlerta('error', 'Erro ao excluir: ' + error.message);
+            });
+        }
+
+        // Cancelar edição
+        function cancelarEdicao() {
+            limparFormulario();
+        }
+
+        // Limpar formulário
+        function limparFormulario() {
+            document.getElementById('unidadeForm').reset();
+            editandoId = null;
+            document.getElementById('formTitle').textContent = 'Nova Unidade';
+            document.getElementById('btnSalvar').textContent = 'Salvar Unidade';
+            document.getElementById('unidadeId').value = '';
+        }
+
+        // Mostrar alerta
+        function mostrarAlerta(tipo, mensagem) {
+            const alertBox = document.getElementById('alertBox');
+            const classe = tipo === 'success' ? 'alert-success' : 'alert-error';
+            const icone = tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            
+            alertBox.innerHTML = `<div class="alert ${classe}"><i class="fas ${icone}"></i> ${mensagem}</div>`;
+            
+            setTimeout(() => {
+                alertBox.innerHTML = '';
+            }, 5000);
+        }
+    </script>
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

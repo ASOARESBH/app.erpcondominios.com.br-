@@ -1,0 +1,93 @@
+===========================================
+REGISTRO DE ERROS - SISTEMA SERRA DA LIBERDADE
+===========================================
+
+Este arquivo serve para registrar erros e problemas identificados no sistema.
+
+-------------------------------------------
+FORMATO DO REGISTRO
+-------------------------------------------
+
+[DATA/HORA] - [TIPO DE ERRO] - [DESCRIÇÃO]
+Detalhes adicionais...
+
+-------------------------------------------
+TIPOS DE ERRO
+-------------------------------------------
+
+- ERRO_500: Internal Server Error
+- ERRO_404: Página não encontrada
+- ERRO_403: Acesso negado
+- ERRO_LOGIN: Problemas no login
+- ERRO_SESSAO: Problemas de sessão
+- ERRO_API: Problemas nas APIs
+- ERRO_CAMINHO: Caminhos incorretos
+- ERRO_JS: Erros JavaScript
+- ERRO_PHP: Erros PHP
+
+-------------------------------------------
+HISTÓRICO DE CORREÇÕES
+-------------------------------------------
+
+[11/01/2026 - v5.9] - ERRO_CAMINHO
+Problema: Login redirecionando para frontend/frontend/dashboard.html
+Causa: login.html usando 'frontend/dashboard.html' em vez de 'dashboard.html'
+Solução: Corrigido linhas 318 e 364 do login.html
+Status: ✅ CORRIGIDO
+
+[11/01/2026 - v5.9] - ERRO_LOGIN
+Problema: Erro 500 ao fazer login após logout
+Causa: validar_login.php não aceitava JSON, apenas POST
+Solução: Modificado para aceitar ambos os formatos
+Status: ✅ CORRIGIDO
+
+[11/01/2026 - v5.8] - ERRO_SESSAO
+Problema: Botão de Sair não aparecia em todas as páginas
+Causa: user-display.js não incluído em algumas páginas
+Solução: Adicionado script em console_acesso, dashboard_, logs_sistema_v2
+Status: ✅ CORRIGIDO
+
+[11/01/2026 - v5.7] - ERRO_500
+Problema: Erro 500 após logout ao tentar novo login
+Causa: Botão de Sair usando link direto em vez de POST
+Solução: Implementada função fazerLogoutGlobal() com POST
+Status: ✅ CORRIGIDO
+
+[11/01/2026 - v5.3] - ERRO_API
+Problema: Todas as APIs retornando erro 500
+Causa: Caminhos relativos incorretos (api/ em vez de ../api/)
+Solução: Corrigidos 61 arquivos HTML com 221 chamadas de API
+Status: ✅ CORRIGIDO
+
+-------------------------------------------
+ERROS ATIVOS (AGUARDANDO CORREÇÃO)
+-------------------------------------------
+
+Nenhum erro ativo no momento.
+
+-------------------------------------------
+INSTRUÇÕES PARA REGISTRO
+-------------------------------------------
+
+1. Ao identificar um erro, registre aqui com data, hora e descrição
+2. Inclua o máximo de detalhes possível (arquivo, linha, mensagem)
+3. Após corrigir, mova para "HISTÓRICO DE CORREÇÕES"
+4. Use a página debug_erros.html para diagnóstico detalhado
+
+-------------------------------------------
+LINKS ÚTEIS
+-------------------------------------------
+
+- Página de Debug: /new/frontend/debug_erros.html
+- Logs do Sistema: /new/frontend/logs_sistema_v2.html
+- Repositório GitHub: https://github.com/andreprogramadorbh-ai/serrafatorado
+
+-------------------------------------------
+CONTATO
+-------------------------------------------
+
+Em caso de dúvidas ou problemas, consulte a documentação no GitHub.
+
+===========================================
+FIM DO ARQUIVO
+===========================================

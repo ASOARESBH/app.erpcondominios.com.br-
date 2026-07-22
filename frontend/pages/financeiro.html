@@ -1,0 +1,170 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Financeiro" data-icon="fa-money-bill-wave" style="display:none;"></div>
+
+<div class="page-wrapper page-financeiro">
+    <div class="page-header">
+        <h1>Financeiro</h1>
+        <p>Gestão financeira, receitas e despesas do condomínio</p>
+    </div>
+
+    <nav class="page-card financeiro-submenu" aria-label="Atalhos financeiros">
+        <a href="#" onclick="AppRouter.navigate('financeiro'); return false;" class="submenu-link active">
+            <i class="fas fa-home"></i> Início
+        </a>
+        <a href="#" onclick="AppRouter.navigate('contas_pagar'); return false;" class="submenu-link">
+            <i class="fas fa-arrow-up"></i> Contas a Pagar
+        </a>
+        <a href="#" onclick="AppRouter.navigate('contas_receber'); return false;" class="submenu-link">
+            <i class="fas fa-arrow-down"></i> Contas a Receber
+        </a>
+        <a href="#" onclick="AppRouter.navigate('planos_contas'); return false;" class="submenu-link">
+            <i class="fas fa-list"></i> Planos de Contas
+        </a>
+        <a href="#" onclick="AppRouter.navigate('contas_bancarias'); return false;" class="submenu-link">
+            <i class="fas fa-university"></i> Contas Bancárias
+        </a>
+        <a href="#" onclick="AppRouter.navigate('conciliacao'); return false;" class="submenu-link">
+            <i class="fas fa-balance-scale"></i> Conciliação
+        </a>
+        <a href="#" onclick="AppRouter.navigate('relatorios_bancarios'); return false;" class="submenu-link">
+            <i class="fas fa-chart-bar"></i> Relatórios Bancários
+        </a>
+        <a href="#" onclick="AppRouter.navigate('importacao_financeira'); return false;" class="submenu-link">
+            <i class="fas fa-file-import"></i> Importação
+        </a>
+        <a href="#" onclick="AppRouter.navigate('logs_financeiro'); return false;" class="submenu-link" style="color:#dc2626;">
+            <i class="fas fa-clipboard-list"></i> Logs / Diagnóstico
+        </a>
+    </nav>
+
+    <div class="stats-grid">
+        <div class="page-card kpi-card">
+            <div class="kpi-content">
+                <h3>Entradas do Mês</h3>
+                <div class="value receita" id="fin-entradas-mes">—</div>
+            </div>
+            <div class="kpi-icon receita"><i class="fas fa-arrow-down"></i></div>
+        </div>
+
+        <div class="page-card kpi-card">
+            <div class="kpi-content">
+                <h3>Saídas do Mês</h3>
+                <div class="value despesa" id="fin-saidas-mes">—</div>
+            </div>
+            <div class="kpi-icon despesa"><i class="fas fa-arrow-up"></i></div>
+        </div>
+
+        <div class="page-card kpi-card">
+            <div class="kpi-content">
+                <h3>Saldo Bancário</h3>
+                <div class="value saldo" id="fin-saldo-bancario">—</div>
+            </div>
+            <div class="kpi-icon saldo"><i class="fas fa-university"></i></div>
+        </div>
+
+        <div class="page-card kpi-card">
+            <div class="kpi-content">
+                <h3>Pendentes Conciliação</h3>
+                <div class="value" id="fin-pendentes-conc" style="color:#f59e0b">—</div>
+            </div>
+            <div class="kpi-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff"><i class="fas fa-clock"></i></div>
+        </div>
+    </div>
+
+    <div class="cards-grid">
+        <div class="page-card action-card">
+            <div class="action-icon red"><i class="fas fa-arrow-up"></i></div>
+            <h3>Contas a Pagar</h3>
+            <p>Gerencie todas as despesas do condomínio. Registre contas a pagar, controle vencimentos, registre pagamentos parciais ou totais e acompanhe o fluxo de caixa.</p>
+            <a href="#" onclick="AppRouter.navigate('contas_pagar'); return false;" class="action-link">Acessar Contas a Pagar</a>
+        </div>
+
+        <div class="page-card action-card">
+            <div class="action-icon green"><i class="fas fa-arrow-down"></i></div>
+            <h3>Contas a Receber</h3>
+            <p>Gerencie todas as receitas do condomínio. Registre contas a receber de moradores, controle vencimentos, registre recebimentos parciais ou totais e monitore inadimplências.</p>
+            <a href="#" onclick="AppRouter.navigate('contas_receber'); return false;" class="action-link">Acessar Contas a Receber</a>
+        </div>
+
+        <div class="page-card action-card">
+            <div class="action-icon blue"><i class="fas fa-list"></i></div>
+            <h3>Planos de Contas</h3>
+            <p>Cadastre e gerencie todos os planos de contas do condomínio. Organize receitas, despesas, ativos e passivos. Defina categorias e natureza das contas para melhor controle financeiro.</p>
+            <a href="#" onclick="AppRouter.navigate('planos_contas'); return false;" class="action-link">Acessar Planos de Contas</a>
+        </div>
+
+        <div class="page-card action-card">
+            <div class="action-icon" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;"><i class="fas fa-file-import"></i></div>
+            <h3>Importação Financeira</h3>
+            <p>Importe arquivos CSV ou PDF de outros sistemas (ex: BRCondos) para cadastrar automaticamente contas a pagar ou a receber. Detecta duplicatas e permite conciliação manual.</p>
+            <a href="#" onclick="AppRouter.navigate('importacao_financeira'); return false;" class="action-link">Acessar Importação</a>
+        </div>
+
+        <div class="page-card action-card">
+            <div class="action-icon" style="background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;"><i class="fas fa-university"></i></div>
+            <h3>Contas Bancárias</h3>
+            <p>Gerencie contas correntes, poupança e investimentos. Importe extratos OFX, acompanhe movimentações e realize a conciliação bancária com detecção automática de duplicatas.</p>
+            <a href="#" onclick="AppRouter.navigate('contas_bancarias'); return false;" class="action-link">Acessar Contas Bancárias</a>
+        </div>
+
+        <div class="page-card action-card">
+            <div class="action-icon" style="background:linear-gradient(135deg,#0f766e,#14b8a6);color:#fff;"><i class="fas fa-balance-scale"></i></div>
+            <h3>Conciliação Bancária</h3>
+            <p>Vincule movimentações bancárias OFX aos títulos financeiros. Motor de conciliação automática com score de correspondência. Desfaça vínculos e acompanhe histórico de ações.</p>
+            <a href="#" onclick="AppRouter.navigate('conciliacao'); return false;" class="action-link">Acessar Conciliação</a>
+        </div>
+
+        <div class="page-card action-card">
+            <div class="action-icon" style="background:linear-gradient(135deg,#4338ca,#7c3aed);color:#fff;"><i class="fas fa-chart-bar"></i></div>
+            <h3>Relatórios Bancários</h3>
+            <p>Extrato bancário detalhado, fluxo de caixa mensal com gráfico e DRE simplificado por categoria. Exporte para CSV com BOM UTF-8 para Excel.</p>
+            <a href="#" onclick="AppRouter.navigate('relatorios_bancarios'); return false;" class="action-link">Acessar Relatórios</a>
+        </div>
+    </div>
+
+    <div class="page-card">
+        <h2>Lançamentos Recentes</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descrição</th>
+                        <th>Tipo</th>
+                        <th>Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="4" class="empty-table">Nenhum lançamento registrado</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+        <div class="page-card action-card">
+            <div class="action-icon" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;"><i class="fas fa-clipboard-list"></i></div>
+            <h3>Logs / Diagnóstico</h3>
+            <p>Monitore erros, avisos e operações do módulo financeiro em tempo real. Filtre por módulo, nível e período. Exporte logs para CSV.</p>
+            <a href="#" onclick="AppRouter.navigate('logs_financeiro'); return false;" class="action-link" style="color:#dc2626;">Acessar Logs</a>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+(async () => {
+    try {
+        const r = await fetch('/api/api_contas_bancarias.php?acao=dashboard_financeiro', { credentials: 'include' });
+        const d = await r.json();
+        if (!d.sucesso) return;
+        const k = d.dados;
+        const fmt = v => 'R ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        set('fin-entradas-mes',  fmt(k.entradas_mes   || 0));
+        set('fin-saidas-mes',    fmt(k.saidas_mes     || 0));
+        set('fin-saldo-bancario',fmt(k.saldo_bancario || 0));
+        set('fin-pendentes-conc', k.pendentes_conciliacao ?? '—');
+    } catch(e) { /* silencioso — KPIs ficam em "—" */ }
+})();
+</script>

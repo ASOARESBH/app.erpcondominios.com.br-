@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Fechar Checklist - Sistema</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="manutencao.html" class="nav-link active"><i class="fas fa-tools"></i>
+                        Manutenção</a></li>
+            </ul>
+        </nav>
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-check-circle"></i> Fechar Checklist</h1>
+            </header>
+            <nav class="submenu">
+                <ul>
+                    <li><a href="checklist_veicular.html"><i class="fas fa-arrow-left"></i> Voltar</a></li>
+                </ul>
+            </nav>
+            <div id="alertaMsg"></div>
+            <div class="section">
+                <h2>Selecione o Checklist para Fechar</h2>
+                <table id="tabelaAbertos">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Veículo</th>
+                            <th>Operador</th>
+                            <th>KM Inicial</th>
+                            <th>Data Abertura</th>
+                            <th>Açµes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoTabela"></tbody>
+                </table>
+            </div>
+            <div class="section" id="formFechamento" style="display:none;">
+                <h2>Dados de Fechamento</h2>
+                <form id="formFechar">
+                    <input type="hidden" id="checklistId">
+                    <div class="form-grid">
+                        <div><label>KM Final *</label><input type="number" id="kmFinal" required></div>
+                        <div><label>Data/Hora Fechamento *</label><input type="datetime-local" id="dataHoraFechamento"
+                                required></div>
+                    </div>
+                    <div><label>Observaçµes Finais</label><textarea id="observacaoFechamento"></textarea></div>
+                    <h3>Preencher Itens de Fechamento</h3>
+                    <div id="itensChecklist"></div>
+                    <button type="submit" class="btn-success"><i class="fas fa-check"></i> Finalizar Checklist</button>
+                    <button type="button" class="btn-secondary" onclick="cancelarFechamento()">Cancelar</button>
+                </form>
+            </div>
+        </main>
+    </div>
+    <script>
+        let checklistSelecionado = null;
+        document.addEventListener('DOMContentLoaded', () => { carregarAbertos(); });
+        function carregarAbertos() {
+            fetch('../api/api_checklist.php?acao=listar_abertos')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const tbody = document.getElementById('corpoTabela');
+                        if (data.dados.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum checklist aberto</td></tr>';
+                        } else {
+                            tbody.innerHTML = data.dados.map(c => `<tr><td>${c.id}</td><td>${c.placa}<br><small>${c.veiculo_modelo}</small></td><td>${c.operador_nome}</td><td>${c.km_inicial} km</td><td>${new Date(c.data_hora_abertura).toLocaleString('pt-BR')}</td><td><button class="btn-sm btn-success" onclick="selecionarChecklist(${c.id})"><i class="fas fa-check"></i> Fechar</button></td></tr>`).join('');
+                        }
+                    }
+                });
+        }
+        function selecionarChecklist(id) {
+            fetch(`../api/api_checklist.php?acao=buscar&id=${id}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        checklistSelecionado = data.dados;
+                        mostrarFormFechamento();
+                    }
+                });
+        }
+        function mostrarFormFechamento() {
+            document.getElementById('checklistId').value = checklistSelecionado.id;
+            document.getElementById('kmFinal').value = '';
+            document.getElementById('kmFinal').min = parseInt(checklistSelecionado.km_inicial) + 1;
+            const agora = new Date();
+            document.getElementById('dataHoraFechamento').value = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            fetch(`../api/api_checklist_itens.php?acao=buscar_por_checklist&checklist_id=${checklistSelecionado.id}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        renderizarItens(data.dados);
+                    }
+                });
+            document.getElementById('formFechamento').style.display = 'block';
+            window.scrollTo(0, document.getElementById('formFechamento').offsetTop);
+        }
+        function renderizarItens(itens) {
+            const container = document.getElementById('itensChecklist');
+            container.innerHTML = itens.map((item, idx) => {
+                if (item.tipo_item === 'nivel') {
+                    return `<div class="checklist-item"><h4>${idx + 1}. ${item.nome_item} (Abertura: ${item.valor_abertura})</h4><div class="radio-group"><label><input type="radio" name="item_${item.categoria}" value="minimo" required> Mínimo</label><label><input type="radio" name="item_${item.categoria}" value="medio"> Médio</label><label><input type="radio" name="item_${item.categoria}" value="maximo"> Máximo</label></div></div>`;
+                } else {
+                    return `<div class="checklist-item"><h4>${idx + 1}. ${item.nome_item} (Abertura: ${item.valor_abertura})</h4><div class="radio-group"><label><input type="radio" name="item_${item.categoria}" value="sim" required> Sim</label><label><input type="radio" name="item_${item.categoria}" value="nao"> Não</label></div></div>`;
+                }
+            }).join('');
+        }
+        document.getElementById('formFechar').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const itens = Array.from(document.querySelectorAll('[name^="item_"]')).reduce((acc, input) => {
+                if (input.checked) {
+                    const categoria = input.name.replace('item_', '');
+                    acc.push({ categoria, valor_fechamento: input.value });
+                }
+                return acc;
+            }, []);
+            const formData1 = new FormData();
+            formData1.append('acao', 'salvar_fechamento');
+            formData1.append('checklist_id', document.getElementById('checklistId').value);
+            formData1.append('itens', JSON.stringify(itens));
+            fetch('../api/api_checklist_itens.php', { method: 'POST', body: formData1 })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const formData2 = new FormData();
+                        formData2.append('acao', 'fechar');
+                        formData2.append('id', document.getElementById('checklistId').value);
+                        formData2.append('km_final', document.getElementById('kmFinal').value);
+                        formData2.append('data_hora_fechamento', document.getElementById('dataHoraFechamento').value);
+                        formData2.append('observacao_fechamento', document.getElementById('observacaoFechamento').value);
+                        fetch('../api/api_checklist.php', { method: 'POST', body: formData2 })
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.sucesso) {
+                                    alert('Checklist fechado com sucesso!');
+                                    window.location.href = 'checklist_veicular.html';
+                                } else {
+                                    alert('Erro: ' + data.mensagem);
+                                }
+                            });
+                    }
+                });
+        });
+        function cancelarFechamento() {
+            document.getElementById('formFechamento').style.display = 'none';
+            checklistSelecionado = null;
+        }
+    </script>
+    <script src="js/auth-guard.js"></script>
+    </div> <!-- /main-container -->
+</body>
+
+</html>

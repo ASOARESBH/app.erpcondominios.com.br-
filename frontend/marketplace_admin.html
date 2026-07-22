@@ -1,0 +1,1416 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketplace - Gerenciamento de Fornecedores</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #10b981;
+            color: #fff;
+        }
+
+        /* Estat­sticas */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-card h3 {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .stat-card.green .value {
+            color: #10b981;
+        }
+
+        .stat-card.blue .value {
+            color: #3b82f6;
+        }
+
+        .stat-card.yellow .value {
+            color: #f59e0b;
+        }
+
+        .stat-card.red .value {
+            color: #ef4444;
+        }
+
+        /* Filtros */
+        .filter-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        /* Tabela */
+        .table-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: inline-block;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        /* Botµes */
+        button,
+        input,
+        select {
+            padding: 0.6rem 1rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.875rem;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #f87171;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .table-section {
+                overflow-x: auto;
+            }
+
+            table {
+                font-size: 0.85rem;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+            }
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .menu-toggle {
+                display: block;
+            }
+        }
+
+        /* A§µes */
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .tab {
+            padding: 1rem 2rem;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: #64748b;
+            transition: 0.2s;
+        }
+
+        .tab:hover {
+            color: #1e293b;
+        }
+
+        .tab.active {
+            color: #10b981;
+            border-bottom-color: #10b981;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        .modal-close:hover {
+            color: #1e293b;
+        }
+    </style>
+    <!-- âÅâ¦ FASE 4: Session Manager Core v2.0 -->
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+
+    <nav class="sidebar" id="sidebar">
+        <h1>Serra da Liberdade</h1>
+        <!-- User Profile Section -->
+        <div class="user-profile-section" id="userProfileSection" style="display: none;">
+            <div class="user-profile-header">
+                <div class="user-avatar" id="userAvatar">-</div>
+                <div class="user-info">
+                    <p class="user-name" id="userName">Carregando...</p>
+                    <p class="user-function" id="userFunction">-</p>
+                    <p class="user-email" id="userEmail">-</p>
+                </div>
+            </div>
+            <div class="session-info">
+                <div class="session-item">
+                    <div class="session-label">Tempo de Sess£o</div>
+                    <div class="session-value session-timer" id="sessionTimer">00:00:00</div>
+                </div>
+                <div class="session-item">
+                    <div class="session-label">Status</div>
+                    <div class="session-value" id="sessionStatus"><i class="fas fa-circle"
+                            style="color: #10b981; font-size: 0.6rem;"></i> Ativo</div>
+                </div>
+            </div>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link active"><i class="fas fa-chart-line"></i>
+                    Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a>
+            </li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Ve­culos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                    Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro
+                    Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                    Acesso</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                    Relat³rios</a></li>
+            <li class="nav-item"><a href="financeiro.html" class="nav-link"><i class="fas fa-money-bill-wave"></i>
+                    Financeiro</a></li>
+            <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                    Configura§µes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manuten§£o</a>
+            </li>
+            <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                    Administrativo</a></li>
+            <li class="nav-item"
+                style="margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <a href="#" class="nav-link" id="btn-logout" style="background: rgba(239, 68, 68, 0.1); color: #fca5a5;"
+                    >
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1><i class="fas fa-store"></i> Marketplace - Gerenciamento de Fornecedores</h1>
+        </header>
+
+        <nav class="submenu">
+            <ul>
+                <li><a href="administrativa.html"><i class="fas fa-home"></i> In­cio</a></li>
+                <li><a href="protocolo.html"><i class="fas fa-box"></i> Protocolos</a></li>
+                <li><a href="inventario.html"><i class="fas fa-boxes"></i> Invent¡rio</a></li>
+                <li><a href="relatorios_inventario.html"><i class="fas fa-chart-bar"></i> Relat³rios</a></li>
+                <li><a href="estoque.html"><i class="fas fa-warehouse"></i> Estoque</a></li>
+                <li><a href="marketplace_admin.html" class="active"><i class="fas fa-store"></i> Marketplace</a></li>
+            </ul>
+        </nav>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="mudarTab('fornecedores')">
+                <i class="fas fa-users"></i> Fornecedores
+            </button>
+            <button class="tab" onclick="mudarTab('ramos')">
+                <i class="fas fa-list"></i> Ramos de Atividade
+            </button>
+        </div>
+
+        <!-- Tab Fornecedores -->
+        <div id="tabFornecedores" class="tab-content active">
+
+            <!-- Estat­sticas -->
+            <div class="stats-grid">
+                <div class="stat-card green">
+                    <h3>Total de Fornecedores</h3>
+                    <div class="value" id="statTotal">0</div>
+                </div>
+                <div class="stat-card blue">
+                    <h3>Fornecedores Ativos</h3>
+                    <div class="value" id="statAtivos">0</div>
+                </div>
+                <div class="stat-card red">
+                    <h3>Fornecedores Inativos</h3>
+                    <div class="value" id="statInativos">0</div>
+                </div>
+                <div class="stat-card yellow">
+                    <h3>Aguardando Aprova§£o</h3>
+                    <div class="value" id="statPendentes">0</div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filter-section">
+                <h3 style="margin-bottom: 1rem;"><i class="fas fa-filter"></i> Filtros</h3>
+                <div class="filter-grid">
+                    <div>
+                        <label>Status</label>
+                        <select id="filtroStatus">
+                            <option value="">Todos</option>
+                            <option value="1">Ativos</option>
+                            <option value="0">Inativos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Aprova§£o</label>
+                        <select id="filtroAprovacao">
+                            <option value="">Todos</option>
+                            <option value="1">Aprovados</option>
+                            <option value="0">Pendentes</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Buscar</label>
+                        <input type="text" id="filtroBusca" placeholder="Nome ou CPF/CNPJ...">
+                    </div>
+                </div>
+                <div class="filter-buttons">
+                    <button onclick="aplicarFiltros()"><i class="fas fa-search"></i> Buscar</button>
+                    <button onclick="limparFiltros()" class="btn-secondary"><i class="fas fa-times"></i> Limpar</button>
+                    <button onclick="carregarFornecedores()" class="btn-success"><i class="fas fa-sync"></i>
+                        Atualizar</button>
+                </div>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading" class="loading">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p>Carregando fornecedores...</p>
+            </div>
+
+            <!-- Alert -->
+            <div id="alertContainer"></div>
+
+            <!-- Tabela -->
+            <div class="table-section">
+                <h3 style="margin-bottom: 1rem;"><i class="fas fa-list"></i> Lista de Fornecedores</h3>
+                <table id="fornecedoresTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Estabelecimento</th>
+                            <th>CPF/CNPJ</th>
+                            <th>Ramo</th>
+                            <th>Telefone</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Aprova§£o</th>
+                            <th>Cadastro</th>
+                            <th>A§µes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fornecedoresBody">
+                        <tr>
+                            <td colspan="10" style="text-align: center; padding: 2rem;">Nenhum fornecedor encontrado
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div><!-- Fim Tab Fornecedores -->
+
+        <!-- Tab Ramos de Atividade -->
+        <div id="tabRamos" class="tab-content">
+
+            <!-- Bot£o Novo Ramo -->
+            <div style="margin-bottom: 2rem;">
+                <button onclick="abrirModalRamo()" class="btn-success">
+                    <i class="fas fa-plus"></i> Novo Ramo de Atividade
+                </button>
+            </div>
+
+            <!-- Loading Ramos -->
+            <div id="loadingRamos" class="loading">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p>Carregando ramos...</p>
+            </div>
+
+            <!-- Tabela Ramos -->
+            <div class="table-section">
+                <h3 style="margin-bottom: 1rem;"><i class="fas fa-list"></i> Ramos de Atividade</h3>
+                <table id="ramosTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>cone</th>
+                            <th>Nome</th>
+                            <th>Descri§£o</th>
+                            <th>Fornecedores</th>
+                            <th>Status</th>
+                            <th>Data Cadastro</th>
+                            <th>A§µes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ramosBody">
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 2rem;">Nenhum ramo encontrado</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div><!-- Fim Tab Ramos -->
+
+    </main>
+
+    <!-- Modal Ramo -->
+    <div id="modalRamo" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalRamoTitulo"><i class="fas fa-plus"></i> Novo Ramo de Atividade</h3>
+                <button class="modal-close" onclick="fecharModalRamo()">&times;</button>
+            </div>
+            <form id="formRamo">
+                <input type="hidden" id="ramoId" name="id">
+                <div class="form-group">
+                    <label>Nome *</label>
+                    <input type="text" id="ramoNome" name="nome" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Descri§£o</label>
+                    <textarea id="ramoDescricao" name="descricao" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>cone (FontAwesome)</label>
+                    <input type="text" id="ramoIcone" name="icone" class="form-control" placeholder="fa-briefcase">
+                    <small style="color: #64748b;">Exemplo: fa-wrench, fa-paint-roller, fa-leaf</small>
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+                    <button type="submit" class="btn-success">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <button type="button" onclick="fecharModalRamo()" class="btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let fornecedores = [];
+        let fornecedoresFiltrados = [];
+
+        // Carregar fornecedores ao iniciar
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarEstatisticas();
+            carregarFornecedores();
+        });
+
+        // Carregar estat­sticas
+        function carregarEstatisticas() {
+            fetch('../api/api_admin_fornecedores.php?acao=estatisticas')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        document.getElementById('statTotal').textContent = data.dados.total_fornecedores || 0;
+                        document.getElementById('statAtivos').textContent = data.dados.fornecedores_ativos || 0;
+                        document.getElementById('statInativos').textContent = data.dados.fornecedores_inativos || 0;
+                        document.getElementById('statPendentes').textContent = data.dados.fornecedores_pendentes || 0;
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar estat­sticas:', error));
+        }
+
+        // Carregar fornecedores
+        function carregarFornecedores() {
+            document.getElementById('loading').classList.add('active');
+
+            fetch('../api/api_admin_fornecedores.php?acao=listar_todos')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loading').classList.remove('active');
+
+                    if (data.sucesso) {
+                        fornecedores = data.dados;
+                        fornecedoresFiltrados = fornecedores;
+                        renderizarTabela();
+                    } else {
+                        mostrarAlerta('Erro ao carregar fornecedores: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').classList.remove('active');
+                    mostrarAlerta('Erro ao carregar fornecedores', 'error');
+                    console.error('Erro:', error);
+                });
+        }
+
+        // Renderizar tabela
+        function renderizarTabela() {
+            const tbody = document.getElementById('fornecedoresBody');
+
+            if (fornecedoresFiltrados.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem;">Nenhum fornecedor encontrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = fornecedoresFiltrados.map(f => `
+                <tr>
+                    <td>${f.id}</td>
+                    <td><strong>${f.nome_estabelecimento}</strong></td>
+                    <td>${f.cpf_cnpj}</td>
+                    <td><i class="fas ${f.ramo_icone}"></i> ${f.ramo_atividade}</td>
+                    <td>${f.telefone || '-'}</td>
+                    <td>${f.email}</td>
+                    <td>
+                        <span class="badge ${f.ativo == 1 ? 'badge-success' : 'badge-danger'}">
+                            ${f.ativo == 1 ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${f.aprovado == 1 ? 'badge-success' : 'badge-warning'}">
+                            ${f.aprovado == 1 ? 'Aprovado' : 'Pendente'}
+                        </span>
+                    </td>
+                    <td>${f.data_cadastro_formatada}</td>
+                    <td class="actions">
+                        <button onclick="alternarStatus(${f.id})" class="btn-sm ${f.ativo == 1 ? 'btn-danger' : 'btn-success'}" title="${f.ativo == 1 ? 'Inativar' : 'Ativar'}">
+                            <i class="fas fa-${f.ativo == 1 ? 'ban' : 'check'}"></i>
+                        </button>
+                        <button onclick="alternarAprovacao(${f.id})" class="btn-sm btn-warning" title="${f.aprovado == 1 ? 'Remover Aprova§£o' : 'Aprovar'}">
+                            <i class="fas fa-${f.aprovado == 1 ? 'times' : 'check-circle'}"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Alternar status
+        function alternarStatus(id) {
+            if (!confirm('Deseja realmente alterar o status deste fornecedor?')) return;
+
+            const formData = new FormData();
+            formData.append('acao', 'alternar_status');
+            formData.append('id', id);
+
+            fetch('../api/api_admin_fornecedores.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        carregarEstatisticas();
+                        carregarFornecedores();
+                    } else {
+                        mostrarAlerta('Erro: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    mostrarAlerta('Erro ao alterar status', 'error');
+                    console.error('Erro:', error);
+                });
+        }
+
+        // Alternar aprova§£o
+        function alternarAprovacao(id) {
+            if (!confirm('Deseja realmente alterar a aprova§£o deste fornecedor?')) return;
+
+            const formData = new FormData();
+            formData.append('acao', 'alternar_aprovacao');
+            formData.append('id', id);
+
+            fetch('../api/api_admin_fornecedores.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        carregarEstatisticas();
+                        carregarFornecedores();
+                    } else {
+                        mostrarAlerta('Erro: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    mostrarAlerta('Erro ao alterar aprova§£o', 'error');
+                    console.error('Erro:', error);
+                });
+        }
+
+        // Aplicar filtros
+        function aplicarFiltros() {
+            const status = document.getElementById('filtroStatus').value;
+            const aprovacao = document.getElementById('filtroAprovacao').value;
+            const busca = document.getElementById('filtroBusca').value.toLowerCase();
+
+            fornecedoresFiltrados = fornecedores.filter(f => {
+                let passa = true;
+
+                if (status !== '' && f.ativo != status) passa = false;
+                if (aprovacao !== '' && f.aprovado != aprovacao) passa = false;
+                if (busca && !f.nome_estabelecimento.toLowerCase().includes(busca) && !f.cpf_cnpj.includes(busca)) passa = false;
+
+                return passa;
+            });
+
+            renderizarTabela();
+        }
+
+        // Limpar filtros
+        function limparFiltros() {
+            document.getElementById('filtroStatus').value = '';
+            document.getElementById('filtroAprovacao').value = '';
+            document.getElementById('filtroBusca').value = '';
+            fornecedoresFiltrados = fornecedores;
+            renderizarTabela();
+        }
+
+        // Mostrar alerta
+        function mostrarAlerta(mensagem, tipo) {
+            const container = document.getElementById('alertContainer');
+            const classe = tipo === 'success' ? 'alert-success' : 'alert-error';
+
+            container.innerHTML = `<div class="alert ${classe}">${mensagem}</div>`;
+
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        // Toggle menu mobile
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        // Fechar menu ao clicar fora
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        // =====================================================
+        // GERENCIAMENTO DE RAMOS DE ATIVIDADE
+        // =====================================================
+
+        let ramos = [];
+
+        // Mudar tab
+        function mudarTab(tab) {
+            // Atualizar tabs
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            if (tab === 'fornecedores') {
+                document.querySelector('.tab:nth-child(1)').classList.add('active');
+                document.getElementById('tabFornecedores').classList.add('active');
+            } else if (tab === 'ramos') {
+                document.querySelector('.tab:nth-child(2)').classList.add('active');
+                document.getElementById('tabRamos').classList.add('active');
+                carregarRamos();
+            }
+        }
+
+        // Carregar ramos
+        function carregarRamos() {
+            document.getElementById('loadingRamos').classList.add('active');
+
+            fetch('../api/api_ramos_atividade.php?acao=listar_todos')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loadingRamos').classList.remove('active');
+
+                    if (data.sucesso) {
+                        ramos = data.dados;
+                        renderizarTabelaRamos();
+                    } else {
+                        mostrarAlerta('Erro ao carregar ramos: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loadingRamos').classList.remove('active');
+                    mostrarAlerta('Erro ao carregar ramos', 'error');
+                    console.error('Erro:', error);
+                });
+        }
+
+        // Renderizar tabela de ramos
+        function renderizarTabelaRamos() {
+            const tbody = document.getElementById('ramosBody');
+
+            if (ramos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Nenhum ramo encontrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = ramos.map(r => `
+                <tr>
+                    <td>${r.id}</td>
+                    <td><i class="fas ${r.icone}" style="font-size: 1.5rem; color: #10b981;"></i></td>
+                    <td><strong>${r.nome}</strong></td>
+                    <td>${r.descricao || '-'}</td>
+                    <td>${r.total_fornecedores || 0}</td>
+                    <td>
+                        <span class="badge ${r.ativo == 1 ? 'badge-success' : 'badge-danger'}">
+                            ${r.ativo == 1 ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </td>
+                    <td>${r.data_criacao_formatada}</td>
+                    <td class="actions">
+                        <button onclick="editarRamo(${r.id})" class="btn-sm btn-warning" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="alternarStatusRamo(${r.id})" class="btn-sm ${r.ativo == 1 ? 'btn-danger' : 'btn-success'}" title="${r.ativo == 1 ? 'Inativar' : 'Ativar'}">
+                            <i class="fas fa-${r.ativo == 1 ? 'ban' : 'check'}"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Abrir modal para novo ramo
+        function abrirModalRamo(id = null) {
+            document.getElementById('formRamo').reset();
+
+            if (id) {
+                // Editar
+                const ramo = ramos.find(r => r.id == id);
+                if (ramo) {
+                    document.getElementById('modalRamoTitulo').innerHTML = '<i class="fas fa-edit"></i> Editar Ramo de Atividade';
+                    document.getElementById('ramoId').value = ramo.id;
+                    document.getElementById('ramoNome').value = ramo.nome;
+                    document.getElementById('ramoDescricao').value = ramo.descricao || '';
+                    document.getElementById('ramoIcone').value = ramo.icone;
+                }
+            } else {
+                // Novo
+                document.getElementById('modalRamoTitulo').innerHTML = '<i class="fas fa-plus"></i> Novo Ramo de Atividade';
+            }
+
+            document.getElementById('modalRamo').classList.add('active');
+        }
+
+        // Fechar modal
+        function fecharModalRamo() {
+            document.getElementById('modalRamo').classList.remove('active');
+        }
+
+        // Editar ramo
+        function editarRamo(id) {
+            abrirModalRamo(id);
+        }
+
+        // Salvar ramo
+        document.getElementById('formRamo').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const id = document.getElementById('ramoId').value;
+            formData.append('acao', id ? 'atualizar' : 'cadastrar');
+
+            fetch('../api/api_ramos_atividade.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        fecharModalRamo();
+                        carregarRamos();
+                    } else {
+                        mostrarAlerta('Erro: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    mostrarAlerta('Erro ao salvar ramo', 'error');
+                    console.error('Erro:', error);
+                });
+        });
+
+        // Alternar status do ramo
+        function alternarStatusRamo(id) {
+            if (!confirm('Deseja realmente alterar o status deste ramo?')) return;
+
+            const formData = new FormData();
+            formData.append('acao', 'alternar_status');
+            formData.append('id', id);
+
+            fetch('../api/api_ramos_atividade.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        carregarRamos();
+                    } else {
+                        mostrarAlerta('Erro: ' + data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    mostrarAlerta('Erro ao alterar status', 'error');
+                    console.error('Erro:', error);
+                });
+        }
+
+        // Fechar modal ao clicar fora
+        document.getElementById('modalRamo').addEventListener('click', function (e) {
+            if (e.target === this) {
+                fecharModalRamo();
+            }
+        });
+        // ========== FUNâ¡ÆO DE LOGOUT ==========
+        function fazerLogout(event) {
+            event.preventDefault();
+
+            if (confirm('Deseja realmente sair do sistema?')) {
+                fetch('../api/logout.php', {
+                    method: 'POST',
+                    credentials: 'include'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.sucesso) {
+                            // Limpar sessionStorage
+                            sessionStorage.clear();
+
+                            // Redirecionar para login
+                            window.location.href = 'login.html';
+                        } else {
+                            alert('Erro ao fazer logout: ' + data.mensagem);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro ao fazer logout:', error);
+                        // Mesmo com erro, limpar e redirecionar
+                        sessionStorage.clear();
+                        window.location.href = 'login.html';
+                    });
+            }
+        }
+    </script>
+
+    <!-- Prote§£o de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+
+    <!-- Script para exibir usu¡rio logado em tempo real -->
+    <script>
+        (function () {
+            'use strict';
+
+            const CONFIG = {
+                warningThreshold: 300,
+                autoRenewThreshold: 600,
+                enableAutoRenew: true
+            };
+
+            let intervaloAtualizacao = null;
+
+            /**
+             * Inicializar o script
+             * âÅâ¦ CORRIGIDO: Usar SessionManager Singleton em vez de polling agressivo
+             */
+            function inicializar() {
+                console.log('°Å¸â§ Dashboard User Display inicializado');
+
+                // Usar SessionManager Singleton em vez de fazer polling
+                const sessionMgr = SessionManagerCore.getInstance();
+                const userData = sessionMgr.getUserData();
+                if (userData) {
+                    atualizarExibicao({ usuario: userData, sessao: { tempo_restante: 600 } });
+                }
+
+                sessionMgr.onUserDataChanged((dados) => {
+                    atualizarExibicao(dados);
+                });
+
+                document.addEventListener('visibilitychange', handleVisibilidadeChange);
+                window.addEventListener('beforeunload', limpar);
+
+                console.log('âÅâ¦ Dashboard User Display pronto');
+            }
+
+            /**
+             * Carregar dados do usu¡rio logado
+             */
+            function carregarDadosUsuario() {
+                fetch(CONFIG.apiUrl, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.sucesso && data.logado) {
+                            const tempo = (typeof data.tempo_restante !== 'undefined') ? data.tempo_restante : (data.sessao ? data.sessao.tempo_restante : null);
+                            atualizarExibicao(data);
+                            if (tempo !== null) verificarAvisos(tempo);
+
+                            if (CONFIG.enableAutoRenew && tempo !== null && tempo < CONFIG.autoRenewThreshold) {
+                                renovarSessaoAutomaticamente();
+                            }
+                        } else {
+                            handleSessaoExpirada();
+                        }
+                    })
+                    .catch(error => console.warn('Erro ao carregar dados da sess£o:', error));
+            }
+
+            /**
+             * Atualizar exibi§£o na interface
+             */
+            function atualizarExibicao(data) {
+                const usuario = data && data.usuario ? data.usuario : null;
+                const tempo = (typeof (data && data.tempo_restante) !== 'undefined') ? data.tempo_restante : (data && data.sessao ? data.sessao.tempo_restante : null);
+
+                atualizarPerfilUsuario(usuario);
+                atualizarTempoSessao({ tempo_restante: tempo, tempo_restante_formatado: data && data.sessao ? data.sessao.tempo_restante_formatado : null });
+                atualizarStatusVisual(tempo);
+            }
+
+            /**
+             * Atualizar perfil do usu¡rio
+             */
+            function atualizarPerfilUsuario(usuario) {
+                const section = document.getElementById('userProfileSection');
+                if (!section) return;
+
+                if (!usuario) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+
+                const nome = usuario.nome || '';
+                const inicial = nome.length ? nome.charAt(0).toUpperCase() : '?';
+                const avatarEl = document.getElementById('userAvatar');
+                const nameEl = document.getElementById('userName');
+                const funcEl = document.getElementById('userFunction');
+                const emailEl = document.getElementById('userEmail');
+
+                if (avatarEl) avatarEl.textContent = inicial;
+                if (nameEl) nameEl.textContent = nome || 'Usu¡rio';
+                if (funcEl) funcEl.textContent = usuario.funcao || usuario.permissao || 'Usu¡rio';
+                if (emailEl) emailEl.textContent = usuario.email || '-';
+            }
+
+            /**
+             * Atualizar tempo de sess£o
+             */
+            function atualizarTempoSessao(sessao) {
+                const tempoElement = document.getElementById('sessionTimer');
+                if (!tempoElement) return;
+
+                const tempoVal = (sessao && typeof sessao.tempo_restante !== 'undefined' && sessao.tempo_restante !== null) ? sessao.tempo_restante : null;
+                const textoFormatado = (sessao && sessao.tempo_restante_formatado) ? sessao.tempo_restante_formatado : (tempoVal !== null ? formatarTempo(tempoVal) : '-');
+                tempoElement.textContent = textoFormatado;
+
+                // Atualizar classe de cor
+                tempoElement.classList.remove('warning', 'critical');
+                if (tempoVal === null) return;
+                if (tempoVal < CONFIG.warningThreshold) {
+                    tempoElement.classList.add('critical');
+                } else if (tempoVal < 1800) {
+                    tempoElement.classList.add('warning');
+                }
+            }
+
+            /**
+             * Atualizar status visual
+             */
+            function atualizarStatusVisual(tempoRestante) {
+                const section = document.getElementById('userProfileSection');
+                if (!section) return;
+
+                section.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                section.style.background = 'rgba(255, 255, 255, 0.1)';
+
+                if (typeof tempoRestante !== 'number' || tempoRestante === null) return;
+
+                if (tempoRestante < CONFIG.warningThreshold) {
+                    section.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    section.style.background = 'rgba(239, 68, 68, 0.1)';
+                } else if (tempoRestante < 1800) {
+                    section.style.borderColor = 'rgba(249, 115, 22, 0.3)';
+                    section.style.background = 'rgba(249, 115, 22, 0.1)';
+                }
+            }
+
+            /**
+             * Verificar avisos
+             */
+            function verificarAvisos(tempoRestante) {
+                if (typeof tempoRestante !== 'number') return;
+
+                if (tempoRestante < CONFIG.warningThreshold && tempoRestante > CONFIG.warningThreshold - 60) {
+                    mostrarNotificacao('warning', 'Sua sess£o expirar¡ em 5 minutos');
+                }
+
+                if (tempoRestante < 60 && tempoRestante > 50) {
+                    mostrarNotificacao('critical', 'Sua sess£o expirar¡ em menos de 1 minuto!');
+                }
+            }
+
+            /**
+             * Mostrar notifica§£o
+             */
+            function mostrarNotificacao(tipo, mensagem) {
+                if (document.querySelector(`[data-notif-sessao="${tipo}"]`)) {
+                    return;
+                }
+
+                const notifHTML = `
+                <div class="session-notification session-notification-${tipo}" data-notif-sessao="${tipo}" style="
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #fff;
+                    padding: 1rem;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    z-index: 9999;
+                    border-left: 4px solid ${tipo === 'critical' ? '#ef4444' : '#f97316'};
+                    animation: slideIn 0.3s ease;
+                ">
+                    <i class="fas fa-exclamation-triangle" style="color: ${tipo === 'critical' ? '#ef4444' : '#f97316'}; margin-right: 0.5rem;"></i>
+                    <span style="color: #1f2937;">${mensagem}</span>
+                </div>
+            `;
+
+                document.body.insertAdjacentHTML('afterbegin', notifHTML);
+
+                setTimeout(() => {
+                    const notif = document.querySelector(`[data-notif-sessao="${tipo}"]`);
+                    if (notif) notif.remove();
+                }, 8000);
+            }
+
+            /**
+             * Renovar sess£o automaticamente
+             */
+            function renovarSessaoAutomaticamente() {
+                fetch(CONFIG.apiUrl + '?acao=renovar', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.sucesso) {
+                            console.log('âÅâ¦ Sess£o renovada automaticamente');
+                            carregarDadosUsuario();
+                        }
+                    })
+                    .catch(error => console.warn('Erro ao renovar sess£o:', error));
+            }
+
+            /**
+             * Lidar com mudan§a de visibilidade
+             */
+            function handleVisibilidadeChange() {
+                if (document.hidden) {
+                    if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
+                } else {
+                    carregarDadosUsuario();
+                    intervaloAtualizacao = setInterval(carregarDadosUsuario, CONFIG.updateInterval);
+                }
+            }
+
+            /**
+             * Lidar com sess£o expirada
+             */
+            function handleSessaoExpirada() {
+                console.warn('âÅ¡ ï¸ Sess£o expirada ou inv¡lida');
+            }
+
+            /**
+             * Formatar tempo
+             */
+            function formatarTempo(segundos) {
+                const horas = Math.floor(segundos / 3600);
+                const minutos = Math.floor((segundos % 3600) / 60);
+                const segs = segundos % 60;
+
+                return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segs).padStart(2, '0')}`;
+            }
+
+            /**
+             * Limpar recursos
+             */
+            function limpar() {
+                if (intervaloAtualizacao) {
+                    clearInterval(intervaloAtualizacao);
+                }
+            }
+
+            /**
+             * Inicializar
+             */
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', inicializar);
+            } else {
+                inicializar();
+            }
+        })();
+    </script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

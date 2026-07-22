@@ -1,0 +1,6 @@
+Options -Indexes
+RewriteEngine On
+
+# Monitor mode — rotas sem extensão
+RewriteRule ^dao$   dao.php   [QSA,L]
+RewriteRule ^door$  door.php  [QSA,L]

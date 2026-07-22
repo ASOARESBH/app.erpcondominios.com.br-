@@ -1,0 +1,294 @@
+﻿/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES ONLY - REGISTRO
+|--------------------------------------------------------------------------
+| Allowed:
+| - Internal layouts
+| - Form styles
+| - Table styles
+| - Buttons and page interactions
+| Forbidden:
+| - Redefining .page-wrapper, .page-header, .page-card, .sidebar, .main-content
+|--------------------------------------------------------------------------
+*/
+
+.page-registro .page-header {
+    margin-bottom: 30px;
+}
+
+.page-registro .info-box {
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+    border-radius: 10px;
+    color: #1e3a8a;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+    font-size: 13px;
+}
+
+.page-registro .veiculo-encontrado {
+    background: #ecfdf5;
+    border: 1px solid #86efac;
+    color: #166534;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+    font-size: 13px;
+}
+
+.page-registro .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-registro label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 8px;
+}
+
+.page-registro input,
+.page-registro select {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #1e293b;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.page-registro input:focus,
+.page-registro select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.page-registro .form-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.page-registro .btn-primary-modern {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.page-registro .btn-primary-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.3);
+    filter: brightness(1.1);
+}
+
+.page-registro .btn-primary-modern:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.page-registro .btn-secondary-modern {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px 20px;
+    color: #334155;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-registro .btn-secondary-modern:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
+.page-registro .search-box {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 25px;
+    background: #f1f5f9;
+    padding: 15px;
+    border-radius: 12px;
+}
+
+.page-registro .search-box input {
+    flex: 1;
+    background: #ffffff;
+}
+
+.page-registro .table-container {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.page-registro table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.page-registro thead {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+}
+
+.page-registro th {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 15px 20px;
+    text-align: left;
+}
+
+.page-registro td {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    font-size: 14px;
+}
+
+.page-registro tbody tr {
+    transition: background 0.2s ease;
+}
+
+.page-registro tbody tr:hover {
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.page-registro tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.page-registro .plate-badge {
+    display: inline-block;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.page-registro .status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.page-registro .status-ok {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.page-registro .status-warn {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.page-registro .status-deny {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.page-registro .action-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.page-registro .action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.page-registro .action-btn.delete:hover {
+    background: #fef2f2;
+    color: #ef4444;
+    border-color: #fecaca;
+}
+
+.page-registro .loading {
+    padding: 30px;
+    text-align: center;
+    color: #3b82f6;
+}
+
+.page-registro .loading i {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.page-registro .empty-state {
+    text-align: center;
+    opacity: 0.7;
+    padding: 2rem;
+}
+
+.page-registro .alert {
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.page-registro .alert-success {
+    background: #ecfdf5;
+    color: #166534;
+    border: 1px solid #86efac;
+}
+
+.page-registro .alert-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+@media (max-width: 768px) {
+    .page-registro .search-box {
+        flex-direction: column;
+    }
+
+    .page-registro th,
+    .page-registro td {
+        padding: 12px;
+        font-size: 12px;
+    }
+}

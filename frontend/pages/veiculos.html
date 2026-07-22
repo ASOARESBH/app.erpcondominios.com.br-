@@ -1,0 +1,435 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Veiculos" data-icon="fa-car" style="display:none;"></div>
+
+<div class="page-wrapper page-veiculos">
+    <div class="page-header">
+        <h1><i class="fas fa-car"></i> Veiculos</h1>
+        <p>Gerenciamento de veiculos vinculados aos moradores</p>
+    </div>
+
+    <!-- Toast -->
+    <div id="veic-toast" style="display:none;position:fixed;top:20px;right:20px;z-index:9999;
+         padding:14px 20px;border-radius:8px;font-size:.9rem;min-width:260px;
+         box-shadow:0 4px 16px rgba(0,0,0,.15);transition:opacity .3s;"></div>
+
+    <!-- ── Tabs ─────────────────────────────────────────────── -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="cadastrar">
+            <i class="fas fa-plus"></i> Cadastrar
+        </button>
+        <button class="tab-button" data-tab="veiculos">
+            <i class="fas fa-car"></i> Veiculos
+        </button>
+        <button class="tab-button" data-tab="relatorios">
+            <i class="fas fa-chart-bar"></i> Relatórios
+        </button>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: CADASTRAR
+    ══════════════════════════════════════════════════════ -->
+    <div id="tab-cadastrar" class="tab-content active">
+        <div class="page-card">
+            <h2>Cadastro de Veiculo</h2>
+            <form id="formVeiculo">
+                <input type="hidden" id="veiculoId" value="">
+
+                <div class="form-grid">
+                    <div>
+                        <label>Morador *</label>
+                        <select id="selectMorador" required>
+                            <option value="">Selecione um morador</option>
+                        </select>
+                        <div class="dependentes-actions">
+                            <button type="button" class="btn-secondary-modern btn-dependentes" id="btnToggleDependentes" disabled>
+                                <i class="fas fa-user-friends"></i> Dependentes
+                            </button>
+                            <span class="dependentes-status" id="dependentesStatus">Selecione um morador</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label>Modelo *</label>
+                        <input type="text" id="modelo" required placeholder="Ex: Corolla">
+                    </div>
+                    <div>
+                        <label>Placa *</label>
+                        <input type="text" id="placa" required placeholder="ABC1D23" maxlength="8">
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div>
+                        <label>TAG RFID *</label>
+                        <input type="text" id="tag" required placeholder="Codigo unico da TAG RFID">
+                    </div>
+                    <div>
+                        <label>Cor</label>
+                        <input type="text" id="cor" placeholder="Ex: Prata">
+                    </div>
+                    <div>
+                        <label>Tipo</label>
+                        <select id="tipo">
+                            <option value="">Selecione...</option>
+                            <option value="Carro">Carro</option>
+                            <option value="Moto">Moto</option>
+                            <option value="Caminhonete">Caminhonete</option>
+                            <option value="Utilitario">Utilitario</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="dependentesPanel" class="dependentes-panel" style="display:none;">
+                    <h3><i class="fas fa-user-friends"></i> Vinculo do Veiculo</h3>
+                    <div class="vinculo-options">
+                        <label class="vinculo-option">
+                            <input type="radio" name="destinoCadastro" value="morador" checked>
+                            <span>Veiculo do Morador</span>
+                        </label>
+                        <label class="vinculo-option">
+                            <input type="radio" name="destinoCadastro" value="dependente">
+                            <span>Veiculo de Dependente</span>
+                        </label>
+                    </div>
+                    <div class="dependente-select-wrap" id="dependenteSelectWrap" style="display:none;">
+                        <label>Dependente do Morador</label>
+                        <select id="selectDependente">
+                            <option value="">Selecione um dependente</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary-modern" id="btnSalvarVeiculo">
+                        <i class="fas fa-save"></i> Salvar Veiculo
+                    </button>
+                    <button type="button" class="btn-secondary-modern" id="btnCancelarEdicaoVeiculo" style="display:none;">
+                        <i class="fas fa-times"></i> Cancelar Edicao
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: VEICULOS (lista/CRUD)
+    ══════════════════════════════════════════════════════ -->
+    <div id="tab-veiculos" class="tab-content">
+        <div class="page-card">
+            <h2>Lista de Veiculos</h2>
+
+            <div class="search-box">
+                <input type="text" id="buscaVeiculo" placeholder="Pesquisar por morador, modelo, placa ou TAG RFID...">
+                <button class="btn-primary-modern" type="button" id="btnBuscarVeiculo">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+                <button class="btn-secondary-modern" type="button" style="background:#1e3a8a;color:#fff;border-color:#1e3a8a;" onclick="window.VeiculosPage?.gerarPDF()">
+                    <i class="fas fa-file-pdf"></i> Gerar PDF
+                </button>
+            </div>
+
+            <div id="loadingVeiculos" class="loading" style="display:none;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Carregando dados...</p>
+            </div>
+
+            <div class="table-container">
+                <table id="tabelaVeiculos">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Morador</th>
+                            <th>Modelo</th>
+                            <th>Placa</th>
+                            <th>TAG RFID</th>
+                            <th>Dependente</th>
+                            <th>Cor</th>
+                            <th>Tipo</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: RELATÓRIOS
+    ══════════════════════════════════════════════════════ -->
+    <div id="tab-relatorios" class="tab-content">
+
+        <!-- ── KPIs ─────────────────────────────────────────────── -->
+        <div class="rel-kpi-grid">
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#dbeafe;color:#2563eb;"><i class="fas fa-car"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">Total de Veiculos</span>
+                    <span class="rel-kpi-value" id="veic-rel-kpi-total">—</span>
+                </div>
+            </div>
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#dcfce7;color:#16a34a;"><i class="fas fa-check-circle"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">Veiculos Ativos</span>
+                    <span class="rel-kpi-value" id="veic-rel-kpi-ativos">—</span>
+                </div>
+            </div>
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#fef9c3;color:#ca8a04;"><i class="fas fa-user-friends"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">Dependentes</span>
+                    <span class="rel-kpi-value" id="veic-rel-kpi-dependentes">—</span>
+                </div>
+            </div>
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#fce7f3;color:#db2777;"><i class="fas fa-wifi"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">TAGs RFID</span>
+                    <span class="rel-kpi-value" id="veic-rel-kpi-tags">—</span>
+                </div>
+            </div>
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#e0e7ff;color:#4338ca;"><i class="fas fa-shapes"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">Tipos</span>
+                    <span class="rel-kpi-value rel-kpi-value-sm" id="veic-rel-kpi-tipos">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Filtros ──────────────────────────────────────────── -->
+        <div class="page-card">
+            <h2><i class="fas fa-filter"></i> Filtros</h2>
+
+            <div class="veic-rel-filtros-grid">
+                <div class="rel-filtro-grupo">
+                    <label>Data Inicial</label>
+                    <input type="date" id="veic-f-data-inicio">
+                </div>
+                <div class="rel-filtro-grupo">
+                    <label>Data Final</label>
+                    <input type="date" id="veic-f-data-fim">
+                </div>
+                <div class="rel-filtro-grupo">
+                    <label>Unidade</label>
+                    <select id="veic-f-unidade">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="rel-filtro-grupo veic-autocomplete-wrap">
+                    <label>Morador</label>
+                    <input type="text" id="veic-f-morador-busca" placeholder="Nome, CPF ou unidade..." autocomplete="off">
+                    <input type="hidden" id="veic-f-morador-id">
+                    <div class="veic-autocomplete-lista" id="veic-f-morador-lista"></div>
+                    <span class="veic-autocomplete-tag" id="veic-f-morador-tag" style="display:none;"></span>
+                </div>
+                <div class="rel-filtro-grupo veic-autocomplete-wrap">
+                    <label>Dependente</label>
+                    <input type="text" id="veic-f-dependente-busca" placeholder="Nome do dependente..." autocomplete="off">
+                    <input type="hidden" id="veic-f-dependente-id">
+                    <div class="veic-autocomplete-lista" id="veic-f-dependente-lista"></div>
+                    <span class="veic-autocomplete-tag" id="veic-f-dependente-tag" style="display:none;"></span>
+                </div>
+                <div class="rel-filtro-grupo">
+                    <label>Modelo</label>
+                    <input type="text" id="veic-f-modelo" placeholder="Ex: Corolla">
+                </div>
+                <div class="rel-filtro-grupo">
+                    <label>Cor</label>
+                    <select id="veic-f-cor">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="rel-filtro-grupo">
+                    <label>Tipo</label>
+                    <select id="veic-f-tipo">
+                        <option value="">Todos</option>
+                        <option value="Carro">Carro</option>
+                        <option value="Moto">Moto</option>
+                        <option value="Caminhao">Caminhao</option>
+                        <option value="Caminhonete">Caminhonete</option>
+                        <option value="Utilitario">Utilitario</option>
+                        <option value="Van">Van</option>
+                        <option value="Onibus">Onibus</option>
+                    </select>
+                </div>
+                <div class="rel-filtro-grupo">
+                    <label>Placa</label>
+                    <input type="text" id="veic-f-placa" placeholder="ABC1234 ou ABC1D23" maxlength="8">
+                </div>
+                <div class="rel-filtro-grupo">
+                    <label>TAG RFID</label>
+                    <input type="text" id="veic-f-tag" placeholder="Codigo da TAG">
+                </div>
+                <div class="rel-filtro-grupo veic-filtro-busca-geral">
+                    <label>Busca Geral</label>
+                    <input type="text" id="veic-f-busca" placeholder="Morador, dependente, unidade, modelo, cor, placa ou TAG...">
+                </div>
+            </div>
+
+            <div class="veic-rel-filtros-acoes">
+                <button class="btn-primary-modern" id="veic-rel-btn-pesquisar" onclick="window.VeiculosPage?.relPesquisar()">
+                    <i class="fas fa-search"></i> Pesquisar
+                </button>
+                <button class="btn-secondary-modern" id="veic-rel-btn-limpar" onclick="window.VeiculosPage?.relLimparFiltros()">
+                    <i class="fas fa-eraser"></i> Limpar
+                </button>
+                <button class="btn-secondary-modern" id="veic-rel-btn-csv" onclick="window.VeiculosPage?.relExportarCSV()">
+                    <i class="fas fa-file-csv"></i> Exportar CSV
+                </button>
+                <button class="btn-primary-modern" id="veic-rel-btn-pdf" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);" onclick="window.VeiculosPage?.relGerarPDF()">
+                    <i class="fas fa-file-pdf"></i> Exportar PDF
+                </button>
+            </div>
+        </div>
+
+        <!-- ── Resultados ───────────────────────────────────────── -->
+        <div class="page-card">
+            <div class="rel-painel-header">
+                <div class="rel-painel-titulo">
+                    <span><i class="fas fa-list"></i></span>
+                    <h2>Resultados</h2>
+                </div>
+            </div>
+
+            <div class="rel-contador">
+                <span id="veic-rel-contador-texto">Aplique os filtros e clique em Pesquisar.</span>
+            </div>
+
+            <div id="veic-rel-loading" class="loading" style="display:none;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Carregando dados...</p>
+            </div>
+
+            <div class="table-container">
+                <table id="veic-rel-tabela">
+                    <thead>
+                        <tr>
+                            <th>Unidade</th>
+                            <th>Morador</th>
+                            <th>Dependente</th>
+                            <th>Modelo</th>
+                            <th>Placa</th>
+                            <th>TAG RFID</th>
+                            <th>Tipo</th>
+                            <th>Cor</th>
+                            <th>Data Cadastro</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div id="veic-rel-paginacao" class="paginacao-moradores"></div>
+        </div>
+
+        <!-- ── Relatórios Prontos ───────────────────────────────── -->
+        <div class="page-card rel-seletor-card">
+            <h2><i class="fas fa-file-alt"></i> Relatórios Prontos</h2>
+            <p class="rel-seletor-desc">Clique em um modelo para aplicar o filtro correspondente automaticamente.</p>
+
+            <div class="rel-tipo-grid">
+                <div class="rel-tipo-card" data-tipo="por_unidade" onclick="window.VeiculosPage?.relAplicarPreset('por_unidade')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);"><i class="fas fa-building"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Veiculos por Unidade</strong>
+                        <span>Quantidade de veiculos agrupada por unidade</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="por_tipo" onclick="window.VeiculosPage?.relAplicarPreset('por_tipo')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#0369a1,#38bdf8);"><i class="fas fa-shapes"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Veiculos por Tipo</strong>
+                        <span>Distribuicao por Carro, Moto, Caminhao etc — com grafico</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="por_cor" onclick="window.VeiculosPage?.relAplicarPreset('por_cor')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);"><i class="fas fa-palette"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Veiculos por Cor</strong>
+                        <span>Distribuicao de veiculos por cor</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="sem_tag" onclick="window.VeiculosPage?.relAplicarPreset('sem_tag')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#b45309,#f59e0b);"><i class="fas fa-wifi"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Veiculos sem TAG</strong>
+                        <span>Veiculos cadastrados sem TAG RFID vinculada</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="tags_duplicadas" onclick="window.VeiculosPage?.relAplicarPreset('tags_duplicadas')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#be123c,#fb7185);"><i class="fas fa-clone"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>TAGs Duplicadas</strong>
+                        <span>Mesma TAG RFID vinculada a mais de um veiculo</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="placas_duplicadas" onclick="window.VeiculosPage?.relAplicarPreset('placas_duplicadas')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#991b1b,#ef4444);"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Placas Duplicadas</strong>
+                        <span>Mesma placa vinculada a mais de um veiculo</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="dependentes" onclick="window.VeiculosPage?.relAplicarPreset('dependentes')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#0f766e,#14b8a6);"><i class="fas fa-user-friends"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Veiculos de Dependentes</strong>
+                        <span>Somente veiculos vinculados a dependentes</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="inativos" onclick="window.VeiculosPage?.relAplicarPreset('inativos')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#4b5563,#9ca3af);"><i class="fas fa-ban"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Veiculos Inativos</strong>
+                        <span>Veiculos com status inativo</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="por_periodo" onclick="window.VeiculosPage?.relAplicarPreset('por_periodo')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#1d4ed8,#60a5fa);"><i class="fas fa-calendar-alt"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Cadastrados por Periodo</strong>
+                        <span>Usa o filtro de Data Inicial / Final para o periodo desejado</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Dashboard Gráfico ────────────────────────────────── -->
+        <div class="page-card">
+            <h2><i class="fas fa-chart-pie"></i> Dashboard Grafico</h2>
+            <div class="veic-graficos-grid">
+                <div class="veic-grafico-box">
+                    <h3>Veiculos por Tipo</h3>
+                    <canvas id="veic-grafico-tipo"></canvas>
+                </div>
+                <div class="veic-grafico-box">
+                    <h3>Veiculos por Cor</h3>
+                    <canvas id="veic-grafico-cor"></canvas>
+                </div>
+                <div class="veic-grafico-box veic-grafico-full">
+                    <h3>Cadastros por Mes</h3>
+                    <canvas id="veic-grafico-mes"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /#tab-relatorios -->
+</div>

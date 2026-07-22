@@ -1,0 +1,782 @@
+/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES - INVENTÁRIO DE PATRIMÔNIO
+|--------------------------------------------------------------------------
+| CSS autossuficiente: o router carrega APENAS este arquivo para a página
+| de inventário. Não herda nenhum outro CSS de página.
+|
+| Convenção: prefixo -inv em classes específicas para evitar conflitos
+| com classes globais do design system.
+|--------------------------------------------------------------------------
+*/
+
+/* ============================================
+   PAGE HEADER
+   ============================================ */
+.page-inventario .page-header-inv {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.page-inventario .page-header-content h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+.page-inventario .page-header-content p {
+    color: #64748b;
+    font-size: 14px;
+}
+.page-inventario .page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* ============================================
+   TABS NAVIGATION
+   ============================================ */
+.page-inventario .tabs-inv {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+.page-inventario .tab-btn-inv {
+    padding: 0.875rem 1.5rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+.page-inventario .tab-btn-inv i {
+    font-size: 15px;
+}
+.page-inventario .tab-btn-inv:hover {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.04);
+    border-radius: 6px 6px 0 0;
+}
+.page-inventario .tab-btn-inv.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    background: rgba(37, 99, 235, 0.06);
+    border-radius: 6px 6px 0 0;
+}
+
+/* ============================================
+   TAB CONTENT
+   ============================================ */
+.page-inventario .tab-content-inv {
+    display: none;
+}
+.page-inventario .tab-content-inv.active {
+    display: block;
+}
+
+/* ============================================
+   CARDS
+   ============================================ */
+.page-inventario .card-inv {
+    background: #fff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+.page-inventario .card-header-inv {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #f1f5f9;
+    background: #f8fafc;
+}
+.page-inventario .card-header-inv h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.page-inventario .card-header-inv h2 i {
+    color: #2563eb;
+    font-size: 15px;
+}
+.page-inventario .card-header-actions-inv {
+    display: flex;
+    gap: 0.5rem;
+}
+.page-inventario form,
+.page-inventario .card-inv > div:not(.card-header-inv):not(.table-responsive-inv):not(.pagination-bar-inv) {
+    padding: 1.5rem;
+}
+
+/* ============================================
+   KPI GRID
+   ============================================ */
+.page-inventario .kpi-grid-inv {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.page-inventario .kpi-card-inv {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.page-inventario .kpi-card-inv:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.page-inventario .kpi-icon-inv {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+.page-inventario .kpi-info-inv {
+    display: flex;
+    flex-direction: column;
+}
+.page-inventario .kpi-value-inv {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #1e293b;
+    line-height: 1;
+}
+.page-inventario .kpi-label-inv {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+    margin-top: 4px;
+}
+/* KPI Colors */
+.page-inventario .kpi-blue-inv .kpi-icon-inv {
+    background: #dbeafe;
+    color: #1e40af;
+}
+.page-inventario .kpi-green-inv .kpi-icon-inv {
+    background: #dcfce7;
+    color: #166534;
+}
+.page-inventario .kpi-red-inv .kpi-icon-inv {
+    background: #fee2e2;
+    color: #991b1b;
+}
+.page-inventario .kpi-purple-inv .kpi-icon-inv {
+    background: #f3e8ff;
+    color: #7e22ce;
+}
+
+/* ============================================
+   FORM STYLES
+   ============================================ */
+.page-inventario .form-grid-inv {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+.page-inventario .form-grid-3-inv {
+    grid-template-columns: repeat(3, 1fr);
+}
+.page-inventario .form-group-inv {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.page-inventario .form-group-inv label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+.page-inventario .req {
+    color: #ef4444;
+}
+.page-inventario .form-hint-inv {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+.page-inventario .form-group-inv input,
+.page-inventario .form-group-inv select,
+.page-inventario .form-group-inv textarea {
+    padding: 0.65rem 0.875rem;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #1e293b;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+}
+.page-inventario .form-group-inv input:focus,
+.page-inventario .form-group-inv select:focus,
+.page-inventario .form-group-inv textarea:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.page-inventario .form-group-inv textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+.page-inventario .form-actions-inline-inv {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+/* Campo condicional */
+.page-inventario .campo-cond-inv {
+    display: none;
+}
+.page-inventario .campo-cond-inv.show {
+    display: flex;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.page-inventario .btn-primary-inv {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.65rem 1.25rem;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+.page-inventario .btn-primary-inv:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+}
+.page-inventario .btn-primary-inv:active {
+    transform: translateY(0);
+}
+.page-inventario .btn-secondary-inv {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.65rem 1.25rem;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.page-inventario .btn-secondary-inv:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+.page-inventario .btn-danger-inv {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.65rem 1.25rem;
+    background: #ef4444;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+.page-inventario .btn-danger-inv:hover {
+    background: #dc2626;
+}
+.page-inventario .btn-sm-inv {
+    padding: 0.45rem 0.875rem;
+    font-size: 13px;
+}
+.page-inventario .btn-actions-inv {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+/* Botões de ação na tabela */
+.page-inventario .btn-edit-inv {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: #fef3c7;
+    color: #d97706;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+.page-inventario .btn-edit-inv:hover {
+    background: #fde68a;
+    transform: scale(1.1);
+}
+.page-inventario .btn-delete-inv {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: #fee2e2;
+    color: #dc2626;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+.page-inventario .btn-delete-inv:hover {
+    background: #fecaca;
+    transform: scale(1.1);
+}
+
+/* ============================================
+   TABLE
+   ============================================ */
+.page-inventario .table-responsive-inv {
+    overflow-x: auto;
+    padding: 0 1.5rem;
+}
+.page-inventario .data-table-inv {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+.page-inventario .data-table-inv thead th {
+    background: #f8fafc;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+}
+.page-inventario .data-table-inv tbody td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: #374151;
+    vertical-align: middle;
+}
+.page-inventario .data-table-inv tbody tr:hover {
+    background: #f8fafc;
+}
+.page-inventario .data-table-inv tbody tr:last-child td {
+    border-bottom: none;
+}
+.page-inventario .empty-row-inv td {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #94a3b8;
+    font-size: 14px;
+}
+.page-inventario .table-actions-inv {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+.page-inventario .badge-inv {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.page-inventario .badge-success-inv {
+    background: #dcfce7;
+    color: #166534;
+}
+.page-inventario .badge-danger-inv {
+    background: #fee2e2;
+    color: #991b1b;
+}
+.page-inventario .badge-primary-inv {
+    background: #dbeafe;
+    color: #1e40af;
+}
+.page-inventario .badge-warning-inv {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+.page-inventario .pagination-bar-inv {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #f1f5f9;
+    flex-wrap: wrap;
+}
+.page-inventario .pagination-bar-inv button {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 0.75rem;
+    border: 1.5px solid #e2e8f0;
+    background: #fff;
+    color: #374151;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.page-inventario .pagination-bar-inv button:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+    background: #eff6ff;
+}
+.page-inventario .pagination-bar-inv button.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+.page-inventario .pagination-bar-inv button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.page-inventario .pagination-info-inv {
+    font-size: 13px;
+    color: #64748b;
+    padding: 0 0.5rem;
+}
+
+/* ============================================
+   TOAST NOTIFICATIONS
+   ============================================ */
+.page-inventario .toast-container-inv,
+.toast-container-inv {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    pointer-events: none;
+}
+.toast-inv {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 280px;
+    max-width: 420px;
+    pointer-events: all;
+    animation: toastSlideIn 0.3s ease;
+    background: #fff;
+    border-left: 4px solid #2563eb;
+    color: #1e293b;
+}
+.toast-inv.success { border-left-color: #22c55e; }
+.toast-inv.error   { border-left-color: #ef4444; }
+.toast-inv.warning { border-left-color: #f59e0b; }
+.toast-inv i { font-size: 18px; flex-shrink: 0; }
+.toast-inv.success i { color: #22c55e; }
+.toast-inv.error   i { color: #ef4444; }
+.toast-inv.warning i { color: #f59e0b; }
+@keyframes toastSlideIn {
+    from { opacity: 0; transform: translateX(100%); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ============================================
+   MODAL
+   ============================================ */
+.modal-overlay-inv {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.modal-overlay-inv.show {
+    display: flex;
+}
+.page-inventario.modal-overlay-inv {
+    display: none;
+}
+.page-inventario.modal-overlay-inv.show {
+    display: flex;
+}
+.modal-box-inv {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 480px;
+    overflow: hidden;
+    animation: modalSlideIn 0.25s ease;
+}
+.modal-sm-inv {
+    max-width: 420px;
+}
+@keyframes modalSlideIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-header-inv {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #f1f5f9;
+    background: #f8fafc;
+}
+.modal-header-danger-inv {
+    background: #fef2f2;
+    border-bottom-color: #fecaca;
+}
+.modal-header-inv h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.modal-header-danger-inv h3 {
+    color: #dc2626;
+}
+.modal-header-danger-inv h3 i {
+    color: #dc2626;
+}
+.modal-close-inv {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #94a3b8;
+    line-height: 1;
+    padding: 0.25rem;
+    border-radius: 6px;
+    transition: color 0.2s;
+}
+.modal-close-inv:hover {
+    color: #1e293b;
+    background: #f1f5f9;
+}
+.modal-body-inv {
+    padding: 1.5rem;
+    font-size: 14px;
+    color: #374151;
+    line-height: 1.6;
+}
+.modal-footer-inv {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #f1f5f9;
+    justify-content: flex-end;
+}
+
+/* ============================================
+   BAIXAS SECTION
+   ============================================ */
+.page-inventario .baixa-item-inv {
+    background: #f8fafc;
+    padding: 1rem 1.25rem;
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+    border-left: 4px solid #ef4444;
+}
+.page-inventario .baixa-item-inv h4 {
+    color: #1e293b;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+.page-inventario .baixa-item-inv p {
+    color: #64748b;
+    font-size: 13px;
+    margin-bottom: 0.25rem;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1024px) {
+    .page-inventario .form-grid-3-inv {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 768px) {
+    .page-inventario .form-grid-3-inv,
+    .page-inventario .form-grid-inv {
+        grid-template-columns: 1fr;
+    }
+    .page-inventario .kpi-grid-inv {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .page-inventario .tabs-inv {
+        gap: 0.25rem;
+    }
+    .page-inventario .tab-btn-inv {
+        padding: 0.65rem 1rem;
+        font-size: 0.85rem;
+    }
+    .page-inventario .page-header-inv {
+        flex-direction: column;
+    }
+    .modal-box-inv {
+        max-width: 100%;
+    }
+}
+@media (max-width: 480px) {
+    .page-inventario .kpi-grid-inv {
+        grid-template-columns: 1fr 1fr;
+    }
+    .page-inventario .kpi-value-inv {
+        font-size: 1.3rem;
+    }
+}
+
+/* ============================================================
+   GRUPOS DE INVENTARIO - v3.0
+   ============================================================ */
+
+.page-inventario .grupo-field-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.page-inventario .btn-icon-inv {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: 1.5px solid #2563eb;
+    background: #fff;
+    color: #2563eb;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    transition: background 0.2s, color 0.2s;
+}
+.page-inventario .btn-icon-inv:hover {
+    background: #2563eb;
+    color: #fff;
+}
+
+.page-inventario .painel-novo-grupo {
+    margin-top: 0.5rem;
+}
+.page-inventario .painel-novo-grupo-inner {
+    background: #f0f7ff;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.page-inventario .painel-novo-grupo-inner input {
+    width: 100%;
+    padding: 0.55rem 0.85rem;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 7px;
+    font-size: 0.9rem;
+    background: #fff;
+    color: #1e293b;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+.page-inventario .painel-novo-grupo-inner input:focus {
+    border-color: #2563eb;
+}
+.page-inventario .painel-novo-grupo-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.page-inventario .badge-info-inv {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 20px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+#formGrupoWrapper {
+    background: #f8fafc;
+}
+
+@media (max-width: 600px) {
+    .page-inventario .grupo-field-wrapper { flex-wrap: nowrap; }
+    .page-inventario .painel-novo-grupo-actions { flex-direction: column; }
+    .page-inventario .painel-novo-grupo-actions button { width: 100%; }
+}

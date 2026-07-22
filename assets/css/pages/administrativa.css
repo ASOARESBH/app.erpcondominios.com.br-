@@ -1,0 +1,63 @@
+/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES ONLY - ADMINISTRATIVA
+|--------------------------------------------------------------------------
+| Allowed:
+| - Internal layouts
+| - Tabs
+| - Page-specific grids
+|
+| Forbidden:
+| - Redefining .page-wrapper
+| - Redefining .page-header
+| - Redefining .page-card
+| - Redefining .sidebar
+| - Redefining .main-content
+|--------------------------------------------------------------------------
+*/
+
+.page-administrativa .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.page-administrativa .page-card.interactive {
+    text-align: center;
+    padding: 2.5rem 2rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.page-administrativa .page-card.interactive:hover {
+    border-color: rgba(37, 99, 235, 0.1);
+    background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+}
+
+.page-administrativa .page-card.interactive i {
+    font-size: 3rem;
+    color: #2563eb;
+    margin-bottom: 1.5rem;
+    display: block;
+    background: linear-gradient(135deg, #2563eb, #1e3a8a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.page-administrativa .page-card.interactive h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.75rem;
+}
+
+.page-administrativa .page-card.interactive p {
+    color: #64748b;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.page-administrativa .tabs {
+    margin-bottom: 2rem;
+}

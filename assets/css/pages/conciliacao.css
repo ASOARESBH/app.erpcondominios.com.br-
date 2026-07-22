@@ -1,0 +1,391 @@
+/* =====================================================
+   CONCILIAÇÃO BANCÁRIA — CSS
+   Prefix: .conc-*
+   ===================================================== */
+
+@keyframes concFadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes concSlideIn { from { opacity:0; transform:translateX(24px); } to { opacity:1; transform:translateX(0); } }
+
+/* ── Header ──────────────────────────────────────────── */
+.conc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.conc-header-left { display: flex; align-items: center; gap: 16px; }
+.conc-header-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 20px; flex-shrink: 0;
+}
+.conc-titulo    { font-size: 22px; font-weight: 700; color: #1e293b; margin: 0; }
+.conc-subtitulo { font-size: 13px; color: #64748b; margin: 2px 0 0; }
+
+/* ── KPIs ─────────────────────────────────────────────── */
+.conc-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.conc-kpi {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  animation: concFadeIn .4s ease;
+  transition: box-shadow .15s;
+}
+.conc-kpi:hover { box-shadow: 0 4px 12px rgba(0,0,0,.07); }
+.conc-kpi-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.conc-kpi-icon.teal      { background: #ccfbf1; color: #0f766e; }
+.conc-kpi-icon.amarelo   { background: #fef9c3; color: #ca8a04; }
+.conc-kpi-icon.verde     { background: #dcfce7; color: #15803d; }
+.conc-kpi-icon.azul      { background: #dbeafe; color: #1d4ed8; }
+.conc-kpi-icon.cinza     { background: #f1f5f9; color: #64748b; }
+.conc-kpi-info   { display: flex; flex-direction: column; }
+.conc-kpi-valor  { font-size: 22px; font-weight: 700; color: #1e293b; line-height: 1.2; }
+.conc-kpi-valor.amarelo { color: #b45309; }
+.conc-kpi-valor.verde   { color: #15803d; }
+.conc-kpi-label  { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+/* Taxa de conciliação — barra de progresso */
+.conc-taxa-wrap  { margin-bottom: 20px; }
+.conc-taxa-label { display: flex; justify-content: space-between; font-size: 13px; color: #475569; margin-bottom: 6px; }
+.conc-taxa-barra { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+.conc-taxa-fill  { height: 100%; background: linear-gradient(90deg,#14b8a6,#0ea5e9); border-radius: 4px; transition: width .6s ease; }
+
+/* ── Filtros ──────────────────────────────────────────── */
+.conc-filtros {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.conc-filtros select,
+.conc-filtros input[type="date"],
+.conc-filtros input[type="search"],
+.conc-filtros input[type="text"] {
+  padding: 7px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  font-size: 13px;
+  background: #fff;
+  color: #334155;
+  min-width: 120px;
+}
+.conc-filtros input[type="search"] { min-width: 180px; }
+.conc-filtros select:focus,
+.conc-filtros input:focus { outline: none; border-color: #14b8a6; box-shadow: 0 0 0 3px rgba(20,184,166,.12); }
+
+/* ── Tabs ─────────────────────────────────────────────── */
+.conc-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 20px;
+}
+.conc-tab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 6px 6px 0 0;
+  transition: color .15s, border-color .15s, background .15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.conc-tab:hover { color: #0f766e; background: #f0fdfa; }
+.conc-tab.ativa { color: #0f766e; border-bottom-color: #14b8a6; font-weight: 600; }
+.conc-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ── Painel de aba ────────────────────────────────────── */
+.conc-panel { animation: concFadeIn .3s ease; }
+.conc-oculto { display: none !important; }
+
+/* ── Tabela ───────────────────────────────────────────── */
+.conc-tabela-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid #e2e8f0; }
+.conc-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  background: #fff;
+}
+.conc-tabela thead { background: #f8fafc; }
+.conc-tabela th {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  border-bottom: 1px solid #e2e8f0;
+}
+.conc-tabela td {
+  padding: 11px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  vertical-align: middle;
+}
+.conc-tabela tbody tr:last-child td { border-bottom: none; }
+.conc-tabela tbody tr:hover td { background: #f0fdfa; }
+.conc-tabela .text-right { text-align: right; }
+.conc-tabela .conc-vazio {
+  text-align: center;
+  padding: 48px 24px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+.conc-tabela .conc-loading {
+  text-align: center;
+  padding: 32px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* ── Badges de tipo e status ──────────────────────────── */
+.conc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.conc-badge.credito    { background: #dcfce7; color: #15803d; }
+.conc-badge.debito     { background: #fee2e2; color: #dc2626; }
+.conc-badge.pendente   { background: #fef9c3; color: #92400e; }
+.conc-badge.conciliado { background: #ccfbf1; color: #0f766e; }
+.conc-badge.ignorado   { background: #f1f5f9; color: #64748b; }
+.conc-badge.divergente { background: #fce7f3; color: #9d174d; }
+.conc-badge.automatica { background: #dbeafe; color: #1d4ed8; }
+.conc-badge.manual     { background: #ede9fe; color: #5b21b6; }
+.conc-badge.ativa      { background: #dcfce7; color: #15803d; }
+.conc-badge.desfeita   { background: #f1f5f9; color: #64748b; text-decoration: line-through; }
+
+/* Score badge */
+.conc-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.conc-score.alto   { background: #dcfce7; color: #15803d; }
+.conc-score.medio  { background: #fef9c3; color: #92400e; }
+.conc-score.baixo  { background: #fee2e2; color: #dc2626; }
+
+/* ── Valores coloridos ────────────────────────────────── */
+.conc-valor-credito { color: #15803d; font-weight: 600; }
+.conc-valor-debito  { color: #dc2626; font-weight: 600; }
+
+/* ── Botões inline da tabela ──────────────────────────── */
+.btn-conc-buscar,
+.btn-conc-desfazer {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.btn-conc-buscar   { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
+.btn-conc-buscar:hover { background: #ccfbf1; }
+.btn-conc-desfazer { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.btn-conc-desfazer:hover { background: #fee2e2; }
+.btn-conc-ignorar  { padding: 5px 8px; border-radius: 6px; font-size: 11px; background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; cursor: pointer; }
+.btn-conc-ignorar:hover { background: #f1f5f9; color: #334155; }
+.conc-acoes-cell   { white-space: nowrap; display: flex; gap: 4px; align-items: center; }
+
+/* ── Paginação ────────────────────────────────────────── */
+.conc-paginacao {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  padding: 12px 0 0;
+}
+.conc-paginacao button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.conc-paginacao button:hover { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
+.conc-paginacao button.ativa { background: #0f766e; color: #fff; border-color: #0f766e; }
+
+/* ── Total badge ─────────────────────────────────────── */
+.conc-total-badge { font-size: 13px; color: #64748b; margin-left: auto; flex-shrink: 0; }
+
+/* ── Modal de Candidatos ─────────────────────────────── */
+.conc-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1200;
+  padding: 20px;
+}
+.conc-modal {
+  background: #fff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+  animation: concSlideIn .25s ease;
+}
+.conc-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.conc-modal-header h3 { font-size: 16px; font-weight: 700; color: #1e293b; margin: 0; }
+.conc-modal-fechar {
+  width: 32px; height: 32px;
+  border: none; background: #f1f5f9; border-radius: 8px;
+  cursor: pointer; color: #64748b; font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s;
+}
+.conc-modal-fechar:hover { background: #e2e8f0; }
+.conc-modal-body   { padding: 20px 22px; overflow-y: auto; flex: 1; }
+.conc-modal-footer {
+  padding: 14px 22px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Mov-info no topo do modal */
+.conc-mov-info {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.conc-mov-info strong { font-size: 14px; color: #1e293b; }
+.conc-mov-info span   { color: #64748b; }
+
+/* Seção de candidatos */
+.conc-cand-secao {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.conc-cand-secao.verde { color: #15803d; }
+.conc-cand-secao.vermelho { color: #dc2626; }
+
+.conc-cand-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #fafafa;
+  transition: border-color .15s, background .15s;
+}
+.conc-cand-item:hover { border-color: #99f6e4; background: #f0fdfa; }
+.conc-cand-info { flex: 1; font-size: 13px; }
+.conc-cand-info strong { display: block; color: #1e293b; }
+.conc-cand-info span   { color: #64748b; font-size: 12px; }
+.conc-cand-valor { font-weight: 700; font-size: 14px; flex-shrink: 0; }
+.conc-cand-valor.verde    { color: #15803d; }
+.conc-cand-valor.vermelho { color: #dc2626; }
+
+/* Botão de conciliar no modal */
+.btn-conc-link {
+  padding: 7px 14px;
+  background: #0f766e;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.btn-conc-link:hover { background: #0d9488; }
+
+/* ── Responsive ───────────────────────────────────────── */
+@media (max-width: 640px) {
+  .conc-kpis { grid-template-columns: 1fr 1fr; }
+  .conc-filtros { flex-direction: column; align-items: stretch; }
+  .conc-filtros select,
+  .conc-filtros input { min-width: 0; width: 100%; }
+  .conc-tab { padding: 8px 12px; font-size: 13px; }
+  .conc-modal { max-height: 95vh; }
+}

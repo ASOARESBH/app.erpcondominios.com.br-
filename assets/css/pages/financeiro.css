@@ -1,0 +1,205 @@
+﻿/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES ONLY - FINANCEIRO
+|--------------------------------------------------------------------------
+*/
+
+.page-financeiro .financeiro-submenu {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+
+.page-financeiro .submenu-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: #0f172a;
+    background: #e5e7eb;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+}
+
+.page-financeiro .submenu-link:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+
+.page-financeiro .submenu-link.active {
+    color: #fff;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border-color: transparent;
+}
+
+.page-financeiro .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-financeiro .kpi-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-financeiro .kpi-content h3 {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin-bottom: 0.5rem;
+}
+
+.page-financeiro .kpi-content .value {
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.page-financeiro .kpi-content .value.receita {
+    color: #10b981;
+}
+
+.page-financeiro .kpi-content .value.despesa {
+    color: #ef4444;
+}
+
+.page-financeiro .kpi-content .value.saldo {
+    color: #1e293b;
+}
+
+.page-financeiro .kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+}
+
+.page-financeiro .kpi-icon.receita {
+    background: #ecfdf5;
+    color: #10b981;
+}
+
+.page-financeiro .kpi-icon.despesa {
+    background: #fef2f2;
+    color: #ef4444;
+}
+
+.page-financeiro .kpi-icon.saldo {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.page-financeiro .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-financeiro .action-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.page-financeiro .action-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+.page-financeiro .action-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+.page-financeiro .action-icon.red { color: #dc2626; }
+.page-financeiro .action-icon.green { color: #10b981; }
+.page-financeiro .action-icon.blue { color: #2563eb; }
+
+.page-financeiro .action-card h3 {
+    color: #0f172a;
+    margin-bottom: 0.5rem;
+}
+
+.page-financeiro .action-card p {
+    color: #475569;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.page-financeiro .action-link {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 0.92rem;
+    transition: filter 0.2s ease;
+}
+
+.page-financeiro .action-link:hover {
+    filter: brightness(1.08);
+}
+
+.page-financeiro .table-container {
+    margin-top: 1rem;
+}
+
+.page-financeiro table thead {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    color: #fff;
+}
+
+.page-financeiro table thead th {
+    padding: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    border: none;
+}
+
+.page-financeiro table tbody tr:hover {
+    background: rgba(37, 99, 235, 0.06);
+}
+
+.page-financeiro table td {
+    padding: 12px 15px;
+    color: #475569;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.page-financeiro .empty-table {
+    text-align: center;
+    opacity: 0.6;
+    padding: 2rem;
+}
+
+@media (max-width: 768px) {
+    .page-financeiro .financeiro-submenu {
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .page-financeiro .submenu-link {
+        width: 100%;
+        justify-content: center;
+        padding: 10px 14px;
+        font-size: 0.95rem;
+    }
+}

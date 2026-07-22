@@ -1,0 +1,340 @@
+<!-- Page Metadata for AppRouter -->
+<div id="page-metadata" data-title="Relatórios" data-icon="fa-chart-bar" style="display:none;"></div>
+
+<style>
+    .submenu {
+        background: var(--color-background-primary);
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .submenu ul {
+        list-style: none;
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .submenu a {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background: var(--color-background-secondary);
+        color: var(--color-text-secondary);
+        text-decoration: none;
+        border-radius: 8px;
+        transition: 0.2s;
+    }
+
+    .submenu a:hover,
+    .submenu a.active {
+        background: var(--color-primary-600);
+        color: var(--color-background-primary);
+    }
+
+    .cards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .card {
+        background: var(--color-background-primary);
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .card-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .card-icon.blue {
+        background: var(--color-info-100);
+        color: var(--color-info-800);
+    }
+
+    .card-icon.green {
+        background: var(--color-success-100);
+        color: var(--color-success-800);
+    }
+
+    .card-icon.red {
+        background: var(--color-error-100);
+        color: var(--color-error-800);
+    }
+
+    .card-icon.yellow {
+        background: var(--color-warning-100);
+        color: var(--color-warning-800);
+    }
+
+    .card h3 {
+        font-size: 2rem;
+        color: var(--color-text-primary);
+        margin-bottom: 0.5rem;
+    }
+
+    .card p {
+        color: var(--color-text-tertiary);
+        font-size: 0.9rem;
+    }
+
+    .section {
+        background: var(--color-background-primary);
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .section h2 {
+        color: var(--color-text-primary);
+        margin-bottom: 1.5rem;
+        font-size: 1.3rem;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        margin-bottom: 0.5rem;
+        color: var(--color-text-secondary);
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .form-group input,
+    .form-group select {
+        padding: 0.75rem;
+        border: 1px solid var(--border-color, #e2e8f0);
+        border-radius: 8px;
+        font-size: 0.95rem;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: var(--color-primary-600);
+    }
+
+    button {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: 0.2s;
+        margin-right: 0.5rem;
+    }
+
+    .btn-primary {
+        background: var(--color-primary-600);
+        color: var(--color-background-primary);
+    }
+        color: #fff;
+    }
+
+    .btn-primary:hover {
+        opacity: 0.9;
+        transform: scale(1.02);
+    }
+
+    .btn-secondary {
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        color: #fff;
+    }
+
+    .btn-secondary:hover {
+        opacity: 0.9;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #f1f5f9;
+        text-align: left;
+        font-size: 0.9rem;
+    }
+
+    th {
+        background: #f8fafc;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    tr:hover {
+        background: #f8fafc;
+    }
+
+    .badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .badge-success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .badge-primary {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .badge-warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+</style>
+
+<nav class="submenu">
+    <ul>
+        <li><a href="administrativa.html"><i class="fas fa-home"></i> Início</a></li>
+        <li><a href="protocolo.html"><i class="fas fa-box"></i> Protocolos</a></li>
+        <li><a href="inventario.html"><i class="fas fa-boxes"></i> Inventário</a></li>
+        <li><a href="relatorios_inventario.html" class="active"><i class="fas fa-chart-bar"></i> Relatórios</a></li>
+        <li><a href="estoque.html"><i class="fas fa-warehouse"></i> Estoque</a></li>
+        <li><a href="marketplace_admin.html"><i class="fas fa-store"></i> Marketplace</a></li>
+    </ul>
+</nav>
+
+<!-- Cards de Resumo -->
+<div class="cards-grid">
+    <div class="card">
+        <div class="card-icon blue">
+            <i class="fas fa-boxes"></i>
+        </div>
+        <h3 id="totalItens">0</h3>
+        <p>Total de Itens</p>
+    </div>
+    <div class="card">
+        <div class="card-icon green">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <h3 id="totalAtivos">0</h3>
+        <p>Itens Ativos</p>
+    </div>
+    <div class="card">
+        <div class="card-icon red">
+            <i class="fas fa-times-circle"></i>
+        </div>
+        <h3 id="totalInativos">0</h3>
+        <p>Itens Inativos</p>
+    </div>
+    <div class="card">
+        <div class="card-icon yellow">
+            <i class="fas fa-dollar-sign"></i>
+        </div>
+        <h3 id="valorTotal">R$ 0,00</h3>
+        <p>Valor Total</p>
+    </div>
+</div>
+
+<!-- Filtros de Relatório -->
+<section class="section">
+    <h2><i class="fas fa-filter"></i> Filtros de Relatório</h2>
+    <div class="form-grid">
+        <div class="form-group">
+            <label>Tipo de Relatório</label>
+            <select id="tipoRelatorio">
+                <option value="geral">Relatório Geral</option>
+                <option value="situacao">Por Situação</option>
+                <option value="status">Por Status</option>
+                <option value="responsavel">Por Responsável</option>
+                <option value="baixas">Itens Baixados</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Situação</label>
+            <select id="filtroSituacao">
+                <option value="">Todas</option>
+                <option value="imobilizado">Imobilizado</option>
+                <option value="circulante">Circulante</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Status</label>
+            <select id="filtroStatus">
+                <option value="">Todos</option>
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Responsável</label>
+            <select id="filtroResponsavel">
+                <option value="">Todos</option>
+            </select>
+        </div>
+    </div>
+    <div style="margin-top: 1rem;">
+        <button class="btn-primary" onclick="window.RelatoriosInventarioPage.gerarRelatorio()">
+            <i class="fas fa-file-pdf"></i> Gerar PDF
+        </button>
+        <button class="btn-secondary" onclick="window.RelatoriosInventarioPage.exportarExcel()">
+            <i class="fas fa-file-excel"></i> Exportar Excel
+        </button>
+    </div>
+</section>
+
+<!-- Tabela de Resultados -->
+<section class="section">
+    <h2><i class="fas fa-table"></i> <span id="tituloRelatorio">Relatório Geral</span></h2>
+    <div style="overflow-x: auto;">
+        <table>
+            <thead id="cabecalhoTabela">
+                <tr>
+                    <th>Patrimônio</th>
+                    <th>Nome do Item</th>
+                    <th>Fabricante</th>
+                    <th>Situação</th>
+                    <th>Status</th>
+                    <th>Valor</th>
+                    <th>Responsável</th>
+                </tr>
+            </thead>
+            <tbody id="tabelaRelatorio">
+                <tr>
+                    <td colspan="7" style="text-align: center;">Carregando...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Relatório de Baixas -->
+<section class="section" id="secaoBaixas" style="display: none;">
+    <h2><i class="fas fa-exclamation-triangle"></i> Detalhamento de Baixas</h2>
+    <div id="listaBaixas"></div>
+</section>

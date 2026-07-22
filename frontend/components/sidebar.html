@@ -1,0 +1,279 @@
+<div class="sidebar-header">
+    <h1>Serra da Liberdade</h1>
+</div>
+
+<!-- Perfil injetado via user-profile-sidebar.js -->
+
+<ul class="nav-menu">
+    <li class="nav-item"><a href="#" data-page="dashboard" class="nav-link"><i class="fas fa-chart-line"></i>
+            Dashboard</a></li>
+    <li class="nav-item"><a href="#" data-page="moradores" class="nav-link"><i class="fas fa-users"></i> Moradores</a>
+    </li>
+    <li class="nav-item"><a href="#" data-page="veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+    <li class="nav-item"><a href="#" data-page="visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+            Visitantes</a></li>
+    <li class="nav-item"><a href="#" data-page="registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+            Registro Manual</a></li>
+    <li class="nav-item"><a href="#" data-page="acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+            Acesso</a></li>
+    <li class="nav-item"><a href="#" data-page="relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+            Relatórios</a></li>
+    <!-- ============================================================
+         FINANCEIRO — com submenu de Contas Bancárias
+         ============================================================ -->
+    <li class="nav-item submenu-container">
+        <a href="#" class="nav-link submenu-toggle" data-toggle="submenu" data-target="submenu-financeiro">
+            <i class="fas fa-money-bill-wave"></i> Financeiro
+            <i class="fas fa-chevron-down submenu-arrow" style="margin-left:auto;font-size:11px;transition:transform 0.2s;"></i>
+        </a>
+        <ul class="submenu-content" id="submenu-financeiro">
+            <li>
+                <a href="#" data-page="financeiro" class="nav-link nav-sublink">
+                    <i class="fas fa-home"></i> Visão Geral
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="contas_bancarias" class="nav-link nav-sublink">
+                    <i class="fas fa-university"></i> Contas Bancárias
+                </a>
+            </li>
+        </ul>
+    </li>
+    <li class="nav-item"><a href="#" data-page="configuracao" class="nav-link"><i class="fas fa-cog"></i>
+            Configurações</a></li>
+    <!-- ============================================================
+         PORTAL PWA — submenu Central + legado
+         ============================================================ -->
+    <li class="nav-item submenu-container">
+        <a href="#" class="nav-link submenu-toggle" data-toggle="submenu" data-target="submenu-pwa">
+            <i class="fas fa-mobile-alt" style="color:#6366f1"></i> Portal PWA
+            <i class="fas fa-chevron-down submenu-arrow" style="margin-left:auto;font-size:11px;transition:transform 0.2s;"></i>
+        </a>
+        <ul class="submenu-content" id="submenu-pwa">
+            <li>
+                <a href="#" data-page="pwa_central" class="nav-link nav-sublink">
+                    <i class="fas fa-broadcast-tower" style="color:#6366f1"></i> Central PWA
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="notificacoes_push" class="nav-link nav-sublink">
+                    <i class="fas fa-bell"></i> Notif. Push
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="dispositivos" class="nav-link nav-sublink">
+                    <i class="fas fa-microchip"></i> Dispositivos
+                </a>
+            </li>
+        </ul>
+    </li>
+    <!-- ============================================================
+         MANUTENÇÃO — com submenu de Hidrômetros
+         ============================================================ -->
+    <li class="nav-item submenu-container">
+        <a href="#" class="nav-link submenu-toggle" data-toggle="submenu" data-target="submenu-manutencao">
+            <i class="fas fa-tools"></i> Manutenção
+            <i class="fas fa-chevron-down submenu-arrow" style="margin-left:auto;font-size:11px;transition:transform 0.2s;"></i>
+        </a>
+        <ul class="submenu-content" id="submenu-manutencao">
+            <li>
+                <a href="#" data-page="manutencao" class="nav-link nav-sublink">
+                    <i class="fas fa-home"></i> Visão Geral
+                </a>
+            </li>
+            <!-- Hidrômetros -->
+            <li class="nav-item submenu-container">
+                <a href="#" class="nav-link nav-sublink submenu-toggle" data-toggle="submenu" data-target="submenu-hidrometro">
+                    <i class="fas fa-tint"></i> Hidrômetros
+                    <i class="fas fa-chevron-right submenu-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s;"></i>
+                </a>
+                <ul class="submenu-content submenu-level2" id="submenu-hidrometro">
+                    <li>
+                        <a href="#" data-page="hidrometro" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-list"></i> Cadastro
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="leitura" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-tachometer-alt"></i> Leituras
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="relatorios_hidrometro" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-chart-bar"></i> Relatórios
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <!-- Abastecimento -->
+            <li>
+                <a href="#" data-page="abastecimento" class="nav-link nav-sublink">
+                    <i class="fas fa-gas-pump"></i> Abastecimento
+                </a>
+            </li>
+            <!-- Estoque -->
+            <li>
+                <a href="#" data-page="estoque" class="nav-link nav-sublink">
+                    <i class="fas fa-boxes"></i> Estoque
+                </a>
+            </li>
+            <!-- Ordens de Serviço -->
+            <li>
+                <a href="#" data-page="ordens_servico" class="nav-link nav-sublink">
+                    <i class="fas fa-wrench"></i> Ordens de Serviço
+                </a>
+            </li>
+            <!-- Checklists (submenu nível 2) -->
+            <li class="nav-item submenu-container">
+                <a href="#" class="nav-link nav-sublink submenu-toggle" data-toggle="submenu" data-target="submenu-checklists">
+                    <i class="fas fa-clipboard-check"></i> Checklists
+                    <i class="fas fa-chevron-right submenu-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s;"></i>
+                </a>
+                <ul class="submenu-content submenu-level2" id="submenu-checklists">
+                    <li>
+                        <a href="#" data-page="checklists" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-list-check"></i> Checklists
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <!-- Inventário (item direto em Manutenção) -->
+            <li class="nav-item submenu-container">
+                <a href="#" class="nav-link nav-sublink submenu-toggle" data-toggle="submenu" data-target="submenu-inventario">
+                    <i class="fas fa-boxes"></i> Inventário
+                    <i class="fas fa-chevron-right submenu-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s;"></i>
+                </a>
+                <ul class="submenu-content submenu-level2" id="submenu-inventario">
+                    <li>
+                        <a href="#" data-page="inventario" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-list"></i> Cadastro
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="relatorios_inventario" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-chart-bar"></i> Relatórios
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <!-- Documentos GED -->
+            <li class="nav-item submenu-container">
+                <a href="#" class="nav-link nav-sublink submenu-toggle" data-toggle="submenu" data-target="submenu-documentos-ged">
+                    <i class="fas fa-folder-open"></i> Documentos (GED)
+                    <i class="fas fa-chevron-right submenu-arrow" style="margin-left:auto;font-size:10px;transition:transform 0.2s;"></i>
+                </a>
+                <ul class="submenu-content submenu-level2" id="submenu-documentos-ged">
+                    <li>
+                        <a href="#" data-page="documentos" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-th-large"></i> Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="documentos" data-tab="documentos" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-file-alt"></i> Documentos
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="documentos" data-tab="departamentos" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-building"></i> Departamentos
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="documentos" data-tab="tipos" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-tags"></i> Tipos
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="documentos" data-tab="relatorios" class="nav-link nav-sublink nav-sublink-2">
+                            <i class="fas fa-chart-bar"></i> Relatórios
+                        </a>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </li>
+    <!-- ============================================================
+         ADMINISTRATIVO — com submenu incluindo Assembleia
+         ============================================================ -->
+    <li class="nav-item submenu-container">
+        <a href="#" class="nav-link submenu-toggle" data-toggle="submenu" data-target="submenu-administrativa">
+            <i class="fas fa-briefcase"></i> Administrativo
+            <i class="fas fa-chevron-down submenu-arrow" style="margin-left:auto;font-size:11px;transition:transform 0.2s;"></i>
+        </a>
+        <ul class="submenu-content" id="submenu-administrativa">
+            <li>
+                <a href="#" data-page="administrativa" class="nav-link nav-sublink">
+                    <i class="fas fa-home"></i> Visão Geral
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="assembleia" class="nav-link nav-sublink">
+                    <i class="fas fa-landmark"></i> Assembleia
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="contratos" class="nav-link nav-sublink">
+                    <i class="fas fa-file-contract"></i> Contratos
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="eventos" class="nav-link nav-sublink">
+                    <i class="fas fa-calendar-alt"></i> Eventos
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="protocolos" class="nav-link nav-sublink">
+                    <i class="fas fa-inbox"></i> Protocolos
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="documentos" class="nav-link nav-sublink">
+                    <i class="fas fa-folder-open"></i> Documentos
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="marketplace" class="nav-link nav-sublink">
+                    <i class="fas fa-store"></i> Marketplace
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="crm" class="nav-link nav-sublink">
+                    <i class="fas fa-handshake"></i> CRM
+                </a>
+            </li>
+            <li>
+                <a href="#" data-page="fornecedores" class="nav-link nav-sublink">
+                    <i class="fas fa-truck"></i> Fornecedores
+                </a>
+            </li>
+        </ul>
+    </li>
+
+    <!-- Manual do Sistema -->
+    <li class="nav-item" style="margin-top: 0.5rem;">
+        <a href="#" data-page="manual" class="nav-link" style="color: #60a5fa; font-weight: 600;">
+            <i class="fas fa-book-open"></i> Manual do Sistema
+        </a>
+    </li>
+
+    <li class="nav-item" style="margin-top: 1rem;">
+        <a href="#" class="nav-link nav-link-logout" id="btn-logout" style="color: #fca5a5;">
+            <i class="fas fa-sign-out-alt"></i> Sair
+        </a>
+    </li>
+
+    <!-- Botão Abrir Chamado -->
+    <li class="nav-item" style="margin-top: 0.5rem; padding: 0 0.75rem 1rem;">
+        <a href="https://erpcondominios.com.br/chamados/index.php"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="btn-abrir-chamado"
+           title="Abrir chamado de suporte">
+            <i class="fas fa-headset"></i>
+            <span>Abrir Chamado</span>
+            <i class="fas fa-external-link-alt" style="font-size:10px; margin-left:auto; opacity:0.7;"></i>
+        </a>
+    </li>
+</ul>
+
+<!-- Footer injetado via user-profile-sidebar.js -->

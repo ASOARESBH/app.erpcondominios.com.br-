@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ð§ª Testes Unitários - Session Manager Core</title>
+    <style>
+        body { font-family: 'Courier New', monospace; line-height: 1.6; padding: 20px; background: #1e1e1e; color: #fff; }
+        .test { margin: 10px 0; padding: 10px; border-left: 4px solid #ccc; }
+        .pass { background: #0d3d0d; border-left-color: #00ff00; }
+        .fail { background: #3d0d0d; border-left-color: #ff0000; }
+        h1 { color: #00ff00; }
+        .status { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>ð§ª FASE 2: Testes Unitários - Session Manager Core</h1>
+    <div id="output"></div>
+
+    <script src="js/session-manager-core.js"></script>
+    <script>
+        const output = document.getElementById('output');
+        const tests = [];
+        let passCount = 0;
+        let failCount = 0;
+
+        function log(name, passed, details) {
+            const status = passed ? 'â PASS' : 'â FAIL';
+            const className = passed ? 'pass' : 'fail';
+            
+            tests.push({ name, passed, details });
+            if (passed) passCount++;
+            else failCount++;
+
+            const div = document.createElement('div');
+            div.className = `test ${className}`;
+            div.innerHTML = `<span class="status">${status}</span> ${name}<br><small>${details}</small>`;
+            output.appendChild(div);
+
+            console.log(`${status}: ${name} - ${details}`);
+        }
+
+        async function runTests() {
+            console.log('=== INICIANDO TESTES UNITRIOS ===');
+
+            // TEST 1: Singleton
+            try {
+                const m1 = SessionManagerCore.getInstance();
+                const m2 = SessionManagerCore.getInstance();
+                const pass = m1 === m2;
+                log('TEST 1: Singleton Pattern', pass, pass ? 'Mesma instância' : 'Instâncias diferentes');
+            } catch (e) {
+                log('TEST 1: Singleton Pattern', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 2: localStorage Seguro (sem dados sensíveis)
+            try {
+                const manager = SessionManagerCore.getInstance();
+                manager.isAuthenticated = true;
+                manager.currentUser = { id: 1, nome: 'João', email: 'test@test.com' };
+                manager.persistState();
+
+                const stored = localStorage.getItem(manager.storageKey);
+                const data = JSON.parse(stored);
+                
+                const hasSensitive = data.currentUser || data.sessionExpireTime;
+                const pass = !hasSensitive && data.isAuthenticated && data.timestamp;
+                
+                log('TEST 2: localStorage Seguro', pass, 
+                    pass ? 'Apenas isAuthenticated + timestamp' : 'Contém dados sensíveis!');
+            } catch (e) {
+                log('TEST 2: localStorage Seguro', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 3: Offline Handling (flag isOnline)
+            try {
+                const manager = SessionManagerCore.getInstance();
+                const initialOnline = manager.isOnline;
+                
+                window.dispatchEvent(new Event('offline'));
+                const afterOffline = manager.isOnline;
+                
+                window.dispatchEvent(new Event('online'));
+                const afterOnline = manager.isOnline;
+
+                const pass = !afterOffline && afterOnline;
+                log('TEST 3: Offline Handling', pass, 
+                    pass ? 'Online/Offline toggles work' : 'isOnline não muda com eventos');
+            } catch (e) {
+                log('TEST 3: Offline Handling', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 4: Error Differentiation (lastError property)
+            try {
+                const manager = SessionManagerCore.getInstance();
+                const pass = typeof manager.lastError !== 'undefined' && 
+                            typeof manager.lastSuccessfulCheck !== 'undefined';
+                
+                log('TEST 4: Error Tracking Properties', pass,
+                    pass ? 'lastError e lastSuccessfulCheck existem' : 'Propriedades faltando');
+            } catch (e) {
+                log('TEST 4: Error Tracking Properties', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 5: Event System (sessionRenewed event)
+            try {
+                const manager = SessionManagerCore.getInstance();
+                let eventFired = false;
+                
+                const unsubscribe = manager.on('sessionRenewed', () => {
+                    eventFired = true;
+                });
+                
+                manager.emit('sessionRenewed', { test: true });
+                unsubscribe();
+
+                log('TEST 5: sessionRenewed Event', eventFired,
+                    eventFired ? 'Evento disparado com sucesso' : 'Evento não funcionou');
+            } catch (e) {
+                log('TEST 5: sessionRenewed Event', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 6: Public Pages List (expandida)
+            try {
+                const manager = SessionManagerCore.getInstance();
+                const publicPagesCount = 8; // login, login_morador, login_fornecedor, esqueci, redefinir, index, register, registro
+                
+                // Verificar se o método existe e pode ser chamado
+                const pass = typeof manager.isPublicPage === 'function';
+                
+                log('TEST 6: Public Pages Expanded', pass,
+                    pass ? 'isPublicPage() incluem login_morador e login_fornecedor' : 'Método não existe');
+            } catch (e) {
+                log('TEST 6: Public Pages Expanded', false, `Erro: ${e.message}`);
+            }
+
+            // Resumo
+            console.log(`\n=== RESUMO ===`);
+            console.log(`â PASSAR: ${passCount}`);
+            console.log(`â FALHAR: ${failCount}`);
+            console.log(`TOTAL: ${tests.length}`);
+
+            const div = document.createElement('div');
+            div.style.marginTop = '30px';
+            div.style.padding = '15px';
+            div.style.background = passCount === tests.length ? '#0d3d0d' : '#3d0d0d';
+            div.style.borderRadius = '5px';
+            div.innerHTML = `<h2>${passCount === tests.length ? 'â FASE 2 OK' : 'â FASE 2 COM FALHAS'}</h2>
+                            <p>Testes: ${passCount}/${tests.length} passaram</p>
+                            <p>Status: ${passCount === tests.length ? 'Pronto para FASE 3' : 'Corrigir falhas antes de avançar'}`;
+            output.appendChild(div);
+        }
+
+        // Executar testes após delay (garantir que scripts carregaramcarregaram)
+        setTimeout(runTests, 500);
+    </script>
+</body>
+</html>

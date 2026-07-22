@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redefinir Senha - Serra da Liberdade</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+        .container { background: #fff; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); overflow: hidden; max-width: 450px; width: 100%; animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem; text-align: center; color: #fff; }
+        .header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+        .header p { font-size: 0.95rem; opacity: 0.9; }
+        .body { padding: 2.5rem 2rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; color: #475569; font-weight: 500; }
+        .input-wrapper { position: relative; }
+        .input-wrapper i { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+        .input-wrapper .toggle-password { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8; }
+        input { width: 100%; padding: 0.875rem 3rem 0.875rem 3rem; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.95rem; transition: all 0.3s; }
+        input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        button { width: 100%; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
+        button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+        button:disabled { opacity: 0.7; cursor: not-allowed; }
+        .alert { padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem; font-size: 0.9rem; display: none; animation: slideDown 0.3s ease-out; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .alert-error { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+        .alert-success { background: #dcfce7; color: #166534; border-left: 4px solid #22c55e; }
+        .password-strength { margin-top: 0.5rem; font-size: 0.85rem; }
+        .strength-bar { height: 4px; border-radius: 2px; background: #e2e8f0; margin-top: 0.5rem; overflow: hidden; }
+        .strength-fill { height: 100%; transition: all 0.3s; width: 0%; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header">
+            <h1><i class="fas fa-lock"></i> Redefinir Senha</h1>
+            <p>Crie uma nova senha segura</p>
+        </div>
+        
+        <div class="body">
+            <div id="alertBox" class="alert"></div>
+            
+            <form id="formRedefinir">
+                <div class="form-group">
+                    <label for="senha">Nova Senha</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="senha" name="senha" placeholder="Digite a nova senha" required minlength="6">
+                        <i class="fas fa-eye toggle-password" onclick="togglePassword('senha')"></i>
+                    </div>
+                    <div class="password-strength">
+                        <div class="strength-bar"><div class="strength-fill" id="strengthBar"></div></div>
+                        <span id="strengthText"></span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="senha_confirma">Confirmar Nova Senha</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="senha_confirma" name="senha_confirma" placeholder="Digite novamente" required minlength="6">
+                        <i class="fas fa-eye toggle-password" onclick="togglePassword('senha_confirma')"></i>
+                    </div>
+                </div>
+                
+                <button type="submit" id="btnRedefinir">
+                    <i class="fas fa-check"></i> Redefinir Senha
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        
+        if (!token) {
+            mostrarErro('Token inválido ou não fornecido');
+            setTimeout(() => window.location.href = 'login_morador.html', 2000);
+        }
+
+        // Verificar força da senha
+        document.getElementById('senha').addEventListener('input', function(e) {
+            const senha = e.target.value;
+            let forca = 0;
+            
+            if (senha.length >= 6) forca++;
+            if (senha.length >= 8) forca++;
+            if (/[a-z]/.test(senha) && /[A-Z]/.test(senha)) forca++;
+            if (/\d/.test(senha)) forca++;
+            if (/[^a-zA-Z0-9]/.test(senha)) forca++;
+            
+            const bar = document.getElementById('strengthBar');
+            const text = document.getElementById('strengthText');
+            
+            if (forca <= 1) {
+                bar.style.width = '20%';
+                bar.style.background = '#ef4444';
+                text.textContent = 'Fraca';
+                text.style.color = '#ef4444';
+            } else if (forca <= 3) {
+                bar.style.width = '60%';
+                bar.style.background = '#f59e0b';
+                text.textContent = 'Média';
+                text.style.color = '#f59e0b';
+            } else {
+                bar.style.width = '100%';
+                bar.style.background = '#22c55e';
+                text.textContent = 'Forte';
+                text.style.color = '#22c55e';
+            }
+        });
+
+        // Enviar nova senha
+        document.getElementById('formRedefinir').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const senha = document.getElementById('senha').value;
+            const confirma = document.getElementById('senha_confirma').value;
+            const btn = document.getElementById('btnRedefinir');
+            
+            if (senha !== confirma) {
+                mostrarErro('As senhas não coincidem');
+                return;
+            }
+            
+            if (senha.length < 6) {
+                mostrarErro('A senha deve ter no mínimo 6 caracteres');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Redefinindo...';
+            
+            const formData = new FormData();
+            formData.append('acao', 'redefinir');
+            formData.append('token', token);
+            formData.append('senha', senha);
+            
+            fetch('../api/api_recuperacao_senha.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mostrarSucesso('Senha redefinida com sucesso! Redirecionando...');
+                    setTimeout(() => {
+                        window.location.href = 'login_morador.html';
+                    }, 2000);
+                } else {
+                    mostrarErro(data.mensagem || 'Erro ao redefinir senha');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Redefinir Senha';
+                }
+            })
+            .catch(error => {
+                mostrarErro('Erro ao processar solicitação');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> Redefinir Senha';
+            });
+        });
+
+        function togglePassword(id) {
+            const input = document.getElementById(id);
+            const icon = input.nextElementSibling;
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        function mostrarSucesso(msg) {
+            const alert = document.getElementById('alertBox');
+            alert.className = 'alert alert-success';
+            alert.innerHTML = '<i class="fas fa-check-circle"></i> ' + msg;
+            alert.style.display = 'block';
+        }
+
+        function mostrarErro(msg) {
+            const alert = document.getElementById('alertBox');
+            alert.className = 'alert alert-error';
+            alert.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + msg;
+            alert.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

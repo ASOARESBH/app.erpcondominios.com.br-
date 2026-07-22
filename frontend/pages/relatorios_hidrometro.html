@@ -1,0 +1,124 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Relatórios de Hidrômetros" data-icon="fa-chart-bar" style="display:none;"></div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-hidrometro">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1>Relatórios de Hidrômetros</h1>
+        <p>Análise de consumo, leituras e valores por período, unidade e morador</p>
+    </div>
+
+    <!-- Filtros -->
+    <div class="page-card compact">
+        <h2><i class="fas fa-filter" style="color:#2563eb;margin-right:8px;"></i>Filtros de Pesquisa</h2>
+        <div class="search-box" style="background:transparent;padding:0;border-radius:0;">
+            <div class="form-group">
+                <label for="filtro_data_inicial">Data Inicial</label>
+                <input type="date" id="filtro_data_inicial">
+            </div>
+            <div class="form-group">
+                <label for="filtro_data_final">Data Final</label>
+                <input type="date" id="filtro_data_final">
+            </div>
+            <div class="form-group">
+                <label for="filtro_unidade">Unidade</label>
+                <select id="filtro_unidade">
+                    <option value="">Todas as unidades</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="filtro_morador">Morador</label>
+                <select id="filtro_morador">
+                    <option value="">Todos os moradores</option>
+                </select>
+            </div>
+        </div>
+        <div class="btn-actions" style="margin-top:1rem;">
+            <button class="btn-primary" onclick="window.RelatorioHidrometroPage.pesquisar()">
+                <i class="fas fa-search"></i> Pesquisar
+            </button>
+            <button class="btn-secondary" onclick="window.RelatorioHidrometroPage.limparFiltros()">
+                <i class="fas fa-eraser"></i> Limpar Filtros
+            </button>
+            <button class="btn-success" onclick="window.RelatorioHidrometroPage.exportarCSV()" id="btnExportCSV" disabled>
+                <i class="fas fa-file-csv"></i> Exportar CSV
+            </button>
+            <button class="btn-danger" onclick="window.RelatorioHidrometroPage.exportarPDF()" id="btnExportPDF" disabled>
+                <i class="fas fa-file-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs (visíveis após pesquisa) -->
+    <div class="stats-grid" id="kpiRelatorio" style="display:none;">
+        <div class="page-card kpi-card compact">
+            <div class="kpi-icon blue"><i class="fas fa-list"></i></div>
+            <div class="kpi-content">
+                <h3>Total de Leituras</h3>
+                <div class="value" id="rel_kpi_total">—</div>
+            </div>
+        </div>
+        <div class="page-card kpi-card compact">
+            <div class="kpi-icon green"><i class="fas fa-tachometer-alt"></i></div>
+            <div class="kpi-content">
+                <h3>Consumo Total</h3>
+                <div class="value" id="rel_kpi_consumo">—</div>
+            </div>
+        </div>
+        <div class="page-card kpi-card compact">
+            <div class="kpi-icon amber"><i class="fas fa-dollar-sign"></i></div>
+            <div class="kpi-content">
+                <h3>Valor Total</h3>
+                <div class="value" id="rel_kpi_valor">—</div>
+            </div>
+        </div>
+        <div class="page-card kpi-card compact">
+            <div class="kpi-icon purple"><i class="fas fa-chart-bar"></i></div>
+            <div class="kpi-content">
+                <h3>Consumo Médio</h3>
+                <div class="value" id="rel_kpi_media">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resultados -->
+    <div class="page-card">
+        <h2><i class="fas fa-table" style="color:#2563eb;margin-right:8px;"></i>Resultados</h2>
+
+        <div class="loading-state" id="loadingRelatorio" style="display:none;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Carregando dados...</p>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data/Hora</th>
+                        <th>Unidade</th>
+                        <th>Morador</th>
+                        <th>Nº Hidrômetro</th>
+                        <th>Nº Lacre</th>
+                        <th>Leit. Ant. (m³)</th>
+                        <th>Leit. Atual (m³)</th>
+                        <th>Consumo (m³)</th>
+                        <th>Valor (R$)</th>
+                        <th>Lançado por</th>
+                    </tr>
+                </thead>
+                <tbody id="listaRelatorio">
+                    <tr class="empty-row">
+                        <td colspan="10">
+                            <i class="fas fa-search"></i>
+                            <p>Use os filtros acima para gerar o relatório</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

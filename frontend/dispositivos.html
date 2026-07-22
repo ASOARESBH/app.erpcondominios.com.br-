@@ -1,0 +1,922 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Dispositivos - ERP Serra da Liberdade</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: calc(100% - 260px);
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #1e293b;
+            font-size: 1.8rem;
+        }
+
+        .btn-novo {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        .btn-novo:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card p {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        /* Table Section */
+        .table-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .table-section h2 {
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Badge */
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .badge-ativo {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-inativo {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .badge-tipo {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+
+        /* Buttons */
+        .btn-edit {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-right: 0.3rem;
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-right: 0.3rem;
+        }
+
+        .btn-activate {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-right: 0.3rem;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #fff;
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-header h2 {
+            color: #1e293b;
+            font-size: 1.5rem;
+        }
+
+        .btn-close {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        .btn-close:hover {
+            color: #1e293b;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 0.9rem;
+        }
+
+        label .required {
+            color: #ef4444;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 2rem;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .btn-cancel {
+            background: #e2e8f0;
+            color: #64748b;
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-submit:hover {
+            opacity: 0.9;
+        }
+
+        .btn-cancel:hover {
+            background: #cbd5e1;
+        }
+
+        /* Token Display */
+        .token-display {
+            background: #f0f9ff;
+            padding: 2rem;
+            border-radius: 12px;
+            border: 2px dashed #3b82f6;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .token-display h3 {
+            color: #1e40af;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .token-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #3b82f6;
+            letter-spacing: 0.3em;
+            font-family: 'Courier New', monospace;
+            margin: 1rem 0;
+        }
+
+        .token-info {
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            line-height: 1.6;
+        }
+
+        .btn-copy {
+            background: #3b82f6;
+            color: #fff;
+            padding: 0.6rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+
+        .btn-copy:hover {
+            background: #2563eb;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #f87171;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .loading i {
+            font-size: 3rem;
+            color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Token Code */
+        .token-code {
+            background: #f1f5f9;
+            padding: 0.4rem 0.6rem;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 0;
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                width: 260px;
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h1>??? ERP Serra</h1>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-home"></i> Dashboard</a>
+            </li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-users"></i> Visitantes</a>
+            </li>
+            <li class="nav-item"><a href="dispositivos.html" class="nav-link active"><i class="fas fa-tablet-alt"></i>
+                    Dispositivos</a></li>
+            <li class="nav-item"><a href="logs_sistema_v2.html" class="nav-link"><i class="fas fa-file-alt"></i>
+                    Logs</a></li>
+            <li class="nav-item"><a href="#" class="nav-link" onclick="logout()"><i class="fas fa-sign-out-alt"></i>
+                    Sair</a></li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1>?? Gerenciar Dispositivos</h1>
+                <p style="color: #64748b; margin-top: 0.5rem;">Cadastre e gerencie dispositivos autorizados para
+                    controle de acesso</p>
+            </div>
+            <button class="btn-novo" onclick="abrirModal()">
+                <i class="fas fa-plus"></i> Novo Dispositivo
+            </button>
+        </div>
+
+        <!-- Alert -->
+        <div id="alert" style="display: none;"></div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3 id="stat-total">0</h3>
+                <p>Total de Dispositivos</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-ativos">0</h3>
+                <p>Dispositivos Ativos</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-validacoes">0</h3>
+                <p>Validaçµes Hoje</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-sucesso">0</h3>
+                <p>Sucesso Hoje</p>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Carregando...</p>
+        </div>
+
+        <!-- Table -->
+        <div class="table-section">
+            <h2>?? Dispositivos Cadastrados</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Tipo</th>
+                        <th>Token</th>
+                        <th>Localização</th>
+                        <th>Responsável</th>
+                        <th>ltimo Acesso</th>
+                        <th>Total Acessos</th>
+                        <th>Status</th>
+                        <th>Açµes</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <tr>
+                        <td colspan="9" style="text-align: center;">Nenhum dispositivo cadastrado</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Cadastro/Edição -->
+    <div class="modal" id="modal-form">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">?? Novo Dispositivo</h2>
+                <button class="btn-close" onclick="fecharModal()"></button>
+            </div>
+
+            <form id="form-dispositivo">
+                <div class="form-group">
+                    <label>Nome do Dispositivo <span class="required">*</span></label>
+                    <input type="text" id="nome" placeholder="Ex: Tablet Portaria Entrada" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Tipo de Dispositivo <span class="required">*</span></label>
+                    <select id="tipo_dispositivo" required>
+                        <option value="">Selecione o tipo</option>
+                        <option value="Tablet">Tablet</option>
+                        <option value="Câmera">Câmera</option>
+                        <option value="Totem">Totem</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Localização <span class="required">*</span></label>
+                    <input type="text" id="localizacao" placeholder="Ex: Portaria Principal" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Status <span class="required">*</span></label>
+                    <select id="status" required>
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Responsável</label>
+                    <input type="text" id="responsavel" placeholder="Ex: Equipe de Segurança">
+                </div>
+
+                <div class="form-group">
+                    <label>Observação</label>
+                    <textarea id="observacao" placeholder="Informaçµes adicionais sobre o dispositivo"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-submit">
+                        <i class="fas fa-save"></i> Salvar Dispositivo
+                    </button>
+                    <button type="button" class="btn-cancel" onclick="fecharModal()">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Token Gerado -->
+    <div class="modal" id="modal-token">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>?? Dispositivo Cadastrado com Sucesso!</h2>
+                <button class="btn-close" onclick="fecharModalToken()"></button>
+            </div>
+
+            <div class="token-display">
+                <h3>Token do Dispositivo</h3>
+                <div class="token-value" id="generated-token">-</div>
+                <p class="token-info">
+                    ?? <strong>IMPORTANTE:</strong> Anote este token em local seguro!<br>
+                    Vocª precisará digitá-lo no dispositivo para configurá-lo.<br>
+                    Este token não será exibido novamente.
+                </p>
+                <button class="btn-copy" onclick="copiarToken()">
+                    <i class="fas fa-copy"></i> Copiar Token
+                </button>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn-submit" onclick="fecharModalToken()">
+                    <i class="fas fa-check"></i> Entendi
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let editandoId = null;
+
+        // Carregar ao iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarEstatisticas();
+            carregarDispositivos();
+        });
+
+        // Carregar estatísticas
+        function carregarEstatisticas() {
+            fetch('../api/api_dispositivos.php?action=estatisticas')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        document.getElementById('stat-total').textContent = data.dados.total_dispositivos || 0;
+                        document.getElementById('stat-ativos').textContent = data.dados.dispositivos_ativos || 0;
+                        document.getElementById('stat-validacoes').textContent = data.dados.validacoes_hoje || 0;
+                        document.getElementById('stat-sucesso').textContent = data.dados.validacoes_sucesso_hoje || 0;
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar estatísticas:', error));
+        }
+
+        // Carregar dispositivos
+        function carregarDispositivos() {
+            document.getElementById('loading').classList.add('active');
+
+            fetch('../api/api_dispositivos.php?action=listar')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('loading').classList.remove('active');
+                    if (data.sucesso) {
+                        renderizarTabela(data.dados);
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').classList.remove('active');
+                    console.error('Erro ao carregar dispositivos:', error);
+                });
+        }
+
+        // Renderizar tabela
+        function renderizarTabela(dispositivos) {
+            const tbody = document.getElementById('table-body');
+
+            if (dispositivos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">Nenhum dispositivo cadastrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = dispositivos.map(d => `
+                <tr>
+                    <td><strong>${d.nome}</strong></td>
+                    <td><span class="badge-tipo">${d.tipo_dispositivo || 'Tablet'}</span></td>
+                    <td><span class="token-code">${d.token}</span></td>
+                    <td>${d.local || '-'}</td>
+                    <td>${d.responsavel || '-'}</td>
+                    <td>${d.ultimo_acesso ? new Date(d.ultimo_acesso).toLocaleString('pt-BR') : 'Nunca'}</td>
+                    <td>${d.total_validacoes || 0}</td>
+                    <td><span class="badge badge-${d.status}">${d.status}</span></td>
+                    <td>
+                        ${d.status === 'ativo'
+                    ? `<button class="btn-delete" onclick="alterarStatus(${d.id}, 'inativo')" title="Desativar"><i class="fas fa-ban"></i></button>`
+                    : `<button class="btn-activate" onclick="alterarStatus(${d.id}, 'ativo')" title="Ativar"><i class="fas fa-check"></i></button>`
+                }
+                        <button class="btn-edit" onclick="editarDispositivo(${d.id})" title="Editar"><i class="fas fa-edit"></i></button>
+                        <button class="btn-delete" onclick="deletarDispositivo(${d.id})" title="Deletar"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Abrir modal
+        function abrirModal() {
+            document.getElementById('modal-title').textContent = '?? Novo Dispositivo';
+            document.getElementById('form-dispositivo').reset();
+            document.getElementById('status').value = 'ativo';
+            editandoId = null;
+            document.getElementById('modal-form').classList.add('active');
+        }
+
+        // Fechar modal
+        function fecharModal() {
+            document.getElementById('modal-form').classList.remove('active');
+            document.getElementById('form-dispositivo').reset();
+            editandoId = null;
+        }
+
+        // Fechar modal token
+        function fecharModalToken() {
+            document.getElementById('modal-token').classList.remove('active');
+            carregarEstatisticas();
+            carregarDispositivos();
+        }
+
+        // Submit form
+        document.getElementById('form-dispositivo').addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const dados = {
+                nome: document.getElementById('nome').value,
+                tipo_dispositivo: document.getElementById('tipo_dispositivo').value,
+                localizacao: document.getElementById('localizacao').value,
+                status: document.getElementById('status').value,
+                responsavel: document.getElementById('responsavel').value,
+                observacao: document.getElementById('observacao').value
+            };
+
+            if (editandoId) {
+                // Atualizar
+                dados.id = editandoId;
+                fetch('../api/api_dispositivos.php?action=atualizar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.sucesso) {
+                            mostrarAlerta('success', data.mensagem);
+                            fecharModal();
+                            carregarEstatisticas();
+                            carregarDispositivos();
+                        } else {
+                            mostrarAlerta('error', data.mensagem);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro:', error);
+                        mostrarAlerta('error', 'Erro ao atualizar dispositivo');
+                    });
+            } else {
+                // Cadastrar
+                fetch('../api/api_dispositivos.php?action=cadastrar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.sucesso) {
+                            // Mostrar token gerado
+                            document.getElementById('generated-token').textContent = data.dados.token;
+                            fecharModal();
+                            document.getElementById('modal-token').classList.add('active');
+                        } else {
+                            mostrarAlerta('error', data.mensagem);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro:', error);
+                        mostrarAlerta('error', 'Erro ao cadastrar dispositivo');
+                    });
+            }
+        });
+
+        // Copiar token
+        function copiarToken() {
+            const token = document.getElementById('generated-token').textContent;
+            navigator.clipboard.writeText(token).then(() => {
+                mostrarAlerta('success', 'Token copiado para a área de transferªncia!');
+            });
+        }
+
+        // Editar dispositivo
+        function editarDispositivo(id) {
+            fetch(`../api/api_dispositivos.php?action=buscar&id=${id}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const d = data.dados;
+                        document.getElementById('modal-title').textContent = '?? Editar Dispositivo';
+                        document.getElementById('nome').value = d.nome;
+                        document.getElementById('tipo_dispositivo').value = d.tipo_dispositivo || 'Tablet';
+                        document.getElementById('localizacao').value = d.local;
+                        document.getElementById('status').value = d.status;
+                        document.getElementById('responsavel').value = d.responsavel || '';
+                        document.getElementById('observacao').value = d.observacao || '';
+                        editandoId = id;
+                        document.getElementById('modal-form').classList.add('active');
+                    } else {
+                        mostrarAlerta('error', data.mensagem);
+                    }
+                });
+        }
+
+        // Alterar status
+        function alterarStatus(id, status) {
+            if (!confirm(`Deseja realmente ${status === 'ativo' ? 'ativar' : 'desativar'} este dispositivo?`)) return;
+
+            fetch('../api/api_dispositivos.php?action=atualizar_status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, status })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta('success', data.mensagem);
+                        carregarEstatisticas();
+                        carregarDispositivos();
+                    } else {
+                        mostrarAlerta('error', data.mensagem);
+                    }
+                });
+        }
+
+        // Deletar dispositivo
+        function deletarDispositivo(id) {
+            if (!confirm('Deseja realmente deletar este dispositivo? Esta ação não pode ser desfeita!')) return;
+
+            fetch('../api/api_dispositivos.php?action=deletar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta('success', data.mensagem);
+                        carregarEstatisticas();
+                        carregarDispositivos();
+                    } else {
+                        mostrarAlerta('error', data.mensagem);
+                    }
+                });
+        }
+
+        // Mostrar alerta
+        function mostrarAlerta(tipo, mensagem) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${tipo}`;
+            alert.innerHTML = `<i class="fas fa-${tipo === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${mensagem}`;
+            alert.style.display = 'block';
+            setTimeout(() => alert.style.display = 'none', 5000);
+        }
+
+        // Logout
+        function logout() {
+            if (confirm('Deseja realmente sair?')) {
+                localStorage.removeItem('usuario');
+                window.location.href = 'index.html';
+            }
+        }
+    </script>
+
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+

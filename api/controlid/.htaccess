@@ -1,0 +1,6 @@
+Options -Indexes
+RewriteEngine On
+
+# Push polling endpoints (sem extensão .php)
+RewriteRule ^push$   push.php   [QSA,L]
+RewriteRule ^result$ result.php [QSA,L]

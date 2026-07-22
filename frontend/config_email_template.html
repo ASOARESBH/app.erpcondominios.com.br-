@@ -1,0 +1,366 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Templates de E-mail - Sistema</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; }
+        .container { display: flex; min-height: 100vh; }
+        .sidebar { position: fixed; top: 0; left: 0; width: 260px; height: 100vh; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 2rem 0; overflow-y: auto; z-index: 1000; transition: transform 0.3s; }
+        .sidebar h1 { color: #fff; font-size: 1.3rem; text-align: center; margin-bottom: 2rem; }
+        .nav-menu { list-style: none; padding: 1rem; }
+        .nav-item { margin-bottom: 0.5rem; }
+        .nav-link { display: flex; align-items: center; padding: 0.75rem 1rem; color: #cbd5e1; text-decoration: none; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .nav-link i { margin-right: 0.75rem; width: 20px; }
+        .menu-toggle { display: none; position: fixed; top: 1rem; left: 1rem; z-index: 1001; background: #1e293b; color: #fff; border: none; padding: 0.75rem; border-radius: 8px; cursor: pointer; }
+        .main-content { margin-left: 260px; padding: 2rem; width: 100%; transition: margin-left 0.3s; }
+        .header { background: #fff; padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .config-submenu { background: #fff; padding: 1rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .config-submenu ul { list-style: none; display: flex; gap: 1rem; flex-wrap: wrap; }
+        .config-submenu a { display: inline-block; padding: 0.75rem 1.5rem; background: #f1f5f9; color: #334155; text-decoration: none; border-radius: 8px; transition: 0.2s; }
+        .config-submenu a:hover, .config-submenu a.active { background: #3b82f6; color: #fff; }
+        .section { background: #fff; padding: 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .section h2 { margin-bottom: 1.5rem; color: #1e293b; }
+        .template-list { display: grid; gap: 1rem; }
+        .template-card { border: 2px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; transition: all 0.2s; cursor: pointer; }
+        .template-card:hover { border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1); }
+        .template-card.active { border-color: #3b82f6; background: #eff6ff; }
+        .template-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .template-title { font-size: 1.2rem; font-weight: 600; color: #1e293b; }
+        .template-badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.85rem; font-weight: 500; }
+        .badge-active { background: #dcfce7; color: #166534; }
+        .badge-inactive { background: #fee2e2; color: #991b1b; }
+        .template-info { color: #64748b; font-size: 0.9rem; margin-bottom: 0.5rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: #334155; }
+        input, select, textarea { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        textarea { min-height: 400px; font-family: monospace; font-size: 0.9rem; }
+        .editor-toolbar { background: #f8fafc; padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .editor-btn { padding: 0.5rem 1rem; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
+        .editor-btn:hover { background: #f1f5f9; border-color: #3b82f6; }
+        button { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 0.6rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; margin-right: 0.5rem; }
+        button:hover { opacity: 0.9; }
+        .btn-success { background: linear-gradient(135deg, #22c55e, #16a34a); }
+        .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
+        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #22c55e; }
+        .alert-error { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
+        .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
+        .variables-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+        .variable-tag { display: inline-block; background: #667eea; color: #fff; padding: 0.25rem 0.75rem; border-radius: 20px; margin: 0.25rem; font-size: 0.85rem; cursor: pointer; }
+        .variable-tag:hover { background: #764ba2; }
+        .preview-box { background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 2rem; margin-top: 1rem; min-height: 300px; }
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.active { transform: translateX(0); }
+            .menu-toggle { display: block; }
+            .main-content { margin-left: 0; padding: 1rem; }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i> Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i> Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link active"><i class="fas fa-cog"></i> Configuraçµes</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i> Administrativo</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-file-alt"></i> Templates de E-mail</h1>
+            </header>
+
+            <nav class="config-submenu">
+                <ul>
+                    <li><a href="configuracao.html"><i class="fas fa-arrow-left"></i> Voltar</a></li>
+                    <li><a href="layout-base.html?page=email_alertas"><i class="fas fa-envelope"></i> E-mail</a></li>
+                    <li><a href="config_email_template.html" class="active"><i class="fas fa-file-alt"></i> Templates</a></li>
+                    <li><a href="config_email_log.html"><i class="fas fa-list"></i> Log de E-mails</a></li>
+                </ul>
+            </nav>
+
+            <div id="alertMsg"></div>
+
+            <div class="section">
+                <h2><i class="fas fa-list"></i> Templates Disponíveis</h2>
+                
+                <div class="info-box">
+                    <p><i class="fas fa-info-circle"></i> <strong>Dica:</strong> Clique em um template para editar. Use as variáveis disponíveis para personalizar o conteºdo.</p>
+                </div>
+                
+                <div class="template-list" id="templateList">
+                    <!-- Templates serão carregados aqui -->
+                </div>
+            </div>
+
+            <div class="section" id="editorSection" style="display: none;">
+                <h2><i class="fas fa-edit"></i> Editar Template</h2>
+                
+                <form id="formTemplate">
+                    <input type="hidden" id="template_id" name="template_id">
+                    
+                    <div class="form-group">
+                        <label for="tipo">Tipo de Template</label>
+                        <input type="text" id="tipo" name="tipo" readonly style="background: #f1f5f9;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="assunto">Assunto do E-mail *</label>
+                        <input type="text" id="assunto" name="assunto" placeholder="Ex: Recuperação de Senha" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="corpo">Corpo do E-mail (HTML) *</label>
+                        
+                        <div class="editor-toolbar">
+                            <button type="button" class="editor-btn" onclick="insertVariable('{{NOME_MORADOR}}')">
+                                <i class="fas fa-user"></i> Nome
+                            </button>
+                            <button type="button" class="editor-btn" onclick="insertVariable('{{LINK_RECUPERACAO}}')">
+                                <i class="fas fa-link"></i> Link
+                            </button>
+                            <button type="button" class="editor-btn" onclick="insertVariable('{{TEMPO_EXPIRACAO}}')">
+                                <i class="fas fa-clock"></i> Tempo
+                            </button>
+                            <button type="button" class="editor-btn" onclick="insertVariable('{{ANO}}')">
+                                <i class="fas fa-calendar"></i> Ano
+                            </button>
+                        </div>
+                        
+                        <textarea id="corpo" name="corpo" required></textarea>
+                        
+                        <div class="variables-box">
+                            <strong>Variáveis Disponíveis:</strong><br>
+                            <span class="variable-tag" onclick="insertVariable('{{NOME_MORADOR}}')">{{NOME_MORADOR}}</span>
+                            <span class="variable-tag" onclick="insertVariable('{{LINK_RECUPERACAO}}')">{{LINK_RECUPERACAO}}</span>
+                            <span class="variable-tag" onclick="insertVariable('{{TEMPO_EXPIRACAO}}')">{{TEMPO_EXPIRACAO}}</span>
+                            <span class="variable-tag" onclick="insertVariable('{{ANO}}')">{{ANO}}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ativo">Status</label>
+                        <select id="ativo" name="ativo">
+                            <option value="1">Ativo</option>
+                            <option value="0">Inativo</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-top: 1.5rem;">
+                        <button type="submit" class="btn-success"><i class="fas fa-save"></i> Salvar Template</button>
+                        <button type="button" onclick="visualizarPreview()"><i class="fas fa-eye"></i> Visualizar</button>
+                        <button type="button" onclick="cancelarEdicao()"><i class="fas fa-times"></i> Cancelar</button>
+                    </div>
+                </form>
+                
+                <div id="previewSection" style="display: none;">
+                    <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Preview do E-mail</h3>
+                    <div class="preview-box" id="previewBox"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let templates = [];
+        
+        // Carregar templates ao abrir a página
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarTemplates();
+        });
+
+        // Carregar lista de templates
+        function carregarTemplates() {
+            fetch('../api/api_email_templates.php?acao=listar')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        templates = data.dados;
+                        renderizarTemplates();
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        // Renderizar lista de templates
+        function renderizarTemplates() {
+            const container = document.getElementById('templateList');
+            
+            if (templates.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #999;">Nenhum template encontrado</p>';
+                return;
+            }
+            
+            container.innerHTML = templates.map(t => `
+                <div class="template-card" onclick="editarTemplate(${t.id})">
+                    <div class="template-header">
+                        <div class="template-title">
+                            <i class="fas fa-envelope"></i> ${getNomeTipo(t.tipo)}
+                        </div>
+                        <span class="template-badge ${t.ativo == 1 ? 'badge-active' : 'badge-inactive'}">
+                            ${t.ativo == 1 ? 'Ativo' : 'Inativo'}
+                        </span>
+                    </div>
+                    <div class="template-info">
+                        <strong>Assunto:</strong> ${t.assunto}
+                    </div>
+                    <div class="template-info">
+                        <strong>ltima atualização:</strong> ${formatarData(t.data_atualizacao)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Editar template
+        function editarTemplate(id) {
+            const template = templates.find(t => t.id == id);
+            if (!template) return;
+            
+            document.getElementById('template_id').value = template.id;
+            document.getElementById('tipo').value = getNomeTipo(template.tipo);
+            document.getElementById('assunto').value = template.assunto;
+            document.getElementById('corpo').value = template.corpo;
+            document.getElementById('ativo').value = template.ativo;
+            
+            document.getElementById('editorSection').style.display = 'block';
+            document.getElementById('editorSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Salvar template
+        document.getElementById('formTemplate').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            formData.append('acao', 'salvar');
+            
+            fetch('../api/api_email_templates.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mostrarSucesso('Template salvo com sucesso!');
+                    carregarTemplates();
+                    cancelarEdicao();
+                } else {
+                    mostrarErro(data.mensagem || 'Erro ao salvar template');
+                }
+            })
+            .catch(error => {
+                mostrarErro('Erro ao salvar template');
+                console.error('Erro:', error);
+            });
+        });
+
+        // Inserir variável no cursor
+        function insertVariable(variable) {
+            const textarea = document.getElementById('corpo');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            
+            textarea.value = text.substring(0, start) + variable + text.substring(end);
+            textarea.focus();
+            textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+        }
+
+        // Visualizar preview
+        function visualizarPreview() {
+            const corpo = document.getElementById('corpo').value;
+            
+            // Substituir variáveis por valores de exemplo
+            let preview = corpo;
+            preview = preview.replace(/{{NOME_MORADOR}}/g, 'João Silva');
+            preview = preview.replace(/{{LINK_RECUPERACAO}}/g, 'https://exemplo.com/redefinir?token=abc123');
+            preview = preview.replace(/{{TEMPO_EXPIRACAO}}/g, '1 hora');
+            preview = preview.replace(/{{ANO}}/g, new Date().getFullYear());
+            
+            document.getElementById('previewBox').innerHTML = preview;
+            document.getElementById('previewSection').style.display = 'block';
+        }
+
+        // Cancelar edição
+        function cancelarEdicao() {
+            document.getElementById('formTemplate').reset();
+            document.getElementById('editorSection').style.display = 'none';
+            document.getElementById('previewSection').style.display = 'none';
+        }
+
+        // Funçµes auxiliares
+        function getNomeTipo(tipo) {
+            const tipos = {
+                'recuperacao_senha': 'Recuperação de Senha',
+                'boas_vindas': 'Boas-vindas',
+                'notificacao': 'Notificação'
+            };
+            return tipos[tipo] || tipo;
+        }
+
+        function formatarData(data) {
+            if (!data) return '-';
+            const d = new Date(data);
+            return d.toLocaleString('pt-BR');
+        }
+
+        function mostrarSucesso(msg) {
+            const div = document.getElementById('alertMsg');
+            div.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> ${msg}</div>`;
+            setTimeout(() => div.innerHTML = '', 5000);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function mostrarErro(msg) {
+            const div = document.getElementById('alertMsg');
+            div.innerHTML = `<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> ${msg}</div>`;
+            setTimeout(() => div.innerHTML = '', 5000);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    </script>
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+</html>
+
+
+
+
+

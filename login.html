@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Design System CSS -->
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <!-- Global Config -->
+    <script src="js/config.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-700) 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: var(--color-background-primary);
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            width: 100%;
+            max-width: 420px;
+            padding: 3rem 2.5rem;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        /* ============================================
+           LOGO QUADRADA - FORMATO PROFISSIONAL
+           Sem círculo, quadrado com cantos suaves
+           ============================================ */
+        .logo-box {
+            width: 120px;
+            height: 120px;
+            background: #ffffff;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.2rem;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .logo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 8px;
+            display: block;
+        }
+
+        /* Shimmer de loading enquanto a logo carrega */
+        .logo-box.loading {
+            background: linear-gradient(90deg, #f0f4f8 25%, #e2e8f0 50%, #f0f4f8 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.2s infinite;
+        }
+
+        @keyframes shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Ícone fallback quando não há logo */
+        .logo-box .logo-fallback-icon {
+            font-size: 3rem;
+            color: var(--color-primary-600);
+        }
+
+        .login-header h1 {
+            color: var(--color-text-primary);
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .login-header p {
+            color: var(--color-text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            color: var(--color-text-primary);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: block;
+        }
+
+        .input-wrapper > i:first-child {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--color-text-tertiary);
+            font-size: 1rem;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .btn-toggle-senha {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 2.8rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--color-text-tertiary);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+            z-index: 2;
+            border-radius: 0 10px 10px 0;
+        }
+
+        .btn-toggle-senha:hover {
+            color: var(--color-primary-600);
+            background: rgba(102, 126, 234, 0.06);
+        }
+
+
+        .btn-toggle-senha:focus {
+            outline: none;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.9rem 3rem 0.9rem 3rem;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            background: var(--color-background-tertiary);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--color-primary-600);
+            background: var(--color-background-primary);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-700) 100%);
+            color: var(--color-background-primary);
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 1rem;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .btn-login:disabled {
+            background: var(--color-text-tertiary);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        .alert-error {
+            background: var(--color-error-100);
+            color: var(--color-error-900);
+            border-left: 4px solid var(--color-error-700);
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert i {
+            margin-right: 0.5rem;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            color: var(--color-text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Loading spinner do botão */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--color-background-primary);
+            animation: spin 0.8s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 2rem 1.5rem;
+            }
+
+            .login-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .logo-box {
+                width: 100px;
+                height: 100px;
+            }
+        }
+
+        /* ============================================
+           LINK ESQUECEU SENHA
+           ============================================ */
+        .link-esqueceu {
+            display: none; /* visível somente após 1ª falha */
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .link-esqueceu button {
+            background: none;
+            border: none;
+            color: var(--color-primary-600);
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-decoration: underline;
+            font-family: inherit;
+            padding: 0;
+        }
+
+        .link-esqueceu button:hover {
+            color: var(--color-primary-700);
+        }
+
+        /* ============================================
+           PAINEL DE RECUPERAÇÃO DE SENHA
+           ============================================ */
+        .recovery-panel {
+            display: none;
+            margin-top: 1.5rem;
+            padding: 1.25rem 1.5rem;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .recovery-panel h3 {
+            font-size: 1rem;
+            color: var(--color-text-primary);
+            margin-bottom: 0.4rem;
+        }
+
+        .recovery-panel p {
+            font-size: 0.85rem;
+            color: var(--color-text-secondary);
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .recovery-panel .form-group {
+            margin-bottom: 0.75rem;
+        }
+
+        .btn-recovery {
+            width: 100%;
+            padding: 0.8rem;
+            background: #10b981;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-family: inherit;
+        }
+
+        .btn-recovery:hover { background: #059669; }
+        .btn-recovery:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        .btn-cancel-recovery {
+            width: 100%;
+            padding: 0.6rem;
+            background: none;
+            border: none;
+            color: var(--color-text-secondary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            font-family: inherit;
+        }
+
+        .btn-cancel-recovery:hover { color: var(--color-text-primary); }
+    </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <div class="login-header">
+
+            <!-- Logo quadrada profissional -->
+            <div class="logo-box loading" id="logoBox">
+                <img id="loginLogo"
+                     alt="Logo da Empresa"
+                     style="display:none;"
+                     onload="LogoManager.onLoad()"
+                     onerror="LogoManager.onError()">
+            </div>
+
+            <p>Sistema de Controle de Acesso</p>
+        </div>
+
+        <div id="alertBox" class="alert"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">E-mail</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="email" name="email"
+                           placeholder="Digite seu e-mail"
+                           required autocomplete="email"
+                           autocapitalize="none"
+                           autocorrect="off"
+                           spellcheck="false"
+                           inputmode="email">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="senha">Senha</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="senha" name="senha"
+                           placeholder="Digite sua senha"
+                           required autocomplete="current-password">
+                    <button type="button" class="btn-toggle-senha" id="btnToggleSenha" tabindex="-1" title="Mostrar/ocultar senha" aria-label="Mostrar senha">
+                        <i class="fas fa-eye" id="iconToggleSenha"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-login" id="btnLogin">
+                <i class="fas fa-sign-in-alt"></i> Entrar
+            </button>
+        </form>
+
+        <!-- Link "Esqueceu sua senha?" — exibido após 1ª tentativa falha -->
+        <div class="link-esqueceu" id="linkEsqueceu">
+            <button type="button" onclick="RecuperacaoSenha.mostrarPainel()">
+                <i class="fas fa-key"></i> Esqueceu sua senha?
+            </button>
+        </div>
+
+        <!-- Painel de recuperação de senha -->
+        <div class="recovery-panel" id="painelRecuperacao">
+            <h3><i class="fas fa-lock-open"></i> Recuperar Senha</h3>
+            <p>Informe seu CPF ou e-mail cadastrado. Enviaremos uma senha temporária para o seu e-mail.</p>
+            <form id="formRecuperacao" onsubmit="RecuperacaoSenha.enviar(event)" novalidate>
+                <div class="form-group">
+                    <label for="recuperacaoCpfEmail">CPF ou E-mail</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-id-card"></i>
+                        <input type="text" id="recuperacaoCpfEmail"
+                               placeholder="Digite seu CPF ou e-mail"
+                               autocomplete="off"
+                               inputmode="email">
+                    </div>
+                </div>
+                <button type="submit" class="btn-recovery" id="btnRecuperar">
+                    <i class="fas fa-paper-plane"></i> Enviar Senha Temporária
+                </button>
+                <button type="button" class="btn-cancel-recovery" onclick="RecuperacaoSenha.ocultarPainel()">
+                    Cancelar
+                </button>
+            </form>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2025 Serra da Liberdade. Todos os direitos reservados.</p>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * LogoManager
+         * Gerencia o carregamento dinâmico da logo da empresa.
+         * Busca via endpoint público /api/get_logo_empresa.php
+         * Fallback: uploads/logo/logoerp.png (ERP Condomínios)
+         *
+         * Arquitetura: este arquivo está em /frontend/login.html
+         * Portanto, '../' aponta para a raiz do projeto.
+         */
+        const LogoManager = (function () {
+            // ✅ URLs absolutas: eliminam qualquer ambiguidade de path relativo
+            const API_LOGO = window.location.origin + '/api/get_logo_empresa.php';
+            const FALLBACK = window.location.origin + '/uploads/logo/logoerp.png';
+
+            const logoBox = document.getElementById('logoBox');
+            const logoImg = document.getElementById('loginLogo');
+
+            let fallbackAttempted = false;
+
+            function init() {
+                fetch(API_LOGO, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'Accept': 'application/json' }
+                })
+                .then(function (res) {
+                    if (!res.ok) throw new Error('API indisponível');
+                    return res.json();
+                })
+                .then(function (data) {
+                    if (data && data.sucesso && data.logo_url) {
+                        // Normalizar URL: se for relativa, usa origin como base
+                        let url = data.logo_url;
+                        if (!url.startsWith('http') && !url.startsWith('/')) {
+                            url = window.location.origin + '/' + url;
+                        } else if (url.startsWith('/')) {
+                            url = window.location.origin + url;
+                        }
+                        logoImg.src = url;
+                        logoImg.style.display = 'block';
+                    } else {
+                        _useFallback();
+                    }
+                })
+                .catch(function () {
+                    _useFallback();
+                });
+            }
+
+            function _useFallback() {
+                logoImg.src = FALLBACK;
+                logoImg.style.display = 'block';
+            }
+
+            function onLoad() {
+                // Remove shimmer ao carregar com sucesso
+                logoBox.classList.remove('loading');
+            }
+
+            function onError() {
+                logoBox.classList.remove('loading');
+                if (!fallbackAttempted) {
+                    fallbackAttempted = true;
+                    logoImg.src = FALLBACK;
+                } else {
+                    // Último recurso: ícone FontAwesome
+                    logoImg.style.display = 'none';
+                    logoBox.innerHTML = '<i class="fas fa-building logo-fallback-icon"></i>';
+                }
+            }
+
+            return { init: init, onLoad: onLoad, onError: onError };
+        })();
+
+        // ============================================
+        // LOGIN FORM
+        // ============================================
+        const loginForm = document.getElementById('loginForm');
+        const btnLogin  = document.getElementById('btnLogin');
+        const alertBox  = document.getElementById('alertBox');
+        var _falhasLogin = 0;
+
+        // ============================================
+        // TOGGLE MOSTRAR/OCULTAR SENHA
+        // ============================================
+        (function () {
+            var btnToggle = document.getElementById('btnToggleSenha');
+            var inputSenha = document.getElementById('senha');
+            var iconToggle = document.getElementById('iconToggleSenha');
+            if (!btnToggle || !inputSenha || !iconToggle) return;
+            btnToggle.addEventListener('click', function () {
+                var visivel = inputSenha.type === 'text';
+                inputSenha.type = visivel ? 'password' : 'text';
+                iconToggle.className = visivel ? 'fas fa-eye' : 'fas fa-eye-slash';
+                btnToggle.setAttribute('aria-label', visivel ? 'Mostrar senha' : 'Ocultar senha');
+                btnToggle.title = visivel ? 'Mostrar senha' : 'Ocultar senha';
+            });
+        })();
+
+        // ============================================
+        // TOGGLE MOSTRAR/OCULTAR SENHA
+        // ============================================
+        (function () {
+            var btnToggle  = document.getElementById('btnToggleSenha');
+            var inputSenha = document.getElementById('senha');
+            var iconToggle = document.getElementById('iconToggleSenha');
+            if (!btnToggle || !inputSenha || !iconToggle) return;
+            btnToggle.addEventListener('click', function () {
+                var visivel = inputSenha.type === 'text';
+                inputSenha.type = visivel ? 'password' : 'text';
+                iconToggle.className = visivel ? 'fas fa-eye' : 'fas fa-eye-slash';
+                btnToggle.setAttribute('aria-label', visivel ? 'Mostrar senha' : 'Ocultar senha');
+                btnToggle.title = visivel ? 'Mostrar senha' : 'Ocultar senha';
+            });
+        })();
+
+        function mostrarAlerta(mensagem, tipo) {
+            const icon = tipo === 'error' ? 'exclamation-circle' : 'check-circle';
+            alertBox.innerHTML = `<i class="fas fa-${icon}"></i> ${mensagem}`;
+            alertBox.className = `alert alert-${tipo}`;
+            alertBox.style.display = 'block';
+            setTimeout(function () {
+                alertBox.style.display = 'none';
+            }, 5000);
+
+            // Exibir link "Esqueceu sua senha?" após primeira falha
+            if (tipo === 'error') {
+                _falhasLogin++;
+                if (_falhasLogin >= 1) {
+                    document.getElementById('linkEsqueceu').style.display = 'block';
+                }
+            }
+        }
+
+        // ============================================================
+        // POPUP DE SELEÇÃO ERP / PORTAL DO MORADOR
+        // ============================================================
+        var _popupEl     = null;
+        var _pendEmail   = '';
+        var _pendSenha   = '';
+
+        function _criarPopup(nomeErp, nomeMorador) {
+            var el = document.getElementById('__popupSelecao');
+            if (el) el.remove();
+
+            var popup = document.createElement('div');
+            popup.id = '__popupSelecao';
+            popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:1rem;';
+
+            popup.innerHTML =
+                '<div style="background:#fff;border-radius:16px;padding:2rem;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.25);">' +
+                  '<div style="text-align:center;margin-bottom:1.5rem;">' +
+                    '<div style="width:56px;height:56px;background:#eff6ff;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto .75rem;">' +
+                      '<i class="fas fa-question-circle" style="font-size:1.6rem;color:#2563eb;"></i>' +
+                    '</div>' +
+                    '<h2 style="font-size:1.15rem;color:#1e293b;margin-bottom:.4rem;">Qual tipo de acesso?</h2>' +
+                    '<p style="font-size:.87rem;color:#64748b;">Este e-mail está vinculado a dois perfis.<br>Selecione como deseja entrar:</p>' +
+                  '</div>' +
+                  '<div style="display:grid;gap:.75rem;">' +
+                    '<button id="__btnErp" onclick="_escolher(\'erp\')" style="border:2px solid #e2e8f0;border-radius:12px;padding:1rem 1.25rem;background:#fff;cursor:pointer;text-align:left;display:flex;align-items:center;gap:.9rem;width:100%;font-family:inherit;">' +
+                      '<div style="width:42px;height:42px;background:#eff6ff;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+                        '<i class="fas fa-desktop" style="color:#2563eb;font-size:1.1rem;"></i>' +
+                      '</div>' +
+                      '<div>' +
+                        '<div style="font-weight:700;color:#1e293b;font-size:.95rem;">Acessar o ERP</div>' +
+                        '<div style="font-size:.8rem;color:#64748b;margin-top:.15rem;">Sistema de gestão · ' + (nomeErp || 'Usuário') + '</div>' +
+                      '</div>' +
+                    '</button>' +
+                    '<button id="__btnPortal" onclick="_escolher(\'portal\')" style="border:2px solid #e2e8f0;border-radius:12px;padding:1rem 1.25rem;background:#fff;cursor:pointer;text-align:left;display:flex;align-items:center;gap:.9rem;width:100%;font-family:inherit;">' +
+                      '<div style="width:42px;height:42px;background:#dcfce7;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+                        '<i class="fas fa-home" style="color:#16a34a;font-size:1.1rem;"></i>' +
+                      '</div>' +
+                      '<div>' +
+                        '<div style="font-weight:700;color:#1e293b;font-size:.95rem;">Acessar o Portal do Morador</div>' +
+                        '<div style="font-size:.8rem;color:#64748b;margin-top:.15rem;">Área do morador · ' + (nomeMorador || 'Morador') + '</div>' +
+                      '</div>' +
+                    '</button>' +
+                  '</div>' +
+                  '<button onclick="_fecharPopup()" style="width:100%;margin-top:1rem;padding:.65rem;border:none;background:transparent;color:#94a3b8;font-size:.85rem;cursor:pointer;font-family:inherit;">' +
+                    '<i class="fas fa-times"></i> Cancelar' +
+                  '</button>' +
+                '</div>';
+
+            // Hover nos botões de escolha
+            popup.addEventListener('mouseover', function(ev) {
+                var btn = ev.target.closest('#__btnErp, #__btnPortal');
+                if (btn) { btn.style.borderColor = '#2563eb'; btn.style.background = '#eff6ff'; }
+            });
+            popup.addEventListener('mouseout', function(ev) {
+                var btn = ev.target.closest('#__btnErp, #__btnPortal');
+                if (btn) { btn.style.borderColor = '#e2e8f0'; btn.style.background = '#fff'; }
+            });
+
+            document.body.appendChild(popup);
+            _popupEl = popup;
+        }
+
+        function _fecharPopup() {
+            if (_popupEl) { _popupEl.remove(); _popupEl = null; }
+            btnLogin.disabled = false;
+            btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+        }
+
+        function _escolher(tipo) {
+            if (_popupEl) { _popupEl.remove(); _popupEl = null; }
+            btnLogin.disabled = true;
+            btnLogin.innerHTML = '<span class="spinner"></span> Autenticando...';
+
+            fetch(window.location.origin + '/api/api_verificar_tipo_login.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ email: _pendEmail, senha: _pendSenha, tipo_escolhido: tipo })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { _processarResposta(data); })
+            .catch(function(err) {
+                console.error('[Login] Erro:', err);
+                mostrarAlerta('Erro ao processar login. Tente novamente.', 'error');
+                btnLogin.disabled = false;
+                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+            });
+        }
+
+        function _processarResposta(data) {
+            if (!data.sucesso) {
+                mostrarAlerta(data.mensagem, 'error');
+                btnLogin.disabled = false;
+                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+                return;
+            }
+
+            var tipo = data.tipo; // 'erp', 'morador', 'ambos'
+
+            if (tipo === 'ambos') {
+                // Exibir popup de seleção sem desabilitar botão
+                btnLogin.disabled = false;
+                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+                _criarPopup(
+                    data.dados && data.dados.nome_erp     ? data.dados.nome_erp     : '',
+                    data.dados && data.dados.nome_morador ? data.dados.nome_morador : ''
+                );
+                return;
+            }
+
+            if (tipo === 'erp') {
+                mostrarAlerta('Login realizado! Redirecionando...', 'success');
+                if (data.dados) {
+                    if (data.dados.nome)      localStorage.setItem('usuario_nome', data.dados.nome);
+                    if (data.dados.permissao) localStorage.setItem('usuario_permissao', data.dados.permissao);
+                }
+                setTimeout(function() {
+                    window.location.href = window.location.origin + '/frontend/layout-base.html?page=dashboard';
+                }, 500);
+                return;
+            }
+
+            if (tipo === 'morador') {
+                mostrarAlerta('Login realizado! Acessando portal...', 'success');
+                if (data.dados) {
+                    localStorage.setItem('portal_token',    data.dados.token      || '');
+                    localStorage.setItem('morador_id',      data.dados.morador_id || '');
+                    localStorage.setItem('morador_nome',    data.dados.nome       || '');
+                    localStorage.setItem('morador_unidade', data.dados.unidade    || '');
+                    localStorage.setItem('morador_email',   data.dados.email      || '');
+                    // Flag de senha temporária: obriga troca imediata no portal
+                    if (data.dados.senha_temporaria) {
+                        localStorage.setItem('morador_senha_temporaria', '1');
+                    } else {
+                        localStorage.removeItem('morador_senha_temporaria');
+                    }
+                }
+                setTimeout(function() {
+                    window.location.href = window.location.origin + '/frontend/portal_morador.html';
+                }, 500);
+                return;
+            }
+
+            // Fallback genérico
+            mostrarAlerta(data.mensagem || 'Login realizado!', 'success');
+        }
+
+        loginForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            btnLogin.disabled = true;
+            btnLogin.innerHTML = '<span class="spinner"></span> Autenticando...';
+
+            // trim() no email para remover espaços do autocomplete mobile
+            // NÃO aplicar trim() na senha — espaços fazem parte da senha
+            _pendEmail = document.getElementById('email').value.trim().toLowerCase();
+            _pendSenha = document.getElementById('senha').value;
+
+            // ✅ Usa a API unificada que verifica ERP + Morador
+            fetch(window.location.origin + '/api/api_verificar_tipo_login.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ email: _pendEmail, senha: _pendSenha })
+            })
+            .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.json();
+            })
+            .then(function (data) {
+                _processarResposta(data);
+            })
+            .catch(function (error) {
+                console.error('[Login] Erro:', error);
+                mostrarAlerta('Erro ao processar login. Tente novamente.', 'error');
+                btnLogin.disabled = false;
+                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+            });
+        });
+
+        // ============================================
+        // MENSAGENS DE ERRO VIA URL PARAMS
+        // ============================================
+        (function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const erro = urlParams.get('erro');
+            const msgs = {
+                '1': 'E-mail ou senha incorretos!',
+                '2': 'Usuário inativo. Entre em contato com o administrador.',
+                '3': 'Preencha todos os campos!',
+                '4': 'Sessão expirada. Faça login novamente.'
+            };
+            if (msgs[erro]) mostrarAlerta(msgs[erro], 'error');
+        })();
+
+        // ============================================
+        // RECUPERAÇÃO DE SENHA
+        // ============================================
+        var RecuperacaoSenha = (function () {
+            var painel = null;
+            var link   = null;
+
+            function _init() {
+                painel = document.getElementById('painelRecuperacao');
+                link   = document.getElementById('linkEsqueceu');
+            }
+
+            function mostrarPainel() {
+                _init();
+                if (link)   link.style.display   = 'none';
+                if (painel) painel.style.display  = 'block';
+                var campo = document.getElementById('recuperacaoCpfEmail');
+                if (campo) campo.focus();
+            }
+
+            function ocultarPainel() {
+                _init();
+                if (painel) painel.style.display = 'none';
+                if (link)   link.style.display   = 'block';
+                var form = document.getElementById('formRecuperacao');
+                if (form) form.reset();
+            }
+
+            function enviar(e) {
+                e.preventDefault();
+                var cpfEmail = document.getElementById('recuperacaoCpfEmail').value.trim();
+                if (!cpfEmail) {
+                    mostrarAlerta('Informe seu CPF ou e-mail.', 'error');
+                    return;
+                }
+
+                var btn = document.getElementById('btnRecuperar');
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner"></span> Enviando...';
+
+                fetch(window.location.origin + '/api/api_recuperar_senha.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cpf_email: cpfEmail })
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    // Sempre exibe mensagem genérica (a API nunca informa se encontrou ou não)
+                    mostrarAlerta(data.mensagem || 'Verifique seu e-mail.', 'success');
+                    ocultarPainel();
+                })
+                .catch(function () {
+                    mostrarAlerta('Erro ao processar. Tente novamente.', 'error');
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Senha Temporária';
+                });
+            }
+
+            return { mostrarPainel: mostrarPainel, ocultarPainel: ocultarPainel, enviar: enviar };
+        })();
+
+        // ============================================
+        // VERIFICAR SESSÃO ATIVA AO CARREGAR
+        // ============================================
+        document.addEventListener('DOMContentLoaded', function () {
+            // Inicializar logo
+            LogoManager.init();
+
+            // Verificar se já está autenticado - URL absoluta
+            fetch(window.location.origin + '/api/verificar_sessao.php', {
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(function (response) {
+                if (!response.ok) return Promise.reject('Não autenticado');
+                return response.json();
+            })
+            .then(function (data) {
+                if (data && data.sucesso) {
+                    // ✅ REDIRECIONAMENTO CORRETO - URL absoluta elimina /frontend/frontend/
+                    window.location.href = window.location.origin + '/frontend/layout-base.html?page=dashboard';
+                }
+            })
+            .catch(function () {
+                // Não autenticado — mantém na página de login
+            });
+        });
+    </script>
+</body>
+
+</html>

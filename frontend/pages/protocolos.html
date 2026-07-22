@@ -1,0 +1,332 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Protocolos" data-icon="fa-box" style="display:none;"></div>
+
+<!-- Toast Container -->
+<div id="toastContainerProtocolo" class="toast-container-proto"></div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-protocolos">
+
+  <!-- Breadcrumb -->
+  <nav class="stub-breadcrumb">
+    <span data-page="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
+    <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+    <span>Protocolos</span>
+  </nav>
+
+    <!-- Page Header com KPIs -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-box" style="color:#2563eb;margin-right:10px;"></i>Protocolo de Mercadorias</h1>
+            <p>Controle de recebimento e entrega de encomendas e mercadorias dos moradores</p>
+        </div>
+        <div class="kpi-header-group">
+            <div class="kpi-mini" id="kpiTotal">
+                <span class="kpi-mini-valor" id="kpiTotalValor">—</span>
+                <span class="kpi-mini-label">Total</span>
+            </div>
+            <div class="kpi-mini kpi-pendente" id="kpiPendentes">
+                <span class="kpi-mini-valor" id="kpiPendentesValor">—</span>
+                <span class="kpi-mini-label">Pendentes</span>
+            </div>
+            <div class="kpi-mini kpi-entregue" id="kpiEntregues">
+                <span class="kpi-mini-valor" id="kpiEntreguesValor">—</span>
+                <span class="kpi-mini-label">Entregues Hoje</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="novo">
+            <i class="fas fa-plus-circle"></i> Novo Protocolo
+        </button>
+        <button class="tab-button" data-tab="listagem">
+            <i class="fas fa-list"></i> Listagem
+        </button>
+        <button class="tab-button" data-tab="pendentes">
+            <i class="fas fa-clock"></i> Pendentes
+            <span class="badge-tab" id="badgePendentes" style="display:none;">0</span>
+        </button>
+        <button class="tab-button" data-tab="historico">
+            <i class="fas fa-history"></i> Histórico
+        </button>
+    </div>
+
+    <!-- ===================== TAB: NOVO PROTOCOLO ===================== -->
+    <div id="tab-novo" class="tab-content active">
+        <div class="page-card">
+            <h2 id="formTitulo"><i class="fas fa-plus-circle" style="color:#2563eb;margin-right:8px;"></i>Novo Protocolo</h2>
+            <div class="alert-info proto-alert" id="alertFormInfo">
+                <i class="fas fa-info-circle"></i>
+                <span>Selecione a <strong>unidade → morador</strong> para registrar o recebimento da mercadoria.</span>
+            </div>
+            <form id="formProtocolo">
+                <input type="hidden" id="protocoloId">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="unidadeId">Unidade *</label>
+                        <select id="unidadeId" required>
+                            <option value="">Selecione uma unidade...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="moradorId">Morador *</label>
+                        <select id="moradorId" required disabled>
+                            <option value="">Primeiro selecione a unidade</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-group-wide">
+                        <label for="descricaoMercadoria">Descrição da Mercadoria *</label>
+                        <input type="text" id="descricaoMercadoria"
+                            placeholder="Ex: Mercado Livre, Amazon, Correios..." required>
+                        <span class="form-hint">Descreva o tipo de encomenda ou mercadoria recebida</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="codigoNf">Código / NF</label>
+                        <input type="text" id="codigoNf" placeholder="Código de rastreio ou nº da NF">
+                    </div>
+                    <div class="form-group">
+                        <label for="pagina">Página (Livro)</label>
+                        <input type="number" id="pagina" placeholder="Nº da página" min="1">
+                        <span class="form-hint">Número da página no livro de protocolos físico</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="dataHoraRecebimento">Data e Hora do Recebimento *</label>
+                        <input type="datetime-local" id="dataHoraRecebimento" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="recebedorPortaria">Recebedor (Portaria) *</label>
+                        <select id="recebedorPortaria" required>
+                            <option value="">Selecione o porteiro...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group form-group-full">
+                    <label for="observacao">Observação</label>
+                    <textarea id="observacao" rows="3"
+                        placeholder="Informações adicionais sobre a mercadoria, estado da embalagem, etc..."></textarea>
+                </div>
+                <div class="btn-actions">
+                    <button type="submit" class="btn-primary" id="btnSalvarProtocolo">
+                        <i class="fas fa-save"></i> Salvar Protocolo
+                    </button>
+                    <button type="button" class="btn-secondary" id="btnLimparProtocolo">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: LISTAGEM ===================== -->
+    <div id="tab-listagem" class="tab-content">
+        <div class="page-card">
+            <!-- Barra de ferramentas -->
+            <div class="toolbar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="buscaProtocolo" placeholder="Buscar por unidade, morador ou mercadoria...">
+                </div>
+                <div class="filter-group">
+                    <select id="filtroStatus">
+                        <option value="">Todos os status</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="entregue">Entregues</option>
+                    </select>
+                    <button class="btn-secondary" id="btnAtualizarListagem">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                    <button class="btn-success" id="btnExportarCSV">
+                        <i class="fas fa-file-csv"></i> Exportar CSV
+                    </button>
+                </div>
+            </div>
+            <!-- Tabela -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Unidade</th>
+                            <th>Morador</th>
+                            <th>Mercadoria</th>
+                            <th>Código/NF</th>
+                            <th>Pág.</th>
+                            <th>Recebimento</th>
+                            <th>Porteiro</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaProtocolos">
+                        <tr class="empty-row">
+                            <td colspan="10">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Carregando protocolos...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <!-- Paginação -->
+            <div class="pagination" id="paginacaoListagem"></div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: PENDENTES ===================== -->
+    <div id="tab-pendentes" class="tab-content">
+        <div class="page-card">
+            <div class="toolbar">
+                <h3 style="color:#92400e;"><i class="fas fa-clock" style="margin-right:6px;"></i>Protocolos Aguardando Entrega</h3>
+                <button class="btn-secondary" id="btnAtualizarPendentes">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Unidade</th>
+                            <th>Morador</th>
+                            <th>Mercadoria</th>
+                            <th>Código/NF</th>
+                            <th>Recebimento</th>
+                            <th>Porteiro</th>
+                            <th>Tempo Aguardando</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaPendentes">
+                        <tr class="empty-row">
+                            <td colspan="9">
+                                <i class="fas fa-check-circle" style="color:#16a34a;font-size:2rem;"></i>
+                                <p>Nenhum protocolo pendente</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: HISTÓRICO ===================== -->
+    <div id="tab-historico" class="tab-content">
+        <div class="page-card">
+            <div class="toolbar">
+                <div class="filter-group">
+                    <label style="font-size:.85rem;color:#64748b;">Período:</label>
+                    <input type="date" id="histDataInicio">
+                    <input type="date" id="histDataFim">
+                    <button class="btn-primary" id="btnFiltrarHistorico">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <button class="btn-success" id="btnExportarHistorico">
+                        <i class="fas fa-file-csv"></i> Exportar
+                    </button>
+                </div>
+            </div>
+            <!-- KPIs do período -->
+            <div class="stats-grid" id="statsHistorico" style="display:none;">
+                <div class="stat-card">
+                    <span class="stat-valor" id="statTotal">—</span>
+                    <span class="stat-label">Total no Período</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-valor" id="statEntregues">—</span>
+                    <span class="stat-label">Entregues</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-valor" id="statPendentes">—</span>
+                    <span class="stat-label">Pendentes</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-valor" id="statMediaDias">—</span>
+                    <span class="stat-label">Média p/ Entrega</span>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Unidade</th>
+                            <th>Morador</th>
+                            <th>Mercadoria</th>
+                            <th>Recebimento</th>
+                            <th>Porteiro</th>
+                            <th>Status</th>
+                            <th>Entregue em</th>
+                            <th>Recebedor (Morador)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaHistorico">
+                        <tr class="empty-row">
+                            <td colspan="9">
+                                <i class="fas fa-filter"></i>
+                                <p>Selecione um período e clique em Filtrar</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /page-wrapper -->
+
+<!-- ===================== MODAL: REGISTRAR ENTREGA ===================== -->
+<div id="modalEntrega" class="modal-overlay page-protocolos">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-check-circle" style="color:#16a34a;margin-right:8px;"></i>Registrar Entrega</h3>
+            <button class="modal-close" id="btnFecharModalEntrega">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Info do protocolo -->
+            <div class="info-box" id="infoProtocoloEntrega">
+                <p id="infoEntregaTexto">—</p>
+            </div>
+            <form id="formEntrega">
+                <input type="hidden" id="entregaProtocoloId">
+                <div class="form-group">
+                    <label for="nomeRecebedorMorador">Nome de quem retirou *</label>
+                    <input type="text" id="nomeRecebedorMorador" required
+                        placeholder="Nome do morador ou responsável que retirou">
+                    <span class="form-hint">Registre o nome de quem assinou o recebimento</span>
+                </div>
+                <div class="form-group">
+                    <label for="dataHoraEntrega">Data e Hora da Entrega *</label>
+                    <input type="datetime-local" id="dataHoraEntrega" required>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-primary" id="btnConfirmarEntrega">
+                <i class="fas fa-check"></i> Confirmar Entrega
+            </button>
+            <button class="btn-secondary" id="btnCancelarEntrega">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL: DETALHES DO PROTOCOLO ===================== -->
+<div id="modalDetalhes" class="modal-overlay page-protocolos">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-info-circle" style="color:#2563eb;margin-right:8px;"></i>Detalhes do Protocolo</h3>
+            <button class="modal-close" id="btnFecharModalDetalhes">&times;</button>
+        </div>
+        <div class="modal-body" id="detalhesConteudo">
+            <!-- Preenchido via JS -->
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="btnFecharDetalhesFooter">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>

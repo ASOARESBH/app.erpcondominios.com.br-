@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste SMTP - Formulário Simples</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            margin-top: 20px;
+            padding: 12px 30px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .btn-debug {
+            background: #f59e0b;
+        }
+        .btn-debug:hover {
+            background: #d97706;
+        }
+        #resultado {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .sucesso {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+        .erro {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>?? Teste de Configuração SMTP</h1>
+        <p>Use este formulário para testar o salvamento das configuraçµes SMTP.</p>
+        
+        <form id="formTeste">
+            <label>Servidor SMTP *</label>
+            <input type="text" name="smtp_host" value="smtp.titan.email" required>
+            
+            <label>Porta *</label>
+            <input type="number" name="smtp_port" value="587" required>
+            
+            <label>Usuário/E-mail *</label>
+            <input type="email" name="smtp_usuario" value="suporte@aserradaliberdade.ong.br" required>
+            
+            <label>Senha/Token *</label>
+            <input type="password" name="smtp_senha" value="senha123" required>
+            
+            <label>E-mail Remetente *</label>
+            <input type="email" name="smtp_de_email" value="suporte@aserradaliberdade.ong.br" required>
+            
+            <label>Nome Remetente *</label>
+            <input type="text" name="smtp_de_nome" value="Serra da Liberdade" required>
+            
+            <label>Segurança *</label>
+            <select name="smtp_seguranca" required>
+                <option value="tls" selected>TLS (Recomendado)</option>
+                <option value="ssl">SSL</option>
+                <option value="none">Nenhuma</option>
+            </select>
+            
+            <label>Status</label>
+            <select name="smtp_ativo">
+                <option value="1" selected>Ativo</option>
+                <option value="0">Inativo</option>
+            </select>
+            
+            <button type="submit">?? Salvar via API Normal</button>
+            <button type="button" onclick="enviarParaDebug()" class="btn-debug">?? Enviar para Debug</button>
+        </form>
+        
+        <div id="resultado"></div>
+    </div>
+
+    <script>
+        // Enviar para API normal
+        document.getElementById('formTeste').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            formData.append('acao', 'salvar');
+            
+            console.log('Enviando dados:');
+            for (let [key, value] of formData.entries()) {
+                console.log(key + ': ' + value);
+            }
+            
+            fetch('../api/api_smtp.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                console.log('Resposta:', data);
+                mostrarResultado(data.sucesso, data.mensagem);
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarResultado(false, 'Erro ao enviar: ' + error.message);
+            });
+        });
+        
+        // Enviar para debug
+        function enviarParaDebug() {
+            const formData = new FormData(document.getElementById('formTeste'));
+            formData.append('acao', 'salvar');
+            
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action="api/debug_smtp_post.php';
+            form.target = '_blank';
+            
+            for (let [key, value] of formData.entries()) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        }
+        
+        function mostrarResultado(sucesso, mensagem) {
+            const div = document.getElementById('resultado');
+            div.style.display = 'block';
+            div.className = sucesso ? 'sucesso' : 'erro';
+            div.innerHTML = (sucesso ? '? ' : '? ') + mensagem;
+        }
+    </script>
+</body>
+</html>
+

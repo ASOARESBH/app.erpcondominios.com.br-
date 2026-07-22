@@ -1,0 +1,809 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Contratos" data-icon="fa-file-contract" style="display:none;"></div>
+
+<div class="page-wrapper page-contratos">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1><i class="fas fa-file-contract" style="color:#2563eb;margin-right:10px;"></i>Contratos</h1>
+        <p>Gestao de contratos de prestacao de servicos e fornecedores</p>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="stats-grid">
+        <div class="kpi-card kpi-total page-card">
+            <div class="kpi-label">Total de Contratos</div>
+            <div class="kpi-value" id="ctr_kpiTotal">0</div>
+            <div class="kpi-icon-row"><i class="fas fa-file-contract"></i></div>
+        </div>
+        <div class="kpi-card kpi-ativos page-card">
+            <div class="kpi-label">Ativos</div>
+            <div class="kpi-value" id="ctr_kpiAtivos">0</div>
+            <div class="kpi-icon-row"><i class="fas fa-check-circle"></i></div>
+        </div>
+        <div class="kpi-card kpi-aguardando page-card">
+            <div class="kpi-label">Aguardando Inicio</div>
+            <div class="kpi-value" id="ctr_kpiAguardando">0</div>
+            <div class="kpi-icon-row"><i class="fas fa-clock"></i></div>
+        </div>
+        <div class="kpi-card kpi-encerrados page-card">
+            <div class="kpi-label">Encerrados</div>
+            <div class="kpi-value" id="ctr_kpiEncerrados">0</div>
+            <div class="kpi-icon-row"><i class="fas fa-times-circle"></i></div>
+        </div>
+        <div class="kpi-card kpi-valor page-card">
+            <div class="kpi-label">Valor Total Ativo</div>
+            <div class="kpi-value kpi-valor-text" id="ctr_kpiValor">R$ 0,00</div>
+            <div class="kpi-icon-row"><i class="fas fa-dollar-sign"></i></div>
+        </div>
+    </div>
+
+    <!-- Alerta de vencimentos -->
+    <div class="ctr-alert-venc" id="ctr_alertBar" style="display:none;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="ctr_alertText"></span>
+    </div>
+
+    <!-- Abas Globais -->
+    <nav class="page-card ctr-tabs-nav" aria-label="Navegacao contratos">
+        <button class="ctr-tab-btn active" data-tab="lista" id="ctr_tabLista">
+            <i class="fas fa-file-contract"></i> Contratos
+        </button>
+        <button class="ctr-tab-btn" data-tab="relatorios" id="ctr_tabRelatorios">
+            <i class="fas fa-chart-bar"></i> Relatorios
+        </button>
+    </nav>
+
+    <!-- ═══ SECAO: LISTA DE CONTRATOS ═══ -->
+    <div id="ctr_secLista">
+
+        <!-- Filtros -->
+        <div class="page-card">
+            <div class="filter-bar">
+                <input type="text" id="ctr_fBusca" class="form-control-sm" placeholder="Buscar fornecedor ou numero...">
+                <label>Status:</label>
+                <select id="ctr_fStatus" class="form-control-sm">
+                    <option value="">Todos</option>
+                    <option value="ativo">Ativos</option>
+                    <option value="aguardando">Aguardando</option>
+                    <option value="encerrado">Encerrados</option>
+                </select>
+                <label>Tipo:</label>
+                <select id="ctr_fTipo" class="form-control-sm">
+                    <option value="">Todos</option>
+                    <option value="prestacao_servico">Prestacao de Servico</option>
+                    <option value="venda">Venda</option>
+                </select>
+                <button class="btn btn-outline btn-xs" id="ctr_btnFiltrar"><i class="fas fa-search"></i> Filtrar</button>
+                <button class="btn btn-outline btn-xs" id="ctr_btnLimpar"><i class="fas fa-times"></i> Limpar</button>
+                <button class="btn btn-success btn-xs" id="ctr_btnNovo"><i class="fas fa-plus"></i> Novo Contrato</button>
+            </div>
+        </div>
+
+        <!-- Tabela -->
+        <div class="page-card">
+            <h2 class="section-title">
+                <i class="fas fa-list"></i> Lista de Contratos
+            </h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N&ordm; CONTRATO</th>
+                            <th>FORNECEDOR</th>
+                            <th>TIPO</th>
+                            <th>NOME</th>
+                            <th>RECORRENCIA</th>
+                            <th>VALOR TOTAL</th>
+                            <th>VIGENCIA</th>
+                            <th>STATUS</th>
+                            <th>DOCS</th>
+                            <th>ORC.</th>
+                            <th>ACOES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ctr_tbody">
+                        <tr>
+                            <td colspan="11" class="empty-table">
+                                <i class="fas fa-spinner fa-spin"></i> Carregando...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="ctr-empty-state" id="ctr_empty" style="display:none;">
+                <i class="fas fa-folder-open"></i>
+                <p>Nenhum contrato encontrado</p>
+            </div>
+            <div class="ctr-pagination" id="ctr_pagination"></div>
+        </div>
+    </div>
+
+    <!-- ═══ SECAO: DETALHE DO CONTRATO ═══ -->
+    <div id="ctr_secDetalhe" style="display:none;">
+
+        <!-- Header do detalhe -->
+        <div class="page-card ctr-detalhe-header">
+            <button class="btn btn-secondary btn-xs" id="ctr_btnVoltar">
+                <i class="fas fa-arrow-left"></i> Voltar para Lista
+            </button>
+            <div class="ctr-detalhe-titulo-wrap">
+                <h2 class="section-title" id="ctr_detalheTitulo" style="margin:0;">Contrato</h2>
+                <span id="ctr_detalheStatus" class="status-badge"></span>
+            </div>
+        </div>
+
+        <!-- Sub-abas -->
+        <nav class="page-card ctr-subtabs-nav" aria-label="Sub-abas contrato">
+            <button class="ctr-subtab-btn active" data-subtab="dados">
+                <i class="fas fa-info-circle"></i> Dados do Contrato
+            </button>
+            <button class="ctr-subtab-btn" data-subtab="documentos">
+                <i class="fas fa-paperclip"></i> Documentos
+                <span class="ctr-tab-counter" id="ctr_badgeDocs">0</span>
+            </button>
+            <button class="ctr-subtab-btn" data-subtab="orcamentos">
+                <i class="fas fa-calculator"></i> Orcamentos
+                <span class="ctr-tab-counter" id="ctr_badgeOrc">0</span>
+            </button>
+            <button class="ctr-subtab-btn" data-subtab="rel_licitacao">
+                <i class="fas fa-file-contract"></i> Relatorio Licitacao
+            </button>
+        </nav>
+
+        <!-- Sub-aba: Dados -->
+        <div id="ctr_subDados">
+            <div class="page-card">
+                <h2 class="section-title"><i class="fas fa-building"></i> Fornecedor</h2>
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Fornecedor</label>
+                        <div class="ctr-dado-valor" id="ctr_dFornecedor">-</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">CNPJ / CPF</label>
+                        <div class="ctr-dado-valor" id="ctr_dCnpj">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="page-card">
+                <h2 class="section-title"><i class="fas fa-file-alt"></i> Dados do Contrato</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Numero</label>
+                        <div class="ctr-dado-valor ctr-numero-mono" id="ctr_dNumero">-</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tipo de Servico</label>
+                        <div class="ctr-dado-valor" id="ctr_dTipo">-</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nome do Contrato</label>
+                        <div class="ctr-dado-valor" id="ctr_dNome">-</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Recorrencia</label>
+                        <div class="ctr-dado-valor" id="ctr_dRecorrencia">-</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Data Inicio</label>
+                        <div class="ctr-dado-valor" id="ctr_dInicio">-</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Data Fim</label>
+                        <div class="ctr-dado-valor" id="ctr_dFim">-</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Data Vencimento</label>
+                        <div class="ctr-dado-valor" id="ctr_dVencimento">-</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Plano de Contas</label>
+                        <div class="ctr-dado-valor" id="ctr_dPlano">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="page-card">
+                <h2 class="section-title"><i class="fas fa-dollar-sign"></i> Financeiro</h2>
+                <div class="form-group">
+                    <label class="form-label">Valor Total do Contrato</label>
+                    <div class="ctr-dado-valor ctr-valor-destaque" id="ctr_dValor">R$ 0,00</div>
+                </div>
+            </div>
+            <div class="page-card" id="ctr_cardObs" style="display:none;">
+                <h2 class="section-title"><i class="fas fa-sticky-note"></i> Observacoes</h2>
+                <p id="ctr_dObs" class="ctr-obs-text"></p>
+            </div>
+            <div class="page-card">
+                <div class="form-actions">
+                    <button class="btn btn-primary" id="ctr_btnEditar"><i class="fas fa-edit"></i> Editar Contrato</button>
+                    <button class="btn btn-danger" id="ctr_btnExcluir"><i class="fas fa-trash"></i> Excluir</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sub-aba: Documentos -->
+        <div id="ctr_subDocs" style="display:none;">
+            <div class="page-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem;">
+                    <h2 class="section-title" style="margin-bottom:0;">
+                        <i class="fas fa-paperclip"></i> Documentos do Contrato
+                        <span class="ctr-counter-badge">(<span id="ctr_docCount">0</span>/4)</span>
+                    </h2>
+                </div>
+
+                <!-- Barra de progresso -->
+                <div class="ctr-progress-wrap">
+                    <div class="ctr-progress-bar" id="ctr_docProgressBar" style="width:0%"></div>
+                </div>
+
+                <!-- Form upload -->
+                <div id="ctr_docUploadForm" style="margin-top:1rem;">
+                    <div class="filter-bar" style="flex-wrap:wrap;align-items:flex-end;">
+                        <div class="form-group" style="flex:1;min-width:180px;">
+                            <label class="form-label">Nome do Documento <span class="required">*</span></label>
+                            <input type="text" id="ctr_docNome" class="form-control" placeholder="Ex: Contrato assinado">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:160px;">
+                            <label class="form-label">Tipo <span class="required">*</span></label>
+                            <select id="ctr_docTipo" class="form-control">
+                                <option value="">Selecione...</option>
+                                <option value="contrato">Contrato</option>
+                                <option value="proposta">Proposta</option>
+                                <option value="nf_recibo">NF / Recibo</option>
+                                <option value="laudo_vistoria">Laudo / Vistoria</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:2;min-width:220px;">
+                            <label class="form-label">Arquivo <span class="required">*</span> <small>(JPG, PDF, DOC, DOCX - max 10MB)</small></label>
+                            <input type="file" id="ctr_docArquivo" class="form-control" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">&nbsp;</label>
+                            <button class="btn btn-success" id="ctr_btnUploadDoc"><i class="fas fa-upload"></i> Enviar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de documentos -->
+                <div class="table-container" style="margin-top:1rem;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>NOME</th>
+                                <th>TIPO</th>
+                                <th>ARQUIVO</th>
+                                <th>TAMANHO</th>
+                                <th>DATA</th>
+                                <th>ACOES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ctr_docTbody"></tbody>
+                    </table>
+                </div>
+                <div class="ctr-empty-state" id="ctr_docEmpty" style="display:none;">
+                    <i class="fas fa-file-upload"></i>
+                    <p>Nenhum documento anexado</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sub-aba: Orcamentos -->
+        <div id="ctr_subOrc" style="display:none;">
+            <div class="page-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1rem;">
+                    <h2 class="section-title" style="margin-bottom:0;">
+                        <i class="fas fa-calculator"></i> Orcamentos do Contrato
+                        <span class="ctr-counter-badge">(<span id="ctr_orcCount">0</span>/3 minimo)</span>
+                    </h2>
+                </div>
+
+                <!-- Alerta minimo -->
+                <div class="alert alert-warning ctr-orc-alert" id="ctr_orcAlert">
+                    <i class="fas fa-exclamation-circle"></i>
+                    Minimo de 3 orcamentos obrigatorios. Faltam <strong id="ctr_orcFaltam">3</strong>.
+                </div>
+
+                <!-- Form orcamento -->
+                <div class="ctr-orc-form">
+                    <input type="hidden" id="ctr_orcId" value="0">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Fornecedor do Orcamento <span class="required">*</span></label>
+                            <input type="text" id="ctr_orcFornecedor" class="form-control" placeholder="Nome do fornecedor">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Descricao <span class="required">*</span></label>
+                            <input type="text" id="ctr_orcDescricao" class="form-control" placeholder="Descricao do orcamento">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Valor (R$) <span class="required">*</span></label>
+                            <input type="text" id="ctr_orcValor" class="form-control" placeholder="0,00">
+                        </div>
+                    </div>
+                    <div class="ctr-justificativa-wrap" id="ctr_orcJustificativaWrap" style="display:none;">
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i> Valor maior que o contrato. Justificativa obrigatoria:</label>
+                            <textarea id="ctr_orcJustificativa" class="form-control" rows="3" placeholder="Justifique o valor acima do contrato..."></textarea>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-success" id="ctr_btnSalvarOrc"><i class="fas fa-save"></i> Salvar Orcamento</button>
+                        <button class="btn btn-secondary" id="ctr_btnCancelarOrc" style="display:none;"><i class="fas fa-times"></i> Cancelar</button>
+                    </div>
+                </div>
+
+                <!-- Lista orcamentos -->
+                <div class="table-container" style="margin-top:1rem;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>FORNECEDOR</th>
+                                <th>DESCRICAO</th>
+                                <th>VALOR</th>
+                                <th>JUSTIFICATIVA</th>
+                                <th>DATA</th>
+                                <th>ACOES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ctr_orcTbody"></tbody>
+                    </table>
+                </div>
+                <div class="ctr-empty-state" id="ctr_orcEmpty" style="display:none;">
+                    <i class="fas fa-calculator"></i>
+                    <p>Nenhum orcamento cadastrado</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sub-aba: Relatorio Licitacao -->
+        <div id="ctr_subRelLicitacao" style="display:none;">
+            <div class="page-card">
+                <div class="ctr-rel-lic-header">
+                    <div>
+                        <h2 class="section-title" style="margin-bottom:4px;">
+                            <i class="fas fa-file-contract"></i> Relatorio de Licitacao
+                        </h2>
+                        <p style="color:#64748b;font-size:.9rem;margin:0;">
+                            Resultado comparativo dos orcamentos e empresa vencedora
+                        </p>
+                    </div>
+                    <div class="ctr-rel-lic-actions">
+                        <button class="btn btn-primary" id="ctr_btnGerarPdfLic" onclick="window.ContratosPage?.gerarPdfLicitacao()">
+                            <i class="fas fa-file-pdf"></i> Gerar PDF
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview do relatorio -->
+                <div id="ctr_relLicPreview" class="ctr-rel-lic-preview">
+                    <div class="ctr-lic-doc">
+                        <!-- Topo -->
+                        <div class="ctr-lic-topo">
+                            <div class="ctr-lic-logo-wrap">
+                                <img id="ctr_licLogoPreview" src="" alt="Logo" style="max-height:70px;display:none;">
+                                <div id="ctr_licLogoPlaceholder" class="ctr-lic-logo-placeholder">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                            </div>
+                            <div class="ctr-lic-empresa-info">
+                                <h3 id="ctr_licEmpresaNome" class="ctr-lic-empresa-nome">—</h3>
+                                <p id="ctr_licEmpresaCnpj" class="ctr-lic-empresa-detalhe">CNPJ: —</p>
+                                <p id="ctr_licEmpresaEndereco" class="ctr-lic-empresa-detalhe">—</p>
+                            </div>
+                            <div class="ctr-lic-doc-num">
+                                <span class="ctr-lic-doc-label">RELATORIO DE LICITACAO</span>
+                                <span id="ctr_licNumContrato" class="ctr-lic-doc-numero">—</span>
+                                <span id="ctr_licDataRelatorio" class="ctr-lic-doc-data">—</span>
+                            </div>
+                        </div>
+                        <div class="ctr-lic-divider"></div>
+
+                        <!-- Dados do contrato -->
+                        <div class="ctr-lic-section">
+                            <h4 class="ctr-lic-section-title"><i class="fas fa-file-alt"></i> Objeto da Licitacao</h4>
+                            <div class="ctr-lic-grid-2">
+                                <div class="ctr-lic-campo">
+                                    <span class="ctr-lic-label">Contrato</span>
+                                    <span id="ctr_licContNome" class="ctr-lic-valor">—</span>
+                                </div>
+                                <div class="ctr-lic-campo">
+                                    <span class="ctr-lic-label">Tipo de Servico</span>
+                                    <span id="ctr_licContTipo" class="ctr-lic-valor">—</span>
+                                </div>
+                                <div class="ctr-lic-campo">
+                                    <span class="ctr-lic-label">Valor Contratado</span>
+                                    <span id="ctr_licContValor" class="ctr-lic-valor ctr-lic-valor-destaque">—</span>
+                                </div>
+                                <div class="ctr-lic-campo">
+                                    <span class="ctr-lic-label">Vigencia</span>
+                                    <span id="ctr_licContVigencia" class="ctr-lic-valor">—</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Empresa vencedora -->
+                        <div class="ctr-lic-section ctr-lic-vencedora-section">
+                            <h4 class="ctr-lic-section-title"><i class="fas fa-trophy"></i> Empresa Vencedora</h4>
+                            <div class="ctr-lic-vencedora-card">
+                                <div class="ctr-lic-vencedora-badge"><i class="fas fa-check-circle"></i> MELHOR PROPOSTA</div>
+                                <div class="ctr-lic-grid-2">
+                                    <div class="ctr-lic-campo">
+                                        <span class="ctr-lic-label">Empresa / Fornecedor</span>
+                                        <span id="ctr_licVencNome" class="ctr-lic-valor ctr-lic-venc-nome">—</span>
+                                    </div>
+                                    <div class="ctr-lic-campo">
+                                        <span class="ctr-lic-label">Valor Proposto</span>
+                                        <span id="ctr_licVencValor" class="ctr-lic-valor ctr-lic-venc-valor">—</span>
+                                    </div>
+                                    <div class="ctr-lic-campo" style="grid-column:1/-1;">
+                                        <span class="ctr-lic-label">Descricao / Servico</span>
+                                        <span id="ctr_licVencDesc" class="ctr-lic-valor">—</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quadro comparativo -->
+                        <div class="ctr-lic-section">
+                            <h4 class="ctr-lic-section-title"><i class="fas fa-balance-scale"></i> Quadro Comparativo de Orcamentos</h4>
+                            <div class="table-container">
+                                <table class="ctr-lic-tabela">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>FORNECEDOR / EMPRESA</th>
+                                            <th>DESCRICAO</th>
+                                            <th>VALOR PROPOSTO</th>
+                                            <th>SITUACAO</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ctr_licOrcTbody">
+                                        <tr><td colspan="5" style="text-align:center;opacity:.5;">Nenhum orcamento cadastrado</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Justificativa -->
+                        <div class="ctr-lic-section" id="ctr_licJustSection" style="display:none;">
+                            <h4 class="ctr-lic-section-title"><i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i> Justificativa</h4>
+                            <div class="ctr-lic-justificativa" id="ctr_licJustTexto">—</div>
+                        </div>
+
+                        <!-- Assinatura -->
+                        <div class="ctr-lic-section ctr-lic-assinatura-section">
+                            <h4 class="ctr-lic-section-title"><i class="fas fa-signature"></i> Aprovacao e Assinatura</h4>
+                            <div class="ctr-lic-assinatura-grid">
+                                <div class="ctr-lic-assinatura-campo">
+                                    <div class="ctr-lic-assinatura-linha"></div>
+                                    <div class="ctr-lic-assinatura-nome">
+                                        <input type="text" id="ctr_licInputNome" class="ctr-lic-input-assinatura" placeholder="Nome do responsavel">
+                                    </div>
+                                    <div class="ctr-lic-assinatura-cargo">
+                                        <input type="text" id="ctr_licInputCargo" class="ctr-lic-input-assinatura" placeholder="Cargo / Funcao">
+                                    </div>
+                                </div>
+                                <div class="ctr-lic-assinatura-campo">
+                                    <div class="ctr-lic-assinatura-linha"></div>
+                                    <div class="ctr-lic-assinatura-nome">Testemunha</div>
+                                    <div class="ctr-lic-assinatura-cargo">Assinatura</div>
+                                </div>
+                            </div>
+                            <div class="ctr-lic-local-data"><span id="ctr_licLocalData">—</span></div>
+                        </div>
+
+                        <!-- Rodape -->
+                        <div class="ctr-lic-rodape">
+                            <p>Documento gerado pelo Sistema ERP Condominio — <span id="ctr_licRodapeData">—</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ SECAO: RELATORIOS ═══ -->
+    <div id="ctr_secRelatorios" style="display:none;">
+        <div class="page-card">
+            <h2 class="section-title"><i class="fas fa-chart-bar"></i> Relatorios de Contratos</h2>
+            <div class="ctr-rel-grid">
+                <div class="ctr-rel-card page-card">
+                    <h3><i class="fas fa-check-circle"></i> Contratos Ativos</h3>
+                    <p>Lista todos os contratos com status ativo.</p>
+                    <div class="form-group">
+                        <select id="ctr_relAtivosTipo" class="form-control">
+                            <option value="">Todos os tipos</option>
+                            <option value="prestacao_servico">Prestacao de Servico</option>
+                            <option value="venda">Venda</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary btn-xs" id="ctr_btnRelAtivos"><i class="fas fa-download"></i> Gerar CSV</button>
+                </div>
+                <div class="ctr-rel-card page-card">
+                    <h3><i class="fas fa-calendar-alt"></i> Vencimentos Proximos</h3>
+                    <p>Contratos que vencem nos proximos dias.</p>
+                    <div class="form-group">
+                        <select id="ctr_relVencDias" class="form-control">
+                            <option value="7">7 dias</option>
+                            <option value="15">15 dias</option>
+                            <option value="30" selected>30 dias</option>
+                            <option value="60">60 dias</option>
+                            <option value="90">90 dias</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary btn-xs" id="ctr_btnRelVenc"><i class="fas fa-download"></i> Gerar CSV</button>
+                </div>
+                <div class="ctr-rel-card page-card">
+                    <h3><i class="fas fa-building"></i> Por Fornecedor</h3>
+                    <p>Agrupa contratos por fornecedor com totais.</p>
+                    <button class="btn btn-primary btn-xs" id="ctr_btnRelFornecedor"><i class="fas fa-download"></i> Gerar CSV</button>
+                </div>
+                <div class="ctr-rel-card page-card">
+                    <h3><i class="fas fa-dollar-sign"></i> Financeiro</h3>
+                    <p>Resumo financeiro por periodo.</p>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">De</label>
+                            <input type="date" id="ctr_relFinIni" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ate</label>
+                            <input type="date" id="ctr_relFinFim" class="form-control">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-xs" id="ctr_btnRelFinanceiro"><i class="fas fa-download"></i> Gerar CSV</button>
+                </div>
+            </div>
+
+            <!-- Resultado do relatorio -->
+            <div id="ctr_relResultado" style="display:none;margin-top:1.5rem;">
+                <h2 class="section-title"><i class="fas fa-table"></i> Resultado</h2>
+                <div class="table-container">
+                    <table id="ctr_relTabela">
+                        <thead id="ctr_relThead"></thead>
+                        <tbody id="ctr_relTbody"></tbody>
+                    </table>
+                </div>
+                <div class="form-actions" style="margin-top:1rem;">
+                    <button class="btn btn-success" id="ctr_btnExportCSV"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══ MODAL: NOVO / EDITAR CONTRATO ═══ -->
+    <div class="modal-overlay" id="ctr_modalOverlay" style="display:none;" onclick="if(event.target===this)Contratos.fecharModal()">
+    <div class="modal-box modal-lg">
+        <div class="modal-header">
+            <h3 id="ctr_modalTitulo"><i class="fas fa-file-contract"></i> Novo Contrato</h3>
+            <button class="modal-close-btn" id="ctr_modalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="ctr_formContrato" autocomplete="off">
+                <input type="hidden" id="ctr_formId" value="0">
+
+                <!-- Fornecedor -->
+                <div class="ctr-form-section">
+                    <h4 class="ctr-form-section-title"><i class="fas fa-building"></i> Fornecedor</h4>
+                    <div class="form-group">
+                        <label class="form-label">Buscar Fornecedor <span class="required">*</span></label>
+                        <div class="ctr-autocomplete-wrap">
+                            <input type="text" id="ctr_formFornecedorBusca" class="form-control" placeholder="Digite nome ou CNPJ do fornecedor..." autocomplete="off">
+                            <div class="ctr-autocomplete-list" id="ctr_fornecedorLista"></div>
+                        </div>
+                        <input type="hidden" id="ctr_formFornecedorId" value="0">
+                        <input type="hidden" id="ctr_formFornecedorNome">
+                        <input type="hidden" id="ctr_formFornecedorCnpj">
+                        <div class="ctr-fornecedor-selecionado" id="ctr_fornecedorSelecionado" style="display:none;">
+                            <i class="fas fa-check-circle" style="color:#10b981;"></i>
+                            <span id="ctr_fornecedorInfo"></span>
+                            <button type="button" class="btn btn-danger btn-xs" id="ctr_fornecedorLimpar">
+                                <i class="fas fa-times"></i> Trocar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dados do Contrato -->
+                <div class="ctr-form-section">
+                    <h4 class="ctr-form-section-title"><i class="fas fa-info-circle"></i> Dados do Contrato</h4>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Tipo de Servico <span class="required">*</span></label>
+                            <select id="ctr_formTipo" class="form-control" required>
+                                <option value="">Selecione...</option>
+                                <option value="prestacao_servico">Prestacao de Servico</option>
+                                <option value="venda">Venda</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Recorrencia <span class="required">*</span></label>
+                            <select id="ctr_formRecorrencia" class="form-control" required>
+                                <option value="">Selecione...</option>
+                                <option value="unica">Unica</option>
+                                <option value="mensal">Mensal</option>
+                                <option value="anual">Anual</option>
+                                <option value="diaria">Diaria</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nome do Contrato <span class="required">*</span></label>
+                        <input type="text" id="ctr_formNome" class="form-control" placeholder="Ex: Locacao de Maquina de Cafe" required>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Data de Inicio <span class="required">*</span></label>
+                            <input type="date" id="ctr_formInicio" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Data de Fim <span class="required">*</span></label>
+                            <input type="date" id="ctr_formFim" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financeiro -->
+                <div class="ctr-form-section">
+                    <h4 class="ctr-form-section-title"><i class="fas fa-dollar-sign"></i> Financeiro</h4>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Valor Total (R$) <span class="required">*</span></label>
+                            <input type="text" id="ctr_formValor" class="form-control" placeholder="0,00" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Data de Vencimento <span class="required">*</span></label>
+                            <input type="date" id="ctr_formVencimento" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Plano de Contas <span class="required">*</span></label>
+                        <select id="ctr_formPlano" class="form-control" required>
+                            <option value="">Selecione o plano de contas...</option>
+                        </select>
+                    </div>
+
+                    <!-- Preview de parcelas -->
+                    <div class="ctr-parcelas-preview" id="ctr_parcelasPreview" style="display:none;">
+                        <div class="ctr-parcelas-info">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Serao gerados <strong id="ctr_parcelasQtd">0</strong> lancamento(s) em Contas a Pagar de
+                            <strong id="ctr_parcelasValor">R$ 0,00</strong> cada.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Observacoes -->
+                <div class="form-group">
+                    <label class="form-label">Observacoes</label>
+                    <textarea id="ctr_formObs" class="form-control" rows="3" placeholder="Observacoes adicionais..."></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" id="ctr_btnSalvar">
+                        <i class="fas fa-save"></i> Gerar Contrato
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="ctr_btnCancelar">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                </div>
+            </form>
+         </div>
+    </div>
+    </div><!-- /#ctr_modalOverlay -->
+
+    <!-- ═══ MODAL: CONFIRMAR EXCLUSAO ═══ -->
+    <div class="modal-overlay" id="ctr_modalExcluirOverlay" style="display:none;">
+    <div class="modal-box modal-sm">
+        <div class="modal-header">
+            <h3><i class="fas fa-exclamation-triangle" style="color:#ef4444;"></i> Confirmar Exclusao</h3>
+            <button class="modal-close-btn" id="ctr_modalExcluirClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Tem certeza que deseja excluir o contrato <strong id="ctr_excluirNome"></strong>?</p>
+            <p style="color:#64748b;font-size:.9rem;">Esta acao nao pode ser desfeita. Os lancamentos em Contas a Pagar vinculados serao mantidos.</p>
+            <div class="form-actions">
+                <button class="btn btn-danger" id="ctr_btnExcluirConfirmar">
+                    <i class="fas fa-trash"></i> Sim, Excluir
+                </button>
+                <button class="btn btn-secondary" id="ctr_btnExcluirCancelar">Cancelar</button>
+            </div>
+        </div>
+     </div>
+    </div><!-- /#ctr_modalExcluirOverlay -->
+
+    <!-- ═══ MODAL: VISUALIZAR ORCAMENTO / DOCUMENTOS ═══ -->
+    <div class="modal-overlay" id="ctr_modalOrcOverlay" style="display:none;" onclick="if(event.target===this)Contratos.fecharModalOrc()">
+    <div class="modal-box modal-lg">
+        <div class="modal-header">
+            <h3><i class="fas fa-calculator"></i> Detalhes do Orcamento</h3>
+            <button class="modal-close-btn" id="ctr_modalOrcClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Fornecedor</label>
+                    <p class="ctr-dado-valor" id="ctr_orcViewFornecedor">-</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Valor Proposto</label>
+                    <p class="ctr-dado-valor ctr-valor-destaque" id="ctr_orcViewValor">-</p>
+                </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label class="form-label">Descricao</label>
+                    <p class="ctr-dado-valor" id="ctr_orcViewDescricao">-</p>
+                </div>
+                <div class="form-group" style="grid-column:1/-1;" id="ctr_orcViewJustWrap">
+                    <label class="form-label"><i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i> Justificativa</label>
+                    <p class="ctr-dado-valor" id="ctr_orcViewJustificativa">-</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Data de Cadastro</label>
+                    <p class="ctr-dado-valor" id="ctr_orcViewData">-</p>
+                </div>
+            </div>
+
+            <hr style="margin:1.25rem 0;border:none;border-top:1px solid #e2e8f0;">
+
+            <h4 class="section-title" style="margin-bottom:.75rem;">
+                <i class="fas fa-paperclip"></i> Documentos do Orcamento
+                <span class="ctr-counter-badge">(<span id="ctr_orcDocCount">0</span>)</span>
+            </h4>
+
+            <div class="filter-bar" style="flex-wrap:wrap;align-items:flex-end;">
+                <div class="form-group" style="flex:1;min-width:180px;">
+                    <label class="form-label">Nome do Documento <span class="required">*</span></label>
+                    <input type="text" id="ctr_orcDocNome" class="form-control" placeholder="Ex: Proposta comercial">
+                </div>
+                <div class="form-group" style="flex:1;min-width:160px;">
+                    <label class="form-label">Tipo <span class="required">*</span></label>
+                    <select id="ctr_orcDocTipo" class="form-control">
+                        <option value="">Selecione...</option>
+                        <option value="proposta">Proposta</option>
+                        <option value="planilha_orcamentaria">Planilha Orcamentaria</option>
+                        <option value="nf_recibo">NF / Recibo</option>
+                        <option value="outros">Outros</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:2;min-width:220px;">
+                    <label class="form-label">Arquivo <span class="required">*</span> <small>(JPG, PDF, DOC, DOCX - max 10MB)</small></label>
+                    <input type="file" id="ctr_orcDocArquivo" class="form-control" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-success" id="ctr_btnUploadOrcDoc"><i class="fas fa-upload"></i> Enviar</button>
+                </div>
+            </div>
+
+            <div class="table-container" style="margin-top:1rem;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>NOME</th>
+                            <th>TIPO</th>
+                            <th>ARQUIVO</th>
+                            <th>TAMANHO</th>
+                            <th>DATA</th>
+                            <th>ACOES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ctr_orcDocTbody"></tbody>
+                </table>
+            </div>
+            <div class="ctr-empty-state" id="ctr_orcDocEmpty" style="display:none;">
+                <i class="fas fa-file-upload"></i>
+                <p>Nenhum documento anexado a este orcamento</p>
+            </div>
+        </div>
+    </div>
+    </div><!-- /#ctr_modalOrcOverlay -->
+
+    <!-- Toast de notificacao -->
+    <div id="ctr_toast" style="display:none;position:fixed;bottom:24px;right:24px;z-index:99999;padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);"></div>
+
+</div><!-- /.page-wrapper -->

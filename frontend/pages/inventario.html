@@ -1,0 +1,535 @@
+
+<div id="page-metadata" data-title="Inventário" data-icon="fa-boxes" style="display:none;"></div>
+
+<!-- Toast Container -->
+<div id="toastContainerInv" class="toast-container-inv"></div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-inventario">
+
+  <!-- Breadcrumb -->
+  <nav class="stub-breadcrumb">
+    <span data-page="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
+    <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+    <span>Inventário</span>
+  </nav>
+
+    <!-- Page Header -->
+    <div class="page-header-inv">
+        <div class="page-header-content">
+            <h1><i class="fas fa-boxes" style="color:#2563eb;margin-right:10px;"></i>Inventário de Patrimônio</h1>
+            <p>Cadastro e controle de bens patrimoniais do condomínio</p>
+        </div>
+        <div class="page-header-actions">
+            <button class="btn-secondary-inv btn-sm-inv" id="btnVoltarAdm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-inv">
+        <button class="tab-btn-inv active" data-tab="cadastro">
+            <i class="fas fa-plus-circle"></i> Cadastro
+        </button>
+        <button class="tab-btn-inv" data-tab="listagem">
+            <i class="fas fa-list"></i> Listagem
+        </button>
+        <button class="tab-btn-inv" data-tab="grupos">
+            <i class="fas fa-layer-group"></i> Grupos
+        </button>
+        <button class="tab-btn-inv" data-tab="relatorios">
+            <i class="fas fa-chart-bar"></i> Relatórios
+        </button>
+    </div>
+
+    <!-- ===== ABA: CADASTRO ===== -->
+    <div id="tab-cadastro" class="tab-content-inv active">
+        <div class="card-inv">
+            <div class="card-header-inv">
+                <h2><i class="fas fa-plus-circle"></i> <span id="formTitle">Novo Item de Patrimônio</span></h2>
+            </div>
+            <form id="formInventario" novalidate>
+                <input type="hidden" id="itemId">
+
+                <div class="form-grid-inv form-grid-3-inv">
+                    <div class="form-group-inv">
+                        <label for="numeroPatrimonio">Nº Patrimônio <span class="req">*</span></label>
+                        <input type="text" id="numeroPatrimonio" placeholder="Ex: PAT-001" required maxlength="50">
+                        <span class="form-hint-inv">Código único da etiqueta patrimonial</span>
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="nomeItem">Nome do Item <span class="req">*</span></label>
+                        <input type="text" id="nomeItem" placeholder="Ex: Notebook Dell Inspiron" required maxlength="255">
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="fabricante">Fabricante</label>
+                        <input type="text" id="fabricante" placeholder="Ex: Dell" maxlength="100">
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="modelo">Modelo</label>
+                        <input type="text" id="modelo" placeholder="Ex: Inspiron 15 3000" maxlength="100">
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="numeroSerie">Número de Série</label>
+                        <input type="text" id="numeroSerie" placeholder="Ex: SN123456789" maxlength="100">
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="nf">Nota Fiscal (NF)</label>
+                        <input type="text" id="nf" placeholder="Número da NF" maxlength="50">
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="dataCompra">Data de Compra</label>
+                        <input type="date" id="dataCompra">
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="situacao">Situação Contábil <span class="req">*</span></label>
+                        <select id="situacao" required>
+                            <option value="imobilizado">Imobilizado (Ativo Fixo)</option>
+                            <option value="circulante">Circulante (Consumível)</option>
+                        </select>
+                        <span class="form-hint-inv">Imobilizado = bem durável; Circulante = consumível</span>
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="valor">Valor de Aquisição (R$)</label>
+                        <input type="number" id="valor" step="0.01" min="0" placeholder="0,00">
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="status">Status <span class="req">*</span></label>
+                        <select id="status" required>
+                            <option value="ativo">Ativo</option>
+                            <option value="inativo">Inativo (Baixado)</option>
+                        </select>
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="tutelaUsuarioId">Responsável (Tutela)</label>
+                        <select id="tutelaUsuarioId">
+                            <option value="">Sem responsável</option>
+                        </select>
+                    </div>
+
+                    <!-- Campo Grupo com cadastro inline -->
+                    <div class="form-group-inv">
+                        <label for="grupoId">Grupo <span class="form-hint-inv" style="display:inline;">(opcional)</span></label>
+                        <div class="grupo-field-wrapper">
+                            <select id="grupoId" style="flex:1;">
+                                <option value="">Sem grupo</option>
+                            </select>
+                            <button type="button" class="btn-icon-inv btn-add-grupo" id="btnAbrirNovoGrupo" title="Cadastrar novo grupo">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <!-- Painel inline de novo grupo -->
+                        <div id="painelNovoGrupo" class="painel-novo-grupo" style="display:none;">
+                            <div class="painel-novo-grupo-inner">
+                                <input type="text" id="novoGrupoNome" placeholder="Nome do novo grupo (ex: Hidrômetros)" maxlength="100">
+                                <input type="text" id="novoGrupoDescricao" placeholder="Descrição (opcional)" maxlength="255">
+                                <div class="painel-novo-grupo-actions">
+                                    <button type="button" class="btn-primary-inv btn-sm-inv" id="btnSalvarNovoGrupo">
+                                        <i class="fas fa-save"></i> Salvar Grupo
+                                    </button>
+                                    <button type="button" class="btn-secondary-inv btn-sm-inv" id="btnCancelarNovoGrupo">
+                                        <i class="fas fa-times"></i> Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="form-hint-inv">Classifique o item em um grupo (ex: Hidrômetros, TI, Móveis)</span>
+                    </div>
+
+                    <!-- Campo condicional: Data de Baixa -->
+                    <div class="form-group-inv campo-cond-inv" id="campoDataBaixa">
+                        <label for="dataBaixa">Data de Baixa</label>
+                        <input type="date" id="dataBaixa">
+                    </div>
+                </div>
+
+                <!-- Motivo de Baixa (condicional) -->
+                <div class="form-group-inv campo-cond-inv" id="campoMotivoBaixa" style="margin-top:1rem;">
+                    <label for="motivoBaixa">Motivo de Baixa <span class="req">*</span></label>
+                    <textarea id="motivoBaixa" rows="3" placeholder="Descreva o motivo da baixa do patrimônio (obrigatório para itens inativos)"></textarea>
+                </div>
+
+                <!-- Observações -->
+                <div class="form-group-inv" style="margin-top:1rem;">
+                    <label for="observacoes">Observações</label>
+                    <textarea id="observacoes" rows="3" placeholder="Informações adicionais sobre o item"></textarea>
+                </div>
+
+                <div class="btn-actions-inv">
+                    <button type="submit" class="btn-primary-inv" id="btnSalvar">
+                        <i class="fas fa-save"></i> <span id="btnSalvarTexto">Salvar Item</span>
+                    </button>
+                    <button type="button" class="btn-secondary-inv" id="btnLimparForm">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== ABA: LISTAGEM ===== -->
+    <div id="tab-listagem" class="tab-content-inv">
+
+        <!-- KPIs -->
+        <div class="kpi-grid-inv">
+            <div class="kpi-card-inv kpi-blue-inv">
+                <div class="kpi-icon-inv"><i class="fas fa-boxes"></i></div>
+                <div class="kpi-info-inv">
+                    <span class="kpi-value-inv" id="kpiTotal">--</span>
+                    <span class="kpi-label-inv">Total de Itens</span>
+                </div>
+            </div>
+            <div class="kpi-card-inv kpi-green-inv">
+                <div class="kpi-icon-inv"><i class="fas fa-check-circle"></i></div>
+                <div class="kpi-info-inv">
+                    <span class="kpi-value-inv" id="kpiAtivos">--</span>
+                    <span class="kpi-label-inv">Ativos</span>
+                </div>
+            </div>
+            <div class="kpi-card-inv kpi-red-inv">
+                <div class="kpi-icon-inv"><i class="fas fa-times-circle"></i></div>
+                <div class="kpi-info-inv">
+                    <span class="kpi-value-inv" id="kpiInativos">--</span>
+                    <span class="kpi-label-inv">Inativos (Baixados)</span>
+                </div>
+            </div>
+            <div class="kpi-card-inv kpi-purple-inv">
+                <div class="kpi-icon-inv"><i class="fas fa-dollar-sign"></i></div>
+                <div class="kpi-info-inv">
+                    <span class="kpi-value-inv" id="kpiValor">--</span>
+                    <span class="kpi-label-inv">Valor Total</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="card-inv">
+            <div class="card-header-inv">
+                <h2><i class="fas fa-filter"></i> Filtros de Busca</h2>
+            </div>
+            <div class="form-grid-inv form-grid-3-inv">
+                <div class="form-group-inv">
+                    <label>Nº Patrimônio</label>
+                    <input type="text" id="filtroNumeroPatrimonio" placeholder="Buscar por patrimônio...">
+                </div>
+                <div class="form-group-inv">
+                    <label>Nota Fiscal</label>
+                    <input type="text" id="filtroNF" placeholder="Buscar por NF...">
+                </div>
+                <div class="form-group-inv">
+                    <label>Situação</label>
+                    <select id="filtroSituacao">
+                        <option value="">Todas</option>
+                        <option value="imobilizado">Imobilizado</option>
+                        <option value="circulante">Circulante</option>
+                    </select>
+                </div>
+                <div class="form-group-inv">
+                    <label>Status</label>
+                    <select id="filtroStatus">
+                        <option value="">Todos</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                    </select>
+                </div>
+                <div class="form-group-inv">
+                    <label>Grupo</label>
+                    <select id="filtroGrupo">
+                        <option value="">Todos os grupos</option>
+                    </select>
+                </div>
+                <div class="form-group-inv">
+                    <label>Responsável</label>
+                    <select id="filtroTutela">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="form-group-inv form-actions-inline-inv">
+                    <button class="btn-primary-inv" id="btnBuscar">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    <button class="btn-secondary-inv" id="btnLimparBusca">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela -->
+        <div class="card-inv">
+            <div class="card-header-inv">
+                <h2><i class="fas fa-list"></i> Lista de Patrimônio</h2>
+                <div class="card-header-actions-inv">
+                    <button class="btn-secondary-inv btn-sm-inv" id="btnExportarCSV">
+                        <i class="fas fa-file-csv"></i> Exportar CSV
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive-inv">
+                <table class="data-table-inv">
+                    <thead>
+                        <tr>
+                            <th>Patrimônio</th>
+                            <th>Nome do Item</th>
+                            <th>Grupo</th>
+                            <th>Fabricante / Modelo</th>
+                            <th>NF</th>
+                            <th>Situação</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Responsável</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaInventario">
+                        <tr class="empty-row-inv">
+                            <td colspan="10"><i class="fas fa-spinner fa-spin"></i> Carregando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <!-- Paginação -->
+            <div class="pagination-bar-inv" id="paginacaoInventario"></div>
+        </div>
+    </div>
+
+    <!-- ===== ABA: GRUPOS ===== -->
+    <div id="tab-grupos" class="tab-content-inv">
+        <div class="card-inv">
+            <div class="card-header-inv">
+                <h2><i class="fas fa-layer-group"></i> Gerenciar Grupos de Inventário</h2>
+                <div class="card-header-actions-inv">
+                    <button class="btn-primary-inv btn-sm-inv" id="btnNovoGrupoTab">
+                        <i class="fas fa-plus"></i> Novo Grupo
+                    </button>
+                </div>
+            </div>
+
+            <!-- Formulário de grupo (colapsável) -->
+            <div id="formGrupoWrapper" style="display:none; padding:1.25rem; border-bottom:1px solid #e2e8f0;">
+                <h3 style="margin:0 0 1rem; font-size:1rem; color:#1e293b;">
+                    <i class="fas fa-edit"></i> <span id="formGrupoTitulo">Novo Grupo</span>
+                </h3>
+                <input type="hidden" id="grupoEditId">
+                <div class="form-grid-inv form-grid-3-inv">
+                    <div class="form-group-inv">
+                        <label for="grupoNomeTab">Nome do Grupo <span class="req">*</span></label>
+                        <input type="text" id="grupoNomeTab" placeholder="Ex: Hidrômetros" maxlength="100" required>
+                        <span class="form-hint-inv">Nome único para identificar o grupo</span>
+                    </div>
+                    <div class="form-group-inv">
+                        <label for="grupoDescricaoTab">Descrição</label>
+                        <input type="text" id="grupoDescricaoTab" placeholder="Descrição opcional do grupo" maxlength="255">
+                    </div>
+                    <div class="form-group-inv form-actions-inline-inv" style="align-self:flex-end;">
+                        <button class="btn-primary-inv" id="btnSalvarGrupoTab">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                        <button class="btn-secondary-inv" id="btnCancelarGrupoTab">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela de grupos -->
+            <div class="table-responsive-inv">
+                <table class="data-table-inv">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Nome do Grupo</th>
+                            <th>Descrição</th>
+                            <th>Status</th>
+                            <th>Cadastrado em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaGrupos">
+                        <tr class="empty-row-inv">
+                            <td colspan="6"><i class="fas fa-spinner fa-spin"></i> Carregando grupos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ABA: RELATÓRIOS ===== -->
+    <div id="tab-relatorios" class="tab-content-inv">
+
+        <!-- KPIs de Relatório -->
+        <div class="kpi-grid-inv">
+            <div class="kpi-card-inv kpi-blue-inv">
+                <div class="kpi-icon-inv"><i class="fas fa-boxes"></i></div>
+                <div class="kpi-info-inv">
+                    <span class="kpi-value-inv" id="relKpiTotal">--</span>
+                    <span class="kpi-label-inv">Total de Itens</span>
+                </div>
+            </div>
+            <div class="kpi-card-inv kpi-green-inv">
+                <div class="kpi-icon-inv"><i class="fas fa-check-circle"></i></div>
+                <div class="kpi-info-inv">
+                    <span class="kpi-value-inv" id="relKpiAtivos">--</span>
+                    <span class="kpi-label-inv">Ativos</span>
+                </div>
+            </div>
+            <div class="kpi-card-inv kpi-red-inv">
+                <div class="kpi-icon-inv"><i class="fas fa-times-circle"></i></div>
+                <div class="kpi-info-inv">
+                    <span class="kpi-value-inv" id="relKpiInativos">--</span>
+                    <span class="kpi-label-inv">Inativos</span>
+                </div>
+            </div>
+            <div class="kpi-card-inv kpi-purple-inv">
+                <div class="kpi-icon-inv"><i class="fas fa-dollar-sign"></i></div>
+                <div class="kpi-info-inv">
+                    <span class="kpi-value-inv" id="relKpiValor">--</span>
+                    <span class="kpi-label-inv">Valor Total</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros de Relatório -->
+        <div class="card-inv">
+            <div class="card-header-inv">
+                <h2><i class="fas fa-filter"></i> Filtros do Relatório</h2>
+            </div>
+            <div class="form-grid-inv form-grid-3-inv">
+                <div class="form-group-inv">
+                    <label>Tipo de Relatório</label>
+                    <select id="tipoRelatorio">
+                        <option value="geral">Relatório Geral</option>
+                        <option value="grupo">Por Grupo</option>
+                        <option value="situacao">Por Situação</option>
+                        <option value="status">Por Status</option>
+                        <option value="responsavel">Por Responsável</option>
+                        <option value="baixas">Itens Baixados</option>
+                    </select>
+                </div>
+                <div class="form-group-inv">
+                    <label>Grupo</label>
+                    <select id="relFiltroGrupo">
+                        <option value="">Todos os grupos</option>
+                    </select>
+                </div>
+                <div class="form-group-inv">
+                    <label>Situação</label>
+                    <select id="relFiltroSituacao">
+                        <option value="">Todas</option>
+                        <option value="imobilizado">Imobilizado</option>
+                        <option value="circulante">Circulante</option>
+                    </select>
+                </div>
+                <div class="form-group-inv">
+                    <label>Status</label>
+                    <select id="relFiltroStatus">
+                        <option value="">Todos</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                    </select>
+                </div>
+                <div class="form-group-inv">
+                    <label>Responsável</label>
+                    <select id="relFiltroResponsavel">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="form-group-inv form-actions-inline-inv">
+                    <button class="btn-primary-inv" id="btnGerarRelatorio">
+                        <i class="fas fa-sync"></i> Gerar
+                    </button>
+                    <button class="btn-secondary-inv btn-sm-inv" id="btnExportarRelCSV">
+                        <i class="fas fa-file-csv"></i> CSV
+                    </button>
+                    <button class="btn-danger-inv btn-sm-inv" id="btnGerarRelPDF" title="Gerar PDF do relatório">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela de Resultados -->
+        <div class="card-inv">
+            <div class="card-header-inv">
+                <h2><i class="fas fa-table"></i> <span id="tituloRelatorio">Relatório Geral</span></h2>
+            </div>
+            <div class="table-responsive-inv">
+                <table class="data-table-inv">
+                    <thead>
+                        <tr>
+                            <th>Patrimônio</th>
+                            <th>Nome do Item</th>
+                            <th>Grupo</th>
+                            <th>Fabricante</th>
+                            <th>Situação</th>
+                            <th>Status</th>
+                            <th>Valor</th>
+                            <th>Responsável</th>
+                            <th>Data Compra</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaRelatorio">
+                        <tr class="empty-row-inv">
+                            <td colspan="9">Selecione os filtros e clique em Gerar</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Seção de Baixas (condicional) -->
+        <div class="card-inv" id="secaoBaixas" style="display:none;">
+            <div class="card-header-inv">
+                <h2><i class="fas fa-exclamation-triangle" style="color:#ef4444;"></i> Detalhamento de Baixas</h2>
+            </div>
+            <div id="listaBaixas"></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal de Confirmação de Exclusão -->
+<div id="modalConfirmarExclusao" class="modal-overlay-inv page-inventario">
+    <div class="modal-box-inv modal-sm-inv">
+        <div class="modal-header-inv modal-header-danger-inv">
+            <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Exclusão</h3>
+            <button class="modal-close-inv" id="btnFecharModalExclusao">&times;</button>
+        </div>
+        <div class="modal-body-inv">
+            <p>Deseja realmente excluir o patrimônio <strong id="confirmarPatrimonio"></strong>?</p>
+            <p class="form-hint-inv" style="margin-top:0.5rem;">Esta ação não pode ser desfeita.</p>
+        </div>
+        <div class="modal-footer-inv">
+            <button class="btn-danger-inv" id="btnConfirmarExclusao">
+                <i class="fas fa-trash"></i> Excluir
+            </button>
+            <button class="btn-secondary-inv" id="btnCancelarExclusao">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Exclusão de Grupo -->
+<div id="modalConfirmarExclusaoGrupo" class="modal-overlay-inv page-inventario">
+    <div class="modal-box-inv modal-sm-inv">
+        <div class="modal-header-inv modal-header-danger-inv">
+            <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Exclusão de Grupo</h3>
+            <button class="modal-close-inv" id="btnFecharModalExclusaoGrupo">&times;</button>
+        </div>
+        <div class="modal-body-inv">
+            <p>Deseja realmente excluir o grupo <strong id="confirmarGrupoNome"></strong>?</p>
+            <p class="form-hint-inv" style="margin-top:0.5rem;">Itens vinculados a este grupo perderão o vínculo. Esta ação não pode ser desfeita.</p>
+        </div>
+        <div class="modal-footer-inv">
+            <button class="btn-danger-inv" id="btnConfirmarExclusaoGrupo">
+                <i class="fas fa-trash"></i> Excluir Grupo
+            </button>
+            <button class="btn-secondary-inv" id="btnCancelarExclusaoGrupo">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+    </div>
+</div>

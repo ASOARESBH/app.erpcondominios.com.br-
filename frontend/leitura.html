@@ -1,0 +1,1167 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leitura de Hidrï¿½metros - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: #fff;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        .tab.active {
+            background: #3b82f6;
+            color: #fff;
+            border-color: #3b82f6;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .section h2 {
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 0.6rem;
+            margin-bottom: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        input:read-only {
+            background: #f1f5f9;
+            color: #64748b;
+            cursor: not-allowed;
+        }
+
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 0.6rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .info-box {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .info-box h3 {
+            color: #1e40af;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-box p {
+            color: #1e40af;
+            margin: 0.25rem 0;
+        }
+
+        .calc-result {
+            background: #dcfce7;
+            border-left: 4px solid #22c55e;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .calc-result h3 {
+            color: #166534;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .calc-result .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #166534;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1000px;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            white-space: nowrap;
+            color: #1e293b;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #f87171;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #3b82f6;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .pagination button {
+            padding: 0.5rem 1rem;
+        }
+
+        .pagination span {
+            padding: 0.5rem 1rem;
+            background: #f1f5f9;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .section {
+                padding: 1rem;
+            }
+
+            .submenu ul {
+                flex-direction: column;
+            }
+
+            .submenu a {
+                display: block;
+                text-align: center;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+
+            button {
+                width: 100%;
+                margin-right: 0;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i>
+                        Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veï¿½culos</a>
+                </li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                        Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+                        Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                        Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                        Relatï¿½rios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                        Configuraï¿½ï¿½es</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link active"><i class="fas fa-tools"></i>
+                        Manutenï¿½ï¿½o</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                        Administrativo</a></li>
+                
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-tachometer-alt"></i> Leitura de Hidrï¿½metros</h1>
+            </header>
+
+            <nav class="submenu">
+                <ul>
+                    <li><a href="manutencao.html"><i class="fas fa-home"></i> Inï¿½cio</a></li>
+                    <li><a href="hidrometro.html"><i class="fas fa-tint"></i> Hidrï¿½metros</a></li>
+                    <li><a href="leitura.html" class="active"><i class="fas fa-tachometer-alt"></i> Leituras</a></li>
+                    <li><a href="relatorios_hidrometro.html"><i class="fas fa-chart-bar"></i> Relatï¿½rios</a></li>
+                </ul>
+            </nav>
+
+            <div id="alertContainer"></div>
+
+            <div class="tabs">
+                <div class="tab active" onclick="mudarAba('individual')">
+                    <i class="fas fa-user"></i> Leitura Individual
+                </div>
+                <div class="tab" onclick="mudarAba('coletiva')">
+                    <i class="fas fa-users"></i> Leitura Coletiva
+                </div>
+                <div class="tab" onclick="mudarAba('configuracoes')">
+                    <i class="fas fa-cog"></i> Configuraï¿½ï¿½es
+                </div>
+            </div>
+
+            <!-- ABA INDIVIDUAL -->
+            <div id="tab-individual" class="tab-content active">
+                <section class="section">
+                    <h2><i class="fas fa-user"></i> Leitura Individual</h2>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Regras de Cï¿½lculo:</strong> Consumo mï¿½nimo de 10 mï¿½ =
+                        R$ 61,60 | Acima de 10 mï¿½ = R$ 6,16 por mï¿½
+                    </div>
+                    <form id="formLeituraIndividual">
+                        <div class="form-grid">
+                            <div>
+                                <label for="ind_unidade">Unidade *</label>
+                                <select id="ind_unidade" required>
+                                    <option value="">Selecione uma unidade...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="ind_morador">Morador *</label>
+                                <select id="ind_morador" required disabled>
+                                    <option value="">Primeiro selecione a unidade</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="ind_hidrometro">Hidrï¿½metro *</label>
+                                <select id="ind_hidrometro" required disabled>
+                                    <option value="">Primeiro selecione o morador</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="ind_data_leitura">Data e Hora da Leitura *</label>
+                                <input type="datetime-local" id="ind_data_leitura" required>
+                            </div>
+                        </div>
+
+                        <div id="ind_info_hidrometro" class="info-box" style="display: none;">
+                            <h3><i class="fas fa-tint"></i> Informaï¿½ï¿½es do Hidrï¿½metro</h3>
+                            <p><strong>Nï¿½mero:</strong> <span id="info_numero"></span></p>
+                            <p><strong>Lacre:</strong> <span id="info_lacre"></span></p>
+                            <p><strong>Leitura Anterior:</strong> <span id="info_leitura_anterior"></span> mï¿½</p>
+                            <p><strong>Data ï¿½ltima Leitura:</strong> <span id="info_data_anterior"></span></p>
+                        </div>
+
+                        <div class="form-grid">
+                            <div>
+                                <label for="ind_leitura_anterior">Leitura Anterior (mï¿½)</label>
+                                <input type="number" id="ind_leitura_anterior" step="0.01" readonly>
+                            </div>
+                            <div>
+                                <label for="ind_leitura_atual">Leitura Atual (mï¿½) *</label>
+                                <input type="number" id="ind_leitura_atual" step="0.01" min="0" required>
+                            </div>
+                        </div>
+
+                        <div id="ind_calculo" class="calc-result" style="display: none;">
+                            <h3><i class="fas fa-calculator"></i> Cï¿½lculo Automï¿½tico</h3>
+                            <div class="form-grid">
+                                <div>
+                                    <p><strong>Consumo:</strong></p>
+                                    <p class="value" id="calc_consumo">0 mï¿½</p>
+                                </div>
+                                <div>
+                                    <p><strong>Valor a Pagar:</strong></p>
+                                    <p class="value" id="calc_valor">R$ 0,00</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit"><i class="fas fa-save"></i> Registrar Leitura</button>
+                        <button type="button" class="btn-secondary" onclick="limparFormIndividual()"><i
+                                class="fas fa-eraser"></i> Limpar</button>
+                    </form>
+                </section>
+            </div>
+
+            <!-- ABA COLETIVA -->
+            <div id="tab-coletiva" class="tab-content">
+                <section class="section">
+                    <h2><i class="fas fa-users"></i> Leitura Coletiva</h2>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Lanï¿½amento em Lote:</strong> Marque os hidrï¿½metros
+                        desejados e clique em "Lanï¿½ar Selecionados"
+                    </div>
+
+                    <div class="form-grid" style="margin-bottom: 1.5rem;">
+                        <div>
+                            <label for="col_data_leitura">Data e Hora da Leitura *</label>
+                            <input type="datetime-local" id="col_data_leitura" required>
+                        </div>
+                        <div style="display: flex; align-items: flex-end;">
+                            <button onclick="carregarHidrometrosAtivos()"><i class="fas fa-sync"></i> Atualizar
+                                Lista</button>
+                        </div>
+                    </div>
+
+                    <div class="loading" id="loadingColetiva">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p>Carregando hidrï¿½metros...</p>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table id="tabelaColetiva">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="selectAll" onclick="selecionarTodos()"></th>
+                                    <th>Unidade</th>
+                                    <th>Morador</th>
+                                    <th>Nï¿½ Hidrï¿½metro</th>
+                                    <th>Leitura Anterior (mï¿½)</th>
+                                    <th>Leitura Atual (mï¿½)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaColetiva">
+                                <tr>
+                                    <td colspan="6" class="empty-state">
+                                        <i class="fas fa-tint"></i>
+                                        <p>Clique em "Atualizar Lista" para carregar os hidrï¿½metros</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination" id="paginacao" style="display: none;">
+                        <button onclick="mudarPagina(-1)" id="btnAnterior"><i class="fas fa-chevron-left"></i>
+                            Anterior</button>
+                        <span id="infoPagina">Pï¿½gina 1 de 1</span>
+                        <button onclick="mudarPagina(1)" id="btnProximo">Prï¿½ximo <i
+                                class="fas fa-chevron-right"></i></button>
+                    </div>
+
+                    <div style="margin-top: 1.5rem;">
+                        <button class="btn-success" onclick="lancarSelecionados()"><i class="fas fa-check-circle"></i>
+                            Lanï¿½ar Selecionados</button>
+                        <button class="btn-secondary" onclick="limparSelecao()"><i class="fas fa-times"></i> Limpar
+                            Seleï¿½ï¿½o</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ABA CONFIGURAï¿½ï¿½ES -->
+            <div id="tab-configuracoes" class="tab-content">
+                <section class="section">
+                    <h2><i class="fas fa-cog"></i> Configuraï¿½ï¿½es de Perï¿½odo de Leitura</h2>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Importante:</strong> Defina o perï¿½odo em que
+                        moradores poderï¿½o lanï¿½ar suas prï¿½prias leituras pelo portal.
+                    </div>
+
+                    <form id="formConfigPeriodo" onsubmit="salvarConfigPeriodo(event)">
+                        <div class="form-grid">
+                            <div>
+                                <label for="config_dia_inicio">Dia Inicial do Perï¿½odo *</label>
+                                <input type="number" id="config_dia_inicio" min="1" max="31" required>
+                                <small style="color: #64748b;">Ex: 1 (primeiro dia do mï¿½s)</small>
+                            </div>
+                            <div>
+                                <label for="config_dia_fim">Dia Final do Perï¿½odo *</label>
+                                <input type="number" id="config_dia_fim" min="1" max="31" required>
+                                <small style="color: #64748b;">Ex: 10 (dï¿½cimo dia do mï¿½s)</small>
+                            </div>
+                        </div>
+
+                        <div style="margin: 1.5rem 0;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="config_morador_pode" checked>
+                                <span>Permitir que moradores lanï¿½em suas prï¿½prias leituras</span>
+                            </label>
+                        </div>
+
+                        <div id="config_info" class="info-box" style="display: none;">
+                            <h3><i class="fas fa-calendar-check"></i> Perï¿½odo Atual</h3>
+                            <p><strong>Dia atual:</strong> <span id="config_dia_atual">-</span></p>
+                            <p><strong>Perï¿½odo configurado:</strong> Dia <span id="config_periodo_atual">-</span></p>
+                            <p><strong>Status:</strong> <span id="config_status">-</span></p>
+                        </div>
+
+                        <button type="submit"><i class="fas fa-save"></i> Salvar Configuraï¿½ï¿½o</button>
+                        <button type="button" class="btn-secondary" onclick="carregarConfigPeriodo()"><i
+                                class="fas fa-sync"></i> Atualizar</button>
+                    </form>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Variï¿½veis globais
+        let hidrometrosAtivos = [];
+        let paginaAtual = 1;
+        let totalPaginas = 1;
+        const VALOR_M3 = 6.16;
+        const VALOR_MINIMO = 61.60;
+        const CONSUMO_MINIMO = 10;
+
+        // Inicializaï¿½ï¿½o
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarUnidades();
+            setDataAtual();
+            carregarConfigPeriodo();
+
+            document.getElementById('ind_unidade').addEventListener('change', carregarMoradoresPorUnidade);
+            document.getElementById('ind_morador').addEventListener('change', carregarHidrometrosPorMorador);
+            document.getElementById('ind_hidrometro').addEventListener('change', carregarUltimaLeitura);
+            document.getElementById('ind_leitura_atual').addEventListener('input', calcularValor);
+            document.getElementById('formLeituraIndividual').addEventListener('submit', salvarLeituraIndividual);
+        });
+
+        // Funï¿½ï¿½es de Menu e Abas
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function mudarAba(aba) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+            event.target.closest('.tab').classList.add('active');
+            document.getElementById('tab-' + aba).classList.add('active');
+
+            if (aba === 'coletiva') {
+                setDataAtualColetiva();
+            } else if (aba === 'configuracoes') {
+                carregarConfigPeriodo();
+            }
+        }
+
+        // Funï¿½ï¿½es de Alerta
+        function mostrarAlerta(mensagem, tipo = 'success') {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo}`;
+            alert.innerHTML = `<i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i> ${mensagem}`;
+            container.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+            container.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Carregar Unidades
+        async function carregarUnidades() {
+            try {
+                const response = await fetch('../api/api_unidades.php?ativas=1');
+                const data = await response.json();
+                if (data.sucesso) {
+                    const select = document.getElementById('ind_unidade');
+                    data.dados.forEach(unidade => {
+                        const option = new Option(unidade.bloco ? `${unidade.nome} - ${unidade.bloco}` : unidade.nome, unidade.nome);
+                        select.add(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar unidades:', error);
+            }
+        }
+
+        // Carregar Moradores por Unidade
+        async function carregarMoradoresPorUnidade() {
+            const unidade = document.getElementById('ind_unidade').value;
+            const selectMorador = document.getElementById('ind_morador');
+            const selectHidrometro = document.getElementById('ind_hidrometro');
+
+            selectMorador.innerHTML = '<option value="">Carregando...</option>';
+            selectMorador.disabled = true;
+            selectHidrometro.innerHTML = '<option value="">Primeiro selecione o morador</option>';
+            selectHidrometro.disabled = true;
+            document.getElementById('ind_info_hidrometro').style.display = 'none';
+
+            if (!unidade) {
+                selectMorador.innerHTML = '<option value="">Primeiro selecione a unidade</option>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`../api/api_moradores.php?unidade=${encodeURIComponent(unidade)}`);
+                const data = await response.json();
+
+                selectMorador.innerHTML = '<option value="">Selecione um morador...</option>';
+
+                if (data.sucesso && data.dados.length > 0) {
+                    data.dados.forEach(morador => {
+                        const option = new Option(`${morador.nome}`, morador.id);
+                        selectMorador.add(option);
+                    });
+                    selectMorador.disabled = false;
+                } else {
+                    selectMorador.innerHTML = '<option value="">Nenhum morador nesta unidade</option>';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                selectMorador.innerHTML = '<option value="">Erro ao carregar</option>';
+            }
+        }
+
+        // Carregar Hidrï¿½metros por Morador
+        async function carregarHidrometrosPorMorador() {
+            const moradorId = document.getElementById('ind_morador').value;
+            const selectHidrometro = document.getElementById('ind_hidrometro');
+
+            selectHidrometro.innerHTML = '<option value="">Carregando...</option>';
+            selectHidrometro.disabled = true;
+            document.getElementById('ind_info_hidrometro').style.display = 'none';
+
+            if (!moradorId) {
+                selectHidrometro.innerHTML = '<option value="">Primeiro selecione o morador</option>';
+                return;
+            }
+
+            try {
+                const response = await fetch('../api/api_hidrometros.php?ativos=1');
+                const data = await response.json();
+
+                selectHidrometro.innerHTML = '<option value="">Selecione um hidrï¿½metro...</option>';
+
+                if (data.sucesso) {
+                    const hidrometros = data.dados.filter(h => h.morador_id == moradorId);
+                    if (hidrometros.length > 0) {
+                        hidrometros.forEach(h => {
+                            const option = new Option(`${h.numero_hidrometro} (Lacre: ${h.numero_lacre || 'N/A'})`, h.id);
+                            selectHidrometro.add(option);
+                        });
+                        selectHidrometro.disabled = false;
+                    } else {
+                        selectHidrometro.innerHTML = '<option value="">Nenhum hidrï¿½metro para este morador</option>';
+                    }
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                selectHidrometro.innerHTML = '<option value="">Erro ao carregar</option>';
+            }
+        }
+
+        // Carregar ï¿½ltima Leitura
+        async function carregarUltimaLeitura() {
+            const hidrometroId = document.getElementById('ind_hidrometro').value;
+
+            if (!hidrometroId) {
+                document.getElementById('ind_info_hidrometro').style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch(`../api/api_leituras.php?ultima_leitura=${hidrometroId}`);
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    const leituraAnterior = data.dados.leitura_atual || 0;
+                    document.getElementById('ind_leitura_anterior').value = leituraAnterior;
+
+                    // Buscar info do hidrï¿½metro
+                    const respH = await fetch('../api/api_hidrometros.php');
+                    const dataH = await respH.json();
+                    const hidrometro = dataH.dados.find(h => h.id == hidrometroId);
+
+                    if (hidrometro) {
+                        document.getElementById('info_numero').textContent = hidrometro.numero_hidrometro;
+                        document.getElementById('info_lacre').textContent = hidrometro.numero_lacre || 'N/A';
+                        document.getElementById('info_leitura_anterior').textContent = leituraAnterior;
+                        document.getElementById('info_data_anterior').textContent = data.dados.data_leitura_formatada || 'Primeira leitura';
+                        document.getElementById('ind_info_hidrometro').style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+
+        // Calcular Valor
+        function calcularValor() {
+            const leituraAnterior = parseFloat(document.getElementById('ind_leitura_anterior').value) || 0;
+            const leituraAtual = parseFloat(document.getElementById('ind_leitura_atual').value) || 0;
+
+            if (leituraAtual <= 0) {
+                document.getElementById('ind_calculo').style.display = 'none';
+                return;
+            }
+
+            const consumo = leituraAtual - leituraAnterior;
+            let valor = 0;
+
+            if (consumo <= CONSUMO_MINIMO) {
+                valor = VALOR_MINIMO;
+            } else {
+                valor = consumo * VALOR_M3;
+            }
+
+            document.getElementById('calc_consumo').textContent = consumo.toFixed(2) + ' mï¿½';
+            document.getElementById('calc_valor').textContent = 'R$ ' + valor.toFixed(2);
+            document.getElementById('ind_calculo').style.display = 'block';
+        }
+
+        // Salvar Leitura Individual
+        async function salvarLeituraIndividual(e) {
+            e.preventDefault();
+
+            const leituraAnterior = parseFloat(document.getElementById('ind_leitura_anterior').value) || 0;
+            const leituraAtual = parseFloat(document.getElementById('ind_leitura_atual').value);
+
+            // Valida§£o: Aceita leitura atual >= anterior OU quando anterior = 0 (primeira leitura)
+            if (leituraAtual < leituraAnterior && leituraAnterior !== 0) {
+                mostrarAlerta(`Leitura atual (${leituraAtual}) n£o pode ser menor que a leitura anterior (${leituraAnterior})`, 'error');
+                return;
+            }
+
+            const dados = {
+                hidrometro_id: document.getElementById('ind_hidrometro').value,
+                leitura_atual: leituraAtual,
+                data_leitura: document.getElementById('ind_data_leitura').value
+            };
+
+            try {
+                const response = await fetch('../api/api_leituras.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta(`Leitura registrada! Consumo: ${data.dados.consumo} mï¿½ | Valor: R$ ${data.dados.valor_total.toFixed(2)}`, 'success');
+                    limparFormIndividual();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao registrar leitura', 'error');
+            }
+        }
+
+        // Carregar Hidrï¿½metros Ativos (Coletiva)
+        async function carregarHidrometrosAtivos() {
+            document.getElementById('loadingColetiva').classList.add('active');
+
+            try {
+                const response = await fetch(`../api/api_leituras.php?hidrometros_ativos=1&pagina=${paginaAtual}`);
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    hidrometrosAtivos = data.dados.hidrometros;
+                    totalPaginas = data.dados.total_paginas;
+                    renderizarHidrometrosColetiva();
+                    atualizarPaginacao();
+                    document.getElementById('paginacao').style.display = 'flex';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao carregar hidrï¿½metros', 'error');
+            } finally {
+                document.getElementById('loadingColetiva').classList.remove('active');
+            }
+        }
+
+        // Renderizar Hidrï¿½metros Coletiva
+        function renderizarHidrometrosColetiva() {
+            const tbody = document.getElementById('listaColetiva');
+
+            if (!hidrometrosAtivos || hidrometrosAtivos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><i class="fas fa-tint"></i><p>Nenhum hidrï¿½metro ativo encontrado</p></td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = hidrometrosAtivos.map((h, index) => `
+                <tr>
+                    <td><input type="checkbox" class="check-hidrometro" data-index="${index}"></td>
+                    <td>${h.unidade}</td>
+                    <td>${h.morador_nome}</td>
+                    <td><strong>${h.numero_hidrometro}</strong></td>
+                    <td>${h.leitura_anterior || 0} mï¿½</td>
+                    <td><input type="number" step="0.01" min="0" class="leitura-atual" data-index="${index}" style="width: 120px; padding: 0.4rem;"></td>
+                </tr>
+            `).join('');
+        }
+
+        // Selecionar Todos
+        function selecionarTodos() {
+            const checkAll = document.getElementById('selectAll');
+            document.querySelectorAll('.check-hidrometro').forEach(check => {
+                check.checked = checkAll.checked;
+            });
+        }
+
+        // Lanï¿½ar Selecionados
+        async function lancarSelecionados() {
+            const dataLeitura = document.getElementById('col_data_leitura').value;
+
+            if (!dataLeitura) {
+                mostrarAlerta('Informe a data e hora da leitura', 'warning');
+                return;
+            }
+
+            const leituras = [];
+            document.querySelectorAll('.check-hidrometro:checked').forEach(check => {
+                const index = check.dataset.index;
+                const leituraAtual = parseFloat(document.querySelector(`.leitura-atual[data-index="${index}"]`).value);
+
+                if (leituraAtual > 0) {
+                    leituras.push({
+                        hidrometro_id: hidrometrosAtivos[index].id,
+                        leitura_atual: leituraAtual,
+                        data_leitura: dataLeitura
+                    });
+                }
+            });
+
+            if (leituras.length === 0) {
+                mostrarAlerta('Selecione ao menos um hidrï¿½metro e informe a leitura', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch('../api/api_leituras.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ leituras })
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta(`${data.dados.sucesso} leitura(s) registrada(s) com sucesso!`, 'success');
+                    limparSelecao();
+                    carregarHidrometrosAtivos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarAlerta('Erro ao registrar leituras', 'error');
+            }
+        }
+
+        // Paginaï¿½ï¿½o
+        function mudarPagina(direcao) {
+            const novaPagina = paginaAtual + direcao;
+            if (novaPagina >= 1 && novaPagina <= totalPaginas) {
+                paginaAtual = novaPagina;
+                carregarHidrometrosAtivos();
+            }
+        }
+
+        function atualizarPaginacao() {
+            document.getElementById('infoPagina').textContent = `Pï¿½gina ${paginaAtual} de ${totalPaginas}`;
+            document.getElementById('btnAnterior').disabled = paginaAtual === 1;
+            document.getElementById('btnProximo').disabled = paginaAtual === totalPaginas;
+        }
+
+        // Limpar Funï¿½ï¿½es
+        function limparFormIndividual() {
+            document.getElementById('formLeituraIndividual').reset();
+            document.getElementById('ind_morador').innerHTML = '<option value="">Primeiro selecione a unidade</option>';
+            document.getElementById('ind_morador').disabled = true;
+            document.getElementById('ind_hidrometro').innerHTML = '<option value="">Primeiro selecione o morador</option>';
+            document.getElementById('ind_hidrometro').disabled = true;
+            document.getElementById('ind_info_hidrometro').style.display = 'none';
+            document.getElementById('ind_calculo').style.display = 'none';
+            setDataAtual();
+        }
+
+        function limparSelecao() {
+            document.getElementById('selectAll').checked = false;
+            document.querySelectorAll('.check-hidrometro').forEach(check => check.checked = false);
+            document.querySelectorAll('.leitura-atual').forEach(input => input.value = '');
+        }
+
+        function setDataAtual() {
+            const agora = new Date();
+            agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+            document.getElementById('ind_data_leitura').value = agora.toISOString().slice(0, 16);
+        }
+
+        function setDataAtualColetiva() {
+            const agora = new Date();
+            agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+            document.getElementById('col_data_leitura').value = agora.toISOString().slice(0, 16);
+        }
+
+        // ========== FUNï¿½ï¿½ES DE CONFIGURAï¿½ï¿½O DE PERï¿½ODO ==========
+
+        async function carregarConfigPeriodo() {
+            try {
+                const response = await fetch('../api/api_config_periodo_leitura.php');
+                const data = await response.json();
+
+                if (data.sucesso && data.dados) {
+                    document.getElementById('config_dia_inicio').value = data.dados.dia_inicio;
+                    document.getElementById('config_dia_fim').value = data.dados.dia_fim;
+                    document.getElementById('config_morador_pode').checked = data.dados.morador_pode_lancar == 1;
+
+                    // Exibir informaï¿½ï¿½es do perï¿½odo
+                    document.getElementById('config_info').style.display = 'block';
+                    document.getElementById('config_dia_atual').textContent = data.dados.dia_atual;
+                    document.getElementById('config_periodo_atual').textContent = `${data.dados.dia_inicio} a ${data.dados.dia_fim}`;
+
+                    if (data.dados.esta_no_periodo) {
+                        document.getElementById('config_status').innerHTML = '<span style="color: #22c55e; font-weight: 600;"><i class="fas fa-check-circle"></i> Dentro do perï¿½odo</span>';
+                    } else {
+                        document.getElementById('config_status').innerHTML = '<span style="color: #f59e0b; font-weight: 600;"><i class="fas fa-exclamation-circle"></i> Fora do perï¿½odo</span>';
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao carregar configuraï¿½ï¿½o:', error);
+            }
+        }
+
+        async function salvarConfigPeriodo(event) {
+            event.preventDefault();
+
+            const dia_inicio = parseInt(document.getElementById('config_dia_inicio').value);
+            const dia_fim = parseInt(document.getElementById('config_dia_fim').value);
+            const morador_pode_lancar = document.getElementById('config_morador_pode').checked ? 1 : 0;
+
+            if (dia_inicio > dia_fim) {
+                mostrarAlerta('Dia inicial nï¿½o pode ser maior que dia final', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('../api/api_config_periodo_leitura.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dia_inicio: dia_inicio,
+                        dia_fim: dia_fim,
+                        morador_pode_lancar: morador_pode_lancar
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'success');
+                    carregarConfigPeriodo();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar configuraï¿½ï¿½o:', error);
+                mostrarAlerta('Erro ao salvar configuraï¿½ï¿½o', 'error');
+            }
+        }
+    </script>
+    <!-- Proteï¿½ï¿½o de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

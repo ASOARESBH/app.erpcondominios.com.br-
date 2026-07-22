@@ -1,0 +1,107 @@
+<!-- Page Metadata for AppRouter -->
+<div id="page-metadata" data-title="Dashboard" data-icon="fa-chart-line" style="display:none;"></div>
+
+<div class="page-wrapper page-dashboard">
+    <div class="page-header">
+        <h1>Dashboard</h1>
+        <p>Visão geral do Condomínio Serra da Liberdade</p>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div class="welcome">
+        <h2><i class="fas fa-building"></i> Bem-vindo ao Sistema de Controle de Acesso</h2>
+        <p>Condomínio Serra da Liberdade</p>
+    </div>
+
+    <!-- ESTATÍSTICAS GERAIS -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <i class="fas fa-users icon"></i>
+            <h3>Total de Moradores</h3>
+            <div class="value" id="totalMoradores">-</div>
+        </div>
+        <div class="stat-card agua">
+            <i class="fas fa-tint icon"></i>
+            <h3>Consumo Total de Água</h3>
+            <div class="value" id="totalConsumoAgua">-</div>
+            <div class="subvalue" id="consumoMedioMorador">-</div>
+        </div>
+        <div class="stat-card agua">
+            <i class="fas fa-dollar-sign icon"></i>
+            <h3>Valor Total de Água</h3>
+            <div class="value" id="totalValorAgua">-</div>
+        </div>
+        <div class="stat-card abastecimento">
+            <i class="fas fa-gas-pump icon"></i>
+            <h3>Saldo de Abastecimento</h3>
+            <div class="value" id="saldoAbastecimento">-</div>
+            <div class="subvalue" id="statusSaldo">-</div>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: CHAMADOS / ORDENS DE SERVIÇO -->
+    <div class="page-card">
+        <h2 class="section-title">
+            <i class="fas fa-tools"></i> Chamados / Ordens de Serviço
+            <span class="dash-os-badge" id="dashOsBadge">NOVO</span>
+            <span class="dash-os-atualizado" id="dashOsAtualizado"></span>
+        </h2>
+        <div class="dash-os-kpis">
+            <div class="dash-os-kpi aberto">
+                <span id="dashOsAbertos">-</span>
+                <label>Abertos</label>
+            </div>
+            <div class="dash-os-kpi andamento">
+                <span id="dashOsAndamento">-</span>
+                <label>Em Andamento</label>
+            </div>
+            <div class="dash-os-kpi urgente">
+                <span id="dashOsUrgentes">-</span>
+                <label>Urgentes</label>
+            </div>
+            <div class="dash-os-kpi vencido">
+                <span id="dashOsVencidos">-</span>
+                <label>Prazo Vencido</label>
+            </div>
+        </div>
+        <div id="dashOsLista">
+            <p class="dash-os-loading"><i class="fas fa-spinner"></i> Carregando chamados...</p>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: TOP 10 MORADORES COM MAIOR CONSUMO DE ÁGUA -->
+    <div class="page-card">
+        <h2 class="section-title">
+            <i class="fas fa-chart-bar"></i> Top 10 Moradores - Maior Consumo de Água
+        </h2>
+
+        <div id="topConsumoContainer" class="loading">
+            <i class="fas fa-spinner"></i>
+            <p>Carregando dados...</p>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: ABASTECIMENTO DE VEÍCULOS -->
+    <div class="page-card">
+        <h2 class="section-title">
+            <i class="fas fa-gas-pump"></i> Abastecimento de Veículos
+        </h2>
+
+        <div id="abastecimentoContainer" class="loading">
+            <i class="fas fa-spinner"></i>
+            <p>Carregando dados...</p>
+        </div>
+    </div>
+
+    <!-- SEÇÃO: HISTÓRICO DE ABASTECIMENTOS -->
+    <div class="page-card">
+        <h2 class="section-title">
+            <i class="fas fa-history"></i> Histórico de Abastecimentos (Últimos 10)
+        </h2>
+
+        <div id="historicoAbastecimentoContainer" class="loading">
+            <i class="fas fa-spinner"></i>
+            <p>Carregando dados...</p>
+        </div>
+    </div>
+</div>

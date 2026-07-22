@@ -1,0 +1,1176 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventário de Patrimônio - Serra da Liberdade</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        /* Menu Toggle Mobile */
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Submenu */
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #10b981;
+            color: #fff;
+        }
+
+        /* Sections */
+        .section {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .section h2 {
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+        }
+
+        /* Search Section */
+        .search-section {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e2e8f0;
+        }
+
+        .search-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .search-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        /* Form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 0.5rem;
+            color: #475569;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #10b981;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* Campo condicional */
+        .campo-condicional {
+            display: none;
+        }
+
+        .campo-condicional.show {
+            display: flex;
+        }
+
+        /* Buttons */
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            opacity: 0.9;
+        }
+
+        .btn-edit {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+            margin-left: 0.5rem;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-primary {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border-left: 4px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border-left: 4px solid #f87171;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .form-grid,
+            .search-grid {
+                grid-template-columns: 1fr;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <nav class="sidebar" id="sidebar">
+        <h1>Serra da Liberdade</h1>
+        <!-- User Profile Section -->
+        <div class="user-profile-section" id="userProfileSection" style="display: none;">
+            <div class="user-profile-header">
+                <div class="user-avatar" id="userAvatar">-</div>
+                <div class="user-info">
+                    <p class="user-name" id="userName">Carregando...</p>
+                    <p class="user-function" id="userFunction">-</p>
+                    <p class="user-email" id="userEmail">-</p>
+                </div>
+            </div>
+            <div class="session-info">
+                <div class="session-item">
+                    <div class="session-label">Tempo de Sessão</div>
+                    <div class="session-value session-timer" id="sessionTimer">00:00:00</div>
+                </div>
+                <div class="session-item">
+                    <div class="session-label">Status</div>
+                    <div class="session-value" id="sessionStatus"><i class="fas fa-circle"
+                            style="color: #10b981; font-size: 0.6rem;"></i> Ativo</div>
+                </div>
+            </div>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link active"><i class="fas fa-chart-line"></i>
+                    Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a>
+            </li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                    Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro
+                    Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                    Acesso</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                    Relatórios</a></li>
+            <li class="nav-item"><a href="financeiro.html" class="nav-link"><i class="fas fa-money-bill-wave"></i>
+                    Financeiro</a></li>
+            <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                    Configuraçµes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a>
+            </li>
+            <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                    Administrativo</a></li>
+            <li class="nav-item"
+                style="margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <a href="#" class="nav-link" id="btn-logout" style="background: rgba(239, 68, 68, 0.1); color: #fca5a5;"
+                    >
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1><i class="fas fa-boxes"></i> Inventário de Patrimônio</h1>
+        </header>
+
+        <nav class="submenu">
+            <ul>
+                <li><a href="administrativa.html"><i class="fas fa-home"></i> Início</a></li>
+                <li><a href="protocolo.html"><i class="fas fa-box"></i> Protocolos</a></li>
+                <li><a href="inventario.html"><i class="fas fa-boxes"></i> Inventário</a></li>
+                <li><a href="relatorios_inventario.html"><i class="fas fa-chart-bar"></i> Relatórios</a></li>
+                <li><a href="estoque.html"><i class="fas fa-warehouse"></i> Estoque</a></li>
+                <li><a href="marketplace_admin.html" class="active"><i class="fas fa-store"></i> Marketplace</a></li>
+            </ul>
+        </nav>
+
+        <div id="alertContainer"></div>
+
+        <!-- Seção de Busca -->
+        <section class="section">
+            <h2><i class="fas fa-search"></i> Buscar Patrimônio</h2>
+            <div class="search-section">
+                <div class="search-grid">
+                    <div class="form-group">
+                        <label>Nºmero Patrimônio</label>
+                        <input type="text" id="filtroNumeroPatrimonio" placeholder="Ex: PAT-001">
+                    </div>
+                    <div class="form-group">
+                        <label>NF</label>
+                        <input type="text" id="filtroNF" placeholder="Nºmero da NF">
+                    </div>
+                    <div class="form-group">
+                        <label>Situação</label>
+                        <select id="filtroSituacao">
+                            <option value="">Todas</option>
+                            <option value="imobilizado">Imobilizado</option>
+                            <option value="circulante">Circulante</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="filtroStatus">
+                            <option value="">Todos</option>
+                            <option value="ativo">Ativo</option>
+                            <option value="inativo">Inativo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tutela (Responsável)</label>
+                        <select id="filtroTutela">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="search-buttons">
+                    <button class="btn-primary" onclick="buscarInventario()">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    <button class="btn-secondary" onclick="limparBusca()">
+                        <i class="fas fa-eraser"></i> Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Formulário de Cadastro -->
+        <section class="section">
+            <h2><i class="fas fa-plus-circle"></i> <span id="formTitle">Novo Item de Patrimônio</span></h2>
+            <form id="formInventario">
+                <input type="hidden" id="itemId">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Nºmero Patrimônio *</label>
+                        <input type="text" id="numeroPatrimonio" required placeholder="Ex: PAT-001">
+                    </div>
+                    <div class="form-group">
+                        <label>Nome do Item *</label>
+                        <input type="text" id="nomeItem" required placeholder="Ex: Notebook Dell">
+                    </div>
+                    <div class="form-group">
+                        <label>Fabricante</label>
+                        <input type="text" id="fabricante" placeholder="Ex: Dell">
+                    </div>
+                    <div class="form-group">
+                        <label>Modelo</label>
+                        <input type="text" id="modelo" placeholder="Ex: Inspiron 15">
+                    </div>
+                    <div class="form-group">
+                        <label>Nºmero de Série</label>
+                        <input type="text" id="numeroSerie" placeholder="Ex: SN123456789">
+                    </div>
+                    <div class="form-group">
+                        <label>NF</label>
+                        <input type="text" id="nf" placeholder="Nºmero da Nota Fiscal">
+                    </div>
+                    <div class="form-group">
+                        <label>Data de Compra</label>
+                        <input type="date" id="dataCompra">
+                    </div>
+                    <div class="form-group">
+                        <label>Situação *</label>
+                        <select id="situacao" required>
+                            <option value="imobilizado">Imobilizado</option>
+                            <option value="circulante">Circulante</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Valor (R$)</label>
+                        <input type="number" id="valor" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Status *</label>
+                        <select id="status" required onchange="toggleMotivoBaixa()">
+                            <option value="ativo">Ativo</option>
+                            <option value="inativo">Inativo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tutela (Responsável)</label>
+                        <select id="tutelaUsuarioId">
+                            <option value="">Sem responsável</option>
+                        </select>
+                    </div>
+
+                    <!-- Campos condicionais para status inativo -->
+                    <div class="form-group campo-condicional" id="campoDataBaixa">
+                        <label>Data de Baixa</label>
+                        <input type="date" id="dataBaixa">
+                    </div>
+                </div>
+
+                <!-- Motivo de baixa (campo grande) -->
+                <div class="form-group campo-condicional" id="campoMotivoBaixa" style="margin-top: 1rem;">
+                    <label>Motivo de Baixa *</label>
+                    <textarea id="motivoBaixa" placeholder="Descreva o motivo da baixa do patrimônio"></textarea>
+                </div>
+
+                <!-- Observaçµes -->
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label>Observaçµes</label>
+                    <textarea id="observacoes" placeholder="Informaçµes adicionais sobre o item"></textarea>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> <span id="btnSalvarTexto">Salvar Item</span>
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="limparFormulario()">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Lista de Itens -->
+        <section class="section">
+            <h2><i class="fas fa-list"></i> Lista de Patrimônio</h2>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Patrimônio</th>
+                            <th>Nome do Item</th>
+                            <th>Fabricante</th>
+                            <th>Modelo</th>
+                            <th>NF</th>
+                            <th>Situação</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Responsável</th>
+                            <th>Açµes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaInventario">
+                        <tr>
+                            <td colspan="10" style="text-align: center;">Carregando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let itemEditando = null;
+        let usuarios = [];
+
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarUsuarios();
+            carregarInventario();
+            configurarEnterBusca();
+
+            document.getElementById('formInventario').addEventListener('submit', function (e) {
+                e.preventDefault();
+                salvarItem();
+            });
+        });
+
+        function carregarUsuarios() {
+            fetch('../api/api_usuarios.php')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        usuarios = data.dados.filter(u => u.ativo == 1);
+
+                        // Preencher select de tutela no formulário
+                        const selectTutela = document.getElementById('tutelaUsuarioId');
+                        selectTutela.innerHTML = '<option value="">Sem responsável</option>';
+                        usuarios.forEach(u => {
+                            const funcao = u.funcao ? ` - ${u.funcao}` : '';
+                            selectTutela.innerHTML += `<option value="${u.id}">${u.nome}${funcao}</option>`;
+                        });
+
+                        // Preencher select de filtro
+                        const selectFiltro = document.getElementById('filtroTutela');
+                        selectFiltro.innerHTML = '<option value="">Todos</option>';
+                        usuarios.forEach(u => {
+                            selectFiltro.innerHTML += `<option value="${u.id}">${u.nome}</option>`;
+                        });
+                    }
+                });
+        }
+
+        function carregarInventario() {
+            fetch('../api/api_inventario.php')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        renderizarTabela(data.dados);
+                    } else {
+                        mostrarAlerta('Erro ao carregar inventário', 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Erro:', err);
+                    mostrarAlerta('Erro ao conectar com o servidor', 'error');
+                });
+        }
+
+        function buscarInventario() {
+            const params = new URLSearchParams();
+
+            const numeroPatrimonio = document.getElementById('filtroNumeroPatrimonio').value;
+            const nf = document.getElementById('filtroNF').value;
+            const situacao = document.getElementById('filtroSituacao').value;
+            const status = document.getElementById('filtroStatus').value;
+            const tutela = document.getElementById('filtroTutela').value;
+
+            if (numeroPatrimonio) params.append('numero_patrimonio', numeroPatrimonio);
+            if (nf) params.append('nf', nf);
+            if (situacao) params.append('situacao', situacao);
+            if (status) params.append('status', status);
+            if (tutela) params.append('tutela', tutela);
+
+            fetch(`../api/api_inventario.php?${params.toString()}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        renderizarTabela(data.dados);
+                        if (data.dados.length === 0) {
+                            mostrarAlerta('Nenhum item encontrado com os filtros aplicados', 'error');
+                        }
+                    }
+                });
+        }
+
+        function limparBusca() {
+            document.getElementById('filtroNumeroPatrimonio').value = '';
+            document.getElementById('filtroNF').value = '';
+            document.getElementById('filtroSituacao').value = '';
+            document.getElementById('filtroStatus').value = '';
+            document.getElementById('filtroTutela').value = '';
+            carregarInventario();
+        }
+
+        function configurarEnterBusca() {
+            const campos = ['filtroNumeroPatrimonio', 'filtroNF'];
+            campos.forEach(id => {
+                document.getElementById(id).addEventListener('keypress', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        buscarInventario();
+                    }
+                });
+            });
+        }
+
+        function renderizarTabela(itens) {
+            const tbody = document.getElementById('tabelaInventario');
+
+            if (itens.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Nenhum item cadastrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = itens.map(item => `
+                <tr>
+                    <td><strong>${item.numero_patrimonio}</strong></td>
+                    <td>${item.nome_item}</td>
+                    <td>${item.fabricante || '-'}</td>
+                    <td>${item.modelo || '-'}</td>
+                    <td>${item.nf || '-'}</td>
+                    <td><span class="badge badge-${item.situacao === 'imobilizado' ? 'primary' : 'warning'}">${item.situacao === 'imobilizado' ? 'Imobilizado' : 'Circulante'}</span></td>
+                    <td>R$ ${parseFloat(item.valor || 0).toFixed(2)}</td>
+                    <td><span class="badge badge-${item.status === 'ativo' ? 'success' : 'danger'}">${item.status === 'ativo' ? 'Ativo' : 'Inativo'}</span></td>
+                    <td>${item.tutela_nome || '-'}</td>
+                    <td>
+                        <button class="btn-edit" onclick="editarItem(${item.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn-delete" onclick="excluirItem(${item.id}, '${item.numero_patrimonio}')"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleMotivoBaixa() {
+            const status = document.getElementById('status').value;
+            const campoMotivo = document.getElementById('campoMotivoBaixa');
+            const campoData = document.getElementById('campoDataBaixa');
+
+            if (status === 'inativo') {
+                campoMotivo.classList.add('show');
+                campoData.classList.add('show');
+                document.getElementById('motivoBaixa').required = true;
+            } else {
+                campoMotivo.classList.remove('show');
+                campoData.classList.remove('show');
+                document.getElementById('motivoBaixa').required = false;
+                document.getElementById('motivoBaixa').value = '';
+                document.getElementById('dataBaixa').value = '';
+            }
+        }
+
+        function salvarItem() {
+            const dados = {
+                numero_patrimonio: document.getElementById('numeroPatrimonio').value,
+                nome_item: document.getElementById('nomeItem').value,
+                fabricante: document.getElementById('fabricante').value,
+                modelo: document.getElementById('modelo').value,
+                numero_serie: document.getElementById('numeroSerie').value,
+                nf: document.getElementById('nf').value,
+                data_compra: document.getElementById('dataCompra').value,
+                situacao: document.getElementById('situacao').value,
+                valor: document.getElementById('valor').value,
+                status: document.getElementById('status').value,
+                motivo_baixa: document.getElementById('motivoBaixa').value,
+                data_baixa: document.getElementById('dataBaixa').value,
+                tutela_usuario_id: document.getElementById('tutelaUsuarioId').value,
+                observacoes: document.getElementById('observacoes').value
+            };
+
+            const metodo = itemEditando ? 'PUT' : 'POST';
+            if (itemEditando) {
+                dados.id = itemEditando;
+            }
+
+            fetch('../api/api_inventario.php', {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        limparFormulario();
+                        carregarInventario();
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Erro:', err);
+                    mostrarAlerta('Erro ao salvar item', 'error');
+                });
+        }
+
+        function editarItem(id) {
+            fetch(`../api/api_inventario.php`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const item = data.dados.find(i => i.id == id);
+                        if (item) {
+                            document.getElementById('itemId').value = item.id;
+                            document.getElementById('numeroPatrimonio').value = item.numero_patrimonio;
+                            document.getElementById('nomeItem').value = item.nome_item;
+                            document.getElementById('fabricante').value = item.fabricante || '';
+                            document.getElementById('modelo').value = item.modelo || '';
+                            document.getElementById('numeroSerie').value = item.numero_serie || '';
+                            document.getElementById('nf').value = item.nf || '';
+                            document.getElementById('dataCompra').value = item.data_compra || '';
+                            document.getElementById('situacao').value = item.situacao;
+                            document.getElementById('valor').value = item.valor || '';
+                            document.getElementById('status').value = item.status;
+                            document.getElementById('motivoBaixa').value = item.motivo_baixa || '';
+                            document.getElementById('dataBaixa').value = item.data_baixa || '';
+                            document.getElementById('tutelaUsuarioId').value = item.tutela_usuario_id || '';
+                            document.getElementById('observacoes').value = item.observacoes || '';
+
+                            toggleMotivoBaixa();
+
+                            itemEditando = id;
+                            document.getElementById('formTitle').textContent = 'Editar Item de Patrimônio';
+                            document.getElementById('btnSalvarTexto').textContent = 'Atualizar Item';
+
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                    }
+                });
+        }
+
+        function excluirItem(id, numeroPatrimonio) {
+            if (!confirm(`Deseja realmente excluir o patrimônio "${numeroPatrimonio}"?`)) {
+                return;
+            }
+
+            fetch('../api/api_inventario.php', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+                        carregarInventario();
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                    }
+                });
+        }
+
+        function limparFormulario() {
+            document.getElementById('formInventario').reset();
+            document.getElementById('itemId').value = '';
+            itemEditando = null;
+            document.getElementById('formTitle').textContent = 'Novo Item de Patrimônio';
+            document.getElementById('btnSalvarTexto').textContent = 'Salvar Item';
+            toggleMotivoBaixa();
+        }
+
+        function mostrarAlerta(mensagem, tipo) {
+            const container = document.getElementById('alertContainer');
+            const div = document.createElement('div');
+            div.className = `alert alert-${tipo}`;
+            div.innerHTML = `<i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${mensagem}`;
+            container.appendChild(div);
+            setTimeout(() => div.remove(), 5000);
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+        // ========== LOGOUT REMOVIDO - Centralizado em SessionManagerCore via sidebar-controller.js ==========
+        // Logout agora é ºnico ponto de entrada: sidebar-controller.js ? SessionManagerCore.getInstance().logout()
+    </script>
+
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+
+    <!-- Script para exibir usuário logado em tempo real -->
+    <script>
+        (function () {
+            'use strict';
+
+            const CONFIG = {
+                apiUrl: '../api/api_usuario_logado.php',
+                // ? CORRIGIDO: Removido updateInterval de 1s â usar SessionManager Singleton
+                warningThreshold: 300,
+                autoRenewThreshold: 600,
+                enableAutoRenew: true
+            };
+
+            let intervaloAtualizacao = null;
+
+            /**
+             * Inicializar o script
+             */
+            function inicializar() {
+                console.log('?? Dashboard User Display inicializado');
+
+                // ? CORRIGIDO: Usar SessionManager Singleton
+                const sessionMgr = SessionManagerCore.getInstance();
+                const userData = sessionMgr.getUserData();
+                if (userData) {
+                    atualizarExibicao({ usuario: userData, sessao: { tempo_restante: 600 } });
+                }
+                sessionMgr.onUserDataChanged((dados) => {
+                    atualizarExibicao(dados);
+                });
+
+                document.addEventListener('visibilitychange', handleVisibilidadeChange);
+                window.addEventListener('beforeunload', limpar);
+
+                console.log('? Dashboard User Display pronto');
+            }
+
+            /**
+             * Carregar dados do usuário logado
+             */
+            function carregarDadosUsuario() {
+                fetch(CONFIG.apiUrl, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.sucesso && data.logado) {
+                            const tempo = (typeof data.tempo_restante !== 'undefined') ? data.tempo_restante : (data.sessao ? data.sessao.tempo_restante : null);
+                            atualizarExibicao(data);
+                            if (tempo !== null) verificarAvisos(tempo);
+
+                            if (CONFIG.enableAutoRenew && tempo !== null && tempo < CONFIG.autoRenewThreshold) {
+                                renovarSessaoAutomaticamente();
+                            }
+                        } else {
+                            handleSessaoExpirada();
+                        }
+                    })
+                    .catch(error => console.warn('Erro ao carregar dados da sessão:', error));
+            }
+
+            /**
+             * Atualizar exibição na interface
+             */
+            function atualizarExibicao(data) {
+                const usuario = data && data.usuario ? data.usuario : null;
+                const tempo = (typeof (data && data.tempo_restante) !== 'undefined') ? data.tempo_restante : (data && data.sessao ? data.sessao.tempo_restante : null);
+
+                atualizarPerfilUsuario(usuario);
+                atualizarTempoSessao({ tempo_restante: tempo, tempo_restante_formatado: data && data.sessao ? data.sessao.tempo_restante_formatado : null });
+                atualizarStatusVisual(tempo);
+            }
+
+            /**
+             * Atualizar perfil do usuário
+             */
+            function atualizarPerfilUsuario(usuario) {
+                const section = document.getElementById('userProfileSection');
+                if (!section) return;
+
+                if (!usuario) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+
+                const nome = usuario.nome || '';
+                const inicial = nome.length ? nome.charAt(0).toUpperCase() : '?';
+                const avatarEl = document.getElementById('userAvatar');
+                const nameEl = document.getElementById('userName');
+                const funcEl = document.getElementById('userFunction');
+                const emailEl = document.getElementById('userEmail');
+
+                if (avatarEl) avatarEl.textContent = inicial;
+                if (nameEl) nameEl.textContent = nome || 'Usuário';
+                if (funcEl) funcEl.textContent = usuario.funcao || usuario.permissao || 'Usuário';
+                if (emailEl) emailEl.textContent = usuario.email || '-';
+            }
+
+            /**
+             * Atualizar tempo de sessão
+             */
+            function atualizarTempoSessao(sessao) {
+                const tempoElement = document.getElementById('sessionTimer');
+                if (!tempoElement) return;
+
+                const tempoVal = (sessao && typeof sessao.tempo_restante !== 'undefined' && sessao.tempo_restante !== null) ? sessao.tempo_restante : null;
+                const textoFormatado = (sessao && sessao.tempo_restante_formatado) ? sessao.tempo_restante_formatado : (tempoVal !== null ? formatarTempo(tempoVal) : '-');
+                tempoElement.textContent = textoFormatado;
+
+                // Atualizar classe de cor
+                tempoElement.classList.remove('warning', 'critical');
+                if (tempoVal === null) return;
+                if (tempoVal < CONFIG.warningThreshold) {
+                    tempoElement.classList.add('critical');
+                } else if (tempoVal < 1800) {
+                    tempoElement.classList.add('warning');
+                }
+            }
+
+            /**
+             * Atualizar status visual
+             */
+            function atualizarStatusVisual(tempoRestante) {
+                const section = document.getElementById('userProfileSection');
+                if (!section) return;
+
+                section.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                section.style.background = 'rgba(255, 255, 255, 0.1)';
+
+                if (typeof tempoRestante !== 'number' || tempoRestante === null) return;
+
+                if (tempoRestante < CONFIG.warningThreshold) {
+                    section.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    section.style.background = 'rgba(239, 68, 68, 0.1)';
+                } else if (tempoRestante < 1800) {
+                    section.style.borderColor = 'rgba(249, 115, 22, 0.3)';
+                    section.style.background = 'rgba(249, 115, 22, 0.1)';
+                }
+            }
+
+            /**
+             * Verificar avisos
+             */
+            function verificarAvisos(tempoRestante) {
+                if (tempoRestante < CONFIG.warningThreshold && tempoRestante > CONFIG.warningThreshold - 60) {
+                    mostrarNotificacao('warning', 'Sua sessão expirará em 5 minutos');
+                }
+
+                if (tempoRestante < 60 && tempoRestante > 50) {
+                    mostrarNotificacao('critical', 'Sua sessão expirará em menos de 1 minuto!');
+                }
+            }
+
+            /**
+             * Mostrar notificação
+             */
+            function mostrarNotificacao(tipo, mensagem) {
+                if (document.querySelector(`[data-notif-sessao="${tipo}"]`)) {
+                    return;
+                }
+
+                const notifHTML = `
+                <div class="session-notification session-notification-${tipo}" data-notif-sessao="${tipo}" style="
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #fff;
+                    padding: 1rem;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    z-index: 9999;
+                    border-left: 4px solid ${tipo === 'critical' ? '#ef4444' : '#f97316'};
+                    animation: slideIn 0.3s ease;
+                ">
+                    <i class="fas fa-exclamation-triangle" style="color: ${tipo === 'critical' ? '#ef4444' : '#f97316'}; margin-right: 0.5rem;"></i>
+                    <span style="color: #1f2937;">${mensagem}</span>
+                </div>
+            `;
+
+                document.body.insertAdjacentHTML('afterbegin', notifHTML);
+
+                setTimeout(() => {
+                    const notif = document.querySelector(`[data-notif-sessao="${tipo}"]`);
+                    if (notif) notif.remove();
+                }, 8000);
+            }
+
+            /**
+             * Renovar sessão automaticamente
+             */
+            function renovarSessaoAutomaticamente() {
+                fetch(CONFIG.apiUrl + '?acao=renovar', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.sucesso) {
+                            console.log('? Sessão renovada automaticamente');
+                            carregarDadosUsuario();
+                        }
+                    })
+                    .catch(error => console.warn('Erro ao renovar sessão:', error));
+            }
+
+            /**
+             * Lidar com mudança de visibilidade
+             */
+            function handleVisibilidadeChange() {
+                if (document.hidden) {
+                    if (intervaloAtualizacao) clearInterval(intervaloAtualizacao);
+                } else {
+                    carregarDadosUsuario();
+                    intervaloAtualizacao = setInterval(carregarDadosUsuario, CONFIG.updateInterval);
+                }
+            }
+
+            /**
+             * Lidar com sessão expirada
+             */
+            function handleSessaoExpirada() {
+                console.warn('?? Sessão expirada ou inválida');
+            }
+
+            /**
+             * Formatar tempo
+             */
+            function formatarTempo(segundos) {
+                const horas = Math.floor(segundos / 3600);
+                const minutos = Math.floor((segundos % 3600) / 60);
+                const segs = segundos % 60;
+
+                return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segs).padStart(2, '0')}`;
+            }
+
+            /**
+             * Limpar recursos
+             */
+            function limpar() {
+                if (intervaloAtualizacao) {
+                    clearInterval(intervaloAtualizacao);
+                }
+            }
+
+            /**
+             * Inicializar
+             */
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', inicializar);
+            } else {
+                inicializar();
+            }
+        })();
+    </script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

@@ -1,0 +1,564 @@
+<div id="page-metadata" data-title="Dispositivos de Acesso" data-icon="fa-microchip" style="display:none;"></div>
+
+<div class="page-wrapper page-dispositivos">
+
+  <!-- ── PAGE HEADER ─────────────────────────────────────────────── -->
+  <div class="page-header">
+    <div class="page-header-icon"><i class="fas fa-microchip"></i></div>
+    <div>
+      <h1 class="page-title">Dispositivos de Acesso</h1>
+      <p class="page-subtitle">Gerencie leitores, catracas e controladores de acesso — suporte a múltiplos fabricantes</p>
+    </div>
+  </div>
+
+  <!-- ── ABAS ─────────────────────────────────────────────────────── -->
+  <div class="page-card" style="padding:0;margin-bottom:0;overflow:hidden">
+    <div class="tabs-container">
+      <button class="tab-btn active" data-tab="dispositivos">
+        <i class="fas fa-microchip"></i> Dispositivos
+      </button>
+      <button class="tab-btn" data-tab="eventos">
+        <i class="fas fa-history"></i> Eventos
+        <span id="badge-eventos" class="tab-badge" style="display:none;"></span>
+      </button>
+      <button class="tab-btn" data-tab="fila">
+        <i class="fas fa-terminal"></i> Fila de Comandos
+        <span id="badge-fila" class="tab-badge tab-badge-amber" style="display:none;"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ABA: DISPOSITIVOS
+  ════════════════════════════════════════════════════════════════ -->
+  <div id="tab-dispositivos" class="tab-content active">
+
+    <!-- KPIs -->
+    <div class="stats-grid" id="disp-kpis">
+      <div class="page-card kpi-card">
+        <div class="kpi-icon blue"><i class="fas fa-microchip"></i></div>
+        <div class="kpi-content">
+          <h3>Total de Dispositivos</h3>
+          <div class="value" id="kpi-total">—</div>
+        </div>
+      </div>
+      <div class="page-card kpi-card">
+        <div class="kpi-icon green"><i class="fas fa-circle"></i></div>
+        <div class="kpi-content">
+          <h3>Online Agora</h3>
+          <div class="value" id="kpi-online">—</div>
+        </div>
+      </div>
+      <div class="page-card kpi-card">
+        <div class="kpi-icon amber"><i class="fas fa-industry"></i></div>
+        <div class="kpi-content">
+          <h3>Fabricantes</h3>
+          <div class="value" id="kpi-fabricantes">—</div>
+        </div>
+      </div>
+      <div class="page-card kpi-card">
+        <div class="kpi-icon purple"><i class="fas fa-laptop-code"></i></div>
+        <div class="kpi-content">
+          <h3>Bridge Local</h3>
+          <div class="value" id="kpi-bridge">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulário de cadastro/edição -->
+    <div class="page-card" id="disp-form-card">
+      <div class="card-header-row">
+        <h2 id="disp-form-titulo"><i class="fas fa-plus-circle"></i> Novo Dispositivo</h2>
+        <button class="btn-secondary-modern" id="btnDispCancelar" style="display:none;" type="button">
+          <i class="fas fa-times"></i> Cancelar
+        </button>
+      </div>
+
+      <!-- PASSO 1: Seleção de Fabricante -->
+      <div class="form-section-title"><i class="fas fa-industry"></i> Fabricante</div>
+      <div class="fabricantes-grid" id="fabricantes-grid">
+        <div class="fabricante-card active" data-fab="controlid">
+          <div class="fabricante-card-icon" style="color:#2563eb"><i class="fas fa-microchip"></i></div>
+          <div class="fabricante-card-nome">Control iD</div>
+          <div class="fabricante-card-desc">Leitores UHF, RFID, facial</div>
+        </div>
+        <div class="fabricante-card" data-fab="intelbras">
+          <div class="fabricante-card-icon" style="color:#16a34a"><i class="fas fa-door-open"></i></div>
+          <div class="fabricante-card-nome">Intelbras</div>
+          <div class="fabricante-card-desc">Catracas e controladores</div>
+        </div>
+        <div class="fabricante-card" data-fab="hikvision">
+          <div class="fabricante-card-icon" style="color:#dc2626"><i class="fas fa-video"></i></div>
+          <div class="fabricante-card-nome">Hikvision</div>
+          <div class="fabricante-card-desc">Câmeras e leitores faciais</div>
+        </div>
+        <div class="fabricante-card" data-fab="generico">
+          <div class="fabricante-card-icon" style="color:#7c3aed"><i class="fas fa-plug"></i></div>
+          <div class="fabricante-card-nome">Genérico</div>
+          <div class="fabricante-card-desc">Outros fabricantes</div>
+        </div>
+      </div>
+
+      <!-- Ajuda do fabricante -->
+      <div id="fabricante-ajuda" class="fabricante-ajuda-box" style="display:none;">
+        <i class="fas fa-info-circle"></i>
+        <div id="fabricante-ajuda-texto"></div>
+      </div>
+
+      <!-- PASSO 2: Identificação (campos comuns) -->
+      <div class="form-section-title" style="margin-top:24px;"><i class="fas fa-id-card"></i> Identificação</div>
+      <div class="form-grid form-grid-3">
+        <div>
+          <label>Nome do Dispositivo *</label>
+          <input type="text" id="disp-nome" placeholder="Ex: Cancela Moradores — Entrada">
+        </div>
+        <div id="wrap-serial">
+          <label id="label-serial">Serial Number *</label>
+          <input type="text" id="disp-serial" placeholder="Ex: 0N8100/002D07">
+        </div>
+        <div>
+          <label>Modelo do Equipamento</label>
+          <input type="text" id="disp-modelo" placeholder="Ex: IDUHF 2.0, iDAccess Nano">
+        </div>
+        <div>
+          <label>Tipo de Leitor</label>
+          <select id="disp-tipo-leitor">
+            <option value="uhf">UHF (TAG RFID longa distância)</option>
+            <option value="rfid">RFID (cartão de proximidade)</option>
+            <option value="facial">Reconhecimento Facial</option>
+            <option value="biometria">Biometria Digital</option>
+            <option value="qrcode">QR Code</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div>
+          <label>Área de Instalação</label>
+          <input type="text" id="disp-area" placeholder="Ex: Portaria Principal — Entrada">
+        </div>
+        <div>
+          <label>Sentido de Acesso</label>
+          <select id="disp-sentido">
+            <option value="ambos">Entrada e Saída</option>
+            <option value="entrada">Apenas Entrada</option>
+            <option value="saida">Apenas Saída</option>
+          </select>
+        </div>
+        <div class="form-col-full">
+          <label>Descrição / Observações</label>
+          <input type="text" id="disp-descricao" placeholder="Observações adicionais sobre o dispositivo...">
+        </div>
+      </div>
+
+      <!-- PASSO 3: Comunicação — Control iD -->
+      <div id="fields-controlid" class="fabricante-fields">
+        <div class="form-section-title" style="margin-top:24px;"><i class="fas fa-network-wired"></i> Comunicação — Control iD</div>
+
+        <div class="form-grid form-grid-3">
+          <div class="form-col-full">
+            <label>Tipo de Integração *</label>
+            <div class="integracao-radio-group">
+              <label class="radio-card" id="radio-bridge">
+                <input type="radio" name="tipo_integracao" value="bridge_local" checked>
+                <div class="radio-card-content">
+                  <i class="fas fa-laptop-code"></i>
+                  <strong>Bridge Local</strong>
+                  <span>Script Python no PC da portaria consulta o equipamento e envia para o servidor</span>
+                  <span class="radio-badge radio-badge-green">Recomendado</span>
+                </div>
+              </label>
+              <label class="radio-card" id="radio-monitor">
+                <input type="radio" name="tipo_integracao" value="monitor_nativo">
+                <div class="radio-card-content">
+                  <i class="fas fa-satellite-dish"></i>
+                  <strong>Monitor Nativo</strong>
+                  <span>O próprio equipamento envia eventos diretamente para o servidor</span>
+                </div>
+              </label>
+              <label class="radio-card" id="radio-manual">
+                <input type="radio" name="tipo_integracao" value="manual">
+                <div class="radio-card-content">
+                  <i class="fas fa-hand-paper"></i>
+                  <strong>Apenas Manual</strong>
+                  <span>Sem integração automática — registros feitos manualmente no sistema</span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Campos de rede Control iD (visíveis para bridge_local e monitor_nativo) -->
+        <div id="bloco-rede-controlid" class="form-grid form-grid-3" style="margin-top:12px;">
+          <div>
+            <label>IP do Equipamento na Rede Local</label>
+            <input type="text" id="disp-ip" placeholder="Ex: 192.168.3.150">
+          </div>
+          <div>
+            <label>Porta HTTP</label>
+            <input type="number" id="disp-porta" placeholder="80" value="80" min="1" max="65535">
+          </div>
+          <div>
+            <label>Usuário da API Control iD</label>
+            <input type="text" id="disp-usuario" placeholder="admin" value="admin">
+          </div>
+          <div>
+            <label>Senha da API Control iD</label>
+            <div class="senha-wrap">
+              <input type="password" id="disp-senha" placeholder="Senha do equipamento">
+              <button type="button" class="btn-toggle-senha" id="btnToggleSenha" title="Mostrar/ocultar senha">
+                <i class="fas fa-eye" id="disp-senha-icon"></i>
+              </button>
+            </div>
+            <span class="input-hint">Deixe em branco para manter a senha atual ao editar</span>
+          </div>
+          <div>
+            <label>Device ID Numérico (Control iD)</label>
+            <input type="number" id="disp-device-id" placeholder="Ex: 1 (veja em Info. Sistema no equipamento)">
+          </div>
+          <div>
+            <label>Bridge API Key <small class="input-hint-inline">(gerada automaticamente)</small></label>
+            <div class="input-with-btn">
+              <input type="text" id="disp-bridge-key" placeholder="Será gerada ao salvar" readonly>
+              <button type="button" class="btn-secondary-modern" id="btnGerarBridgeKey" title="Gerar nova chave">
+                <i class="fas fa-sync-alt"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PASSO 3: Comunicação — Intelbras -->
+      <div id="fields-intelbras" class="fabricante-fields" style="display:none;">
+        <div class="form-section-title" style="margin-top:24px;"><i class="fas fa-network-wired"></i> Comunicação — Intelbras</div>
+        <div class="form-grid form-grid-3">
+          <div>
+            <label>IP do Equipamento</label>
+            <input type="text" id="intelbras-ip" placeholder="Ex: 192.168.1.100">
+          </div>
+          <div>
+            <label>Porta HTTP</label>
+            <input type="number" id="intelbras-porta" placeholder="80" value="80" min="1" max="65535">
+          </div>
+          <div>
+            <label>Usuário</label>
+            <input type="text" id="intelbras-usuario" placeholder="admin" value="admin">
+          </div>
+          <div>
+            <label>Senha</label>
+            <div class="senha-wrap">
+              <input type="password" id="intelbras-senha" placeholder="Senha do equipamento">
+              <button type="button" class="btn-toggle-senha" id="btnToggleSenhaIntelbras" title="Mostrar/ocultar senha">
+                <i class="fas fa-eye" id="intelbras-senha-icon"></i>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label>Canal (Porta de Acesso)</label>
+            <input type="number" id="intelbras-canal" placeholder="Ex: 1" value="1" min="1" max="32">
+          </div>
+        </div>
+        <div class="alert alert-info" style="margin-top:12px;">
+          <i class="fas fa-info-circle"></i>
+          <span>Integração Intelbras em desenvolvimento. Os campos serão utilizados quando o módulo de integração for ativado.</span>
+        </div>
+      </div>
+
+      <!-- PASSO 3: Comunicação — Hikvision -->
+      <div id="fields-hikvision" class="fabricante-fields" style="display:none;">
+        <div class="form-section-title" style="margin-top:24px;"><i class="fas fa-network-wired"></i> Comunicação — Hikvision</div>
+        <div class="form-grid form-grid-3">
+          <div>
+            <label>IP do Equipamento</label>
+            <input type="text" id="hikvision-ip" placeholder="Ex: 192.168.1.200">
+          </div>
+          <div>
+            <label>Porta HTTP</label>
+            <input type="number" id="hikvision-porta" placeholder="80" value="80" min="1" max="65535">
+          </div>
+          <div>
+            <label>Usuário</label>
+            <input type="text" id="hikvision-usuario" placeholder="admin" value="admin">
+          </div>
+          <div>
+            <label>Senha</label>
+            <div class="senha-wrap">
+              <input type="password" id="hikvision-senha" placeholder="Senha do equipamento">
+              <button type="button" class="btn-toggle-senha" id="btnToggleSenhaHikvision" title="Mostrar/ocultar senha">
+                <i class="fas fa-eye" id="hikvision-senha-icon"></i>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label>Canal de Vídeo</label>
+            <input type="number" id="hikvision-canal" placeholder="Ex: 1" value="1" min="1" max="64">
+          </div>
+          <div>
+            <label>Stream</label>
+            <select id="hikvision-stream">
+              <option value="main">Principal (Main Stream)</option>
+              <option value="sub">Secundário (Sub Stream)</option>
+            </select>
+          </div>
+        </div>
+        <div class="alert alert-info" style="margin-top:12px;">
+          <i class="fas fa-info-circle"></i>
+          <span>Integração Hikvision em desenvolvimento. Os campos serão utilizados quando o módulo de integração for ativado.</span>
+        </div>
+      </div>
+
+      <!-- PASSO 3: Comunicação — Genérico -->
+      <div id="fields-generico" class="fabricante-fields" style="display:none;">
+        <div class="form-section-title" style="margin-top:24px;"><i class="fas fa-network-wired"></i> Comunicação — Genérico</div>
+        <div class="form-grid form-grid-3">
+          <div>
+            <label>IP do Equipamento</label>
+            <input type="text" id="generico-ip" placeholder="Ex: 192.168.1.50">
+          </div>
+          <div>
+            <label>Porta</label>
+            <input type="number" id="generico-porta" placeholder="80" value="80" min="1" max="65535">
+          </div>
+          <div>
+            <label>Usuário</label>
+            <input type="text" id="generico-usuario" placeholder="admin">
+          </div>
+          <div>
+            <label>Senha</label>
+            <div class="senha-wrap">
+              <input type="password" id="generico-senha" placeholder="Senha do equipamento">
+              <button type="button" class="btn-toggle-senha" id="btnToggleSenhaGenerico" title="Mostrar/ocultar senha">
+                <i class="fas fa-eye" id="generico-senha-icon"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <input type="hidden" id="disp-id" value="">
+      <input type="hidden" id="disp-fabricante" value="controlid">
+
+      <div class="form-actions">
+        <button class="btn-primary-modern" id="btnDispSalvar" type="button">
+          <i class="fas fa-save"></i> Salvar Dispositivo
+        </button>
+      </div>
+    </div>
+
+    <!-- Listagem -->
+    <div class="page-card" style="margin-top:20px;">
+      <div class="card-header-row">
+        <h2><i class="fas fa-list"></i> Dispositivos Cadastrados</h2>
+        <div class="search-inline">
+          <input type="text" id="disp-busca" placeholder="Buscar por nome ou serial...">
+          <button class="btn-secondary-modern" id="btnDispBuscar" type="button">
+            <i class="fas fa-search"></i>
+          </button>
+        </div>
+      </div>
+
+      <div id="disp-lista" class="loading-state">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Carregando dispositivos...</p>
+      </div>
+    </div>
+
+  </div><!-- /tab-dispositivos -->
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ABA: EVENTOS
+  ════════════════════════════════════════════════════════════════ -->
+  <div id="tab-eventos" class="tab-content">
+
+    <div class="page-card">
+      <div class="card-header-row">
+        <h2><i class="fas fa-history"></i> Eventos de Acesso</h2>
+        <button class="btn-secondary-modern" id="btnEventosRefresh" type="button">
+          <i class="fas fa-sync-alt"></i> Atualizar
+        </button>
+      </div>
+
+      <div class="search-box">
+        <div class="form-group">
+          <label>Dispositivo</label>
+          <select id="ev-filtro-disp">
+            <option value="">Todos os dispositivos</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tipo de Evento</label>
+          <select id="ev-filtro-tipo">
+            <option value="">Todos</option>
+            <option value="7">Acesso Liberado</option>
+            <option value="4">Acesso Negado</option>
+            <option value="1">Saída</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>De</label>
+          <input type="date" id="ev-filtro-de">
+        </div>
+        <div class="form-group">
+          <label>Até</label>
+          <input type="date" id="ev-filtro-ate">
+        </div>
+        <button class="btn-primary-modern" id="btnEventosBuscar" type="button">
+          <i class="fas fa-search"></i> Buscar
+        </button>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Dispositivo</th>
+              <th>TAG RFID / User ID</th>
+              <th>Veículo / Morador</th>
+              <th>Tipo Evento</th>
+              <th>Data / Hora</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="ev-tbody">
+            <tr><td colspan="7" class="empty-cell"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="ev-paginacao" class="paginacao-container"></div>
+    </div>
+
+  </div><!-- /tab-eventos -->
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ABA: FILA DE COMANDOS
+  ════════════════════════════════════════════════════════════════ -->
+  <div id="tab-fila" class="tab-content">
+
+    <div class="page-card" style="margin-bottom:20px;">
+      <div class="card-header-row">
+        <h2><i class="fas fa-plus-circle"></i> Novo Comando</h2>
+      </div>
+      <div class="form-grid form-grid-3">
+        <div>
+          <label>Dispositivo *</label>
+          <select id="fila-disp">
+            <option value="">Selecione o dispositivo...</option>
+          </select>
+        </div>
+        <div>
+          <label>Tipo de Comando *</label>
+          <input type="text" id="fila-tipo-comando" placeholder="Ex: liberar_acesso, bloquear, sincronizar">
+        </div>
+        <div class="form-col-full">
+          <label>Payload JSON (opcional)</label>
+          <textarea id="fila-payload" rows="4" placeholder='{"user_id": 42, "timeout": 5}' class="textarea-mono"></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary-modern" id="btnFilaEnfileirar" type="button">
+          <i class="fas fa-paper-plane"></i> Enfileirar Comando
+        </button>
+      </div>
+    </div>
+
+    <div class="page-card">
+      <div class="card-header-row">
+        <h2><i class="fas fa-list-ul"></i> Comandos na Fila</h2>
+        <div class="search-inline">
+          <select id="fila-filtro-disp">
+            <option value="">Todos os dispositivos</option>
+          </select>
+          <select id="fila-filtro-status">
+            <option value="">Todos os status</option>
+            <option value="pendente">Pendente</option>
+            <option value="enviado">Enviado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+          <button class="btn-secondary-modern" id="btnFilaRefresh" type="button">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Dispositivo</th>
+              <th>Tipo Comando</th>
+              <th>Payload</th>
+              <th>Status</th>
+              <th>Criado em</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="fila-tbody">
+            <tr><td colspan="7" class="empty-cell"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /tab-fila -->
+
+</div><!-- /.page-dispositivos -->
+
+<!-- ══════════════════════════════════════════════════
+     MODAL: TOKEN / BRIDGE KEY
+══════════════════════════════════════════════════════ -->
+<div id="disp-token-overlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3><i class="fas fa-key"></i> Token de Autenticação</h3>
+      <button class="modal-close" id="btnFecharToken" type="button">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">
+        Use o <strong>Token de Autenticação</strong> como <code>BRIDGE_API_KEY</code> no arquivo
+        <code>controlid_bridge.py</code>. Para o Monitor Nativo, use como header <strong>X-ControlID-Token</strong>.
+      </p>
+
+      <label class="modal-label">Token de Autenticação</label>
+      <div class="input-with-btn">
+        <input type="text" id="token-display" readonly class="input-mono">
+        <button class="btn-secondary-modern" id="btnCopiarToken" type="button">
+          <i class="fas fa-copy"></i> Copiar
+        </button>
+      </div>
+
+      <label class="modal-label" style="margin-top:16px;">Bridge API Key (alternativa ao token)</label>
+      <div class="input-with-btn">
+        <input type="text" id="bridge-key-display" readonly class="input-mono">
+        <button class="btn-secondary-modern" type="button" onclick="navigator.clipboard.writeText(document.getElementById('bridge-key-display').value).then(()=>window.DispModule&&window.DispModule.toast&&window.DispModule.toast('Copiado!','sucesso'))">
+          <i class="fas fa-copy"></i> Copiar
+        </button>
+      </div>
+
+      <div class="modal-footer-actions">
+        <button class="btn-primary-modern" id="btnRegenerarToken" type="button">
+          <i class="fas fa-sync-alt"></i> Gerar Novo Token e Bridge Key
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     MODAL: GUIA DE CONFIGURAÇÃO
+══════════════════════════════════════════════════════ -->
+<div id="disp-guia-overlay" class="modal-overlay">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <h3><i class="fas fa-book"></i> Guia de Configuração</h3>
+      <button class="modal-close" id="btnFecharGuia" type="button">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div id="guia-conteudo"></div>
+    </div>
+  </div>
+</div>

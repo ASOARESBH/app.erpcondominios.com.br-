@@ -1,0 +1,350 @@
+<!-- Page Metadata for AppRouter -->
+<div id="page-metadata" data-title="Protocolo" data-icon="fa-file-contract" style="display:none;"></div>
+
+<style>
+    .submenu {
+        background: var(--color-background-primary);
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .submenu ul {
+        list-style: none;
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .submenu a {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background: var(--color-background-secondary);
+        color: var(--color-text-secondary);
+        text-decoration: none;
+        border-radius: 8px;
+        transition: 0.2s;
+    }
+
+    .submenu a:hover,
+    .submenu a.active {
+        background: var(--color-primary-600);
+        color: var(--color-background-primary);
+    }
+
+    .section {
+        background: var(--color-background-primary);
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .section h2 {
+        color: var(--color-text-primary);
+        margin-bottom: 1.5rem;
+        font-size: 1.3rem;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        color: var(--color-text-secondary);
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 0.75rem;
+        border: 1px solid var(--border-color, #e2e8f0);
+        border-radius: 8px;
+        font-size: 0.95rem;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--color-primary-600);
+    }
+
+    button {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: 0.2s;
+    }
+
+    .btn-primary {
+        background: var(--color-primary-600);
+        color: var(--color-background-primary);
+    }
+
+    .btn-primary:hover {
+        background: var(--color-primary-700);
+    }
+
+    .btn-secondary {
+        background: var(--color-text-tertiary);
+        color: var(--color-background-primary);
+    }
+
+    .btn-secondary:hover {
+        background: var(--color-text-secondary);
+    }
+
+    .btn-danger {
+        background: var(--color-error-500);
+        color: var(--color-background-primary);
+    }
+
+    .btn-danger:hover {
+        background: var(--color-error-600);
+    }
+
+    .btn-sm {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color, #e2e8f0);
+    }
+
+    th {
+        background: var(--color-background-secondary);
+        color: var(--color-text-secondary);
+        font-weight: 600;
+    }
+
+    tr:hover {
+        background: var(--color-background-secondary);
+    }
+
+    .badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    .badge-success {
+        background: var(--color-success-100);
+        color: var(--color-success-800);
+    }
+
+    .badge-warning {
+        background: var(--color-warning-100);
+        color: var(--color-warning-800);
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 2000;
+    }
+
+    .modal.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background: var(--color-background-primary);
+        padding: 2rem;
+        border-radius: 12px;
+        max-width: 500px;
+        width: 90%;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .modal-header h3 {
+        color: var(--color-text-primary);
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--color-text-tertiary);
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .alert-success {
+        background: var(--color-success-100);
+        color: var(--color-success-800);
+        border-left: 4px solid var(--color-success-600);
+    }
+
+    .alert-error {
+        background: var(--color-error-100);
+        color: var(--color-error-800);
+        border-left: 4px solid var(--color-error-500);
+    }
+
+    .alert-info {
+        background: var(--color-info-100);
+        color: var(--color-info-800);
+        border-left: 4px solid var(--color-info-500);
+    }
+</style>
+
+<nav class="submenu">
+    <ul>
+        <li><a href="administrativa.html"><i class="fas fa-home"></i> Início</a></li>
+        <li><a href="protocolo.html" class="active"><i class="fas fa-box"></i> Protocolos</a></li>
+        <li><a href="inventario.html"><i class="fas fa-boxes"></i> Inventário</a></li>
+        <li><a href="relatorios_inventario.html"><i class="fas fa-chart-bar"></i> Relatórios</a></li>
+        <li><a href="estoque.html"><i class="fas fa-warehouse"></i> Estoque</a></li>
+        <li><a href="marketplace_admin.html"><i class="fas fa-store"></i> Marketplace</a></li>
+    </ul>
+</nav>
+
+<div id="alertContainer"></div>
+
+<section class="section">
+    <h2>Novo Protocolo</h2>
+    <form id="formProtocolo">
+        <input type="hidden" id="protocoloId">
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Unidade *</label>
+                <select id="unidadeId" required>
+                    <option value="">Selecione...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Morador *</label>
+                <select id="moradorId" required>
+                    <option value="">Selecione a unidade primeiro</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Descrição da Mercadoria *</label>
+                <input type="text" id="descricaoMercadoria" placeholder="Ex: Mercado Livre" required>
+            </div>
+            <div class="form-group">
+                <label>Código ou NF</label>
+                <input type="text" id="codigoNf" placeholder="Código ou número da NF">
+            </div>
+            <div class="form-group">
+                <label>Página</label>
+                <input type="number" id="pagina" placeholder="Número da página">
+            </div>
+            <div class="form-group">
+                <label>Data e Hora Recebimento *</label>
+                <input type="datetime-local" id="dataHoraRecebimento" required>
+            </div>
+            <div class="form-group">
+                <label>Recebedor (Portaria) *</label>
+                <select id="recebedorPortaria" required>
+                    <option value="">Selecione...</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
+            <label>Observação</label>
+            <textarea id="observacao" rows="3" placeholder="Informações adicionais sobre a mercadoria..."></textarea>
+        </div>
+        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+            <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Salvar Protocolo</button>
+            <button type="button" class="btn-secondary" onclick="window.ProtocoloPage.limparFormulario()"><i
+                    class="fas fa-times"></i> Limpar</button>
+        </div>
+    </form>
+</section>
+
+<section class="section">
+    <h2>Lista de Protocolos</h2>
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Unidade</th>
+                    <th>Morador</th>
+                    <th>Descrição</th>
+                    <th>Código/NF</th>
+                    <th>Pág</th>
+                    <th>Data Recebimento</th>
+                    <th>Recebedor</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="tabelaProtocolos">
+                <tr>
+                    <td colspan="10" style="text-align: center; color: #94a3b8;">Carregando...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Modal de Entrega -->
+<div id="modalEntrega" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-check-circle"></i> Registrar Entrega</h3>
+            <button class="modal-close" onclick="window.ProtocoloPage.fecharModalEntrega()">&times;</button>
+        </div>
+        <form id="formEntrega">
+            <input type="hidden" id="entregaProtocoloId">
+            <div class="form-group">
+                <label>Nome do Recebedor (Morador) *</label>
+                <input type="text" id="nomeRecebedorMorador" required placeholder="Nome de quem recebeu">
+            </div>
+            <div class="form-group">
+                <label>Data e Hora da Entrega *</label>
+                <input type="datetime-local" id="dataHoraEntrega" required>
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button type="submit" class="btn-primary"><i class="fas fa-check"></i> Confirmar Entrega</button>
+                <button type="button" class="btn-secondary"
+                    onclick="window.ProtocoloPage.fecharModalEntrega()">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>

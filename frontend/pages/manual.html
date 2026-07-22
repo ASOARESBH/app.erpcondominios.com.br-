@@ -1,0 +1,297 @@
+<!-- Manual do Sistema — Base de Conhecimento Inteligente -->
+<div class="manual-container" id="manualContainer">
+
+    <!-- HEADER DO MANUAL -->
+    <div class="manual-header">
+        <div class="manual-header-left">
+            <div class="manual-logo">
+                <i class="fas fa-book-open"></i>
+            </div>
+            <div>
+                <h1 class="manual-title">Manual do Sistema</h1>
+                <p class="manual-subtitle">Base de Conhecimento Inteligente — ERP Condomínios</p>
+            </div>
+        </div>
+        <div class="manual-header-right" id="manualAdminBtns" style="display:none;">
+            <button class="btn-manual-primary" onclick="Manual.abrirEditor()">
+                <i class="fas fa-plus"></i> Novo Artigo
+            </button>
+            <button class="btn-manual-secondary" onclick="Manual.verPendentes()">
+                <i class="fas fa-exclamation-triangle"></i> Pendentes
+                <span class="badge-pendentes" id="badgePendentes" style="display:none;">0</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- BARRA DE PESQUISA INTELIGENTE -->
+    <div class="manual-search-bar">
+        <div class="manual-search-wrapper">
+            <i class="fas fa-search manual-search-icon"></i>
+            <input type="text" id="manualSearchInput" class="manual-search-input"
+                placeholder="Pesquisar... Ex: Como cadastrar visitante, Hidrômetro, Boleto, TAG RFID..."
+                autocomplete="off">
+            <button class="manual-search-clear" id="manualSearchClear" onclick="Manual.limparBusca()" style="display:none;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="manual-search-results" id="manualSearchResults" style="display:none;"></div>
+    </div>
+
+    <!-- LAYOUT PRINCIPAL -->
+    <div class="manual-layout">
+
+        <!-- SIDEBAR DE MÓDULOS -->
+        <aside class="manual-sidebar" id="manualSidebar">
+            <div class="manual-sidebar-header">
+                <span><i class="fas fa-th-list"></i> Módulos</span>
+            </div>
+            <nav class="manual-nav" id="manualNav">
+                <div class="manual-nav-item active" data-modulo="todos" onclick="Manual.filtrarModulo('todos', this)">
+                    <i class="fas fa-home"></i>
+                    <span>Todos os Artigos</span>
+                </div>
+                <div class="manual-nav-item" data-modulo="favoritos" onclick="Manual.filtrarModulo('favoritos', this)">
+                    <i class="fas fa-star"></i>
+                    <span>Meus Favoritos</span>
+                </div>
+                <div class="manual-nav-divider"></div>
+                <!-- Módulos carregados dinamicamente -->
+                <div id="manualNavModulos"></div>
+            </nav>
+        </aside>
+
+        <!-- CONTEÚDO PRINCIPAL -->
+        <main class="manual-main" id="manualMain">
+
+            <!-- DASHBOARD / LISTAGEM DE ARTIGOS -->
+            <div id="manualViewLista">
+
+                <!-- STATS (só no dashboard) -->
+                <div class="manual-stats-row" id="manualStatsRow" style="display:none;">
+                    <div class="manual-stat-card">
+                        <div class="manual-stat-icon" style="background:#eff6ff;"><i class="fas fa-file-alt" style="color:#2563eb;"></i></div>
+                        <div>
+                            <div class="manual-stat-value" id="statTotalArtigos">0</div>
+                            <div class="manual-stat-label">Artigos Publicados</div>
+                        </div>
+                    </div>
+                    <div class="manual-stat-card">
+                        <div class="manual-stat-icon" style="background:#f0fdf4;"><i class="fas fa-search" style="color:#16a34a;"></i></div>
+                        <div>
+                            <div class="manual-stat-value" id="statBuscasHoje">0</div>
+                            <div class="manual-stat-label">Buscas Hoje</div>
+                        </div>
+                    </div>
+                    <div class="manual-stat-card">
+                        <div class="manual-stat-icon" style="background:#fef3c7;"><i class="fas fa-thumbs-up" style="color:#d97706;"></i></div>
+                        <div>
+                            <div class="manual-stat-value" id="statAvaliacoes">0</div>
+                            <div class="manual-stat-label">Avaliações Positivas</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FILTROS E TÍTULO DA SEÇÃO -->
+                <div class="manual-section-header">
+                    <h2 class="manual-section-title" id="manualSectionTitle">
+                        <i class="fas fa-home"></i> Todos os Artigos
+                    </h2>
+                    <div class="manual-section-filters">
+                        <select class="manual-filter-select" id="manualFilterStatus" onchange="Manual.aplicarFiltros()">
+                            <option value="">Todos os status</option>
+                            <option value="publicado">Publicado</option>
+                            <option value="rascunho">Rascunho</option>
+                            <option value="desatualizado">Desatualizado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- GRID DE ARTIGOS -->
+                <div class="manual-artigos-grid" id="manualArtigosGrid">
+                    <div class="manual-loading">
+                        <i class="fas fa-spinner fa-spin"></i> Carregando artigos...
+                    </div>
+                </div>
+
+                <!-- BUSCAS SEM RESULTADO (admin) -->
+                <div class="manual-buscas-vazias" id="manualBuscasVazias" style="display:none;">
+                    <h3><i class="fas fa-exclamation-circle" style="color:#f59e0b;"></i> Buscas sem resultado</h3>
+                    <p>Termos pesquisados pelos usuários que não retornaram artigos:</p>
+                    <div id="manualBuscasVaziasList"></div>
+                </div>
+            </div>
+
+            <!-- VISUALIZAÇÃO DE ARTIGO -->
+            <div id="manualViewArtigo" style="display:none;">
+                <button class="btn-manual-back" onclick="Manual.voltarLista()">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </button>
+                <article class="manual-artigo-view" id="manualArtigoContent">
+                    <!-- Conteúdo do artigo carregado dinamicamente -->
+                </article>
+            </div>
+
+        </main>
+    </div>
+</div>
+
+<!-- ===================================================
+     MODAL EDITOR DE ARTIGO
+=================================================== -->
+<div class="manual-modal-overlay" id="manualModalEditor" style="display:none;">
+    <div class="manual-modal-content manual-modal-large">
+        <div class="manual-modal-header">
+            <h3 id="manualEditorTitle"><i class="fas fa-edit"></i> Novo Artigo</h3>
+            <button class="manual-modal-close" onclick="Manual.fecharEditor()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="manual-modal-body">
+            <input type="hidden" id="editorArtigoId" value="">
+            <div class="manual-form-row">
+                <div class="manual-form-group" style="flex:2;">
+                    <label class="manual-form-label">Título *</label>
+                    <input type="text" id="editorTitulo" class="manual-form-input" placeholder="Título do artigo">
+                </div>
+                <div class="manual-form-group" style="flex:1;">
+                    <label class="manual-form-label">Módulo *</label>
+                    <select id="editorModulo" class="manual-form-select"></select>
+                </div>
+                <div class="manual-form-group" style="flex:1;">
+                    <label class="manual-form-label">Status</label>
+                    <select id="editorStatus" class="manual-form-select">
+                        <option value="publicado">Publicado</option>
+                        <option value="rascunho">Rascunho</option>
+                        <option value="desatualizado">Desatualizado</option>
+                    </select>
+                </div>
+            </div>
+            <div class="manual-form-group">
+                <label class="manual-form-label">Resumo</label>
+                <input type="text" id="editorResumo" class="manual-form-input" placeholder="Breve descrição do artigo (aparece na listagem)">
+            </div>
+            <div class="manual-form-group">
+                <label class="manual-form-label">Conteúdo</label>
+                <!-- Toolbar WYSIWYG -->
+                <div class="manual-editor-toolbar">
+                    <button type="button" onclick="Manual.execCmd('bold')" title="Negrito"><i class="fas fa-bold"></i></button>
+                    <button type="button" onclick="Manual.execCmd('italic')" title="Itálico"><i class="fas fa-italic"></i></button>
+                    <button type="button" onclick="Manual.execCmd('underline')" title="Sublinhado"><i class="fas fa-underline"></i></button>
+                    <span class="toolbar-sep"></span>
+                    <button type="button" onclick="Manual.execCmd('insertUnorderedList')" title="Lista"><i class="fas fa-list-ul"></i></button>
+                    <button type="button" onclick="Manual.execCmd('insertOrderedList')" title="Lista numerada"><i class="fas fa-list-ol"></i></button>
+                    <span class="toolbar-sep"></span>
+                    <button type="button" onclick="Manual.inserirH2()" title="Título H2">H2</button>
+                    <button type="button" onclick="Manual.inserirH3()" title="Título H3">H3</button>
+                    <span class="toolbar-sep"></span>
+                    <button type="button" onclick="Manual.inserirLink()" title="Link"><i class="fas fa-link"></i></button>
+                    <button type="button" onclick="Manual.inserirImagem()" title="Imagem"><i class="fas fa-image"></i></button>
+                    <button type="button" onclick="Manual.inserirAlerta()" title="Alerta"><i class="fas fa-exclamation-triangle"></i></button>
+                    <button type="button" onclick="Manual.inserirDica()" title="Dica"><i class="fas fa-lightbulb"></i></button>
+                    <span class="toolbar-sep"></span>
+                    <button type="button" onclick="Manual.execCmd('removeFormat')" title="Limpar formatação"><i class="fas fa-eraser"></i></button>
+                </div>
+                <div id="editorConteudo" class="manual-editor-body" contenteditable="true"
+                    data-placeholder="Escreva o conteúdo do artigo aqui..."></div>
+            </div>
+            <div class="manual-form-row">
+                <div class="manual-form-group" style="flex:2;">
+                    <label class="manual-form-label">Tags / Palavras-chave</label>
+                    <input type="text" id="editorTags" class="manual-form-input" placeholder="Ex: cadastro, morador, visitante, boleto">
+                </div>
+                <div class="manual-form-group" style="flex:1;">
+                    <label class="manual-form-label">URL do Vídeo (YouTube)</label>
+                    <input type="text" id="editorVideoUrl" class="manual-form-input" placeholder="https://youtube.com/...">
+                </div>
+            </div>
+        </div>
+        <div class="manual-modal-footer">
+            <button class="btn-manual-secondary" onclick="Manual.fecharEditor()">Cancelar</button>
+            <button class="btn-manual-primary" onclick="Manual.salvarArtigo()">
+                <i class="fas fa-save"></i> Salvar Artigo
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================================================
+     MODAL UPLOAD IMAGEM
+=================================================== -->
+<div class="manual-modal-overlay" id="manualModalImagem" style="display:none;">
+    <div class="manual-modal-content" style="max-width:480px;">
+        <div class="manual-modal-header">
+            <h3><i class="fas fa-image"></i> Inserir Imagem</h3>
+            <button class="manual-modal-close" onclick="document.getElementById('manualModalImagem').style.display='none'"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="manual-modal-body">
+            <div class="manual-form-group">
+                <label class="manual-form-label">URL da Imagem</label>
+                <input type="text" id="imgUrl" class="manual-form-input" placeholder="https://...">
+            </div>
+            <div class="manual-form-group">
+                <label class="manual-form-label">Ou fazer upload</label>
+                <input type="file" id="imgUpload" accept="image/*" class="manual-form-input" onchange="Manual.uploadImagem(this)">
+            </div>
+            <div class="manual-form-group">
+                <label class="manual-form-label">Texto alternativo</label>
+                <input type="text" id="imgAlt" class="manual-form-input" placeholder="Descrição da imagem">
+            </div>
+        </div>
+        <div class="manual-modal-footer">
+            <button class="btn-manual-secondary" onclick="document.getElementById('manualModalImagem').style.display='none'">Cancelar</button>
+            <button class="btn-manual-primary" onclick="Manual.confirmarImagem()">Inserir</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================================================
+     MODAL HISTÓRICO DE VERSÕES
+=================================================== -->
+<div class="manual-modal-overlay" id="manualModalHistorico" style="display:none;">
+    <div class="manual-modal-content" style="max-width:600px;">
+        <div class="manual-modal-header">
+            <h3><i class="fas fa-history"></i> Histórico de Versões</h3>
+            <button class="manual-modal-close" onclick="document.getElementById('manualModalHistorico').style.display='none'"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="manual-modal-body" id="manualHistoricoContent">
+            <div class="manual-loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================================================
+     MODAL AVALIAÇÃO NEGATIVA
+=================================================== -->
+<div class="manual-modal-overlay" id="manualModalAvaliacao" style="display:none;">
+    <div class="manual-modal-content" style="max-width:480px;">
+        <div class="manual-modal-header">
+            <h3><i class="fas fa-comment"></i> Como podemos melhorar?</h3>
+            <button class="manual-modal-close" onclick="document.getElementById('manualModalAvaliacao').style.display='none'"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="manual-modal-body">
+            <p style="color:#64748b;margin-bottom:1rem;">Seu feedback é muito importante para melhorarmos a documentação.</p>
+            <div class="manual-form-group">
+                <label class="manual-form-label">Comentário (opcional)</label>
+                <textarea id="avaliacaoComentario" class="manual-form-input" rows="3"
+                    placeholder="O que estava faltando ou poderia ser melhor explicado?"></textarea>
+            </div>
+        </div>
+        <div class="manual-modal-footer">
+            <button class="btn-manual-secondary" onclick="document.getElementById('manualModalAvaliacao').style.display='none'">Pular</button>
+            <button class="btn-manual-primary" onclick="Manual.confirmarAvaliacao()">Enviar Feedback</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================================================
+     MODAL ARTIGOS PENDENTES
+=================================================== -->
+<div class="manual-modal-overlay" id="manualModalPendentes" style="display:none;">
+    <div class="manual-modal-content" style="max-width:600px;">
+        <div class="manual-modal-header">
+            <h3><i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i> Documentação Pendente</h3>
+            <button class="manual-modal-close" onclick="document.getElementById('manualModalPendentes').style.display='none'"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="manual-modal-body" id="manualPendentesContent">
+            <div class="manual-loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+        </div>
+    </div>
+</div>

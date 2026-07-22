@@ -1,0 +1,201 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Relatorios" data-icon="fa-file-alt" style="display:none;"></div>
+
+<div class="page-wrapper page-relatorios">
+    <div class="page-header">
+        <h1>Relatorios</h1>
+        <p>Geracao de relatorios gerenciais e operacionais</p>
+    </div>
+
+    <div id="alertBox"></div>
+
+    <div class="page-card filter-section">
+        <h2>Filtros de Pesquisa</h2>
+
+        <div class="form-grid">
+            <div>
+                <label>Data Inicial</label>
+                <input type="date" id="dataInicial">
+            </div>
+            <div>
+                <label>Data Final</label>
+                <input type="date" id="dataFinal">
+            </div>
+            <div>
+                <label>Hora Inicial</label>
+                <input type="time" id="horaInicial">
+            </div>
+            <div>
+                <label>Hora Final</label>
+                <input type="time" id="horaFinal">
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <div>
+                <label>Placa</label>
+                <input type="text" id="filtroPlaca" placeholder="ABC1D23">
+            </div>
+            <div>
+                <label>Modelo</label>
+                <input type="text" id="filtroModelo" placeholder="Ex: Corolla">
+            </div>
+            <div>
+                <label>Unidade</label>
+                <input type="text" id="filtroUnidade" placeholder="Ex: Gleba 93">
+            </div>
+            <div>
+                <label>Nome / Morador</label>
+                <input type="text" id="filtroNome" placeholder="Nome do morador/visitante">
+            </div>
+        </div>
+
+        <div class="form-grid filter-row-tight">
+            <div>
+                <label>Tipo de Relatorio</label>
+                <select id="tipoRelatorio">
+                    <option value="todos">Todos</option>
+                    <option value="moradores">Somente Moradores</option>
+                    <option value="visitantes">Somente Visitantes</option>
+                    <option value="prestadores">Somente Prestadores</option>
+                </select>
+            </div>
+            <div class="inline-options">
+                <label class="checkbox-group"><input type="checkbox" id="tipoMorador" checked> Morador</label>
+                <label class="checkbox-group"><input type="checkbox" id="tipoVisitante" checked> Visitante</label>
+                <label class="checkbox-group"><input type="checkbox" id="tipoPrestador" checked> Prestador</label>
+                <label class="checkbox-group"><input type="checkbox" id="apenasLiberados"> Apenas Liberados</label>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="button" class="btn-primary-modern" id="btnAplicarFiltros">
+                <i class="fas fa-search"></i> Pesquisar
+            </button>
+            <button type="button" class="btn-export" id="btnExportarCsv">
+                <i class="fas fa-file-csv"></i> Exportar CSV
+            </button>
+            <button type="button" class="btn-print" id="btnGerarPDF">
+                <i class="fas fa-file-pdf"></i> Gerar PDF
+            </button>
+            <button type="button" class="btn-clear" id="btnLimparFiltros">
+                <i class="fas fa-eraser"></i> Limpar
+            </button>
+        </div>
+    </div>
+
+    <div class="page-card">
+        <div class="stats">
+            <div class="stat-card">
+                <div class="value" id="totalRegistros">0</div>
+                <div class="label">Total de Registros</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="totalMoradores">0</div>
+                <div class="label">Moradores</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="totalVisitantes">0</div>
+                <div class="label">Visitantes</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="totalPrestadores">0</div>
+                <div class="label">Prestadores</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="totalLiberados">0</div>
+                <div class="label">Acessos Liberados</div>
+            </div>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="buscaLocalRelatorio" placeholder="Filtro local na tabela...">
+            <label class="audio-toggle">
+                <input type="checkbox" id="habilitarSomRelatorios" checked>
+                Som de feedback
+            </label>
+            <button class="btn-primary-modern" type="button" id="btnAtualizarRelatorio">
+                <i class="fas fa-sync-alt"></i> Atualizar dados
+            </button>
+        </div>
+
+        <div id="loadingRelatorios" class="loading" style="display:none;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Carregando registros...</p>
+        </div>
+
+        <div class="table-wrapper">
+            <div class="table-container">
+                <table id="relatorioTable">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Hora</th>
+                            <th>Placa</th>
+                            <th>Modelo</th>
+                            <th>Cor</th>
+                            <th>TAG RFID</th>
+                            <th>Tipo</th>
+                            <th>Nome</th>
+                            <th>Unidade</th>
+                            <th>Dias Perm.</th>
+                            <th>Status</th>
+                            <th>Observacao</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== RANKING DE VEICULOS COM MAIS ACESSOS ===== -->
+    <div class="page-card">
+        <h2><i class="fas fa-car"></i> Veiculos com Mais Acessos — Ultimos 30 Dias</h2>
+        <p style="font-size:12px;color:#64748b;margin-bottom:16px;">Ranking dos veiculos que mais acessaram o condominio no periodo, agrupados por placa, tipo e nome.</p>
+
+        <div class="form-grid" style="margin-bottom:14px;">
+            <div>
+                <label>Periodo (dias)</label>
+                <select id="rankingDias">
+                    <option value="7">Ultimos 7 dias</option>
+                    <option value="15">Ultimos 15 dias</option>
+                    <option value="30" selected>Ultimos 30 dias</option>
+                    <option value="60">Ultimos 60 dias</option>
+                    <option value="90">Ultimos 90 dias</option>
+                </select>
+            </div>
+            <div>
+                <label>Tipo</label>
+                <select id="rankingTipo">
+                    <option value="">Todos</option>
+                    <option value="Morador">Morador</option>
+                    <option value="Visitante">Visitante</option>
+                    <option value="Prestador">Prestador</option>
+                </select>
+            </div>
+            <div>
+                <label>Placa (opcional)</label>
+                <input type="text" id="rankingPlaca" placeholder="ABC1D23">
+            </div>
+            <div>
+                <label>Top N veiculos</label>
+                <select id="rankingTop">
+                    <option value="10">Top 10</option>
+                    <option value="20" selected>Top 20</option>
+                    <option value="50">Top 50</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-actions" style="padding-top:0;">
+            <button type="button" class="btn-export" id="btnRankingCSV">
+                <i class="fas fa-file-csv"></i> Exportar CSV
+            </button>
+            <button type="button" class="btn-print" id="btnRankingPDF">
+                <i class="fas fa-file-pdf"></i> Gerar PDF
+            </button>
+        </div>
+    </div>
+
+</div>

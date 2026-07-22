@@ -1,0 +1,345 @@
+/* ============================================================
+   Notificações Push — CSS da Página
+   Arquivo: assets/css/pages/notificacoes_push.css
+   ============================================================ */
+
+/* ── Grid de Estatísticas ─────────────────────────────────── */
+.push-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.push-stat-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+.push-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.push-stat-info {
+    min-width: 0;
+}
+
+.push-stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1;
+}
+
+.push-stat-label {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+/* ── Área de Envio Rápido ─────────────────────────────────── */
+.push-quick-card {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    border-radius: 14px;
+    padding: 1.5rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.push-quick-card h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.push-quick-card p {
+    font-size: 0.85rem;
+    opacity: 0.85;
+    margin: 0;
+}
+
+.push-quick-card .btn-white {
+    background: #fff;
+    color: #4f46e5;
+    border: none;
+    padding: 0.6rem 1.25rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+}
+
+.push-quick-card .btn-white:hover {
+    background: #f0f0ff;
+}
+
+/* ── Tabela de Histórico ──────────────────────────────────── */
+.push-historico-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+.push-historico-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.push-historico-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+.push-historico-header .push-filtros {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.push-filtros select {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #374151;
+    background: #f9fafb;
+    cursor: pointer;
+}
+
+.push-table-wrap {
+    overflow-x: auto;
+}
+
+.push-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.push-table th {
+    background: #f9fafb;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #6b7280;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.push-table td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+    vertical-align: middle;
+}
+
+.push-table tr:last-child td {
+    border-bottom: none;
+}
+
+.push-table tr:hover td {
+    background: #f9fafb;
+}
+
+/* ── Badges de tipo ───────────────────────────────────────── */
+.push-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.push-badge-comunicado  { background: #dbeafe; color: #1d4ed8; }
+.push-badge-aviso       { background: #fef3c7; color: #92400e; }
+.push-badge-inadimplencia { background: #fee2e2; color: #991b1b; }
+.push-badge-visitante   { background: #d1fae5; color: #065f46; }
+.push-badge-os          { background: #ffedd5; color: #9a3412; }
+.push-badge-urgente     { background: #fce7f3; color: #9d174d; }
+.push-badge-geral       { background: #ede9fe; color: #5b21b6; }
+
+/* ── Badge de status de envio ─────────────────────────────── */
+.push-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.push-status-enviado   { background: #d1fae5; color: #065f46; }
+.push-status-parcial   { background: #fef3c7; color: #92400e; }
+.push-status-erro      { background: #fee2e2; color: #991b1b; }
+.push-status-pendente  { background: #f3f4f6; color: #6b7280; }
+
+/* ── Destinatários ────────────────────────────────────────── */
+.push-dest-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    background: #f3f4f6;
+    color: #374151;
+}
+
+/* ── Estado vazio ─────────────────────────────────────────── */
+.push-empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #9ca3af;
+}
+
+.push-empty-state i {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    display: block;
+    color: #d1d5db;
+}
+
+.push-empty-state p {
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* ── Modais ───────────────────────────────────────────────── */
+.push-tipo-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.push-tipo-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.6rem 0.4rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: #374151;
+    transition: all 0.15s;
+    font-weight: 500;
+}
+
+.push-tipo-btn i {
+    font-size: 1.1rem;
+}
+
+.push-tipo-btn:hover {
+    border-color: #6366f1;
+    background: #f5f3ff;
+    color: #4f46e5;
+}
+
+.push-tipo-btn.ativo {
+    border-color: #6366f1;
+    background: #ede9fe;
+    color: #4f46e5;
+}
+
+/* ── Configurações FCM ────────────────────────────────────── */
+.push-config-info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    color: #1e40af;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.push-config-info a {
+    font-weight: 600;
+}
+
+.push-config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+/* ── Responsividade ───────────────────────────────────────── */
+@media (max-width: 1024px) {
+    .push-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .push-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+
+    .push-quick-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .push-historico-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .push-tipo-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .push-config-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .push-stats-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .push-tipo-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

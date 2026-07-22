@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Visualizar Checklist - Sistema</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        @media print {
+            .sidebar, .submenu, .no-print { display: none !important; }
+            .main-content { margin-left: 0; }
+        }
+        .print-header { text-align: center; margin-bottom: 2rem; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+        .info-item { padding: 1rem; background: #f8fafc; border-radius: 8px; }
+        .items-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .items-table th, .items-table td { border: 1px solid #ddd; padding: 0.75rem; text-align: left; }
+        .items-table th { background: #f1f5f9; }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <div class="main-container">
+        <nav class="sidebar no-print" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="manutencao.html" class="nav-link active"><i class="fas fa-tools"></i> Manutenção</a></li>
+            </ul>
+        </nav>
+        <main class="main-content">
+            <header class="header no-print"><h1><i class="fas fa-eye"></i> Visualizar Checklist</h1></header>
+            <nav class="submenu no-print"><ul><li><a href="checklist_veicular.html"><i class="fas fa-arrow-left"></i> Voltar</a></li><li><button onclick="window.print()" class="btn-info"><i class="fas fa-print"></i> Imprimir</button></li></ul></nav>
+            <div id="alertaMsg" class="no-print"></div>
+            <div class="section">
+                <div class="print-header">
+                    <h1>CHECKLIST VEICULAR</h1>
+                    <p>Condomínio Serra da Liberdade</p>
+                </div>
+                <div id="conteudoChecklist">
+                    <p>Carregando...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('id');
+            if (!id) {
+                alert('ID não informado');
+                window.location.href = 'checklist_veicular.html';
+                return;
+            }
+            carregarChecklist(id);
+        });
+        function carregarChecklist(id) {
+            Promise.all([
+                fetch(`../api/api_checklist.php?acao=buscar&id=${id}`).then(r => r.json()),
+                fetch(`../api/api_checklist_itens.php?acao=buscar_por_checklist&checklist_id=${id}`).then(r => r.json())
+            ]).then(([checklistData, itensData]) => {
+                if (checklistData.sucesso && itensData.sucesso) {
+                    renderizarChecklist(checklistData.dados, itensData.dados);
+                }
+            });
+        }
+        function renderizarChecklist(checklist, itens) {
+            const container = document.getElementById('conteudoChecklist');
+            const kmPercorrido = checklist.km_final ? (checklist.km_final - checklist.km_inicial) : '-';
+            container.innerHTML = `
+                <div class="info-grid">
+                    <div class="info-item"><strong>Veículo:</strong> ${checklist.placa} - ${checklist.veiculo_modelo}</div>
+                    <div class="info-item"><strong>Operador:</strong> ${checklist.operador_nome}</div>
+                    <div class="info-item"><strong>KM Inicial:</strong> ${checklist.km_inicial} km</div>
+                    <div class="info-item"><strong>KM Final:</strong> ${checklist.km_final || '-'} km</div>
+                    <div class="info-item"><strong>KM Percorrido:</strong> ${kmPercorrido} km</div>
+                    <div class="info-item"><strong>Status:</strong> ${checklist.status.toUpperCase()}</div>
+                    <div class="info-item"><strong>Data Abertura:</strong> ${new Date(checklist.data_hora_abertura).toLocaleString('pt-BR')}</div>
+                    <div class="info-item"><strong>Data Fechamento:</strong> ${checklist.data_hora_fechamento ? new Date(checklist.data_hora_fechamento).toLocaleString('pt-BR') : '-'}</div>
+                </div>
+                ${checklist.observacao_abertura ? `<div class="info-item"><strong>Observaçµes Iniciais:</strong><br>${checklist.observacao_abertura}</div>` : ''}
+                ${checklist.observacao_fechamento ? `<div class="info-item"><strong>Observaçµes Finais:</strong><br>${checklist.observacao_fechamento}</div>` : ''}
+                <h3>Itens Verificados</h3>
+                <table class="items-table">
+                    <thead><tr><th>Item</th><th>Abertura</th><th>Fechamento</th></tr></thead>
+                    <tbody>
+                        ${itens.map(item => `<tr><td>${item.nome_item}</td><td>${item.valor_abertura || '-'}</td><td>${item.valor_fechamento || '-'}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    </script>
+    <script src="js/auth-guard.js"></script>
+    </div> <!-- /main-container -->
+</body>
+</html>

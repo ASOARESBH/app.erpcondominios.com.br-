@@ -1,0 +1,481 @@
+/**
+ * SIDEBAR REFACTOR - Baseado na Referência Visual
+ * Core design rules for the new sidebar and top header.
+ */
+
+/* ============================================
+   SIDEBAR BASE 
+   ============================================ */
+.sidebar {
+    background: #111827 !important;
+    /* Dark Slate */
+    width: 260px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    border-right: none !important;
+}
+
+/* Logo Container */
+.sidebar-header {
+    padding: 24px 20px !important;
+    background: transparent !important;
+    text-align: center !important;
+}
+
+.sidebar-logo-container {
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-logo {
+    max-width: 100%;
+    max-height: 120px;
+    object-fit: contain;
+}
+
+/* Menu Items */
+.nav-menu,
+.sidebar-nav ul {
+    list-style: none !important;
+    padding: 10px 12px !important;
+    margin: 0 !important;
+    flex: 1 !important;
+}
+
+.nav-item,
+.sidebar-nav li {
+    margin-bottom: 4px !important;
+}
+
+.nav-link,
+.sidebar-nav a {
+    display: flex !important;
+    align-items: center !important;
+    padding: 12px 16px !important;
+    color: #94a3b8 !important;
+    /* text-slate-400 */
+    text-decoration: none !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+}
+
+.nav-link i,
+.sidebar-nav a i {
+    width: 24px !important;
+    margin-right: 12px !important;
+    font-size: 1.1rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Active State */
+.nav-link.active,
+.sidebar-nav a.active,
+.nav-item.active .nav-link {
+    background: #2563eb !important;
+    /* primary-600 */
+    color: white !important;
+}
+
+.nav-link:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: white !important;
+}
+
+/* Logout Item (Sair) */
+#btn-logout,
+.nav-link[href*="logout"],
+.nav-link-logout {
+    color: #f87171 !important;
+    /* red-400 */
+    margin-top: auto !important;
+}
+
+#btn-logout i {
+    color: #f87171 !important;
+}
+
+/* Remove User Profile from Sidebar */
+.user-profile-section,
+.profile-section,
+.user-session,
+.sidebar-footer {
+    display: none !important;
+}
+
+/* ============================================
+   TOP HEADER (LOGIN SUPERIOR)
+   ============================================ */
+.header {
+    background: white !important;
+    color: #1e293b !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    padding: 12px 24px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 900 !important;
+}
+
+.header h1 {
+    font-size: 1.25rem !important;
+    color: #1e293b !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+.user-mini-profile {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    cursor: pointer !important;
+}
+
+.header-user-name {
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    color: #334155 !important;
+}
+
+.top-user-avatar {
+    width: 36px !important;
+    height: 36px !important;
+    background: #2563eb !important;
+    color: white !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-weight: 700 !important;
+    border: 2px solid white !important;
+    box-shadow: 0 0 0 1px #e2e8f0 !important;
+}
+
+/* ============================================
+   MODAL DE LOGOUT (FIX)
+   ============================================ */
+.modal-logout-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    backdrop-filter: blur(4px) !important;
+    z-index: 10000 !important;
+    display: none;
+    /* Escondido por padrão, controlado via JS */
+    align-items: center !important;
+    justify-content: center !important;
+    opacity: 0 !important;
+    transition: opacity 0.3s ease !important;
+}
+
+.modal-logout-overlay.show {
+    display: flex !important;
+    opacity: 1 !important;
+}
+
+.modal-logout-content {
+    background: #1e293b !important;
+    color: white !important;
+    padding: 2rem !important;
+    border-radius: 16px !important;
+    width: 90% !important;
+    max-width: 400px !important;
+    text-align: center !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important;
+    transform: scale(0.9) !important;
+    transition: transform 0.3s ease !important;
+}
+
+.modal-logout-overlay.show .modal-logout-content {
+    transform: scale(1) !important;
+}
+
+.modal-logout-icon {
+    font-size: 3.5rem !important;
+    color: #2563eb !important;
+    margin-bottom: 1rem !important;
+    display: block !important;
+}
+
+.modal-logout-title {
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.5rem !important;
+    color: white !important;
+}
+
+.modal-logout-text {
+    color: #94a3b8 !important;
+    font-size: 0.95rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.modal-logout-buttons {
+    display: flex !important;
+    gap: 1rem !important;
+    justify-content: center !important;
+}
+
+.btn-modal {
+    padding: 0.6rem 1.5rem !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    border: none !important;
+    font-size: 0.95rem !important;
+}
+
+.btn-modal-cancel {
+    background: transparent !important;
+    color: #cbd5e1 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.btn-modal-cancel:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: white !important;
+}
+
+.btn-modal-confirm {
+    background: #2563eb !important;
+    color: white !important;
+}
+
+.btn-modal-confirm:hover {
+    background: #1d4ed8 !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ============================================
+   SUBMENU ANINHADO (MANUTENCAO / HIDROMETROS)
+   ============================================ */
+
+.submenu-container {
+    position: relative;
+}
+
+.submenu-toggle .submenu-arrow {
+    transition: transform 0.25s ease;
+}
+
+.submenu-toggle.active .submenu-arrow {
+    transform: rotate(90deg);
+}
+
+.submenu-content {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.submenu-content.show {
+    max-height: 600px;
+}
+
+.nav-sublink {
+    padding: 9px 16px 9px 36px !important;
+    font-size: 0.88rem !important;
+    color: #94a3b8 !important;
+    border-left: 2px solid transparent;
+    border-radius: 0 8px 8px 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    transition: all 0.2s ease !important;
+    text-decoration: none;
+}
+
+.nav-sublink:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #e2e8f0 !important;
+    border-left-color: #3b82f6;
+}
+
+.nav-sublink.active {
+    background: rgba(37, 99, 235, 0.15) !important;
+    color: #93c5fd !important;
+    border-left-color: #2563eb;
+}
+
+.nav-sublink i {
+    width: 18px !important;
+    font-size: 0.85rem !important;
+    margin-right: 0 !important;
+}
+
+.nav-sublink-2 {
+    padding-left: 52px !important;
+    font-size: 0.83rem !important;
+    color: #64748b !important;
+}
+
+.nav-sublink-2:hover {
+    color: #cbd5e1 !important;
+}
+
+.nav-sublink-2.active {
+    color: #7dd3fc !important;
+}
+
+.submenu-level2 {
+    border-left: 1px dashed rgba(148, 163, 184, 0.2);
+    margin-left: 36px;
+}
+
+.submenu-level2.show {
+    max-height: 300px;
+}
+/* ============================================
+   BOTÃO ABRIR CHAMADO (rodapé do sidebar)
+   ============================================ */
+.btn-abrir-chamado {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    padding: 0.65rem 1rem !important;
+    background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%) !important;
+    color: #fff !important;
+    border-radius: 10px !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35) !important;
+    letter-spacing: 0.01em !important;
+    cursor: pointer !important;
+}
+
+.btn-abrir-chamado:hover {
+    background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%) !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5) !important;
+    transform: translateY(-1px) !important;
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+.btn-abrir-chamado i:first-child {
+    font-size: 1rem !important;
+    color: #fff !important;
+    flex-shrink: 0 !important;
+}
+
+.btn-abrir-chamado span {
+    flex: 1 !important;
+    color: #fff !important;
+}
+
+/* ============================================
+   HEADER SESSION GROUP (sino + sessão juntos)
+   ============================================ */
+#headerSessionGroup {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+}
+
+/* Separador visual entre sino e perfil */
+#notif-bell-wrap + #userMiniProfile {
+    border-left: 1px solid #e2e8f0;
+    padding-left: 12px;
+    margin-left: 4px;
+}
+
+/* ============================================
+   SIDEBAR COLLAPSE BUTTON
+   ============================================ */
+#sidebarCollapseBtn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Sidebar recolhida: ocultar texto dos nav-links */
+.sidebar.collapsed .nav-link > span,
+.sidebar.collapsed .nav-link > *:not(i) {
+    display: none !important;
+}
+
+/* Sidebar recolhida: centralizar ícones */
+.sidebar.collapsed .nav-link {
+    justify-content: center !important;
+    padding: 12px 8px !important;
+    position: relative;
+}
+
+.sidebar.collapsed .nav-link i {
+    margin-right: 0 !important;
+    font-size: 1.2rem !important;
+    width: auto !important;
+}
+
+/* Sidebar recolhida: ocultar logo e mostrar só o botão */
+.sidebar.collapsed .sidebar-logo-container {
+    display: none !important;
+}
+
+/* Sidebar recolhida: ajustar header */
+.sidebar.collapsed .sidebar-header {
+    padding: 12px 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+}
+
+/* Sidebar recolhida: ocultar submenus */
+.sidebar.collapsed .submenu-content {
+    display: none !important;
+}
+
+.sidebar.collapsed .submenu-arrow {
+    display: none !important;
+}
+
+/* Sidebar recolhida: botão abrir chamado */
+.sidebar.collapsed .btn-abrir-chamado span {
+    display: none !important;
+}
+
+.sidebar.collapsed .btn-abrir-chamado {
+    justify-content: center !important;
+    padding: 0.65rem 0.5rem !important;
+}
+
+/* Tooltip ao passar o mouse nos itens recolhidos */
+.sidebar.collapsed .nav-link[data-label]:hover::after {
+    content: attr(data-label);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #1e293b;
+    color: #f1f5f9;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    pointer-events: none;
+}

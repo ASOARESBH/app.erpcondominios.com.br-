@@ -1,0 +1,12 @@
+{
+  "name": "asl-qa-headless",
+  "version": "1.0.0",
+  "description": "Headless QA for Session Manager Core (Puppeteer)",
+  "main": "qa-puppeteer.js",
+  "scripts": {
+    "qa": "node tools/qa-puppeteer.js"
+  },
+  "dependencies": {
+    "puppeteer-core": "^21.11.0"
+  }
+}

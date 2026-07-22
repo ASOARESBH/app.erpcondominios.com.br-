@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Teste - refreshUserData()</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid #28a745;
+            background: #f9f9f9;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #28a745;
+        }
+        .code {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .result {
+            background: #e8f5e9;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #4caf50;
+        }
+        .error {
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #f44336;
+        }
+        .warning {
+            background: #fff3e0;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #ff9800;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px 5px 5px 0;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .console-output {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background: #007bff;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        .status-pass {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-fail {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ð§ª Teste - Método refreshUserData()</h1>
+        
+        <div class="test-section">
+            <h2>ð Objetivo do Teste</h2>
+            <p>Validar que o método <code>refreshUserData()</code> foi adicionado corretamente ao <code>SessionManagerCore</code> e funciona conforme esperado.</p>
+        </div>
+
+        <div class="test-section">
+            <h2>ð Testes Unitários</h2>
+            
+            <h3>Teste 1: Verificar se método existe</h3>
+            <div class="code">
+// Verificar se SessionManagerCore tem o método refreshUserData
+const sessionMgr = SessionManagerCore.getInstance();
+console.log(typeof sessionMgr.refreshUserData === 'function');
+            </div>
+            <button onclick="teste1()">Executar Teste 1</button>
+            <div id="resultado1"></div>
+
+            <h3>Teste 2: Verificar se é async</h3>
+            <div class="code">
+// Verificar se o método retorna uma Promise
+const sessionMgr = SessionManagerCore.getInstance();
+const resultado = sessionMgr.refreshUserData();
+console.log(resultado instanceof Promise);
+            </div>
+            <button onclick="teste2()">Executar Teste 2</button>
+            <div id="resultado2"></div>
+
+            <h3>Teste 3: Verificar estrutura de retorno</h3>
+            <div class="code">
+// Chamar o método e verificar estrutura
+const sessionMgr = SessionManagerCore.getInstance();
+const dados = await sessionMgr.refreshUserData();
+console.log('Campos retornados:', Object.keys(dados));
+            </div>
+            <button onclick="teste3()">Executar Teste 3</button>
+            <div id="resultado3"></div>
+
+            <h3>Teste 4: Verificar método formatarTempoRestante</h3>
+            <div class="code">
+// Testar formatação de tempo
+const sessionMgr = SessionManagerCore.getInstance();
+console.log(sessionMgr.formatarTempoRestante(3661)); // 1h 1m 1s
+            </div>
+            <button onclick="teste4()">Executar Teste 4</button>
+            <div id="resultado4"></div>
+
+            <h3>Teste 5: Verificar logging</h3>
+            <div class="code">
+// Verificar se há logs apropriados
+const sessionMgr = SessionManagerCore.getInstance();
+await sessionMgr.refreshUserData();
+// Verificar console.log
+            </div>
+            <button onclick="teste5()">Executar Teste 5</button>
+            <div id="resultado5"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>ð Resumo dos Testes</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Teste</th>
+                        <th>Descrição</th>
+                        <th>Status</th>
+                        <th>Resultado</th>
+                    </tr>
+                </thead>
+                <tbody id="resumoTestes">
+                    <tr>
+                        <td>1</td>
+                        <td>Método existe</td>
+                        <td id="status1">-</td>
+                        <td id="msg1">-</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Retorna Promise</td>
+                        <td id="status2">-</td>
+                        <td id="msg2">-</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Estrutura correta</td>
+                        <td id="status3">-</td>
+                        <td id="msg3">-</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Formatação de tempo</td>
+                        <td id="status4">-</td>
+                        <td id="msg4">-</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Logging correto</td>
+                        <td id="status5">-</td>
+                        <td id="msg5">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="test-section">
+            <h2>ð¥ï¸ Console de Saída</h2>
+            <div class="console-output" id="consoleOutput"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>â Conclusão</h2>
+            <p id="conclusao">Execute os testes para validar a solução...</p>
+        </div>
+    </div>
+
+    <script>
+        // Capturar console.log
+        const logs = [];
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        console.log = function(...args) {
+            logs.push('[LOG] ' + args.join(' '));
+            originalLog.apply(console, args);
+            atualizarConsole();
+        };
+
+        console.warn = function(...args) {
+            logs.push('[WARN] ' + args.join(' '));
+            originalWarn.apply(console, args);
+            atualizarConsole();
+        };
+
+        console.error = function(...args) {
+            logs.push('[ERROR] ' + args.join(' '));
+            originalError.apply(console, args);
+            atualizarConsole();
+        };
+
+        function atualizarConsole() {
+            const consoleEl = document.getElementById('consoleOutput');
+            consoleEl.textContent = logs.slice(-50).join('\n');
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function teste1() {
+            try {
+                const sessionMgr = SessionManagerCore.getInstance();
+                const existe = typeof sessionMgr.refreshUserData === 'function';
+                
+                const resultado = document.getElementById('resultado1');
+                if (existe) {
+                    resultado.innerHTML = '<div class="result">â <strong>PASSOU:</strong> Método refreshUserData() existe e é uma função</div>';
+                    document.getElementById('status1').innerHTML = '<span class="status-pass">â PASSOU</span>';
+                    document.getElementById('msg1').innerHTML = 'Método encontrado';
+                } else {
+                    resultado.innerHTML = '<div class="error">â <strong>FALHOU:</strong> Método não encontrado</div>';
+                    document.getElementById('status1').innerHTML = '<span class="status-fail">â FALHOU</span>';
+                    document.getElementById('msg1').innerHTML = 'Método não existe';
+                }
+            } catch (e) {
+                document.getElementById('resultado1').innerHTML = '<div class="error">â <strong>ERRO:</strong> ' + e.message + '</div>';
+                document.getElementById('status1').innerHTML = '<span class="status-fail">â ERRO</span>';
+                document.getElementById('msg1').innerHTML = e.message;
+            }
+        }
+
+        function teste2() {
+            try {
+                const sessionMgr = SessionManagerCore.getInstance();
+                const resultado = sessionMgr.refreshUserData();
+                const ehPromise = resultado instanceof Promise;
+                
+                const resultadoEl = document.getElementById('resultado2');
+                if (ehPromise) {
+                    resultadoEl.innerHTML = '<div class="result">â <strong>PASSOU:</strong> Método retorna uma Promise</div>';
+                    document.getElementById('status2').innerHTML = '<span class="status-pass">â PASSOU</span>';
+                    document.getElementById('msg2').innerHTML = 'Retorna Promise';
+                } else {
+                    resultadoEl.innerHTML = '<div class="error">â <strong>FALHOU:</strong> Método não retorna Promise</div>';
+                    document.getElementById('status2').innerHTML = '<span class="status-fail">â FALHOU</span>';
+                    document.getElementById('msg2').innerHTML = 'Não é Promise';
+                }
+            } catch (e) {
+                document.getElementById('resultado2').innerHTML = '<div class="error">â <strong>ERRO:</strong> ' + e.message + '</div>';
+                document.getElementById('status2').innerHTML = '<span class="status-fail">â ERRO</span>';
+                document.getElementById('msg2').innerHTML = e.message;
+            }
+        }
+
+        async function teste3() {
+            try {
+                const sessionMgr = SessionManagerCore.getInstance();
+                const dados = await sessionMgr.refreshUserData();
+                
+                const camposEsperados = ['sucesso', 'sessao_ativa', 'usuario', 'tempo_restante', 'sessao'];
+                const camposPresentes = camposEsperados.filter(campo => campo in dados);
+                const todosPresentes = camposPresentes.length === camposEsperados.length;
+                
+                const resultadoEl = document.getElementById('resultado3');
+                if (todosPresentes) {
+                    resultadoEl.innerHTML = '<div class="result">â <strong>PASSOU:</strong> Estrutura de retorno correta<br><strong>Campos:</strong> ' + camposPresentes.join(', ') + '</div>';
+                    document.getElementById('status3').innerHTML = '<span class="status-pass">â PASSOU</span>';
+                    document.getElementById('msg3').innerHTML = 'Estrutura: ' + camposPresentes.join(', ');
+                } else {
+                    resultadoEl.innerHTML = '<div class="error">â <strong>FALHOU:</strong> Campos faltando<br><strong>Esperados:</strong> ' + camposEsperados.join(', ') + '<br><strong>Presentes:</strong> ' + camposPresentes.join(', ') + '</div>';
+                    document.getElementById('status3').innerHTML = '<span class="status-fail">â FALHOU</span>';
+                    document.getElementById('msg3').innerHTML = 'Campos faltando';
+                }
+            } catch (e) {
+                document.getElementById('resultado3').innerHTML = '<div class="error">â <strong>ERRO:</strong> ' + e.message + '</div>';
+                document.getElementById('status3').innerHTML = '<span class="status-fail">â ERRO</span>';
+                document.getElementById('msg3').innerHTML = e.message;
+            }
+        }
+
+        function teste4() {
+            try {
+                const sessionMgr = SessionManagerCore.getInstance();
+                
+                const testes = [
+                    { input: 3661, esperado: '1h 1m', descricao: '1 hora, 1 minuto, 1 segundo' },
+                    { input: 125, esperado: '2m 5s', descricao: '2 minutos, 5 segundos' },
+                    { input: 45, esperado: '45s', descricao: '45 segundos' },
+                    { input: 0, esperado: '0s', descricao: '0 segundos' }
+                ];
+                
+                let todosPassaram = true;
+                let html = '<div class="result">â <strong>Testes de Formatação:</strong><br>';
+                
+                testes.forEach(t => {
+                    const resultado = sessionMgr.formatarTempoRestante(t.input);
+                    const passou = resultado === t.esperado;
+                    todosPassaram = todosPassaram && passou;
+                    html += `<strong>${t.descricao}:</strong> ${resultado} (esperado: ${t.esperado}) ${passou ? 'â' : 'â'}<br>`;
+                });
+                
+                html += '</div>';
+                
+                document.getElementById('resultado4').innerHTML = html;
+                document.getElementById('status4').innerHTML = todosPassaram ? '<span class="status-pass">â PASSOU</span>' : '<span class="status-fail">â FALHOU</span>';
+                document.getElementById('msg4').innerHTML = todosPassaram ? 'Formatação correta' : 'Erro na formatação';
+            } catch (e) {
+                document.getElementById('resultado4').innerHTML = '<div class="error">â <strong>ERRO:</strong> ' + e.message + '</div>';
+                document.getElementById('status4').innerHTML = '<span class="status-fail">â ERRO</span>';
+                document.getElementById('msg4').innerHTML = e.message;
+            }
+        }
+
+        async function teste5() {
+            try {
+                logs.length = 0; // Limpar logs anteriores
+                const sessionMgr = SessionManagerCore.getInstance();
+                await sessionMgr.refreshUserData();
+                
+                const temRefreshLog = logs.some(log => log.includes('Atualizando dados do usuário'));
+                const temSucessoLog = logs.some(log => log.includes('Dados do usuário atualizados com sucesso'));
+                
+                const resultadoEl = document.getElementById('resultado5');
+                if (temRefreshLog && temSucessoLog) {
+                    resultadoEl.innerHTML = '<div class="result">â <strong>PASSOU:</strong> Logs apropriados encontrados<br><strong>Logs:</strong><br>' + logs.filter(l => l.includes('SessionManager')).join('<br>') + '</div>';
+                    document.getElementById('status5').innerHTML = '<span class="status-pass">â PASSOU</span>';
+                    document.getElementById('msg5').innerHTML = 'Logging correto';
+                } else {
+                    resultadoEl.innerHTML = '<div class="warning">â ï¸ <strong>AVISO:</strong> Alguns logs esperados não encontrados</div>';
+                    document.getElementById('status5').innerHTML = '<span class="status-fail">â ï¸ AVISO</span>';
+                    document.getElementById('msg5').innerHTML = 'Logs incompletos';
+                }
+            } catch (e) {
+                document.getElementById('resultado5').innerHTML = '<div class="error">â <strong>ERRO:</strong> ' + e.message + '</div>';
+                document.getElementById('status5').innerHTML = '<span class="status-fail">â ERRO</span>';
+                document.getElementById('msg5').innerHTML = e.message;
+            }
+        }
+
+        // Executar todos os testes automaticamente
+        window.addEventListener('load', () => {
+            console.log('[TESTE] Página de teste carregada');
+            console.log('[TESTE] Aguardando SessionManagerCore...');
+        });
+    </script>
+</body>
+</html>

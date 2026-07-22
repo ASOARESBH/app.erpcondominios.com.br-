@@ -1,0 +1,427 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Configurações de Notificações" data-icon="fa-bell" style="display:none;"></div>
+
+<div class="page-wrapper page-notificacoes-config">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-header-content">
+      <h1><i class="fas fa-bell"></i> Configurações de Notificações</h1>
+      <p>Configure alertas automáticos por módulo, canais de envio e configurações do Firebase Cloud Messaging</p>
+    </div>
+  </div>
+
+  <!-- Abas de navegação -->
+  <div class="notif-tabs-nav">
+    <button class="notif-tab-btn active" data-tab="regras">
+      <i class="fas fa-sliders-h"></i> Regras de Notificação
+    </button>
+    <button class="notif-tab-btn" data-tab="historico">
+      <i class="fas fa-bell"></i> Minhas Notificações
+    </button>
+    <button class="notif-tab-btn" data-tab="fcm">
+      <i class="fab fa-google"></i> Configurar FCM
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ABA 1 — Regras de Notificação
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="notif-tab-panel active" id="tab-regras">
+
+    <!-- Módulos de Notificação -->
+    <div class="notif-modulos-grid">
+
+      <!-- Módulo: Ordens de Serviço -->
+      <div class="notif-modulo-card" id="modulo-os">
+        <div class="notif-modulo-header">
+          <div class="notif-modulo-icon os-icon">
+            <i class="fas fa-wrench"></i>
+          </div>
+          <div class="notif-modulo-info">
+            <h2>Ordens de Serviço</h2>
+            <p>Alertas de abertura, prazo e prioridade de O.S</p>
+          </div>
+          <span class="notif-modulo-badge" id="badge-os">Carregando...</span>
+        </div>
+        <div class="notif-regras-lista" id="regras-os">
+          <div class="notif-loading"><i class="fas fa-spinner fa-spin"></i> Carregando regras...</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /tab-regras -->
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ABA 2 — Minhas Notificações
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="notif-tab-panel" id="tab-historico">
+
+    <div class="notif-hist-toolbar">
+      <div class="notif-hist-filtros">
+        <select id="hist-filtro-evento" class="notif-select notif-hist-sel" title="Filtrar por tipo de notificação">
+          <option value="">Todos os tipos</option>
+          <option value="os_criada">O.S Criada</option>
+          <option value="os_prioridade_urgente">O.S Urgente</option>
+          <option value="os_prioridade_alta">O.S Alta Prioridade</option>
+          <option value="os_aberta_horas">O.S em Aberto há X Horas</option>
+          <option value="os_finalizada">O.S Finalizada</option>
+          <option value="os_previsao_definida">Previsão Definida</option>
+        </select>
+        <select id="hist-filtro-lido" class="notif-select notif-hist-sel" title="Filtrar por status de leitura">
+          <option value="">Todas (lidas e não lidas)</option>
+          <option value="0">Não lidas</option>
+          <option value="1">Lidas</option>
+        </select>
+        <button type="button" class="notif-hist-btn-filtrar" id="hist-btn-filtrar">
+          <i class="fas fa-search"></i> Filtrar
+        </button>
+        <span id="hist-stats" class="notif-hist-stats"></span>
+      </div>
+      <button type="button" class="notif-hist-btn-marcar-todos" id="hist-btn-marcar-todos">
+        <i class="fas fa-check-double"></i> Marcar todas como lidas
+      </button>
+    </div>
+
+    <div class="notif-hist-lista" id="hist-lista">
+      <div class="notif-loading"><i class="fas fa-spinner fa-spin"></i> Selecione a aba para carregar...</div>
+    </div>
+
+    <div class="notif-hist-paginacao" id="hist-paginacao"></div>
+
+  </div><!-- /tab-historico -->
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ABA 3 — Configurar FCM
+  ═══════════════════════════════════════════════════════════════ -->
+  <div class="notif-tab-panel" id="tab-fcm">
+
+    <!-- Status do PWA -->
+    <div class="fcm-status-bar" id="fcm-status-bar">
+      <div class="fcm-status-indicator" id="fcm-status-indicator">
+        <i class="fas fa-circle-notch fa-spin"></i>
+        <span id="fcm-status-texto">Verificando configuração...</span>
+      </div>
+      <div class="fcm-status-stats" id="fcm-status-stats" style="display:none;">
+        <span class="fcm-stat"><i class="fas fa-mobile-alt"></i> <strong id="fcm-total-tokens">0</strong> dispositivos ativos</span>
+        <span class="fcm-stat"><i class="fas fa-paper-plane"></i> <strong id="fcm-total-enviadas">0</strong> notificações enviadas</span>
+      </div>
+    </div>
+
+    <!-- Guia de configuração -->
+    <div class="fcm-guia-card">
+      <div class="fcm-guia-header">
+        <i class="fas fa-info-circle"></i>
+        <strong>Como obter as credenciais do Firebase</strong>
+        <button class="fcm-guia-toggle" id="fcm-guia-toggle" type="button">
+          <i class="fas fa-chevron-down"></i> Ver instruções
+        </button>
+      </div>
+      <div class="fcm-guia-body" id="fcm-guia-body" style="display:none;">
+        <div class="fcm-passo">
+          <div class="fcm-passo-num">1</div>
+          <div class="fcm-passo-info">
+            <strong>Criar o Projeto no Firebase</strong>
+            <p>Acesse <a href="https://console.firebase.google.com/" target="_blank" rel="noopener">console.firebase.google.com</a>, clique em <em>Adicionar projeto</em>, dê um nome (ex: <code>serra-liberdade-pwa</code>), desative o Google Analytics e clique em <em>Criar projeto</em>.</p>
+          </div>
+        </div>
+        <div class="fcm-passo">
+          <div class="fcm-passo-num">2</div>
+          <div class="fcm-passo-info">
+            <strong>Adicionar o App Web</strong>
+            <p>No painel do projeto, clique no ícone <strong>&lt;/&gt;</strong> (Web), dê um apelido (ex: <code>Portal Morador Web</code>), clique em <em>Registrar app</em>. O Firebase exibirá o bloco <code>firebaseConfig</code> — copie todos os valores.</p>
+          </div>
+        </div>
+        <div class="fcm-passo">
+          <div class="fcm-passo-num">3</div>
+          <div class="fcm-passo-info">
+            <strong>Gerar a Chave VAPID</strong>
+            <p>Vá em <em>⚙️ Configurações do projeto → Cloud Messaging → Configuração da Web → Certificados push da Web</em> e clique em <em>Generate key pair</em>. Copie a chave pública gerada — essa é a <strong>VAPID Key</strong>.</p>
+          </div>
+        </div>
+        <div class="fcm-passo fcm-passo-atencao">
+          <div class="fcm-passo-num"><i class="fas fa-exclamation-triangle"></i></div>
+          <div class="fcm-passo-info">
+            <strong>Atenção — FCM Server Key (Legacy)</strong>
+            <p>O Google descontinuou a API Legacy do FCM. O sistema está preparado para usar a <strong>Server Key Legacy</strong> se ela ainda estiver ativa no seu projeto. Caso não esteja, acesse o <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → APIs e serviços → Biblioteca → pesquise <em>Cloud Messaging API</em> e habilite a versão <strong>Legacy</strong>. A Server Key fica em <em>⚙️ Configurações do projeto → Cloud Messaging → Chaves de API do servidor</em>.</p>
+          </div>
+        </div>
+        <div class="fcm-passo">
+          <div class="fcm-passo-num">5</div>
+          <div class="fcm-passo-info">
+            <strong>Atualizar os arquivos de código</strong>
+            <p>Após salvar as credenciais aqui, você ainda precisa atualizar manualmente os arquivos <code>frontend/js/pwa-portal.js</code> e <code>firebase-messaging-sw.js</code> com os mesmos valores do <code>firebaseConfig</code>. Veja o guia completo em <code>DOC_PWA_FIREBASE.md</code> (Passos 5 e 6).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulário de credenciais -->
+    <div class="fcm-form-card">
+      <div class="fcm-form-header">
+        <i class="fab fa-google" style="color:#4285f4;"></i>
+        <h3>Credenciais do Firebase (firebaseConfig)</h3>
+      </div>
+      <div class="fcm-form-grid">
+
+        <div class="fcm-form-group">
+          <label class="fcm-label" for="fcm-project-id">
+            Project ID <span class="fcm-required">*</span>
+          </label>
+          <input type="text" id="fcm-project-id" class="fcm-input" placeholder="ex: serra-liberdade-pwa">
+          <p class="fcm-hint">Campo <code>projectId</code> do firebaseConfig</p>
+        </div>
+
+        <div class="fcm-form-group">
+          <label class="fcm-label" for="fcm-api-key">
+            API Key <span class="fcm-required">*</span>
+          </label>
+          <input type="text" id="fcm-api-key" class="fcm-input" placeholder="AIzaSy...">
+          <p class="fcm-hint">Campo <code>apiKey</code> do firebaseConfig</p>
+        </div>
+
+        <div class="fcm-form-group">
+          <label class="fcm-label" for="fcm-auth-domain">
+            Auth Domain <span class="fcm-required">*</span>
+          </label>
+          <input type="text" id="fcm-auth-domain" class="fcm-input" placeholder="seu-projeto.firebaseapp.com">
+          <p class="fcm-hint">Campo <code>authDomain</code> do firebaseConfig</p>
+        </div>
+
+        <div class="fcm-form-group">
+          <label class="fcm-label" for="fcm-sender-id">
+            Messaging Sender ID <span class="fcm-required">*</span>
+          </label>
+          <input type="text" id="fcm-sender-id" class="fcm-input" placeholder="123456789012">
+          <p class="fcm-hint">Campo <code>messagingSenderId</code> do firebaseConfig</p>
+        </div>
+
+        <div class="fcm-form-group">
+          <label class="fcm-label" for="fcm-app-id">
+            App ID <span class="fcm-required">*</span>
+          </label>
+          <input type="text" id="fcm-app-id" class="fcm-input" placeholder="1:123456789012:web:abc123...">
+          <p class="fcm-hint">Campo <code>appId</code> do firebaseConfig</p>
+        </div>
+
+        <div class="fcm-form-group">
+          <label class="fcm-label" for="fcm-vapid-key">
+            VAPID Key (Web Push Certificate) <span class="fcm-required">*</span>
+          </label>
+          <input type="text" id="fcm-vapid-key" class="fcm-input" placeholder="BNtq...">
+          <p class="fcm-hint">Chave pública gerada em Cloud Messaging → Certificados push da Web</p>
+        </div>
+
+        <div class="fcm-form-group fcm-full-width">
+          <label class="fcm-label" for="fcm-server-key">
+            FCM Server Key (Legacy) <span class="fcm-optional">opcional</span>
+          </label>
+          <input type="password" id="fcm-server-key" class="fcm-input" placeholder="AAAA...">
+          <p class="fcm-hint">Necessária para envio de push pelo servidor PHP. Encontrada em <em>Configurações do projeto → Cloud Messaging → Chaves de API do servidor</em>. Se não aparecer, habilite a Cloud Messaging API (Legacy) no Google Cloud Console.</p>
+        </div>
+
+      </div>
+
+      <!-- Toggles de funcionalidades -->
+      <div class="fcm-toggles-section">
+        <h4 class="fcm-toggles-titulo"><i class="fas fa-toggle-on"></i> Tipos de Notificação Ativas</h4>
+        <div class="fcm-toggles-grid">
+
+          <label class="fcm-toggle-item">
+            <div class="fcm-toggle-info">
+              <strong>PWA Ativo</strong>
+              <span>Habilita o portal como Progressive Web App</span>
+            </div>
+            <div class="fcm-toggle-wrap">
+              <input type="checkbox" id="fcm-toggle-pwa" class="fcm-toggle-input" checked>
+              <span class="fcm-toggle-slider"></span>
+            </div>
+          </label>
+
+          <label class="fcm-toggle-item">
+            <div class="fcm-toggle-info">
+              <strong><i class="fas fa-user-check" style="color:#22c55e;"></i> Visitantes</strong>
+              <span>Alertas de visitantes na portaria</span>
+            </div>
+            <div class="fcm-toggle-wrap">
+              <input type="checkbox" id="fcm-toggle-visitante" class="fcm-toggle-input" checked>
+              <span class="fcm-toggle-slider"></span>
+            </div>
+          </label>
+
+          <label class="fcm-toggle-item">
+            <div class="fcm-toggle-info">
+              <strong><i class="fas fa-dollar-sign" style="color:#ef4444;"></i> Inadimplência</strong>
+              <span>Avisos de cobranças e inadimplência</span>
+            </div>
+            <div class="fcm-toggle-wrap">
+              <input type="checkbox" id="fcm-toggle-inadimplencia" class="fcm-toggle-input" checked>
+              <span class="fcm-toggle-slider"></span>
+            </div>
+          </label>
+
+          <label class="fcm-toggle-item">
+            <div class="fcm-toggle-info">
+              <strong><i class="fas fa-bullhorn" style="color:#3b82f6;"></i> Comunicados</strong>
+              <span>Avisos e comunicados da associação</span>
+            </div>
+            <div class="fcm-toggle-wrap">
+              <input type="checkbox" id="fcm-toggle-comunicado" class="fcm-toggle-input" checked>
+              <span class="fcm-toggle-slider"></span>
+            </div>
+          </label>
+
+          <label class="fcm-toggle-item">
+            <div class="fcm-toggle-info">
+              <strong><i class="fas fa-wrench" style="color:#f97316;"></i> Ordens de Serviço</strong>
+              <span>Atualizações de chamados do morador</span>
+            </div>
+            <div class="fcm-toggle-wrap">
+              <input type="checkbox" id="fcm-toggle-os" class="fcm-toggle-input" checked>
+              <span class="fcm-toggle-slider"></span>
+            </div>
+          </label>
+
+        </div>
+      </div>
+
+      <!-- Botões de ação -->
+      <div class="fcm-form-actions">
+        <button class="fcm-btn-testar" id="fcm-btn-testar" type="button">
+          <i class="fas fa-paper-plane"></i> Enviar Notificação de Teste
+        </button>
+        <button class="fcm-btn-salvar" id="fcm-btn-salvar" type="button">
+          <i class="fas fa-save"></i> Salvar Configurações
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /tab-fcm -->
+
+  <!-- Modal de edição de regra -->
+  <div class="notif-modal-overlay" id="notif-modal-overlay" style="display:none;">
+    <div class="notif-modal">
+      <div class="notif-modal-header">
+        <h3 id="notif-modal-titulo"><i class="fas fa-bell"></i> Editar Regra de Notificação</h3>
+        <button class="notif-modal-close" id="notif-modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="notif-modal-body">
+        <input type="hidden" id="notif-regra-id">
+        <input type="hidden" id="notif-regra-evento">
+
+        <div class="notif-form-row">
+          <label class="notif-toggle-label">
+            <span>Notificação ativa</span>
+            <div class="notif-toggle-wrap">
+              <input type="checkbox" id="notif-ativo" class="notif-toggle-input">
+              <span class="notif-toggle-slider"></span>
+            </div>
+          </label>
+        </div>
+
+        <div class="notif-form-group">
+          <label class="notif-label">Canais de Envio</label>
+          <div class="notif-canais-grid">
+            <label class="notif-canal-item">
+              <input type="checkbox" name="canal" value="sistema" id="canal-sistema">
+              <span class="notif-canal-box"><i class="fas fa-desktop"></i><span>Sistema</span></span>
+            </label>
+            <label class="notif-canal-item">
+              <input type="checkbox" name="canal" value="email" id="canal-email">
+              <span class="notif-canal-box"><i class="fas fa-envelope"></i><span>E-mail</span></span>
+            </label>
+            <label class="notif-canal-item">
+              <input type="checkbox" name="canal" value="whatsapp" id="canal-whatsapp">
+              <span class="notif-canal-box"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></span>
+            </label>
+            <label class="notif-canal-item">
+              <input type="checkbox" name="canal" value="telegram" id="canal-telegram">
+              <span class="notif-canal-box"><i class="fab fa-telegram"></i><span>Telegram</span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="notif-form-group" id="notif-horas-group" style="display:none;">
+          <label class="notif-label">Alertar quando a O.S estiver aberta há mais de <strong>X horas</strong></label>
+          <div class="notif-input-suffix">
+            <input type="number" id="notif-horas-limite" class="notif-input" min="1" max="9999" step="0.5" placeholder="Ex: 24">
+            <span class="notif-suffix">horas</span>
+          </div>
+          <p class="notif-hint">O sistema verificará automaticamente e gerará um alerta por dia para cada O.S em aberto acima deste limite.</p>
+        </div>
+
+        <div class="notif-form-group" id="notif-prioridade-group" style="display:none;">
+          <label class="notif-label">Alertar quando a prioridade for</label>
+          <select id="notif-prioridade" class="notif-select">
+            <option value="">— Selecione —</option>
+            <option value="urgente">Urgente</option>
+            <option value="alta">Alta</option>
+            <option value="media">Média</option>
+            <option value="baixa">Baixa</option>
+          </select>
+        </div>
+
+        <div class="notif-form-group" id="notif-emails-group" style="display:none;">
+          <label class="notif-label">E-mails adicionais para notificação</label>
+          <input type="text" id="notif-emails" class="notif-input" placeholder="email1@dominio.com, email2@dominio.com">
+          <p class="notif-hint">Separe múltiplos e-mails com vírgula.</p>
+        </div>
+
+        <div class="notif-form-group">
+          <label class="notif-label">Usuários que receberão esta notificação</label>
+          <div class="notif-usuarios-lista" id="notif-usuarios-lista">
+            <div class="notif-loading"><i class="fas fa-spinner fa-spin"></i> Carregando usuários...</div>
+          </div>
+          <p class="notif-hint">Se nenhum usuário for selecionado, todos os administradores e gerentes serão notificados.</p>
+        </div>
+
+        <div class="notif-form-group">
+          <label class="notif-label">Título da notificação</label>
+          <input type="text" id="notif-titulo-tpl" class="notif-input" placeholder="Ex: Nova O.S criada: {numero}">
+          <p class="notif-hint">Variáveis: <code>{numero}</code> <code>{titulo}</code> <code>{prioridade}</code> <code>{departamento}</code> <code>{atendente}</code> <code>{criado_por}</code> <code>{horas}</code></p>
+        </div>
+
+        <div class="notif-form-group">
+          <label class="notif-label">Mensagem da notificação</label>
+          <textarea id="notif-corpo-tpl" class="notif-textarea" rows="3" placeholder="Descreva a mensagem..."></textarea>
+        </div>
+      </div>
+      <div class="notif-modal-footer">
+        <button class="notif-btn-cancelar" id="notif-btn-cancelar"><i class="fas fa-times"></i> Cancelar</button>
+        <button class="notif-btn-salvar" id="notif-btn-salvar"><i class="fas fa-save"></i> Salvar Configuração</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de teste de notificação -->
+  <div class="notif-modal-overlay" id="fcm-modal-teste" style="display:none;">
+    <div class="notif-modal" style="max-width:480px;">
+      <div class="notif-modal-header">
+        <h3><i class="fas fa-paper-plane"></i> Enviar Notificação de Teste</h3>
+        <button class="notif-modal-close" id="fcm-modal-teste-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="notif-modal-body">
+        <div class="fcm-form-group" style="margin-bottom:1rem;">
+          <label class="fcm-label">Título</label>
+          <input type="text" id="fcm-teste-titulo" class="fcm-input" value="🔔 Teste de Notificação" placeholder="Título da notificação">
+        </div>
+        <div class="fcm-form-group" style="margin-bottom:1rem;">
+          <label class="fcm-label">Mensagem</label>
+          <textarea id="fcm-teste-corpo" class="fcm-input" rows="3" placeholder="Mensagem de teste...">Esta é uma notificação de teste enviada pelo ERP Serra da Liberdade.</textarea>
+        </div>
+        <div class="fcm-form-group">
+          <label class="fcm-label">Destinatário</label>
+          <select id="fcm-teste-destino" class="fcm-input">
+            <option value="todos">Todos os dispositivos ativos</option>
+          </select>
+        </div>
+      </div>
+      <div class="notif-modal-footer">
+        <button class="notif-btn-cancelar" id="fcm-modal-teste-cancelar"><i class="fas fa-times"></i> Cancelar</button>
+        <button class="fcm-btn-salvar" id="fcm-modal-teste-enviar"><i class="fas fa-paper-plane"></i> Enviar Teste</button>
+      </div>
+    </div>
+  </div>
+
+</div>

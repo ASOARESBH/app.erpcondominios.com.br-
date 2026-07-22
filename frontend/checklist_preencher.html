@@ -1,0 +1,781 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preencher Checklist - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 2rem 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+        }
+
+        .sidebar h1 {
+            color: #fff;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #1e293b;
+            color: #fff;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+            max-width: 1200px;
+        }
+
+        .header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #f1f5f9;
+            color: #334155;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        .section {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .section h2 {
+            margin-bottom: 1.5rem;
+            color: #1e293b;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 0.75rem;
+        }
+
+        .section h3 {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #334155;
+            font-size: 1.1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            margin-right: 0.5rem;
+            font-size: 1rem;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #22c55e;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #f87171;
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+
+        .info-box h3 {
+            margin-bottom: 0.5rem;
+        }
+
+        .info-box p {
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        .checklist-item {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .checklist-item h4 {
+            color: #1e293b;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+        }
+
+        .radio-option input[type="radio"] {
+            margin-right: 0.5rem;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .radio-option label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: normal;
+        }
+
+        .nivel-minimo {
+            color: #ef4444;
+        }
+
+        .nivel-medio {
+            color: #f59e0b;
+        }
+
+        .nivel-maximo {
+            color: #22c55e;
+        }
+
+        .funcional-sim {
+            color: #22c55e;
+        }
+
+        .funcional-nao {
+            color: #ef4444;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .section {
+                padding: 1rem;
+            }
+
+            .submenu ul {
+                flex-direction: column;
+            }
+
+            .submenu a {
+                display: block;
+                text-align: center;
+            }
+
+            button {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 0.5rem;
+            }
+
+            .radio-group {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()"><i class="fas fa-bars"></i></button>
+
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                        Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i>
+                        Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a>
+                </li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i>
+                        Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i>
+                        Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de
+                        Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i>
+                        Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                        Configuraçµes</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link active"><i class="fas fa-tools"></i>
+                        Manutenção</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                        Administrativo</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-clipboard-check"></i> Preencher Checklist Veicular</h1>
+            </header>
+
+            <nav class="submenu">
+                <ul>
+                    <li><a href="checklist_veicular.html"><i class="fas fa-arrow-left"></i> Voltar</a></li>
+                </ul>
+            </nav>
+
+            <div id="alertaMsg"></div>
+
+            <!-- Informaçµes do Checklist -->
+            <div class="info-box" id="infoChecklist">
+                <h3><i class="fas fa-car"></i> Carregando informaçµes...</h3>
+            </div>
+
+            <!-- Formulário de Itens -->
+            <div class="section">
+                <h2><i class="fas fa-tasks"></i> Itens de Verificação</h2>
+
+                <form id="formItens">
+                    <h3><i class="fas fa-oil-can"></i> Itens com Níveis</h3>
+
+                    <div class="checklist-item">
+                        <h4>1. Nível do leo do Motor</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="oleo_min" name="nivel_oleo" value="minimo" required>
+                                <label for="oleo_min" class="nivel-minimo"><i class="fas fa-exclamation-triangle"></i>
+                                    Mínimo</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="oleo_med" name="nivel_oleo" value="medio">
+                                <label for="oleo_med" class="nivel-medio"><i class="fas fa-minus-circle"></i>
+                                    Médio</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="oleo_max" name="nivel_oleo" value="maximo">
+                                <label for="oleo_max" class="nivel-maximo"><i class="fas fa-check-circle"></i>
+                                    Máximo</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>2. Nível da gua do Radiador</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="agua_min" name="nivel_agua" value="minimo" required>
+                                <label for="agua_min" class="nivel-minimo"><i class="fas fa-exclamation-triangle"></i>
+                                    Mínimo</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="agua_med" name="nivel_agua" value="medio">
+                                <label for="agua_med" class="nivel-medio"><i class="fas fa-minus-circle"></i>
+                                    Médio</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="agua_max" name="nivel_agua" value="maximo">
+                                <label for="agua_max" class="nivel-maximo"><i class="fas fa-check-circle"></i>
+                                    Máximo</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>3. Pneu Dianteiro Esquerdo (LD)</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_de_min" name="pneu_dianteiro_esq" value="minimo" required>
+                                <label for="pneu_de_min" class="nivel-minimo"><i
+                                        class="fas fa-exclamation-triangle"></i> Mínimo</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_de_med" name="pneu_dianteiro_esq" value="medio">
+                                <label for="pneu_de_med" class="nivel-medio"><i class="fas fa-minus-circle"></i>
+                                    Médio</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_de_max" name="pneu_dianteiro_esq" value="maximo">
+                                <label for="pneu_de_max" class="nivel-maximo"><i class="fas fa-check-circle"></i>
+                                    Máximo</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>4. Pneu Dianteiro Direito (LE)</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_dd_min" name="pneu_dianteiro_dir" value="minimo" required>
+                                <label for="pneu_dd_min" class="nivel-minimo"><i
+                                        class="fas fa-exclamation-triangle"></i> Mínimo</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_dd_med" name="pneu_dianteiro_dir" value="medio">
+                                <label for="pneu_dd_med" class="nivel-medio"><i class="fas fa-minus-circle"></i>
+                                    Médio</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_dd_max" name="pneu_dianteiro_dir" value="maximo">
+                                <label for="pneu_dd_max" class="nivel-maximo"><i class="fas fa-check-circle"></i>
+                                    Máximo</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>5. Pneu Traseiro Esquerdo (LD)</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_te_min" name="pneu_traseiro_esq" value="minimo" required>
+                                <label for="pneu_te_min" class="nivel-minimo"><i
+                                        class="fas fa-exclamation-triangle"></i> Mínimo</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_te_med" name="pneu_traseiro_esq" value="medio">
+                                <label for="pneu_te_med" class="nivel-medio"><i class="fas fa-minus-circle"></i>
+                                    Médio</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_te_max" name="pneu_traseiro_esq" value="maximo">
+                                <label for="pneu_te_max" class="nivel-maximo"><i class="fas fa-check-circle"></i>
+                                    Máximo</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>6. Pneu Traseiro Direito (LE)</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_td_min" name="pneu_traseiro_dir" value="minimo" required>
+                                <label for="pneu_td_min" class="nivel-minimo"><i
+                                        class="fas fa-exclamation-triangle"></i> Mínimo</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_td_med" name="pneu_traseiro_dir" value="medio">
+                                <label for="pneu_td_med" class="nivel-medio"><i class="fas fa-minus-circle"></i>
+                                    Médio</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="pneu_td_max" name="pneu_traseiro_dir" value="maximo">
+                                <label for="pneu_td_max" class="nivel-maximo"><i class="fas fa-check-circle"></i>
+                                    Máximo</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3><i class="fas fa-check-square"></i> Itens Funcionais</h3>
+
+                    <div class="checklist-item">
+                        <h4>7. Buzina está funcionando?</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="buzina_sim" name="buzina" value="sim" required>
+                                <label for="buzina_sim" class="funcional-sim"><i class="fas fa-check-circle"></i>
+                                    Sim</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="buzina_nao" name="buzina" value="nao">
+                                <label for="buzina_nao" class="funcional-nao"><i class="fas fa-times-circle"></i>
+                                    Não</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>8. Faróis Alto estão funcionando?</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="farois_sim" name="farois" value="sim" required>
+                                <label for="farois_sim" class="funcional-sim"><i class="fas fa-check-circle"></i>
+                                    Sim</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="farois_nao" name="farois" value="nao">
+                                <label for="farois_nao" class="funcional-nao"><i class="fas fa-times-circle"></i>
+                                    Não</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>9. Luzes de Freio estão funcionando?</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="freios_sim" name="luzes_freio" value="sim" required>
+                                <label for="freios_sim" class="funcional-sim"><i class="fas fa-check-circle"></i>
+                                    Sim</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="freios_nao" name="luzes_freio" value="nao">
+                                <label for="freios_nao" class="funcional-nao"><i class="fas fa-times-circle"></i>
+                                    Não</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>10. Cintos de Segurança (todos funcionando)?</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="cintos_sim" name="cintos" value="sim" required>
+                                <label for="cintos_sim" class="funcional-sim"><i class="fas fa-check-circle"></i>
+                                    Sim</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="cintos_nao" name="cintos" value="nao">
+                                <label for="cintos_nao" class="funcional-nao"><i class="fas fa-times-circle"></i>
+                                    Não</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>11. Limpadores de Para-brisa funcionando?</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="limpadores_sim" name="limpadores" value="sim" required>
+                                <label for="limpadores_sim" class="funcional-sim"><i class="fas fa-check-circle"></i>
+                                    Sim</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="limpadores_nao" name="limpadores" value="nao">
+                                <label for="limpadores_nao" class="funcional-nao"><i class="fas fa-times-circle"></i>
+                                    Não</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checklist-item">
+                        <h4>12. Extintor de Incªndio (válido e no local)?</h4>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="extintor_sim" name="extintor" value="sim" required>
+                                <label for="extintor_sim" class="funcional-sim"><i class="fas fa-check-circle"></i>
+                                    Sim</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="extintor_nao" name="extintor" value="nao">
+                                <label for="extintor_nao" class="funcional-nao"><i class="fas fa-times-circle"></i>
+                                    Não</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 2rem;">
+                        <button type="submit" class="btn-success">
+                            <i class="fas fa-save"></i> Salvar Checklist
+                        </button>
+                        <button type="button" class="btn-secondary"
+                            onclick="window.location.href='checklist_veicular.html'">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Variáveis globais
+        let checklistId = null;
+        let checklist = null;
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            checklistId = urlParams.get('id');
+
+            if (!checklistId) {
+                mostrarAlerta('ID do checklist não informado', 'error');
+                setTimeout(() => window.location.href = 'checklist_veicular.html', 2000);
+                return;
+            }
+
+            carregarChecklist();
+        });
+
+        function carregarChecklist() {
+            fetch(`../api/api_checklist.php?acao=buscar&id=${checklistId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        checklist = data.dados;
+                        exibirInfoChecklist();
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                        setTimeout(() => window.location.href = 'checklist_veicular.html', 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro ao carregar checklist', 'error');
+                });
+        }
+
+        function exibirInfoChecklist() {
+            const infoBox = document.getElementById('infoChecklist');
+            infoBox.innerHTML = `
+                <h3><i class="fas fa-car"></i> ${checklist.placa} - ${checklist.veiculo_modelo}</h3>
+                <p>
+                    <strong>Operador:</strong> ${checklist.operador_nome} | 
+                    <strong>KM Inicial:</strong> ${checklist.km_inicial} km | 
+                    <strong>Data/Hora:</strong> ${formatarDataHora(checklist.data_hora_abertura)}
+                </p>
+            `;
+        }
+
+        // Submissão do formulário
+        document.getElementById('formItens').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const itens = [
+                { tipo_item: 'nivel', nome_item: 'Nível do leo', categoria: 'nivel_oleo', valor_abertura: document.querySelector('input[name="nivel_oleo"]:checked').value },
+                { tipo_item: 'nivel', nome_item: 'Nível da gua', categoria: 'nivel_agua', valor_abertura: document.querySelector('input[name="nivel_agua"]:checked').value },
+                { tipo_item: 'nivel', nome_item: 'Pneu Dianteiro Esquerdo', categoria: 'pneu_dianteiro_esq', valor_abertura: document.querySelector('input[name="pneu_dianteiro_esq"]:checked').value },
+                { tipo_item: 'nivel', nome_item: 'Pneu Dianteiro Direito', categoria: 'pneu_dianteiro_dir', valor_abertura: document.querySelector('input[name="pneu_dianteiro_dir"]:checked').value },
+                { tipo_item: 'nivel', nome_item: 'Pneu Traseiro Esquerdo', categoria: 'pneu_traseiro_esq', valor_abertura: document.querySelector('input[name="pneu_traseiro_esq"]:checked').value },
+                { tipo_item: 'nivel', nome_item: 'Pneu Traseiro Direito', categoria: 'pneu_traseiro_dir', valor_abertura: document.querySelector('input[name="pneu_traseiro_dir"]:checked').value },
+                { tipo_item: 'funcional', nome_item: 'Buzina', categoria: 'buzina', valor_abertura: document.querySelector('input[name="buzina"]:checked').value },
+                { tipo_item: 'funcional', nome_item: 'Faróis Alto', categoria: 'farois', valor_abertura: document.querySelector('input[name="farois"]:checked').value },
+                { tipo_item: 'funcional', nome_item: 'Luzes de Freio', categoria: 'luzes_freio', valor_abertura: document.querySelector('input[name="luzes_freio"]:checked').value },
+                { tipo_item: 'funcional', nome_item: 'Cintos de Segurança', categoria: 'cintos', valor_abertura: document.querySelector('input[name="cintos"]:checked').value },
+                { tipo_item: 'funcional', nome_item: 'Limpadores de Para-brisa', categoria: 'limpadores', valor_abertura: document.querySelector('input[name="limpadores"]:checked').value },
+                { tipo_item: 'funcional', nome_item: 'Extintor de Incªndio', categoria: 'extintor', valor_abertura: document.querySelector('input[name="extintor"]:checked').value }
+            ];
+
+            const formData = new FormData();
+            formData.append('acao', 'salvar_abertura');
+            formData.append('checklist_id', checklistId);
+            formData.append('itens', JSON.stringify(itens));
+
+            // Desabilitar botão
+            const btnSubmit = document.querySelector('button[type="submit"]');
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+            fetch('../api/api_checklist_itens.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta('Checklist salvo com sucesso! Redirecionando...', 'success');
+                        setTimeout(() => {
+                            window.location.href = 'checklist_veicular.html';
+                        }, 1500);
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                        btnSubmit.disabled = false;
+                        btnSubmit.innerHTML = '<i class="fas fa-save"></i> Salvar Checklist';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro ao salvar checklist', 'error');
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = '<i class="fas fa-save"></i> Salvar Checklist';
+                });
+        });
+
+        function formatarDataHora(dataHora) {
+            if (!dataHora) return '-';
+            const data = new Date(dataHora);
+            return data.toLocaleString('pt-BR');
+        }
+
+        function mostrarAlerta(mensagem, tipo) {
+            const alertaDiv = document.getElementById('alertaMsg');
+            alertaDiv.innerHTML = `<div class="alert alert-${tipo === 'success' ? 'success' : 'error'}">${mensagem}</div>`;
+            window.scrollTo(0, 0);
+            setTimeout(() => { alertaDiv.innerHTML = ''; }, 5000);
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('click', function (e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    </script>
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
+
+
+
+
+

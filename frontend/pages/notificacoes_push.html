@@ -1,0 +1,228 @@
+<!-- ============================================================
+     Painel de Notificações Push — Sistema Interno ERP
+     Arquivo: frontend/pages/notificacoes_push.html
+     ============================================================ -->
+<div class="page-wrapper">
+
+    <!-- Header da Página -->
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1 class="page-title">
+                <i class="fas fa-bell" style="color:#6366f1"></i>
+                Notificações Push
+            </h1>
+            <p class="page-subtitle">Envie notificações para os moradores via PWA</p>
+        </div>
+        <div class="page-header-actions">
+            <button class="btn btn-primary" id="btnNovaNotif">
+                <i class="fas fa-paper-plane"></i> Enviar Notificação
+            </button>
+            <button class="btn btn-outline" id="btnConfigFCM">
+                <i class="fas fa-cog"></i> Configurar FCM
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="push-stats-grid" id="pushStatsGrid">
+        <div class="push-stat-card">
+            <div class="push-stat-icon" style="background:#ede9fe;color:#7c3aed"><i class="fas fa-mobile-alt"></i></div>
+            <div class="push-stat-info">
+                <div class="push-stat-valor" id="statTokensAtivos">—</div>
+                <div class="push-stat-label">Dispositivos Ativos</div>
+            </div>
+        </div>
+        <div class="push-stat-card">
+            <div class="push-stat-icon" style="background:#dbeafe;color:#2563eb"><i class="fas fa-users"></i></div>
+            <div class="push-stat-info">
+                <div class="push-stat-valor" id="statMoradoresPWA">—</div>
+                <div class="push-stat-label">Moradores com PWA</div>
+            </div>
+        </div>
+        <div class="push-stat-card">
+            <div class="push-stat-icon" style="background:#dcfce7;color:#16a34a"><i class="fas fa-bell"></i></div>
+            <div class="push-stat-info">
+                <div class="push-stat-valor" id="statTotalNotif">—</div>
+                <div class="push-stat-label">Notificações Enviadas</div>
+            </div>
+        </div>
+        <div class="push-stat-card">
+            <div class="push-stat-icon" style="background:#fef3c7;color:#d97706"><i class="fas fa-calendar-day"></i></div>
+            <div class="push-stat-info">
+                <div class="push-stat-valor" id="statHoje">—</div>
+                <div class="push-stat-label">Enviadas Hoje</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Notificações Enviadas -->
+    <div class="page-card">
+        <div class="page-card-header">
+            <h3><i class="fas fa-history"></i> Histórico de Notificações</h3>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table" id="tabelaNotifPush">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Título / Corpo</th>
+                        <th>Tipo</th>
+                        <th>Destinatário</th>
+                        <th>Enviado por</th>
+                        <th>Tokens</th>
+                        <th>Status</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyNotifPush">
+                    <tr><td colspan="8" class="text-center" style="padding:40px;color:#94a3b8">
+                        <i class="fas fa-spinner fa-spin"></i> Carregando...
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── Modal: Enviar Notificação ───────────────────────────── -->
+<div id="modalNovaNotif" class="modal-overlay" style="display:none">
+    <div class="modal-box" style="max-width:560px">
+        <div class="modal-header">
+            <h3><i class="fas fa-paper-plane" style="color:#6366f1"></i> Enviar Notificação Push</h3>
+            <button class="modal-close" onclick="pushFecharModal('modalNovaNotif')">×</button>
+        </div>
+        <div class="modal-body">
+            <form id="formNovaNotif" onsubmit="pushEnviarNotificacao(event)">
+
+                <div class="form-group">
+                    <label class="form-label">Tipo de Notificação <span class="obrigatorio">*</span></label>
+                    <select class="form-control" id="pushTipo" required>
+                        <option value="">Selecione o tipo...</option>
+                        <option value="comunicado">📢 Comunicado da Associação</option>
+                        <option value="aviso">⚠️ Aviso Geral</option>
+                        <option value="inadimplencia">💰 Aviso de Inadimplência</option>
+                        <option value="visitante">🚶 Alerta de Visitante</option>
+                        <option value="os">🔧 Atualização de Chamado (OS)</option>
+                        <option value="urgente">🚨 Urgente</option>
+                        <option value="geral">🔔 Geral</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Título <span class="obrigatorio">*</span></label>
+                    <input type="text" class="form-control" id="pushTitulo" maxlength="100" placeholder="Ex: Comunicado Importante" required>
+                    <small class="form-hint">Máximo 100 caracteres</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Mensagem <span class="obrigatorio">*</span></label>
+                    <textarea class="form-control" id="pushCorpo" rows="3" maxlength="300" placeholder="Digite a mensagem da notificação..." required></textarea>
+                    <small class="form-hint">Máximo 300 caracteres</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Destinatário <span class="obrigatorio">*</span></label>
+                    <select class="form-control" id="pushDestinatario" onchange="pushAlternarDestinatario()" required>
+                        <option value="todos">🌐 Todos os moradores</option>
+                        <option value="unidade">🏠 Por unidade específica</option>
+                        <option value="morador">👤 Morador específico</option>
+                    </select>
+                </div>
+
+                <div id="pushCampoUnidade" style="display:none" class="form-group">
+                    <label class="form-label">Unidade</label>
+                    <select class="form-control" id="pushUnidadeId">
+                        <option value="">Carregando unidades...</option>
+                    </select>
+                </div>
+
+                <div id="pushCampoMorador" style="display:none" class="form-group">
+                    <label class="form-label">Morador</label>
+                    <select class="form-control" id="pushMoradorId">
+                        <option value="">Carregando moradores...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">URL de destino (ao clicar na notificação)</label>
+                    <input type="text" class="form-control" id="pushUrl" value="/frontend/portal_morador.html" placeholder="/frontend/portal_morador.html">
+                    <small class="form-hint">Deixe em branco para abrir o portal. Use #aba para ir direto a uma aba (ex: #chamados)</small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" onclick="pushFecharModal('modalNovaNotif')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnEnviarNotif">
+                        <i class="fas fa-paper-plane"></i> Enviar Notificação
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: Configurar FCM ──────────────────────────────── -->
+<div id="modalConfigFCM" class="modal-overlay" style="display:none">
+    <div class="modal-box" style="max-width:600px">
+        <div class="modal-header">
+            <h3><i class="fas fa-cog" style="color:#f59e0b"></i> Configurar Firebase FCM</h3>
+            <button class="modal-close" onclick="pushFecharModal('modalConfigFCM')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="alert-info" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#1e40af">
+                <strong>📋 Como obter as credenciais:</strong><br>
+                Acesse <a href="https://console.firebase.google.com" target="_blank" style="color:#2563eb">console.firebase.google.com</a> →
+                Seu projeto → Configurações → Cloud Messaging
+            </div>
+            <form id="formConfigFCM" onsubmit="pushSalvarConfig(event)">
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label class="form-label">FCM Server Key (Legacy) <span class="obrigatorio">*</span></label>
+                        <input type="text" class="form-control" id="cfgServerKey" placeholder="AAAA...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Project ID <span class="obrigatorio">*</span></label>
+                        <input type="text" class="form-control" id="cfgProjectId" placeholder="meu-projeto-12345">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <input type="text" class="form-control" id="cfgApiKey" placeholder="AIza...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Auth Domain</label>
+                        <input type="text" class="form-control" id="cfgAuthDomain" placeholder="projeto.firebaseapp.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Messaging Sender ID</label>
+                        <input type="text" class="form-control" id="cfgSenderId" placeholder="123456789">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">App ID</label>
+                        <input type="text" class="form-control" id="cfgAppId" placeholder="1:123:web:abc">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">VAPID Key (Web Push Certificate)</label>
+                    <input type="text" class="form-control" id="cfgVapidKey" placeholder="BNtq...">
+                    <small class="form-hint">Obtida em: Firebase Console → Cloud Messaging → Web configuration → Generate key pair</small>
+                </div>
+
+                <hr style="margin:20px 0;border-color:#e2e8f0">
+                <h4 style="font-size:14px;color:#475569;margin-bottom:12px">Tipos de Notificação Ativas</h4>
+                <div class="form-grid-2">
+                    <label class="toggle-label"><input type="checkbox" id="cfgPushVisitante" checked> 🚶 Alertas de Visitantes</label>
+                    <label class="toggle-label"><input type="checkbox" id="cfgPushInadimplencia" checked> 💰 Inadimplência</label>
+                    <label class="toggle-label"><input type="checkbox" id="cfgPushComunicado" checked> 📢 Comunicados</label>
+                    <label class="toggle-label"><input type="checkbox" id="cfgPushOS" checked> 🔧 Chamados (OS)</label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" onclick="pushFecharModal('modalConfigFCM')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Configurações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

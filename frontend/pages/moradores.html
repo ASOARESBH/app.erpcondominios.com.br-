@@ -1,0 +1,732 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Moradores" data-icon="fa-users" style="display:none;"></div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE WRAPPER
+═══════════════════════════════════════════════════════════ -->
+<div class="page-wrapper page-moradores">
+
+    <!-- ── Header ───────────────────────────────────────────── -->
+    <div class="page-header">
+        <h1><i class="fas fa-users"></i> Moradores</h1>
+        <p>Gerenciamento de moradores e dependentes do condomínio</p>
+    </div>
+
+    <!-- ── Toast ────────────────────────────────────────────── -->
+    <div id="mor-toast" style="display:none;position:fixed;top:20px;right:20px;z-index:9999;
+         padding:14px 20px;border-radius:8px;font-size:.9rem;min-width:260px;
+         box-shadow:0 4px 16px rgba(0,0,0,.15);transition:opacity .3s;"></div>
+
+    <!-- ── Tabs ─────────────────────────────────────────────── -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="moradores">
+            <i class="fas fa-users"></i> Moradores
+        </button>
+        <button class="tab-button" data-tab="dependentes">
+            <i class="fas fa-user-friends"></i> Dependentes
+        </button>
+        <button class="tab-button" data-tab="relatorios">
+            <i class="fas fa-chart-bar"></i> Relatórios
+        </button>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: MORADORES
+    ══════════════════════════════════════════════════════ -->
+    <div id="tab-moradores" class="tab-content active">
+
+        <!-- Formulário de cadastro -->
+        <div class="page-card">
+            <h2><i class="fas fa-user-plus"></i> Cadastro de Morador</h2>
+            <form id="moradorForm">
+                <div class="form-grid">
+                    <div>
+                        <label>Nome Completo *</label>
+                        <input type="text" id="nomeCompleto" required placeholder="Ex: João Silva">
+                    </div>
+                    <div>
+                        <label>CPF *</label>
+                        <input type="text" id="cpf" required placeholder="000.000.000-00" maxlength="14">
+                    </div>
+                    <div>
+                        <label>Unidade *</label>
+                        <select id="unidade" required>
+                            <option value="">Carregando unidades...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label>Email *</label>
+                        <input type="email" id="email" required placeholder="email@exemplo.com">
+                    </div>
+                    <div>
+                        <label>Senha *</label>
+                        <input type="password" id="senha" required placeholder="Senha de acesso ao portal">
+                    </div>
+                    <div>
+                        <label>Telefone</label>
+                        <input type="tel" id="telefone" placeholder="(00) 0000-0000">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label>Celular</label>
+                        <input type="tel" id="celular" placeholder="(00) 90000-0000">
+                    </div>
+                    <div>
+                        <label>Observação</label>
+                        <input type="text" id="observacao" placeholder="Observações gerais">
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary-modern">
+                    <i class="fas fa-save"></i> Salvar Morador
+                </button>
+            </form>
+        </div>
+
+        <!-- Lista de moradores -->
+        <div class="page-card">
+            <h2><i class="fas fa-list"></i> Lista de Moradores</h2>
+            <div class="search-box">
+                <input type="text" id="searchMorador" placeholder="Pesquisar por nome, CPF ou unidade...">
+                <button class="btn-primary-modern" onclick="window.MoradoresPage?.buscar()">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
+            <div id="loadingMoradores" class="loading" style="display:none;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Carregando dados...</p>
+            </div>
+            <div class="table-container">
+                <table id="tabelaMoradores">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>CPF</th>
+                            <th>Unidade</th>
+                            <th>Email</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <!-- Navegação de páginas -->
+            <div id="paginacaoMoradores" class="paginacao-moradores"></div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: DEPENDENTES
+    ══════════════════════════════════════════════════════ -->
+    <div id="tab-dependentes" class="tab-content">
+
+        <!-- Formulário de cadastro de dependente -->
+        <div class="page-card">
+            <h2><i class="fas fa-user-plus"></i> Cadastro de Dependente</h2>
+            <form id="dependenteForm">
+                <div class="form-grid">
+                    <div>
+                        <label>Morador *</label>
+                        <select id="moradorSelecionado" required>
+                            <option value="">Selecione um morador</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Nome Completo *</label>
+                        <input type="text" id="nomeDependente" required placeholder="Nome do dependente">
+                    </div>
+                    <div>
+                        <label>Parentesco *</label>
+                        <select id="parentesco" required>
+                            <option value="">Selecione...</option>
+                            <option value="Cônjuge">Cônjuge</option>
+                            <option value="Filho(a)">Filho(a)</option>
+                            <option value="Pai/Mãe">Pai/Mãe</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label>CPF *</label>
+                        <input type="text" id="cpfDependente" required placeholder="000.000.000-00" maxlength="14">
+                    </div>
+                    <div>
+                        <label>Email</label>
+                        <input type="email" id="emailDependente" placeholder="email@exemplo.com">
+                    </div>
+                    <div>
+                        <label>Telefone Celular</label>
+                        <input type="tel" id="celularDependente" placeholder="(00) 90000-0000">
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary-modern">
+                    <i class="fas fa-save"></i> Salvar Dependente
+                </button>
+            </form>
+        </div>
+
+        <!-- Lista de dependentes -->
+        <div class="page-card">
+            <h2><i class="fas fa-list"></i> Lista de Dependentes</h2>
+            <div class="search-box">
+                <input type="text" id="searchDependente" placeholder="Pesquisar por nome, CPF ou morador...">
+                <button class="btn-primary-modern" onclick="window.MoradoresPage?.buscarDependentes()">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
+            <div class="table-container">
+                <table id="tabelaDependentes">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Morador</th>
+                            <th>Unidade</th>
+                            <th>Parentesco</th>
+                            <th>CPF</th>
+                            <th>Email</th>
+                            <th>Celular</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <!-- Navegação de páginas -->
+            <div id="paginacaoDependentes" class="paginacao-moradores"></div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: RELATÓRIOS
+    ══════════════════════════════════════════════════════ -->
+    <div id="tab-relatorios" class="tab-content">
+
+        <!-- ── KPIs rápidos ─────────────────────────────────────── -->
+        <div class="rel-kpi-grid">
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#dbeafe;color:#2563eb;"><i class="fas fa-users"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">Total de Moradores</span>
+                    <span class="rel-kpi-value" id="rel-total-moradores">—</span>
+                </div>
+            </div>
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#dcfce7;color:#16a34a;"><i class="fas fa-user-friends"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">Total de Dependentes</span>
+                    <span class="rel-kpi-value" id="rel-total-dependentes">—</span>
+                </div>
+            </div>
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#fef9c3;color:#ca8a04;"><i class="fas fa-home"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">Unidades com Dependentes</span>
+                    <span class="rel-kpi-value" id="rel-unidades-com-dep">—</span>
+                </div>
+            </div>
+            <div class="rel-kpi-card">
+                <div class="rel-kpi-icon" style="background:#fce7f3;color:#db2777;"><i class="fas fa-chart-line"></i></div>
+                <div class="rel-kpi-info">
+                    <span class="rel-kpi-label">Média Dep. por Unidade</span>
+                    <span class="rel-kpi-value" id="rel-media-dep">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Seletor de Tipo de Relatório ──────────────────────── -->
+        <div class="page-card rel-seletor-card">
+            <h2><i class="fas fa-file-alt"></i> Selecione o Tipo de Relatório</h2>
+            <p class="rel-seletor-desc">Escolha o modelo desejado. Todos os relatórios são ordenados por unidade (menor → maior).</p>
+
+            <div class="rel-tipo-grid">
+
+                <!-- Relatório Completo -->
+                <div class="rel-tipo-card" data-tipo="completo" onclick="window.MoradoresPage?.relSelecionarTipo('completo')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="rel-tipo-info">
+                        <strong>Relatório Completo de Moradores</strong>
+                        <span>Unidade, nome, CPF, e-mail, telefone, celular e status — somente moradores titulares</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <!-- Relatório de Dependentes -->
+                <div class="rel-tipo-card" data-tipo="dependentes" onclick="window.MoradoresPage?.relSelecionarTipo('dependentes')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#0369a1,#38bdf8);">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="rel-tipo-info">
+                        <strong>Relatório de Dependentes</strong>
+                        <span>Unidade, morador titular, nome do dependente, CPF, parentesco e celular</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <!-- Unidade / Nome / Telefone -->
+                <div class="rel-tipo-card" data-tipo="contato_simples" onclick="window.MoradoresPage?.relSelecionarTipo('contato_simples')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#0f766e,#14b8a6);">
+                        <i class="fas fa-phone-alt"></i>
+                    </div>
+                    <div class="rel-tipo-info">
+                        <strong>Unidade, Nome e Telefone</strong>
+                        <span>Lista simplificada com unidade, nome completo, telefone e celular</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <!-- Credenciamento -->
+                <div class="rel-tipo-card" data-tipo="credenciamento" onclick="window.MoradoresPage?.relSelecionarTipo('credenciamento')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);">
+                        <i class="fas fa-id-card"></i>
+                    </div>
+                    <div class="rel-tipo-info">
+                        <strong>Lista de Credenciamento</strong>
+                        <span>Unidade, nome completo, CPF e linha para assinatura — pronto para impressão</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <!-- Ranking de Dependentes -->
+                <div class="rel-tipo-card" data-tipo="ranking" onclick="window.MoradoresPage?.relSelecionarTipo('ranking')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#b45309,#f59e0b);">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <div class="rel-tipo-info">
+                        <strong>Ranking de Dependentes</strong>
+                        <span>Unidades com mais dependentes, com gráfico de barras</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+            </div><!-- /.rel-tipo-grid -->
+        </div><!-- /.rel-seletor-card -->
+
+        <!-- ── Painel de Prévia / Filtros (aparece após seleção) ── -->
+        <div id="rel-painel" class="page-card" style="display:none;">
+
+            <!-- Cabeçalho do painel -->
+            <div class="rel-painel-header">
+                <div class="rel-painel-titulo">
+                    <span id="rel-painel-icon"><i class="fas fa-file-alt"></i></span>
+                    <h2 id="rel-painel-nome">Relatório</h2>
+                </div>
+                <div class="rel-painel-acoes">
+                    <button class="btn-secondary-modern" id="rel-btn-csv"
+                            onclick="window.MoradoresPage?.relExportarCSV()">
+                        <i class="fas fa-file-csv"></i> Exportar CSV
+                    </button>
+                    <button class="btn-primary-modern" id="rel-btn-pdf"
+                            onclick="window.MoradoresPage?.relGerarPDF()">
+                        <i class="fas fa-print"></i> Imprimir / PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filtros do painel -->
+            <div class="rel-painel-filtros">
+                <div class="rel-filtro-grupo">
+                    <label>Filtrar por unidade ou nome</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="rel-filtro-texto"
+                               placeholder="Ex: Gleba 1, Lote 5, João Silva..."
+                               oninput="window.MoradoresPage?.relAplicarFiltro()">
+                        <button class="btn-secondary-modern" onclick="window.MoradoresPage?.relLimparFiltro()">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+                <div class="rel-filtro-grupo" id="rel-filtro-status-grupo">
+                    <label>Status</label>
+                    <select id="rel-filtro-status" onchange="window.MoradoresPage?.relAplicarFiltro()">
+                        <option value="todos">Todos</option>
+                        <option value="ativo">Somente Ativos</option>
+                        <option value="inativo">Somente Inativos</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Contador de resultados -->
+            <div class="rel-contador">
+                <span id="rel-contador-texto">Carregando...</span>
+            </div>
+
+            <!-- Prévia da tabela -->
+            <div class="table-container" id="rel-tabela-container">
+                <table id="rel-tabela-previa">
+                    <thead id="rel-tabela-thead"><tr></tr></thead>
+                    <tbody id="rel-tabela-tbody"></tbody>
+                </table>
+            </div>
+
+        </div><!-- /#rel-painel -->
+
+        <!-- ── Gráfico de Ranking (visível apenas no tipo ranking) ── -->
+        <div class="page-card" id="rel-grafico-card" style="display:none;">
+            <h2><i class="fas fa-chart-bar"></i> Ranking — Unidades com Mais Dependentes</h2>
+            <div id="rel-grafico-container">
+                <canvas id="rel-grafico-dep" style="max-height:320px;"></canvas>
+            </div>
+            <div class="table-container" style="margin-top:20px;">
+                <table id="rel-tabela-ranking">
+                    <thead><tr>
+                        <th>#</th><th>Unidade</th><th>Morador</th><th>Qtd. Dependentes</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /#tab-relatorios -->
+
+    <!-- ══════════════════════════════════════════════════════
+         MODAL: EDITAR MORADOR
+    ══════════════════════════════════════════════════════ -->
+    <div id="modal-editar-morador" class="mor-modal-overlay" style="display:none;">
+        <div class="mor-modal">
+            <div class="mor-modal-header">
+                <h3><i class="fas fa-user-edit"></i> Editar Morador</h3>
+                <button class="mor-modal-close" onclick="window.MoradoresPage?.fecharModalMorador()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mor-modal-body">
+                <input type="hidden" id="edit-morador-id">
+                <div class="form-grid">
+                    <div>
+                        <label>Nome Completo *</label>
+                        <input type="text" id="edit-morador-nome" required placeholder="Nome completo">
+                    </div>
+                    <div>
+                        <label>CPF *</label>
+                        <input type="text" id="edit-morador-cpf" required placeholder="000.000.000-00" maxlength="14">
+                    </div>
+                    <div>
+                        <label>Unidade *</label>
+                        <select id="edit-morador-unidade" required>
+                            <option value="">Carregando unidades...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label>Email *</label>
+                        <input type="email" id="edit-morador-email" required placeholder="email@exemplo.com">
+                    </div>
+                    <div>
+                        <label>Telefone</label>
+                        <input type="tel" id="edit-morador-telefone" placeholder="(00) 0000-0000">
+                    </div>
+                    <div>
+                        <label>Celular</label>
+                        <input type="tel" id="edit-morador-celular" placeholder="(00) 90000-0000">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label>Nova Senha <small>(deixe em branco para manter)</small></label>
+                        <input type="password" id="edit-morador-senha" placeholder="Nova senha (opcional)">
+                    </div>
+                    <div>
+                        <label>Observação</label>
+                        <input type="text" id="edit-morador-observacao" placeholder="Observações gerais">
+                    </div>
+                </div>
+            </div>
+            <div class="mor-modal-footer">
+                <button class="btn-secondary-modern" onclick="window.MoradoresPage?.fecharModalMorador()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-primary-modern" onclick="window.MoradoresPage?.salvarEdicaoMorador()">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         MODAL: EDITAR DEPENDENTE
+    ══════════════════════════════════════════════════════ -->
+    <div id="modal-editar-dependente" class="mor-modal-overlay" style="display:none;">
+        <div class="mor-modal">
+            <div class="mor-modal-header">
+                <h3><i class="fas fa-user-edit"></i> Editar Dependente</h3>
+                <button class="mor-modal-close" onclick="window.MoradoresPage?.fecharModalDependente()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mor-modal-body">
+                <input type="hidden" id="edit-dep-id">
+                <div class="form-grid">
+                    <div>
+                        <label>Nome Completo *</label>
+                        <input type="text" id="edit-dep-nome" required placeholder="Nome completo">
+                    </div>
+                    <div>
+                        <label>CPF *</label>
+                        <input type="text" id="edit-dep-cpf" required placeholder="000.000.000-00" maxlength="14">
+                    </div>
+                    <div>
+                        <label>Parentesco *</label>
+                        <select id="edit-dep-parentesco" required>
+                            <option value="">Selecione...</option>
+                            <option value="Cônjuge">Cônjuge</option>
+                            <option value="Filho(a)">Filho(a)</option>
+                            <option value="Pai/Mãe">Pai/Mãe</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label>Email</label>
+                        <input type="email" id="edit-dep-email" placeholder="email@exemplo.com">
+                    </div>
+                    <div>
+                        <label>Telefone Celular</label>
+                        <input type="tel" id="edit-dep-celular" placeholder="(00) 90000-0000">
+                    </div>
+                    <div>
+                        <label>Observação</label>
+                        <input type="text" id="edit-dep-observacao" placeholder="Observações">
+                    </div>
+                </div>
+            </div>
+            <div class="mor-modal-footer">
+                <button class="btn-secondary-modern" onclick="window.MoradoresPage?.fecharModalDependente()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-primary-modern" onclick="window.MoradoresPage?.salvarEdicaoDependente()">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         MODAL: ANEXOS DO MORADOR
+    ══════════════════════════════════════════════════════ -->
+    <div id="modal-anexos" class="mor-modal-overlay" style="display:none;">
+        <div class="mor-modal mor-modal-lg">
+            <div class="mor-modal-header">
+                <h3><i class="fas fa-paperclip"></i> Anexos — <span id="anexo-morador-nome">Morador</span></h3>
+                <button class="mor-modal-close" onclick="window.MoradoresPage?.fecharModalAnexos()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mor-modal-body">
+                <input type="hidden" id="anexo-morador-id">
+
+                <!-- Formulário de upload -->
+                <div class="mor-upload-box">
+                    <h4><i class="fas fa-upload"></i> Adicionar Documento</h4>
+                    <div class="form-grid">
+                        <div style="grid-column:1/-1;">
+                            <label>Nome do Documento *</label>
+                            <input type="text" id="anexo-nome-doc" placeholder="Ex: RG, Contrato, Comprovante de Residência...">
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div style="grid-column:1/-1;">
+                            <label>Arquivo * <small>(PDF, JPG, PNG, GIF, WEBP — máx. 10 MB)</small></label>
+                            <div class="mor-file-drop" id="mor-file-drop">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>Arraste o arquivo aqui ou <strong>clique para selecionar</strong></p>
+                                <p id="mor-file-name" style="color:#2563eb;font-weight:600;margin-top:6px;"></p>
+                                <input type="file" id="anexo-arquivo" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+                                       style="position:absolute;inset:0;opacity:0;cursor:pointer;">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="mor-upload-progress" style="display:none;margin-top:10px;">
+                        <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;">
+                            <div id="mor-progress-bar" style="background:#2563eb;height:100%;width:0;transition:width .3s;"></div>
+                        </div>
+                        <p id="mor-upload-status" style="font-size:.8rem;color:#64748b;margin-top:4px;"></p>
+                    </div>
+                    <button class="btn-primary-modern" onclick="window.MoradoresPage?.enviarAnexo()" style="margin-top:12px;">
+                        <i class="fas fa-upload"></i> Enviar Documento
+                    </button>
+                </div>
+
+                <!-- Lista de anexos existentes -->
+                <div style="margin-top:20px;">
+                    <h4><i class="fas fa-folder-open"></i> Documentos Cadastrados</h4>
+                    <div id="mor-lista-anexos">
+                        <p style="text-align:center;color:#94a3b8;padding:20px;">
+                            <i class="fas fa-spinner fa-spin"></i> Carregando...
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="mor-modal-footer">
+                <button class="btn-secondary-modern" onclick="window.MoradoresPage?.fecharModalAnexos()">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         ESTILOS DO MÓDULO
+    ══════════════════════════════════════════════════════ -->
+    <style>
+    /* ── Modais ─────────────────────────────────────────────── */
+    .page-moradores .mor-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.5);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: morFadeIn .2s ease;
+    }
+    @keyframes morFadeIn { from { opacity:0; } to { opacity:1; } }
+
+    .page-moradores .mor-modal {
+        background: #fff;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 680px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0,0,0,.25);
+        animation: morSlideUp .25s ease;
+    }
+    .page-moradores .mor-modal-lg { max-width: 820px; }
+
+    @keyframes morSlideUp {
+        from { transform: translateY(30px); opacity:0; }
+        to   { transform: translateY(0);    opacity:1; }
+    }
+
+    .page-moradores .mor-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 24px;
+        border-bottom: 1px solid #e2e8f0;
+        background: #f8fafc;
+        border-radius: 12px 12px 0 0;
+    }
+    .page-moradores .mor-modal-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: #1e293b;
+    }
+    .page-moradores .mor-modal-close {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #64748b;
+        font-size: 1.1rem;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: background .2s;
+    }
+    .page-moradores .mor-modal-close:hover { background: #fee2e2; color: #ef4444; }
+
+    .page-moradores .mor-modal-body {
+        padding: 24px;
+    }
+    .page-moradores .mor-modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        background: #f8fafc;
+        border-radius: 0 0 12px 12px;
+    }
+
+    /* ── Botão Secundário ───────────────────────────────────── */
+    .page-moradores .btn-secondary-modern {
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        color: #475569;
+        cursor: pointer;
+        font-size: .9rem;
+        font-weight: 600;
+        transition: background .2s;
+    }
+    .page-moradores .btn-secondary-modern:hover { background: #f1f5f9; }
+
+    /* ── Botão Anexo ────────────────────────────────────────── */
+    .page-moradores .action-btn.attach {
+        background: #f0fdf4;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+    }
+    .page-moradores .action-btn.attach:hover { background: #dcfce7; }
+
+    /* ── Upload Box ─────────────────────────────────────────── */
+    .page-moradores .mor-upload-box {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 20px;
+    }
+    .page-moradores .mor-upload-box h4 {
+        margin: 0 0 14px;
+        color: #1e293b;
+        font-size: .95rem;
+    }
+    .page-moradores .mor-file-drop {
+        position: relative;
+        border: 2px dashed #cbd5e1;
+        border-radius: 8px;
+        padding: 28px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color .2s, background .2s;
+        background: #fff;
+    }
+    .page-moradores .mor-file-drop:hover,
+    .page-moradores .mor-file-drop.drag-over {
+        border-color: #2563eb;
+        background: #eff6ff;
+    }
+    .page-moradores .mor-file-drop i { font-size: 2rem; color: #94a3b8; margin-bottom: 8px; }
+    .page-moradores .mor-file-drop p  { margin: 4px 0; color: #64748b; font-size: .9rem; }
+
+    /* ── Lista de Anexos ────────────────────────────────────── */
+    .page-moradores .mor-anexo-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        background: #fff;
+        transition: box-shadow .2s;
+    }
+    .page-moradores .mor-anexo-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .page-moradores .mor-anexo-icon {
+        width: 40px; height: 40px;
+        border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.2rem; flex-shrink: 0;
+    }
+    .page-moradores .mor-anexo-icon.pdf  { background:#fee2e2; color:#ef4444; }
+    .page-moradores .mor-anexo-icon.img  { background:#dbeafe; color:#2563eb; }
+    .page-moradores .mor-anexo-info { flex: 1; min-width: 0; }
+    .page-moradores .mor-anexo-nome {
+        font-weight: 600; color: #1e293b; font-size: .9rem;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .page-moradores .mor-anexo-meta { font-size: .78rem; color: #94a3b8; margin-top: 2px; }
+    .page-moradores .mor-anexo-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    </style>
+
+</div><!-- /.page-wrapper.page-moradores -->

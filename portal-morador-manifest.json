@@ -1,0 +1,57 @@
+{
+  "name": "Portal do Morador - Serra da Liberdade",
+  "short_name": "Portal Morador",
+  "description": "Portal do morador do Condomínio Serra da Liberdade. Acesse notificações, visitantes, chamados e muito mais.",
+  "start_url": "/frontend/portal_morador.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#2563eb",
+  "theme_color": "#2563eb",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["lifestyle", "utilities"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/ico/icon-72x72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "any" },
+    { "src": "/ico/icon-72x72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "maskable" },
+    { "src": "/ico/icon-96x96.png",   "sizes": "96x96",   "type": "image/png", "purpose": "any" },
+    { "src": "/ico/icon-96x96.png",   "sizes": "96x96",   "type": "image/png", "purpose": "maskable" },
+    { "src": "/ico/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "/ico/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "maskable" },
+    { "src": "/ico/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "/ico/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "maskable" },
+    { "src": "/ico/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
+    { "src": "/ico/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "maskable" },
+    { "src": "/ico/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/ico/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/ico/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/ico/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "maskable" },
+    { "src": "/ico/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/ico/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Meus Chamados",
+      "short_name": "Chamados",
+      "description": "Ver e abrir chamados de manutenção",
+      "url": "/frontend/portal_morador.html#ordens_servico",
+      "icons": [{ "src": "/ico/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Notificações",
+      "short_name": "Avisos",
+      "description": "Ver avisos e comunicados do condomínio",
+      "url": "/frontend/portal_morador.html#notificacoes",
+      "icons": [{ "src": "/ico/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Visitantes",
+      "short_name": "Visitantes",
+      "description": "Gerenciar visitantes autorizados",
+      "url": "/frontend/portal_morador.html#visitantes",
+      "icons": [{ "src": "/ico/icon-96x96.png", "sizes": "96x96" }]
+    }
+  ],
+  "screenshots": []
+}

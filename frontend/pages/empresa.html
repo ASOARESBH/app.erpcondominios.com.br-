@@ -1,0 +1,179 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Empresa" data-icon="fa-building" style="display:none;"></div>
+
+<div class="page-wrapper page-empresa">
+
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb">
+    <span data-page="configuracao"><i class="fas fa-cog"></i> Configurações</span>
+    <span style="color:#cbd5e1;font-size:0.7rem;"><i class="fas fa-chevron-right"></i></span>
+    <span>Empresa</span>
+  </nav>
+
+    <div class="page-header">
+        <h1><i class="fas fa-building"></i> Dados da Empresa</h1>
+        <p>Gerencie as informações da empresa. Configure CNPJ, razão social, endereço, contatos e logo.</p>
+    </div>
+
+    <div id="alertBox"></div>
+    <div class="page-card form-section" style="box-shadow: none; padding: 0;">
+        <h2><i class="fas fa-info-circle"></i> Informações da Empresa</h2>
+        <form id="empresaForm">
+            <!-- Logo Section -->
+            <div class="logo-section"
+                style="display: flex; align-items: flex-start; gap: 2rem; margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 1px solid #e2e8f0;">
+                <div class="logo-preview" id="logoPreview"
+                    style="width: 140px; height: 140px; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #f8fafc; flex-shrink: 0;">
+                    <i class="fas fa-image" style="font-size: 2.5rem; color: #cbd5e1;"></i>
+                </div>
+                <div class="logo-controls" style="flex: 1;">
+                    <h3 style="margin-top: 0; margin-bottom: 0.75rem;">Logo da Empresa</h3>
+                    <input type="file" id="logoUpload" class="upload-input" style="display: none;"
+                        accept="image/png,image/jpeg,image/gif">
+                    <button type="button" class="btn-primary-modern"
+                        onclick="document.getElementById('logoUpload').click()">
+                        <i class="fas fa-upload"></i> Selecionar Logo
+                    </button>
+                    <p style="font-size: 0.85rem; color: #64748b; margin-top: 0.75rem;">
+                        <strong>Formatos:</strong> PNG, JPEG ou GIF<br>
+                        <strong>Tamanho máximo:</strong> 5MB
+                    </p>
+                </div>
+            </div>
+
+            <!-- CNPJ and Search -->
+            <div class="form-grid">
+                <div>
+                    <label for="cnpj">CNPJ *</label>
+                    <div style="display: flex; gap: 1rem;">
+                        <input type="text" id="cnpj" placeholder="XX.XXX.XXX/XXXX-XX" maxlength="20" required
+                            style="flex: 1;">
+                        <button type="button" id="btnBuscarCNPJ" class="btn-primary-modern"
+                            style="white-space: nowrap;">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Razão Social and Nome Fantasia -->
+            <div class="form-grid">
+                <div>
+                    <label for="razao_social">Razão Social *</label>
+                    <input type="text" id="razao_social" placeholder="Nome da empresa" maxlength="255" required>
+                </div>
+                <div>
+                    <label for="nome_fantasia">Nome Fantasia</label>
+                    <input type="text" id="nome_fantasia" placeholder="Nome comercial" maxlength="255">
+                </div>
+            </div>
+
+            <!-- Address Section -->
+            <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: #1e293b; font-size: 1rem; font-weight: 600;"><i
+                    class="fas fa-map-marker-alt"></i> Endereço Completo</h3>
+            <div class="form-grid">
+                <div>
+                    <label for="endereco_rua">Rua/Avenida *</label>
+                    <input type="text" id="endereco_rua" placeholder="Rua, Avenida, etc." maxlength="255" required>
+                </div>
+                <div>
+                    <label for="endereco_numero">Número *</label>
+                    <input type="text" id="endereco_numero" placeholder="Número" maxlength="20" required>
+                </div>
+            </div>
+            <div class="form-grid">
+                <div>
+                    <label for="endereco_complemento">Complemento</label>
+                    <input type="text" id="endereco_complemento" placeholder="Apto, Sala, etc." maxlength="255">
+                </div>
+                <div>
+                    <label for="endereco_bairro">Bairro *</label>
+                    <input type="text" id="endereco_bairro" placeholder="Bairro" maxlength="100" required>
+                </div>
+            </div>
+            <div class="form-grid">
+                <div>
+                    <label for="endereco_cidade">Cidade *</label>
+                    <input type="text" id="endereco_cidade" placeholder="Cidade" maxlength="100" required>
+                </div>
+                <div>
+                    <label for="endereco_estado">Estado (UF) *</label>
+                    <select id="endereco_estado" required>
+                        <option value="">Selecione o estado</option>
+                        <option value="AC">Acre</option>
+                        <option value="AL">Alagoas</option>
+                        <option value="AP">Amapá</option>
+                        <option value="AM">Amazonas</option>
+                        <option value="BA">Bahia</option>
+                        <option value="CE">Ceará</option>
+                        <option value="DF">Distrito Federal</option>
+                        <option value="ES">Espírito Santo</option>
+                        <option value="GO">Goiás</option>
+                        <option value="MA">Maranhão</option>
+                        <option value="MT">Mato Grosso</option>
+                        <option value="MS">Mato Grosso do Sul</option>
+                        <option value="MG">Minas Gerais</option>
+                        <option value="PA">Pará</option>
+                        <option value="PB">Paraíba</option>
+                        <option value="PR">Paraná</option>
+                        <option value="PE">Pernambuco</option>
+                        <option value="PI">Piauí</option>
+                        <option value="RJ">Rio de Janeiro</option>
+                        <option value="RN">Rio Grande do Norte</option>
+                        <option value="RS">Rio Grande do Sul</option>
+                        <option value="RO">Rondônia</option>
+                        <option value="RR">Roraima</option>
+                        <option value="SC">Santa Catarina</option>
+                        <option value="SP">São Paulo</option>
+                        <option value="SE">Sergipe</option>
+                        <option value="TO">Tocantins</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="endereco_cep">CEP *</label>
+                    <input type="text" id="endereco_cep" placeholder="XXXXX-XXX" maxlength="10" required>
+                </div>
+            </div>
+
+            <!-- Contact Section -->
+            <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: #1e293b; font-size: 1rem; font-weight: 600;"><i
+                    class="fas fa-envelope"></i> Contatos</h3>
+            <div class="form-grid">
+                <div>
+                    <label for="email_principal">E-mail Principal *</label>
+                    <input type="email" id="email_principal" placeholder="email@empresa.com.br" maxlength="255"
+                        required>
+                </div>
+                <div>
+                    <label for="email_cobranca">E-mail para Cobrança</label>
+                    <input type="email" id="email_cobranca" placeholder="cobranca@empresa.com.br" maxlength="255">
+                </div>
+                <div>
+                    <label for="telefone">Telefone</label>
+                    <input type="tel" id="telefone" placeholder="(XX) XXXXX-XXXX" maxlength="20">
+                </div>
+            </div>
+
+            <!-- Status Section -->
+            <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: #1e293b; font-size: 1rem; font-weight: 600;"><i
+                    class="fas fa-toggle-on"></i> Situação</h3>
+            <div class="form-grid">
+                <div>
+                    <label for="situacao">Situação da Empresa *</label>
+                    <select id="situacao" required>
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="form-actions" style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e2e8f0;">
+                <button type="submit" id="btnSalvar" class="btn-primary-modern"><i class="fas fa-save"></i> Salvar
+                    Dados</button>
+                <button type="button" id="btnLimpar" class="btn-secondary-modern"><i class="fas fa-redo"></i>
+                    Limpar</button>
+            </div>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rea do Morador - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            color: #fff;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .header-left h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.3rem;
+        }
+        
+        .header-left p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .user-info {
+            text-align: right;
+        }
+        
+        .user-info .name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        
+        .user-info .unit {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        
+        .btn-logout {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 0.6rem 1.2rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-logout:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 1rem 1.5rem;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: #64748b;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tab:hover {
+            color: #2563eb;
+        }
+        
+        .tab.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+        
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Cards */
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .card h2 {
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        /* Form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #334155;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        .form-group input:disabled {
+            background: #f1f5f9;
+            cursor: not-allowed;
+        }
+        
+        /* Buttons */
+        button {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-edit {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+        
+        .btn-delete {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        
+        .btn-cancel {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+        }
+        
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        tr:hover {
+            background: #f8fafc;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .actions button {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+        
+        /* Notificaçµes */
+        .notificacao-item {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s;
+        }
+        
+        .notificacao-item:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .notificacao-item.nao-lida {
+            border-left: 4px solid #3b82f6;
+            background: #f0f9ff;
+        }
+        
+        .notificacao-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .notificacao-numero {
+            background: #3b82f6;
+            color: #fff;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        
+        .notificacao-data {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        
+        .notificacao-assunto {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .notificacao-resumo {
+            color: #475569;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+        
+        .notificacao-footer {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .btn-download {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        /* Status Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .badge-pendente {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .badge-entregue {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #dc2626;
+        }
+        
+        .alert i {
+            margin-right: 0.5rem;
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            display: none;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-radius: 50%;
+            border-top-color: #2563eb;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            
+            .header-right {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .tabs {
+                overflow-x: auto;
+            }
+            
+            .tab {
+                white-space: nowrap;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            table {
+                font-size: 0.85rem;
+            }
+            
+            th, td {
+                padding: 0.5rem;
+            }
+            
+            .actions {
+                flex-direction: column;
+            }
+            
+            .actions button {
+                width: 100%;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <h1><i class="fas fa-home"></i> rea do Morador</h1>
+            <p>Serra da Liberdade</p>
+        </div>
+        <div class="header-right">
+            <div class="user-info">
+                <div class="name" id="userName">Carregando...</div>
+                <div class="unit" id="userUnit">Unidade: --</div>
+            </div>
+            <a href="logout_morador.php" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </a>
+        </div>
+    </header>
+    
+    <div class="main-container">
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('cadastro')">
+                <i class="fas fa-user-edit"></i> Meu Cadastro
+            </button>
+            <button class="tab" onclick="showTab('veiculos')">
+                <i class="fas fa-car"></i> Meus Veículos
+            </button>
+            <button class="tab" onclick="showTab('protocolos')">
+                <i class="fas fa-box"></i> Meus Protocolos
+            </button>
+            <button class="tab" onclick="showTab('hidrometro')">
+                <i class="fas fa-tint"></i> Hidrômetro
+            </button>
+            <button class="tab" onclick="showTab('notificacoes')">
+                <i class="fas fa-bell"></i> Notificaçµes
+            </button>
+        </div>
+        
+        <!-- Tab: Meu Cadastro -->
+        <div id="tabCadastro" class="tab-content active">
+            <div class="card">
+                <h2><i class="fas fa-user-circle"></i> Meus Dados</h2>
+                <div id="alertCadastro" class="alert"></div>
+                <form id="formCadastro">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Nome Completo</label>
+                            <input type="text" id="nome" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>CPF</label>
+                            <input type="text" id="cpf" maxlength="14" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Unidade</label>
+                            <input type="text" id="unidade" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail *</label>
+                            <input type="email" id="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="text" id="telefone" maxlength="15">
+                        </div>
+                        <div class="form-group">
+                            <label>Celular</label>
+                            <input type="text" id="celular" maxlength="15">
+                        </div>
+                    </div>
+                    <button type="submit" id="btnSalvarCadastro">
+                        <i class="fas fa-save"></i> Salvar Alteraçµes
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Tab: Meus Veículos -->
+        <div id="tabVeiculos" class="tab-content">
+            <div class="card">
+                <h2><i class="fas fa-plus-circle"></i> <span id="tituloFormVeiculo">Cadastrar Novo Veículo</span></h2>
+                <div id="alertVeiculo" class="alert"></div>
+                <form id="formVeiculo">
+                    <input type="hidden" id="veiculoId">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Placa *</label>
+                            <input type="text" id="placa" maxlength="8" required style="text-transform: uppercase;">
+                        </div>
+                        <div class="form-group">
+                            <label>Modelo *</label>
+                            <input type="text" id="modelo" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Cor *</label>
+                            <input type="text" id="cor" required>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="submit" id="btnSalvarVeiculo">
+                            <i class="fas fa-save"></i> Salvar Veículo
+                        </button>
+                        <button type="button" class="btn-cancel" id="btnCancelarVeiculo" style="display: none;" onclick="cancelarEdicaoVeiculo()">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="card">
+                <h2><i class="fas fa-list"></i> Lista de Veículos</h2>
+                <div class="loading" id="loadingVeiculos">
+                    <div class="spinner"></div>
+                    <p>Carregando veículos...</p>
+                </div>
+                <div id="veiculosContainer"></div>
+            </div>
+        </div>
+        
+        <!-- Tab: Meus Protocolos -->
+        <div id="tabProtocolos" class="tab-content">
+            <div class="card">
+                <h2><i class="fas fa-box-open"></i> Meus Protocolos de Mercadorias</h2>
+                
+                <div style="margin-bottom: 1rem;">
+                    <label style="font-weight: 600; margin-right: 0.5rem;">Filtrar por status:</label>
+                    <select id="filtroStatusProtocolo" onchange="carregarProtocolos()" style="padding: 0.5rem; border-radius: 6px; border: 2px solid #e2e8f0;">
+                        <option value="">Todos</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="entregue">Entregues</option>
+                    </select>
+                </div>
+                
+                <div class="loading" id="loadingProtocolos">
+                    <div class="spinner"></div>
+                    <p>Carregando protocolos...</p>
+                </div>
+                <div id="protocolosContainer"></div>
+            </div>
+        </div>
+        
+        <!-- Tab: Hidrômetro -->
+        <div id="tabHidrometro" class="tab-content">
+            <div class="card">
+                <h2><i class="fas fa-tint"></i> Dados do Hidrômetro</h2>
+                <div class="loading" id="loadingHidrometro">
+                    <div class="spinner"></div>
+                    <p>Carregando dados...</p>
+                </div>
+                <div id="hidrometroInfo" style="display: none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Nºmero do Hidrômetro</label>
+                            <input type="text" id="numeroHidrometro" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Nºmero do Lacre</label>
+                            <input type="text" id="numeroLacre" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>ltima Leitura (m³)</label>
+                            <input type="text" id="ultimaLeitura" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Data de Instalação</label>
+                            <input type="text" id="dataInstalacao" disabled>
+                        </div>
+                    </div>
+                </div>
+                <div id="hidrometroVazio" class="empty-state" style="display: none;">
+                    <i class="fas fa-tint"></i>
+                    <p>Nenhum hidrômetro cadastrado para sua unidade</p>
+                </div>
+            </div>
+            
+            <div class="card" id="cardLeituras" style="display: none;">
+                <h2><i class="fas fa-chart-line"></i> Histórico de Leituras</h2>
+                <div id="leiturasContainer"></div>
+            </div>
+        </div>
+        
+        <!-- Tab: Notificaçµes -->
+        <div id="tabNotificacoes" class="tab-content">
+            <div class="card">
+                <h2><i class="fas fa-bell"></i> Notificaçµes e Avisos</h2>
+                <div class="loading" id="loadingNotificacoes">
+                    <div class="spinner"></div>
+                    <p>Carregando notificaçµes...</p>
+                </div>
+                <div id="notificacoesContainer"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let editandoVeiculoId = null;
+        
+        // Carregar dados ao iniciar
+        document.addEventListener('DOMContentLoaded', function() {
+            verificarSessao();
+            carregarDadosMorador();
+            aplicarMascaras();
+        });
+        
+        // Verificar sessão
+        function verificarSessao() {
+            fetch('../api/api_morador_dados.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.sucesso) {
+                        window.location.href = 'login_morador.html?erro=4';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao verificar sessão:', error);
+                });
+        }
+        
+        // Aplicar máscaras
+        function aplicarMascaras() {
+            // Máscara de CPF
+            document.getElementById('cpf').addEventListener('input', function(e) {
+                let valor = e.target.value.replace(/\D/g, '');
+                if (valor.length <= 11) {
+                    valor = valor.replace(/(\d{3})(\d)/, '$1.$2');
+                    valor = valor.replace(/(\d{3})(\d)/, '$1.$2');
+                    valor = valor.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+                }
+                e.target.value = valor;
+            });
+            
+            // Máscara de telefone
+            ['telefone', 'celular'].forEach(campo => {
+                document.getElementById(campo).addEventListener('input', function(e) {
+                    let valor = e.target.value.replace(/\D/g, '');
+                    if (valor.length <= 11) {
+                        valor = valor.replace(/^(\d{2})(\d)/g, '($1) $2');
+                        valor = valor.replace(/(\d)(\d{4})$/, '$1-$2');
+                    }
+                    e.target.value = valor;
+                });
+            });
+        }
+        
+        // Mostrar tab
+        function showTab(tabName) {
+            // Remover active de todas as tabs
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Ativar tab selecionada
+            event.target.classList.add('active');
+            document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).classList.add('active');
+            
+            // Carregar dados da tab
+            if (tabName === 'veiculos') {
+                carregarVeiculos();
+            } else if (tabName === 'protocolos') {
+                carregarProtocolos();
+            } else if (tabName === 'hidrometro') {
+                carregarHidrometro();
+            } else if (tabName === 'notificacoes') {
+                carregarNotificacoes();
+            }
+        }
+        
+        // Carregar dados do morador
+        function carregarDadosMorador() {
+            fetch('../api/api_morador_dados.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const morador = data.dados;
+                        document.getElementById('userName').textContent = morador.nome;
+                        document.getElementById('userUnit').textContent = 'Unidade: ' + morador.unidade;
+                        document.getElementById('nome').value = morador.nome;
+                        document.getElementById('cpf').value = morador.cpf;
+                        document.getElementById('unidade').value = morador.unidade;
+                        document.getElementById('email').value = morador.email;
+                        document.getElementById('telefone').value = morador.telefone || '';
+                        document.getElementById('celular').value = morador.celular || '';
+                    } else {
+                        mostrarAlerta('alertCadastro', data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('alertCadastro', 'Erro ao carregar dados', 'error');
+                });
+        }
+        
+        // Salvar cadastro
+        document.getElementById('formCadastro').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const btnSalvar = document.getElementById('btnSalvarCadastro');
+            btnSalvar.disabled = true;
+            btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            
+            const dados = {
+                email: document.getElementById('email').value,
+                telefone: document.getElementById('telefone').value,
+                celular: document.getElementById('celular').value,
+                cpf: document.getElementById('cpf').value
+            };
+            
+            fetch('../api/api_morador_dados.php', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mostrarAlerta('alertCadastro', data.mensagem, 'success');
+                } else {
+                    mostrarAlerta('alertCadastro', data.mensagem, 'error');
+                }
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Alteraçµes';
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('alertCadastro', 'Erro ao salvar dados', 'error');
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Alteraçµes';
+            });
+        });
+        
+        // Carregar veículos
+        function carregarVeiculos() {
+            document.getElementById('loadingVeiculos').classList.add('active');
+            
+            fetch('../api/api_morador_veiculos.php')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loadingVeiculos').classList.remove('active');
+                    
+                    if (data.sucesso) {
+                        const container = document.getElementById('veiculosContainer');
+                        
+                        if (data.dados.length === 0) {
+                            container.innerHTML = '<div class="empty-state"><i class="fas fa-car"></i><p>Nenhum veículo cadastrado</p></div>';
+                        } else {
+                            let html = '<table><thead><tr><th>Placa</th><th>Modelo</th><th>Cor</th><th>TAG</th><th>Açµes</th></tr></thead><tbody>';
+                            
+                            data.dados.forEach(veiculo => {
+                                html += `
+                                    <tr>
+                                        <td><strong>${veiculo.placa}</strong></td>
+                                        <td>${veiculo.modelo}</td>
+                                        <td>${veiculo.cor}</td>
+                                        <td><span class="badge badge-entregue">${veiculo.tag}</span></td>
+                                        <td class="actions">
+                                            <button class="btn-edit" onclick="editarVeiculo(${veiculo.id}, '${veiculo.placa}', '${veiculo.modelo}', '${veiculo.cor}')">
+                                                <i class="fas fa-edit"></i> Editar
+                                            </button>
+                                            <button class="btn-delete" onclick="excluirVeiculo(${veiculo.id}, '${veiculo.placa}')">
+                                                <i class="fas fa-trash"></i> Excluir
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `;
+                            });
+                            
+                            html += '</tbody></table>';
+                            container.innerHTML = html;
+                        }
+                    } else {
+                        mostrarAlerta('alertVeiculo', data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    document.getElementById('loadingVeiculos').classList.remove('active');
+                    mostrarAlerta('alertVeiculo', 'Erro ao carregar veículos', 'error');
+                });
+        }
+        
+        // Salvar veículo
+        document.getElementById('formVeiculo').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const btnSalvar = document.getElementById('btnSalvarVeiculo');
+            btnSalvar.disabled = true;
+            btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            
+            const dados = {
+                placa: document.getElementById('placa').value.toUpperCase(),
+                modelo: document.getElementById('modelo').value,
+                cor: document.getElementById('cor').value
+            };
+            
+            const metodo = editandoVeiculoId ? 'PUT' : 'POST';
+            if (editandoVeiculoId) {
+                dados.id = editandoVeiculoId;
+            }
+            
+            fetch('../api/api_morador_veiculos.php', {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mostrarAlerta('alertVeiculo', data.mensagem, 'success');
+                    document.getElementById('formVeiculo').reset();
+                    cancelarEdicaoVeiculo();
+                    carregarVeiculos();
+                } else {
+                    mostrarAlerta('alertVeiculo', data.mensagem, 'error');
+                }
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Veículo';
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('alertVeiculo', 'Erro ao salvar veículo', 'error');
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar Veículo';
+            });
+        });
+        
+        // Editar veículo
+        function editarVeiculo(id, placa, modelo, cor) {
+            editandoVeiculoId = id;
+            document.getElementById('placa').value = placa;
+            document.getElementById('modelo').value = modelo;
+            document.getElementById('cor').value = cor;
+            document.getElementById('tituloFormVeiculo').textContent = 'Editar Veículo';
+            document.getElementById('btnCancelarVeiculo').style.display = 'inline-flex';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // Cancelar edição
+        function cancelarEdicaoVeiculo() {
+            editandoVeiculoId = null;
+            document.getElementById('formVeiculo').reset();
+            document.getElementById('tituloFormVeiculo').textContent = 'Cadastrar Novo Veículo';
+            document.getElementById('btnCancelarVeiculo').style.display = 'none';
+        }
+        
+        // Excluir veículo
+        function excluirVeiculo(id, placa) {
+            if (!confirm(`Deseja realmente excluir o veículo ${placa}?`)) {
+                return;
+            }
+            
+            fetch('../api/api_morador_veiculos.php', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mostrarAlerta('alertVeiculo', data.mensagem, 'success');
+                    carregarVeiculos();
+                } else {
+                    mostrarAlerta('alertVeiculo', data.mensagem, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                mostrarAlerta('alertVeiculo', 'Erro ao excluir veículo', 'error');
+            });
+        }
+        
+        // Carregar protocolos
+        function carregarProtocolos() {
+            document.getElementById('loadingProtocolos').classList.add('active');
+            
+            const status = document.getElementById('filtroStatusProtocolo').value;
+            const url = status ? `api_morador_protocolos.php?status=${status}` : 'api_morador_protocolos.php';
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loadingProtocolos').classList.remove('active');
+                    
+                    if (data.sucesso) {
+                        const container = document.getElementById('protocolosContainer');
+                        
+                        if (data.dados.length === 0) {
+                            container.innerHTML = '<div class="empty-state"><i class="fas fa-box"></i><p>Nenhum protocolo encontrado</p></div>';
+                        } else {
+                            let html = '<table><thead><tr><th>ID</th><th>Descrição</th><th>Código NF</th><th>Recebido em</th><th>Recebedor</th><th>Status</th><th>Entregue em</th></tr></thead><tbody>';
+                            
+                            data.dados.forEach(protocolo => {
+                                const statusClass = protocolo.status === 'pendente' ? 'badge-pendente' : 'badge-entregue';
+                                const statusTexto = protocolo.status === 'pendente' ? 'Pendente' : 'Entregue';
+                                
+                                html += `
+                                    <tr>
+                                        <td><strong>#${protocolo.id}</strong></td>
+                                        <td>${protocolo.descricao_mercadoria}</td>
+                                        <td>${protocolo.codigo_nf || '-'}</td>
+                                        <td>${protocolo.data_hora_recebimento}</td>
+                                        <td>${protocolo.recebedor_portaria}</td>
+                                        <td><span class="badge ${statusClass}">${statusTexto}</span></td>
+                                        <td>${protocolo.data_hora_entrega || '-'}</td>
+                                    </tr>
+                                `;
+                            });
+                            
+                            html += '</tbody></table>';
+                            container.innerHTML = html;
+                        }
+                    } else {
+                        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>' + data.mensagem + '</p></div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    document.getElementById('loadingProtocolos').classList.remove('active');
+                    document.getElementById('protocolosContainer').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Erro ao carregar protocolos</p></div>';
+                });
+        }
+        
+        // Carregar hidrômetro
+        function carregarHidrometro() {
+            document.getElementById('loadingHidrometro').classList.add('active');
+            document.getElementById('hidrometroInfo').style.display = 'none';
+            document.getElementById('hidrometroVazio').style.display = 'none';
+            document.getElementById('cardLeituras').style.display = 'none';
+            
+            fetch('../api/api_morador_hidrometro.php')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loadingHidrometro').classList.remove('active');
+                    
+                    if (data.sucesso && data.dados.hidrometro) {
+                        const hidrometro = data.dados.hidrometro;
+                        const leituras = data.dados.leituras;
+                        
+                        // Exibir dados do hidrômetro
+                        document.getElementById('numeroHidrometro').value = hidrometro.numero_hidrometro || '-';
+                        document.getElementById('numeroLacre').value = hidrometro.numero_lacre || '-';
+                        document.getElementById('ultimaLeitura').value = hidrometro.ultima_leitura ? hidrometro.ultima_leitura + ' m³' : '-';
+                        document.getElementById('dataInstalacao').value = hidrometro.data_instalacao || '-';
+                        document.getElementById('hidrometroInfo').style.display = 'block';
+                        
+                        // Exibir histórico de leituras
+                        if (leituras && leituras.length > 0) {
+                            let html = '<table><thead><tr><th>Data</th><th>Leitura Anterior (m³)</th><th>Leitura Atual (m³)</th><th>Consumo (m³)</th><th>Valor (R$)</th></tr></thead><tbody>';
+                            
+                            leituras.forEach(leitura => {
+                                html += `
+                                    <tr>
+                                        <td><strong>${leitura.data_leitura}</strong></td>
+                                        <td>${parseFloat(leitura.leitura_anterior).toFixed(2)}</td>
+                                        <td>${parseFloat(leitura.leitura_atual).toFixed(2)}</td>
+                                        <td>${parseFloat(leitura.consumo).toFixed(2)}</td>
+                                        <td>R$ ${parseFloat(leitura.valor_total).toFixed(2)}</td>
+                                    </tr>
+                                `;
+                            });
+                            
+                            html += '</tbody></table>';
+                            document.getElementById('leiturasContainer').innerHTML = html;
+                            document.getElementById('cardLeituras').style.display = 'block';
+                        } else {
+                            document.getElementById('leiturasContainer').innerHTML = '<div class="empty-state"><i class="fas fa-chart-line"></i><p>Nenhuma leitura registrada</p></div>';
+                            document.getElementById('cardLeituras').style.display = 'block';
+                        }
+                    } else {
+                        document.getElementById('hidrometroVazio').style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    document.getElementById('loadingHidrometro').classList.remove('active');
+                    document.getElementById('hidrometroVazio').style.display = 'block';
+                });
+        }
+        
+        // Carregar notificaçµes
+        function carregarNotificacoes() {
+            document.getElementById('loadingNotificacoes').classList.add('active');
+            
+            fetch('../api/api_morador_notificacoes.php')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loadingNotificacoes').classList.remove('active');
+                    
+                    if (data.sucesso) {
+                        const container = document.getElementById('notificacoesContainer');
+                        
+                        if (data.dados.length === 0) {
+                            container.innerHTML = '<div class="empty-state"><i class="fas fa-bell"></i><p>Nenhuma notificação disponível</p></div>';
+                        } else {
+                            let html = '';
+                            
+                            data.dados.forEach(notif => {
+                                const naoLida = !notif.visualizada ? 'nao-lida' : '';
+                                
+                                html += `
+                                    <div class="notificacao-item ${naoLida}">
+                                        <div class="notificacao-header">
+                                            <span class="notificacao-numero">#${notif.numero_sequencial}</span>
+                                            <span class="notificacao-data"><i class="fas fa-clock"></i> ${notif.data_hora_formatada}</span>
+                                        </div>
+                                        <div class="notificacao-assunto">${notif.assunto}</div>
+                                        <div class="notificacao-resumo">${notif.resumo}</div>
+                                        <div class="notificacao-footer">
+                                            ${notif.tem_anexo ? `
+                                                <button class="btn-download" onclick="visualizarAnexo(${notif.id})">
+                                                    <i class="fas fa-eye"></i> Visualizar Anexo
+                                                </button>
+                                                <button onclick="baixarAnexo(${notif.id})">
+                                                    <i class="fas fa-download"></i> Baixar
+                                                </button>
+                                            ` : ''}
+                                            ${!notif.visualizada ? `
+                                                <button onclick="marcarComoLida(${notif.id})">
+                                                    <i class="fas fa-check"></i> Marcar como Lida
+                                                </button>
+                                            ` : '<span class="badge badge-success"><i class="fas fa-check"></i> Lida</span>'}
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            
+                            container.innerHTML = html;
+                        }
+                    } else {
+                        document.getElementById('notificacoesContainer').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Erro ao carregar notificaçµes</p></div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    document.getElementById('loadingNotificacoes').classList.remove('active');
+                    document.getElementById('notificacoesContainer').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Erro ao carregar notificaçµes</p></div>';
+                });
+        }
+        
+        // Marcar como lida
+        function marcarComoLida(id) {
+            const formData = new FormData();
+            formData.append('visualizar', id);
+            
+            fetch('../api/api_morador_notificacoes.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    carregarNotificacoes();
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+            });
+        }
+        
+        // Visualizar anexo
+        function visualizarAnexo(id) {
+            window.open(`visualizar_anexo.php?id=${id}`, '_blank');
+            
+            // Recarregar notificaçµes após 1 segundo para atualizar status
+            setTimeout(() => {
+                carregarNotificacoes();
+            }, 1000);
+        }
+        
+        // Baixar anexo
+        function baixarAnexo(id) {
+            window.open(`api_morador_notificacoes.php?download=${id}`, '_blank');
+            
+            // Recarregar notificaçµes após 1 segundo para atualizar status
+            setTimeout(() => {
+                carregarNotificacoes();
+            }, 1000);
+        }
+        
+        // Mostrar alerta
+        function mostrarAlerta(elementId, mensagem, tipo) {
+            const alert = document.getElementById(elementId);
+            alert.innerHTML = `<i class="fas fa-${tipo === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${mensagem}`;
+            alert.className = `alert alert-${tipo}`;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+
+

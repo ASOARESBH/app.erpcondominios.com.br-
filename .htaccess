@@ -1,0 +1,76 @@
+# Sistema de Controle de Acesso - Configuração Apache
+# SIMPLES E FUNCIONAL PARA SUBDIRETÓRIO
+
+RewriteEngine On
+
+# Página inicial padrão - Redireciona para login.html
+DirectoryIndex login.html
+
+# --- CONTROL ID ONLINE MODE — Endpoints .fcgi → api/controlid/ ---
+# O equipamento chama estas URLs no modo Online (Pro/Enterprise).
+# Devem ficar ANTES das regras de arquivos reais pois .fcgi não existe em disco.
+
+RewriteRule ^new_uhf_tag\.fcgi$         api/controlid/new_uhf_tag.php         [QSA,L]
+RewriteRule ^new_user_identified\.fcgi$ api/controlid/new_user_identified.php [QSA,L]
+RewriteRule ^new_card\.fcgi$            api/controlid/new_card.php            [QSA,L]
+RewriteRule ^new_qrcode\.fcgi$          api/controlid/new_qrcode.php          [QSA,L]
+RewriteRule ^device_is_alive\.fcgi$     api/controlid/device_is_alive.php     [QSA,L]
+
+# --- REGRAS PRINCIPAIS DE ROTEAMENTO ---
+
+# 1. PERMITIR: Arquivos reais (imagens, css, js, etc) - não fazer rewrite
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# 2. PERMITIR: Diretórios reais - não fazer rewrite
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# 3. IMPORTANTE: Não fazer rewrite de requests para /api/ e /frontend/
+# Deixar que possam acessar diretamente
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^ - [L]
+
+RewriteCond %{REQUEST_URI} ^/frontend/
+RewriteRule ^ - [L]
+
+# 4. Se acessar /dashboard redireciona para layout-base
+RewriteRule ^dashboard/?$ frontend/layout-base.html?page=dashboard [L]
+
+# 4b. Página pública de transparência de Projetos (sem login)
+#     /projetos        -> lista/dashboard público
+#     /projetos/123     -> projeto específico (id=123)
+RewriteRule ^projetos/?$      projetos_publico.php [QSA,L]
+RewriteRule ^projetos/(\d+)/?$ projetos_publico.php?id=$1 [QSA,L]
+
+# 5. Redirecionar tudo que não existe para login.html (SPA fallback)
+# EXCETO extensões de arquivo estático
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !\.(gif|jpg|jpeg|png|css|js|svg|ico|woff|woff2|ttf|eot|json|xml)$
+RewriteRule ^ login.html [L]
+
+# --- CONFIGURAÇÕES DE SEGURANÇA BÁSICAS ---
+
+# Prevenir listagem de diretórios
+Options -Indexes
+
+# Security headers (se suportado)
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Bloquear acesso a arquivos sensíveis
+<FilesMatch "\.(env|log|bak|sql)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+
+<Files ".htaccess">
+    Order deny,allow
+    Deny from all
+</Files>
+
+# Configurar charset
+AddDefaultCharset UTF-8

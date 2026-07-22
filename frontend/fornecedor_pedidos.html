@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meus Pedidos - Fornecedor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-small {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        table th {
+            background: #f3f4f6;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        table tr:hover {
+            background: #f9fafb;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-aguardando {
+            background: #fef3c7;
+            color: #78350f;
+        }
+
+        .status-executando {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-finalizado {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-cancelado {
+            background: #fee2e2;
+            color: #7f1d1d;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 15px;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+            color: #333;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .alert.active {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            color: #065f46;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            color: #7f1d1d;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-section {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filter-section label {
+            font-weight: 600;
+        }
+
+        .filter-section select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            table th,
+            table td {
+                padding: 8px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ð Meus Pedidos</h1>
+            <p>Gerencie os pedidos dos moradores</p>
+        </div>
+
+        <!-- Alertas -->
+        <div id="alertSuccess" class="alert alert-success"></div>
+        <div id="alertError" class="alert alert-error"></div>
+
+        <!-- Filtros -->
+        <div class="card">
+            <div class="filter-section">
+                <label>Filtrar por status:</label>
+                <select id="filtroStatus" onchange="carregarPedidos()">
+                    <option value="">Todos os status</option>
+                    <option value="aguardando">Aguardando Aprovação</option>
+                    <option value="executando">Em Execução</option>
+                    <option value="finalizado">Finalizado</option>
+                    <option value="cancelado">Cancelado</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Lista de Pedidos -->
+        <div class="card">
+            <div id="listaPedidos"></div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: DETALHES DO PEDIDO ===== -->
+    <div id="modalDetalhes" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Detalhes do Pedido</h2>
+                <button class="modal-close" onclick="fecharModal('modalDetalhes')">â</button>
+            </div>
+
+            <div id="detalhesPedido"></div>
+
+            <div class="modal-footer">
+                <button type="button" class="button btn-secondary" onclick="fecharModal('modalDetalhes')">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: RECUSAR PEDIDO ===== -->
+    <div id="modalRecusar" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Recusar Pedido</h2>
+                <button class="modal-close" onclick="fecharModal('modalRecusar')">â</button>
+            </div>
+
+            <form id="formRecusar" onsubmit="confirmarRecusa(event)">
+                <input type="hidden" id="recusarPedidoId">
+
+                <div class="form-group">
+                    <label>Motivo da Recusa *</label>
+                    <textarea id="motivoRecusa" required placeholder="Explique por que está recusando este pedido..."></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="button btn-secondary" onclick="fecharModal('modalRecusar')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="button btn-danger">
+                        Recusar Pedido
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: AVALIAR PEDIDO ===== -->
+    <div id="modalAvaliar" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Avaliar Pedido</h2>
+                <button class="modal-close" onclick="fecharModal('modalAvaliar')">â</button>
+            </div>
+
+            <form id="formAvaliacao" onsubmit="salvarAvaliacao(event)">
+                <input type="hidden" id="avaliacaoPedidoId">
+
+                <div class="form-group">
+                    <label>Nota (1-5 estrelas) *</label>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <label><input type="radio" name="nota" value="1"> â­</label>
+                        <label><input type="radio" name="nota" value="2"> â­â­</label>
+                        <label><input type="radio" name="nota" value="3"> â­â­â­</label>
+                        <label><input type="radio" name="nota" value="4"> â­â­â­â­</label>
+                        <label><input type="radio" name="nota" value="5"> â­â­â­â­â­</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Comentário</label>
+                    <textarea id="avaliacaoComentario" placeholder="Deixe seu comentário..."></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="button btn-secondary" onclick="fecharModal('modalAvaliar')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="button btn-primary">
+                        Enviar Avaliação
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '../api/';
+
+        function abrirModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function fecharModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+        }
+
+        function mostrarAlerta(mensagem, tipo = 'success') {
+            const alertId = `alert${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`;
+            const alert = document.getElementById(alertId);
+            alert.textContent = mensagem;
+            alert.classList.add('active');
+
+            setTimeout(() => {
+                alert.classList.remove('active');
+            }, 5000);
+        }
+
+        async function carregarPedidos() {
+            try {
+                const status = document.getElementById('filtroStatus').value;
+                let url = API_BASE + 'api_pedidos.php?acao=listar_fornecedor';
+                if (status) {
+                    url += '&status=' + status;
+                }
+
+                const response = await fetch(url, {
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (!data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'error');
+                    return;
+                }
+
+                const pedidos = data.dados || [];
+                const container = document.getElementById('listaPedidos');
+
+                if (pedidos.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">ð</div>
+                            <p>Nenhum pedido encontrado</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '<table><thead><tr>';
+                html += '<th>ID</th><th>Morador</th><th>Produto</th><th>Valor</th><th>Status</th><th>Data</th><th>Açµes</th>';
+                html += '</tr></thead><tbody>';
+
+                pedidos.forEach(pedido => {
+                    const statusClass = `status-${pedido.status}`;
+                    const statusTexto = pedido.status.charAt(0).toUpperCase() + pedido.status.slice(1);
+
+                    let botoes = `<button class="button btn-small btn-secondary" onclick="verDetalhePedido(${pedido.id})">Detalhes</button>`;
+
+                    if (pedido.status === 'aguardando') {
+                        botoes += `<button class="button btn-small btn-success" onclick="aprovarPedido(${pedido.id})">Aprovar</button>`;
+                        botoes += `<button class="button btn-small btn-danger" onclick="abrirModalRecusa(${pedido.id})">Recusar</button>`;
+                    } else if (pedido.status === 'executando') {
+                        botoes += `<button class="button btn-small btn-success" onclick="finalizarPedido(${pedido.id})">Finalizar</button>`;
+                    } else if (pedido.status === 'finalizado') {
+                        botoes += `<button class="button btn-small btn-primary" onclick="abrirModalAvaliacao(${pedido.id})">Avaliar</button>`;
+                    }
+
+                    html += `<tr>
+                        <td>#${pedido.id}</td>
+                        <td>${pedido.morador_nome}</td>
+                        <td>${pedido.produto_nome}</td>
+                        <td>R$ ${parseFloat(pedido.valor_proposto).toFixed(2)}</td>
+                        <td><span class="status-badge ${statusClass}">${statusTexto}</span></td>
+                        <td>${new Date(pedido.data_pedido).toLocaleDateString('pt-BR')}</td>
+                        <td>
+                            <div class="action-buttons">
+                                ${botoes}
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+            } catch (error) {
+                mostrarAlerta('Erro ao carregar pedidos: ' + error.message, 'error');
+            }
+        }
+
+        async function verDetalhePedido(pedidoId) {
+            // Aqui vocª poderia carregar detalhes do pedido
+            mostrarAlerta('Detalhes do pedido #' + pedidoId, 'info');
+        }
+
+        async function aprovarPedido(pedidoId) {
+            try {
+                const formData = new FormData();
+                formData.append('acao', 'aprovar');
+                formData.append('pedido_id', pedidoId);
+
+                const response = await fetch(API_BASE + 'api_pedidos.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('Pedido aprovado com sucesso!', 'success');
+                    carregarPedidos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao aprovar: ' + error.message, 'error');
+            }
+        }
+
+        function abrirModalRecusa(pedidoId) {
+            document.getElementById('recusarPedidoId').value = pedidoId;
+            document.getElementById('motivoRecusa').value = '';
+            abrirModal('modalRecusar');
+        }
+
+        async function confirmarRecusa(event) {
+            event.preventDefault();
+
+            const pedidoId = document.getElementById('recusarPedidoId').value;
+            const motivo = document.getElementById('motivoRecusa').value;
+
+            try {
+                const formData = new FormData();
+                formData.append('acao', 'recusar');
+                formData.append('pedido_id', pedidoId);
+                formData.append('motivo_recusa', motivo);
+
+                const response = await fetch(API_BASE + 'api_pedidos.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('Pedido recusado com sucesso!', 'success');
+                    fecharModal('modalRecusar');
+                    carregarPedidos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao recusar: ' + error.message, 'error');
+            }
+        }
+
+        async function finalizarPedido(pedidoId) {
+            if (!confirm('Tem certeza que deseja finalizar este pedido?')) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('acao', 'finalizar');
+                formData.append('pedido_id', pedidoId);
+
+                const response = await fetch(API_BASE + 'api_pedidos.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('Pedido finalizado com sucesso!', 'success');
+                    carregarPedidos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao finalizar: ' + error.message, 'error');
+            }
+        }
+
+        function abrirModalAvaliacao(pedidoId) {
+            document.getElementById('avaliacaoPedidoId').value = pedidoId;
+            document.getElementById('formAvaliacao').reset();
+            abrirModal('modalAvaliar');
+        }
+
+        async function salvarAvaliacao(event) {
+            event.preventDefault();
+
+            const pedidoId = document.getElementById('avaliacaoPedidoId').value;
+            const nota = document.querySelector('input[name="nota"]:checked').value;
+            const comentario = document.getElementById('avaliacaoComentario').value;
+
+            try {
+                const formData = new FormData();
+                formData.append('acao', 'avaliar');
+                formData.append('pedido_id', pedidoId);
+                formData.append('nota', nota);
+                formData.append('comentario', comentario);
+                formData.append('tipo', 'fornecedor');
+
+                const response = await fetch(API_BASE + 'api_pedidos.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta('Avaliação registrada com sucesso!', 'success');
+                    fecharModal('modalAvaliar');
+                    carregarPedidos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao salvar avaliação: ' + error.message, 'error');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarPedidos();
+        });
+    </script>
+</body>
+</html>

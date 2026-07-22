@@ -1,0 +1,235 @@
+/**
+ * usuarios.css — Módulo de Gerenciamento de Usuários
+ * CSS autossuficiente com escopo .page-usuarios para evitar conflitos globais
+ * @version 1.0.0
+ */
+
+/* ============================================================
+   BREADCRUMB
+   ============================================================ */
+.page-usuarios .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.page-usuarios .breadcrumb [data-page],
+.page-usuarios .breadcrumb a {
+    color: #4f46e5;
+    text-decoration: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.page-usuarios .breadcrumb [data-page]:hover,
+.page-usuarios .breadcrumb a:hover {
+    color: #3730a3;
+    text-decoration: underline;
+}
+
+/* ============================================================
+   FORMULÁRIO
+   ============================================================ */
+.page-usuarios .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 0;
+}
+
+.page-usuarios .form-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.page-usuarios .form-grid label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.page-usuarios .form-grid input,
+.page-usuarios .form-grid select {
+    padding: 9px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: #1e293b;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.page-usuarios .form-grid input:focus,
+.page-usuarios .form-grid select:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* ============================================================
+   BOTÕES
+   ============================================================ */
+.page-usuarios .btn-primary-modern {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: #4f46e5;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.page-usuarios .btn-primary-modern:hover {
+    background: #4338ca;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.page-usuarios .btn-primary-modern:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.page-usuarios .btn-secondary-modern {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.page-usuarios .btn-secondary-modern:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+/* ============================================================
+   TABELA
+   ============================================================ */
+.page-usuarios .table-container {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.page-usuarios table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.page-usuarios table thead tr {
+    background: #f8fafc;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.page-usuarios table th {
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.page-usuarios table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    vertical-align: middle;
+}
+
+.page-usuarios table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.page-usuarios table tbody tr:hover td {
+    background: #f8faff;
+}
+
+/* Badges */
+.page-usuarios .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.page-usuarios .badge-danger   { background: #fef3c7; color: #92400e; }
+.page-usuarios .badge-warning  { background: #dbeafe; color: #1e40af; }
+.page-usuarios .badge-primary  { background: #f0fdf4; color: #166534; }
+.page-usuarios .badge-success  { background: #dcfce7; color: #166534; }
+
+/* ============================================================
+   SEÇÕES
+   ============================================================ */
+.page-usuarios .form-section {
+    margin-bottom: 1.5rem;
+}
+
+.page-usuarios .form-section h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 1.25rem 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-usuarios .form-section h3 i {
+    color: #4f46e5;
+}
+
+.page-usuarios .table-section h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 1.25rem 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ============================================================
+   RESPONSIVIDADE
+   ============================================================ */
+@media (max-width: 768px) {
+    .page-usuarios .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-usuarios table th:nth-child(1),
+    .page-usuarios table td:nth-child(1),
+    .page-usuarios table th:nth-child(5),
+    .page-usuarios table td:nth-child(5) {
+        display: none;
+    }
+}

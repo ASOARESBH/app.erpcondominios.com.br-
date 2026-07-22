@@ -1,0 +1,33 @@
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+vendor/
+
+# Uploads
+uploads/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+temp/
+tmp/
+*.tmp
+logs/*.log

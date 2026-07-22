@@ -1,0 +1,21 @@
+# CSS MIME Type Configuration
+<IfModule mod_mime.c>
+    AddType text/css .css
+</IfModule>
+
+# Cache para CSS
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+</IfModule>
+
+# Headers de segurança
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Permitir acesso
+<FilesMatch "\.css$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>

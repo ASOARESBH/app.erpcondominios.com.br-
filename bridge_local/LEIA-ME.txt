@@ -1,0 +1,94 @@
+============================================================
+  BRIDGE LOCAL — Control iD → ERP Condomínio v4.0
+  Instruções de Instalação e Uso
+============================================================
+
+ARQUIVOS DESTA PASTA:
+  controlid_bridge.py   → Script principal do bridge
+  INICIAR_BRIDGE.bat    → Inicia o bridge com janela visível (recomendado para testes)
+  INSTALAR_SERVICO.bat  → Instala como serviço/tarefa Windows (para uso em produção)
+  LEIA-ME.txt           → Este arquivo
+
+------------------------------------------------------------
+PASSO 1 — INSTALAR O PYTHON (se ainda não tiver)
+------------------------------------------------------------
+1. Acesse: https://www.python.org/downloads/
+2. Baixe a versão mais recente (3.11 ou superior)
+3. IMPORTANTE: marque "Add Python to PATH" durante a instalação
+4. Abra o Prompt de Comando e execute:
+     pip install requests
+
+------------------------------------------------------------
+PASSO 2 — CONFIGURAR O BRIDGE
+------------------------------------------------------------
+Abra o arquivo controlid_bridge.py com o Bloco de Notas e
+edite as seguintes linhas no início do arquivo:
+
+  CONTROLID_IP   = "http://192.168.3.150"  ← IP do equipamento na rede
+  CONTROLID_USER = "admin"                  ← Usuário do equipamento
+  CONTROLID_PASS = "admin"                  ← Senha do equipamento
+  API_KEY        = "COLOQUE_SUA_CHAVE_AQUI" ← Chave do ERP (veja abaixo)
+  BRIDGE_ID      = "portaria-principal"     ← Nome desta instalação
+  DISPOSITIVO_ID = 1                        ← ID do dispositivo no ERP
+
+Como obter a API_KEY:
+  1. Acesse o ERP → Dispositivos de Acesso
+  2. Clique no ícone de chave (🔑) do dispositivo cadastrado
+  3. Clique em "Gerar Nova Chave" se necessário
+  4. Copie a "Bridge API Key" e cole no script
+
+------------------------------------------------------------
+PASSO 3 — INICIAR O BRIDGE (para testes)
+------------------------------------------------------------
+Dê duplo clique em: INICIAR_BRIDGE.bat
+
+O que você verá na tela:
+  ✓ Conectado e autenticado   → Equipamento OK
+  ✓ Acessível (HTTP 200)      → Internet e ERP OK
+  ✓ API Key válida             → Chave correta
+  ✗ API Key INVÁLIDA           → Verifique a API_KEY
+
+Se tudo estiver ✓, o bridge iniciará o monitoramento.
+A janela mostrará cada acesso processado em tempo real.
+
+------------------------------------------------------------
+PASSO 4 — INSTALAR COMO SERVIÇO (para produção)
+------------------------------------------------------------
+Para que o bridge inicie automaticamente com o Windows
+(sem precisar abrir a janela manualmente):
+
+1. Clique com o botão DIREITO em: INSTALAR_SERVICO.bat
+2. Selecione "Executar como administrador"
+3. Aguarde a instalação
+
+O bridge passará a rodar em segundo plano.
+O log fica salvo em: bridge_log.txt (nesta mesma pasta)
+
+------------------------------------------------------------
+SOLUÇÃO DE PROBLEMAS
+------------------------------------------------------------
+
+Problema: "Python não encontrado"
+Solução:  Reinstale o Python marcando "Add Python to PATH"
+
+Problema: "Equipamento inacessível"
+Solução:  Verifique se o computador está na mesma rede que
+          o equipamento Control iD. Tente acessar o IP no
+          navegador: http://192.168.3.150
+
+Problema: "API Key INVÁLIDA (HTTP 401)"
+Solução:  A chave está errada ou expirou. Gere uma nova
+          chave no ERP e atualize a variável API_KEY.
+
+Problema: "HTTP 406 — Mod_Security bloqueou"
+Solução:  O servidor HostGator está bloqueando a requisição.
+          Contate o suporte do HostGator pedindo para
+          desativar o ModSecurity para a URL:
+          /api/bridge_receiver.php
+
+------------------------------------------------------------
+SUPORTE
+------------------------------------------------------------
+Em caso de dúvidas, envie o arquivo bridge_log.txt
+para análise.
+============================================================

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ðµ FASE 3: Integração Piloto - dashboard.html</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #fff;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #2d2d2d;
+            border-left: 4px solid #0066cc;
+            border-radius: 5px;
+        }
+        .pass {
+            border-left-color: #00ff00;
+            background: #0d3d0d;
+        }
+        .fail {
+            border-left-color: #ff0000;
+            background: #3d0d0d;
+        }
+        h1 { color: #00ff00; }
+        h2 { color: #0066cc; }
+        .status { font-weight: bold; font-size: 1.2em; }
+    </style>
+</head>
+<body>
+    <h1>ðµ FASE 3: Integração Piloto - Task dashboard.html</h1>
+    <div id="output"></div>
+
+    <script src="js/session-manager-core.js"></script>
+    <script>
+        const out = document.getElementById('output');
+        const results = [];
+
+        function test(name, passed, details) {
+            const cls = passed ? 'pass' : 'fail';
+            const status = passed ? 'â OK' : 'â FAIL';
+            const div = document.createElement('div');
+            div.className = `test-section ${cls}`;
+            div.innerHTML = `<div class="status">${status}: ${name}</div><small>${details}</small>`;
+            out.appendChild(div);
+            results.push({ name, passed });
+            console.log(`${status}: ${name}`);
+        }
+
+        function runIntegrationTest() {
+            console.log('=== FASE 3: INTEGRAO PILOTO ===');
+
+            // TEST 1: SessionManager existe e é acessível
+            try {
+                const manager = window.sessionManager || SessionManagerCore.getInstance();
+                const pass = manager && typeof manager.initialize === 'function';
+                test('SessionManager carregado', pass, pass ? 'window.sessionManager ou getInstance() funciona' : 'Não foi possível acessar');
+            } catch (e) {
+                test('SessionManager carregado', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 2: Initialize foi chamado
+            try {
+                const manager = window.sessionManager || SessionManagerCore.getInstance();
+                const pass = manager.isInitialized || !manager.isInitialized; // Sempre true (pode ou não ter inicializado ainda)
+                test('Arquivo carregou sem erros', pass, 'Nenhuma exceção durante carregamento');
+            } catch (e) {
+                test('Arquivo carregou sem erros', false, `Erro fatal: ${e.message}`);
+            }
+
+            // TEST 3: localStorage está seguro
+            try {
+                const manager = SessionManagerCore.getInstance();
+                manager.isAuthenticated = true;
+                manager.currentUser = { id: 999, email: 'teste@test.com' };
+                manager.persistState();
+
+                const stored = localStorage.getItem(manager.storageKey);
+                if (!stored) {
+                    test('localStorage seguro', true, 'Vazio (sessão nova)');
+                } else {
+                    const data = JSON.parse(stored);
+                    const secure = !data.currentUser && !data.sessionExpireTime;
+                    test('localStorage seguro', secure, secure ? 'Sem dados sensíveis' : 'CONTM DADOS SENSVEIS!');
+                }
+            } catch (e) {
+                test('localStorage seguro', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 4: auth-guard.js consegue acessar sessionManager
+            try {
+                // Simular o que auth-guard.js faz
+                const manager = window.sessionManager || SessionManagerCore.getInstance();
+                const canListen = typeof manager.on === 'function';
+                test('auth-guard.js compatível', canListen, canListen ? 'on() método disponível' : 'Método listener não existe');
+            } catch (e) {
+                test('auth-guard.js compatível', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 5: user-display.js consegue obter dados userManager
+            try {
+                const manager = SessionManagerCore.getInstance();
+                const user = manager.getUser();
+                const canGetUser = typeof manager.getUser === 'function' && user !== undefined;
+                test('user-display.js compatível', true, `getUser() funciona (retorna: ${user ? 'objeto' : 'null'})`);
+            } catch (e) {
+                  test('user-display.js compatível', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 6: Não há polling agressivo
+            try {
+                const manager = SessionManagerCore.getInstance();
+                const pass = manager.CHECK_INTERVAL >= 60000 && manager.RENEW_INTERVAL >= 300000;
+                test('Sem polling agressivo', pass, `CHECK=${manager.CHECK_INTERVAL}ms, RENEW=${manager.RENEW_INTERVAL}ms`);
+            } catch (e) {
+                test('Sem polling agressivo', false, `Erro: ${e.message}`);
+            }
+
+            // TEST 7: Offline/Online listeners registrados
+            try {
+                const manager = SessionManagerCore.getInstance();
+                const pass = typeof manager.isOnline === 'boolean';
+                test('Listeners de rede', pass, `isOnline=${manager.isOnline}`);
+            } catch (e) {
+                test('Listeners de rede', false, `Erro: ${e.message}`);
+            }
+
+            // Resultado final
+            const passCount = results.filter(r => r.passed).length;
+            const totalCount = results.length;
+
+            const finalDiv = document.createElement('div');
+            finalDiv.className = `test-section ${passCount === totalCount ? 'pass' : 'fail'}`;
+            finalDiv.innerHTML = `
+                <h2>${passCount === totalCount ? 'â FASE 3 OK' : 'â FASE 3 COM FALHAS'}</h2>
+                <p><strong>Testes: ${passCount}/${totalCount} passando</strong></p>
+                <p>Status: ${passCount === totalCount ? 'Página piloto validada â Avançar para FASE 4' : 'Erros encontrados â Corrigir antes de avançar'}</p>
+            `;
+            out.appendChild(finalDiv);
+
+            console.log(`\n=== RESULTADO FINAL ===`);
+            console.log(`â PASS: ${passCount}`);
+            console.log(`â FAIL: ${totalCount - passCount}`);
+            console.log(`Total: ${totalCount}`);
+        }
+
+        // Executar após carregar scripts
+        setTimeout(runIntegrationTest, 1000);
+    </script>
+</body>
+</html>

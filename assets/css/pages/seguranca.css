@@ -1,0 +1,462 @@
+/* ============================================================
+   SEGURANÇA E AUDITORIA — Scoped to .page-seguranca
+   ============================================================ */
+
+/* KPI Grid */
+.page-seguranca .seg-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.page-seguranca .seg-kpi-card {
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+}
+
+.page-seguranca .seg-kpi-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.page-seguranca .seg-kpi-icon--blue   { background: #dbeafe; color: #2563eb; }
+.page-seguranca .seg-kpi-icon--red    { background: #fee2e2; color: #dc2626; }
+.page-seguranca .seg-kpi-icon--green  { background: #d1fae5; color: #16a34a; }
+.page-seguranca .seg-kpi-icon--purple { background: #ede9fe; color: #7c3aed; }
+
+.page-seguranca .seg-kpi-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.page-seguranca .seg-kpi-value {
+    font-size: 1.85rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: block;
+    line-height: 1;
+}
+
+.page-seguranca .seg-kpi-sub {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    display: block;
+    margin-top: 5px;
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+.page-seguranca .tabs-container {
+    display: flex;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 24px;
+    overflow-x: auto;
+    gap: 4px;
+}
+
+.page-seguranca .tab-btn {
+    padding: 0.85rem 1.25rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+    border-radius: 6px 6px 0 0;
+}
+
+.page-seguranca .tab-btn i { font-size: 14px; }
+
+.page-seguranca .tab-btn:hover {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.page-seguranca .tab-btn.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    background: #eff6ff;
+    font-weight: 700;
+}
+
+/* ============================================================
+   PAGE CARD HEADER (structural helper)
+   ============================================================ */
+.page-seguranca .page-card-header {
+    margin-bottom: 20px;
+}
+
+.page-seguranca .page-card-header h2 {
+    margin-bottom: 4px;
+}
+
+.page-seguranca .page-card-header p {
+    color: #64748b;
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
+.page-seguranca .page-alert {
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    border-left: 4px solid #2563eb;
+    background: #eff6ff;
+    color: #1e40af;
+}
+
+.page-seguranca .page-alert-success {
+    border-left-color: #16a34a;
+    background: #d1fae5;
+    color: #064e3b;
+}
+
+.page-seguranca .page-alert-error {
+    border-left-color: #dc2626;
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.page-seguranca .page-alert-warning {
+    border-left-color: #f59e0b;
+    background: #fef3c7;
+    color: #78350f;
+}
+
+/* ============================================================
+   FILTERS
+   ============================================================ */
+.page-seguranca .seg-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.page-seguranca .seg-filters label {
+    display: block;
+    margin-bottom: 6px;
+    color: #475569;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.page-seguranca .seg-filters input,
+.page-seguranca .seg-filters select {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    font-size: 0.9rem;
+    color: #0f172a;
+    transition: border-color 0.2s, background 0.2s;
+    font-family: inherit;
+}
+
+.page-seguranca .seg-filters input:focus,
+.page-seguranca .seg-filters select:focus {
+    outline: none;
+    border-color: #2563eb;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+/* Actions row */
+.page-seguranca .seg-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* Type pills */
+.page-seguranca .seg-pills-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 14px;
+    min-height: 0;
+}
+
+.page-seguranca .seg-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    cursor: default;
+    transition: background 0.15s;
+}
+
+.page-seguranca .seg-pill:hover {
+    background: #e2e8f0;
+}
+
+/* ============================================================
+   TABLE
+   ============================================================ */
+.page-seguranca .seg-table-container {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+
+.page-seguranca table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+}
+
+.page-seguranca th,
+.page-seguranca td {
+    padding: 11px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: left;
+    vertical-align: top;
+    color: #334155;
+    font-size: 0.88rem;
+}
+
+.page-seguranca th {
+    background: #f8fafc;
+    font-weight: 700;
+    color: #475569;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.page-seguranca tr:last-child td { border-bottom: none; }
+.page-seguranca tbody tr:hover  { background: #f8fafc; }
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+.page-seguranca .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.page-seguranca .badge-success   { background: #d1fae5; color: #065f46; }
+.page-seguranca .badge-danger    { background: #fee2e2; color: #991b1b; }
+.page-seguranca .badge-warning   { background: #fef3c7; color: #92400e; }
+.page-seguranca .badge-info      { background: #dbeafe; color: #1e40af; }
+.page-seguranca .badge-secondary { background: #f1f5f9; color: #475569; }
+
+/* ============================================================
+   PAGINATION
+   ============================================================ */
+.page-seguranca .pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 16px;
+    padding: 8px 0;
+}
+
+.page-seguranca .pagination button {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 5px 11px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    transition: background 0.15s;
+}
+
+.page-seguranca .pagination button:hover:not(:disabled) { background: #e2e8f0; }
+.page-seguranca .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.page-seguranca .pagination button.active  { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+/* ============================================================
+   RELATÓRIOS TAB — Exception summary grid
+   ============================================================ */
+.page-seguranca .seg-exception-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 12px;
+}
+
+.page-seguranca .seg-exception-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    border-left-width: 3px;
+}
+
+.page-seguranca .seg-exception-card--critico { border-left-color: #dc2626; }
+.page-seguranca .seg-exception-card--erro    { border-left-color: #f59e0b; }
+.page-seguranca .seg-exception-card--aviso   { border-left-color: #0ea5e9; }
+.page-seguranca .seg-exception-card--info    { border-left-color: #10b981; }
+
+.page-seguranca .exc-num {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: block;
+    line-height: 1;
+}
+
+.page-seguranca .exc-type {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 6px;
+    display: block;
+    word-break: break-all;
+}
+
+.page-seguranca .exc-last {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-top: 5px;
+    display: block;
+}
+
+/* ============================================================
+   RELATÓRIOS TAB — Timeline bar chart
+   ============================================================ */
+.page-seguranca .seg-timeline-wrap {
+    overflow-x: auto;
+}
+
+.page-seguranca .seg-timeline {
+    display: flex;
+    align-items: flex-end;
+    gap: 5px;
+    height: 100px;
+    min-width: max-content;
+    padding: 4px 0;
+}
+
+.page-seguranca .seg-tl-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 34px;
+}
+
+.page-seguranca .seg-tl-fill {
+    width: 22px;
+    min-height: 3px;
+    background: linear-gradient(180deg, #60a5fa, #2563eb);
+    border-radius: 3px 3px 0 0;
+    transition: opacity 0.15s;
+}
+
+.page-seguranca .seg-tl-fill:hover { opacity: 0.75; }
+
+.page-seguranca .seg-tl-count {
+    font-size: 0.6rem;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.page-seguranca .seg-tl-label {
+    font-size: 0.62rem;
+    color: #94a3b8;
+    margin-top: 4px;
+    white-space: nowrap;
+}
+
+/* ============================================================
+   VISIBILITY HELPERS
+   ============================================================ */
+.page-seguranca .seg-hidden { display: none; }
+
+.page-seguranca .seg-empty-cell {
+    text-align: center;
+    padding: 2.5rem;
+    color: #94a3b8;
+}
+
+.page-seguranca .seg-empty-icon {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 1024px) {
+    .page-seguranca .seg-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .page-seguranca .seg-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-seguranca .seg-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .page-seguranca .seg-actions {
+        flex-direction: column;
+    }
+
+    .page-seguranca .seg-actions button {
+        width: 100%;
+        justify-content: center;
+    }
+}

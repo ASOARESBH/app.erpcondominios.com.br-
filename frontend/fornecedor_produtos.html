@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meus Produtos/Serviços - Fornecedor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-small {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        table th {
+            background: #f3f4f6;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        table tr:hover {
+            background: #f9fafb;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-ativo {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-inativo {
+            background: #fee2e2;
+            color: #7f1d1d;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 15px;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+            color: #333;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .alert.active {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            color: #065f46;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            color: #7f1d1d;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            table th,
+            table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>ð¦ Meus Produtos/Serviços</h1>
+                <p>Gerencie seus produtos e serviços</p>
+            </div>
+            <div class="header-actions">
+                <button class="button btn-primary" onclick="abrirModalCriarProduto()">
+                    â Novo Produto/Serviço
+                </button>
+            </div>
+        </div>
+
+        <!-- Alertas -->
+        <div id="alertSuccess" class="alert alert-success"></div>
+        <div id="alertError" class="alert alert-error"></div>
+
+        <!-- Lista de Produtos -->
+        <div class="card">
+            <div id="listaProdutos"></div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: CRIAR/EDITAR PRODUTO ===== -->
+    <div id="modalProduto" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalProdutoTitulo">Novo Produto/Serviço</h2>
+                <button class="modal-close" onclick="fecharModal('modalProduto')">â</button>
+            </div>
+
+            <form id="formProduto" onsubmit="salvarProduto(event)">
+                <div class="form-group">
+                    <label>Tipo *</label>
+                    <select id="produtoTipo" required onchange="atualizarLabelQuantidade()">
+                        <option value="">Selecione...</option>
+                        <option value="produto">Produto</option>
+                        <option value="servico">Serviço</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Nome *</label>
+                    <input type="text" id="produtoNome" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Descrição</label>
+                    <textarea id="produtoDescricao"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Preço de Venda (R$) *</label>
+                        <input type="number" id="produtoPreco" step="0.01" min="0" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label id="labelQuantidade">Quantidade Disponível *</label>
+                        <input type="number" id="produtoQuantidade" min="0" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Observaçµes</label>
+                    <textarea id="produtoObservacao"></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="button btn-secondary" onclick="fecharModal('modalProduto')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="button btn-primary">
+                        Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '../api/';
+        let produtoEmEdicao = null;
+
+        function abrirModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function fecharModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+        }
+
+        function mostrarAlerta(mensagem, tipo = 'success') {
+            const alertId = `alert${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`;
+            const alert = document.getElementById(alertId);
+            alert.textContent = mensagem;
+            alert.classList.add('active');
+
+            setTimeout(() => {
+                alert.classList.remove('active');
+            }, 5000);
+        }
+
+        function abrirModalCriarProduto() {
+            produtoEmEdicao = null;
+            document.getElementById('formProduto').reset();
+            document.getElementById('modalProdutoTitulo').textContent = 'Novo Produto/Serviço';
+            abrirModal('modalProduto');
+        }
+
+        function atualizarLabelQuantidade() {
+            const tipo = document.getElementById('produtoTipo').value;
+            const label = document.getElementById('labelQuantidade');
+            if (tipo === 'servico') {
+                label.textContent = 'Quantidade de Serviços Disponíveis *';
+            } else {
+                label.textContent = 'Quantidade Disponível *';
+            }
+        }
+
+        async function salvarProduto(event) {
+            event.preventDefault();
+
+            const tipo = document.getElementById('produtoTipo').value;
+            const nome = document.getElementById('produtoNome').value;
+            const descricao = document.getElementById('produtoDescricao').value;
+            const preco = document.getElementById('produtoPreco').value;
+            const quantidade = document.getElementById('produtoQuantidade').value;
+            const observacao = document.getElementById('produtoObservacao').value;
+
+            const formData = new FormData();
+            formData.append('acao', produtoEmEdicao ? 'atualizar' : 'criar');
+            formData.append('tipo', tipo);
+            formData.append('nome', nome);
+            formData.append('descricao', descricao);
+            formData.append('preco_venda', preco);
+            formData.append('quantidade_disponivel', quantidade);
+            formData.append('observacao', observacao);
+
+            if (produtoEmEdicao) {
+                formData.append('id', produtoEmEdicao.id);
+            }
+
+            try {
+                const response = await fetch(API_BASE + 'api_produtos_servicos.php', {
+                    method: produtoEmEdicao ? 'PUT' : 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'success');
+                    fecharModal('modalProduto');
+                    carregarProdutos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao salvar: ' + error.message, 'error');
+            }
+        }
+
+        async function carregarProdutos() {
+            try {
+                const response = await fetch(API_BASE + 'api_produtos_servicos.php?acao=listar', {
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (!data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'error');
+                    return;
+                }
+
+                const produtos = data.dados || [];
+                const container = document.getElementById('listaProdutos');
+
+                if (produtos.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">ð¦</div>
+                            <p>Nenhum produto/serviço cadastrado ainda</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '<table><thead><tr>';
+                html += '<th>Código</th><th>Nome</th><th>Tipo</th><th>Preço</th><th>Quantidade</th><th>Status</th><th>Açµes</th>';
+                html += '</tr></thead><tbody>';
+
+                produtos.forEach(produto => {
+                    const statusClass = produto.ativo ? 'status-ativo' : 'status-inativo';
+                    const statusTexto = produto.ativo ? 'Ativo' : 'Inativo';
+
+                    html += `<tr>
+                        <td>${produto.codigo_sequencial}</td>
+                        <td>${produto.nome}</td>
+                        <td>${produto.tipo === 'produto' ? 'ð¦ Produto' : 'ð§ Serviço'}</td>
+                        <td>R$ ${parseFloat(produto.preco_venda).toFixed(2)}</td>
+                        <td>${produto.quantidade_disponivel}</td>
+                        <td><span class="status-badge ${statusClass}">${statusTexto}</span></td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="button btn-small btn-secondary" onclick="editarProduto(${produto.id})">Editar</button>
+                                <button class="button btn-small ${produto.ativo ? 'btn-danger' : 'btn-success'}" onclick="alternarStatusProduto(${produto.id}, ${produto.ativo ? 0 : 1})">
+                                    ${produto.ativo ? 'Inativar' : 'Ativar'}
+                                </button>
+                                <button class="button btn-small btn-primary" onclick="gerarLinkProduto(${produto.id})">Link</button>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+            } catch (error) {
+                mostrarAlerta('Erro ao carregar produtos: ' + error.message, 'error');
+            }
+        }
+
+        async function editarProduto(produtoId) {
+            try {
+                const response = await fetch(API_BASE + `api_produtos_servicos.php?acao=obter&id=${produtoId}`, {
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (!data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'error');
+                    return;
+                }
+
+                const produto = data.dados;
+                produtoEmEdicao = produto;
+
+                document.getElementById('produtoTipo').value = produto.tipo;
+                document.getElementById('produtoNome').value = produto.nome;
+                document.getElementById('produtoDescricao').value = produto.descricao || '';
+                document.getElementById('produtoPreco').value = produto.preco_venda;
+                document.getElementById('produtoQuantidade').value = produto.quantidade_disponivel;
+                document.getElementById('produtoObservacao').value = produto.observacao || '';
+
+                document.getElementById('modalProdutoTitulo').textContent = 'Editar Produto/Serviço';
+                atualizarLabelQuantidade();
+                abrirModal('modalProduto');
+
+            } catch (error) {
+                mostrarAlerta('Erro ao carregar produto: ' + error.message, 'error');
+            }
+        }
+
+        async function alternarStatusProduto(produtoId, novoStatus) {
+            try {
+                const formData = new FormData();
+                formData.append('acao', 'alternar_status');
+                formData.append('id', produtoId);
+                formData.append('ativo', novoStatus);
+
+                const response = await fetch(API_BASE + 'api_produtos_servicos.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    mostrarAlerta(data.mensagem, 'success');
+                    carregarProdutos();
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao alterar status: ' + error.message, 'error');
+            }
+        }
+
+        async function gerarLinkProduto(produtoId) {
+            try {
+                const formData = new FormData();
+                formData.append('acao', 'gerar_link');
+                formData.append('id', produtoId);
+
+                const response = await fetch(API_BASE + 'api_produtos_servicos.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    const link = data.dados.url_completa;
+                    prompt('Link de compartilhamento:', link);
+                } else {
+                    mostrarAlerta(data.mensagem, 'error');
+                }
+            } catch (error) {
+                mostrarAlerta('Erro ao gerar link: ' + error.message, 'error');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarProdutos();
+        });
+    </script>
+</body>
+</html>

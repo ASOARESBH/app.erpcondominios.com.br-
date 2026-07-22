@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciamento de Sessões | ERP Condomínio</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: #f1f5f9; color: #1e293b; }
+        .page-header {
+            background: linear-gradient(135deg, #1e40af, #2563eb);
+            color: #fff; padding: 24px 32px;
+            display: flex; align-items: center; gap: 16px;
+        }
+        .page-header h1 { font-size: 1.5rem; font-weight: 700; }
+        .page-header p  { font-size: 0.875rem; opacity: 0.85; margin-top: 4px; }
+        .page-body { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+
+        /* ── Tabs ── */
+        .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; }
+        .tab-btn {
+            padding: 10px 20px; border: none; background: none; cursor: pointer;
+            font-size: 0.9rem; font-weight: 500; color: #64748b;
+            border-bottom: 2px solid transparent; margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .tab-btn:hover  { color: #1e40af; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ── Cards ── */
+        .card {
+            background: #fff; border-radius: 12px; padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        .card-title { font-size: 1rem; font-weight: 600; color: #1e293b; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .card-title i { color: #2563eb; }
+
+        /* ── Config Global ── */
+        .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+        .config-item label { display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
+        .config-item input[type=number] {
+            width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1;
+            border-radius: 8px; font-size: 0.9rem; color: #1e293b;
+        }
+        .config-item input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .config-item .hint { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
+        .btn-save {
+            margin-top: 20px; padding: 10px 24px; background: #2563eb; color: #fff;
+            border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .btn-save:hover { background: #1e40af; }
+
+        /* ── Sessões Ativas ── */
+        .stats-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+        .stat-card {
+            flex: 1; min-width: 140px; background: #f8fafc; border: 1px solid #e2e8f0;
+            border-radius: 10px; padding: 16px; text-align: center;
+        }
+        .stat-card .stat-value { font-size: 2rem; font-weight: 700; color: #2563eb; }
+        .stat-card .stat-label { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+
+        /* ── Tabela ── */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        thead th {
+            background: #f8fafc; padding: 10px 12px; text-align: left;
+            font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;
+        }
+        tbody tr { border-bottom: 1px solid #f1f5f9; transition: background 0.15s; }
+        tbody tr:hover { background: #f8fafc; }
+        tbody td { padding: 10px 12px; vertical-align: middle; }
+
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 99px;
+            font-size: 0.75rem; font-weight: 600;
+        }
+        .badge-green  { background: #dcfce7; color: #166534; }
+        .badge-red    { background: #fee2e2; color: #991b1b; }
+        .badge-blue   { background: #dbeafe; color: #1e40af; }
+        .badge-yellow { background: #fef9c3; color: #854d0e; }
+
+        /* ── Botões de ação ── */
+        .btn-action {
+            padding: 5px 12px; border: none; border-radius: 6px;
+            font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-encerrar { background: #fee2e2; color: #991b1b; }
+        .btn-encerrar:hover { background: #fecaca; }
+        .btn-config   { background: #dbeafe; color: #1e40af; }
+        .btn-config:hover { background: #bfdbfe; }
+
+        /* ── Busca ── */
+        .search-bar {
+            display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .search-bar input {
+            flex: 1; min-width: 200px; padding: 9px 14px;
+            border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.875rem;
+        }
+        .search-bar input:focus { outline: none; border-color: #2563eb; }
+        .search-bar button {
+            padding: 9px 18px; background: #2563eb; color: #fff;
+            border: none; border-radius: 8px; cursor: pointer; font-size: 0.875rem;
+        }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-danger:hover { background: #dc2626; }
+
+        /* ── Modal ── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #fff; border-radius: 12px; padding: 28px;
+            width: 100%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; color: #1e293b; }
+        .modal .form-group { margin-bottom: 16px; }
+        .modal label { display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
+        .modal input[type=number], .modal select {
+            width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1;
+            border-radius: 8px; font-size: 0.9rem;
+        }
+        .modal input:focus, .modal select:focus { outline: none; border-color: #2563eb; }
+        .modal .toggle-row { display: flex; align-items: center; gap: 10px; }
+        .modal .toggle-row input[type=checkbox] { width: 18px; height: 18px; accent-color: #2563eb; }
+        .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .btn-cancel { padding: 9px 18px; background: #f1f5f9; color: #475569; border: none; border-radius: 8px; cursor: pointer; }
+        .btn-primary { padding: 9px 18px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .btn-primary:hover { background: #1e40af; }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+            background: #1e293b; color: #fff; padding: 12px 20px;
+            border-radius: 8px; font-size: 0.875rem; font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transform: translateY(100px); opacity: 0;
+            transition: all 0.3s ease; max-width: 360px;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-left: 4px solid #22c55e; }
+        .toast.error   { border-left: 4px solid #ef4444; }
+
+        /* ── Paginação ── */
+        .pagination { display: flex; gap: 6px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+        .pagination button {
+            padding: 6px 12px; border: 1px solid #e2e8f0; background: #fff;
+            border-radius: 6px; cursor: pointer; font-size: 0.8rem; color: #475569;
+        }
+        .pagination button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+        .pagination button:hover:not(.active) { background: #f8fafc; }
+
+        /* ── Responsivo ── */
+        @media (max-width: 640px) {
+            .page-body { padding: 16px; }
+            .page-header { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-shield-alt"></i> Gerenciamento de Sessões</h1>
+        <p>Configure timeouts globais e personalizados por usuário. Monitore sessões ativas em tempo real.</p>
+    </div>
+</div>
+
+<div class="page-body">
+
+    <!-- ── Tabs ── -->
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="sessoes-ativas">
+            <i class="fas fa-circle-dot"></i> Sessões Ativas
+        </button>
+        <button class="tab-btn" data-tab="moradores">
+            <i class="fas fa-users"></i> Usuários
+        </button>
+        <button class="tab-btn" data-tab="config-global">
+            <i class="fas fa-sliders"></i> Configuração Global
+        </button>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB: SESSÕES ATIVAS                                                   -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-sessoes-ativas" class="tab-panel active">
+        <div class="stats-row" id="statsRow">
+            <div class="stat-card">
+                <div class="stat-value" id="statTotal">–</div>
+                <div class="stat-label">Sessões Ativas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statRecentes">–</div>
+                <div class="stat-label">Últimos 10 min</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statInativas">–</div>
+                <div class="stat-label">Inativas &gt; 5 min</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <i class="fas fa-circle-dot"></i> Sessões em Andamento
+                <button class="btn-action btn-encerrar btn-danger" style="margin-left:auto" onclick="encerrarTodas()">
+                    <i class="fas fa-power-off"></i> Encerrar Todas
+                </button>
+                <button class="btn-action btn-config" style="margin-left:8px" onclick="carregarSessoesAtivas()">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Morador</th>
+                            <th>Unidade</th>
+                            <th>Login</th>
+                            <th>Último Ativo</th>
+                            <th>Logado há</th>
+                            <th>Inativo há</th>
+                            <th>Timeout Total</th>
+                            <th>IP</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodySessoes">
+                        <tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:24px">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB: MORADORES / USUÁRIOS                                             -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-moradores" class="tab-panel">
+        <div class="card">
+            <div class="card-title"><i class="fas fa-users"></i> Configuração de Sessão por Usuário</div>
+
+            <div class="search-bar">
+                <input type="text" id="buscaMorador" placeholder="Buscar por nome, unidade ou e-mail..." />
+                <button onclick="carregarMoradores()"><i class="fas fa-search"></i> Buscar</button>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Unidade</th>
+                            <th>E-mail</th>
+                            <th>Sessão Personalizada</th>
+                            <th>Timeout Total</th>
+                            <th>Timeout Inatividade</th>
+                            <th>Sessões Ativas</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyMoradores">
+                        <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:24px">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination" id="paginacaoMoradores"></div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- TAB: CONFIGURAÇÃO GLOBAL                                              -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-config-global" class="tab-panel">
+        <div class="card">
+            <div class="card-title"><i class="fas fa-sliders"></i> Configurações Globais de Sessão</div>
+            <p style="font-size:0.85rem;color:#64748b;margin-bottom:20px">
+                Estas configurações se aplicam a <strong>todos os usuários</strong> que não possuem configuração personalizada.
+                O administrador pode sobrescrever individualmente na aba "Usuários".
+            </p>
+
+            <div class="config-grid">
+                <div class="config-item">
+                    <label><i class="fas fa-clock"></i> Tempo Total de Sessão (minutos)</label>
+                    <input type="number" id="cfgTotalMin" min="5" max="480" value="30" />
+                    <div class="hint">Padrão: 30 min. Mínimo: 5 min. Máximo: 480 min (8h).</div>
+                </div>
+                <div class="config-item">
+                    <label><i class="fas fa-hourglass-half"></i> Timeout de Inatividade (minutos)</label>
+                    <input type="number" id="cfgInatividadeMin" min="2" max="120" value="10" />
+                    <div class="hint">Padrão: 10 min. Encerra a sessão se o usuário ficar inativo por este tempo.</div>
+                </div>
+                <div class="config-item">
+                    <label><i class="fas fa-bell"></i> Aviso de Expiração (minutos antes)</label>
+                    <input type="number" id="cfgAvisoMin" min="1" max="30" value="5" />
+                    <div class="hint">Exibe alerta visual quando restar este tempo para a sessão expirar.</div>
+                </div>
+            </div>
+
+            <button class="btn-save" onclick="salvarConfigGlobal()">
+                <i class="fas fa-save"></i> Salvar Configurações Globais
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><i class="fas fa-info-circle"></i> Resumo das Regras de Sessão</div>
+            <div style="font-size:0.875rem;color:#475569;line-height:1.8">
+                <p><strong>Prioridade de configuração:</strong></p>
+                <ol style="margin-left:20px;margin-top:8px">
+                    <li>Configuração personalizada do usuário (se <em>Sessão Personalizada</em> estiver ativada)</li>
+                    <li>Configuração global do sistema (esta tela)</li>
+                </ol>
+                <p style="margin-top:12px"><strong>Comportamento:</strong></p>
+                <ul style="margin-left:20px;margin-top:8px">
+                    <li>A sessão expira quando o <strong>tempo total</strong> é atingido, independente de atividade.</li>
+                    <li>A sessão expira quando o usuário fica <strong>inativo</strong> por mais do que o timeout de inatividade.</li>
+                    <li>O ping automático (a cada 2 minutos) reseta o contador de inatividade enquanto o usuário estiver ativo.</li>
+                    <li>O aviso visual aparece no menu superior quando o tempo restante for menor que o configurado.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── Modal: Configurar Sessão do Morador ── -->
+<div class="modal-overlay" id="modalConfig">
+    <div class="modal">
+        <h3><i class="fas fa-user-cog"></i> Configurar Sessão do Usuário</h3>
+        <input type="hidden" id="modalMoradorId" />
+        <p id="modalMoradorNome" style="font-size:0.875rem;color:#64748b;margin-bottom:16px"></p>
+
+        <div class="form-group">
+            <div class="toggle-row">
+                <input type="checkbox" id="modalPersonalizada" />
+                <label for="modalPersonalizada" style="margin:0">Usar configuração personalizada para este usuário</label>
+            </div>
+            <div class="hint" style="margin-top:6px;font-size:0.75rem;color:#94a3b8">
+                Se desmarcado, o usuário seguirá a configuração global do sistema.
+            </div>
+        </div>
+
+        <div id="modalCamposCustom">
+            <div class="form-group">
+                <label>Timeout Total (minutos)</label>
+                <input type="number" id="modalTotalMin" min="5" max="480" placeholder="Ex: 60" />
+                <div class="hint" style="font-size:0.75rem;color:#94a3b8;margin-top:4px">Tempo máximo da sessão (5–480 min)</div>
+            </div>
+            <div class="form-group">
+                <label>Timeout de Inatividade (minutos)</label>
+                <input type="number" id="modalInatividadeMin" min="2" max="120" placeholder="Ex: 15" />
+                <div class="hint" style="font-size:0.75rem;color:#94a3b8;margin-top:4px">Encerrar após inatividade (2–120 min)</div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
+            <button class="btn-primary" onclick="salvarConfigMorador()">
+                <i class="fas fa-save"></i> Salvar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Toast ── -->
+<div class="toast" id="toast"></div>
+
+<script>
+    const API = '../api/api_admin_sessoes.php';
+    let paginaAtual = 1;
+
+    // ── Tabs ──────────────────────────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            if (btn.dataset.tab === 'sessoes-ativas') carregarSessoesAtivas();
+            if (btn.dataset.tab === 'moradores')      carregarMoradores();
+            if (btn.dataset.tab === 'config-global')  carregarConfigGlobal();
+        });
+    });
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    function showToast(msg, tipo = 'success') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className   = 'toast ' + tipo + ' show';
+        setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    // ── Sessões Ativas ────────────────────────────────────────────────────────
+    async function carregarSessoesAtivas() {
+        try {
+            const r = await fetch(API + '?action=sessoes_ativas', { credentials: 'include' });
+            const d = await r.json();
+            if (!d.sucesso) { showToast(d.mensagem, 'error'); return; }
+
+            const itens = d.dados.itens || [];
+            document.getElementById('statTotal').textContent = itens.length;
+            document.getElementById('statRecentes').textContent = itens.filter(s => (s.minutos_logado||0) <= 10).length;
+            document.getElementById('statInativas').textContent = itens.filter(s => (s.minutos_inativo||0) > 5).length;
+
+            const tbody = document.getElementById('tbodySessoes');
+            if (!itens.length) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:24px">Nenhuma sessão ativa no momento</td></tr>';
+                return;
+            }
+            tbody.innerHTML = itens.map(s => `
+                <tr>
+                    <td><strong>${esc(s.morador_nome)}</strong></td>
+                    <td>${esc(s.morador_unidade || '–')}</td>
+                    <td>${formatarData(s.data_login)}</td>
+                    <td>${s.ultimo_ativo ? formatarData(s.ultimo_ativo) : '–'}</td>
+                    <td><span class="badge badge-blue">${s.minutos_logado || 0} min</span></td>
+                    <td><span class="badge ${(s.minutos_inativo||0) > 5 ? 'badge-yellow' : 'badge-green'}">${s.minutos_inativo || 0} min</span></td>
+                    <td>${s.timeout_total_min || 30} min</td>
+                    <td>${esc(s.ip_address || '–')}</td>
+                    <td>
+                        <button class="btn-action btn-encerrar" onclick="encerrarSessao(${s.id})">
+                            <i class="fas fa-times"></i> Encerrar
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch(e) { showToast('Erro ao carregar sessões: ' + e.message, 'error'); }
+    }
+
+    async function encerrarSessao(id) {
+        if (!confirm('Encerrar esta sessão?')) return;
+        const r = await fetch(API, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'encerrar_sessao', sessao_id: id })
+        });
+        const d = await r.json();
+        showToast(d.mensagem, d.sucesso ? 'success' : 'error');
+        if (d.sucesso) carregarSessoesAtivas();
+    }
+
+    async function encerrarTodas() {
+        if (!confirm('Encerrar TODAS as sessões ativas? Esta ação desconectará todos os usuários.')) return;
+        const r = await fetch(API, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'encerrar_todas' })
+        });
+        const d = await r.json();
+        showToast(d.mensagem, d.sucesso ? 'success' : 'error');
+        if (d.sucesso) carregarSessoesAtivas();
+    }
+
+    // ── Moradores ─────────────────────────────────────────────────────────────
+    async function carregarMoradores(pagina = 1) {
+        paginaAtual = pagina;
+        const busca = document.getElementById('buscaMorador').value.trim();
+        const url   = `${API}?action=moradores&pagina=${pagina}&por_pagina=20&busca=${encodeURIComponent(busca)}`;
+        try {
+            const r = await fetch(url, { credentials: 'include' });
+            const d = await r.json();
+            if (!d.sucesso) { showToast(d.mensagem, 'error'); return; }
+
+            const { itens, total, total_paginas } = d.dados;
+            const tbody = document.getElementById('tbodyMoradores');
+            if (!itens.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:24px">Nenhum usuário encontrado</td></tr>';
+                document.getElementById('paginacaoMoradores').innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = itens.map(m => `
+                <tr>
+                    <td><strong>${esc(m.nome)}</strong></td>
+                    <td>${esc(m.unidade || '–')}</td>
+                    <td>${esc(m.email || '–')}</td>
+                    <td>
+                        <span class="badge ${m.sessao_personalizada == 1 ? 'badge-blue' : 'badge-green'}">
+                            ${m.sessao_personalizada == 1 ? 'Personalizada' : 'Padrão do Sistema'}
+                        </span>
+                    </td>
+                    <td>${m.timeout_total_min ? m.timeout_total_min + ' min' : '<span style="color:#94a3b8">Padrão</span>'}</td>
+                    <td>${m.timeout_inatividade_min ? m.timeout_inatividade_min + ' min' : '<span style="color:#94a3b8">Padrão</span>'}</td>
+                    <td>
+                        <span class="badge ${m.sessoes_ativas > 0 ? 'badge-green' : 'badge-red'}">
+                            ${m.sessoes_ativas || 0} ativa(s)
+                        </span>
+                    </td>
+                    <td style="display:flex;gap:6px;flex-wrap:wrap">
+                        <button class="btn-action btn-config" onclick="abrirModalConfig(${m.id}, '${esc(m.nome)}', ${m.sessao_personalizada||0}, ${m.timeout_total_min||''}, ${m.timeout_inatividade_min||''})">
+                            <i class="fas fa-cog"></i> Configurar
+                        </button>
+                        ${m.sessoes_ativas > 0 ? `
+                        <button class="btn-action btn-encerrar" onclick="encerrarSessoesMorador(${m.id})">
+                            <i class="fas fa-sign-out-alt"></i> Desconectar
+                        </button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+
+            // Paginação
+            const pg = document.getElementById('paginacaoMoradores');
+            pg.innerHTML = '';
+            for (let i = 1; i <= total_paginas; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = i;
+                if (i === pagina) btn.classList.add('active');
+                btn.onclick = () => carregarMoradores(i);
+                pg.appendChild(btn);
+            }
+        } catch(e) { showToast('Erro ao carregar usuários: ' + e.message, 'error'); }
+    }
+
+    async function encerrarSessoesMorador(moradorId) {
+        if (!confirm('Desconectar este usuário de todas as sessões ativas?')) return;
+        const r = await fetch(API, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'encerrar_sessao', morador_id: moradorId })
+        });
+        const d = await r.json();
+        showToast(d.mensagem, d.sucesso ? 'success' : 'error');
+        if (d.sucesso) carregarMoradores(paginaAtual);
+    }
+
+    // ── Modal Configurar Morador ──────────────────────────────────────────────
+    function abrirModalConfig(id, nome, personalizada, totalMin, inatividadeMin) {
+        document.getElementById('modalMoradorId').value      = id;
+        document.getElementById('modalMoradorNome').textContent = 'Usuário: ' + nome;
+        document.getElementById('modalPersonalizada').checked  = personalizada == 1;
+        document.getElementById('modalTotalMin').value         = totalMin || '';
+        document.getElementById('modalInatividadeMin').value   = inatividadeMin || '';
+        toggleCamposCustom();
+        document.getElementById('modalConfig').classList.add('active');
+    }
+
+    function fecharModal() {
+        document.getElementById('modalConfig').classList.remove('active');
+    }
+
+    document.getElementById('modalPersonalizada').addEventListener('change', toggleCamposCustom);
+
+    function toggleCamposCustom() {
+        const checked = document.getElementById('modalPersonalizada').checked;
+        document.getElementById('modalCamposCustom').style.display = checked ? 'block' : 'none';
+    }
+
+    async function salvarConfigMorador() {
+        const id           = parseInt(document.getElementById('modalMoradorId').value);
+        const personalizada = document.getElementById('modalPersonalizada').checked ? 1 : 0;
+        const totalMin     = parseInt(document.getElementById('modalTotalMin').value) || null;
+        const inatMin      = parseInt(document.getElementById('modalInatividadeMin').value) || null;
+
+        if (personalizada && (!totalMin || !inatMin)) {
+            showToast('Preencha os dois campos de timeout para configuração personalizada.', 'error');
+            return;
+        }
+        if (personalizada && inatMin >= totalMin) {
+            showToast('O timeout de inatividade deve ser menor que o timeout total.', 'error');
+            return;
+        }
+
+        const r = await fetch(API, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'configurar_morador',
+                morador_id: id,
+                sessao_personalizada: personalizada,
+                timeout_total_min: totalMin,
+                timeout_inatividade_min: inatMin,
+            })
+        });
+        const d = await r.json();
+        showToast(d.mensagem, d.sucesso ? 'success' : 'error');
+        if (d.sucesso) { fecharModal(); carregarMoradores(paginaAtual); }
+    }
+
+    // ── Config Global ─────────────────────────────────────────────────────────
+    async function carregarConfigGlobal() {
+        try {
+            const r = await fetch(API + '?action=config_global', { credentials: 'include' });
+            const d = await r.json();
+            if (!d.sucesso) return;
+            const cfg = d.dados;
+            if (cfg.timeout_total_min)       document.getElementById('cfgTotalMin').value       = cfg.timeout_total_min.valor;
+            if (cfg.timeout_inatividade_min) document.getElementById('cfgInatividadeMin').value = cfg.timeout_inatividade_min.valor;
+            if (cfg.aviso_expiracao_min)     document.getElementById('cfgAvisoMin').value       = cfg.aviso_expiracao_min.valor;
+        } catch(e) { showToast('Erro ao carregar configurações: ' + e.message, 'error'); }
+    }
+
+    async function salvarConfigGlobal() {
+        const totalMin = parseInt(document.getElementById('cfgTotalMin').value);
+        const inatMin  = parseInt(document.getElementById('cfgInatividadeMin').value);
+        const avisoMin = parseInt(document.getElementById('cfgAvisoMin').value);
+
+        if (inatMin >= totalMin) {
+            showToast('O timeout de inatividade deve ser menor que o timeout total.', 'error');
+            return;
+        }
+
+        const r = await fetch(API, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'salvar_config_global',
+                timeout_total_min: totalMin,
+                timeout_inatividade_min: inatMin,
+                aviso_expiracao_min: avisoMin,
+            })
+        });
+        const d = await r.json();
+        showToast(d.mensagem, d.sucesso ? 'success' : 'error');
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function formatarData(str) {
+        if (!str) return '–';
+        const d = new Date(str.replace(' ', 'T'));
+        return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ── Busca com Enter ───────────────────────────────────────────────────────
+    document.getElementById('buscaMorador').addEventListener('keydown', e => {
+        if (e.key === 'Enter') carregarMoradores();
+    });
+
+    // ── Fechar modal ao clicar fora ───────────────────────────────────────────
+    document.getElementById('modalConfig').addEventListener('click', function(e) {
+        if (e.target === this) fecharModal();
+    });
+
+    // ── Inicialização ─────────────────────────────────────────────────────────
+    carregarSessoesAtivas();
+    // Auto-refresh das sessões ativas a cada 30s
+    setInterval(carregarSessoesAtivas, 30000);
+</script>
+</body>
+</html>

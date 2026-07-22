@@ -1,0 +1,1208 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#667eea">
+    <title>Console de Acesso</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="../manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="../ico/icon-192x192.png">
+    <link rel="apple-touch-icon" href="../ico/icon-192x192.png">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.6s ease;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .main-buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            animation: fadeInUp 0.6s ease 0.2s both;
+        }
+
+        .btn-main {
+            background: rgba(255, 255, 255, 0.95);
+            color: #667eea;
+            border: none;
+            padding: 2rem;
+            border-radius: 25px;
+            font-size: 1.3rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-main::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-main:hover::before {
+            left: 100%;
+        }
+
+        .btn-main i {
+            font-size: 3rem;
+        }
+
+        .btn-main:active {
+            transform: scale(0.95);
+        }
+
+        .btn-main.btn-qr {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: #fff;
+        }
+
+        .btn-main.btn-portaria {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: #fff;
+        }
+
+        .btn-main.btn-morador {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: #fff;
+        }
+
+        /* Scanner Container */
+        .scanner-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #000;
+            z-index: 1000;
+            flex-direction: column;
+        }
+
+        .scanner-container.active {
+            display: flex;
+        }
+
+        .scanner-header {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #fff;
+        }
+
+        .scanner-header h2 {
+            font-size: 1.2rem;
+        }
+
+        .btn-close-scanner {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .scanner-video-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #scanner-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scanner-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px;
+            height: 280px;
+            border: 3px solid #f5576c;
+            border-radius: 20px;
+            pointer-events: none;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        }
+
+        .scanner-overlay::before,
+        .scanner-overlay::after,
+        .scanner-overlay .corner-tl,
+        .scanner-overlay .corner-tr,
+        .scanner-overlay .corner-bl,
+        .scanner-overlay .corner-br {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 4px solid #f5576c;
+        }
+
+        .scanner-overlay::before {
+            top: -4px;
+            left: -4px;
+            border-right: none;
+            border-bottom: none;
+            border-top-left-radius: 20px;
+        }
+
+        .scanner-overlay::after {
+            top: -4px;
+            right: -4px;
+            border-left: none;
+            border-bottom: none;
+            border-top-right-radius: 20px;
+        }
+
+        .scanner-overlay .corner-bl {
+            bottom: -4px;
+            left: -4px;
+            border-right: none;
+            border-top: none;
+            border-bottom-left-radius: 20px;
+        }
+
+        .scanner-overlay .corner-br {
+            bottom: -4px;
+            right: -4px;
+            border-left: none;
+            border-top: none;
+            border-bottom-right-radius: 20px;
+        }
+
+        .scanner-instructions {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 1.5rem;
+            text-align: center;
+            color: #fff;
+        }
+
+        .scanner-instructions p {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Modal de Autenticação */
+        .auth-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .auth-modal.active {
+            display: flex;
+        }
+
+        .auth-content {
+            background: #fff;
+            border-radius: 25px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            color: #333;
+        }
+
+        .auth-icon {
+            font-size: 4rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .auth-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .auth-description {
+            font-size: 0.95rem;
+            color: #6c757d;
+            margin-bottom: 2rem;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            font-size: 1.2rem;
+            text-align: center;
+            font-weight: 700;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .auth-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-auth {
+            width: 100%;
+            padding: 1rem;
+            background: #667eea;
+            color: #fff;
+            border: none;
+            border-radius: 15px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .btn-auth:active {
+            transform: scale(0.95);
+        }
+
+        .auth-error {
+            display: none;
+            background: #fee;
+            color: #c33;
+            padding: 0.75rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .auth-error.active {
+            display: block;
+        }
+
+        /* Modal de Resultado */
+        .result-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .result-modal.active {
+            display: flex;
+        }
+
+        .result-content {
+            background: #fff;
+            border-radius: 25px;
+            padding: 2rem;
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+            color: #333;
+            animation: scaleIn 0.3s ease;
+        }
+
+        .result-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+        }
+
+        .result-icon.success {
+            color: #43e97b;
+        }
+
+        .result-icon.error {
+            color: #f5576c;
+        }
+
+        .result-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .result-info {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .result-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .result-info-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-info-label {
+            font-weight: 600;
+            color: #6c757d;
+        }
+
+        .result-info-value {
+            font-weight: 700;
+            color: #333;
+        }
+
+        .btn-close-result {
+            background: #667eea;
+            color: #fff;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 15px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .spinner {
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top: 5px solid #fff;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        .loading-text {
+            color: #fff;
+            font-size: 1.2rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .btn-main {
+                padding: 1.5rem;
+                font-size: 1.1rem;
+            }
+
+            .btn-main i {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-shield-alt"></i> Console de Acesso</h1>
+            <p>Serra da Liberdade</p>
+        </div>
+
+        <!-- Botµes Principais -->
+        <div class="main-buttons">
+            <button class="btn-main btn-qr" onclick="abrirScanner()">
+                <i class="fas fa-qrcode"></i>
+                <span>LER QR CODE</span>
+            </button>
+            <button class="btn-main" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: #fff;" onclick="abrirFaceID()">
+                <i class="fas fa-face-smile"></i>
+                <span>FACE ID</span>
+            </button>
+            <button class="btn-main btn-portaria" onclick="abrirPortaria()">
+                <i class="fas fa-door-open"></i>
+                <span>PORTARIA</span>
+            </button>
+            <button class="btn-main btn-morador" onclick="abrirMorador()">
+                <i class="fas fa-home"></i>
+                <span>MORADOR</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal de Autenticação -->
+    <div class="auth-modal" id="authModal">
+        <div class="auth-content">
+            <div class="auth-icon">
+                <i class="fas fa-lock"></i>
+            </div>
+            <div class="auth-title">Dispositivo Não Autorizado</div>
+            <div class="auth-description">
+                Digite o token de acesso para autorizar este dispositivo
+            </div>
+            <input 
+                type="text" 
+                class="auth-input" 
+                id="tokenInput" 
+                placeholder="A9F3K7L2Q8M4"
+                maxlength="12"
+                autocomplete="off"
+            >
+            <button class="btn-auth" onclick="validarToken()">
+                <i class="fas fa-check"></i> Validar Token
+            </button>
+            <div class="auth-error" id="authError"></div>
+        </div>
+    </div>
+
+    <!-- Scanner de QR Code -->
+    <div class="scanner-container" id="scannerContainer">
+        <div class="scanner-header">
+            <h2><i class="fas fa-qrcode"></i> Scanner de QR Code</h2>
+            <button class="btn-close-scanner" onclick="fecharScanner()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="scanner-video-container">
+            <video id="scanner-video" autoplay playsinline></video>
+            <div class="scanner-overlay">
+                <div class="corner-bl"></div>
+                <div class="corner-br"></div>
+            </div>
+        </div>
+        <div class="scanner-instructions">
+            <p><strong>Posicione o QR Code dentro do quadro</strong></p>
+            <p>A leitura será automática</p>
+        </div>
+    </div>
+
+    <!-- Modal de Resultado -->
+    <div class="result-modal" id="resultModal">
+        <div class="result-content">
+            <div class="result-icon" id="resultIcon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="result-title" id="resultTitle">Acesso Permitido</div>
+            <div class="result-info" id="resultInfo"></div>
+            <button class="btn-close-result" onclick="fecharResultado()">
+                Fechar
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">Processando...</div>
+    </div>
+
+    <!-- ZXing QR Code Scanner Library -->
+    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+
+    <script>
+        let codeReader = null;
+        let videoStream = null;
+        let scannerAtivo = false;
+        let validandoQRCode = false; // Anti-loop: bloqueia novas leituras durante validação
+        let dispositivoAutorizado = false;
+        let dispositivoId = null;
+        let dispositivoToken = null;
+        let dispositivoNome = null;
+
+        // Verificar autenticação ao carregar
+        window.addEventListener('load', () => {
+            // ========================================
+            // VALIDAO DE TOKEN DESABILITADA
+            // ========================================
+            // Para reativar a validação de token do dispositivo,
+            // descomente a linha abaixo:
+            // verificarAutenticacao();
+            
+            // ACESSO LIBERADO SEM VALIDAO (TEMPORRIO)
+            // Remove as linhas abaixo quando reativar a validação:
+            dispositivoAutorizado = true;
+            dispositivoId = 1;
+            dispositivoToken = 'ACESSO_LIVRE';
+            dispositivoNome = 'Console Portaria';
+            console.log('[AUTH] Acesso liberado sem validação de token (modo temporário)');
+            // ========================================
+            
+            registrarServiceWorker();
+        });
+
+        // Registrar Service Worker para PWA
+        function registrarServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('[PWA] Service Worker registrado:', registration);
+                    })
+                    .catch(error => {
+                        console.error('[PWA] Erro ao registrar Service Worker:', error);
+                    });
+            }
+        }
+
+        // Verificar se dispositivo está autorizado
+        function verificarAutenticacao() {
+            const tokenSalvo = localStorage.getItem('console_token');
+            const dispositivoIdSalvo = localStorage.getItem('console_dispositivo_id');
+            const dispositivoNomeSalvo = localStorage.getItem('console_dispositivo_nome');
+
+            if (tokenSalvo && dispositivoIdSalvo) {
+                // Validar token no servidor
+                fetch(`../api/api_dispositivos_console.php?action=validar_token&token=${tokenSalvo}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        dispositivoAutorizado = true;
+                        dispositivoId = data.dados.id;
+                        dispositivoToken = tokenSalvo;
+                        dispositivoNome = data.dados.nome_dispositivo || dispositivoNomeSalvo || 'Console';
+                        console.log('[AUTH] Dispositivo autorizado:', dispositivoNome);
+                    } else {
+                        mostrarModalAutenticacao();
+                    }
+                })
+                .catch(error => {
+                    console.error('[AUTH] Erro ao validar:', error);
+                    mostrarModalAutenticacao();
+                });
+            } else {
+                mostrarModalAutenticacao();
+            }
+        }
+
+        // Mostrar modal de autenticação
+        function mostrarModalAutenticacao() {
+            document.getElementById('authModal').classList.add('active');
+            document.getElementById('tokenInput').focus();
+        }
+
+        // Validar token digitado
+        function validarToken() {
+            const token = document.getElementById('tokenInput').value.trim().toUpperCase();
+            
+            if (!token) {
+                mostrarErroAuth('Digite o token de acesso');
+                return;
+            }
+
+            document.getElementById('loading').classList.add('active');
+
+            fetch(`../api/api_dispositivos_console.php?action=validar_token&token=${token}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').classList.remove('active');
+                
+                if (data.sucesso) {
+                    // Salvar token e ID do dispositivo
+                    localStorage.setItem('console_token', token);
+                    localStorage.setItem('console_dispositivo_id', data.dados.dispositivo_id);
+                    localStorage.setItem('console_dispositivo_nome', data.dados.nome_dispositivo || 'Console');
+                    
+                    dispositivoAutorizado = true;
+                    dispositivoId = data.dados.dispositivo_id;
+                    dispositivoToken = token;
+                    dispositivoNome = data.dados.nome_dispositivo || 'Console';
+                    
+                    // Fechar modal
+                    document.getElementById('authModal').classList.remove('active');
+                    document.getElementById('tokenInput').value = '';
+                    document.getElementById('authError').classList.remove('active');
+                    
+                    // Feedback visual
+                    playSound('success');
+                } else {
+                    mostrarErroAuth(data.mensagem);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').classList.remove('active');
+                console.error('[AUTH] Erro:', error);
+                mostrarErroAuth('Erro ao validar token');
+            });
+        }
+
+        // Mostrar erro de autenticação
+        function mostrarErroAuth(mensagem) {
+            const errorDiv = document.getElementById('authError');
+            errorDiv.textContent = mensagem;
+            errorDiv.classList.add('active');
+            playSound('error');
+        }
+
+        // Verificar se está autorizado antes de açµes
+        function verificarAutorizacao() {
+            // ========================================
+            // VALIDAO DESABILITADA
+            // ========================================
+            // Para reativar, descomente o bloco abaixo:
+            /*
+            if (!dispositivoAutorizado) {
+                mostrarModalAutenticacao();
+                return false;
+            }
+            */
+            // ========================================
+            return true;
+        }
+
+        // Abrir scanner
+        function abrirScanner() {
+            if (!verificarAutorizacao()) return;
+            
+            document.getElementById('scannerContainer').classList.add('active');
+            iniciarScanner();
+        }
+
+        // Fechar scanner
+        function fecharScanner() {
+            document.getElementById('scannerContainer').classList.remove('active');
+            pararScanner();
+        }
+
+        // Iniciar scanner (câmera frontal) - ZXing
+        async function iniciarScanner() {
+            if (scannerAtivo) return;
+
+            try {
+                console.log('[SCANNER] Iniciando ZXing...');
+                
+                // Criar instância do ZXing BrowserQRCodeReader
+                codeReader = new ZXing.BrowserQRCodeReader();
+                
+                // Obter dispositivos de vídeo
+                const videoInputDevices = await codeReader.listVideoInputDevices();
+                console.log('[SCANNER] Dispositivos encontrados:', videoInputDevices.length);
+                
+                // Selecionar câmera frontal (user) se disponível
+                let selectedDeviceId = videoInputDevices[0]?.deviceId;
+                
+                // Tentar encontrar câmera frontal
+                for (const device of videoInputDevices) {
+                    if (device.label.toLowerCase().includes('front') || 
+                        device.label.toLowerCase().includes('user')) {
+                        selectedDeviceId = device.deviceId;
+                        console.log('[SCANNER] Câmera frontal selecionada:', device.label);
+                        break;
+                    }
+                }
+                
+                // Iniciar decodificação contínua
+                codeReader.decodeFromVideoDevice(
+                    selectedDeviceId,
+                    'scanner-video',
+                    (result, err) => {
+                        if (result) {
+                            // ANTI-LOOP: Bloqueia novas leituras durante validação
+                            if (validandoQRCode) {
+                                console.log('[SCANNER] Validação em andamento, ignorando leitura');
+                                return;
+                            }
+                            
+                            console.log('[SCANNER] QR Code lido:', result.text);
+                            validandoQRCode = true;
+                            pararScanner();
+                            fecharScanner();
+                            validarQRCode(result.text);
+                        }
+                        
+                        if (err && !(err instanceof ZXing.NotFoundException)) {
+                            console.error('[SCANNER] Erro:', err);
+                        }
+                    }
+                );
+                
+                scannerAtivo = true;
+                console.log('[SCANNER] Scanner iniciado com sucesso');
+                
+            } catch (err) {
+                console.error('[SCANNER] Erro ao iniciar:', err);
+                alert('Erro ao acessar câmera. Verifique as permissµes.');
+                fecharScanner();
+            }
+        }
+
+        // Parar scanner - ZXing
+        function pararScanner() {
+            if (codeReader && scannerAtivo) {
+                try {
+                    codeReader.reset();
+                    scannerAtivo = false;
+                    console.log('[SCANNER] Scanner parado');
+                } catch (err) {
+                    console.error('[SCANNER] Erro ao parar:', err);
+                }
+            }
+        }
+
+        // Validar QR Code
+        function validarQRCode(qrCode) {
+            console.log('[VALIDACAO] Iniciando validação...');
+            
+            // Exibir "Validando..."
+            const loading = document.getElementById('loading');
+            loading.classList.add('active');
+            loading.textContent = '? Validando...';
+
+            fetch('../api/api_console_acesso.php?action=validar_qrcode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    qr_code: qrCode,
+                    dispositivo_token: dispositivoToken,
+                    console_usuario: dispositivoNome || 'Console'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('[VALIDACAO] Resposta:', data);
+                loading.classList.remove('active');
+                loading.textContent = 'Carregando...';
+                
+                // Liberar anti-loop após validação
+                validandoQRCode = false;
+                
+                mostrarResultado(data);
+            })
+            .catch(error => {
+                console.error('[VALIDACAO] Erro:', error);
+                loading.classList.remove('active');
+                loading.textContent = 'Carregando...';
+                
+                // Liberar anti-loop em caso de erro
+                validandoQRCode = false;
+                
+                mostrarResultado({
+                    sucesso: false,
+                    mensagem: 'Erro ao validar QR Code: ' + error.message
+                });
+            });
+        }
+
+        // Mostrar resultado
+        function mostrarResultado(data) {
+            const modal = document.getElementById('resultModal');
+            const icon = document.getElementById('resultIcon');
+            const title = document.getElementById('resultTitle');
+            const info = document.getElementById('resultInfo');
+
+            if (data.sucesso) {
+                icon.className = 'result-icon success';
+                icon.innerHTML = '<i class="fas fa-check-circle"></i>';
+                title.textContent = data.mensagem;
+                title.style.color = '#43e97b';
+
+                let infoHTML = '';
+                if (data.dados.visitante && data.dados.visitante.nome) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Visitante:</span><span class="result-info-value">${data.dados.visitante.nome}</span></div>`;
+                }
+                if (data.dados.visitante && data.dados.visitante.documento) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Documento:</span><span class="result-info-value">${data.dados.visitante.documento}</span></div>`;
+                }
+                if (data.dados.entregador) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Entregador:</span><span class="result-info-value">${data.dados.entregador}</span></div>`;
+                }
+                if (data.dados.empresa) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Empresa:</span><span class="result-info-value">${data.dados.empresa}</span></div>`;
+                }
+
+                if (data.dados.tipo_visitante) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Tipo:</span><span class="result-info-value">${data.dados.tipo_visitante}</span></div>`;
+                }
+                if (data.dados.morador) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Morador:</span><span class="result-info-value">${data.dados.morador}</span></div>`;
+                }
+                if (data.dados.unidade) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Unidade:</span><span class="result-info-value">${data.dados.unidade}</span></div>`;
+                }
+                if (data.dados.acesso && data.dados.acesso.tipo_acesso) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Tipo Acesso:</span><span class="result-info-value">${data.dados.acesso.tipo_acesso}</span></div>`;
+                }
+                if (data.dados.horario) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Horário:</span><span class="result-info-value">${data.dados.horario}</span></div>`;
+                }
+                if (data.dados.veiculo) {
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Veículo:</span><span class="result-info-value">${data.dados.veiculo}</span></div>`;
+                }
+                if (data.dados.acesso && data.dados.acesso.data_final) {
+                    const dataFinal = new Date(data.dados.acesso.data_final).toLocaleDateString('pt-BR');
+                    infoHTML += `<div class="result-info-item"><span class="result-info-label">Válido até:</span><span class="result-info-value">${dataFinal}</span></div>`;
+                }
+
+                info.innerHTML = infoHTML;
+                playSound('success');
+            } else {
+                icon.className = 'result-icon error';
+                icon.innerHTML = '<i class="fas fa-times-circle"></i>';
+                title.textContent = data.mensagem;
+                title.style.color = '#f5576c';
+                info.innerHTML = '<p style="text-align: center; color: #6c757d;">Acesso não autorizado</p>';
+                playSound('error');
+            }
+
+            modal.classList.add('active');
+        }
+
+        // Fechar resultado
+        function fecharResultado() {
+            document.getElementById('resultModal').classList.remove('active');
+        }
+
+        // Tocar som
+        function playSound(type) {
+            const context = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = context.createOscillator();
+            const gainNode = context.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(context.destination);
+
+            if (type === 'success') {
+                oscillator.frequency.value = 800;
+                gainNode.gain.setValueAtTime(0.3, context.currentTime);
+                oscillator.start(context.currentTime);
+                oscillator.stop(context.currentTime + 0.1);
+            } else {
+                oscillator.frequency.value = 200;
+                gainNode.gain.setValueAtTime(0.3, context.currentTime);
+                oscillator.start(context.currentTime);
+                oscillator.stop(context.currentTime + 0.3);
+            }
+        }
+
+        // Abrir portaria (redirecionar para visitantes)
+        function abrirPortaria() {
+            if (!verificarAutorizacao()) return;
+            window.location.href = 'layout-base.html?page=visitantes';
+        }
+
+        // Abrir morador
+        function abrirMorador() {
+            window.location.href = 'login_morador.html';
+        }
+
+        // Enter para validar token
+        document.getElementById('tokenInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                validarToken();
+            }
+        });
+    </script>
+    
+    <!-- Modal Face ID -->
+    <div id="faceIDModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 2000; flex-direction: column; align-items: center; justify-content: center;">
+        <div style="width: 100%; max-width: 500px; padding: 2rem;">
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h2 style="font-size: 2rem; margin-bottom: 0.5rem;"><i class="fas fa-face-smile"></i> Face ID</h2>
+                <p style="opacity: 0.8;">Posicione seu rosto na câmera</p>
+            </div>
+            
+            <div style="position: relative; width: 100%; max-width: 400px; margin: 0 auto;">
+                <video id="faceVideo" autoplay playsinline style="width: 100%; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);"></video>
+                <canvas id="faceCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+            </div>
+            
+            <div id="faceStatus" style="text-align: center; margin-top: 2rem; font-size: 1.2rem; font-weight: 600;">
+                <i class="fas fa-spinner fa-spin"></i> Carregando modelos...
+            </div>
+            
+            <button onclick="fecharFaceID()" style="width: 100%; margin-top: 2rem; background: rgba(255,255,255,0.1); color: #fff; border: 2px solid rgba(255,255,255,0.3); padding: 1rem; border-radius: 15px; font-size: 1.1rem; font-weight: 600; cursor: pointer;">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+    </div>
+    
+    <!-- Script Face ID -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.min.js"></script>
+    <script>
+        let faceModelsLoaded = false;
+        let faceStream = null;
+        let faceDetectionInterval = null;
+        
+        // Abrir Face ID
+        async function abrirFaceID() {
+            console.log('[FACE-ID] Abrindo Face ID...');
+            
+            document.getElementById('faceIDModal').style.display = 'flex';
+            document.getElementById('faceStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Carregando modelos...';
+            
+            try {
+                // Carregar modelos se necessário
+                if (!faceModelsLoaded) {
+                    await Promise.all([
+                        faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model'),
+                        faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model'),
+                        faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model')
+                    ]);
+                    faceModelsLoaded = true;
+                    console.log('[FACE-ID] Modelos carregados');
+                }
+                
+                // Iniciar câmera
+                const video = document.getElementById('faceVideo');
+                faceStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: 640, height: 480 }
+                });
+                video.srcObject = faceStream;
+                
+                document.getElementById('faceStatus').innerHTML = '<i class="fas fa-camera"></i> Posicione seu rosto...';
+                
+                // Aguardar vídeo carregar
+                await new Promise(resolve => {
+                    video.onloadedmetadata = resolve;
+                });
+                
+                // Iniciar detecção
+                iniciarDeteccaoFacial();
+                
+            } catch (error) {
+                console.error('[FACE-ID] Erro:', error);
+                document.getElementById('faceStatus').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro ao iniciar câmera';
+            }
+        }
+        
+        // Iniciar detecção facial
+        function iniciarDeteccaoFacial() {
+            const video = document.getElementById('faceVideo');
+            const canvas = document.getElementById('faceCanvas');
+            const displaySize = { width: video.width, height: video.height };
+            faceapi.matchDimensions(canvas, displaySize);
+            
+            let validandoFace = false;
+            
+            faceDetectionInterval = setInterval(async () => {
+                if (validandoFace) return;
+                
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceDescriptors();
+                
+                // Limpar canvas
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (detections.length > 0) {
+                    // Desenhar detecção
+                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                    faceapi.draw.drawDetections(canvas, resizedDetections);
+                    faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+                    
+                    // Validar face
+                    validandoFace = true;
+                    document.getElementById('faceStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validando...';
+                    
+                    const descriptor = detections[0].descriptor;
+                    await validarFaceComBanco(Array.from(descriptor));
+                    
+                    validandoFace = false;
+                } else {
+                    document.getElementById('faceStatus').innerHTML = '<i class="fas fa-camera"></i> Nenhum rosto detectado';
+                }
+            }, 1000);
+        }
+        
+        // Validar face com banco
+        async function validarFaceComBanco(descriptor) {
+            try {
+                const response = await fetch('../api/api_face_id.php?action=validar_face', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        descritor: descriptor,
+                        dispositivo_token: dispositivoToken
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.sucesso && result.dados.acesso_liberado) {
+                    // ACESSO LIBERADO
+                    clearInterval(faceDetectionInterval);
+                    document.getElementById('faceStatus').innerHTML = '<i class="fas fa-check-circle" style="color: #22c55e;"></i> ACESSO LIBERADO';
+                    
+                    // Exibir resultado
+                    setTimeout(() => {
+                        mostrarResultado({
+                            sucesso: true,
+                            visitante: result.dados.visitante_nome,
+                            veiculo: result.dados.veiculo || 'Não informado',
+                            unidade: result.dados.unidade_destino || 'Não informado',
+                            tipo: 'Face ID',
+                            similaridade: (result.dados.similaridade * 100).toFixed(1) + '%'
+                        });
+                        fecharFaceID();
+                    }, 2000);
+                } else {
+                    // ACESSO NEGADO
+                    document.getElementById('faceStatus').innerHTML = '<i class="fas fa-times-circle" style="color: #ef4444;"></i> Rosto não reconhecido';
+                    
+                    setTimeout(() => {
+                        document.getElementById('faceStatus').innerHTML = '<i class="fas fa-camera"></i> Posicione seu rosto...';
+                    }, 3000);
+                }
+            } catch (error) {
+                console.error('[FACE-ID] Erro na validação:', error);
+                document.getElementById('faceStatus').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro na validação';
+            }
+        }
+        
+        // Fechar Face ID
+        function fecharFaceID() {
+            console.log('[FACE-ID] Fechando Face ID...');
+            
+            // Parar detecção
+            if (faceDetectionInterval) {
+                clearInterval(faceDetectionInterval);
+                faceDetectionInterval = null;
+            }
+            
+            // Parar câmera
+            if (faceStream) {
+                faceStream.getTracks().forEach(track => track.stop());
+                faceStream = null;
+            }
+            
+            // Fechar modal
+            document.getElementById('faceIDModal').style.display = 'none';
+        }
+    </script>
+    
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+</body>
+</html>
+
+

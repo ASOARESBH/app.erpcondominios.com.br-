@@ -1,0 +1,904 @@
+<div id="page-metadata" data-title="Recursos Humanos" data-icon="fa-users-cog" style="display:none;"></div>
+
+<div class="page-wrapper page-recursos-humanos">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1><i class="fas fa-users-cog"></i> Recursos Humanos</h1>
+    <p>Gestão de colaboradores, registro de ponto, escalas e relatórios</p>
+  </div>
+
+  <!-- Abas principais -->
+  <div class="tabs-container">
+    <button class="tab-btn active" data-tab="colaboradores">
+      <i class="fas fa-id-badge"></i> Colaboradores
+    </button>
+    <button class="tab-btn" data-tab="ponto">
+      <i class="fas fa-clock"></i> Registro de Ponto
+    </button>
+    <button class="tab-btn" data-tab="escala">
+      <i class="fas fa-calendar-alt"></i> Escala
+    </button>
+    <button class="tab-btn" data-tab="relatorios">
+      <i class="fas fa-chart-bar"></i> Relatórios
+    </button>
+    <button class="tab-btn" data-tab="abono">
+      <i class="fas fa-shield-check"></i> Abono
+    </button>
+  </div>
+
+  <!-- ===================== ABA: COLABORADORES ===================== -->
+  <div id="tab-colaboradores" class="tab-content active">
+
+    <!-- Formulário -->
+    <div class="page-card" id="rh-form-card">
+      <div class="card-header-row">
+        <h2 id="rh-form-titulo"><i class="fas fa-plus-circle"></i> Novo Colaborador</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-secondary-modern" id="btnRhCancelar" type="button" style="display:none;">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+        </div>
+      </div>
+
+      <form id="formColaborador" autocomplete="off" enctype="multipart/form-data" method="post">
+        <input type="hidden" id="rh-id" value="">
+        <div id="rh-form-status" style="display:none;"></div>
+
+        <!-- Foto -->
+        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px;">
+          <div class="rh-foto-wrap">
+            <img id="rh-foto-preview" class="rh-foto-preview"
+                 src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110' viewBox='0 0 110 110'%3E%3Ccircle cx='55' cy='55' r='55' fill='%23e2e8f0'/%3E%3Ccircle cx='55' cy='42' r='18' fill='%2394a3b8'/%3E%3Cellipse cx='55' cy='85' rx='28' ry='20' fill='%2394a3b8'/%3E%3C/svg%3E"
+                 alt="Foto"
+                 onclick="document.getElementById('rh-foto-input').click()">
+            <input type="file" id="rh-foto-input" accept="image/*" style="display:none">
+            <button type="button" class="rh-foto-btn" onclick="document.getElementById('rh-foto-input').click()">
+              <i class="fas fa-camera"></i> Alterar foto
+            </button>
+          </div>
+
+          <div style="flex:1;min-width:260px;">
+            <!-- Dados pessoais -->
+            <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+              <div>
+                <label>Nome completo *</label>
+                <input type="text" id="rh-nome" placeholder="Nome completo" required>
+              </div>
+              <div>
+                <label>CPF *</label>
+                <input type="text" id="rh-cpf" placeholder="000.000.000-00" maxlength="14">
+              </div>
+              <div>
+                <label>RG</label>
+                <input type="text" id="rh-rg" placeholder="RG">
+              </div>
+              <div>
+                <label>Data de nascimento</label>
+                <input type="date" id="rh-data-nascimento">
+              </div>
+              <div>
+                <label>Sexo</label>
+                <select id="rh-sexo">
+                  <option value="">Selecione</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Feminino</option>
+                  <option value="O">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label>Estado civil</label>
+                <select id="rh-estado-civil">
+                  <option value="">Selecione</option>
+                  <option value="solteiro">Solteiro(a)</option>
+                  <option value="casado">Casado(a)</option>
+                  <option value="divorciado">Divorciado(a)</option>
+                  <option value="viuvo">Viúvo(a)</option>
+                  <option value="uniao_estavel">União estável</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dados profissionais -->
+        <div class="form-section-title" style="font-weight:600;font-size:13px;color:var(--text-secondary,#64748b);margin:12px 0 8px;border-top:1px solid var(--border-color,#e2e8f0);padding-top:12px;">
+          <i class="fas fa-briefcase"></i> Dados profissionais
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+          <div>
+            <label>Cargo</label>
+            <input type="text" id="rh-cargo" placeholder="Ex: Zelador">
+          </div>
+          <div>
+            <label>Departamento</label>
+            <input type="text" id="rh-departamento" placeholder="Ex: Manutenção">
+          </div>
+          <div>
+            <label>Tipo de contrato</label>
+            <select id="rh-tipo-contrato">
+              <option value="clt">CLT</option>
+              <option value="pj">PJ</option>
+              <option value="estagiario">Estagiário</option>
+              <option value="temporario">Temporário</option              <option value="afastamento">Afastamento</option>
+              <option value="horas_extras">Horas Extras</option>
+            </select>       </div>
+          <div>
+            <label>Data de admissão</label>
+            <input type="date" id="rh-data-admissao">
+          </div>
+          <div>
+            <label>Data de demissão</label>
+            <input type="date" id="rh-data-demissao">
+            <span id="rh-demissao-erro" style="display:none;color:#dc2626;font-size:11px;margin-top:4px;display:none;">
+              ⚠ Deve ser posterior à data de admissão.
+            </span>
+          </div>
+          <div>
+            <label>Salário</label>
+            <input type="number" id="rh-salario" placeholder="0,00" step="0.01" min="0">
+          </div>
+        </div>
+
+        <!-- Contato -->
+        <div class="form-section-title" style="font-weight:600;font-size:13px;color:var(--text-secondary,#64748b);margin:12px 0 8px;border-top:1px solid var(--border-color,#e2e8f0);padding-top:12px;">
+          <i class="fas fa-phone"></i> Contato
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+          <div>
+            <label>Telefone</label>
+            <input type="text" id="rh-telefone" placeholder="(00) 0000-0000">
+          </div>
+          <div>
+            <label>Celular</label>
+            <input type="text" id="rh-celular" placeholder="(00) 00000-0000">
+          </div>
+          <div>
+            <label>E-mail</label>
+            <input type="email" id="rh-email" placeholder="email@exemplo.com">
+          </div>
+        </div>
+
+        <!-- Endereço -->
+        <div class="form-section-title" style="font-weight:600;font-size:13px;color:var(--text-secondary,#64748b);margin:12px 0 8px;border-top:1px solid var(--border-color,#e2e8f0);padding-top:12px;">
+          <i class="fas fa-map-marker-alt"></i> Endereço
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));">
+          <div>
+            <label>CEP</label>
+            <input type="text" id="rh-cep" placeholder="00000-000" maxlength="9">
+          </div>
+          <div style="grid-column:span 2;">
+            <label>Logradouro</label>
+            <input type="text" id="rh-logradouro" placeholder="Rua, Av., Alameda...">
+          </div>
+          <div>
+            <label>Número</label>
+            <input type="text" id="rh-numero" placeholder="Nº">
+          </div>
+          <div>
+            <label>Complemento</label>
+            <input type="text" id="rh-complemento" placeholder="Apto, Bloco...">
+          </div>
+          <div>
+            <label>Bairro</label>
+            <input type="text" id="rh-bairro" placeholder="Bairro">
+          </div>
+          <div>
+            <label>Cidade</label>
+            <input type="text" id="rh-cidade" placeholder="Cidade">
+          </div>
+          <div>
+            <label>Estado</label>
+            <select id="rh-estado">
+              <option value="">UF</option>
+              <option>AC</option><option>AL</option><option>AP</option><option>AM</option>
+              <option>BA</option><option>CE</option><option>DF</option><option>ES</option>
+              <option>GO</option><option>MA</option><option>MT</option><option>MS</option>
+              <option>MG</option><option>PA</option><option>PB</option><option>PR</option>
+              <option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+              <option>RS</option><option>RO</option><option>RR</option><option>SC</option>
+              <option>SP</option><option>SE</option><option>TO</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Dados bancários -->
+        <div class="form-section-title" style="font-weight:600;font-size:13px;color:var(--text-secondary,#64748b);margin:12px 0 8px;border-top:1px solid var(--border-color,#e2e8f0);padding-top:12px;">
+          <i class="fas fa-university"></i> Dados bancários
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));">
+          <div>
+            <label>Banco</label>
+            <input type="text" id="rh-banco" placeholder="Nome do banco">
+          </div>
+          <div>
+            <label>Agência</label>
+            <input type="text" id="rh-agencia" placeholder="0000-0">
+          </div>
+          <div>
+            <label>Conta</label>
+            <input type="text" id="rh-conta" placeholder="00000-0">
+          </div>
+          <div>
+            <label>PIX</label>
+            <input type="text" id="rh-pix" placeholder="CPF, e-mail, telefone ou chave">
+          </div>
+        </div>
+
+        <!-- Observações -->
+        <div style="margin-top:12px;">
+          <label>Observações</label>
+          <textarea id="rh-observacoes" rows="3" placeholder="Informações adicionais..."></textarea>
+        </div>
+
+        <!-- Aviso de demissão — exibido ao preencher data de demissão válida -->
+        <div id="rh-demissao-aviso" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:8px;padding:16px 20px;margin-top:14px;">
+          <p style="font-weight:700;color:#991b1b;font-size:13px;margin-bottom:6px;">
+            <i class="fas fa-exclamation-triangle"></i> Atenção — Demissão do colaborador
+          </p>
+          <p style="color:#7f1d1d;font-size:12px;line-height:1.7;margin-bottom:12px;">
+            Ao continuar, o colaborador será marcado como <strong>Inativo</strong> e
+            <strong>não aparecerá mais nos relatórios</strong> a partir da data de demissão informada.<br>
+            Para reverter, edite o colaborador e remova a data de demissão.
+          </p>
+          <div style="display:flex;gap:8px;">
+            <button type="button" id="btnDemissaoConfirmar" style="background:#dc2626;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">
+              <i class="fas fa-check"></i> Entendi, confirmar demissão
+            </button>
+            <button type="button" id="btnDemissaoCancelar" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;">
+              <i class="fas fa-times"></i> Cancelar
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+          <button type="button" class="btn-secondary-modern" id="btnRhNovoColab">
+            <i class="fas fa-plus"></i> Novo
+          </button>
+          <button type="submit" class="btn-primary-modern" id="btnRhSalvar">
+            <i class="fas fa-save"></i> Salvar Colaborador
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Listagem -->
+    <div class="page-card">
+      <div class="card-header-row">
+        <h2><i class="fas fa-list"></i> Colaboradores cadastrados</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="rh-filtro-ativo" style="padding:7px 10px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:13px;background:var(--card-bg,#fff);">
+            <option value="1">Ativos</option>
+            <option value="0">Inativos</option>
+          </select>
+          <input type="text" id="rh-busca" placeholder="Buscar nome, cargo, CPF..." style="padding:7px 12px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:13px;min-width:220px;">
+          <button class="btn-primary-modern" id="btnRhBuscar">
+            <i class="fas fa-search"></i>
+          </button>
+        </div>
+      </div>
+      <div id="rh-lista-colaboradores">
+        <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ABA: REGISTRO DE PONTO ===================== -->
+  <div id="tab-ponto" class="tab-content">
+
+    <!-- Seletor de colaborador / período -->
+    <div class="page-card" id="ponto-seletor-card">
+      <div class="card-header-row">
+        <h2><i class="fas fa-clock"></i> Folha de Ponto</h2>
+      </div>
+
+      <!-- Seletor de tipo de período -->
+      <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;padding:12px 14px;background:#f0f4ff;border-radius:10px;border:1px solid #c7d7fd;">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600;color:#1e3a8a;font-size:14px;">
+          <input type="radio" name="ponto-tipo-periodo" id="ponto-tipo-mes" value="mes" checked
+            style="accent-color:#2563eb;width:17px;height:17px;">
+          <i class="fas fa-calendar-alt" style="color:#2563eb;"></i> Por Mês
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600;color:#7c3aed;font-size:14px;">
+          <input type="radio" name="ponto-tipo-periodo" id="ponto-tipo-personalizado" value="personalizado"
+            style="accent-color:#7c3aed;width:17px;height:17px;">
+          <i class="fas fa-calendar-week" style="color:#7c3aed;"></i> Período Personalizado
+        </label>
+        <span id="ponto-aviso-personalizado" style="display:none;font-size:12px;color:#dc2626;align-self:center;">
+          <i class="fas fa-exclamation-triangle"></i> Data início e fim são obrigatórias
+        </span>
+      </div>
+
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+        <div>
+          <label>Colaborador *</label>
+          <select id="ponto-colaborador-id">
+            <option value="">Selecione o colaborador</option>
+          </select>
+        </div>
+        <!-- Campos modo MÊS -->
+        <div id="ponto-campo-mes">
+          <label>Mês *</label>
+          <select id="ponto-mes">
+            <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+            <option value="3">Março</option><option value="4">Abril</option>
+            <option value="5">Maio</option><option value="6">Junho</option>
+            <option value="7">Julho</option><option value="8">Agosto</option>
+            <option value="9">Setembro</option><option value="10">Outubro</option>
+            <option value="11">Novembro</option><option value="12">Dezembro</option>
+          </select>
+        </div>
+        <div id="ponto-campo-ano">
+          <label>Ano *</label>
+          <input type="number" id="ponto-ano" min="2020" max="2099" value="">
+        </div>
+        <!-- Campos modo PERSONALIZADO (ocultos por padrão) -->
+        <div id="ponto-campo-data-inicio" style="display:none;">
+          <label>Data Início * <span style="color:#dc2626;font-size:11px;font-weight:700;">●</span></label>
+          <input type="date" id="ponto-data-inicio">
+        </div>
+        <div id="ponto-campo-data-fim" style="display:none;">
+          <label>Data Fim * <span style="color:#dc2626;font-size:11px;font-weight:700;">●</span></label>
+          <input type="date" id="ponto-data-fim">
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px;">
+          <button class="btn-primary-modern" id="btnPontoAbrir" style="flex:1;">
+            <i class="fas fa-folder-open"></i> Abrir Período
+          </button>
+          <button class="btn-secondary-modern" id="btnPontoCriar" title="Criar período se não existir">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Folha de ponto -->
+    <div id="ponto-folha-wrap" style="display:none;">
+      <div class="periodo-header">
+        <div style="flex:1;">
+          <div class="periodo-nome" id="ponto-header-nome">—</div>
+          <div class="periodo-meta" id="ponto-header-meta">—</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-secondary-modern" id="btnPontoRecalcular" title="Recalcula todos os lançamentos do período, incluindo turnos 12x36 que cruzam meia-noite">
+            <i class="fas fa-sync-alt"></i> Recalcular
+          </button>
+          <button class="btn-secondary-modern" id="btnPontoFechar">
+            <i class="fas fa-lock"></i> Fechar Período
+          </button>
+          <button class="btn-secondary-modern" id="btnPontoReabrir" style="display:none;">
+            <i class="fas fa-lock-open"></i> Reabrir
+          </button>
+          <button class="btn-secondary-modern" id="btnPontoVoltar">
+            <i class="fas fa-arrow-left"></i> Voltar
+          </button>
+        </div>
+      </div>
+
+      <!-- Totalizadores -->
+      <div class="ponto-totais" id="ponto-totais">
+        <div class="ponto-total-card">
+          <div class="valor" id="pt-trabalhadas">00:00</div>
+          <div class="label">Horas Trabalhadas</div>
+        </div>
+        <div class="ponto-total-card">
+          <div class="valor" id="pt-extras" style="color:#16a34a;">00:00</div>
+          <div class="label">Horas Extras</div>
+        </div>
+        <div class="ponto-total-card">
+          <div class="valor" id="pt-atraso" style="color:#dc2626;">00:00</div>
+          <div class="label">Atrasos</div>
+        </div>
+        <div class="ponto-total-card">
+          <div class="valor" id="pt-faltas">0</div>
+          <div class="label">Faltas</div>
+        </div>
+        <div class="ponto-total-card">
+          <div class="valor" id="pt-folgas">0</div>
+          <div class="label">Folgas</div>
+        </div>
+      </div>
+
+      <!-- Tabela de lançamentos -->
+      <div class="page-card" style="padding:0;">
+        <div class="ponto-table-wrap">
+          <table class="ponto-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Dia</th>
+                <th>Tipo</th>
+                <th>Entrada</th>
+                <th>Saída Almoço</th>
+                <th>Ret. Almoço</th>
+                <th>Saída</th>
+                <th>Trabalhado</th>
+                <th>Extra</th>
+                <th>Atraso</th>
+                <th>Obs</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="ponto-tbody">
+              <tr><td colspan="12" style="text-align:center;padding:20px;color:var(--text-secondary,#64748b);">Nenhum lançamento</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ABA: ESCALA ===================== -->
+  <div id="tab-escala" class="tab-content">
+
+    <!-- Seletor de colaborador -->
+    <div class="page-card">
+      <div class="card-header-row">
+        <h2><i class="fas fa-calendar-alt"></i> Escalas de Trabalho</h2>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="flex:1;min-width:200px;">
+          <label>Colaborador</label>
+          <select id="escala-colaborador-id">
+            <option value="">Selecione o colaborador</option>
+          </select>
+        </div>
+        <button class="btn-primary-modern" id="btnEscalaCarregar">
+          <i class="fas fa-search"></i> Ver Escalas
+        </button>
+        <button class="btn-secondary-modern" id="btnEscalaNova" style="display:none;">
+          <i class="fas fa-plus"></i> Nova Escala
+        </button>
+      </div>
+    </div>
+
+    <!-- Lista de escalas -->
+    <div id="escala-lista-wrap" style="display:none;">
+      <div id="escala-lista"></div>
+    </div>
+
+    <!-- Formulário de escala -->
+    <div class="page-card" id="escala-form-card" style="display:none;">
+      <div class="card-header-row">
+        <h2 id="escala-form-titulo"><i class="fas fa-plus-circle"></i> Nova Escala</h2>
+        <button class="btn-secondary-modern" id="btnEscalaCancelar">
+          <i class="fas fa-times"></i> Cancelar
+        </button>
+      </div>
+      <form id="formEscala" autocomplete="off">
+        <input type="hidden" id="escala-id" value="">
+        <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+          <div>
+            <label>Nome da escala</label>
+            <input type="text" id="escala-nome" placeholder="Ex: Escala Principal" value="Principal">
+          </div>
+          <div>
+            <label>Tipo de carga</label>
+            <select id="escala-tipo">
+              <option value="livre">Livre (sem controle)</option>
+              <option value="controle_jornada">Controle de Jornada (personalizado)</option>
+              <option value="escala_manual">Escala Manual (horário por dia da semana)</option>
+              <optgroup label="── Jornadas CLT padrão ──────────">
+                <option value="jornada_44h">Jornada 44h/semana — 220h mensais (CLT Art. 58)</option>
+                <option value="jornada_40h">Jornada 40h/semana — 200h mensais (administrativo)</option>
+                <option value="jornada_36h">Jornada 36h/semana — 180h mensais (turno 6h)</option>
+              </optgroup>
+              <option value="alternada">Escala Alternada (12x alternado)</option>
+            </select>
+          </div>
+          <div id="escala-carga-h-wrap">
+            <label>Carga diária (horas)</label>
+            <input type="number" id="escala-carga-h" min="1" max="24" value="8" step="any">
+          </div>
+          <div>
+            <label>Tolerância (min)</label>
+            <input type="number" id="escala-tolerancia" min="0" max="60" value="10">
+          </div>
+        </div>
+
+        <div id="escala-dias-section">
+        <div style="margin:12px 0 6px;font-size:13px;font-weight:600;color:var(--text-secondary,#64748b);">Dias de trabalho</div>
+        <div class="dias-semana-grid" id="escala-dias-grid">
+          <span class="dia-tag ativo" data-dia="seg">Seg</span>
+          <span class="dia-tag ativo" data-dia="ter">Ter</span>
+          <span class="dia-tag ativo" data-dia="qua">Qua</span>
+          <span class="dia-tag ativo" data-dia="qui">Qui</span>
+          <span class="dia-tag ativo" data-dia="sex">Sex</span>
+          <span class="dia-tag" data-dia="sab">Sáb</span>
+          <span class="dia-tag" data-dia="dom">Dom</span>
+        </div>
+        </div><!-- /escala-dias-section -->
+
+        <div id="escala-horarios-grid" class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-top:12px;">
+          <div>
+            <label>Entrada</label>
+            <input type="time" id="escala-entrada" value="08:00">
+          </div>
+          <div>
+            <label>Saída para almoço</label>
+            <input type="time" id="escala-almoco-saida" value="12:00">
+          </div>
+          <div>
+            <label>Retorno do almoço</label>
+            <input type="time" id="escala-almoco-retorno" value="13:00">
+          </div>
+          <div>
+            <label>Saída</label>
+            <input type="time" id="escala-saida" value="17:00">
+          </div>
+          <div>
+            <label>Intervalo almoço (min)</label>
+            <input type="number" id="escala-intervalo" value="60" min="0" max="180">
+          </div>
+        </div>
+
+        <!-- ── INFO CLT: jornadas padrão ── -->
+        <div id="escala-clt-info-bloco" style="display:none;margin-top:10px;padding:12px 14px;
+             background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;line-height:1.7;color:#78350f;">
+          <div style="font-weight:700;margin-bottom:4px;color:#92400e;">
+            <i class="fas fa-balance-scale"></i> <span id="escala-clt-info-titulo">—</span>
+          </div>
+          <div id="escala-clt-info-corpo"></div>
+        </div>
+
+        <!-- ── BLOCO REGIME 12x36 / DESCANSO (visível para alternada e controle_jornada) ── -->
+        <div id="escala-jornada-bloco" style="display:none;margin-top:12px;">
+          <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+            <div id="escala-12x36-wrap" style="display:none;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="escala-regime-12x36" style="width:16px;height:16px;">
+                <span>Regime 12x36</span>
+              </label>
+              <small style="color:#64748b;font-size:11px;">Habilita validação de 36h de descanso obrigatório entre jornadas</small>
+            </div>
+            <div id="escala-carga-mensal-wrap" style="display:none;">
+              <label>Carga mensal (horas)</label>
+              <input type="number" id="escala-carga-mensal-h" min="1" max="744" step="0.5" placeholder="Ex: 165">
+              <small style="color:#64748b;font-size:11px;">Calculado automaticamente pelos dias das Semanas A e B × carga diária</small>
+            </div>
+            <div>
+              <label>Descanso entre jornadas (horas)</label>
+              <input type="number" id="escala-descanso-h" min="0" max="72" step="0.5" placeholder="Ex: 11">
+              <small style="color:#64748b;font-size:11px;">Mínimo: 11h (CLT) | 12x36: 36h obrigatório</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── BLOCO BANCO DE HORAS (visível apenas para controle_jornada) ── -->
+        <div id="escala-banco-horas-bloco" style="display:none;margin-top:12px;padding:14px 16px;
+             background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;user-select:none;">
+            <input type="checkbox" id="escala-banco-horas-ativo"
+                   style="width:16px;height:16px;margin-top:2px;accent-color:#16a34a;flex-shrink:0;">
+            <div>
+              <div style="font-weight:700;font-size:13px;color:#15803d;">
+                <i class="fas fa-piggy-bank"></i> Habilitar Banco de Horas
+              </div>
+              <div style="font-size:11px;color:#166534;margin-top:3px;line-height:1.5;">
+                Horas extras são creditadas no banco (máx. 2h/dia — CLT Art. 59, §2°).
+                Atrasos e faltas geram débito automático.
+                Gerencie saldo, abatimentos e pagamentos em <strong>Relatórios → Banco de Horas</strong>.
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <!-- ── BLOCO ESCALA ALTERNADA (visível apenas quando tipo=alternada) ── -->
+        <div id="escala-alternada-bloco" style="display:none;margin-top:16px;padding:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;">
+          <div style="font-weight:700;font-size:13px;color:#0369a1;margin-bottom:12px;">
+            <i class="fas fa-exchange-alt"></i> Configuração da Escala Alternada
+          </div>
+          <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">
+            <div>
+              <label>Data de início da Semana A <span style="color:#dc2626">*</span></label>
+              <input type="date" id="escala-alt-inicio">
+              <small style="color:#64748b;font-size:11px;">Informe o primeiro dia de trabalho (ex: segunda-feira da 1ª semana)</small>
+            </div>
+            <div>
+              <label>Tipo de folga nos dias alternados</label>
+              <select id="escala-alt-tipo-folga">
+                <option value="folga">Folga</option>
+                <option value="falta">Falta</option>
+                <option value="feriado">Feriado</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#0369a1;margin-bottom:6px;">Semana A (1ª semana)</div>
+              <div class="dias-semana-grid" id="escala-alt-semana-a">
+                <span class="dia-tag ativo" data-dia="seg">Seg</span>
+                <span class="dia-tag" data-dia="ter">Ter</span>
+                <span class="dia-tag ativo" data-dia="qua">Qua</span>
+                <span class="dia-tag" data-dia="qui">Qui</span>
+                <span class="dia-tag ativo" data-dia="sex">Sex</span>
+                <span class="dia-tag" data-dia="sab">Sáb</span>
+                <span class="dia-tag ativo" data-dia="dom">Dom</span>
+              </div>
+              <small style="color:#64748b;font-size:11px;">Dias de trabalho na Semana A</small>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px;">Semana B (2ª semana)</div>
+              <div class="dias-semana-grid" id="escala-alt-semana-b">
+                <span class="dia-tag" data-dia="seg">Seg</span>
+                <span class="dia-tag ativo" data-dia="ter">Ter</span>
+                <span class="dia-tag" data-dia="qua">Qua</span>
+                <span class="dia-tag ativo" data-dia="qui">Qui</span>
+                <span class="dia-tag" data-dia="sex">Sex</span>
+                <span class="dia-tag ativo" data-dia="sab">Sáb</span>
+                <span class="dia-tag" data-dia="dom">Dom</span>
+              </div>
+              <small style="color:#64748b;font-size:11px;">Dias de trabalho na Semana B</small>
+            </div>
+          </div>
+
+          <!-- ── Preview 30 dias ──────────────────────────────────────────── -->
+          <div style="margin-top:14px;">
+            <div style="font-size:12px;font-weight:600;color:#0369a1;margin-bottom:8px;">
+              <i class="fas fa-calendar-alt"></i> Prévia dos próximos 30 dias
+              <span style="font-weight:400;color:#64748b;margin-left:6px;">— <span class="escala-alt-prev-legenda"><span class="escala-alt-prev-dot sem-a"></span> Semana A &nbsp;<span class="escala-alt-prev-dot sem-b"></span> Semana B &nbsp;<span class="escala-alt-prev-dot folga"></span> Folga</span></span>
+            </div>
+            <div id="escala-alt-preview-grid" class="escala-alt-preview-grid">
+              <span style="font-size:11px;color:#94a3b8;">Defina a data de início e os dias das semanas A e B para ver a prévia.</span>
+            </div>
+            <div id="escala-alt-preview-stats" style="font-size:11px;color:#475569;margin-top:6px;"></div>
+          </div>
+
+          <div id="escala-alt-info" style="margin-top:10px;padding:10px;background:#e0f2fe;border-radius:8px;font-size:12px;color:#0369a1;">
+            <i class="fas fa-info-circle"></i>
+            <strong>Como funciona:</strong> A cada 2 semanas o sistema alterna automaticamente entre Semana A e Semana B a partir da data de início. Defina os dias de trabalho de cada semana e a carga diária — a carga mensal é calculada automaticamente. Dias fora do padrão são marcados com o tipo de folga configurado.
+          </div>
+          <div id="escala-12x36-info" style="display:none;margin-top:10px;padding:10px;background:#fef3c7;border-radius:8px;font-size:12px;color:#92400e;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Regime 12x36 ativo:</strong> O sistema validará o descanso mínimo de 36h entre jornadas no Registro de Ponto.
+          </div>
+        </div>
+
+        <!-- ── BLOCO ESCALA MANUAL (visível apenas quando tipo=escala_manual) ── -->
+        <div id="escala-manual-bloco" style="display:none;margin-top:16px;padding:16px;background:#faf5ff;border:1px solid #d8b4fe;border-radius:10px;">
+          <div style="font-weight:700;font-size:13px;color:#6d28d9;margin-bottom:12px;">
+            <i class="fas fa-calendar-week"></i> Horário por Dia da Semana
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px;">
+              <thead>
+                <tr style="background:#ede9fe;color:#4c1d95;">
+                  <th style="padding:8px 10px;text-align:left;width:80px;">Dia</th>
+                  <th style="padding:8px 10px;text-align:center;width:50px;">Ativo</th>
+                  <th style="padding:8px 10px;">Entrada</th>
+                  <th style="padding:8px 10px;">Saída Almoço</th>
+                  <th style="padding:8px 10px;">Ret. Almoço</th>
+                  <th style="padding:8px 10px;">Saída</th>
+                  <th style="padding:8px 10px;width:80px;">Intervalo</th>
+                  <th style="padding:8px 10px;text-align:right;width:70px;">Carga</th>
+                </tr>
+              </thead>
+              <tbody id="escala-manual-tbody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px;padding:10px;background:#ede9fe;border-radius:8px;font-size:12px;color:#4c1d95;">
+            <i class="fas fa-info-circle"></i>
+            <strong>Escala Manual:</strong> Defina o horário esperado por dia. Quando vinculado ao banco de horas: trabalho além do esperado gera <strong>crédito</strong>; trabalho abaixo gera <strong>débito de horas faltantes</strong>. Dias inativos são marcados como folga automaticamente.
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+          <button type="submit" class="btn-primary-modern">
+            <i class="fas fa-save"></i> Salvar Escala
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== ABA: RELATÓRIOS ===================== -->
+  <div id="tab-relatorios" class="tab-content">
+
+    <!-- Filtros globais -->
+    <div class="page-card">
+      <div class="card-header-row">
+        <h2><i class="fas fa-filter"></i> Filtros do Relatório</h2>
+      </div>
+
+      <!-- Seletor de tipo de período -->
+      <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;padding:12px 14px;background:#f0f4ff;border-radius:10px;border:1px solid #c7d7fd;">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600;color:#1e3a8a;font-size:14px;">
+          <input type="radio" name="rel-tipo-periodo" id="rel-tipo-mes" value="mes" checked
+            style="accent-color:#2563eb;width:17px;height:17px;">
+          <i class="fas fa-calendar-alt" style="color:#2563eb;"></i> Por Mês
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600;color:#7c3aed;font-size:14px;">
+          <input type="radio" name="rel-tipo-periodo" id="rel-tipo-personalizado" value="personalizado"
+            style="accent-color:#7c3aed;width:17px;height:17px;">
+          <i class="fas fa-calendar-week" style="color:#7c3aed;"></i> Período Personalizado
+        </label>
+        <span id="rel-aviso-personalizado" style="display:none;font-size:12px;color:#dc2626;align-self:center;">
+          <i class="fas fa-exclamation-triangle"></i> Data início e fim são obrigatórias
+        </span>
+      </div>
+
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));">
+        <!-- Campos modo MÊS -->
+        <div id="rel-campo-mes">
+          <label>Mês</label>
+          <select id="rel-mes">
+            <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+            <option value="3">Março</option><option value="4">Abril</option>
+            <option value="5">Maio</option><option value="6">Junho</option>
+            <option value="7">Julho</option><option value="8">Agosto</option>
+            <option value="9">Setembro</option><option value="10">Outubro</option>
+            <option value="11">Novembro</option><option value="12">Dezembro</option>
+          </select>
+        </div>
+        <div id="rel-campo-ano">
+          <label>Ano</label>
+          <input type="number" id="rel-ano" min="2020" max="2099" value="">
+        </div>
+        <!-- Campos modo PERSONALIZADO (ocultos por padrão) -->
+        <div id="rel-campo-data-inicio" style="display:none;">
+          <label>Data Início * <span style="color:#dc2626;font-size:11px;font-weight:700;">●</span></label>
+          <input type="date" id="rel-data-inicio">
+        </div>
+        <div id="rel-campo-data-fim" style="display:none;">
+          <label>Data Fim * <span style="color:#dc2626;font-size:11px;font-weight:700;">●</span></label>
+          <input type="date" id="rel-data-fim">
+        </div>
+        <!-- Filtros comuns -->
+        <div>
+          <label>Departamento</label>
+          <select id="rel-departamento">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div>
+          <label>Colaborador (espelho / banco)</label>
+          <select id="rel-colaborador-id">
+            <option value="">Selecione para espelho</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botões de relatórios -->
+    <div class="relatorio-grid">
+      <div class="relatorio-btn-card" onclick="window.ModuleRH.gerarRelatorio('totais_horas')">
+        <i class="fas fa-file-invoice"></i>
+        <span>Totais de Horas<br><small style="font-weight:400;font-size:11px;">Para contabilidade</small></span>
+      </div>
+      <div class="relatorio-btn-card" onclick="window.ModuleRH.gerarRelatorio('espelho_ponto')">
+        <i class="fas fa-file-alt"></i>
+        <span>Espelho de Ponto<br><small style="font-weight:400;font-size:11px;">Por colaborador</small></span>
+      </div>
+      <div class="relatorio-btn-card" onclick="window.ModuleRH.gerarRelatorio('faltas')">
+        <i class="fas fa-user-times"></i>
+        <span>Faltas e<br>Afastamentos</span>
+      </div>
+      <div class="relatorio-btn-card" onclick="window.ModuleRH.gerarRelatorio('horas_extras')">
+        <i class="fas fa-business-time"></i>
+        <span>Horas Extras</span>
+      </div>
+      <div class="relatorio-btn-card" onclick="window.ModuleRH.gerarRelatorio('atrasos')">
+        <i class="fas fa-hourglass-half"></i>
+        <span>Atrasos</span>
+      </div>
+      <div class="relatorio-btn-card" onclick="window.ModuleRH.gerarRelatorio('banco_horas')">
+        <i class="fas fa-piggy-bank"></i>
+        <span>Banco de Horas</span>
+      </div>
+      <div class="relatorio-btn-card" onclick="window.ModuleRH.gerarRelatorio('aniversariantes')">
+        <i class="fas fa-birthday-cake"></i>
+        <span>Aniversariantes</span>
+      </div>
+    </div>
+
+    <!-- Resultado do relatório -->
+    <div id="relatorio-resultado" class="relatorio-resultado" style="display:none;">
+      <div class="relatorio-titulo" id="relatorio-titulo">—</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <button class="btn-secondary-modern" id="btnRelExportarCSV" onclick="window.ModuleRH.exportarRelatorioCSV()">
+          <i class="fas fa-file-csv"></i> Exportar CSV
+        </button>
+        <button class="btn-primary-modern" id="btnRelGerarPDF" onclick="window.ModuleRH.gerarRelatorioPDF()"
+          style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
+          <i class="fas fa-file-pdf"></i> Gerar PDF
+        </button>
+      </div>
+      <div id="relatorio-conteudo"></div>
+    </div>
+
+    <!-- Painel: Registrar Abatimento / Pagamento de Banco de Horas -->
+    <div id="bh-registrar-painel" class="page-card" style="margin-top:18px;display:none;border:1px solid #c7d7fd;">
+      <h3 style="font-size:14px;font-weight:700;color:#1e3a8a;margin-bottom:14px;">
+        <i class="fas fa-piggy-bank"></i> Registrar Abatimento / Pagamento
+      </h3>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;font-weight:600;color:#64748b;">Tipo</label>
+          <select id="bh-reg-tipo" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;">
+            <option value="abatimento">Abatimento (folga compensatória)</option>
+            <option value="pagamento">Pagamento (monetário)</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;font-weight:600;color:#64748b;">Minutos</label>
+          <input type="number" id="bh-reg-minutos" min="1" placeholder="ex: 120"
+            style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:100px;">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;font-weight:600;color:#64748b;">Data</label>
+          <input type="date" id="bh-reg-data"
+            style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px;">
+          <label style="font-size:11px;font-weight:600;color:#64748b;">Descrição</label>
+          <input type="text" id="bh-reg-descricao" placeholder="ex: Compensação — dia 15/06"
+            style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:100%;">
+        </div>
+        <button onclick="window.ModuleRH.registrarBH()"
+          style="padding:8px 18px;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;
+                 border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+          <i class="fas fa-plus"></i> Registrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ABA: ABONO ===================== -->
+  <div id="tab-abono" class="tab-content">
+    <div class="page-card">
+      <h2 style="font-size:16px;font-weight:700;color:#1e3a8a;margin-bottom:20px;">
+        <i class="fas fa-shield-check"></i> Gestão de Abonos
+      </h2>
+
+      <!-- Filtros -->
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px;
+                  padding:16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;font-weight:600;color:#64748b;">Colaborador</label>
+          <select id="abono-colaborador-id"
+            style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;min-width:220px;">
+            <option value="">Selecione o colaborador</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;font-weight:600;color:#64748b;">Mês</label>
+          <select id="abono-mes" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;">
+            <option value="1">Janeiro</option>
+            <option value="2">Fevereiro</option>
+            <option value="3">Março</option>
+            <option value="4">Abril</option>
+            <option value="5">Maio</option>
+            <option value="6">Junho</option>
+            <option value="7">Julho</option>
+            <option value="8">Agosto</option>
+            <option value="9">Setembro</option>
+            <option value="10">Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;font-weight:600;color:#64748b;">Ano</label>
+          <input type="number" id="abono-ano" value="2026" min="2020" max="2099"
+            style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:90px;">
+        </div>
+        <button id="btnAbonoCarregar"
+          style="padding:8px 18px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;
+                 border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+          <i class="fas fa-search"></i> Carregar
+        </button>
+      </div>
+
+      <!-- Resultado -->
+      <div id="abono-lista">
+        <div style="text-align:center;padding:40px;color:#94a3b8;">
+          <i class="fas fa-hand-holding-heart" style="font-size:32px;margin-bottom:12px;display:block;"></i>
+          Selecione um colaborador e período para visualizar os lançamentos.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,420 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log de E-mails - Sistema</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; }
+        .container { display: flex; min-height: 100vh; }
+        .sidebar { position: fixed; top: 0; left: 0; width: 260px; height: 100vh; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 2rem 0; overflow-y: auto; z-index: 1000; transition: transform 0.3s; }
+        .sidebar h1 { color: #fff; font-size: 1.3rem; text-align: center; margin-bottom: 2rem; }
+        .nav-menu { list-style: none; padding: 1rem; }
+        .nav-item { margin-bottom: 0.5rem; }
+        .nav-link { display: flex; align-items: center; padding: 0.75rem 1rem; color: #cbd5e1; text-decoration: none; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .nav-link i { margin-right: 0.75rem; width: 20px; }
+        .menu-toggle { display: none; position: fixed; top: 1rem; left: 1rem; z-index: 1001; background: #1e293b; color: #fff; border: none; padding: 0.75rem; border-radius: 8px; cursor: pointer; }
+        .main-content { margin-left: 260px; padding: 2rem; width: 100%; transition: margin-left 0.3s; }
+        .header { background: #fff; padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .config-submenu { background: #fff; padding: 1rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .config-submenu ul { list-style: none; display: flex; gap: 1rem; flex-wrap: wrap; }
+        .config-submenu a { display: inline-block; padding: 0.75rem 1.5rem; background: #f1f5f9; color: #334155; text-decoration: none; border-radius: 8px; transition: 0.2s; }
+        .config-submenu a:hover, .config-submenu a.active { background: #3b82f6; color: #fff; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .stat-card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .stat-icon { width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 1rem; }
+        .stat-value { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .stat-label { color: #64748b; font-size: 0.9rem; }
+        .section { background: #fff; padding: 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .section h2 { margin-bottom: 1.5rem; color: #1e293b; }
+        .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .filter-group { }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: #334155; font-size: 0.9rem; }
+        input, select { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        button { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 0.6rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; margin-right: 0.5rem; }
+        button:hover { opacity: 0.9; }
+        .btn-secondary { background: linear-gradient(135deg, #64748b, #475569); }
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; font-weight: 600; color: #334155; }
+        tr:hover { background: #f8fafc; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.85rem; font-weight: 500; }
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-error { background: #fee2e2; color: #991b1b; }
+        .badge-pending { background: #fef3c7; color: #92400e; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+        .empty-state { text-align: center; padding: 3rem; color: #94a3b8; }
+        .empty-state i { font-size: 4rem; margin-bottom: 1rem; opacity: 0.3; }
+        .pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1.5rem; }
+        .pagination button { padding: 0.5rem 1rem; }
+        .pagination button.active { background: linear-gradient(135deg, #22c55e, #16a34a); }
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.active { transform: translateX(0); }
+            .menu-toggle { display: block; }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .filters { grid-template-columns: 1fr; }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <h1>Serra da Liberdade</h1>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+                <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i> Visitantes</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro Manual</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de Acesso</a></li>
+                <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i> Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link active"><i class="fas fa-cog"></i> Configuraçµes</a></li>
+                <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i> Administrativo</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-list"></i> Log de E-mails</h1>
+            </header>
+
+            <nav class="config-submenu">
+                <ul>
+                    <li><a href="configuracao.html"><i class="fas fa-arrow-left"></i> Voltar</a></li>
+                    <li><a href="layout-base.html?page=email_alertas"><i class="fas fa-envelope"></i> E-mail</a></li>
+                    <li><a href="config_email_template.html"><i class="fas fa-file-alt"></i> Templates</a></li>
+                    <li><a href="config_email_log.html" class="active"><i class="fas fa-list"></i> Log de E-mails</a></li>
+                </ul>
+            </nav>
+
+            <!-- Estatísticas -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #dcfce7; color: #166534;">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-value" id="statEnviados">0</div>
+                    <div class="stat-label">E-mails Enviados</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #fee2e2; color: #991b1b;">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                    <div class="stat-value" id="statErros">0</div>
+                    <div class="stat-label">Erros de Envio</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #fef3c7; color: #92400e;">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-value" id="statPendentes">0</div>
+                    <div class="stat-label">Pendentes</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #dbeafe; color: #1e40af;">
+                        <i class="fas fa-percentage"></i>
+                    </div>
+                    <div class="stat-value" id="statTaxa">0%</div>
+                    <div class="stat-label">Taxa de Sucesso</div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="section">
+                <h2><i class="fas fa-filter"></i> Filtros</h2>
+                
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="filtroStatus">Status</label>
+                        <select id="filtroStatus">
+                            <option value="">Todos</option>
+                            <option value="enviado">Enviado</option>
+                            <option value="erro">Erro</option>
+                            <option value="pendente">Pendente</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="filtroTipo">Tipo</label>
+                        <select id="filtroTipo">
+                            <option value="">Todos</option>
+                            <option value="recuperacao_senha">Recuperação de Senha</option>
+                            <option value="boas_vindas">Boas-vindas</option>
+                            <option value="notificacao">Notificação</option>
+                            <option value="outro">Outro</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="filtroDataInicio">Data Início</label>
+                        <input type="date" id="filtroDataInicio">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="filtroDataFim">Data Fim</label>
+                        <input type="date" id="filtroDataFim">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <button onclick="aplicarFiltros()"><i class="fas fa-search"></i> Filtrar</button>
+                    <button class="btn-secondary" onclick="limparFiltros()"><i class="fas fa-times"></i> Limpar</button>
+                    <button class="btn-secondary" onclick="exportarCSV()"><i class="fas fa-download"></i> Exportar CSV</button>
+                </div>
+            </div>
+
+            <!-- Tabela de Logs -->
+            <div class="section">
+                <h2><i class="fas fa-table"></i> Registros de E-mails</h2>
+                
+                <div class="table-container">
+                    <table id="tabelaLogs">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Data/Hora</th>
+                                <th>Destinatário</th>
+                                <th>Assunto</th>
+                                <th>Tipo</th>
+                                <th>Status</th>
+                                <th>Erro</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpoTabela">
+                            <!-- Logs serão carregados aqui -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="emptyState" class="empty-state" style="display: none;">
+                    <i class="fas fa-inbox"></i>
+                    <p>Nenhum registro encontrado</p>
+                </div>
+                
+                <div class="pagination" id="pagination"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let logs = [];
+        let paginaAtual = 1;
+        const itensPorPagina = 20;
+        
+        // Carregar logs ao abrir a página
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarLogs();
+            carregarEstatisticas();
+        });
+
+        // Carregar logs
+        function carregarLogs() {
+            const status = document.getElementById('filtroStatus').value;
+            const tipo = document.getElementById('filtroTipo').value;
+            const dataInicio = document.getElementById('filtroDataInicio').value;
+            const dataFim = document.getElementById('filtroDataFim').value;
+            
+            let url = 'api_email_log.php?acao=listar';
+            if (status) url += '&status=' + status;
+            if (tipo) url += '&tipo=' + tipo;
+            if (dataInicio) url += '&data_inicio=' + dataInicio;
+            if (dataFim) url += '&data_fim=' + dataFim;
+            
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        logs = data.dados || [];
+                        renderizarTabela();
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        // Carregar estatísticas
+        function carregarEstatisticas() {
+            fetch('../api/api_email_log.php?acao=estatisticas')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.sucesso && data.dados) {
+                        document.getElementById('statEnviados').textContent = data.dados.enviados || 0;
+                        document.getElementById('statErros').textContent = data.dados.erros || 0;
+                        document.getElementById('statPendentes').textContent = data.dados.pendentes || 0;
+                        document.getElementById('statTaxa').textContent = data.dados.taxa_sucesso || '0%';
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        // Renderizar tabela
+        function renderizarTabela() {
+            const tbody = document.getElementById('corpoTabela');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (logs.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.style.display = 'block';
+                document.getElementById('pagination').innerHTML = '';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            const inicio = (paginaAtual - 1) * itensPorPagina;
+            const fim = inicio + itensPorPagina;
+            const logsP = logs.slice(inicio, fim);
+            
+            tbody.innerHTML = logsP.map(log => `
+                <tr>
+                    <td>${log.id}</td>
+                    <td>${formatarData(log.data_envio)}</td>
+                    <td>${log.destinatario}</td>
+                    <td>${log.assunto}</td>
+                    <td><span class="badge badge-info">${getTipoLabel(log.tipo)}</span></td>
+                    <td><span class="badge ${getStatusClass(log.status)}">${getStatusLabel(log.status)}</span></td>
+                    <td>${log.mensagem_erro || '-'}</td>
+                </tr>
+            `).join('');
+            
+            renderizarPaginacao();
+        }
+
+        // Renderizar paginação
+        function renderizarPaginacao() {
+            const totalPaginas = Math.ceil(logs.length / itensPorPagina);
+            const container = document.getElementById('pagination');
+            
+            if (totalPaginas <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            for (let i = 1; i <= totalPaginas; i++) {
+                html += `<button class="${i === paginaAtual ? 'active' : ''}" onclick="irParaPagina(${i})">${i}</button>`;
+            }
+            
+            container.innerHTML = html;
+        }
+
+        // Ir para página
+        function irParaPagina(pagina) {
+            paginaAtual = pagina;
+            renderizarTabela();
+        }
+
+        // Aplicar filtros
+        function aplicarFiltros() {
+            paginaAtual = 1;
+            carregarLogs();
+            carregarEstatisticas();
+        }
+
+        // Limpar filtros
+        function limparFiltros() {
+            document.getElementById('filtroStatus').value = '';
+            document.getElementById('filtroTipo').value = '';
+            document.getElementById('filtroDataInicio').value = '';
+            document.getElementById('filtroDataFim').value = '';
+            aplicarFiltros();
+        }
+
+        // Exportar CSV
+        function exportarCSV() {
+            if (logs.length === 0) {
+                alert('Nenhum registro para exportar');
+                return;
+            }
+            
+            let csv = 'ID,Data/Hora,Destinatário,Assunto,Tipo,Status,Erro\n';
+            
+            logs.forEach(log => {
+                csv += `${log.id},"${formatarData(log.data_envio)}","${log.destinatario}","${log.assunto}","${getTipoLabel(log.tipo)}","${getStatusLabel(log.status)}","${log.mensagem_erro || ''}"\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'log_emails_' + new Date().toISOString().split('T')[0] + '.csv';
+            a.click();
+        }
+
+        // Funçµes auxiliares
+        function formatarData(data) {
+            if (!data) return '-';
+            const d = new Date(data);
+            return d.toLocaleString('pt-BR');
+        }
+
+        function getTipoLabel(tipo) {
+            const tipos = {
+                'recuperacao_senha': 'Recuperação',
+                'boas_vindas': 'Boas-vindas',
+                'notificacao': 'Notificação',
+                'outro': 'Outro'
+            };
+            return tipos[tipo] || tipo;
+        }
+
+        function getStatusLabel(status) {
+            const labels = {
+                'enviado': 'Enviado',
+                'erro': 'Erro',
+                'pendente': 'Pendente'
+            };
+            return labels[status] || status;
+        }
+
+        function getStatusClass(status) {
+            const classes = {
+                'enviado': 'badge-success',
+                'erro': 'badge-error',
+                'pendente': 'badge-pending'
+            };
+            return classes[status] || 'badge-info';
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    </script>
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+</html>
+
+
+
+
+

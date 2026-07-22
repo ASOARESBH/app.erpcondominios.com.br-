@@ -1,0 +1,680 @@
+/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES ONLY - RECURSOS HUMANOS
+|--------------------------------------------------------------------------
+| Allowed:
+|   - Internal layouts, tabs, page-specific grids
+| Forbidden:
+|   - Redefining .page-wrapper, .page-header, .page-card, .sidebar
+|--------------------------------------------------------------------------
+*/
+
+/* ============================================================
+   ABAS — Crítico: ocultar conteúdo inativo
+   ============================================================ */
+.page-recursos-humanos .tab-content {
+    display: none;
+}
+
+.page-recursos-humanos .tab-content.active {
+    display: block;
+    animation: rhFadeIn 0.3s ease;
+}
+
+@keyframes rhFadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-recursos-humanos .tabs-container {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+
+.page-recursos-humanos .tab-btn {
+    padding: 1rem 1.5rem;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 6px 6px 0 0;
+}
+
+.page-recursos-humanos .tab-btn i { font-size: 15px; }
+
+.page-recursos-humanos .tab-btn:hover {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.page-recursos-humanos .tab-btn.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    background: #eff6ff;
+    font-weight: 700;
+}
+
+/* ============================================================
+   FORMULÁRIO — Labels, inputs, selects, textareas
+   ============================================================ */
+.page-recursos-humanos label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 6px;
+}
+
+.page-recursos-humanos input:not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="time"]),
+.page-recursos-humanos select,
+.page-recursos-humanos textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #1e293b;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.page-recursos-humanos input:not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="time"]):focus,
+.page-recursos-humanos select:focus,
+.page-recursos-humanos textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.page-recursos-humanos .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+/* Header de seção dentro de cards */
+.page-recursos-humanos .card-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.page-recursos-humanos .card-header-row h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ============================================================
+   BOTÕES
+   ============================================================ */
+.page-recursos-humanos .btn-primary-modern {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.page-recursos-humanos .btn-primary-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.3);
+    filter: brightness(1.1);
+}
+
+.page-recursos-humanos .btn-primary-modern:active { transform: translateY(0); }
+
+.page-recursos-humanos .btn-primary-modern:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.page-recursos-humanos .btn-secondary-modern {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #475569;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s ease;
+}
+
+.page-recursos-humanos .btn-secondary-modern:hover { background: #f1f5f9; }
+
+/* ============================================================
+   BOTÕES DE AÇÃO (ícone)
+   ============================================================ */
+.page-recursos-humanos .action-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-right: 4px;
+    text-decoration: none;
+}
+
+.page-recursos-humanos .action-btn i { font-size: 13px; }
+
+.page-recursos-humanos .action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,.06);
+}
+
+.page-recursos-humanos .action-btn.edit:hover  { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.page-recursos-humanos .action-btn.delete:hover { background: #fef2f2; color: #ef4444; border-color: #fecaca; }
+
+/* ============================================================
+   TABELA DE PONTO
+   ============================================================ */
+.ponto-table-wrap { overflow-x: auto; }
+
+.ponto-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.ponto-table thead {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+}
+
+.ponto-table th {
+    color: #fff;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 12px 8px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.ponto-table td {
+    padding: 8px 6px;
+    text-align: center;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    color: #334155;
+}
+
+.ponto-table tbody tr { transition: background 0.2s ease; }
+.ponto-table tbody tr:hover td { background: rgba(37, 99, 235, 0.04); }
+.ponto-table tbody tr:last-child td { border-bottom: none; }
+
+.ponto-table input[type="time"] {
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 78px;
+    background: #fff;
+    color: #1e293b;
+    text-align: center;
+}
+
+.ponto-table input[type="time"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+}
+
+.ponto-table select {
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    padding: 4px 6px;
+    font-size: 12px;
+    background: #fff;
+    color: #1e293b;
+    max-width: 120px;
+}
+
+.ponto-table .dia-semana { font-weight: 600; color: #64748b; font-size: 11px; }
+.ponto-table .dia-folga  td { background: #eff6ff; }
+.ponto-table .dia-falta  td { background: #fff1f2; }
+.ponto-table .dia-feriado td { background: #fef9c3; }
+/* Horas Extras: fundo verde claro para destacar dias extras */
+.ponto-table .dia-horas-extras td { background: #dcfce7; }
+.ponto-table .dia-horas-extras td select { background: #dcfce7; border-color: #86efac; }
+.ponto-table .horas-extra  { color: #16a34a; font-weight: 600; }
+.ponto-table .horas-atraso { color: #dc2626; font-weight: 600; }
+.badge-d1 {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: #7c3aed;
+    border-radius: 4px;
+    vertical-align: middle;
+    letter-spacing: 0.5px;
+    cursor: default;
+}
+
+/* ============================================================
+   TOTAIS DE PONTO
+   ============================================================ */
+.ponto-totais {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 0;
+}
+
+.ponto-total-card {
+    flex: 1;
+    min-width: 130px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-align: center;
+}
+
+.ponto-total-card .valor {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.ponto-total-card .label {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+/* Período header */
+.periodo-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: #f8fafc;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    border: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+
+.periodo-header .periodo-nome {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.periodo-header .periodo-meta {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.status-aberto  { color: #ea580c; font-weight: 600; }
+.status-fechado { color: #16a34a; font-weight: 600; }
+
+/* ============================================================
+   FOTO DO COLABORADOR
+   ============================================================ */
+.rh-foto-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.rh-foto-preview {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #e2e8f0;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.rh-foto-preview:hover { border-color: #2563eb; }
+
+.rh-foto-btn {
+    font-size: 12px;
+    padding: 5px 14px;
+    cursor: pointer;
+    color: #2563eb;
+    border: 1px solid #2563eb;
+    border-radius: 6px;
+    background: transparent;
+    font-weight: 600;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.rh-foto-btn:hover {
+    background: #2563eb;
+    color: #fff;
+}
+
+/* ============================================================
+   CARD DE COLABORADOR NA LISTAGEM
+   ============================================================ */
+.rh-colab-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    margin-bottom: 8px;
+    transition: box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.rh-colab-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+
+.rh-colab-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e2e8f0;
+    flex-shrink: 0;
+    background: #f0f4f8;
+}
+
+.rh-colab-info { flex: 1; min-width: 0; }
+
+.rh-colab-nome {
+    font-weight: 600;
+    font-size: 14px;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rh-colab-sub {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+/* Badges */
+.rh-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.rh-badge-ativo   { background: #dcfce7; color: #166534; }
+.rh-badge-inativo { background: #fee2e2; color: #991b1b; }
+
+/* ============================================================
+   ESCALA
+   ============================================================ */
+.escala-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px;
+    background: #fff;
+    margin-bottom: 12px;
+    transition: box-shadow 0.2s ease;
+}
+
+.escala-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+
+.escala-card .escala-tipo {
+    display: inline-block;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.escala-tipo-livre              { background: #e0f2fe; color: #0369a1; }
+.escala-tipo-controle_jornada   { background: #fce7f3; color: #be185d; }
+.escala-tipo-alternada          { background: #ede9fe; color: #6d28d9; }
+.escala-tipo-jornada_44h        { background: #fef9c3; color: #854d0e; }
+.escala-tipo-jornada_40h        { background: #dcfce7; color: #166534; }
+.escala-tipo-jornada_36h        { background: #fff7ed; color: #9a3412; }
+
+.escala-horarios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.escala-horarios span {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    padding: 3px 8px;
+}
+
+.dias-semana-grid {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+}
+
+.dia-tag {
+    width: 36px;
+    text-align: center;
+    padding: 4px 0;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 2px solid #e2e8f0;
+    background: #fff;
+    color: #64748b;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+.dia-tag.ativo {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+/* ============================================================
+   RELATÓRIOS
+   ============================================================ */
+.relatorio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.relatorio-btn-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    text-decoration: none;
+    color: inherit;
+}
+
+.relatorio-btn-card:hover {
+    box-shadow: 0 4px 14px rgba(0,0,0,.1);
+    border-color: #2563eb;
+}
+
+.relatorio-btn-card i {
+    font-size: 28px;
+    color: #2563eb;
+}
+
+.relatorio-btn-card span {
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    color: #1e293b;
+}
+
+.relatorio-resultado {
+    margin-top: 20px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 20px;
+}
+
+.relatorio-resultado .relatorio-titulo {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    color: #1e293b;
+}
+
+/* Tabela de resultado de relatório */
+.page-recursos-humanos .table-container {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.page-recursos-humanos .table-container table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.page-recursos-humanos .table-container thead {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+}
+
+.page-recursos-humanos .table-container th {
+    color: #fff;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 13px 16px;
+    text-align: left;
+}
+
+.page-recursos-humanos .table-container td {
+    padding: 13px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    font-size: 14px;
+}
+
+.page-recursos-humanos .table-container tbody tr { transition: background 0.2s ease; }
+.page-recursos-humanos .table-container tbody tr:hover { background: rgba(37, 99, 235, 0.04); }
+.page-recursos-humanos .table-container tbody tr:last-child td { border-bottom: none; }
+
+/* ============================================================
+   ESTADO VAZIO / CARREGANDO
+   ============================================================ */
+.page-recursos-humanos .rh-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #94a3b8;
+}
+
+.page-recursos-humanos .rh-empty i {
+    font-size: 36px;
+    display: block;
+    margin-bottom: 12px;
+}
+
+/* ============================================================
+   PREVIEW ESCALA ALTERNADA — calendário 30 dias
+   ============================================================ */
+.escala-alt-preview-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+.escala-alt-prev-dia {
+    width: 34px;
+    height: 36px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    cursor: default;
+    transition: transform .1s;
+}
+.escala-alt-prev-dia:hover { transform: scale(1.12); z-index: 1; position: relative; }
+.escala-alt-prev-dia .prev-dd { font-size: 11px; font-weight: 700; line-height: 1; }
+.escala-alt-prev-dia .prev-sig { font-size: 9px; font-weight: 500; line-height: 1; opacity: .8; }
+.escala-alt-prev-dia.trabalho.sem-a { background: #dcfce7; color: #15803d; border: 1.5px solid #86efac; }
+.escala-alt-prev-dia.trabalho.sem-b { background: #ede9fe; color: #6d28d9; border: 1.5px solid #c4b5fd; }
+.escala-alt-prev-dia.folga { background: #f1f5f9; color: #94a3b8; border: 1.5px solid #e2e8f0; }
+.escala-alt-prev-legenda { display: inline-flex; align-items: center; gap: 4px; }
+.escala-alt-prev-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+}
+.escala-alt-prev-dot.sem-a { background: #dcfce7; border: 1px solid #86efac; }
+.escala-alt-prev-dot.sem-b { background: #ede9fe; border: 1px solid #c4b5fd; }
+.escala-alt-prev-dot.folga { background: #f1f5f9; border: 1px solid #e2e8f0; }
+
+/* ============================================================
+   RESPONSIVO
+   ============================================================ */
+@media (max-width: 768px) {
+    .page-recursos-humanos .form-grid { grid-template-columns: 1fr; }
+    .ponto-table input[type="time"] { width: 70px; font-size: 11px; }
+    .relatorio-grid { grid-template-columns: repeat(2, 1fr); }
+    .ponto-totais > * { min-width: 100px; }
+    .page-recursos-humanos .tabs-container { gap: 0; }
+    .page-recursos-humanos .tab-btn { padding: 0.75rem 1rem; font-size: 0.8rem; }
+}

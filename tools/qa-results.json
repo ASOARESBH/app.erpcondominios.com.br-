@@ -1,0 +1,262 @@
+{
+  "timestamp": "2026-02-07T03:22:10.119Z",
+  "results": [
+    {
+      "page": "/TEST_FASE6_QA.html",
+      "url": "http://localhost/dashboard/asl.erpcondominios.com.br/frontend/TEST_FASE6_QA.html",
+      "checks": [
+        {
+          "name": "coreLoaded",
+          "ok": false,
+          "details": {
+            "hasInstance": false,
+            "hasClass": false,
+            "scriptSrc": null
+          }
+        },
+        {
+          "name": "localStorage",
+          "ok": true,
+          "details": {
+            "present": false
+          }
+        },
+        {
+          "name": "offlineDetect",
+          "ok": true
+        },
+        {
+          "name": "logoutClick",
+          "ok": "not_found"
+        },
+        {
+          "name": "consoleErrors",
+          "ok": true,
+          "errors": [
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar produtos: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar produtos: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar acessos: JSHandle@error",
+            "Erro ao verificar autenticação: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+          ]
+        },
+        {
+          "name": "scriptAvailable",
+          "ok": true,
+          "details": {
+            "httpStatus": 200,
+            "existsOnDisk": true,
+            "diskPath": "c:\\xampp\\htdocs\\dashboard\\asl.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
+          }
+        }
+      ],
+      "status": "ok"
+    },
+    {
+      "page": "/dashboard.html",
+      "url": "http://localhost/dashboard/asl.erpcondominios.com.br/frontend/dashboard.html",
+      "checks": [
+        {
+          "name": "coreLoaded",
+          "ok": false,
+          "details": {
+            "hasInstance": false,
+            "hasClass": false,
+            "scriptSrc": null
+          }
+        },
+        {
+          "name": "localStorage",
+          "ok": true,
+          "details": {
+            "present": false
+          }
+        },
+        {
+          "name": "offlineDetect",
+          "ok": true
+        },
+        {
+          "name": "logoutClick",
+          "ok": "not_found"
+        },
+        {
+          "name": "consoleErrors",
+          "ok": true,
+          "errors": [
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar produtos: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar produtos: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar acessos: JSHandle@error",
+            "Erro ao verificar autenticação: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+          ]
+        },
+        {
+          "name": "scriptAvailable",
+          "ok": true,
+          "details": {
+            "httpStatus": 200,
+            "existsOnDisk": true,
+            "diskPath": "c:\\xampp\\htdocs\\dashboard\\asl.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
+          }
+        }
+      ],
+      "status": "ok"
+    },
+    {
+      "page": "/estoque.html",
+      "url": "http://localhost/dashboard/asl.erpcondominios.com.br/frontend/estoque.html",
+      "checks": [
+        {
+          "name": "coreLoaded",
+          "ok": false,
+          "details": {
+            "hasInstance": false,
+            "hasClass": false,
+            "scriptSrc": null
+          }
+        },
+        {
+          "name": "localStorage",
+          "ok": true,
+          "details": {
+            "present": false
+          }
+        },
+        {
+          "name": "offlineDetect",
+          "ok": true
+        },
+        {
+          "name": "logoutClick",
+          "ok": "not_found"
+        },
+        {
+          "name": "consoleErrors",
+          "ok": true,
+          "errors": [
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar produtos: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar acessos: JSHandle@error",
+            "Erro ao verificar autenticação: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+          ]
+        },
+        {
+          "name": "scriptAvailable",
+          "ok": true,
+          "details": {
+            "httpStatus": 200,
+            "existsOnDisk": true,
+            "diskPath": "c:\\xampp\\htdocs\\dashboard\\asl.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
+          }
+        }
+      ],
+      "status": "ok"
+    },
+    {
+      "page": "/acesso.html",
+      "url": "http://localhost/dashboard/asl.erpcondominios.com.br/frontend/acesso.html",
+      "checks": [
+        {
+          "name": "coreLoaded",
+          "ok": false,
+          "details": {
+            "hasInstance": false,
+            "hasClass": false,
+            "scriptSrc": null
+          }
+        },
+        {
+          "name": "localStorage",
+          "ok": true,
+          "details": {
+            "present": false
+          }
+        },
+        {
+          "name": "offlineDetect",
+          "ok": true
+        },
+        {
+          "name": "logoutClick",
+          "ok": "not_found"
+        },
+        {
+          "name": "consoleErrors",
+          "ok": true,
+          "errors": [
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "Erro ao carregar acessos: JSHandle@error",
+            "Erro ao verificar autenticação: JSHandle@error",
+            "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+          ]
+        },
+        {
+          "name": "scriptAvailable",
+          "ok": true,
+          "details": {
+            "httpStatus": 200,
+            "existsOnDisk": true,
+            "diskPath": "c:\\xampp\\htdocs\\dashboard\\asl.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
+          }
+        }
+      ],
+      "status": "ok"
+    }
+  ]
+}

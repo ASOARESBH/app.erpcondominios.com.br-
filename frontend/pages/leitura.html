@@ -1,0 +1,364 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Leituras de Hidrômetros" data-icon="fa-tachometer-alt" style="display:none;"></div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-hidrometro">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1>Leituras de Hidrômetros</h1>
+        <p>Registro de leituras individuais, coletivas e configuração do período de lançamento</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="individual">
+            <i class="fas fa-user"></i> Individual
+        </button>
+        <button class="tab-button" data-tab="coletiva">
+            <i class="fas fa-users"></i> Coletiva
+        </button>
+        <button class="tab-button" data-tab="historico">
+            <i class="fas fa-list-alt"></i> Histórico
+        </button>
+        <button class="tab-button" data-tab="configuracoes">
+            <i class="fas fa-cog"></i> Configurações
+        </button>
+    </div>
+
+    <!-- ===================== TAB: INDIVIDUAL ===================== -->
+    <div id="tab-individual" class="tab-content active">
+        <div class="page-card">
+            <h2><i class="fas fa-user" style="color:#2563eb;margin-right:8px;"></i>Leitura Individual</h2>
+
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <span>Selecione a <strong>unidade → morador → hidrômetro</strong> para registrar a leitura.</span>
+            </div>
+
+            <form id="formIndividual">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="ind_unidade">Unidade *</label>
+                        <select id="ind_unidade" required>
+                            <option value="">Selecione uma unidade...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ind_morador">Morador *</label>
+                        <select id="ind_morador" required disabled>
+                            <option value="">Primeiro selecione a unidade</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ind_hidrometro">Hidrômetro *</label>
+                        <select id="ind_hidrometro" required disabled>
+                            <option value="">Primeiro selecione o morador</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ind_data_leitura">Data e Hora da Leitura *</label>
+                        <input type="datetime-local" id="ind_data_leitura" required>
+                    </div>
+                </div>
+
+                <!-- Info do hidrômetro selecionado -->
+                <div class="info-box" id="ind_info_hidrometro" style="display:none;">
+                    <h4><i class="fas fa-tint"></i> Hidrômetro Selecionado</h4>
+                    <div class="info-box-grid">
+                        <div class="info-item">
+                            <label>Nº Hidrômetro</label>
+                            <span id="info_numero">—</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Nº Lacre</label>
+                            <span id="info_lacre">—</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Leitura Anterior</label>
+                            <span id="info_leitura_anterior">—</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Data Anterior</label>
+                            <span id="info_data_anterior">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="ind_leitura_anterior">Leitura Anterior (m³)</label>
+                        <input type="number" id="ind_leitura_anterior" step="0.01" readonly
+                            placeholder="Carregado automaticamente">
+                        <span class="form-hint">Preenchido automaticamente ao selecionar o hidrômetro.</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="ind_leitura_atual">Leitura Atual (m³) *</label>
+                        <input type="number" id="ind_leitura_atual" step="0.01" min="0" required
+                            placeholder="Ex: 125.50" oninput="window.LeituraPage.calcularPreview()">
+                    </div>
+                    <div class="form-group">
+                        <label for="ind_observacao">Observação</label>
+                        <input type="text" id="ind_observacao" placeholder="Opcional">
+                    </div>
+                </div>
+
+                <!-- Preview do cálculo -->
+                <div class="calc-preview" id="ind_calculo">
+                    <h4><i class="fas fa-calculator"></i> Cálculo Estimado</h4>
+                    <div class="calc-grid">
+                        <div class="calc-item">
+                            <label>Consumo</label>
+                            <span id="calc_consumo">—</span>
+                        </div>
+                        <div class="calc-item">
+                            <label>Valor Estimado</label>
+                            <span id="calc_valor">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-actions">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Registrar Leitura
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="window.LeituraPage.limparIndividual()">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: COLETIVA ===================== -->
+    <div id="tab-coletiva" class="tab-content">
+        <div class="page-card">
+            <h2><i class="fas fa-users" style="color:#2563eb;margin-right:8px;"></i>Leitura Coletiva</h2>
+
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Informe a <strong>data da leitura</strong> e preencha os valores para os hidrômetros selecionados.</span>
+            </div>
+
+            <div class="form-grid" style="margin-bottom:1.25rem;">
+                <div class="form-group">
+                    <label for="col_data_leitura">Data e Hora da Leitura *</label>
+                    <input type="datetime-local" id="col_data_leitura" required>
+                </div>
+                <div class="form-group" style="justify-content:flex-end;">
+                    <label>&nbsp;</label>
+                    <button class="btn-secondary" onclick="window.LeituraPage.carregarColetiva()">
+                        <i class="fas fa-sync"></i> Atualizar Lista
+                    </button>
+                </div>
+            </div>
+
+            <div class="loading-state" id="loadingColetiva" style="display:none;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Carregando hidrômetros ativos...</p>
+            </div>
+
+            <div class="table-container coletiva-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAll" onchange="window.LeituraPage.selecionarTodos()"></th>
+                            <th>Unidade</th>
+                            <th>Morador</th>
+                            <th>Nº Hidrômetro</th>
+                            <th>Leit. Anterior (m³)</th>
+                            <th>Leit. Atual (m³)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaColetiva">
+                        <tr class="empty-row">
+                            <td colspan="6">
+                                <i class="fas fa-sync"></i>
+                                <p>Clique em "Atualizar Lista" para carregar os hidrômetros</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            <div class="pagination" id="paginacaoColetiva" style="display:none;">
+                <button class="btn-secondary" onclick="window.LeituraPage.mudarPagina(-1)" id="btnAnterior">
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </button>
+                <span id="infoPagina">Página 1 de 1</span>
+                <button class="btn-secondary" onclick="window.LeituraPage.mudarPagina(1)" id="btnProximo">
+                    Próximo <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+
+            <div class="btn-actions" style="margin-top:1.25rem;">
+                <button class="btn-success" onclick="window.LeituraPage.lancarSelecionados()">
+                    <i class="fas fa-check-circle"></i> Lançar Selecionados
+                </button>
+                <button class="btn-secondary" onclick="window.LeituraPage.limparSelecao()">
+                    <i class="fas fa-times"></i> Limpar Seleção
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: HISTÓRICO ===================== -->
+    <div id="tab-historico" class="tab-content">
+        <div class="page-card compact">
+            <div class="search-box">
+                <div class="form-group">
+                    <label for="hist_data_inicial">Data Inicial</label>
+                    <input type="date" id="hist_data_inicial">
+                </div>
+                <div class="form-group">
+                    <label for="hist_data_final">Data Final</label>
+                    <input type="date" id="hist_data_final">
+                </div>
+                <div class="form-group">
+                    <label for="hist_unidade">Unidade</label>
+                    <select id="hist_unidade">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="form-group" style="justify-content:flex-end;">
+                    <label>&nbsp;</label>
+                    <button class="btn-primary" onclick="window.LeituraPage.buscarHistorico()">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs do histórico -->
+        <div class="stats-grid" id="kpiHistorico" style="display:none;">
+            <div class="page-card kpi-card compact">
+                <div class="kpi-icon blue"><i class="fas fa-list"></i></div>
+                <div class="kpi-content">
+                    <h3>Total Leituras</h3>
+                    <div class="value" id="hist_kpi_total">—</div>
+                </div>
+            </div>
+            <div class="page-card kpi-card compact">
+                <div class="kpi-icon green"><i class="fas fa-tachometer-alt"></i></div>
+                <div class="kpi-content">
+                    <h3>Consumo Total</h3>
+                    <div class="value" id="hist_kpi_consumo">—</div>
+                </div>
+            </div>
+            <div class="page-card kpi-card compact">
+                <div class="kpi-icon amber"><i class="fas fa-dollar-sign"></i></div>
+                <div class="kpi-content">
+                    <h3>Valor Total</h3>
+                    <div class="value" id="hist_kpi_valor">—</div>
+                </div>
+            </div>
+            <div class="page-card kpi-card compact">
+                <div class="kpi-icon purple"><i class="fas fa-chart-bar"></i></div>
+                <div class="kpi-content">
+                    <h3>Consumo Médio</h3>
+                    <div class="value" id="hist_kpi_media">—</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-card">
+            <h2><i class="fas fa-list-alt" style="color:#2563eb;margin-right:8px;"></i>Histórico de Leituras</h2>
+
+            <div class="loading-state" id="loadingHistorico" style="display:none;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Carregando leituras...</p>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Unidade</th>
+                            <th>Morador</th>
+                            <th>Nº Hidrômetro</th>
+                            <th>Leit. Ant. (m³)</th>
+                            <th>Leit. Atual (m³)</th>
+                            <th>Consumo (m³)</th>
+                            <th>Valor (R$)</th>
+                            <th>Lançado por</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaHistorico">
+                        <tr class="empty-row">
+                            <td colspan="9">
+                                <i class="fas fa-search"></i>
+                                <p>Use os filtros acima para buscar leituras</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: CONFIGURAÇÕES ===================== -->
+    <div id="tab-configuracoes" class="tab-content">
+        <div class="page-card">
+            <h2><i class="fas fa-cog" style="color:#2563eb;margin-right:8px;"></i>Período de Leitura</h2>
+
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <span>Configure o período em que os moradores poderão lançar suas próprias leituras pelo portal.</span>
+            </div>
+
+            <form id="formConfigPeriodo">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="config_dia_inicio">Dia Inicial do Período *</label>
+                        <input type="number" id="config_dia_inicio" min="1" max="31" required>
+                        <span class="form-hint">Ex: 1 (primeiro dia do mês)</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="config_dia_fim">Dia Final do Período *</label>
+                        <input type="number" id="config_dia_fim" min="1" max="31" required>
+                        <span class="form-hint">Ex: 10 (décimo dia do mês)</span>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:1.25rem;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;">
+                        <input type="checkbox" id="config_morador_pode" style="width:18px;height:18px;accent-color:#2563eb;">
+                        Permitir que moradores lancem suas próprias leituras
+                    </label>
+                </div>
+
+                <!-- Status atual do período -->
+                <div class="info-box" id="config_status_box" style="display:none;">
+                    <h4><i class="fas fa-calendar-check"></i> Status do Período Atual</h4>
+                    <div class="info-box-grid">
+                        <div class="info-item">
+                            <label>Dia Atual</label>
+                            <span id="config_dia_atual">—</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Período Configurado</label>
+                            <span id="config_periodo_atual">—</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Status</label>
+                            <span id="config_status">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-actions">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Salvar Configuração
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="window.LeituraPage.carregarConfigPeriodo()">
+                        <i class="fas fa-sync"></i> Atualizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

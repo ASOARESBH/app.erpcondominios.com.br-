@@ -1,0 +1,796 @@
+/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES ONLY - MORADORES
+|--------------------------------------------------------------------------
+| Allowed:
+| - Internal layouts
+| - Tabs
+| - Page-specific grids
+|
+| Forbidden:
+| - Redefining .page-wrapper
+| - Redefining .page-header
+| - Redefining .page-card
+| - Redefining .sidebar
+| - Redefining .main-content
+|--------------------------------------------------------------------------
+*/
+
+/* ============================================
+   MORADORES PAGE - Specific Styles
+   Scoped to .page-moradores to avoid global pollution
+   ============================================ */
+
+/* Page Header Adjustments */
+.page-moradores .page-header {
+    margin-bottom: 30px;
+}
+
+/* Tabs Navigation Modernization */
+.page-moradores .tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.page-moradores .tab-button {
+    padding: 1rem 2rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    color: #64748b;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-moradores .tab-button i {
+    font-size: 16px;
+}
+
+.page-moradores .tab-button:hover {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.page-moradores .tab-button.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+}
+
+/* Tab Content */
+.page-moradores .tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.page-moradores .tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Form Modernization */
+.page-moradores .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.page-moradores label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 8px;
+}
+
+.page-moradores input,
+.page-moradores select {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #1e293b;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.page-moradores input:focus,
+.page-moradores select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+/* Submit Buttons */
+.page-moradores .btn-primary-modern {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.page-moradores .btn-primary-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.3);
+    filter: brightness(1.1);
+}
+
+.page-moradores .btn-primary-modern:active {
+    transform: translateY(0);
+}
+
+/* Search Box Modernization */
+.page-moradores .search-box {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 25px;
+    background: #f1f5f9;
+    padding: 15px;
+    border-radius: 12px;
+}
+
+.page-moradores .search-box input {
+    flex: 1;
+    background: #fff;
+}
+
+/* Professional Table Pattern */
+.page-moradores .table-container {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.page-moradores table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.page-moradores thead {
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+}
+
+.page-moradores th {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 15px 20px;
+    text-align: left;
+}
+
+.page-moradores td {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    font-size: 14px;
+}
+
+.page-moradores tbody tr {
+    transition: background 0.2s ease;
+}
+
+.page-moradores tbody tr:hover {
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.page-moradores tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Badges */
+.page-moradores .status-badge {
+    display: inline-flex;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.page-moradores .status-badge.active {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.page-moradores .status-badge.inactive {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* Action Buttons */
+.page-moradores .action-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-right: 6px;
+    text-decoration: none;
+}
+
+.page-moradores .action-btn i {
+    font-size: 14px;
+}
+
+.page-moradores .action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.page-moradores .action-btn.edit:hover {
+    background: #eff6ff;
+    color: #2563eb;
+    border-color: #bfdbfe;
+}
+
+.page-moradores .action-btn.delete:hover {
+    background: #fef2f2;
+    color: #ef4444;
+    border-color: #fecaca;
+}
+
+.page-moradores .action-btn.block:hover {
+    background: #f8fafc;
+    color: #1e293b;
+    border-color: #cbd5e1;
+}
+
+/* Loading State Refinement */
+.page-moradores .loading {
+    padding: 30px;
+    text-align: center;
+    color: #3b82f6;
+}
+
+.page-moradores .loading i {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+/* ══════════════════════════════════════════════════════
+   ABA RELATÓRIOS — Estilos específicos
+   ══════════════════════════════════════════════════════ */
+
+/* KPI Grid */
+.page-moradores .rel-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.page-moradores .rel-kpi-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+    transition: box-shadow .2s;
+}
+
+.page-moradores .rel-kpi-card:hover {
+    box-shadow: 0 4px 16px rgba(37,99,235,.1);
+}
+
+.page-moradores .rel-kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.page-moradores .rel-kpi-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.page-moradores .rel-kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+
+.page-moradores .rel-kpi-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1;
+}
+
+/* Badge Unidade */
+.page-moradores .rel-badge-unidade {
+    display: inline-block;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Badge Contagem */
+.page-moradores .rel-badge-count {
+    display: inline-block;
+    background: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 28px;
+    text-align: center;
+}
+
+/* Badge OK / Faltando */
+.page-moradores .rel-badge-ok {
+    color: #166534;
+}
+
+.page-moradores .rel-badge-miss {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* Select no search-box */
+.page-moradores .search-box select {
+    flex: 0 0 auto;
+    background: #fff;
+    min-width: 160px;
+}
+
+/* Responsividade KPI */
+@media (max-width: 640px) {
+    .page-moradores .rel-kpi-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .page-moradores .rel-kpi-value {
+        font-size: 1.4rem;
+    }
+}
+
+/* ============================================================
+   PAGINAÇÃO — Navegação no rodapé da lista de moradores
+   ============================================================ */
+.page-moradores .paginacao-moradores {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 4px 4px;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 8px;
+}
+
+/* Contador "1–25 de 80" */
+.page-moradores .pag-info {
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Grupo de botões */
+.page-moradores .pag-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+/* Botão individual */
+.page-moradores .pag-btn {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    background: #fff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    line-height: 1;
+}
+
+.page-moradores .pag-btn:hover:not(.disabled):not(.active) {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}
+
+/* Página ativa */
+.page-moradores .pag-btn.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+    font-weight: 700;
+    cursor: default;
+}
+
+/* Botão desabilitado (primeira/última página) */
+.page-moradores .pag-btn.disabled,
+.page-moradores .pag-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Reticências */
+.page-moradores .pag-ellipsis {
+    font-size: 13px;
+    color: #9ca3af;
+    padding: 0 2px;
+    user-select: none;
+}
+
+/* Responsividade: centraliza em telas pequenas */
+@media (max-width: 480px) {
+    .page-moradores .paginacao-moradores {
+        justify-content: center;
+    }
+    .page-moradores .pag-info {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* ============================================================
+   RELATÓRIOS — Seletor de Tipo e Painel de Prévia
+   ============================================================ */
+
+/* Card contentor do seletor */
+.page-moradores .rel-seletor-card h2 {
+    margin-bottom: 4px;
+}
+
+.page-moradores .rel-seletor-desc {
+    color: #64748b;
+    font-size: 13.5px;
+    margin-bottom: 20px;
+}
+
+/* Grid dos 4 cards de tipo */
+.page-moradores .rel-tipo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+}
+
+/* Card individual de tipo */
+.page-moradores .rel-tipo-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    cursor: pointer;
+    background: #fff;
+    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    position: relative;
+}
+
+.page-moradores .rel-tipo-card:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 2px 12px rgba(37,99,235,0.10);
+}
+
+.page-moradores .rel-tipo-card.ativo {
+    border-color: #2563eb;
+    background: #eff6ff;
+    box-shadow: 0 2px 16px rgba(37,99,235,0.13);
+}
+
+/* Ícone do card */
+.page-moradores .rel-tipo-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+/* Texto do card */
+.page-moradores .rel-tipo-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.page-moradores .rel-tipo-info strong {
+    font-size: 14px;
+    color: #1e293b;
+    font-weight: 700;
+}
+
+.page-moradores .rel-tipo-info span {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+/* Check de selecionado */
+.page-moradores .rel-tipo-check {
+    color: #2563eb;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.page-moradores .rel-tipo-card.ativo .rel-tipo-check {
+    opacity: 1;
+}
+
+/* ── Painel de prévia ───────────────────────────────────────── */
+
+.page-moradores .rel-painel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.page-moradores .rel-painel-titulo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-moradores .rel-painel-titulo h2 {
+    margin: 0;
+    font-size: 17px;
+    color: #1e293b;
+}
+
+.page-moradores .rel-painel-titulo span {
+    font-size: 20px;
+    color: #2563eb;
+}
+
+.page-moradores .rel-painel-acoes {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Filtros do painel */
+.page-moradores .rel-painel-filtros {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+}
+
+.page-moradores .rel-filtro-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.page-moradores .rel-filtro-grupo label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.page-moradores .rel-filtro-grupo input,
+.page-moradores .rel-filtro-grupo select {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 13.5px;
+    color: #1e293b;
+    background: #fff;
+    transition: border-color 0.15s;
+}
+
+.page-moradores .rel-filtro-grupo input:focus,
+.page-moradores .rel-filtro-grupo select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.10);
+}
+
+/* Contador de resultados */
+.page-moradores .rel-contador {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 10px;
+    font-style: italic;
+}
+
+/* ── Badges na tabela de prévia ─────────────────────────────── */
+
+.page-moradores .rel-badge-status {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.page-moradores .rel-badge-status.ativo {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.page-moradores .rel-badge-status.inativo {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+/* ── Linha de dependentes expandida ─────────────────────────── */
+
+.page-moradores .rel-dep-row td {
+    background: #f8fafc;
+    padding: 6px 16px 10px;
+}
+
+.page-moradores .rel-dep-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: #e0f2fe;
+    color: #0369a1;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 12px;
+    margin: 2px 4px 2px 0;
+}
+
+.page-moradores .rel-dep-item i {
+    font-size: 11px;
+}
+
+.page-moradores .rel-dep-parentesco {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+}
+
+/* ── Linha de assinatura (credenciamento) ───────────────────── */
+
+.page-moradores .rel-assinatura-linha {
+    display: block;
+    width: 180px;
+    border-bottom: 1px solid #94a3b8;
+    height: 22px;
+}
+
+/* ── Responsividade ─────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+    .page-moradores .rel-tipo-grid {
+        grid-template-columns: 1fr;
+    }
+    .page-moradores .rel-painel-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .page-moradores .rel-painel-filtros {
+        flex-direction: column;
+    }
+}
+
+/* ── Impressão / PDF ────────────────────────────────────────── */
+
+@media print {
+    /* Ocultar tudo exceto o conteúdo do relatório */
+    .sidebar,
+    .page-header,
+    .tabs,
+    .rel-kpi-grid,
+    .rel-seletor-card,
+    .rel-painel-header,
+    .rel-painel-filtros,
+    .rel-contador,
+    .rel-grafico-card,
+    .btn-primary-modern,
+    .btn-secondary-modern {
+        display: none !important;
+    }
+
+    body, .main-content, .page-wrapper {
+        background: #fff !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .page-moradores .rel-assinatura-linha {
+        width: 220px;
+        border-bottom: 1px solid #000;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11pt;
+    }
+
+    th, td {
+        border: 1px solid #ccc;
+        padding: 5px 8px;
+    }
+
+    th {
+        background: #1e3a8a !important;
+        color: #fff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .rel-badge-unidade {
+        font-weight: bold;
+    }
+}

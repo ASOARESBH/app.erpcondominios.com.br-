@@ -1,0 +1,352 @@
+/**
+ * DESIGN SYSTEM - LAYOUT
+ * 
+ * Estilos base para containers, grids e estruturas de layout.
+ * Não altera nenhuma tela existente.
+ * 
+ * @version 1.0.0
+ * @created 2026-01-30
+ */
+
+/* ============================================
+   CONTAINER
+   ============================================ */
+
+.ds-container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--spacing-4);
+  padding-right: var(--spacing-4);
+}
+
+.ds-container-sm {
+  max-width: 640px;
+}
+
+.ds-container-md {
+  max-width: 768px;
+}
+
+.ds-container-lg {
+  max-width: 1024px;
+}
+
+.ds-container-xl {
+  max-width: 1280px;
+}
+
+.ds-container-2xl {
+  max-width: 1536px;
+}
+
+.ds-container-fluid {
+  width: 100%;
+  padding-left: var(--spacing-4);
+  padding-right: var(--spacing-4);
+}
+
+/* ============================================
+   FLEXBOX
+   ============================================ */
+
+.ds-flex {
+  display: flex;
+}
+
+.ds-flex-row {
+  flex-direction: row;
+}
+
+.ds-flex-col {
+  flex-direction: column;
+}
+
+.ds-flex-wrap {
+  flex-wrap: wrap;
+}
+
+.ds-flex-nowrap {
+  flex-wrap: nowrap;
+}
+
+.ds-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ds-flex-between {
+  display: flex;
+  justify-content: space-between;
+}
+
+.ds-flex-around {
+  display: flex;
+  justify-content: space-around;
+}
+
+.ds-flex-evenly {
+  display: flex;
+  justify-content: space-evenly;
+}
+
+.ds-flex-start {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.ds-flex-end {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ds-items-start {
+  align-items: flex-start;
+}
+
+.ds-items-end {
+  align-items: flex-end;
+}
+
+.ds-items-center {
+  align-items: center;
+}
+
+.ds-items-baseline {
+  align-items: baseline;
+}
+
+.ds-items-stretch {
+  align-items: stretch;
+}
+
+.ds-gap-1 { gap: var(--spacing-1); }
+.ds-gap-2 { gap: var(--spacing-2); }
+.ds-gap-3 { gap: var(--spacing-3); }
+.ds-gap-4 { gap: var(--spacing-4); }
+.ds-gap-6 { gap: var(--spacing-6); }
+.ds-gap-8 { gap: var(--spacing-8); }
+
+/* ============================================
+   GRID
+   ============================================ */
+
+.ds-grid {
+  display: grid;
+}
+
+.ds-grid-cols-1 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.ds-grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ds-grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ds-grid-cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ds-grid-cols-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.ds-grid-cols-12 {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.ds-grid-cols-auto {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.ds-grid-gap-1 { gap: var(--spacing-1); }
+.ds-grid-gap-2 { gap: var(--spacing-2); }
+.ds-grid-gap-3 { gap: var(--spacing-3); }
+.ds-grid-gap-4 { gap: var(--spacing-4); }
+.ds-grid-gap-6 { gap: var(--spacing-6); }
+.ds-grid-gap-8 { gap: var(--spacing-8); }
+
+.ds-col-span-1 { grid-column: span 1 / span 1; }
+.ds-col-span-2 { grid-column: span 2 / span 2; }
+.ds-col-span-3 { grid-column: span 3 / span 3; }
+.ds-col-span-4 { grid-column: span 4 / span 4; }
+.ds-col-span-6 { grid-column: span 6 / span 6; }
+.ds-col-span-12 { grid-column: span 12 / span 12; }
+
+.ds-row-span-1 { grid-row: span 1 / span 1; }
+.ds-row-span-2 { grid-row: span 2 / span 2; }
+.ds-row-span-3 { grid-row: span 3 / span 3; }
+
+/* ============================================
+   POSICIONAMENTO
+   ============================================ */
+
+.ds-relative {
+  position: relative;
+}
+
+.ds-absolute {
+  position: absolute;
+}
+
+.ds-fixed {
+  position: fixed;
+}
+
+.ds-sticky {
+  position: sticky;
+}
+
+.ds-static {
+  position: static;
+}
+
+/* ============================================
+   DISPLAY
+   ============================================ */
+
+.ds-block {
+  display: block;
+}
+
+.ds-inline-block {
+  display: inline-block;
+}
+
+.ds-inline {
+  display: inline;
+}
+
+.ds-hidden {
+  display: none;
+}
+
+.ds-visible {
+  visibility: visible;
+}
+
+.ds-invisible {
+  visibility: hidden;
+}
+
+/* ============================================
+   OVERFLOW
+   ============================================ */
+
+.ds-overflow-auto {
+  overflow: auto;
+}
+
+.ds-overflow-hidden {
+  overflow: hidden;
+}
+
+.ds-overflow-visible {
+  overflow: visible;
+}
+
+.ds-overflow-x-auto {
+  overflow-x: auto;
+}
+
+.ds-overflow-y-auto {
+  overflow-y: auto;
+}
+
+.ds-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================
+   DIMENSÕES
+   ============================================ */
+
+.ds-w-full {
+  width: 100%;
+}
+
+.ds-h-full {
+  height: 100%;
+}
+
+.ds-w-screen {
+  width: 100vw;
+}
+
+.ds-h-screen {
+  height: 100vh;
+}
+
+.ds-min-h-screen {
+  min-height: 100vh;
+}
+
+.ds-max-w-full {
+  max-width: 100%;
+}
+
+/* ============================================
+   RESPONSIVIDADE - MOBILE FIRST
+   ============================================ */
+
+@media (max-width: 640px) {
+  .ds-container {
+    padding-left: var(--spacing-3);
+    padding-right: var(--spacing-3);
+  }
+
+  .ds-grid-cols-2,
+  .ds-grid-cols-3,
+  .ds-grid-cols-4,
+  .ds-grid-cols-6,
+  .ds-grid-cols-12 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .ds-col-span-2,
+  .ds-col-span-3,
+  .ds-col-span-4,
+  .ds-col-span-6,
+  .ds-col-span-12 {
+    grid-column: span 1 / span 1;
+  }
+
+  .ds-flex-col-mobile {
+    flex-direction: column;
+  }
+
+  .ds-hidden-mobile {
+    display: none;
+  }
+
+  .ds-visible-mobile {
+    display: block;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .ds-hidden-tablet {
+    display: none;
+  }
+
+  .ds-visible-tablet {
+    display: block;
+  }
+}
+
+@media (min-width: 1025px) {
+  .ds-hidden-desktop {
+    display: none;
+  }
+
+  .ds-visible-desktop {
+    display: block;
+  }
+}

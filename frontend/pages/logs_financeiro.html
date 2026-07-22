@@ -1,0 +1,255 @@
+<!--
+  ============================================================
+  LOGS FINANCEIRO — logs_financeiro.html
+  ============================================================
+  Painel de diagnóstico do módulo financeiro.
+  Acesso: layout-base.html?page=logs_financeiro
+  ============================================================
+-->
+<style>
+/* ── Variáveis ────────────────────────────────────────────── */
+:root {
+    --log-critico: #7c2d12; --log-critico-bg: #fef2f2; --log-critico-bd: #fca5a5;
+    --log-erro:    #dc2626; --log-erro-bg:    #fef2f2; --log-erro-bd:    #fca5a5;
+    --log-aviso:   #d97706; --log-aviso-bg:   #fffbeb; --log-aviso-bd:   #fcd34d;
+    --log-info:    #2563eb; --log-info-bg:    #eff6ff; --log-info-bd:    #93c5fd;
+    --log-debug:   #64748b; --log-debug-bg:   #f8fafc; --log-debug-bd:   #cbd5e1;
+}
+
+/* ── KPIs ─────────────────────────────────────────────────── */
+.log-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+.log-kpi-card { background:#fff; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0; }
+.log-kpi-card .lk-val { font-size:28px; font-weight:800; line-height:1.1; }
+.log-kpi-card .lk-lbl { font-size:11px; color:#64748b; margin-top:4px; text-transform:uppercase; letter-spacing:.5px; }
+.log-kpi-card.lk-critico { border-top:4px solid var(--log-critico); }
+.log-kpi-card.lk-erro    { border-top:4px solid var(--log-erro); }
+.log-kpi-card.lk-aviso   { border-top:4px solid var(--log-aviso); }
+.log-kpi-card.lk-info    { border-top:4px solid var(--log-info); }
+.log-kpi-card.lk-debug   { border-top:4px solid var(--log-debug); }
+.log-kpi-card.lk-total   { border-top:4px solid #1e3a8a; }
+
+/* ── Badges de nível ──────────────────────────────────────── */
+.badge-log { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; white-space:nowrap; }
+.badge-log.bl-critico { background:var(--log-critico-bg); color:var(--log-critico); border:1px solid var(--log-critico-bd); }
+.badge-log.bl-erro    { background:var(--log-erro-bg);    color:var(--log-erro);    border:1px solid var(--log-erro-bd); }
+.badge-log.bl-aviso   { background:var(--log-aviso-bg);   color:var(--log-aviso);   border:1px solid var(--log-aviso-bd); }
+.badge-log.bl-info    { background:var(--log-info-bg);    color:var(--log-info);    border:1px solid var(--log-info-bd); }
+.badge-log.bl-debug   { background:var(--log-debug-bg);   color:var(--log-debug);   border:1px solid var(--log-debug-bd); }
+
+/* ── Tabela de logs ───────────────────────────────────────── */
+.log-table { width:100%; border-collapse:collapse; font-size:12px; }
+.log-table th { background:#1e3a8a; color:#fff; padding:8px 10px; text-align:left; font-size:11px; white-space:nowrap; }
+.log-table td { padding:7px 10px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+.log-table tr:hover td { background:#f8fafc; }
+.log-table tr.row-critico td { background:var(--log-critico-bg); }
+.log-table tr.row-erro    td { background:var(--log-erro-bg); }
+.log-table tr.row-aviso   td { background:var(--log-aviso-bg); }
+
+/* ── Detalhe expandível ───────────────────────────────────── */
+.log-detalhe-btn { background:none; border:none; cursor:pointer; color:#2563eb; font-size:11px; padding:0; }
+.log-detalhe-box { display:none; margin-top:6px; background:#1e293b; color:#e2e8f0; padding:10px; border-radius:6px; font-size:11px; white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto; }
+.log-detalhe-box.open { display:block; }
+
+/* ── Por módulo ───────────────────────────────────────────── */
+.log-modulo-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:20px; }
+.log-modulo-card { background:#fff; border-radius:10px; padding:14px; border:1px solid #e2e8f0; border-left:4px solid #2563eb; }
+.log-modulo-card .lm-nome { font-size:13px; font-weight:700; color:#1e3a8a; margin-bottom:8px; }
+.log-modulo-card .lm-stats { display:flex; gap:8px; flex-wrap:wrap; }
+.log-modulo-card .lm-stat  { font-size:11px; padding:2px 6px; border-radius:4px; }
+.log-modulo-card .lm-ultimo { font-size:10px; color:#94a3b8; margin-top:6px; }
+
+/* ── Timeline ─────────────────────────────────────────────── */
+.log-timeline { display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; }
+.log-timeline-item { min-width:60px; text-align:center; }
+.log-timeline-item .lt-hora { font-size:10px; color:#64748b; margin-bottom:4px; }
+.log-timeline-item .lt-bar  { height:40px; background:#e2e8f0; border-radius:4px; position:relative; overflow:hidden; }
+.log-timeline-item .lt-fill-e { position:absolute; bottom:0; left:0; right:0; background:#dc2626; transition:height .3s; }
+.log-timeline-item .lt-fill-a { position:absolute; bottom:0; left:0; right:0; background:#d97706; transition:height .3s; }
+.log-timeline-item .lt-total { font-size:10px; color:#374151; margin-top:3px; font-weight:600; }
+
+/* ── Filtros ──────────────────────────────────────────────── */
+.log-filtros { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }
+.log-filtros .form-group { margin:0; }
+.log-filtros label { font-size:11px; color:#64748b; display:block; margin-bottom:3px; }
+.log-filtros input, .log-filtros select { font-size:12px; padding:5px 8px; border:1px solid #d1d5db; border-radius:6px; }
+
+/* ── Paginação ────────────────────────────────────────────── */
+.log-pag { display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+.log-pag button { padding:4px 10px; font-size:12px; border:1px solid #d1d5db; background:#fff; border-radius:6px; cursor:pointer; }
+.log-pag button.active { background:#1e3a8a; color:#fff; border-color:#1e3a8a; }
+.log-pag button:disabled { opacity:.4; cursor:default; }
+.log-pag .pag-info { font-size:11px; color:#64748b; margin-left:8px; }
+
+/* ── Erros recentes ───────────────────────────────────────── */
+.log-erro-card { background:var(--log-erro-bg); border:1px solid var(--log-erro-bd); border-radius:8px; padding:12px; margin-bottom:8px; }
+.log-erro-card .le-header { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.log-erro-card .le-msg { font-size:13px; color:#1e293b; font-weight:600; }
+.log-erro-card .le-meta { font-size:11px; color:#64748b; }
+
+/* ── Responsivo ───────────────────────────────────────────── */
+@media (max-width:768px) {
+    .log-kpi-grid { grid-template-columns:repeat(2,1fr); }
+    .log-filtros { flex-direction:column; }
+    .log-table { font-size:11px; }
+}
+</style>
+
+<div class="page-header">
+    <h1><i class="fas fa-clipboard-list" style="color:#dc2626;"></i> Logs de Diagnóstico — Financeiro</h1>
+    <p class="page-subtitle">Monitoramento de erros, avisos e operações do módulo financeiro</p>
+</div>
+
+<!-- Navegação financeira -->
+<div class="page-card" style="padding:12px 16px;margin-bottom:16px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-secondary" onclick="window.location='layout-base.html?page=financeiro'">
+            <i class="fas fa-home"></i> Início
+        </button>
+        <button class="btn btn-secondary" onclick="window.location='layout-base.html?page=contas_pagar'">
+            <i class="fas fa-arrow-up"></i> Contas a Pagar
+        </button>
+        <button class="btn btn-secondary" onclick="window.location='layout-base.html?page=contas_receber'">
+            <i class="fas fa-arrow-down"></i> Contas a Receber
+        </button>
+        <button class="btn btn-secondary" onclick="window.location='layout-base.html?page=importacao_financeira'">
+            <i class="fas fa-file-import"></i> Importação
+        </button>
+        <button class="btn btn-primary" style="margin-left:auto;" onclick="LogsFin.carregarResumo()">
+            <i class="fas fa-sync"></i> Atualizar
+        </button>
+        <button class="btn btn-danger" onclick="LogsFin.limparLogs()" title="Remover logs com mais de 30 dias">
+            <i class="fas fa-trash"></i> Limpar Antigos
+        </button>
+    </div>
+</div>
+
+<!-- KPIs 24h -->
+<div id="lf_kpiWrap">
+    <div class="log-kpi-grid" id="lf_kpis">
+        <div class="log-kpi-card lk-total"><div class="lk-val" id="lf_kTotal">—</div><div class="lk-lbl">Total (7 dias)</div></div>
+        <div class="log-kpi-card lk-critico"><div class="lk-val" style="color:var(--log-critico);" id="lf_kCritico">—</div><div class="lk-lbl">Críticos (24h)</div></div>
+        <div class="log-kpi-card lk-erro"><div class="lk-val" style="color:var(--log-erro);" id="lf_kErro">—</div><div class="lk-lbl">Erros (24h)</div></div>
+        <div class="log-kpi-card lk-aviso"><div class="lk-val" style="color:var(--log-aviso);" id="lf_kAviso">—</div><div class="lk-lbl">Avisos (24h)</div></div>
+        <div class="log-kpi-card lk-info"><div class="lk-val" style="color:var(--log-info);" id="lf_kInfo">—</div><div class="lk-lbl">Infos (24h)</div></div>
+        <div class="log-kpi-card lk-debug"><div class="lk-val" style="color:var(--log-debug);" id="lf_kDebug">—</div><div class="lk-lbl">Debug (24h)</div></div>
+    </div>
+</div>
+
+<!-- Linha: Por módulo + Erros recentes -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;" class="log-two-col">
+
+    <!-- Por módulo -->
+    <div class="page-card">
+        <h3 style="font-size:14px;font-weight:700;color:#1e3a8a;margin-bottom:12px;">
+            <i class="fas fa-cubes"></i> Status por Módulo (7 dias)
+        </h3>
+        <div id="lf_porModulo" class="log-modulo-grid">
+            <div style="color:#94a3b8;font-size:13px;grid-column:1/-1;">Carregando...</div>
+        </div>
+    </div>
+
+    <!-- Erros recentes -->
+    <div class="page-card">
+        <h3 style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:12px;">
+            <i class="fas fa-exclamation-circle"></i> Erros Recentes (24h)
+        </h3>
+        <div id="lf_errosRecentes" style="max-height:280px;overflow-y:auto;">
+            <div style="color:#94a3b8;font-size:13px;">Carregando...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Timeline -->
+<div class="page-card" style="margin-bottom:16px;">
+    <h3 style="font-size:14px;font-weight:700;color:#1e3a8a;margin-bottom:12px;">
+        <i class="fas fa-chart-bar"></i> Atividade por Hora (últimas 24h)
+    </h3>
+    <div id="lf_timeline" class="log-timeline">
+        <div style="color:#94a3b8;font-size:13px;">Carregando...</div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;">
+        <span><span style="display:inline-block;width:12px;height:12px;background:#dc2626;border-radius:2px;margin-right:4px;"></span>Erros/Críticos</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#d97706;border-radius:2px;margin-right:4px;"></span>Avisos</span>
+    </div>
+</div>
+
+<!-- Tabela de logs -->
+<div class="page-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <h3 style="font-size:14px;font-weight:700;color:#1e3a8a;margin:0;">
+            <i class="fas fa-list"></i> Todos os Logs <span id="lf_totalLogs" style="font-size:12px;color:#64748b;font-weight:400;"></span>
+        </h3>
+        <button class="btn btn-sm btn-secondary" onclick="LogsFin.exportarCSV()">
+            <i class="fas fa-file-csv"></i> Exportar CSV
+        </button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="log-filtros">
+        <div class="form-group">
+            <label>Módulo</label>
+            <select id="lf_filtroModulo" onchange="LogsFin.filtrar()">
+                <option value="">Todos</option>
+                <option value="importacao">Importação</option>
+                <option value="contas_pagar">Contas a Pagar</option>
+                <option value="contas_receber">Contas a Receber</option>
+                <option value="planos_contas">Planos de Contas</option>
+                <option value="conciliacao">Conciliação</option>
+                <option value="geral">Geral</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Nível</label>
+            <select id="lf_filtroNivel" onchange="LogsFin.filtrar()">
+                <option value="">Todos</option>
+                <option value="CRITICO">Crítico</option>
+                <option value="ERRO">Erro</option>
+                <option value="AVISO">Aviso</option>
+                <option value="INFO">Info</option>
+                <option value="DEBUG">Debug</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Data Início</label>
+            <input type="date" id="lf_filtroDataIni" onchange="LogsFin.filtrar()">
+        </div>
+        <div class="form-group">
+            <label>Data Fim</label>
+            <input type="date" id="lf_filtroDataFim" onchange="LogsFin.filtrar()">
+        </div>
+        <div class="form-group">
+            <label>Busca</label>
+            <input type="text" id="lf_filtroBusca" placeholder="Mensagem, ação, usuário..." oninput="LogsFin.filtrar()" style="min-width:200px;">
+        </div>
+        <button class="btn btn-sm btn-secondary" onclick="LogsFin.limparFiltros()">
+            <i class="fas fa-times"></i> Limpar
+        </button>
+    </div>
+
+    <!-- Tabela -->
+    <div style="overflow-x:auto;">
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th style="width:130px;">Data/Hora</th>
+                    <th style="width:90px;">Módulo</th>
+                    <th style="width:80px;">Nível</th>
+                    <th style="width:110px;">Ação</th>
+                    <th>Mensagem</th>
+                    <th style="width:80px;">Usuário</th>
+                    <th style="width:80px;">IP</th>
+                    <th style="width:60px;">Dur. (ms)</th>
+                    <th style="width:40px;"></th>
+                </tr>
+            </thead>
+            <tbody id="lf_tbody">
+                <tr><td colspan="9" class="empty-table"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginação -->
+    <div id="lf_paginacao" class="log-pag"></div>
+</div>
+
+<script src="../js/pages/logs_financeiro.js"></script>

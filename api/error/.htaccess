@@ -1,0 +1,19 @@
+# =====================================================
+# .htaccess - Proteção do Diretório de Debug
+# =====================================================
+# 
+# Este arquivo protege o diretório de debug, permitindo
+# acesso apenas de localhost
+# 
+# @author Sistema ERP Serra da Liberdade
+# @date 25/01/2026
+
+# Permitir apenas localhost
+Order Deny,Allow
+Deny from all
+Allow from 127.0.0.1
+Allow from ::1
+Allow from localhost
+
+# Mensagem de erro personalizada
+ErrorDocument 403 "Acesso negado. Este diretório é apenas para debug local."

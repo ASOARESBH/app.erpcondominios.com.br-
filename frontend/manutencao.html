@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manutenção - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Design System CSS -->
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+
+    <!-- FASE 2: CSS do Web Component -->
+    <link rel="stylesheet" href="components/user-menu/user-menu.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--color-background-tertiary);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar & Layout */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            padding: 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+            display: flex;
+            flex-direction: column;
+            /* User Profile & Sidebar Footer styles are now handled by user-profile-sidebar.js */
+            margin: 0;
+        }
+
+        .sidebar-header {
+            padding: 2rem 1rem 1rem;
+            text-align: center;
+        }
+
+        .sidebar h1 {
+            color: var(--color-background-primary);
+            font-size: 1.3rem;
+            margin-bottom: 0;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+            flex: 1;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: var(--border-color);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--color-background-primary);
+        }
+
+        .nav-link.active {
+            background: var(--color-primary-600);
+            color: var(--color-background-primary);
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+        }
+
+        /* Blue Header - Cleaned for Phase 3 */
+        .header {
+            background: white !important;
+            color: #1e293b !important;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Header, User Profile & Sidebar Footer styles are now handled by user-profile-sidebar.js */
+
+
+        .submenu {
+            background: var(--color-background-primary);
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .submenu ul {
+            list-style: none;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .submenu a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: var(--color-background-secondary);
+            color: var(--color-text-primary);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .submenu a:hover,
+        .submenu a.active {
+            background: var(--color-primary-600);
+            color: var(--color-background-primary);
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--color-background-primary);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            transition: 0.2s;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            color: var(--color-primary-600);
+            margin-bottom: 1rem;
+        }
+
+        .card h3 {
+            color: var(--color-text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .card p {
+            color: var(--color-text-secondary);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .card a {
+            display: inline-block;
+            padding: 0.6rem 1.5rem;
+            background: var(--color-primary-600);
+            color: var(--color-background-primary);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+
+        .card a:hover {
+            background: var(--color-primary-800);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .submenu ul {
+                flex-direction: column;
+            }
+
+            .submenu a {
+                display: block;
+                text-align: center;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script src="js/auth-guard.js"></script>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <div class="main-container">
+        <nav class="sidebar" id="sidebar">
+            <!-- Sidebar loaded dynamically -->
+        </nav>
+
+        <main class="main-content">
+            <header class="header">
+                <h1><i class="fas fa-tools"></i> Manutenção</h1>
+                <app-user-menu></app-user-menu>
+            </header>
+
+            <nav class="submenu">
+                <ul>
+                    <li><a href="manutencao.html" class="active"><i class="fas fa-home"></i> Início</a></li>
+                    <li><a href="hidrometro.html"><i class="fas fa-tint"></i> Hidrômetros</a></li>
+                    <li><a href="leitura.html"><i class="fas fa-tachometer-alt"></i> Leituras</a></li>
+                    <li><a href="relatorios_hidrometro.html"><i class="fas fa-chart-bar"></i> Relatórios</a></li>
+                    <li><a href="abastecimento.html"><i class="fas fa-gas-pump"></i> Abastecimento</a></li>
+                    <li><a href="checklist_veicular.html"><i class="fas fa-clipboard-check"></i> Checklist Veicular</a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-tint"></i>
+                    </div>
+                    <h3>Cadastro de Hidrômetros</h3>
+                    <p>Gerencie os hidrômetros do condomínio. Cadastre novos hidrômetros vinculados aos moradores, edite
+                        informaçµes e visualize o histórico completo de alteraçµes.</p>
+                    <a href="hidrometro.html">Acessar Cadastro</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-tachometer-alt"></i>
+                    </div>
+                    <h3>Leitura de Hidrômetros</h3>
+                    <p>Registre leituras individuais ou coletivas. O sistema calcula automaticamente o consumo e o valor
+                        a pagar com base nas regras estabelecidas (R$ 6,16/m³).</p>
+                    <a href="leitura.html">Registrar Leituras</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <h3>Relatórios de Consumo</h3>
+                    <p>Gere relatórios detalhados com filtros por período, unidade, morador e hidrômetro. Exporte para
+                        PDF ou Excel para análise e arquivo.</p>
+                    <a href="relatorios_hidrometro.html">Ver Relatórios</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-gas-pump"></i>
+                    </div>
+                    <h3>Controle de Abastecimento</h3>
+                    <p>Gerencie o abastecimento dos veículos do condomínio. Cadastre veículos, registre abastecimentos,
+                        controle recargas e gere relatórios de consumo e gastos.</p>
+                    <a href="abastecimento.html">Acessar Módulo</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <h3>Checklist Veicular</h3>
+                    <p>Gerencie o checklist diário dos veículos. Registre verificaçµes de início e fim de turno,
+                        monitore itens de segurança e receba alertas automáticos para manutenção preventiva.</p>
+                    <a href="checklist_veicular.html">Acessar Checklist</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <h3>Informaçµes do Sistema</h3>
+                    <p><strong>Valor do m³:</strong> R$ 6,16<br>
+                        <strong>Consumo mínimo:</strong> 10 m³<br>
+                        <strong>Valor mínimo:</strong> R$ 61,60<br>
+                        <strong>Cálculo:</strong> Consumo  R$ 6,16 (mín. R$ 61,60)
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Standard Scripts -->
+    <script src="components/user-menu/user-menu.js" defer></script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <script src="js/menu-controller.js"></script>
+    <script src="js/sidebar-controller.js"></script>
+</body>
+
+</html>

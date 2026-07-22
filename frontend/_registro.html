@@ -1,0 +1,514 @@
+ï»¿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro Manual - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; display: flex; }
+        .sidebar { position: fixed; top: 0; left: 0; width: 260px; height: 100vh; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 2rem 0; overflow-y: auto; }
+        .sidebar h1 { color: #fff; font-size: 1.3rem; text-align: center; margin-bottom: 2rem; }
+        .nav-menu { list-style: none; padding: 1rem; }
+        .nav-item { margin-bottom: 0.5rem; }
+        .nav-link { display: flex; align-items: center; padding: 0.75rem 1rem; color: #cbd5e1; text-decoration: none; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .nav-link i { margin-right: 0.75rem; width: 20px; }
+        .main-content { margin-left: 260px; padding: 2rem; width: 100%; }
+        .header { background: #fff; padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .form-section, .table-section { background: #fff; padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        input, select { width: 100%; padding: 0.6rem; margin-bottom: 0.5rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        button { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 0.6rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        button:hover { opacity: 0.9; transform: scale(1.02); }
+        .btn-delete { background: linear-gradient(135deg, #ef4444, #dc2626); padding: 0.4rem 0.8rem; font-size: 0.9rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; border-bottom: 1px solid #f1f5f9; text-align: left; }
+        th { background: #f8fafc; font-weight: 600; }
+        .alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-weight: 500; }
+        .alert-success { background: #dcfce7; color: #166534; border: 1px solid #22c55e; }
+        .alert-error { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
+        .loading { display: none; text-align: center; padding: 2rem; }
+        .loading.active { display: block; }
+        .info-box { background: #eff6ff; border: 1px solid #3b82f6; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; }
+        .info-box strong { color: #1d4ed8; }
+        #extraCampos { display: none; }
+        .veiculo-encontrado { background: #dcfce7; border: 1px solid #22c55e; padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; display: none; }
+        .veiculo-encontrado.show { display: block; }
+        /* Menu Toggle Mobile */
+        .menu-toggle { display: none; position: fixed; top: 1rem; left: 1rem; z-index: 1001; background: #1e293b; color: #fff; border: none; padding: 0.75rem; border-radius: 8px; cursor: pointer; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.active { transform: translateX(0); }
+            .menu-toggle { display: block; }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .header { padding: 1rem; }
+            .form-section, .table-section { padding: 1rem; }
+            th, td { padding: 0.5rem; font-size: 0.85rem; }
+        }
+        
+        @media (max-width: 480px) {
+            .form-grid { grid-template-columns: 1fr; }
+            button { width: 100%; margin-bottom: 0.5rem; margin-right: 0; }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+    <nav class="sidebar" id="sidebar">
+        <h1>Serra da Liberdade</h1>
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link active"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i> Veículos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i class="fas fa-user-friends"></i> Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i class="fas fa-clipboard-list"></i> Registro Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i class="fas fa-door-open"></i> Controle de Acesso</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i class="fas fa-file-alt"></i> Relatórios</a></li>
+                <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i> Configuraçµes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a></li>
+                <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i> Administrativo</a></li>
+            
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1>Registro Manual de Acesso</h1>
+        </header>
+
+        <div id="alertBox"></div>
+
+        <section class="form-section">
+            <div class="info-box">
+                <i class="fas fa-info-circle"></i> <strong>Registro Manual:</strong> Use este formulário para registrar visitantes, prestadores de serviço ou moradores sem TAG cadastrada.
+            </div>
+
+            <div id="veiculoEncontrado" class="veiculo-encontrado">
+                <i class="fas fa-check-circle"></i> <strong>Veículo cadastrado encontrado!</strong> Dados preenchidos automaticamente.
+            </div>
+
+            <form id="registroForm">
+                <input type="hidden" id="moradorId">
+                <input type="hidden" id="veiculoId">
+                
+                <div class="form-grid">
+                    <div>
+                        <label>Data e Hora *</label>
+                        <input type="datetime-local" id="datahora" required>
+                    </div>
+                    <div>
+                        <label>Placa *</label>
+                        <input type="text" id="placa" maxlength="8" placeholder="ABC1D23" required>
+                    </div>
+                    <div>
+                        <label>Modelo</label>
+                        <input type="text" id="modelo" placeholder="Ex: Honda Civic">
+                    </div>
+                    <div>
+                        <label>Cor</label>
+                        <input type="text" id="cor" placeholder="Ex: Prata">
+                    </div>
+                    <div>
+                        <label>Tipo *</label>
+                        <select id="tipo" required>
+                            <option value="">Selecione...</option>
+                            <option value="Morador">Morador</option>
+                            <option value="Visitante">Visitante</option>
+                            <option value="Prestador">Prestador de Serviço</option>
+                        </select>
+                    </div>
+                    <div id="campoUnidadeMorador" style="display: none;">
+                        <label>Unidade *</label>
+                        <select id="unidadeMorador" required>
+                            <option value="">Selecione a unidade...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-grid" id="extraCampos">
+                    <div>
+                        <label>Nome</label>
+                        <input type="text" id="nomeVisitante" placeholder="Nome do visitante/prestador">
+                    </div>
+                    <div>
+                        
+                        <label>Unidade de Destino (Morador)</label>
+                           <select id="unidadeDestino">
+                             <option value="">Selecione a unidade/morador...</option>
+                                 <!-- Opçµes carregadas dinamicamente -->
+                                 </select>
+                    </div>
+                    <div>
+                        <label>Dias de Permanªncia</label>
+                        <input type="number" id="diasPermanencia" min="1" placeholder="Ex: 1">
+                    </div>
+                    <div>
+                        <label>Observação</label>
+                        <input type="text" id="observacao" placeholder="Observaçµes adicionais">
+                    </div>
+                </div>
+
+                <button type="submit">Registrar Acesso</button>
+            </form>
+        </section>
+
+        <section class="table-section">
+            <h2>Registros de Acesso</h2>
+            <div class="loading" id="loading">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p>Carregando...</p>
+            </div>
+            <table id="registrosTable">
+                <thead>
+                    <tr>
+                        <th>Data/Hora</th>
+                        <th>Placa</th>
+                        <th>Modelo</th>
+                        <th>Cor</th>
+                        <th>Tipo</th>
+                        <th>Nome</th>
+                        <th>Unidade</th>
+                        <th>Status</th>
+                        <th>Açµes</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+    </main>
+
+    <script>
+        let veiculos = [];
+        
+        // Função para atualizar data e hora
+        function atualizarDataHora() {
+            const agora = new Date();
+            agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+            document.getElementById('datahora').value = agora.toISOString().slice(0, 16);
+        }
+        
+        // Definir data/hora atual ao carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            atualizarDataHora();
+            
+            carregarVeiculos();
+            carregarRegistros();
+            aplicarMascaras();
+            
+            // Auto-atualização da tabela a cada 1 minuto (60000 ms)
+            setInterval(function() {
+                carregarRegistros();
+                console.log('Tabela de registros atualizada automaticamente');
+            }, 60000);
+            
+            // Auto-atualização da data/hora a cada 1 minuto (60000 ms)
+            setInterval(function() {
+                atualizarDataHora();
+                console.log('Data e hora atualizadas automaticamente');
+            }, 60000);
+        });
+
+        // Carregar veículos do banco
+        function carregarVeiculos() {
+            fetch('../api/api_veiculos.php')
+                .then(response => response.text())
+                .then(text => {
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.sucesso) {
+                            veiculos = data.dados;
+                        }
+                    } catch (e) {
+                        console.error('Erro ao carregar veículos:', e);
+                    }
+                });
+        }
+
+        // Buscar veículo ao digitar placa
+        document.getElementById('placa').addEventListener('blur', function() {
+            const placa = this.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+            
+            if (placa.length >= 7) {
+                const veiculo = veiculos.find(v => v.placa.replace(/[^A-Z0-9]/g, '') === placa);
+                
+                if (veiculo) {
+                    // Preencher dados do veículo
+                    document.getElementById('modelo').value = veiculo.modelo || '';
+                    document.getElementById('cor').value = veiculo.cor || '';
+                    document.getElementById('moradorId').value = veiculo.morador_id || '';
+                    document.getElementById('veiculoId').value = veiculo.id || '';
+                    document.getElementById('tipo').value = 'Morador';
+                    
+                    // Mostrar mensagem
+                    const veiculoEncontrado = document.getElementById('veiculoEncontrado');
+                    veiculoEncontrado.classList.add('show');
+                    veiculoEncontrado.innerHTML = `<i class="fas fa-check-circle"></i> <strong>Veículo cadastrado:</strong> ${veiculo.modelo} - ${veiculo.morador_nome} (Unidade ${veiculo.morador_unidade})`;
+                    
+                    // Esconder campos extras
+                    document.getElementById('extraCampos').style.display = 'none';
+                } else {
+                    document.getElementById('veiculoEncontrado').classList.remove('show');
+                    document.getElementById('moradorId').value = '';
+                    document.getElementById('veiculoId').value = '';
+                }
+            }
+        });
+
+        // Mostrar campos extras para visitante/prestador
+        document.getElementById('tipo').addEventListener('change', function() {
+            const extraCampos = document.getElementById('extraCampos');
+            const campoUnidadeMorador = document.getElementById('campoUnidadeMorador');
+            
+            if (this.value === 'Visitante' || this.value === 'Prestador') {
+                extraCampos.style.display = 'grid';
+                campoUnidadeMorador.style.display = 'none';
+            } else if (this.value === 'Morador') {
+                extraCampos.style.display = 'none';
+                campoUnidadeMorador.style.display = 'block';
+                carregarUnidades();
+                document.getElementById('nomeVisitante').value = '';
+                document.getElementById('unidadeDestino').value = '';
+                document.getElementById('diasPermanencia').value = '';
+                document.getElementById('observacao').value = '';
+            } else {
+                extraCampos.style.display = 'none';
+                campoUnidadeMorador.style.display = 'none';
+                document.getElementById('nomeVisitante').value = '';
+                document.getElementById('unidadeDestino').value = '';
+                document.getElementById('diasPermanencia').value = '';
+                document.getElementById('observacao').value = '';
+            }
+        });
+        
+        // Carregar unidades para seleção
+        function carregarUnidades() {
+            fetch('../api/api_unidades.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const select = document.getElementById('unidadeMorador');
+                        select.innerHTML = '<option value="">Selecione a unidade...</option>';
+                        data.dados.forEach(unidade => {
+                            const option = document.createElement('option');
+                            option.value = unidade.id;
+                            option.textContent = unidade.nome;
+                            select.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar unidades:', error));
+        }
+
+        // Aplicar máscaras
+        function aplicarMascaras() {
+            document.getElementById('placa').addEventListener('input', function(e) {
+                let valor = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (valor.length > 3 && valor.length <= 7) {
+                    valor = valor.substring(0, 3) + '-' + valor.substring(3);
+                }
+                e.target.value = valor;
+            });
+        }
+
+        // Carregar registros
+        function carregarRegistros() {
+            document.getElementById('loading').classList.add('active');
+            
+            fetch('../api/api_registros.php?limite=50')
+                .then(response => response.text())
+                .then(text => {
+                    document.getElementById('loading').classList.remove('active');
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.sucesso) {
+                            renderizarTabela(data.dados);
+                        } else {
+                            mostrarAlerta('error', data.mensagem);
+                        }
+                    } catch (e) {
+                        console.error('Erro ao processar registros:', text);
+                        mostrarAlerta('error', 'Erro ao carregar registros');
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').classList.remove('active');
+                    mostrarAlerta('error', 'Erro ao carregar registros: ' + error.message);
+                });
+        }
+
+        // Renderizar tabela
+        function renderizarTabela(registros) {
+            const tbody = document.querySelector('#registrosTable tbody');
+            tbody.innerHTML = '';
+
+            if (registros.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Nenhum registro encontrado</td></tr>';
+                return;
+            }
+
+            registros.forEach(r => {
+                const tr = document.createElement('tr');
+                const nome = r.morador_nome || r.nome_visitante || r.tipo;
+                const unidade = r.morador_unidade || r.unidade_destino || '-';
+                
+                tr.innerHTML = `
+                    <td>${r.data_hora_formatada}</td>
+                    <td><strong>${r.placa}</strong></td>
+                    <td>${r.modelo || '-'}</td>
+                    <td>${r.cor || '-'}</td>
+                    <td>${r.tipo}</td>
+                    <td>${nome}</td>
+                    <td>${unidade}</td>
+                    <td>${r.status}</td>
+                    <td>
+                        <button class="btn-delete" onclick="excluirRegistro(${r.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Salvar registro
+        document.getElementById('registroForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Validar unidade para morador
+            const tipo = document.getElementById('tipo').value;
+            if (tipo === 'Morador') {
+                const unidadeMorador = document.getElementById('unidadeMorador').value;
+                if (!unidadeMorador) {
+                    mostrarAlerta('error', 'Por favor, selecione a unidade do morador.');
+                    return;
+                }
+            }
+
+            const dados = {
+                data_hora: document.getElementById('datahora').value.replace('T', ' ') + ':00',
+                placa: document.getElementById('placa').value.toUpperCase().replace('-', ''),
+                modelo: document.getElementById('modelo').value,
+                cor: document.getElementById('cor').value,
+                tipo: document.getElementById('tipo').value,
+                nome_visitante: document.getElementById('nomeVisitante').value,
+                unidade_destino: document.getElementById('unidadeDestino').value,
+                dias_permanencia: document.getElementById('diasPermanencia').value,
+                observacao: document.getElementById('observacao').value,
+                morador_id: document.getElementById('moradorId').value,
+                unidade_morador_id: document.getElementById('unidadeMorador').value
+            };
+
+            fetch('../api/api_registros.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            })
+            .then(response => response.text())
+            .then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    if (data.sucesso) {
+                        mostrarAlerta('success', '? Registro gravado com sucesso!');
+                        limparFormulario();
+                        carregarRegistros();
+                    } else {
+                        mostrarAlerta('error', data.mensagem);
+                    }
+                } catch (e) {
+                    console.error('Resposta do servidor:', text);
+                    mostrarAlerta('error', 'Erro ao processar resposta. Verifique se o registro foi salvo.');
+                    carregarRegistros();
+                }
+            })
+            .catch(error => {
+                mostrarAlerta('error', 'Erro ao registrar: ' + error.message);
+            });
+        });
+
+        // Excluir registro
+        function excluirRegistro(id) {
+            if (!confirm('Deseja realmente excluir este registro?')) {
+                return;
+            }
+
+            fetch('../api/api_registros.php', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mostrarAlerta('success', data.mensagem);
+                    carregarRegistros();
+                } else {
+                    mostrarAlerta('error', data.mensagem);
+                }
+            })
+            .catch(error => {
+                mostrarAlerta('error', 'Erro ao excluir: ' + error.message);
+            });
+        }
+
+        // Limpar formulário
+        function limparFormulario() {
+            document.getElementById('registroForm').reset();
+            const agora = new Date();
+            agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+            document.getElementById('datahora').value = agora.toISOString().slice(0, 16);
+            document.getElementById('extraCampos').style.display = 'none';
+            document.getElementById('veiculoEncontrado').classList.remove('show');
+            document.getElementById('moradorId').value = '';
+            document.getElementById('veiculoId').value = '';
+        }
+
+        // Mostrar alerta
+        function mostrarAlerta(tipo, mensagem) {
+            const alertBox = document.getElementById('alertBox');
+            const classe = tipo === 'success' ? 'alert-success' : 'alert-error';
+            const icone = tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            
+            alertBox.innerHTML = `<div class="alert ${classe}"><i class="fas ${icone}"></i> ${mensagem}</div>`;
+            
+            setTimeout(() => {
+                alertBox.innerHTML = '';
+            }, 5000);
+        }
+        // Toggle menu mobile
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        // Fechar menu ao clicar fora (mobile)
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.menu-toggle');
+            
+            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    </script>
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

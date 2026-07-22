@@ -1,0 +1,272 @@
+/**
+ * configuracao.css — Módulo Hub de Configurações
+ * CSS autossuficiente com prefixo .page-configuracao para evitar conflitos globais
+ * @version 2.1.0
+ */
+
+/* ============================================================
+   CARDS GRID — Hub principal
+   ============================================================ */
+.page-configuracao .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+/* ============================================================
+   CARD INTERATIVO
+   ============================================================ */
+.page-configuracao .page-card.interactive {
+    text-align: center;
+    padding: 2.5rem 2rem;
+    cursor: pointer;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-configuracao .page-card.interactive::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #4f46e5, #7c3aed);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.page-configuracao .page-card.interactive:hover {
+    border-color: rgba(79, 70, 229, 0.2);
+    background: linear-gradient(180deg, #fff 0%, #f8faff 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(79, 70, 229, 0.12);
+}
+
+.page-configuracao .page-card.interactive:hover::before {
+    opacity: 1;
+}
+
+.page-configuracao .page-card.interactive:focus {
+    outline: 2px solid #4f46e5;
+    outline-offset: 2px;
+}
+
+/* Ícone do card */
+.page-configuracao .page-card.interactive .card-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.25rem auto;
+    transition: all 0.2s ease;
+}
+
+.page-configuracao .page-card.interactive:hover .card-icon {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+.page-configuracao .page-card.interactive .card-icon i {
+    font-size: 1.75rem;
+    color: #4f46e5;
+    transition: color 0.2s ease;
+}
+
+.page-configuracao .page-card.interactive:hover .card-icon i {
+    color: #fff;
+}
+
+/* Compatibilidade com ícone direto (sem .card-icon) */
+.page-configuracao .page-card.interactive > i {
+    font-size: 3rem;
+    color: #4f46e5;
+    margin-bottom: 1.5rem;
+    display: block;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.page-configuracao .page-card.interactive h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 0.5rem 0;
+}
+
+.page-configuracao .page-card.interactive p {
+    color: #64748b;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Seta de acesso no hover */
+.page-configuracao .page-card.interactive::after {
+    content: '\f054';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    bottom: 1rem;
+    right: 1.25rem;
+    font-size: 0.75rem;
+    color: #cbd5e1;
+    transition: all 0.2s ease;
+}
+
+.page-configuracao .page-card.interactive:hover::after {
+    color: #4f46e5;
+    transform: translateX(3px);
+}
+
+/* ============================================================
+   BREADCRUMB DE NAVEGAÇÃO
+   ============================================================ */
+.page-configuracao .breadcrumb-cfg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.page-configuracao .breadcrumb-cfg a,
+.page-configuracao .breadcrumb-cfg [data-page] {
+    color: #4f46e5;
+    text-decoration: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.page-configuracao .breadcrumb-cfg a:hover,
+.page-configuracao .breadcrumb-cfg [data-page]:hover {
+    color: #3730a3;
+    text-decoration: underline;
+}
+
+.page-configuracao .breadcrumb-cfg .separator {
+    color: #cbd5e1;
+}
+
+/* ============================================================
+   TABS (usadas em sub-páginas inline)
+   ============================================================ */
+.page-configuracao .tabs {
+    display: flex;
+    gap: 4px;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.page-configuracao .tab-button {
+    flex: 1;
+    min-width: 120px;
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.page-configuracao .tab-button:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.page-configuracao .tab-button.active {
+    background: #fff;
+    color: #4f46e5;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* ============================================================
+   RESPONSIVIDADE
+   ============================================================ */
+@media (max-width: 768px) {
+    .page-configuracao .cards-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .page-configuracao .page-card.interactive {
+        padding: 1.5rem 1rem;
+    }
+
+    .page-configuracao .page-card.interactive .card-icon {
+        width: 48px;
+        height: 48px;
+    }
+
+    .page-configuracao .page-card.interactive .card-icon i {
+        font-size: 1.25rem;
+    }
+
+    .page-configuracao .page-card.interactive h3 {
+        font-size: 0.95rem;
+    }
+
+    .page-configuracao .page-card.interactive p {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .page-configuracao .cards-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================
+   CARD FOOTER (seta "Acessar")
+   ============================================================ */
+.page-configuracao .page-card.interactive .card-footer {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.page-configuracao .page-card.interactive .card-footer .card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #4f46e5;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: gap 0.2s ease;
+}
+
+.page-configuracao .page-card.interactive:hover .card-footer .card-link {
+    gap: 10px;
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+.page-configuracao .tabs {
+    margin-bottom: 2rem;
+}

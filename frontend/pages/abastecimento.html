@@ -1,0 +1,441 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Abastecimento" data-icon="fa-gas-pump" style="display:none;"></div>
+
+<!-- Toast Container -->
+<div id="toastContainerAbast" class="toast-container-abast"></div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-abastecimento">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="page-header-content">
+            <h1><i class="fas fa-gas-pump" style="color:#2563eb;margin-right:10px;"></i>Gerenciamento de Abastecimento</h1>
+            <p>Controle de veículos, lançamentos de combustível, recargas de saldo e relatórios</p>
+        </div>
+        <!-- KPI Saldo -->
+        <div id="saldoKpi" class="saldo-kpi">
+            <div class="saldo-kpi-label"><i class="fas fa-wallet"></i> Saldo Disponível</div>
+            <div class="saldo-kpi-valor" id="saldoKpiValor">R$ 0,00</div>
+            <button id="btnSincronizarSaldo" class="btn-sincronizar-saldo" title="Recalcular saldo com base nos registros reais do banco">
+                <i class="fas fa-sync-alt"></i> Sincronizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="veiculos">
+            <i class="fas fa-car"></i> Veículos
+        </button>
+        <button class="tab-button" data-tab="lancamento">
+            <i class="fas fa-gas-pump"></i> Lançamento
+        </button>
+        <button class="tab-button" data-tab="recarga">
+            <i class="fas fa-wallet"></i> Recarga
+        </button>
+        <button class="tab-button" data-tab="relatorio">
+            <i class="fas fa-chart-bar"></i> Relatórios
+        </button>
+    </div>
+
+    <!-- ===================== TAB: VEÍCULOS ===================== -->
+    <div id="tab-veiculos" class="tab-content active">
+
+        <!-- Formulário de Cadastro -->
+        <div class="page-card">
+            <h2><i class="fas fa-car" style="color:#2563eb;margin-right:8px;"></i>Cadastrar Veículo</h2>
+            <form id="formVeiculo">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="placa">Placa *</label>
+                        <input type="text" id="placa" placeholder="ABC-1234 ou ABC1D23" maxlength="8" required>
+                        <span class="form-hint">Formato antigo (ABC-1234) ou Mercosul (ABC1D23)</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="modelo">Modelo *</label>
+                        <input type="text" id="modelo" placeholder="Ex: Fiat Strada" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ano">Ano *</label>
+                        <input type="number" id="ano" placeholder="Ex: 2022" min="1900" max="2099" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cor">Cor *</label>
+                        <input type="text" id="cor" placeholder="Ex: Branco" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="km_inicial">KM Atual *</label>
+                        <input type="number" id="km_inicial" placeholder="Ex: 50000" min="0" step="1" required>
+                    </div>
+                </div>
+                <div class="btn-actions">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Cadastrar Veículo
+                    </button>
+                    <button type="button" class="btn-secondary" id="btnLimparVeiculo">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Listagem -->
+        <div class="page-card">
+            <div class="card-header-actions">
+                <h2><i class="fas fa-list" style="color:#2563eb;margin-right:8px;"></i>Veículos Cadastrados</h2>
+                <div class="search-inline">
+                    <input type="text" id="buscaVeiculo" placeholder="Buscar por placa ou modelo...">
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Placa</th>
+                            <th>Modelo</th>
+                            <th>Ano</th>
+                            <th>Cor</th>
+                            <th>KM Inicial</th>
+                            <th>Cadastrado em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaVeiculos">
+                        <tr class="empty-row">
+                            <td colspan="7">
+                                <i class="fas fa-car"></i>
+                                <p>Nenhum veículo cadastrado</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /tab-veiculos -->
+
+    <!-- ===================== TAB: LANÇAMENTO ===================== -->
+    <div id="tab-lancamento" class="tab-content">
+
+        <!-- Alerta de saldo baixo -->
+        <div class="alert alert-warning" id="alertSemSaldo" style="display:none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span><strong>Atenção:</strong> Saldo insuficiente! O lançamento ficará negativo até a próxima recarga.</span>
+        </div>
+
+        <!-- Formulário de Lançamento -->
+        <div class="page-card">
+            <h2><i class="fas fa-gas-pump" style="color:#2563eb;margin-right:8px;"></i>Registrar Abastecimento</h2>
+            <form id="formAbastecimento">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="veiculo_id">Veículo *</label>
+                        <select id="veiculo_id" required>
+                            <option value="">Selecione um veículo...</option>
+                        </select>
+                        <span class="form-hint" id="km_info"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="data_abastecimento">Data e Hora *</label>
+                        <input type="datetime-local" id="data_abastecimento" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="km_abastecimento">KM Atual *</label>
+                        <input type="number" id="km_abastecimento" placeholder="KM no momento do abastecimento" min="0" step="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="litros">Litros *</label>
+                        <input type="number" id="litros" placeholder="Ex: 45.50" min="0.01" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="valor_abastecimento">Valor (R$) *</label>
+                        <input type="number" id="valor_abastecimento" placeholder="Ex: 250.00" min="0.01" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tipo_combustivel">Tipo de Combustível *</label>
+                        <select id="tipo_combustivel" required>
+                            <option value="">Selecione...</option>
+                            <option value="Gasolina">Gasolina</option>
+                            <option value="Álcool">Álcool</option>
+                            <option value="Diesel">Diesel</option>
+                            <option value="GNV">GNV</option>
+                            <option value="Elétrico">Elétrico</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="operador_id">Operador *</label>
+                        <select id="operador_id" required>
+                            <option value="">Selecione um operador...</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Preview de custo -->
+                <div class="calc-preview" id="calcPreviewAbast">
+                    <h4><i class="fas fa-calculator"></i> Preview do Lançamento</h4>
+                    <div class="calc-grid">
+                        <div class="calc-item">
+                            <label>Preço/Litro</label>
+                            <span id="prev_preco_litro">R$ 0,00</span>
+                        </div>
+                        <div class="calc-item">
+                            <label>Total</label>
+                            <span id="prev_total">R$ 0,00</span>
+                        </div>
+                        <div class="calc-item">
+                            <label>Saldo Após</label>
+                            <span id="prev_saldo_apos">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="btn-actions">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Registrar Abastecimento
+                    </button>
+                    <button type="button" class="btn-secondary" id="btnLimparAbastecimento">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Histórico de Abastecimentos -->
+        <div class="page-card">
+            <div class="card-header-actions">
+                <h2><i class="fas fa-history" style="color:#2563eb;margin-right:8px;"></i>Histórico de Abastecimentos</h2>
+                <button class="btn-secondary" id="btnAtualizarAbastecimentos">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Veículo</th>
+                            <th>KM</th>
+                            <th>Litros</th>
+                            <th>Valor</th>
+                            <th>Combustível</th>
+                            <th>Operador</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaAbastecimentos">
+                        <tr class="empty-row">
+                            <td colspan="7">
+                                <i class="fas fa-gas-pump"></i>
+                                <p>Nenhum abastecimento registrado</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /tab-lancamento -->
+
+    <!-- ===================== TAB: RECARGA ===================== -->
+    <div id="tab-recarga" class="tab-content">
+
+        <!-- Info box -->
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <span><strong>Sistema de Crédito/Débito:</strong> Para realizar lançamentos de abastecimento é necessário ter saldo. É possível continuar lançando mesmo com saldo negativo.</span>
+        </div>
+
+        <!-- Formulário de Recarga -->
+        <div class="page-card">
+            <h2><i class="fas fa-wallet" style="color:#2563eb;margin-right:8px;"></i>Nova Recarga de Saldo</h2>
+            <form id="formRecarga">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="data_recarga">Data e Hora *</label>
+                        <input type="datetime-local" id="data_recarga" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="valor_recarga">Valor da Recarga (R$) *</label>
+                        <input type="number" id="valor_recarga" placeholder="Ex: 1000.00" min="0.01" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="valor_minimo">Valor Mínimo para Alerta (R$) *</label>
+                        <input type="number" id="valor_minimo" placeholder="Ex: 200.00" min="0" step="0.01" required>
+                        <span class="form-hint">Sistema alertará quando o saldo atingir este valor</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="nf_recarga">Nº da NF (Opcional)</label>
+                        <input type="text" id="nf_recarga" placeholder="Ex: 12345">
+                    </div>
+                </div>
+                <div class="btn-actions">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Registrar Recarga
+                    </button>
+                    <button type="button" class="btn-secondary" id="btnLimparRecarga">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Histórico de Recargas -->
+        <div class="page-card">
+            <div class="card-header-actions">
+                <h2><i class="fas fa-history" style="color:#2563eb;margin-right:8px;"></i>Histórico de Recargas</h2>
+                <button class="btn-secondary" id="btnAtualizarRecargas">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Valor Recarga</th>
+                            <th>Valor Mínimo</th>
+                            <th>NF</th>
+                            <th>Saldo Após</th>
+                            <th>Usuário</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaRecargas">
+                        <tr class="empty-row">
+                            <td colspan="6">
+                                <i class="fas fa-wallet"></i>
+                                <p>Nenhuma recarga registrada</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /tab-recarga -->
+
+    <!-- ===================== TAB: RELATÓRIOS ===================== -->
+    <div id="tab-relatorio" class="tab-content">
+
+        <!-- Filtros -->
+        <div class="page-card">
+            <h2><i class="fas fa-filter" style="color:#2563eb;margin-right:8px;"></i>Filtros do Relatório</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="filtro_veiculo">Veículo</label>
+                    <select id="filtro_veiculo">
+                        <option value="">Todos os veículos</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filtro_data_inicio">Data Início</label>
+                    <input type="date" id="filtro_data_inicio">
+                </div>
+                <div class="form-group">
+                    <label for="filtro_data_fim">Data Fim</label>
+                    <input type="date" id="filtro_data_fim">
+                </div>
+                <div class="form-group">
+                    <label for="filtro_combustivel">Combustível</label>
+                    <select id="filtro_combustivel">
+                        <option value="">Todos</option>
+                        <option value="Gasolina">Gasolina</option>
+                        <option value="Álcool">Álcool</option>
+                        <option value="Diesel">Diesel</option>
+                        <option value="GNV">GNV</option>
+                    </select>
+                </div>
+            </div>
+            <div class="btn-actions">
+                <button class="btn-primary" id="btnGerarRelatorio">
+                    <i class="fas fa-search"></i> Gerar Relatório
+                </button>
+                <button class="btn-secondary" id="btnExportarRelatorio" disabled>
+                    <i class="fas fa-file-csv"></i> Exportar CSV
+                </button>
+                <button class="btn-pdf" id="btnExportarPDF" type="button" title="Gerar relatório personalizado em PDF com a identidade visual do condomínio">
+                    <i class="fas fa-file-pdf"></i> Gerar PDF
+                </button>
+            </div>
+        </div>
+
+        <!-- KPIs do Relatório -->
+        <div id="secaoRelatorio" style="display:none;">
+            <div class="stats-grid" id="kpiRelatorio">
+                <div class="page-card kpi-card">
+                    <div class="kpi-icon blue"><i class="fas fa-gas-pump"></i></div>
+                    <div class="kpi-content">
+                        <h3>Total Abastecimentos</h3>
+                        <div class="value" id="rel_total_abast">0</div>
+                    </div>
+                </div>
+                <div class="page-card kpi-card">
+                    <div class="kpi-icon green"><i class="fas fa-tint"></i></div>
+                    <div class="kpi-content">
+                        <h3>Total Litros</h3>
+                        <div class="value" id="rel_total_litros">0,00 L</div>
+                    </div>
+                </div>
+                <div class="page-card kpi-card">
+                    <div class="kpi-icon amber"><i class="fas fa-dollar-sign"></i></div>
+                    <div class="kpi-content">
+                        <h3>Total Gasto</h3>
+                        <div class="value" id="rel_total_valor">R$ 0,00</div>
+                    </div>
+                </div>
+                <div class="page-card kpi-card">
+                    <div class="kpi-icon purple"><i class="fas fa-road"></i></div>
+                    <div class="kpi-content">
+                        <h3>Média Consumo</h3>
+                        <div class="value" id="rel_media_consumo">0,00 km/L</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela Detalhada -->
+            <div class="page-card">
+                <h2><i class="fas fa-table" style="color:#2563eb;margin-right:8px;"></i>Detalhamento</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>Modelo</th>
+                                <th>Placa</th>
+                                <th>KM</th>
+                                <th>KM Rodado</th>
+                                <th>Litros</th>
+                                <th>Valor</th>
+                                <th>R$/L</th>
+                                <th>Consumo</th>
+                                <th>Combustível</th>
+                                <th>Operador</th>
+                            </tr>
+                        </thead>
+                        <tbody id="relatorioDetalhado"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /tab-relatorio -->
+
+</div><!-- /page-wrapper -->
+
+<!-- Modal: Detalhes do Veículo -->
+<div class="modal-overlay modal-abastecimento" id="modalDetalhesVeiculo">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-car"></i> Detalhes do Veículo</h3>
+            <button class="modal-close" id="btnFecharModalVeiculo"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" id="detalhesVeiculoContent">
+            <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Carregando...</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="btnFecharModalVeiculoFooter">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>

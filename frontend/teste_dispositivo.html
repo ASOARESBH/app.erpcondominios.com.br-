@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste API Dispositivos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .resultado {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .token {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            letter-spacing: 0.2em;
+            margin: 20px 0;
+            padding: 15px;
+            background: #fff;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .erro {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .sucesso {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        pre {
+            background: #263238;
+            color: #aed581;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>?? Teste API Dispositivos</h1>
+        
+        <form id="formTeste" onsubmit="testarCadastro(event)">
+            <div class="form-group">
+                <label>Nome do Dispositivo *</label>
+                <input type="text" id="nome" value="Tablet Teste" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Tipo de Dispositivo</label>
+                <select id="tipo">
+                    <option value="tablet">Tablet</option>
+                    <option value="smartphone">Smartphone</option>
+                    <option value="computador">Computador</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Localização</label>
+                <input type="text" id="localizacao" value="Portaria Principal">
+            </div>
+            
+            <div class="form-group">
+                <label>Responsável</label>
+                <input type="text" id="responsavel" value="Equipe de Segurança">
+            </div>
+            
+            <div class="form-group">
+                <label>Observação</label>
+                <textarea id="observacao" rows="3">Dispositivo de teste</textarea>
+            </div>
+            
+            <button type="submit">?? Cadastrar e Testar</button>
+        </form>
+        
+        <div id="resultado"></div>
+    </div>
+    
+    <script>
+        function testarCadastro(event) {
+            event.preventDefault();
+            
+            const dados = {
+                nome_dispositivo: document.getElementById('nome').value,
+                tipo_dispositivo: document.getElementById('tipo').value,
+                localizacao: document.getElementById('localizacao').value,
+                responsavel: document.getElementById('responsavel').value,
+                observacao: document.getElementById('observacao').value
+            };
+            
+            document.getElementById('resultado').innerHTML = '<p>? Enviando requisição...</p>';
+            
+            console.log('?? Dados enviados:', dados);
+            
+            fetch('../api/api_dispositivos_console.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            })
+            .then(response => {
+                console.log('?? Status da resposta:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('?? Resposta completa:', data);
+                
+                let html = '';
+                
+                if (data.sucesso) {
+                    html = `
+                        <div class="resultado sucesso">
+                            <h3>? Sucesso!</h3>
+                            <p><strong>Mensagem:</strong> ${data.mensagem}</p>
+                            
+                            ${data.dados && data.dados.token_acesso ? `
+                                <div class="token">
+                                    ${data.dados.token_acesso}
+                                </div>
+                                <p><strong>ID:</strong> ${data.dados.id}</p>
+                                <p><strong>Nome:</strong> ${data.dados.nome_dispositivo}</p>
+                            ` : '<p style="color: #dc3545;"><strong>?? ATENO:</strong> Token não foi retornado!</p>'}
+                            
+                            <h4>Resposta Completa:</h4>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    html = `
+                        <div class="resultado erro">
+                            <h3>? Erro</h3>
+                            <p><strong>Mensagem:</strong> ${data.mensagem}</p>
+                            <h4>Resposta Completa:</h4>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('resultado').innerHTML = html;
+            })
+            .catch(error => {
+                console.error('? Erro:', error);
+                document.getElementById('resultado').innerHTML = `
+                    <div class="resultado erro">
+                        <h3>? Erro de Conexão</h3>
+                        <p><strong>Erro:</strong> ${error.message}</p>
+                        <p>Verifique o console do navegador para mais detalhes.</p>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
+

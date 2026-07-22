@@ -1,0 +1,312 @@
+<div id="page-metadata" data-title="CRM" data-icon="fa-handshake" style="display:none;"></div>
+
+<div class="page-wrapper page-crm">
+
+  <!-- Header -->
+  <div class="page-header">
+    <h1><i class="fas fa-handshake"></i> CRM — Relacionamentos</h1>
+    <p>Gestão de tarefas, comunicações e acompanhamento da equipe diretiva</p>
+  </div>
+
+  <!-- Abas -->
+  <div class="tabs-container">
+    <button class="tab-btn active" data-tab="relacionamentos">
+      <i class="fas fa-list-ul"></i> Relacionamentos
+    </button>
+    <button class="tab-btn" data-tab="sla">
+      <i class="fas fa-exclamation-triangle"></i> SLA &amp; Prazos
+      <span class="sla-count-badge" id="sla-count-badge" style="display:none;background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;"></span>
+    </button>
+  </div>
+
+  <!-- ===================== ABA: RELACIONAMENTOS ===================== -->
+  <div id="tab-relacionamentos" class="tab-content active">
+
+    <!-- Barra de ações -->
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+      <div class="crm-filtros">
+        <input type="text" id="crm-busca" placeholder="Buscar número, assunto, pessoa..." style="min-width:240px;">
+        <select id="crm-filtro-status">
+          <option value="">Todos os status</option>
+          <option value="aberto">Aberto</option>
+          <option value="em_andamento">Em Andamento</option>
+          <option value="aguardando_retorno">Aguardando Retorno</option>
+          <option value="finalizado">Finalizado</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+        <select id="crm-filtro-dept">
+          <option value="">Todos os departamentos</option>
+          <option value="ADMINISTRATIVO">Administrativo</option>
+          <option value="MANUTENCAO">Manutenção</option>
+          <option value="FINANCEIRO">Financeiro</option>
+          <option value="JURIDICO">Jurídico</option>
+          <option value="CONTABIL">Contábil</option>
+        </select>
+        <select id="crm-filtro-prio">
+          <option value="">Toda prioridade</option>
+          <option value="urgente">Urgente</option>
+          <option value="alta">Alta</option>
+          <option value="media">Média</option>
+          <option value="baixa">Baixa</option>
+        </select>
+        <button class="btn-secondary-modern" id="btnCrmBuscar"><i class="fas fa-search"></i></button>
+      </div>
+      <button class="btn-primary-modern" id="btnCrmNovo">
+        <i class="fas fa-plus"></i> Novo Relacionamento
+      </button>
+    </div>
+
+    <!-- Lista -->
+    <div id="crm-lista">
+      <div class="crm-empty"><i class="fas fa-spinner fa-spin"></i><span>Carregando...</span></div>
+    </div>
+
+    <!-- Paginação -->
+    <div id="crm-paginacao" style="display:flex;justify-content:center;gap:8px;margin-top:16px;flex-wrap:wrap;"></div>
+  </div>
+
+  <!-- ===================== ABA: SLA ===================== -->
+  <div id="tab-sla" class="tab-content">
+    <div id="sla-conteudo">
+      <div class="crm-empty"><i class="fas fa-spinner fa-spin"></i><span>Carregando SLA...</span></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: NOVO / EDITAR RELACIONAMENTO
+══════════════════════════════════════════════════════════ -->
+<div id="crm-form-overlay" class="crm-form-overlay" style="display:none;">
+  <div class="crm-form-modal">
+    <div class="crm-form-header">
+      <h3 id="crm-form-titulo"><i class="fas fa-plus-circle"></i> Novo Relacionamento</h3>
+      <button class="crm-modal-close" onclick="window.CRMPage?.fecharForm()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="crm-form-body">
+      <input type="hidden" id="crm-edit-id">
+
+      <!-- Remetente (somente leitura) -->
+      <div style="background:var(--bg-secondary,#f8fafc);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;">
+        <span style="font-weight:600;color:var(--text-secondary,#64748b);font-size:11px;text-transform:uppercase;letter-spacing:.5px;">De (você)</span>
+        <div id="crm-remetente-display" style="font-weight:600;margin-top:4px;color:var(--text-primary,#1e293b);">—</div>
+      </div>
+
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
+
+        <!-- Tipo de destinatário -->
+        <div>
+          <label>Destinatário — tipo *</label>
+          <select id="crm-dest-tipo" onchange="window.CRMPage?.atualizarSelectDestino()">
+            <option value="usuario">Usuário do sistema</option>
+            <option value="morador">Morador</option>
+          </select>
+        </div>
+
+        <!-- Destinatário -->
+        <div>
+          <label>Destinatário *</label>
+          <select id="crm-dest-id">
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+
+        <!-- Departamento -->
+        <div>
+          <label>Departamento *</label>
+          <select id="crm-departamento">
+            <option value="">Selecione...</option>
+            <option value="ADMINISTRATIVO">Administrativo</option>
+            <option value="MANUTENCAO">Manutenção</option>
+            <option value="FINANCEIRO">Financeiro</option>
+            <option value="JURIDICO">Jurídico</option>
+            <option value="CONTABIL">Contábil</option>
+          </select>
+        </div>
+
+        <!-- Prioridade -->
+        <div>
+          <label>Prioridade *</label>
+          <select id="crm-prioridade">
+            <option value="baixa">Baixa</option>
+            <option value="media" selected>Média</option>
+            <option value="alta">Alta</option>
+            <option value="urgente">Urgente</option>
+          </select>
+        </div>
+
+        <!-- Data limite (SLA) -->
+        <div>
+          <label>Data limite (SLA)</label>
+          <input type="datetime-local" id="crm-data-limite">
+        </div>
+
+      </div>
+
+      <!-- Assunto -->
+      <div style="margin-top:12px;">
+        <label>Assunto *</label>
+        <input type="text" id="crm-assunto" placeholder="Descreva brevemente o assunto">
+      </div>
+
+      <!-- Descrição inicial -->
+      <div style="margin-top:12px;">
+        <label>Descrição / Detalhamento</label>
+        <textarea id="crm-descricao" rows="4" placeholder="Detalhes, contexto, informações importantes..."></textarea>
+      </div>
+    </div>
+    <div class="crm-form-footer">
+      <button class="btn-secondary-modern" onclick="window.CRMPage?.fecharForm()">
+        <i class="fas fa-times"></i> Cancelar
+      </button>
+      <button class="btn-primary-modern" id="btnCrmSalvarForm">
+        <i class="fas fa-save"></i> Salvar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: DETALHE + CHAT
+══════════════════════════════════════════════════════════ -->
+<div id="crm-detalhe-overlay" class="crm-modal-overlay" style="display:none;">
+  <div class="crm-modal">
+
+    <!-- Header -->
+    <div class="crm-modal-header">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;color:var(--text-secondary,#64748b);font-family:monospace;margin-bottom:2px;" id="det-numero">—</div>
+        <h3 id="det-assunto">—</h3>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <span class="crm-badge" id="det-status-badge">—</span>
+        <button class="crm-modal-close" onclick="window.CRMPage?.fecharDetalhe()"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+
+    <!-- Body: chat + info -->
+    <div class="crm-modal-body" style="overflow:hidden;display:flex;">
+
+      <!-- Esquerda: chat -->
+      <div class="crm-painel-chat">
+
+        <!-- Info bar -->
+        <div class="crm-info-bar" id="det-info-bar">
+          <!-- preenchida por JS -->
+        </div>
+
+        <!-- Mensagens -->
+        <div class="crm-chat-msgs" id="det-chat-msgs">
+          <!-- preenchido por JS -->
+        </div>
+
+        <!-- Input chat -->
+        <div class="crm-chat-input" id="det-chat-input-wrap">
+          <textarea id="det-msg-input" rows="2" placeholder="Digite sua mensagem..." onkeydown="window.CRMPage?.chatKeydown(event)"></textarea>
+          <button class="btn-primary-modern" style="padding:8px 14px;" onclick="window.CRMPage?.enviarMensagem()">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Direita: detalhes e ações -->
+      <div class="crm-painel-info" id="det-painel-info">
+
+        <!-- Status -->
+        <div class="crm-info-section">
+          <div class="label">Alterar status</div>
+          <select id="det-select-status" onchange="window.CRMPage?.mudarStatus()" style="width:100%;padding:7px 10px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:12px;background:var(--card-bg,#fff);">
+            <option value="aberto">Aberto</option>
+            <option value="em_andamento">Em Andamento</option>
+            <option value="aguardando_retorno">Aguardando Retorno</option>
+            <option value="finalizado">Finalizado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+        </div>
+
+        <!-- Prioridade -->
+        <div class="crm-info-section">
+          <div class="label">Prioridade</div>
+          <select id="det-select-prio" onchange="window.CRMPage?.mudarPrioridade()" style="width:100%;padding:7px 10px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:12px;background:var(--card-bg,#fff);">
+            <option value="baixa">Baixa</option>
+            <option value="media">Média</option>
+            <option value="alta">Alta</option>
+            <option value="urgente">Urgente</option>
+          </select>
+        </div>
+
+        <!-- Info fields -->
+        <div class="crm-info-section">
+          <div class="label">De</div>
+          <div class="valor" id="det-remetente">—</div>
+        </div>
+        <div class="crm-info-section">
+          <div class="label">Para</div>
+          <div class="valor" id="det-destinatario">—</div>
+        </div>
+        <div class="crm-info-section">
+          <div class="label">Departamento</div>
+          <div class="valor" id="det-departamento">—</div>
+        </div>
+        <div class="crm-info-section">
+          <div class="label">Prazo (SLA)</div>
+          <div class="valor" id="det-prazo">—</div>
+        </div>
+        <div class="crm-info-section">
+          <div class="label">Aberto em</div>
+          <div class="valor" id="det-criado">—</div>
+        </div>
+
+        <!-- Ações -->
+        <div class="crm-info-section">
+          <div class="label" style="margin-bottom:8px;">Ações</div>
+          <div class="crm-actions-list">
+            <button class="crm-action-btn" onclick="window.CRMPage?.abrirUploadAnexo()">
+              <i class="fas fa-paperclip"></i> Anexar documento
+            </button>
+            <button class="crm-action-btn" onclick="window.CRMPage?.editarRelacionamento()">
+              <i class="fas fa-edit"></i> Editar informações
+            </button>
+            <button class="crm-action-btn danger" onclick="window.CRMPage?.excluirRelacionamento()">
+              <i class="fas fa-trash"></i> Excluir
+            </button>
+          </div>
+        </div>
+
+        <!-- Anexos -->
+        <div class="crm-info-section">
+          <div class="label" style="margin-bottom:8px;">Anexos (<span id="det-anexos-count">0</span>)</div>
+          <div id="det-anexos-lista" style="display:flex;flex-direction:column;gap:4px;"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload de Anexo -->
+<div id="crm-upload-overlay" class="crm-form-overlay" style="display:none;">
+  <div class="crm-form-modal" style="max-width:420px;">
+    <div class="crm-form-header">
+      <h3><i class="fas fa-paperclip"></i> Anexar Documento</h3>
+      <button class="crm-modal-close" onclick="window.CRMPage?.fecharUpload()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="crm-form-body">
+      <div style="margin-bottom:12px;">
+        <label>Nome do documento *</label>
+        <input type="text" id="upload-nome-doc" placeholder="Ex: Contrato, Nota Fiscal, Laudo...">
+      </div>
+      <div>
+        <label>Arquivo *</label>
+        <input type="file" id="upload-arquivo" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.txt" style="width:100%;padding:8px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;">
+        <div style="font-size:11px;color:var(--text-secondary,#64748b);margin-top:4px;">PDF, imagens, Word, Excel, TXT — máx. 15 MB</div>
+      </div>
+    </div>
+    <div class="crm-form-footer">
+      <button class="btn-secondary-modern" onclick="window.CRMPage?.fecharUpload()">Cancelar</button>
+      <button class="btn-primary-modern" id="btnUploadEnviar">
+        <i class="fas fa-upload"></i> Enviar
+      </button>
+    </div>
+  </div>
+</div>

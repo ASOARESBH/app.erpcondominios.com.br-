@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal do Morador - Serra da Liberdade</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .login-container {
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            max-width: 450px;
+            width: 100%;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem 2rem 2.5rem 2rem;
+            text-align: center;
+            color: #fff;
+        }
+
+        .logo-container {
+            background: #fff;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 0 auto 1.5rem auto;
+            max-width: 280px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .logo-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .login-header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .login-header p {
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+
+        .login-body {
+            padding: 2.5rem 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #475569;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            font-size: 1.1rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.875rem 1rem 0.875rem 3rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #cbd5e1;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-login:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-login:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border-left: 4px solid #22c55e;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .forgot-password {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .forgot-password a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .forgot-password a:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        .login-footer {
+            background: #f8fafc;
+            padding: 1.5rem 2rem;
+            text-align: center;
+            color: #64748b;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .login-footer strong {
+            color: #475569;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: color 0.2s;
+        }
+
+        .back-link a:hover {
+            color: #764ba2;
+        }
+
+        @media (max-width: 480px) {
+            .login-header {
+                padding: 1.5rem 1.5rem 2rem 1.5rem;
+            }
+
+            .logo-container {
+                max-width: 220px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            }
+
+            .login-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .login-body {
+                padding: 2rem 1.5rem;
+            }
+
+            .login-footer {
+                padding: 1.25rem 1.5rem;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="logo-container">
+                <img src="logo.jpeg" alt="Serra da Liberdade" id="logoImg"
+                    onerror="this.style.display='none'; document.getElementById('logoText').style.display='block';">
+                <div id="logoText"
+                    style="display:none; font-size: 1.5rem; font-weight: bold; color: #667eea; padding: 1rem;">
+                    Serra da Liberdade
+                </div>
+            </div>
+            <h1>Portal do Morador</h1>
+            <p>Bem-vindo ao seu portal</p>
+        </div>
+
+        <div class="login-body">
+            <div id="alertBox" class="alert"></div>
+
+            <form id="loginForm" method="POST">
+                <div class="form-group">
+                    <label for="cpf">CPF</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-id-card"></i>
+                        <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00" required maxlength="14"
+                            autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="senha">Senha</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="senha" name="senha" placeholder="Digite sua senha" required
+                            autocomplete="current-password">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-login" id="btnLogin">
+                    <i class="fas fa-sign-in-alt"></i> Entrar
+                </button>
+            </form>
+
+            <div class="forgot-password">
+                <a href="esqueci_senha.html">
+                    <i class="fas fa-question-circle"></i> Esqueceu sua senha?
+                </a>
+            </div>
+
+            <div class="back-link">
+                <a href="login.html">
+                    <i class="fas fa-arrow-left"></i> Voltar para login administrativo
+                </a>
+            </div>
+        </div>
+
+        <div class="login-footer">
+            <p><i class="fas fa-info-circle"></i> Primeira vez? Use seu CPF e a senha padrão: <strong>123456</strong>
+            </p>
+            <p style="margin-top: 0.5rem;">Altere sua senha após o primeiro acesso</p>
+        </div>
+    </div>
+
+    <script>
+        // Máscara de CPF
+        document.getElementById('cpf').addEventListener('input', function (e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length <= 11) {
+                value = value.replace(/(\d{3})(\d)/, '$1.$2');
+                value = value.replace(/(\d{3})(\d)/, '$1.$2');
+                value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+                e.target.value = value;
+            }
+        });
+
+        const loginForm = document.getElementById('loginForm');
+        const btnLogin = document.getElementById('btnLogin');
+        const alertBox = document.getElementById('alertBox');
+
+        // Função para exibir alertas
+        function mostrarAlerta(mensagem, tipo) {
+            alertBox.innerHTML = `<i class="fas fa-${tipo === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${mensagem}`;
+            alertBox.className = `alert alert-${tipo}`;
+            alertBox.style.display = 'block';
+
+            // Auto-esconder após 5 segundos
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 5000);
+        }
+
+        // Manipular envio do formulário
+        loginForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const cpfInput = document.getElementById('cpf').value;
+            const cpf = cpfInput.replace(/\D/g, '');
+
+            // Validar CPF
+            if (cpf.length !== 11) {
+                mostrarAlerta('CPF inválido. Digite 11 dígitos.', 'error');
+                return;
+            }
+
+            // Desabilitar botão e mostrar loading
+            btnLogin.disabled = true;
+            btnLogin.innerHTML = '<span class="spinner"></span> Autenticando...';
+
+            // Coletar dados do formulário
+            const formData = new FormData(loginForm);
+
+            // Enviar requisição
+            fetch('../api/validar_login_morador.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta(data.mensagem, 'success');
+
+                        // Limpar sessionStorage e localStorage
+                        sessionStorage.clear();
+                        localStorage.clear();
+
+                        // Salvar token e dados do morador no localStorage
+                        if (data.dados && data.dados.token) {
+                            localStorage.setItem('portal_token', data.dados.token);
+                            localStorage.setItem('morador_id', data.dados.morador_id);
+                            localStorage.setItem('morador_nome', data.dados.nome);
+                            localStorage.setItem('morador_unidade', data.dados.unidade);
+                            console.log('? Token salvo:', data.dados.token.substring(0, 20) + '...');
+                            console.log('? Morador ID:', data.dados.morador_id);
+                        }
+
+                        // Marcar sessão como verificada
+                        sessionStorage.setItem('sessao_verificada', 'true');
+                        sessionStorage.setItem('tentativas_verificacao', '0');
+
+                        // Redirecionar após 500ms
+                        setTimeout(() => {
+                            window.location.replace('portal.html');
+                        }, 500);
+                    } else {
+                        mostrarAlerta(data.mensagem, 'error');
+                        btnLogin.disabled = false;
+                        btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro ao processar login. Tente novamente.', 'error');
+                    btnLogin.disabled = false;
+                    btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+                });
+        });
+
+        function esqueceuSenha() {
+            mostrarAlerta('Entre em contato com a administração do condomínio para redefinir sua senha.', 'error');
+        }
+
+        // Verificar se há mensagem de erro na URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const erro = urlParams.get('erro');
+
+        if (erro === '1') {
+            mostrarAlerta('CPF ou senha incorretos!', 'error');
+        } else if (erro === '2') {
+            mostrarAlerta('Morador inativo. Entre em contato com a administração.', 'error');
+        } else if (erro === '3') {
+            mostrarAlerta('Preencha todos os campos!', 'error');
+        } else if (erro === '4') {
+            mostrarAlerta('Sessão expirada. Faça login novamente.', 'error');
+        }
+    </script>
+
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="js/user-display.js"></script>
+    <script src="js/visual-identity.js"></script>
+</body>
+
+</html>

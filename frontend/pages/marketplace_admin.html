@@ -1,0 +1,535 @@
+<!-- Page Metadata for AppRouter -->
+<div id="page-metadata" data-title="Marketplace" data-icon="fa-shop" style="display:none;"></div>
+
+<style>
+    .submenu {
+        background: var(--color-background-primary);
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .submenu ul {
+        list-style: none;
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .submenu a {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background: var(--color-background-secondary);
+        color: var(--color-text-secondary);
+        text-decoration: none;
+        border-radius: 8px;
+        transition: 0.2s;
+    }
+
+    .submenu a:hover,
+    .submenu a.active {
+        background: var(--color-primary-600);
+        color: var(--color-background-primary);
+    }
+
+    .tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border-color, #e2e8f0);
+    }
+
+    .tab {
+        padding: 1rem 2rem;
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--color-text-tertiary);
+        transition: 0.2s;
+    }
+
+    .tab:hover {
+        color: var(--color-text-primary);
+    }
+
+    .tab.active {
+        color: var(--color-primary-600);
+        border-bottom-color: var(--color-primary-600);
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: #fff;
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .stat-card h3 {
+        font-size: 0.875rem;
+        color: #64748b;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+    }
+
+    .stat-card .value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .stat-card.green .value {
+        color: #10b981;
+    }
+
+    .stat-card.blue .value {
+        color: #3b82f6;
+    }
+
+    .stat-card.yellow .value {
+        color: #f59e0b;
+    }
+
+    .stat-card.red .value {
+        color: #ef4444;
+    }
+
+    .filter-section {
+        background: var(--color-background-primary);
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .filter-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .table-section {
+        background: var(--color-background-primary);
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        padding: 0.75rem;
+        border-bottom: 1px solid var(--border-color, #e2e8f0);
+        text-align: left;
+    }
+
+    th {
+        background: var(--color-background-secondary);
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        color: var(--color-text-tertiary);
+    }
+
+    tr:hover {
+        background: var(--color-background-secondary);
+    }
+
+    .badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        display: inline-block;
+    }
+
+    .badge-success {
+        background: var(--color-success-100);
+        color: var(--color-success-800);
+    }
+
+    .badge-danger {
+        background: var(--color-error-100);
+        color: var(--color-error-800);
+    }
+
+    .badge-warning {
+        background: var(--color-warning-100);
+        color: var(--color-warning-800);
+    }
+
+    .badge-info {
+        background: var(--color-info-100);
+        color: var(--color-info-800);
+    }
+
+    button,
+    input,
+    select {
+        padding: 0.6rem 1rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 0.95rem;
+    }
+
+    button {
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 0.2s;
+    }
+
+    button:hover {
+        opacity: 0.9;
+        transform: scale(1.02);
+    }
+
+    .btn-success {
+        background: linear-gradient(135deg, #10b981, #059669);
+    }
+
+    .btn-danger {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    .btn-warning {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+
+    .btn-secondary {
+        background: linear-gradient(135deg, #6b7280, #4b5563);
+    }
+
+    .btn-sm {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.875rem;
+    }
+
+    .loading {
+        display: none;
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .loading.active {
+        display: block;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+
+    .alert-success {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #22c55e;
+    }
+
+    .alert-error {
+        background: #fee2e2;
+        color: #b91c1c;
+        border: 1px solid #f87171;
+    }
+
+    .actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: #fff;
+        padding: 2rem;
+        border-radius: 12px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #64748b;
+    }
+
+    .modal-close:hover {
+        color: #1e293b;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+    }
+
+    textarea.form-control {
+        resize: vertical;
+    }
+</style>
+
+<nav class="submenu">
+    <ul>
+        <li><a href="administrativa.html"><i class="fas fa-home"></i> Início</a></li>
+        <li><a href="protocolo.html"><i class="fas fa-box"></i> Protocolos</a></li>
+        <li><a href="inventario.html"><i class="fas fa-boxes"></i> Inventário</a></li>
+        <li><a href="relatorios_inventario.html"><i class="fas fa-chart-bar"></i> Relatórios</a></li>
+        <li><a href="estoque.html"><i class="fas fa-warehouse"></i> Estoque</a></li>
+        <li><a href="marketplace_admin.html" class="active"><i class="fas fa-store"></i> Marketplace</a></li>
+    </ul>
+</nav>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab active" onclick="window.MarketplacePage.mudarTab('fornecedores')">
+        <i class="fas fa-users"></i> Fornecedores
+    </button>
+    <button class="tab" onclick="window.MarketplacePage.mudarTab('ramos')">
+        <i class="fas fa-list"></i> Ramos de Atividade
+    </button>
+</div>
+
+<!-- Tab Fornecedores -->
+<div id="tabFornecedores" class="tab-content active">
+
+    <!-- Estatísticas -->
+    <div class="stats-grid">
+        <div class="stat-card green">
+            <h3>Total de Fornecedores</h3>
+            <div class="value" id="statTotal">0</div>
+        </div>
+        <div class="stat-card blue">
+            <h3>Fornecedores Ativos</h3>
+            <div class="value" id="statAtivos">0</div>
+        </div>
+        <div class="stat-card red">
+            <h3>Fornecedores Inativos</h3>
+            <div class="value" id="statInativos">0</div>
+        </div>
+        <div class="stat-card yellow">
+            <h3>Aguardando Aprovação</h3>
+            <div class="value" id="statPendentes">0</div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-section">
+        <h3 style="margin-bottom: 1rem;"><i class="fas fa-filter"></i> Filtros</h3>
+        <div class="filter-grid">
+            <div>
+                <label>Status</label>
+                <select id="filtroStatus">
+                    <option value="">Todos</option>
+                    <option value="1">Ativos</option>
+                    <option value="0">Inativos</option>
+                </select>
+            </div>
+            <div>
+                <label>Aprovação</label>
+                <select id="filtroAprovacao">
+                    <option value="">Todos</option>
+                    <option value="1">Aprovados</option>
+                    <option value="0">Pendentes</option>
+                </select>
+            </div>
+            <div>
+                <label>Buscar</label>
+                <input type="text" id="filtroBusca" placeholder="Nome ou CPF/CNPJ...">
+            </div>
+        </div>
+        <div class="filter-buttons">
+            <button onclick="window.MarketplacePage.aplicarFiltros()"><i class="fas fa-search"></i> Buscar</button>
+            <button onclick="window.MarketplacePage.limparFiltros()" class="btn-secondary"><i class="fas fa-times"></i>
+                Limpar</button>
+            <button onclick="window.MarketplacePage.carregarFornecedores()" class="btn-success"><i
+                    class="fas fa-sync"></i>
+                Atualizar</button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="loading">
+        <i class="fas fa-spinner fa-spin fa-2x"></i>
+        <p>Carregando fornecedores...</p>
+    </div>
+
+    <!-- Alert -->
+    <div id="alertContainer"></div>
+
+    <!-- Tabela -->
+    <div class="table-section">
+        <h3 style="margin-bottom: 1rem;"><i class="fas fa-list"></i> Lista de Fornecedores</h3>
+        <table id="fornecedoresTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Estabelecimento</th>
+                    <th>CPF/CNPJ</th>
+                    <th>Ramo</th>
+                    <th>Telefone</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Aprovação</th>
+                    <th>Cadastro</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="fornecedoresBody">
+                <tr>
+                    <td colspan="10" style="text-align: center; padding: 2rem;">Nenhum fornecedor encontrado
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div><!-- Fim Tab Fornecedores -->
+
+<!-- Tab Ramos de Atividade -->
+<div id="tabRamos" class="tab-content">
+
+    <!-- Botão Novo Ramo -->
+    <div style="margin-bottom: 2rem;">
+        <button onclick="window.MarketplacePage.abrirModalRamo()" class="btn-success">
+            <i class="fas fa-plus"></i> Novo Ramo de Atividade
+        </button>
+    </div>
+
+    <!-- Loading Ramos -->
+    <div id="loadingRamos" class="loading">
+        <i class="fas fa-spinner fa-spin fa-2x"></i>
+        <p>Carregando ramos...</p>
+    </div>
+
+    <!-- Tabela Ramos -->
+    <div class="table-section">
+        <h3 style="margin-bottom: 1rem;"><i class="fas fa-list"></i> Ramos de Atividade</h3>
+        <table id="ramosTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Ícone</th>
+                    <th>Nome</th>
+                    <th>Descrição</th>
+                    <th>Fornecedores</th>
+                    <th>Status</th>
+                    <th>Data Cadastro</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="ramosBody">
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 2rem;">Nenhum ramo encontrado</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div><!-- Fim Tab Ramos -->
+
+<!-- Modal Ramo -->
+<div id="modalRamo" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalRamoTitulo"><i class="fas fa-plus"></i> Novo Ramo de Atividade</h3>
+            <button class="modal-close" onclick="window.MarketplacePage.fecharModalRamo()">&times;</button>
+        </div>
+        <form id="formRamo">
+            <input type="hidden" id="ramoId" name="id">
+            <div class="form-group">
+                <label>Nome *</label>
+                <input type="text" id="ramoNome" name="nome" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Descrição</label>
+                <textarea id="ramoDescricao" name="descricao" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Ícone (FontAwesome)</label>
+                <input type="text" id="ramoIcone" name="icone" class="form-control" placeholder="fa-briefcase">
+                <small style="color: #64748b;">Exemplo: fa-wrench, fa-paint-roller, fa-leaf</small>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+                <button type="submit" class="btn-success">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+                <button type="button" onclick="window.MarketplacePage.fecharModalRamo()" class="btn-secondary">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

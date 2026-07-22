@@ -1,0 +1,1012 @@
+<!-- Page Metadata -->
+<div id="page-metadata" data-title="Hidrômetros" data-icon="fa-tint" style="display:none;"></div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Modals (fora do page-wrapper para z-index correto) -->
+<!-- Modal Editar -->
+<div class="modal-overlay page-hidrometro" id="modalEditar">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-edit"></i> Editar Hidrômetro</h3>
+            <button class="modal-close" onclick="window.HidrometroPage.fecharModal('modalEditar')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="formEditar">
+                <input type="hidden" id="edit_id">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="edit_unidade">Unidade *</label>
+                        <select id="edit_unidade" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_morador">Morador *</label>
+                        <select id="edit_morador" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_numero_hidrometro">Nº do Hidrômetro *</label>
+                        <input type="text" id="edit_numero_hidrometro" required placeholder="Ex: H123456">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_numero_lacre">Nº do Lacre</label>
+                        <input type="text" id="edit_numero_lacre" placeholder="Ex: L789012">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_data_instalacao">Data de Instalação *</label>
+                        <input type="datetime-local" id="edit_data_instalacao" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_ativo">Status *</label>
+                        <select id="edit_ativo" required>
+                            <option value="1">Ativo</option>
+                            <option value="0">Inativo</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="position:relative;">
+                        <label for="edit_patrimonio_busca">Nº do Patrimônio (Inventário)</label>
+                        <div style="display:flex;gap:0.5rem;align-items:center;">
+                            <input type="text" id="edit_patrimonio_busca"
+                                placeholder="Digite o nº do patrimônio..."
+                                autocomplete="off"
+                                oninput="window.HidrometroPage.buscarPatrimonioEdit(this.value)">
+                            <button type="button" class="btn-secondary" style="white-space:nowrap;padding:0.6rem 0.9rem;"
+                                onclick="window.HidrometroPage.limparPatrimonioEdit()" title="Limpar patrimônio">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" id="edit_inventario_id">
+                        <div id="editPatrimonioDropdown" style="
+                            display:none;
+                            position:absolute;
+                            top:100%;
+                            left:0;
+                            right:0;
+                            background:#fff;
+                            border:1.5px solid #2563eb;
+                            border-radius:8px;
+                            box-shadow:0 8px 24px rgba(0,0,0,0.12);
+                            z-index:9999;
+                            max-height:220px;
+                            overflow-y:auto;
+                        "></div>
+                        <small style="color:#64748b;font-size:11px;margin-top:3px;display:block;">
+                            Busca apenas itens <strong>Ativos</strong>, <strong>Circulantes</strong> do grupo <strong>Hidrômetros</strong>
+                        </small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit_observacao">Motivo da Alteração *</label>
+                    <textarea id="edit_observacao" rows="3"
+                        placeholder="Descreva o motivo da alteração para registro no histórico..." required></textarea>
+                    <span class="form-hint">Obrigatório para auditoria e rastreabilidade.</span>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="window.HidrometroPage.fecharModal('modalEditar')">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button class="btn-primary" onclick="window.HidrometroPage.salvarEdicao()">
+                <i class="fas fa-save"></i> Salvar Alterações
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Histórico -->
+<div class="modal-overlay page-hidrometro" id="modalHistorico">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-history"></i> Histórico de Alterações</h3>
+            <button class="modal-close" onclick="window.HidrometroPage.fecharModal('modalHistorico')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="historicoContent">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Carregando histórico...</p>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="window.HidrometroPage.fecharModal('modalHistorico')">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Foto — Menu (Tirar Foto / Anexar Arquivo) -->
+<div class="modal-overlay page-hidrometro" id="modalFotoMenu">
+    <div class="modal-box modal-box-sm">
+        <div class="modal-header">
+            <h3><i class="fas fa-camera"></i> Foto da Leitura</h3>
+            <button class="modal-close" onclick="window.HidrometroPage.fotoFecharMenu()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body foto-menu-opcoes">
+            <button type="button" class="btn-secondary foto-menu-btn" onclick="window.HidrometroPage.fotoEscolherOpcao('camera')">
+                <i class="fas fa-camera"></i> Tirar Foto
+            </button>
+            <button type="button" class="btn-secondary foto-menu-btn" onclick="window.HidrometroPage.fotoEscolherOpcao('upload')">
+                <i class="fas fa-image"></i> Anexar Arquivo
+            </button>
+        </div>
+    </div>
+</div>
+<!-- Input de arquivo oculto, compartilhado pelo menu de foto (individual e coletiva) -->
+<input type="file" id="fotoInputArquivo" accept="image/jpeg,image/jpg,image/png,image/webp" style="display:none;"
+    onchange="window.HidrometroPage.fotoInputArquivoChange(this)">
+
+<!-- Modal Foto — Câmera / Pré-visualização -->
+<div class="modal-overlay page-hidrometro" id="modalFotoCaptura">
+    <div class="modal-box modal-box-md">
+        <div class="modal-header">
+            <h3><i class="fas fa-camera"></i> Foto da Leitura</h3>
+            <button class="modal-close" onclick="window.HidrometroPage.fotoCancelar()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body foto-captura-body">
+            <video id="fotoVideo" autoplay playsinline muted></video>
+            <canvas id="fotoCanvas" style="display:none;"></canvas>
+            <img id="fotoPreviewImg" style="display:none;" alt="Pré-visualização da foto">
+            <p id="fotoCapturaErro" class="alert alert-error" style="display:none;"></p>
+        </div>
+        <div class="modal-footer" id="fotoCapturaFooterCamera">
+            <button class="btn-secondary" onclick="window.HidrometroPage.fotoCancelar()">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button class="btn-primary" onclick="window.HidrometroPage.fotoCapturarFoto()">
+                <i class="fas fa-camera"></i> Capturar
+            </button>
+        </div>
+        <div class="modal-footer" id="fotoCapturaFooterPreview" style="display:none;">
+            <button class="btn-secondary" onclick="window.HidrometroPage.fotoCancelar()">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+            <button class="btn-secondary" id="fotoBtnRefazer" onclick="window.HidrometroPage.fotoRefazer()">
+                <i class="fas fa-redo"></i> Tirar Novamente
+            </button>
+            <button class="btn-primary" onclick="window.HidrometroPage.fotoConfirmar()">
+                <i class="fas fa-check"></i> Confirmar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Foto — Visualizador (evidência / galeria) -->
+<div class="modal-overlay page-hidrometro" id="modalFotoVisualizar">
+    <div class="modal-box modal-box-lg">
+        <div class="modal-header">
+            <h3><i class="fas fa-image"></i> Evidência Fotográfica</h3>
+            <button class="modal-close" onclick="window.HidrometroPage.fecharModal('modalFotoVisualizar')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="info-box" style="margin-bottom:1rem;">
+                <div class="info-box-grid">
+                    <div class="info-item"><label>Data da Leitura</label><span id="fv_data">—</span></div>
+                    <div class="info-item"><label>Unidade</label><span id="fv_unidade">—</span></div>
+                    <div class="info-item"><label>Hidrômetro</label><span id="fv_hidrometro">—</span></div>
+                    <div class="info-item"><label>Leitura Registrada</label><span id="fv_leitura">—</span></div>
+                    <div class="info-item"><label>Registrado por</label><span id="fv_usuario">—</span></div>
+                </div>
+            </div>
+            <div class="foto-visualizador-stage">
+                <button type="button" class="foto-nav-btn foto-nav-anterior" id="fv_btn_anterior" onclick="window.HidrometroPage.fotoGaleriaAnterior()" title="Foto anterior">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <img id="fv_imagem" src="" alt="Evidência fotográfica" loading="lazy" onclick="window.HidrometroPage.fotoAlternarZoom()">
+                <button type="button" class="foto-nav-btn foto-nav-proxima" id="fv_btn_proxima" onclick="window.HidrometroPage.fotoGaleriaProxima()" title="Próxima foto">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            <p id="fv_contador" class="foto-visualizador-contador"></p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="window.HidrometroPage.fotoVisualizadorDownload()">
+                <i class="fas fa-download"></i> Download
+            </button>
+            <button class="btn-secondary" onclick="window.HidrometroPage.fotoVisualizadorImprimir()">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+            <button class="btn-primary" onclick="window.HidrometroPage.fecharModal('modalFotoVisualizar')">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Page Wrapper -->
+<div class="page-wrapper page-hidrometro">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1>Hidrômetros</h1>
+        <p>Cadastro e gestão de hidrômetros por unidade e morador</p>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="stats-grid" id="kpiGrid">
+        <div class="page-card kpi-card compact">
+            <div class="kpi-icon blue"><i class="fas fa-tint"></i></div>
+            <div class="kpi-content">
+                <h3>Total Cadastrados</h3>
+                <div class="value" id="kpi_total">—</div>
+            </div>
+        </div>
+        <div class="page-card kpi-card compact">
+            <div class="kpi-icon green"><i class="fas fa-check-circle"></i></div>
+            <div class="kpi-content">
+                <h3>Ativos</h3>
+                <div class="value" id="kpi_ativos">—</div>
+            </div>
+        </div>
+        <div class="page-card kpi-card compact">
+            <div class="kpi-icon amber"><i class="fas fa-exclamation-circle"></i></div>
+            <div class="kpi-content">
+                <h3>Inativos</h3>
+                <div class="value" id="kpi_inativos">—</div>
+            </div>
+        </div>
+        <div class="page-card kpi-card compact">
+            <div class="kpi-icon purple"><i class="fas fa-tachometer-alt"></i></div>
+            <div class="kpi-content">
+                <h3>Com Leitura</h3>
+                <div class="value" id="kpi_com_leitura">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="cadastro">
+            <i class="fas fa-plus-circle"></i> Cadastrar
+        </button>
+        <button class="tab-button" data-tab="lista">
+            <i class="fas fa-list"></i> Hidrômetros
+        </button>
+        <button class="tab-button" data-tab="leituras">
+            <i class="fas fa-tachometer-alt"></i> Leituras
+        </button>
+        <button class="tab-button" data-tab="relatorios">
+            <i class="fas fa-chart-bar"></i> Relatórios
+        </button>
+    </div>
+
+    <!-- TAB: CADASTRO -->
+    <div id="tab-cadastro" class="tab-content active">
+        <div class="page-card">
+            <h2><i class="fas fa-plus-circle" style="color:#2563eb;margin-right:8px;"></i>Novo Hidrômetro</h2>
+
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <span>Selecione primeiro a <strong>unidade</strong> para carregar os moradores disponíveis.</span>
+            </div>
+
+            <form id="formCadastro">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="cad_unidade">Unidade *</label>
+                        <select id="cad_unidade" required>
+                            <option value="">Selecione uma unidade...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cad_morador">Morador *</label>
+                        <select id="cad_morador" required disabled>
+                            <option value="">Primeiro selecione a unidade</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cad_numero">Nº do Hidrômetro *</label>
+                        <input type="text" id="cad_numero" placeholder="Ex: H123456" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cad_lacre">Nº do Lacre</label>
+                        <input type="text" id="cad_lacre" placeholder="Ex: L789012">
+                    </div>
+                    <div class="form-group">
+                        <label for="cad_data">Data e Hora de Instalação *</label>
+                        <input type="datetime-local" id="cad_data" required>
+                    </div>
+                    <div class="form-group" style="position:relative;">
+                        <label for="cad_patrimonio_busca">Nº do Patrimônio (Inventário)</label>
+                        <div style="display:flex;gap:0.5rem;align-items:center;">
+                            <input type="text" id="cad_patrimonio_busca"
+                                placeholder="Digite o nº do patrimônio..."
+                                autocomplete="off"
+                                oninput="window.HidrometroPage.buscarPatrimonio(this.value)">
+                            <button type="button" class="btn-secondary" style="white-space:nowrap;padding:0.6rem 0.9rem;"
+                                onclick="window.HidrometroPage.limparPatrimonio()" title="Limpar patrimônio">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" id="cad_inventario_id">
+                        <!-- Dropdown de sugestões -->
+                        <div id="patrimonioDropdown" style="
+                            display:none;
+                            position:absolute;
+                            top:100%;
+                            left:0;
+                            right:0;
+                            background:#fff;
+                            border:1.5px solid #2563eb;
+                            border-radius:8px;
+                            box-shadow:0 8px 24px rgba(0,0,0,0.12);
+                            z-index:999;
+                            max-height:220px;
+                            overflow-y:auto;
+                        "></div>
+                        <small style="color:#64748b;font-size:11px;margin-top:3px;display:block;">
+                            Busca apenas itens <strong>Ativos</strong>, <strong>Circulantes</strong> do grupo <strong>Hidrômetros</strong>
+                        </small>
+                    </div>
+                </div>
+                <div class="btn-actions">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Salvar Hidrômetro
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="window.HidrometroPage.limparCadastro()">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TAB: LISTA -->
+    <div id="tab-lista" class="tab-content">
+        <!-- Pesquisa Avançada -->
+        <div class="page-card compact">
+            <div class="search-box">
+                <div class="form-group">
+                    <label for="busca">Pesquisar (Nº, Lacre, Unidade ou Morador)</label>
+                    <input type="text" id="busca" placeholder="Ex: A24H068226, ECC5614918, Gleba 15, Paulo..."
+                        onkeyup="window.HidrometroPage.buscarDebounce()">
+                </div>
+                <div class="form-group">
+                    <label for="filtro_status">Status</label>
+                    <select id="filtro_status" onchange="window.HidrometroPage.buscar()">
+                        <option value="">Todos</option>
+                        <option value="1">Ativos</option>
+                        <option value="0">Inativos</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filtro_unidade">Unidade</label>
+                    <select id="filtro_unidade" onchange="window.HidrometroPage.buscar()">
+                        <option value="">Todas as unidades</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filtro_data_inicial">Data Inicial</label>
+                    <input type="date" id="filtro_data_inicial" onchange="window.HidrometroPage.buscar()">
+                </div>
+                <div class="form-group">
+                    <label for="filtro_data_final">Data Final</label>
+                    <input type="date" id="filtro_data_final" onchange="window.HidrometroPage.buscar()">
+                </div>
+                <button class="btn-primary" onclick="window.HidrometroPage.buscar()">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+                <button class="btn-secondary" onclick="window.HidrometroPage.limparBusca()">
+                    <i class="fas fa-times"></i> Limpar
+                </button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="page-card">
+            <h2><i class="fas fa-list" style="color:#2563eb;margin-right:8px;"></i>Hidrômetros Cadastrados</h2>
+
+            <div class="loading-state" id="loadingLista" style="display:none;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Carregando hidrômetros...</p>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Unidade</th>
+                            <th>Morador</th>
+                            <th>Nº Hidrômetro</th>
+                            <th>Nº Lacre</th>
+                            <th>Instalação</th>
+                            <th>Última Leitura</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaHidrometros">
+                        <tr class="empty-row">
+                            <td colspan="9">
+                                <i class="fas fa-tint"></i>
+                                <p>Nenhum hidrômetro encontrado</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: LEITURAS ===================== -->
+    <div id="tab-leituras" class="tab-content">
+
+        <!-- Sub-tabs de Leituras -->
+        <div class="tabs sub-tabs">
+            <button class="tab-button active" data-subtab="individual">
+                <i class="fas fa-user"></i> Individual
+            </button>
+            <button class="tab-button" data-subtab="coletiva">
+                <i class="fas fa-users"></i> Coletiva
+            </button>
+            <button class="tab-button" data-subtab="historico">
+                <i class="fas fa-list-alt"></i> Histórico
+            </button>
+            <button class="tab-button" data-subtab="configuracoes">
+                <i class="fas fa-cog"></i> Configurações
+            </button>
+        </div>
+
+        <!-- SUB-TAB: INDIVIDUAL -->
+        <div id="subtab-individual" class="subtab-content active">
+            <div class="page-card">
+                <h2><i class="fas fa-user" style="color:#2563eb;margin-right:8px;"></i>Leitura Individual</h2>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Selecione a <strong>unidade → morador → hidrômetro</strong> para registrar a leitura.</span>
+                </div>
+                <form id="formIndividual">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="ind_unidade">Unidade *</label>
+                            <select id="ind_unidade" required>
+                                <option value="">Selecione uma unidade...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ind_morador">Morador *</label>
+                            <select id="ind_morador" required disabled>
+                                <option value="">Primeiro selecione a unidade</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ind_hidrometro">Hidrômetro *</label>
+                            <select id="ind_hidrometro" required disabled>
+                                <option value="">Primeiro selecione o morador</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ind_data_leitura">Data e Hora da Leitura *</label>
+                            <input type="datetime-local" id="ind_data_leitura" required>
+                        </div>
+                    </div>
+                    <div class="info-box" id="ind_info_hidrometro" style="display:none;">
+                        <h4><i class="fas fa-tint"></i> Hidrômetro Selecionado</h4>
+                        <div class="info-box-grid">
+                            <div class="info-item"><label>Nº Hidrômetro</label><span id="info_numero">—</span></div>
+                            <div class="info-item"><label>Nº Lacre</label><span id="info_lacre">—</span></div>
+                            <div class="info-item"><label>Leitura Anterior</label><span id="info_leitura_anterior">—</span></div>
+                            <div class="info-item"><label>Data Anterior</label><span id="info_data_anterior">—</span></div>
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="ind_leitura_anterior">Leitura Anterior (m³)</label>
+                            <input type="number" id="ind_leitura_anterior" step="0.01" readonly placeholder="Carregado automaticamente">
+                            <span class="form-hint">Preenchido automaticamente ao selecionar o hidrômetro.</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="ind_leitura_atual">Leitura Atual (m³) *</label>
+                            <input type="number" id="ind_leitura_atual" step="0.01" min="0" required
+                                placeholder="Ex: 125.50" oninput="window.HidrometroPage.calcularPreview()">
+                        </div>
+                        <div class="form-group">
+                            <label for="ind_observacao">Observação</label>
+                            <input type="text" id="ind_observacao" placeholder="Opcional">
+                        </div>
+                    </div>
+                    <div class="calc-preview" id="ind_calculo">
+                        <h4><i class="fas fa-calculator"></i> Cálculo Estimado</h4>
+                        <div class="calc-grid">
+                            <div class="calc-item"><label>Consumo</label><span id="calc_consumo">—</span></div>
+                            <div class="calc-item"><label>Valor Estimado</label><span id="calc_valor">—</span></div>
+                        </div>
+                    </div>
+                    <div class="btn-actions" style="align-items:center;">
+                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Registrar Leitura</button>
+                        <button type="button" class="btn-secondary" onclick="window.HidrometroPage.limparIndividual()">
+                            <i class="fas fa-eraser"></i> Limpar
+                        </button>
+                        <div class="foto-ind-wrap" id="indFotoWrap">
+                            <button type="button" class="btn-secondary" onclick="window.HidrometroPage.fotoAbrirMenuIndividual()">
+                                <i class="fas fa-camera"></i> Foto da Leitura
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- SUB-TAB: COLETIVA -->
+        <div id="subtab-coletiva" class="subtab-content">
+            <div class="page-card">
+                <h2><i class="fas fa-users" style="color:#2563eb;margin-right:8px;"></i>Leitura Coletiva</h2>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Informe a <strong>data da leitura</strong> e preencha os valores para os hidrômetros selecionados.</span>
+                </div>
+                <div class="form-grid" style="margin-bottom:1.25rem;">
+                    <div class="form-group">
+                        <label for="col_data_leitura">Data e Hora da Leitura *</label>
+                        <input type="datetime-local" id="col_data_leitura" required>
+                    </div>
+                    <div class="form-group" style="justify-content:flex-end;">
+                        <label>&nbsp;</label>
+                        <button class="btn-secondary" onclick="window.HidrometroPage.carregarColetiva()">
+                            <i class="fas fa-sync"></i> Atualizar Lista
+                        </button>
+                    </div>
+                </div>
+                <div class="loading-state" id="loadingColetiva" style="display:none;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Carregando hidrômetros ativos...</p>
+                </div>
+                <div class="col-contadores" style="display:flex;gap:1.5rem;margin-bottom:0.75rem;font-size:13px;color:#475569;">
+                    <span>Leituras preenchidas: <strong id="colCountPreenchidas">0</strong></span>
+                    <span>Selecionados: <strong id="colCountSelecionados">0</strong></span>
+                </div>
+                <div class="table-container coletiva-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAll" onchange="window.HidrometroPage.selecionarTodos(this.checked)"></th>
+                                <th>Unidade</th>
+                                <th>Morador</th>
+                                <th>Nº Hidrômetro</th>
+                                <th>Leit. Anterior (m³)</th>
+                                <th>Leit. Atual (m³)</th>
+                                <th>Foto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaColetiva">
+                            <tr class="empty-row">
+                                <td colspan="7">
+                                    <i class="fas fa-sync"></i>
+                                    <p>Clique em "Atualizar Lista" para carregar os hidrômetros</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="paginacaoColetiva" style="display:none;">
+                    <button class="btn-secondary" onclick="window.HidrometroPage.mudarPagina(-1)" id="btnAnterior">
+                        <i class="fas fa-chevron-left"></i> Anterior
+                    </button>
+                    <span id="infoPagina">Página 1 de 1</span>
+                    <button class="btn-secondary" onclick="window.HidrometroPage.mudarPagina(1)" id="btnProximo">
+                        Próximo <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="btn-actions" style="margin-top:1.25rem;">
+                    <button class="btn-success" id="btnLancarColetiva" onclick="window.HidrometroPage.lancarSelecionados()">
+                        <i class="fas fa-check-circle"></i> Lançar Selecionados
+                    </button>
+                    <button class="btn-secondary" onclick="window.HidrometroPage.limparSelecao()">
+                        <i class="fas fa-times"></i> Limpar Seleção
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUB-TAB: HISTÓRICO -->
+        <div id="subtab-historico" class="subtab-content">
+            <div class="page-card compact">
+                <div class="search-box">
+                    <div class="form-group">
+                        <label for="hist_data_inicial">Data Inicial</label>
+                        <input type="date" id="hist_data_inicial">
+                    </div>
+                    <div class="form-group">
+                        <label for="hist_data_final">Data Final</label>
+                        <input type="date" id="hist_data_final">
+                    </div>
+                    <div class="form-group">
+                        <label for="hist_unidade">Unidade</label>
+                        <select id="hist_unidade">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="justify-content:flex-end;">
+                        <label>&nbsp;</label>
+                        <button class="btn-primary" onclick="window.HidrometroPage.buscarHistorico()">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="stats-grid" id="kpiHistorico" style="display:none;">
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon blue"><i class="fas fa-list"></i></div>
+                    <div class="kpi-content"><h3>Total Leituras</h3><div class="value" id="hist_kpi_total">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon green"><i class="fas fa-tachometer-alt"></i></div>
+                    <div class="kpi-content"><h3>Consumo Total</h3><div class="value" id="hist_kpi_consumo">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon amber"><i class="fas fa-dollar-sign"></i></div>
+                    <div class="kpi-content"><h3>Valor Total</h3><div class="value" id="hist_kpi_valor">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon purple"><i class="fas fa-chart-bar"></i></div>
+                    <div class="kpi-content"><h3>Consumo Médio</h3><div class="value" id="hist_kpi_media">—</div></div>
+                </div>
+            </div>
+            <div class="page-card">
+                <h2><i class="fas fa-list-alt" style="color:#2563eb;margin-right:8px;"></i>Histórico de Leituras</h2>
+                <div class="loading-state" id="loadingHistorico" style="display:none;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Carregando leituras...</p>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>Unidade</th>
+                                <th>Morador</th>
+                                <th>Nº Hidrômetro</th>
+                                <th>Leit. Ant. (m³)</th>
+                                <th>Leit. Atual (m³)</th>
+                                <th>Consumo (m³)</th>
+                                <th>Valor (R$)</th>
+                                <th>Lançado por</th>
+                                <th>Imagem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaHistorico">
+                            <tr class="empty-row">
+                                <td colspan="10">
+                                    <i class="fas fa-search"></i>
+                                    <p>Use os filtros acima para buscar leituras</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUB-TAB: CONFIGURAÇÕES -->
+        <div id="subtab-configuracoes" class="subtab-content">
+            <div class="page-card">
+                <h2><i class="fas fa-cog" style="color:#2563eb;margin-right:8px;"></i>Período de Leitura</h2>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Configure o período em que os moradores poderão lançar suas próprias leituras pelo portal.</span>
+                </div>
+                <form id="formConfigPeriodo">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="config_dia_inicio">Dia Inicial do Período *</label>
+                            <input type="number" id="config_dia_inicio" min="1" max="31" required>
+                            <span class="form-hint">Ex: 1 (primeiro dia do mês)</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="config_dia_fim">Dia Final do Período *</label>
+                            <input type="number" id="config_dia_fim" min="1" max="31" required>
+                            <span class="form-hint">Ex: 10 (décimo dia do mês)</span>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:1.25rem;">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;">
+                            <input type="checkbox" id="config_morador_pode" style="width:18px;height:18px;accent-color:#2563eb;">
+                            Permitir que moradores lançem suas próprias leituras
+                        </label>
+                    </div>
+                    <div class="info-box" id="config_status_box" style="display:none;">
+                        <h4><i class="fas fa-calendar-check"></i> Status do Período Atual</h4>
+                        <div class="info-box-grid">
+                            <div class="info-item"><label>Dia Atual</label><span id="config_dia_atual">—</span></div>
+                            <div class="info-item"><label>Período Configurado</label><span id="config_periodo_atual">—</span></div>
+                            <div class="info-item"><label>Status</label><span id="config_status">—</span></div>
+                        </div>
+                    </div>
+                    <div class="btn-actions">
+                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Salvar Configuração</button>
+                        <button type="button" class="btn-secondary" onclick="window.HidrometroPage.carregarConfigPeriodo()">
+                            <i class="fas fa-sync"></i> Atualizar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: RELATÓRIOS ===================== -->
+    <div id="tab-relatorios" class="tab-content">
+
+        <!-- KPIs rápidos -->
+        <div class="stats-grid" id="kpiRelatorio" style="display:none;">
+            <div class="page-card kpi-card compact">
+                <div class="kpi-icon blue"><i class="fas fa-list"></i></div>
+                <div class="kpi-content"><h3>Total Leituras</h3><div class="value" id="rel_kpi_total">—</div></div>
+            </div>
+            <div class="page-card kpi-card compact">
+                <div class="kpi-icon green"><i class="fas fa-tachometer-alt"></i></div>
+                <div class="kpi-content"><h3>Consumo Total</h3><div class="value" id="rel_kpi_consumo">—</div></div>
+            </div>
+            <div class="page-card kpi-card compact">
+                <div class="kpi-icon amber"><i class="fas fa-dollar-sign"></i></div>
+                <div class="kpi-content"><h3>Valor Total</h3><div class="value" id="rel_kpi_valor">—</div></div>
+            </div>
+            <div class="page-card kpi-card compact">
+                <div class="kpi-icon purple"><i class="fas fa-chart-bar"></i></div>
+                <div class="kpi-content"><h3>Consumo Médio</h3><div class="value" id="rel_kpi_media">—</div></div>
+            </div>
+        </div>
+
+        <!-- Seletor de Tipo de Relatório -->
+        <div class="page-card rel-seletor-card">
+            <h2><i class="fas fa-file-alt"></i> Selecione o Tipo de Relatório</h2>
+            <p class="rel-seletor-desc">Escolha o modelo desejado para gerar a análise de consumo de água.</p>
+
+            <div class="rel-tipo-grid">
+                <div class="rel-tipo-card" data-tipo="geral" onclick="window.HidrometroPage.relSelecionarTipo('geral')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#0369a1,#0ea5e9);"><i class="fas fa-tint"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Relatório Geral de Consumo</strong>
+                        <span>Resumo completo de consumo por unidade</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="evolucao" onclick="window.HidrometroPage.relSelecionarTipo('evolucao')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);"><i class="fas fa-chart-line"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Evolução de Consumo</strong>
+                        <span>Comparativo mensal de consumo da associação</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="alertas" onclick="window.HidrometroPage.relSelecionarTipo('alertas')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#b91c1c,#ef4444);"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Alertas de Consumo</strong>
+                        <span>Identifica automaticamente consumos suspeitos</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="inativos" onclick="window.HidrometroPage.relSelecionarTipo('inativos')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#57534e,#a8a29e);"><i class="fas fa-ban"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Histórico de Hidrômetros Inativos</strong>
+                        <span>Lista completa dos hidrômetros desativados</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="ranking" onclick="window.HidrometroPage.relSelecionarTipo('ranking')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#b45309,#f59e0b);"><i class="fas fa-trophy"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Ranking de Consumo</strong>
+                        <span>Unidades com maior e menor consumo</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="financeiro" onclick="window.HidrometroPage.relSelecionarTipo('financeiro')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#065f46,#10b981);"><i class="fas fa-coins"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Relatório Financeiro da Água</strong>
+                        <span>Resumo financeiro: consumo × receita</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="unidade" onclick="window.HidrometroPage.relSelecionarTipo('unidade')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#6b21a8,#a855f7);"><i class="fas fa-file-invoice"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Histórico Completo por Unidade</strong>
+                        <span>Todas as leituras de uma unidade específica</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+
+                <div class="rel-tipo-card" data-tipo="analitico" onclick="window.HidrometroPage.relSelecionarTipo('analitico')">
+                    <div class="rel-tipo-icon" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);"><i class="fas fa-chart-area"></i></div>
+                    <div class="rel-tipo-info">
+                        <strong>Relatório de Consumo Analítico</strong>
+                        <span>Comparativo entre leitura anterior e leitura atual por unidade</span>
+                    </div>
+                    <div class="rel-tipo-check"><i class="fas fa-check-circle"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel de filtros / prévia (aparece após seleção de um cartão) -->
+        <div id="rel-painel" class="page-card" style="display:none;">
+            <div class="rel-painel-header">
+                <div class="rel-painel-titulo">
+                    <span id="rel-painel-icon"><i class="fas fa-file-alt"></i></span>
+                    <h2 id="rel-painel-nome">Relatório</h2>
+                </div>
+                <div class="rel-painel-acoes">
+                    <button class="btn-secondary" onclick="window.HidrometroPage.relExportarCSV()">
+                        <i class="fas fa-download"></i> Exportar CSV
+                    </button>
+                    <button class="btn-secondary" onclick="window.HidrometroPage.relExportarPDF()">
+                        <i class="fas fa-file-pdf"></i> Exportar PDF
+                    </button>
+                </div>
+            </div>
+
+            <div class="rel-painel-filtros">
+                <div class="rel-filtro-grupo" id="rel-grupo-data-inicial">
+                    <label for="rel_data_inicial">Data Inicial</label>
+                    <input type="date" id="rel_data_inicial" onchange="window.HidrometroPage.relGerar()">
+                </div>
+                <div class="rel-filtro-grupo" id="rel-grupo-data-final">
+                    <label for="rel_data_final">Data Final</label>
+                    <input type="date" id="rel_data_final" onchange="window.HidrometroPage.relGerar()">
+                </div>
+                <div class="rel-filtro-grupo" id="rel-grupo-unidade">
+                    <label for="rel_unidade">Unidade</label>
+                    <select id="rel_unidade" onchange="window.HidrometroPage.relGerar()">
+                        <option value="">Todas as unidades</option>
+                    </select>
+                </div>
+                <div class="rel-filtro-grupo" id="rel-grupo-motivo" style="display:none;">
+                    <label for="rel_motivo">Motivo</label>
+                    <input type="text" id="rel_motivo" placeholder="Buscar por motivo..." oninput="window.HidrometroPage.relGerar()">
+                </div>
+                <div class="rel-filtro-grupo" id="rel-grupo-status" style="display:none;">
+                    <label for="rel_status">Status</label>
+                    <select id="rel_status" onchange="window.HidrometroPage.relGerar()">
+                        <option value="">Todos</option>
+                        <option value="ativos">Ativos</option>
+                        <option value="inativos">Inativos</option>
+                    </select>
+                </div>
+                <div class="rel-filtro-grupo" id="rel-grupo-ordenacao" style="display:none;">
+                    <label for="rel_ordenacao">Ordenação</label>
+                    <select id="rel_ordenacao" onchange="window.HidrometroPage.relGerar()">
+                        <option value="unidade">Unidade</option>
+                        <option value="maior_consumo">Maior Consumo</option>
+                        <option value="menor_consumo">Menor Consumo</option>
+                        <option value="maior_valor">Maior Valor</option>
+                        <option value="data_leitura">Data da Leitura</option>
+                    </select>
+                </div>
+                <div class="rel-filtro-grupo" style="flex:0 0 auto;min-width:0;">
+                    <label>&nbsp;</label>
+                    <button class="btn-primary" onclick="window.HidrometroPage.relGerar()">
+                        <i class="fas fa-search"></i> Gerar
+                    </button>
+                </div>
+            </div>
+
+            <div class="rel-contador"><span id="rel-contador-texto">Selecione os filtros e clique em Gerar.</span></div>
+
+            <!-- Resumo de alertas (somente no tipo "alertas") -->
+            <div class="stats-grid" id="rel-resumo-alertas" style="display:none;">
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon" style="background:#f1f5f9;color:#475569;"><i class="fas fa-tint-slash"></i></div>
+                    <div class="kpi-content"><h3>Consumo Zero</h3><div class="value" id="rel_alerta_zero">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon amber"><i class="fas fa-exclamation-circle"></i></div>
+                    <div class="kpi-content"><h3>Oscilação Moderada</h3><div class="value" id="rel_alerta_moderada">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon red"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="kpi-content"><h3>Oscilação Alta</h3><div class="value" id="rel_alerta_alta">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon purple"><i class="fas fa-house"></i></div>
+                    <div class="kpi-content"><h3>Possível Imóvel Vazio</h3><div class="value" id="rel_alerta_vazio">—</div></div>
+                </div>
+            </div>
+
+            <!-- Painel de resumo (somente no tipo "analitico") -->
+            <div class="stats-grid" id="rel-resumo-analitico" style="display:none;">
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon green"><i class="fas fa-arrow-trend-up"></i></div>
+                    <div class="kpi-content"><h3>Maior Consumo</h3><div class="value" id="rel_analitico_maior_consumo">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon blue"><i class="fas fa-arrow-trend-down"></i></div>
+                    <div class="kpi-content"><h3>Menor Consumo</h3><div class="value" id="rel_analitico_menor_consumo">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon amber"><i class="fas fa-sack-dollar"></i></div>
+                    <div class="kpi-content"><h3>Maior Faturamento</h3><div class="value" id="rel_analitico_maior_faturamento">—</div></div>
+                </div>
+                <div class="page-card kpi-card compact">
+                    <div class="kpi-icon purple"><i class="fas fa-chart-simple"></i></div>
+                    <div class="kpi-content"><h3>Média Geral</h3><div class="value" id="rel_analitico_media_geral">—</div></div>
+                </div>
+            </div>
+
+            <div class="loading-state" id="loadingRelatorio" style="display:none;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Gerando relatório...</p>
+            </div>
+
+            <!-- Gráfico (evolução / ranking / financeiro / unidade) -->
+            <div id="rel-grafico-wrap" style="display:none;margin-bottom:1.5rem;">
+                <canvas id="rel-grafico" style="max-height:340px;"></canvas>
+            </div>
+
+            <!-- Gráficos do Relatório de Consumo Analítico (3 gráficos dedicados) -->
+            <div id="rel-analitico-graficos" style="display:none;">
+                <div class="rel-analitico-graficos-grid">
+                    <div class="page-card">
+                        <h2 style="font-size:14px;margin-bottom:0.75rem;color:#1e293b;">Consumo por Unidade</h2>
+                        <canvas id="rel-analitico-grafico-unidade" style="max-height:260px;"></canvas>
+                    </div>
+                    <div class="page-card">
+                        <h2 style="font-size:14px;margin-bottom:0.75rem;color:#1e293b;">Evolução Mensal</h2>
+                        <canvas id="rel-analitico-grafico-evolucao" style="max-height:260px;"></canvas>
+                    </div>
+                    <div class="page-card">
+                        <h2 style="font-size:14px;margin-bottom:0.75rem;color:#1e293b;">Distribuição de Consumo</h2>
+                        <canvas id="rel-analitico-grafico-distribuicao" style="max-height:260px;"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Busca rápida (somente no tipo "analitico" — filtra o resultado já carregado, sem nova consulta) -->
+            <div class="rel-analitico-busca-wrap" id="rel-analitico-busca-wrap" style="display:none;">
+                <input type="text" id="rel_analitico_busca" class="input-filtro-tabela"
+                       placeholder="Filtrar tabela... (Unidade, Morador ou Hidrômetro)"
+                       oninput="window.HidrometroPage.relAnaliticoFiltrarBusca()">
+            </div>
+
+            <div class="table-container" id="rel-tabela-container">
+                <table id="rel-tabela-previa">
+                    <thead id="rel-tabela-thead"><tr></tr></thead>
+                    <tbody id="rel-tabela-tbody">
+                        <tr class="empty-row"><td colspan="8"><i class="fas fa-chart-bar"></i><p>Selecione um tipo de relatório acima</p></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação (somente no tipo "analitico") -->
+            <div class="rel-analitico-paginacao" id="rel-analitico-paginacao" style="display:none;">
+                <span id="rel-analitico-paginacao-texto">Mostrando 0 de 0</span>
+                <div class="rel-analitico-paginacao-botoes">
+                    <button class="btn-secondary" onclick="window.HidrometroPage.relAnaliticoPaginaAnterior()"><i class="fas fa-chevron-left"></i> Anterior</button>
+                    <button class="btn-secondary" onclick="window.HidrometroPage.relAnaliticoProximaPagina()">Próxima <i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- Segunda tabela (ex.: detalhado da Evolução, menores consumidores do Ranking) -->
+            <div class="table-container" id="rel-tabela2-container" style="display:none;margin-top:1.5rem;">
+                <h2 id="rel-tabela2-titulo" style="font-size:15px;margin-bottom:0.75rem;color:#1e293b;"></h2>
+                <table id="rel-tabela2">
+                    <thead id="rel-tabela2-thead"><tr></tr></thead>
+                    <tbody id="rel-tabela2-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

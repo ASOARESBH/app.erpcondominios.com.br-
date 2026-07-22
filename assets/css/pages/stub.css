@@ -1,0 +1,95 @@
+/**
+ * stub.css — Estilos compartilhados para páginas em desenvolvimento
+ * Usado por: seguranca, notificacoes, sistema
+ * @version 1.0.0
+ */
+
+/* ============================================================
+   BREADCRUMB STUB
+   ============================================================ */
+.stub-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.stub-breadcrumb [data-page] {
+    color: #4f46e5;
+    cursor: pointer;
+    font-weight: 500;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.stub-breadcrumb [data-page]:hover {
+    color: #3730a3;
+    text-decoration: underline;
+}
+
+.stub-sep {
+    color: #cbd5e1;
+    font-size: 0.7rem;
+}
+
+/* ============================================================
+   CARD EM DESENVOLVIMENTO
+   ============================================================ */
+.stub-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+    border: 2px dashed #e2e8f0;
+    background: #fafbfc;
+}
+
+.stub-icon {
+    font-size: 3.5rem;
+    color: #cbd5e1;
+    margin-bottom: 1.25rem;
+}
+
+.stub-card h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #64748b;
+    margin: 0 0 0.75rem 0;
+}
+
+.stub-card p {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    max-width: 480px;
+    line-height: 1.6;
+    margin: 0 0 1.5rem 0;
+}
+
+.stub-btn-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: #4f46e5;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.stub-btn-back:hover {
+    background: #4338ca;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}

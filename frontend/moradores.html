@@ -1,0 +1,1301 @@
+ï»¿
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Moradores - Sistema de Controle de Acesso</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Design System CSS -->
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <!-- Tema Azul (FASE 2) -->
+    <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
+
+    <!-- FASE 2: CSS do Web Component -->
+    <link rel="stylesheet" href="components/user-menu/user-menu.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--color-background-tertiary);
+            display: flex;
+        }
+
+        /* Sidebar & Layout */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            padding: 0;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 2rem 1rem 1rem;
+            text-align: center;
+        }
+
+        .sidebar h1 {
+            color: var(--color-background-primary);
+            font-size: 1.3rem;
+            margin-bottom: 0;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+            flex: 1;
+        }
+
+        .sidebar-footer {
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: auto;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            color: var(--border-color);
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--color-background-primary);
+        }
+
+        .nav-link.active {
+            background: var(--color-primary-600);
+            color: var(--color-background-primary);
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+        }
+
+        .main-content {
+            margin-left: 260px;
+            padding: 2rem;
+            width: 100%;
+            transition: margin-left 0.3s;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Header, User Profile & Sidebar Footer styles are now handled by user-profile-sidebar.js */
+
+
+        /* User Profile & Sidebar Footer styles are now handled by user-profile-sidebar.js */
+
+
+        .form-section,
+        .table-section {
+            background: var(--color-background-primary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-grid-2 {
+            grid-template-columns: 2fr 1fr;
+        }
+
+        .form-grid-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.6rem;
+            margin-bottom: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-family: inherit;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--color-primary-600);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-800));
+            color: var(--color-background-primary);
+            padding: 0.6rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            margin-right: 0.5rem;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .btn-cancel {
+            background: linear-gradient(135deg, var(--color-neutral-600), var(--color-neutral-700));
+        }
+
+        .btn-edit {
+            background: linear-gradient(135deg, var(--color-warning-600), var(--color-warning-700));
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, var(--color-error-600), var(--color-error-700));
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-toggle {
+            background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
+            padding: 0.4rem 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--color-background-secondary);
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: var(--color-background-tertiary);
+            font-weight: 600;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: var(--color-success-100);
+            color: var(--color-success-900);
+            border: 1px solid var(--color-success-500);
+        }
+
+        .alert-error {
+            background: var(--color-error-100);
+            color: var(--color-error-900);
+            border: 1px solid #f87171;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .search-box input {
+            flex: 1;
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .badge-success {
+            background: var(--color-success-100);
+            color: var(--color-success-900);
+        }
+
+        .badge-danger {
+            background: var(--color-error-100);
+            color: var(--color-error-900);
+        }
+
+        /* Menu Toggle Mobile */
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: var(--color-text-primary);
+            color: var(--color-background-primary);
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .form-section,
+            .table-section {
+                padding: 1rem;
+            }
+
+            th,
+            td {
+                padding: 0.5rem;
+                font-size: 0.85rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            button {
+                width: 100%;
+                margin-bottom: 0.5rem;
+                margin-right: 0;
+            }
+        }
+
+        /* Sistema de Abas */
+        .tabs-container {
+            background: var(--color-background-primary);
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--color-background-secondary);
+            padding: 0 1.5rem;
+        }
+
+        .tab {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--color-text-secondary);
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab:hover {
+            color: var(--color-primary-600);
+        }
+
+        .tab.active {
+            color: var(--color-primary-600);
+            border-bottom-color: var(--color-primary-600);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 1.5rem;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .tabs {
+                padding: 0 0.5rem;
+            }
+
+            .tab {
+                padding: 0.75rem 1rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+    <script src="js/session-manager-core.js"></script>
+</head>
+
+<body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h1>Serra da Liberdade</h1>
+        </div>
+
+        <!-- Perfil injetado via user-profile-sidebar.js -->
+
+
+        <ul class="nav-menu">
+            <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i>
+                    Dashboard</a></li>
+            <li class="nav-item"><a href="moradores.html" class="nav-link active"><i class="fas fa-users"></i>
+                    Moradores</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=veiculos" class="nav-link"><i class="fas fa-car"></i>
+                    Veículos</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=visitantes" class="nav-link"><i
+                        class="fas fa-user-friends"></i>
+                    Visitantes</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=registro" class="nav-link"><i
+                        class="fas fa-clipboard-list"></i> Registro
+                    Manual</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=acesso" class="nav-link"><i
+                        class="fas fa-door-open"></i> Controle de
+                    Acesso</a></li>
+            <li class="nav-item"><a href="layout-base.html?page=relatorios" class="nav-link"><i
+                        class="fas fa-file-alt"></i>
+                    Relatórios</a></li>
+            <li class="nav-item"><a href="financeiro.html" class="nav-link"><i class="fas fa-money-bill-wave"></i>
+                    Financeiro</a></li>
+            <li class="nav-item"><a href="configuracao.html" class="nav-link"><i class="fas fa-cog"></i>
+                    Configuraçµes</a></li>
+            <li class="nav-item"><a href="manutencao.html" class="nav-link"><i class="fas fa-tools"></i> Manutenção</a>
+            </li>
+            <li class="nav-item"><a href="administrativa.html" class="nav-link"><i class="fas fa-briefcase"></i>
+                    Administrativo</a></li>
+
+            <li class="nav-item" style="margin-top: 1rem;">
+                <a href="#" class="nav-link" id="btn-logout" style="color: #fca5a5;">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </a>
+            </li>
+        </ul>
+
+        <!-- Footer injetado via user-profile-sidebar.js -->
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1><i class="fas fa-users"></i> Moradores</h1>
+            <app-user-menu></app-user-menu>
+        </header>
+
+        <div id="alertBox"></div>
+
+        <!-- Sistema de Abas -->
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab active" onclick="abrirAba('moradores')">
+                    <i class="fas fa-users"></i> Moradores
+                </button>
+                <button class="tab" onclick="abrirAba('dependentes')">
+                    <i class="fas fa-user-friends"></i> Dependentes
+                </button>
+            </div>
+
+            <!-- ABA: MORADORES -->
+            <div id="tab-moradores" class="tab-content active">
+                <section class="form-section" style="box-shadow: none; padding: 0; margin-bottom: 1.5rem;">
+                    <h2 id="formTitle">Novo Morador</h2>
+
+                    <form id="moradorForm">
+                        <input type="hidden" id="moradorId">
+
+                        <div class="form-grid">
+                            <div>
+                                <label>Nome Completo *</label>
+                                <input type="text" id="nomeCompleto" required placeholder="Nome completo do morador">
+                            </div>
+                            <div>
+                                <label>CPF *</label>
+                                <input type="text" id="cpf" required placeholder="000.000.000-00"
+                                    oninput="formatarInputCPF(this)">
+                            </div>
+                            <div>
+                                <label>Unidade *</label>
+                                <select id="unidade" required>
+                                    <option value="">Selecione uma unidade</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div>
+                                <label>Email</label>
+                                <input type="email" id="email" placeholder="email@exemplo.com">
+                            </div>
+                            <div>
+                                <label>Telefone</label>
+                                <input type="tel" id="telefone" placeholder="(11) 3000-0000">
+                            </div>
+                            <div>
+                                <label>Celular</label>
+                                <input type="tel" id="celular" placeholder="(11) 99999-9999">
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div style="grid-column: 1 / -1;">
+                                <label>Observaçµes</label>
+                                <textarea id="observacao" placeholder="Observaçµes adicionais" rows="3"></textarea>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btnSalvarMorador">
+                            <i class="fas fa-save"></i> Salvar Morador
+                        </button>
+                        <button type="button" class="btn-cancel" id="btnCancelarMorador"
+                            onclick="limparFormularioMorador()" style="display:none;">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                    </form>
+                </section>
+
+                <!-- Tabela de Moradores -->
+                <section class="table-section">
+                    <h2>Lista de Moradores</h2>
+
+                    <div class="search-box">
+                        <input type="text" id="searchMorador" placeholder="Pesquisar por nome, CPF ou unidade...">
+                        <button onclick="buscarMoradores()"><i class="fas fa-search"></i> Buscar</button>
+                        <button class="btn-cancel" onclick="limparBuscaMoradores()"><i class="fas fa-redo"></i>
+                            Limpar</button>
+                    </div>
+
+                    <div class="loading" id="loadingMoradores">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p>Carregando moradores...</p>
+                    </div>
+
+                    <table id="tabelaMoradores">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>CPF</th>
+                                <th>Unidade</th>
+                                <th>Email</th>
+                                <th>Telefone</th>
+                                <th>Celular</th>
+                                <th>Status</th>
+                                <th>Açµes</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </section>
+            </div>
+
+            <!-- ABA: DEPENDENTES -->
+            <div id="tab-dependentes" class="tab-content">
+                <section class="form-section" style="box-shadow: none; padding: 0; margin-bottom: 1.5rem;">
+                    <h2 id="formTitleDependente">Novo Dependente</h2>
+
+                    <form id="dependenteForm">
+                        <input type="hidden" id="dependenteId">
+                        <input type="hidden" id="moradorIdDependente">
+
+                        <div class="form-grid">
+                            <div>
+                                <label>Morador *</label>
+                                <select id="moradorSelecionado" required onchange="selecionarMorador()">
+                                    <option value="">Selecione um morador</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>Nome Completo *</label>
+                                <input type="text" id="nomeCompletoDepend" required
+                                    placeholder="Nome completo do dependente">
+                            </div>
+                            <div>
+                                <label>CPF *</label>
+                                <input type="text" id="cpfDepend" required placeholder="000.000.000-00"
+                                    oninput="formatarInputCPF(this)">
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div>
+                                <label>Parentesco *</label>
+                                <select id="parentesco" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="Cônjuge">Cônjuge</option>
+                                    <option value="Filho">Filho</option>
+                                    <option value="Filha">Filha</option>
+                                    <option value="Pai">Pai</option>
+                                    <option value="Mãe">Mãe</option>
+                                    <option value="Avô">Avô</option>
+                                    <option value="Avó">Avó</option>
+                                    <option value="Irmão">Irmão</option>
+                                    <option value="Irmã">Irmã</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>Data de Nascimento</label>
+                                <input type="date" id="dataNascimentoDepend">
+                            </div>
+                            <div>
+                                <label>Email</label>
+                                <input type="email" id="emailDepend" placeholder="email@exemplo.com">
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div>
+                                <label>Telefone</label>
+                                <input type="tel" id="telefoneDepend" placeholder="(11) 3000-0000">
+                            </div>
+                            <div>
+                                <label>Celular</label>
+                                <input type="tel" id="celularDepend" placeholder="(11) 99999-9999">
+                            </div>
+                            <div>
+                                <label>Observaçµes</label>
+                                <textarea id="observacaoDepend" placeholder="Observaçµes adicionais"
+                                    rows="2"></textarea>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btnSalvarDependente">
+                            <i class="fas fa-save"></i> Salvar Dependente
+                        </button>
+                        <button type="button" class="btn-cancel" id="btnCancelarDependente"
+                            onclick="limparFormularioDependente()" style="display:none;">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                    </form>
+                </section>
+
+                <!-- Tabela de Dependentes -->
+                <section class="table-section">
+                    <h2>Lista de Dependentes</h2>
+
+                    <div class="search-box">
+                        <input type="text" id="searchDependente" placeholder="Pesquisar por nome ou CPF...">
+                        <button onclick="buscarDependentes()"><i class="fas fa-search"></i> Buscar</button>
+                        <button class="btn-cancel" onclick="limparBuscaDependentes()"><i class="fas fa-redo"></i>
+                            Limpar</button>
+                    </div>
+
+                    <div class="loading" id="loadingDependentes">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p>Carregando dependentes...</p>
+                    </div>
+
+                    <table id="tabelaDependentes">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>CPF</th>
+                                <th>Parentesco</th>
+                                <th>Morador</th>
+                                <th>Status</th>
+                                <th>Açµes</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+        }
+
+        function abrirAba(abaNome) {
+            // Ocultar todas as abas
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Remover classe active de todos os botµes
+            document.querySelectorAll('.tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Mostrar aba selecionada
+            document.getElementById('tab-' + abaNome).classList.add('active');
+
+            // Marcar botão como ativo
+            event.target.classList.add('active');
+
+            // Carregar dados se necessário
+            if (abaNome === 'moradores') {
+                carregarMoradores();
+            } else if (abaNome === 'dependentes') {
+                carregarDependentes();
+                carregarMoradoresParaSelect();
+            }
+        }
+
+        // Inicializar ao carregar a página
+        document.addEventListener('DOMContentLoaded', function () {
+            carregarMoradores();
+            carregarUnidades();
+            carregarMoradoresParaSelect();
+
+            // Listeners de formulários
+            document.getElementById('moradorForm').addEventListener('submit', salvarMorador);
+            document.getElementById('dependenteForm').addEventListener('submit', salvarDependente);
+        });
+
+        // ============================================
+        // FUNES DE MORADORES
+        // ============================================
+
+        function carregarMoradores() {
+            const loading = document.getElementById('loadingMoradores');
+            if (loading) loading.classList.add('active');
+
+            fetch('../api/api_moradores.php?acao=listar', {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (loading) loading.classList.remove('active');
+
+                    if (data.sucesso) {
+                        preencherTabelaMoradores(data.dados || []);
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    if (loading) loading.classList.remove('active');
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro', 'Erro ao carregar moradores', 'error');
+                });
+        }
+
+        function preencherTabelaMoradores(moradores) {
+            const tbody = document.querySelector('#tabelaMoradores tbody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+
+            if (!moradores || moradores.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem;"><i class="fas fa-inbox"></i> Nenhum morador cadastrado</td></tr>';
+                return;
+            }
+
+            moradores.forEach(m => {
+                const statusBadge = m.ativo === 1
+                    ? '<span class="badge badge-success"><i class="fas fa-check-circle"></i> Ativo</span>'
+                    : '<span class="badge badge-danger"><i class="fas fa-times-circle"></i> Inativo</span>';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${m.id}</td>
+                    <td><strong>${m.nome}</strong></td>
+                    <td>${formatarCPF(m.cpf)}</td>
+                    <td>${m.unidade}</td>
+                    <td>${m.email || '-'}</td>
+                    <td>${m.telefone || '-'}</td>
+                    <td>${m.celular || '-'}</td>
+                    <td>${statusBadge}</td>
+                    <td class="actions">
+                        <button class="btn-edit" onclick="editarMorador(${m.id})" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-toggle" onclick="alternarStatusMorador(${m.id}, ${m.ativo})" title="${m.ativo === 1 ? 'Inativar' : 'Ativar'}">
+                            <i class="fas fa-${m.ativo === 1 ? 'ban' : 'check'}"></i>
+                        </button>
+                        <button class="btn-delete" onclick="deletarMorador(${m.id})" title="Deletar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function carregarUnidades() {
+            fetch('../api/api_unidades.php', {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Unidades carregadas:', data);
+                    if (data.sucesso && data.dados) {
+                        const select = document.getElementById('unidade');
+                        select.innerHTML = '<option value="">Selecione uma unidade</option>';
+                        data.dados.forEach(u => {
+                            const option = document.createElement('option');
+                            option.value = u.nome;
+                            option.textContent = u.nome + (u.bloco ? ' - Bloco ' + u.bloco : '');
+                            select.appendChild(option);
+                        });
+                    } else {
+                        console.error('Erro ao carregar unidades:', data.mensagem);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar unidades:', error);
+                });
+        }
+
+        function salvarMorador(event) {
+            event.preventDefault();
+
+            const dados = {
+                nome: document.getElementById('nomeCompleto').value.trim(),
+                cpf: document.getElementById('cpf').value.trim(),
+                unidade: document.getElementById('unidade').value,
+                email: document.getElementById('email').value.trim(),
+                telefone: document.getElementById('telefone').value.trim(),
+                celular: document.getElementById('celular').value.trim(),
+                observacao: document.getElementById('observacao').value.trim()
+            };
+
+            const moradorId = document.getElementById('moradorId').value;
+            const metodo = moradorId ? 'PUT' : 'POST';
+            const url = `../api/api_moradores.php`;
+
+            if (moradorId) {
+                dados.id = moradorId;
+            }
+
+            fetch(url, {
+                method: metodo,
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const mensagem = moradorId ? 'Morador atualizado com sucesso!' : 'Morador cadastrado com sucesso!';
+                        mostrarAlerta('Sucesso', mensagem, 'success');
+                        limparFormularioMorador();
+                        carregarMoradores();
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem || 'Erro ao salvar', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro', 'Erro ao salvar morador', 'error');
+                });
+        }
+
+        function editarMorador(id) {
+            fetch(`../api/api_moradores.php?id=${id}`, {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Resposta da API:', data);
+                    if (data.sucesso && data.dados) {
+                        const m = data.dados;
+                        document.getElementById('moradorId').value = m.id;
+                        document.getElementById('nomeCompleto').value = m.nome;
+                        document.getElementById('cpf').value = m.cpf;
+                        document.getElementById('unidade').value = m.unidade || '';
+                        document.getElementById('email').value = m.email || '';
+                        document.getElementById('telefone').value = m.telefone || '';
+                        document.getElementById('celular').value = m.celular || '';
+                        document.getElementById('observacao').value = m.observacao || '';
+
+                        document.getElementById('formTitle').textContent = 'Editar Morador';
+                        document.getElementById('btnSalvarMorador').innerHTML = '<i class="fas fa-save"></i> Atualizar Morador';
+                        document.getElementById('btnCancelarMorador').style.display = 'inline-block';
+                        document.getElementById('cpf').disabled = true;
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        function deletarMorador(id) {
+            if (!confirm('Tem certeza que deseja deletar este morador?')) return;
+
+            fetch(`../api/api_moradores.php?acao=deletar&id=${id}`, {
+                method: 'DELETE',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta('Sucesso', data.mensagem, 'success');
+                        carregarMoradores();
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem, 'error');
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        function alternarStatusMorador(id, statusAtual) {
+            const novoStatus = statusAtual === 1 ? 0 : 1;
+            const acao = novoStatus === 1 ? 'ativar' : 'inativar';
+
+            fetch(`../api/api_moradores.php?acao=${acao}&id=${id}`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta('Sucesso', data.mensagem, 'success');
+                        carregarMoradores();
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem, 'error');
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        function limparFormularioMorador() {
+            document.getElementById('moradorForm').reset();
+            document.getElementById('moradorId').value = '';
+            document.getElementById('formTitle').textContent = 'Novo Morador';
+            document.getElementById('btnSalvarMorador').innerHTML = '<i class="fas fa-save"></i> Salvar Morador';
+            document.getElementById('btnCancelarMorador').style.display = 'none';
+            document.getElementById('cpf').disabled = false;
+        }
+
+        function buscarMoradores() {
+            const termo = document.getElementById('searchMorador').value.toLowerCase();
+            const rows = document.querySelectorAll('#tabelaMoradores tbody tr');
+
+            rows.forEach(row => {
+                const texto = row.textContent.toLowerCase();
+                row.style.display = texto.includes(termo) ? '' : 'none';
+            });
+        }
+
+        function limparBuscaMoradores() {
+            document.getElementById('searchMorador').value = '';
+            buscarMoradores();
+        }
+
+        // ============================================
+        // FUNES DE DEPENDENTES
+        // ============================================
+
+        function carregarMoradoresParaSelect() {
+            fetch('../api/api_moradores.php', {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const select = document.getElementById('moradorSelecionado');
+                        select.innerHTML = '<option value="">Selecione um morador</option>';
+                        data.dados.forEach(m => {
+                            const option = document.createElement('option');
+                            option.value = m.id;
+                            option.textContent = m.nome + ' - ' + m.unidade;
+                            select.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        function selecionarMorador() {
+            const moradorId = document.getElementById('moradorSelecionado').value;
+            document.getElementById('moradorIdDependente').value = moradorId;
+        }
+
+        function carregarDependentes() {
+            const loading = document.getElementById('loadingDependentes');
+            if (loading) loading.classList.add('active');
+
+            fetch('../api/api_dependentes.php', {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (loading) loading.classList.remove('active');
+
+                    if (data.sucesso) {
+                        preencherTabelaDependentes(data.dados || []);
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem, 'error');
+                    }
+                })
+                .catch(error => {
+                    if (loading) loading.classList.remove('active');
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro', 'Erro ao carregar dependentes', 'error');
+                });
+        }
+
+        function preencherTabelaDependentes(dependentes) {
+            const tbody = document.querySelector('#tabelaDependentes tbody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+
+            if (!dependentes || dependentes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;"><i class="fas fa-inbox"></i> Nenhum dependente cadastrado</td></tr>';
+                return;
+            }
+
+            dependentes.forEach(d => {
+                const statusBadge = d.ativo === 1
+                    ? '<span class="badge badge-success"><i class="fas fa-check-circle"></i> Ativo</span>'
+                    : '<span class="badge badge-danger"><i class="fas fa-times-circle"></i> Inativo</span>';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${d.id}</td>
+                    <td><strong>${d.nome_completo}</strong></td>
+                    <td>${formatarCPF(d.cpf)}</td>
+                    <td>${d.parentesco}</td>
+                    <td>${d.morador_nome || '-'}</td>
+                    <td>${statusBadge}</td>
+                    <td class="actions">
+                        <button class="btn-edit" onclick="editarDependente(${d.id})" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-toggle" onclick="alternarStatusDependente(${d.id}, ${d.ativo})" title="${d.ativo === 1 ? 'Inativar' : 'Ativar'}">
+                            <i class="fas fa-${d.ativo === 1 ? 'ban' : 'check'}"></i>
+                        </button>
+                        <button class="btn-delete" onclick="deletarDependente(${d.id})" title="Deletar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function salvarDependente(event) {
+            event.preventDefault();
+
+            const moradorId = document.getElementById('moradorIdDependente').value;
+            const nomeCompleto = document.getElementById('nomeCompletoDepend').value.trim();
+            const cpf = document.getElementById('cpfDepend').value.trim();
+            const parentesco = document.getElementById('parentesco').value;
+
+            if (!moradorId) {
+                mostrarAlerta('Validacao', 'Selecione um morador', 'error');
+                return;
+            }
+
+            if (!nomeCompleto) {
+                mostrarAlerta('Validacao', 'Nome completo eh obrigatorio', 'error');
+                return;
+            }
+
+            if (!cpf) {
+                mostrarAlerta('Validacao', 'CPF eh obrigatorio', 'error');
+                return;
+            }
+
+            if (!parentesco) {
+                mostrarAlerta('Validacao', 'Parentesco eh obrigatorio', 'error');
+                return;
+            }
+
+            const dados = {
+                morador_id: moradorId,
+                nome_completo: document.getElementById('nomeCompletoDepend').value.trim(),
+                cpf: document.getElementById('cpfDepend').value.trim(),
+                parentesco: document.getElementById('parentesco').value,
+                data_nascimento: document.getElementById('dataNascimentoDepend').value,
+                email: document.getElementById('emailDepend').value.trim(),
+                telefone: document.getElementById('telefoneDepend').value.trim(),
+                celular: document.getElementById('celularDepend').value.trim(),
+                observacao: document.getElementById('observacaoDepend').value.trim()
+            };
+
+            const dependenteId = document.getElementById('dependenteId').value;
+            const metodo = dependenteId ? 'PUT' : 'POST';
+            const url = `../api/api_dependentes.php`;
+
+            if (dependenteId) {
+                dados.id = dependenteId;
+            }
+
+            fetch(url, {
+                method: metodo,
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        const mensagem = dependenteId ? 'Dependente atualizado com sucesso!' : 'Dependente cadastrado com sucesso!';
+                        mostrarAlerta('Sucesso', mensagem, 'success');
+                        limparFormularioDependente();
+                        carregarDependentes();
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem || 'Erro ao salvar', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro', 'Erro ao salvar dependente', 'error');
+                });
+        }
+
+        function editarDependente(id) {
+            fetch(`../api/api_dependentes.php?id=${id}`, {
+                method: 'GET',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Dependente carregado:', data);
+                    if (data.sucesso && data.dados) {
+                        const d = data.dados;
+                        document.getElementById('dependenteId').value = d.id;
+                        document.getElementById('moradorSelecionado').value = d.morador_id;
+                        document.getElementById('moradorIdDependente').value = d.morador_id;
+                        document.getElementById('nomeCompletoDepend').value = d.nome_completo;
+                        document.getElementById('cpfDepend').value = d.cpf;
+                        document.getElementById('parentesco').value = d.parentesco;
+                        document.getElementById('dataNascimentoDepend').value = d.data_nascimento || '';
+                        document.getElementById('emailDepend').value = d.email || '';
+                        document.getElementById('telefoneDepend').value = d.telefone || '';
+                        document.getElementById('celularDepend').value = d.celular || '';
+                        document.getElementById('observacaoDepend').value = d.observacao || '';
+
+                        document.getElementById('formTitleDependente').textContent = 'Editar Dependente';
+                        document.getElementById('btnSalvarDependente').innerHTML = '<i class="fas fa-save"></i> Atualizar Dependente';
+                        document.getElementById('btnCancelarDependente').style.display = 'inline-block';
+                        document.getElementById('cpfDepend').disabled = true;
+                        document.getElementById('moradorSelecionado').disabled = true;
+
+                        document.querySelector('.form-section').scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem || 'Erro ao carregar dependente', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    mostrarAlerta('Erro', 'Erro ao carregar dependente', 'error');
+                });
+        }
+
+        function deletarDependente(id) {
+            if (!confirm('Tem certeza que deseja deletar este dependente?')) return;
+
+            fetch(`../api/api_dependentes.php`, {
+                method: 'DELETE',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta('Sucesso', data.mensagem, 'success');
+                        carregarDependentes();
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem, 'error');
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        function alternarStatusDependente(id, statusAtual) {
+            const novoStatus = statusAtual === 1 ? 0 : 1;
+
+            fetch(`../api/api_dependentes.php`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id, ativo: novoStatus })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        mostrarAlerta('Sucesso', data.mensagem, 'success');
+                        carregarDependentes();
+                    } else {
+                        mostrarAlerta('Erro', data.mensagem, 'error');
+                    }
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        function limparFormularioDependente() {
+            document.getElementById('dependenteForm').reset();
+            document.getElementById('dependenteId').value = '';
+            document.getElementById('moradorIdDependente').value = '';
+            document.getElementById('formTitleDependente').textContent = 'Novo Dependente';
+            document.getElementById('btnSalvarDependente').innerHTML = '<i class="fas fa-save"></i> Salvar Dependente';
+            document.getElementById('btnCancelarDependente').style.display = 'none';
+            document.getElementById('cpfDepend').disabled = false;
+            document.getElementById('moradorSelecionado').disabled = false;
+        }
+
+        function buscarDependentes() {
+            const termo = document.getElementById('searchDependente').value.toLowerCase();
+            const rows = document.querySelectorAll('#tabelaDependentes tbody tr');
+
+            rows.forEach(row => {
+                const texto = row.textContent.toLowerCase();
+                row.style.display = texto.includes(termo) ? '' : 'none';
+            });
+        }
+
+        function limparBuscaDependentes() {
+            document.getElementById('searchDependente').value = '';
+            buscarDependentes();
+        }
+
+        // ============================================
+        // FUNES UTILITRIAS
+        // ============================================
+
+        function formatarCPF(cpf) {
+            if (!cpf) return '-';
+            cpf = cpf.replace(/[^\d]/g, '');
+            if (cpf.length !== 11) return cpf;
+            return cpf.substring(0, 3) + '.' + cpf.substring(3, 6) + '.' + cpf.substring(6, 9) + '-' + cpf.substring(9);
+        }
+
+        function formatarInputCPF(element) {
+            let valor = element.value.replace(/[^\d]/g, '');
+            if (valor.length > 11) valor = valor.substring(0, 11);
+            if (valor.length > 9) {
+                valor = valor.substring(0, 3) + '.' + valor.substring(3, 6) + '.' + valor.substring(6, 9) + '-' + valor.substring(9);
+            } else if (valor.length > 6) {
+                valor = valor.substring(0, 3) + '.' + valor.substring(3, 6) + '.' + valor.substring(6);
+            } else if (valor.length > 3) {
+                valor = valor.substring(0, 3) + '.' + valor.substring(3);
+            }
+            element.value = valor;
+        }
+
+        function mostrarAlerta(titulo, mensagem, tipo = 'info') {
+            const alertBox = document.getElementById('alertBox');
+            const cores = {
+                success: { bg: 'var(--color-success-100)', border: 'var(--color-success-500)', text: 'var(--color-success-900)' },
+                error: { bg: 'var(--color-error-100)', border: '#f87171', text: 'var(--color-error-900)' },
+                info: { bg: '#dbeafe', border: 'var(--color-primary-600)', text: '#1e40af' }
+            };
+
+            const cor = cores[tipo] || cores.info;
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${tipo}`;
+            alert.style.background = cor.bg;
+            alert.style.borderLeft = `4px solid ${cor.border}`;
+            alert.style.color = cor.text;
+            alert.innerHTML = `<strong>${titulo}:</strong> ${mensagem}`;
+
+            alertBox.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // ========== LOGOUT REMOVIDO - Centralizado em SessionManagerCore via sidebar-controller.js ==========
+        // Logout agora é ºnico ponto de entrada: sidebar-controller.js ? SessionManagerCore.getInstance().logout()
+    </script>
+
+    <!-- Proteção de Login -->
+    <script src="js/auth-guard.js"></script>
+    <script src="components/user-menu/user-menu.js" defer></script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+</body>
+
+</html>
