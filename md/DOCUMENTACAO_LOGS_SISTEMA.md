@@ -2,7 +2,7 @@
 
 ## 📋 Visão Geral
 
-O sistema de logs foi implementado para fornecer **auditoria completa** de todas as ações, eventos e erros que ocorrem no sistema ERP Serra da Liberdade. Esta funcionalidade permite rastreamento detalhado para análise de problemas, segurança e conformidade.
+O sistema de logs foi implementado para fornecer **auditoria completa** de todas as ações, eventos e erros que ocorrem no sistema ERP Condomínio. Esta funcionalidade permite rastreamento detalhado para análise de problemas, segurança e conformidade.
 
 ## 🎯 Funcionalidades Implementadas
 
@@ -457,4 +457,4 @@ Para dúvidas ou problemas relacionados ao sistema de logs:
 **Versão:** 1.0  
 **Data:** 18 de Dezembro de 2024  
 **Desenvolvedor:** Manus AI  
-**Sistema:** ERP Serra da Liberdade
+**Sistema:** ERP Condomínio

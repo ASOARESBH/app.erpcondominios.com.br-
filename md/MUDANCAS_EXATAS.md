@@ -126,10 +126,10 @@ console.log('✅ APP_BASE_PATH detected:', window.APP_BASE_PATH);
 
 ### Antes da Correção
 ```
-❌ APP_BASE_PATH = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+❌ APP_BASE_PATH = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
                     ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑ DUPLICADO!
 
-❌ Logo = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/..."
+❌ Logo = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/..."
            ❌ 404 Not Found
 
 ❌ PWA icons = "/ico/icon-192x192.png"
@@ -138,7 +138,7 @@ console.log('✅ APP_BASE_PATH detected:', window.APP_BASE_PATH);
 
 ### Depois da Correção
 ```
-✅ APP_BASE_PATH = "https://asl.erpcondominios.com.br/"
+✅ APP_BASE_PATH = "https://app.erpcondominios.com.br/"
                    ✅ CORRETO!
 
 ✅ Logo = "../uploads/logo/logo_1769740112.jpeg"
@@ -192,7 +192,7 @@ Para confirmar que está tudo correto, execute:
 // No Console (F12), digite:
 
 // 1. Verificar basePath
-window.APP_BASE_PATH === 'https://asl.erpcondominios.com.br/' ? 
+window.APP_BASE_PATH === 'https://app.erpcondominios.com.br/' ? 
   '✅ CORRETO' : '❌ ERRADO: ' + window.APP_BASE_PATH;
 
 // 2. Verificar se logo existe

@@ -3,7 +3,7 @@
 
 **Data:** 22 de Julho de 2026
 **Repositório Novo:** [app.erpcondominios.com.br-](https://github.com/ASOARESBH/app.erpcondominios.com.br-)
-**Repositório Legado:** [asl.erpcondominio.com.br](https://github.com/ASOARESBH/asl.erpcondominio.com.br)
+**Repositório Legado:** [app.erpcondominios.com.br](https://github.com/ASOARESBH/app.erpcondominios.com.br)
 
 ---
 
@@ -56,7 +56,7 @@ $_SESSION['login_timestamp']
 
 Não há `$_SESSION['tenant_id']`. Isso significa que, mesmo que adicionemos `tenant_id` nas tabelas, as APIs não saberiam qual tenant filtrar sem essa informação na sessão.
 
-Adicionalmente, **62 arquivos PHP** contêm o domínio `asl.erpcondominios.com.br` hardcoded no cabeçalho `Access-Control-Allow-Origin`, o que bloquearia requisições de outros domínios de condomínio.
+Adicionalmente, **62 arquivos PHP** contêm o domínio `app.erpcondominios.com.br` hardcoded no cabeçalho `Access-Control-Allow-Origin`, o que bloquearia requisições de outros domínios de condomínio.
 
 ### 2.3. Frontend — SPA Sem Seleção de Contexto
 
@@ -244,7 +244,7 @@ $stmt->bind_param("i", $tenant_id);
 
 ```php
 // ANTES (em 62 arquivos):
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+header('Access-Control-Allow-Origin: https://app.erpcondominios.com.br');
 
 // DEPOIS — Dinâmico:
 $allowed_origins = ['https://app.erpcondominios.com.br', 'https://*.erpcondominios.com.br'];

@@ -5,7 +5,7 @@ const pathModule = require('path');
 
 (async () => {
   const results = [];
-  const base = 'http://localhost/dashboard/asl.erpcondominios.com.br/frontend';
+  const base = 'http://localhost/dashboard/app.erpcondominios.com.br/frontend';
 
   // pages to validate (sample + test page)
   const pages = [

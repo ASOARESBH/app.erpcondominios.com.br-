@@ -1,4 +1,4 @@
-# 📊 Resumo Executivo - Sistema Serra da Liberdade v5.2
+# 📊 Resumo Executivo - Sistema ERP Condomínio v5.2
 
 **Data:** 11 de Janeiro de 2026  
 **Versão:** 5.2  

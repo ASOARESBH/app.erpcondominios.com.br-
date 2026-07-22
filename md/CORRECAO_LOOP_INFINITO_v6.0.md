@@ -174,7 +174,7 @@ this.renovacaoInterval = 300000;   // 5min (antes: múltiplos 1s)
 
 1. ✅ **Abrir DevTools (F12) → Network**
 2. ✅ **Limpar cache/cookies (ou usar janela anônima)**
-3. ✅ **Acessar https://asl.erpcondominios.com.br/frontend/dashboard.html**
+3. ✅ **Acessar https://app.erpcondominios.com.br/frontend/dashboard.html**
 4. ✅ **Manter página aberta por 10 minutos e observar:**
    - Filtrar por `/api/` na Network
    - Contar requisições (esperado: 1-2 por minuto máximo)

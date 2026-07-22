@@ -1,6 +1,6 @@
 -- ============================================
 -- SQL para Criar Tabelas do Portal do Morador
--- Sistema de Controle de Acesso - Serra da Liberdade
+-- ERP Condomínio — Gestão Inteligente - ERP Condomínio
 -- ============================================
 
 -- Tabela: sessoes_portal (OBRIGATÓRIA)

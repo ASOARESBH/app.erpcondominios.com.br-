@@ -1,6 +1,6 @@
-# AI Context Framework — ERP Serra da Liberdade
+# AI Context Framework — ERP Condomínio
 
-Este diretório contém o **Framework de Contexto para Inteligência Artificial** do ERP Associação Serra da Liberdade.
+Este diretório contém o **Framework de Contexto para Inteligência Artificial** do ERP Condomínio.
 
 ## Objetivo
 Permitir que qualquer IA compreenda este projeto em segundos, com mínimo consumo de tokens e máxima precisão nas intervenções.

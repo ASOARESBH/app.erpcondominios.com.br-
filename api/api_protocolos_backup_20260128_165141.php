@@ -1,7 +1,7 @@
 <?php
 /**
  * API de Protocolos de Mercadorias
- * Sistema de Controle de Acesso - Serra da Liberdade
+ * ERP Condomínio — Gestão Inteligente - ERP Condomínio
  */
 
 // Limpar qualquer saída anterior

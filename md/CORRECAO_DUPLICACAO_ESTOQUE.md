@@ -241,6 +241,6 @@ Se após aplicar a correção o problema persistir:
 
 ---
 
-**Desenvolvido para:** Serra da Liberdade  
+**Desenvolvido para:** ERP Condomínio  
 **Data:** Novembro 2025  
 **Status:** ✅ Corrigido e Testado

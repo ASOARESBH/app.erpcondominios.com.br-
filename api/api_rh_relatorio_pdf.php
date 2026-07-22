@@ -419,7 +419,7 @@ if (file_exists($logo_path)) {
 $total_registros = count($dados);
 $data_geracao    = date('d/m/Y H:i');
 $usuario_nome    = $_SESSION['usuario_nome'] ?? 'Sistema';
-$nome_empresa    = $empresa_info['razao_social'] ?: ($empresa_info['nome_fantasia'] ?: 'Associação Serra da Liberdade');
+$nome_empresa    = $empresa_info['razao_social'] ?: ($empresa_info['nome_fantasia'] ?: 'ERP Condomínio');
 $cnpj_empresa    = $empresa_info['cnpj'] ?: '';
 $cidade_empresa  = $empresa_info['endereco_cidade'] ?: '';
 $estado_empresa  = $empresa_info['endereco_estado'] ?: '';

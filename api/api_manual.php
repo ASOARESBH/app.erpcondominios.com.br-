@@ -480,7 +480,7 @@ function _upload_imagem($db, $sessao) {
     $path = $dir . $filename;
 
     if (move_uploaded_file($file['tmp_name'], $path)) {
-        $url = 'https://asl.erpcondominios.com.br/uploads/manual/' . $filename;
+        $url = 'https://app.erpcondominios.com.br/uploads/manual/' . $filename;
         echo json_encode(['sucesso' => true, 'url' => $url]);
     } else {
         echo json_encode(['sucesso' => false, 'mensagem' => 'Falha ao salvar arquivo.']);

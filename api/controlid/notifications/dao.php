@@ -8,11 +8,11 @@
  *
  * Configuração no equipamento (via set_configuration.fcgi):
  *   monitor.path = "/api/controlid/notifications"
- *   monitor.hostname = "asl.erpcondominio.com.br"
+ *   monitor.hostname = "app.erpcondominios.com.br"
  *   monitor.port = 443
  *
  * O equipamento chamará:
- *   POST https://asl.erpcondominio.com.br/api/controlid/notifications/dao
+ *   POST https://app.erpcondominios.com.br/api/controlid/notifications/dao
  *
  * Body JSON varia conforme o objeto:
  *   {"object":"access_logs","records":[{"id":1,...}],"operation":"INSERT"}

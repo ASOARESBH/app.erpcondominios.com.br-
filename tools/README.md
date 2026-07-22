@@ -5,7 +5,7 @@ This folder contains a small Puppeteer script to run basic headless QA checks ag
 Prerequisites
 - Node.js (v14+)
 - npm
-- The web server must serve the frontend at `http://localhost/dashboard/asl.erpcondominios.com.br/frontend`
+- The web server must serve the frontend at `http://localhost/dashboard/app.erpcondominios.com.br/frontend`
 
 Install
 ```bash

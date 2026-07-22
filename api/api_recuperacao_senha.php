@@ -5,7 +5,7 @@
  * Gerencia solicitações de recuperação de senha
  * Utiliza a classe EmailSender para envio de e-mails
  * 
- * @author Sistema ERP Serra da Liberdade
+ * @author Sistema ERP Condomínio
  * @date 29/12/2025
  */
 

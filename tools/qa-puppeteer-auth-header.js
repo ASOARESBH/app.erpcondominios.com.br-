@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // tools/qa-puppeteer-auth-header.js
 // Usage: QA_PHPSESSID=... node tools/qa-puppeteer-auth-header.js
-// Optional env: QA_BASE_URL (defaults to https://asl.erpcondominios.com.br)
+// Optional env: QA_BASE_URL (defaults to https://app.erpcondominios.com.br)
 
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 
-const BASE = process.env.QA_BASE_URL || 'https://asl.erpcondominios.com.br';
+const BASE = process.env.QA_BASE_URL || 'https://app.erpcondominios.com.br';
 const PHPSESSID = process.env.QA_PHPSESSID || '';
 const OUT = 'tools/qa-results-auth-header.json';
 
@@ -77,7 +77,7 @@ const pathModule = require('path');
 
 (async () => {
   const QA_PHPSESSID = process.env.QA_PHPSESSID;
-  const BASE = process.env.BASE_URL || 'https://asl.erpcondominios.com.br';
+  const BASE = process.env.BASE_URL || 'https://app.erpcondominios.com.br';
 
   if (!QA_PHPSESSID) {
     console.error('Please set QA_PHPSESSID environment variable (do not commit it).');

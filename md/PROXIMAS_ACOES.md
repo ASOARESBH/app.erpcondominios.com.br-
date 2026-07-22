@@ -10,7 +10,7 @@
 
 ### 1.1 Abrir o Navegador
 ```javascript
-1. Abra: https://asl.erpcondominios.com.br/dashboard.html
+1. Abra: https://app.erpcondominios.com.br/dashboard.html
 2. Login com suas credenciais
 3. Você deve ver o dashboard normal
 ```
@@ -21,7 +21,7 @@
 
 // Verificação 1: APP_BASE_PATH
 window.APP_BASE_PATH
-// ✅ Esperado: "https://asl.erpcondominios.com.br/"
+// ✅ Esperado: "https://app.erpcondominios.com.br/"
 // ❌ Não deve ter: "/home2/inlaud99/" ou duplicações
 
 // Verificação 2: Nenhum 404
@@ -175,7 +175,7 @@ document.cookie
 ### 5.1 Fazer Backup
 ```bash
 # Windows (PowerShell):
-mkdir "C:\backups\asl.erpcondominios.com.br-backup-13_02_2026"
+mkdir "C:\backups\app.erpcondominios.com.br-backup-13_02_2026"
 
 # Copie os áquivos:
 copy "frontend/js/config.js" "C:\backups\..."
@@ -189,7 +189,7 @@ copy "frontend/dashboard.html" "C:\backups\..."
 Via FTP (FileZilla) ou cPanel:
 
 1. Conecte ao servidor FTP
-2. Vá para: /home2/inlaud99/asl.erpcondominios.com.br/
+2. Vá para: /home2/inlaud99/app.erpcondominios.com.br/
 
 3. Envie estes arquivos (sobrescrevendo):
    ✅ frontend/js/config.js
@@ -204,7 +204,7 @@ Via FTP (FileZilla) ou cPanel:
 
 ### 5.3 Testar em Produção
 ```
-1. Acesse: https://asl.erpcondominios.com.br/dashboard.html
+1. Acesse: https://app.erpcondominios.com.br/dashboard.html
 2. Faça login
 3. Repita os testes (Passo 2 e 3)
 4. Tudo deve funcionar igual ao teste local

@@ -9,7 +9,7 @@
 
 ### Passo 1: Abrir DevTools
 ```
-1. Abrir site: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html
+1. Abrir site: https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html
 2. Pressionar: F12 (ou Ctrl+Shift+I no Windows)
 3. Ir para aba: Console
 ```
@@ -19,8 +19,8 @@
 No console você verá:
 
 ┌─────────────────────────────────────────────────────────────┐
-│ APP_BASE_PATH detected: https://asl.erpcondominios.com.br/  │
-│                         home2/inlaud99/asl.erpcondominios... │
+│ APP_BASE_PATH detected: https://app.erpcondominios.com.br/  │
+│                         home2/inlaud99/app.erpcondominios... │
 │                         .com.br/                              │
 └─────────────────────────────────────────────────────────────┘
 
@@ -35,10 +35,10 @@ window.APP_BASE_PATH
 // Pressione Enter
 
 // Resultado esperado (ERRADO):
-"https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+"https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 
 // Resultado correto deveria ser:
-"https://asl.erpcondominios.com.br/"
+"https://app.erpcondominios.com.br/"
 ```
 
 ---
@@ -61,10 +61,10 @@ Procure por linhas em VERMELHO (status 404):
 
 | Recurso | URL Tentada | Status |
 |---------|------|--------|
-| logo_1769740112.jpeg | `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg` | 404 ❌ |
-| logo_padrao.png | `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_padrao.png` | 404 ❌ |
-| app.css | `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/assets/css/app.css` | 404 ❌ |
-| visual-identity.js | `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/js/visual-identity.js` | 404 ❌ |
+| logo_1769740112.jpeg | `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg` | 404 ❌ |
+| logo_padrao.png | `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_padrao.png` | 404 ❌ |
+| app.css | `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/assets/css/app.css` | 404 ❌ |
+| visual-identity.js | `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/js/visual-identity.js` | 404 ❌ |
 
 ```
 
@@ -75,7 +75,7 @@ Clique em qualquer linha com status 404.
 No painel direito, você verá:
 
 Headers:
-├─ Request URL: https://asl.erpcondominios.com.br/home2/inlaud99/...
+├─ Request URL: https://app.erpcondominios.com.br/home2/inlaud99/...
 ├─ Request Method: GET
 ├─ Status Code: 404 Not Found
 └─ Remote Address: xxx.xxx.xxx.xxx
@@ -154,12 +154,12 @@ No console ou aba Scope, você verá:
 
 window.location.origin
 ┌──────────────────────────────────────────┐
-│ "https://asl.erpcondominios.com.br"      │  ✓ Correto
+│ "https://app.erpcondominios.com.br"      │  ✓ Correto
 └──────────────────────────────────────────┘
 
 window.location.pathname
 ┌──────────────────────────────────────────┐
-│ "/home2/inlaud99/asl.erpcondominios.../ │  ✓ Contém o caminho do servidor
+│ "/home2/inlaud99/app.erpcondominios.../ │  ✓ Contém o caminho do servidor
 │  frontend/login.html"                    │
 └──────────────────────────────────────────┘
 ```
@@ -171,7 +171,7 @@ Digite no console:
 path.split('/frontend/')[0]
 
 Resultado:
-"/home2/inlaud99/asl.erpcondominios.com.br"
+"/home2/inlaud99/app.erpcondominios.com.br"
 
 🔴 ESTE É O PROBLEMA!
    Contém mais do que deveria!
@@ -184,7 +184,7 @@ Digite no console:
 basePath
 
 Resultado:
-"https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+"https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 
 🔴 URL DUPLICADA!
 ```
@@ -214,8 +214,8 @@ Você pode adicionar uma "Watch Expression" para monitorar a variável:
 │ F12 → Console                          │
 │ ──────────────────────────────────────│
 │ APP_BASE_PATH detected:                │
-│ "https://asl.erpcondominios.com.br/   │
-│  home2/inlaud99/asl.erpcondominios... │
+│ "https://app.erpcondominios.com.br/   │
+│  home2/inlaud99/app.erpcondominios... │
 │  .com.br/"                             │
 │                                        │
 │ ❌ ESTA É A URL DUPLICADA!            │
@@ -250,8 +250,8 @@ Você pode adicionar uma "Watch Expression" para monitorar a variável:
 │ + '/'                                  │
 │                                        │
 │ Resultado:                             │
-│ "https://asl.erpcondominios.com.br/  │
-│  home2/inlaud99/asl.erpcondominios...│
+│ "https://app.erpcondominios.com.br/  │
+│  home2/inlaud99/app.erpcondominios...│
 │  .com.br/"                             │
 │                                        │
 │ ❌ ORIGEM DO ERRO IDENTIFICADA!       │
@@ -268,39 +268,39 @@ Abra o console e execute:
 // 1. Ver o valor atual (ERRADO):
 console.log('APP_BASE_PATH atual:', window.APP_BASE_PATH);
 
-// Saída: "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+// Saída: "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 
 // 2. Ver o pathname:
 console.log('pathname:', window.location.pathname);
 
-// Saída: "/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html"
+// Saída: "/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html"
 
 // 3. Simular o split (que causa o problema):
 const path = window.location.pathname;
 console.log('resultado do split:', path.split('/frontend/')[0]);
 
-// Saída: "/home2/inlaud99/asl.erpcondominios.com.br"
+// Saída: "/home2/inlaud99/app.erpcondominios.com.br"
 
 // 4. Simular a concatenação final:
 const wrongBasePath = window.location.origin + path.split('/frontend/')[0] + '/';
 console.log('basePath resultante (ERRADA):', wrongBasePath);
 
-// Saída: "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+// Saída: "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 
 // 5. Comparar com o correto:
 const correctBasePath = window.location.origin + '/';
 console.log('basePath que deveria ser (CORRETA):', correctBasePath);
 
-// Saída: "https://asl.erpcondominios.com.br/"
+// Saída: "https://app.erpcondominios.com.br/"
 ```
 
 **Saída esperada:**
 ```
-APP_BASE_PATH atual: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/
-pathname: /home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html
-resultado do split: /home2/inlaud99/asl.erpcondominios.com.br
-basePath resultante (ERRADA): https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/
-basePath que deveria ser (CORRETA): https://asl.erpcondominios.com.br/
+APP_BASE_PATH atual: https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/
+pathname: /home2/inlaud99/app.erpcondominios.com.br/frontend/login.html
+resultado do split: /home2/inlaud99/app.erpcondominios.com.br
+basePath resultante (ERRADA): https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/
+basePath que deveria ser (CORRETA): https://app.erpcondominios.com.br/
 ```
 
 ---
@@ -324,5 +324,5 @@ Quando você executar esses testes, você conseguirá **ver em tempo real**:
 3. **Onde** ela é usada: `frontend/login.html` linha 379
 4. **O que acontece** com ela: é concatenada com paths, criando URLs inválidas de 404
 
-A URL `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/...` aparecerá em **TODOS** os testes acima.
+A URL `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/...` aparecerá em **TODOS** os testes acima.
 

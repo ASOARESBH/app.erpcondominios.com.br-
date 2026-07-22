@@ -1,7 +1,7 @@
 <?php
 // ============================================================
 // API de Unidades — Módulo de Gestão de Unidades
-// Associação Serra da Liberdade
+// ERP Condomínio
 // ============================================================
 ob_start();
 require_once 'config.php';
@@ -41,7 +41,7 @@ function garantir_unidades_padrao($conexao) {
     if (intval($row['total']) >= 187) return;
     for ($i = 1; $i <= 187; $i++) {
         $nome = "Gleba $i";
-        $stmt = $conexao->prepare("INSERT IGNORE INTO unidades (nome, descricao, bloco, ativo) VALUES (?, 'Serra da Liberdade', 'Gleba', 1)");
+        $stmt = $conexao->prepare("INSERT IGNORE INTO unidades (nome, descricao, bloco, ativo) VALUES (?, 'ERP Condomínio', 'Gleba', 1)");
         $stmt->bind_param("s", $nome);
         $stmt->execute();
         $stmt->close();

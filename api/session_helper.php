@@ -59,9 +59,9 @@ function configurar_cors_fornecedor() {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
     $allowed = [
-        'https://asl.erpcondominios.com.br',
-        'http://asl.erpcondominios.com.br',
-        'https://www.asl.erpcondominios.com.br',
+        'https://app.erpcondominios.com.br',
+        'http://app.erpcondominios.com.br',
+        'https://www.app.erpcondominios.com.br',
         'http://localhost',
         'http://localhost:3000',
         'http://localhost:8080',

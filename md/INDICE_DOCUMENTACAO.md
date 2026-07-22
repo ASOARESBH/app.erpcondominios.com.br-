@@ -188,7 +188,7 @@ Estes documentos foram criados em sessions anteriores:
 Todos os documentos estão em **UTF-8** com estrutura Markdown:
 
 ```
-c:\xampp\htdocs\dashboard\TESTE - asl.erpcondominios.com.br\
+c:\xampp\htdocs\dashboard\TESTE - app.erpcondominios.com.br\
 ├── RESUMO_RÁPIDO.md
 ├── ANALISE_ERRO_MIME_TYPE.md
 ├── DIAGRAMA_VISUAL_FLUXO.md

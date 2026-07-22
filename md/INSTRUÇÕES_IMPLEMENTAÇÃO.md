@@ -112,7 +112,7 @@ A logo deve estar em `/uploads/logo/` com o nome `logo` e uma extensão suportad
 /uploads/logo/logo.gif
 ```
 
-**Importante**: O sistema tentará carregar a logo em ordem de extensão. Se nenhuma for encontrada, exibirá o fallback "Serra da Liberdade".
+**Importante**: O sistema tentará carregar a logo em ordem de extensão. Se nenhuma for encontrada, exibirá o fallback "ERP Condomínio".
 
 ### 6️⃣ Verificar API
 
@@ -155,7 +155,7 @@ Certifique-se de que o endpoint `../api/api_usuario_logado.php` está funcionand
 
 **Logo**:
 - Carregamento dinâmico com suporte a múltiplas extensões
-- Fallback elegante com texto "Serra da Liberdade"
+- Fallback elegante com texto "ERP Condomínio"
 - Sem ícone de imagem quebrada
 - Sombra e efeito hover
 
@@ -207,7 +207,7 @@ const CONFIG = {
     autoRenewThreshold: 600,                   // Renovar em 10 minutos
     enableAutoRenew: true,                     // Renovação automática
     logoPath: '../uploads/logo/logo',          // Caminho da logo
-    companyName: 'Serra da Liberdade'          // Nome da empresa (fallback)
+    companyName: 'ERP Condomínio'          // Nome da empresa (fallback)
 };
 ```
 

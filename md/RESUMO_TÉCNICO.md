@@ -189,7 +189,7 @@ projeto/
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <h1>Serra da Liberdade</h1>
+        <h1>ERP Condomínio</h1>
         <!-- Logo será injetada aqui -->
     </div>
     <!-- Perfil será injetado aqui -->
@@ -221,7 +221,7 @@ projeto/
     <img src="../uploads/logo/logo.jpeg" alt="Logo" class="sidebar-logo">
     <!-- OU fallback -->
     <div class="logo-fallback">
-        <div class="logo-fallback-text">Serra da Liberdade</div>
+        <div class="logo-fallback-text">ERP Condomínio</div>
     </div>
 </div>
 ```
@@ -413,7 +413,7 @@ Em `user-profile-sidebar.js`:
 
 ```javascript
 const CONFIG = {
-    companyName: 'Serra da Liberdade',
+    companyName: 'ERP Condomínio',
     // Alterar para: 'Seu Condomínio', 'Empresa XYZ', etc.
 };
 ```
@@ -473,7 +473,7 @@ Os scripts incluem logs no console para facilitar debug:
 
 // Logs de carregamento de logo
 ✅ Logo carregada: ../uploads/logo/logo.jpeg
-⚠️ Logo não encontrada. Exibindo fallback: Serra da Liberdade
+⚠️ Logo não encontrada. Exibindo fallback: ERP Condomínio
 
 // Logs de sincronização
 ✅ Componentes prontos. Iniciando sincronização...

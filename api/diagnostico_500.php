@@ -1,7 +1,7 @@
 <?php
 /**
  * DIAGNÓSTICO DE ERRO 500 — REMOVER APÓS USO
- * Acesse: https://asl.erpcondominios.com.br/api/diagnostico_500.php
+ * Acesse: https://app.erpcondominios.com.br/api/diagnostico_500.php
  */
 error_reporting(E_ALL);
 ini_set('display_errors', 1);

@@ -10,7 +10,7 @@
 
 ### Passo 1: Abrir o Navegador
 ```
-1. Vá para: https://asl.erpcondominios.com.br/frontend/layout-base.html?page=protocolo
+1. Vá para: https://app.erpcondominios.com.br/frontend/layout-base.html?page=protocolo
 2. Espere a página carregar completamente
 3. Observe o HEADER (topo da página)
 ```
@@ -72,7 +72,7 @@ pages.forEach(p => console.log("  ✓", p));
 Abra cada URL e verifique:
 
 ```
-Layout:           https://asl.erpcondominios.com.br/frontend/layout-base.html?page=NOME
+Layout:           https://app.erpcondominios.com.br/frontend/layout-base.html?page=NOME
 
 ╔═════════════════════════════════════════════════════════════╗
 ║ Página        │ URL Parameter   │ Expected Title          ║
@@ -284,11 +284,11 @@ A página NÃO deve mostrar NENHUM erro vermelho.
 ### URLs de Teste Rápido
 
 ```
-https://asl.erpcondominios.com.br/frontend/layout-base.html?page=protocolo
-https://asl.erpcondominios.com.br/frontend/layout-base.html?page=estoque
-https://asl.erpcondominios.com.br/frontend/layout-base.html?page=inventario
-https://asl.erpcondominios.com.br/frontend/layout-base.html?page=marketplace_admin
-https://asl.erpcondominios.com.br/frontend/layout-base.html?page=relatorios_inventario
+https://app.erpcondominios.com.br/frontend/layout-base.html?page=protocolo
+https://app.erpcondominios.com.br/frontend/layout-base.html?page=estoque
+https://app.erpcondominios.com.br/frontend/layout-base.html?page=inventario
+https://app.erpcondominios.com.br/frontend/layout-base.html?page=marketplace_admin
+https://app.erpcondominios.com.br/frontend/layout-base.html?page=relatorios_inventario
 ```
 
 ### Console Debugging

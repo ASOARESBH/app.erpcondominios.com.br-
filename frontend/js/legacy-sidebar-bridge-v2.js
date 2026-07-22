@@ -153,7 +153,7 @@
 
             if (config.fallbackEnabled) {
                 sidebar.innerHTML = [
-                    '<div class="sidebar-header"><h1>Serra da Liberdade</h1></div>',
+                    '<div class="sidebar-header"><h1>ERP Condomínio</h1></div>',
                     '<ul class="nav-menu">',
                     '<li class="nav-item"><a href="dashboard.html" class="nav-link" data-page="dashboard">Dashboard</a></li>',
                     '</ul>'

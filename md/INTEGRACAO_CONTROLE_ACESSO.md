@@ -660,7 +660,7 @@ Tudo funcionando de forma **automática**, **integrada** e **auditável**!
 
 ---
 
-**Desenvolvido com ❤️ para o Condomínio Serra da Liberdade**
+**Desenvolvido com ❤️ para o ERP Condomínio**
 
 **Data:** 18 de Dezembro de 2024  
 **Versão:** 2.0  

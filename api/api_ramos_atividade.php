@@ -4,7 +4,7 @@
  * 
  * Gerencia categorias de fornecedores do marketplace
  * 
- * @author Sistema ERP Serra da Liberdade
+ * @author Sistema ERP Condomínio
  * @date 29/12/2025
  */
 

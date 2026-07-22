@@ -9,9 +9,9 @@
 
 ### Passo 1: Abrir Dashboard
 ```
-URL: https://asl.erpcondominios.com.br/frontend/dashboard.html
+URL: https://app.erpcondominios.com.br/frontend/dashboard.html
      ou
-     https://asl.erpcondominios.com.br/frontend/layout-base.html?page=dashboard
+     https://app.erpcondominios.com.br/frontend/layout-base.html?page=dashboard
 ```
 
 ### Passo 2: Localizar Botão "Sair"
@@ -40,7 +40,7 @@ Clique em "OK"
 ```
 Resultado esperado:
 ✅ Página muda para login.html
-✅ URL agora é: https://asl.erpcondominios.com.br/login.html
+✅ URL agora é: https://app.erpcondominios.com.br/login.html
 ✅ Botão "Sair" desaparece
 ```
 

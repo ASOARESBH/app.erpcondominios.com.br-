@@ -27,7 +27,7 @@
 --   - Execute este script UMA ÚNICA VEZ no banco de produção
 --   - Faça backup completo do banco ANTES de executar
 --   - Todos os dados existentes serão preservados (tenant_id = 1)
---   - O condomínio atual (Serra da Liberdade) receberá id = 1
+--   - O condomínio atual (ERP Condomínio) receberá id = 1
 -- =========================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS `tenants` (
 -- =========================================================================
 -- SEÇÃO 2: MIGRAÇÃO DOS DADOS DA EMPRESA ATUAL PARA TENANTS
 -- =========================================================================
--- O condomínio atual (Serra da Liberdade) receberá o slug 'serra'
+-- O condomínio atual receberá o slug 'erpcondominios' (pode ser alterado pelo Super-Admin)
 -- e manterá o id = 1 para compatibilidade com todos os dados existentes.
 
 INSERT INTO `tenants` (
@@ -78,7 +78,7 @@ INSERT INTO `tenants` (
 )
 SELECT
   e.id,
-  'serra',
+  'erpcondominios',
   e.razao_social,
   e.nome_fantasia,
   e.cnpj,
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS `usuario_tenant` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Relacionamento de usuários com seus respectivos condomínios';
 
--- Migrar todos os usuários existentes para o tenant 1 (Serra da Liberdade)
+-- Migrar todos os usuários existentes para o tenant 1 (ERP Condomínio)
 INSERT IGNORE INTO `usuario_tenant` (`usuario_id`, `tenant_id`, `permissao`, `ativo`)
 SELECT `id`, 1, `permissao`, `ativo`
 FROM `usuarios`;

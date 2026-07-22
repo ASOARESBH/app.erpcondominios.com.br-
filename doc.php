@@ -115,7 +115,7 @@ $linkExt = htmlspecialchars($comp['link_externo'] ?? '');
   <div class="card-header">
     <div style="font-size:3rem;margin-bottom:12px">📄</div>
     <h1>Documento Compartilhado</h1>
-    <p>Você recebeu acesso a um documento do Sistema ERP Serra da Liberdade</p>
+    <p>Você recebeu acesso a um documento do Sistema ERP Condomínio</p>
   </div>
   <div class="card-body">
     <?php if ($depto): ?>
@@ -140,7 +140,7 @@ $linkExt = htmlspecialchars($comp['link_externo'] ?? '');
     <a href="<?= $linkExt ?>" target="_blank" rel="noopener noreferrer" class="btn-ext">🔗 Abrir Link Externo</a>
     <?php endif; ?>
   </div>
-  <div class="footer">Serra da Liberdade — ERP Condomínio · Este link pode ser desativado a qualquer momento.</div>
+  <div class="footer">ERP Condomínio — ERP Condomínio · Este link pode ser desativado a qualquer momento.</div>
 </div>
 </body>
 </html>

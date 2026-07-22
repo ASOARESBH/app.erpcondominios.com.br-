@@ -549,7 +549,7 @@ Para dúvidas ou problemas:
 
 ---
 
-**Desenvolvido com ❤️ para o Condomínio Serra da Liberdade**
+**Desenvolvido com ❤️ para o ERP Condomínio**
 
 **Data:** 18 de Dezembro de 2024  
 **Versão:** 1.0  

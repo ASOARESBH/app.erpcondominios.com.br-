@@ -1,5 +1,5 @@
 # SISTEMA DE ACESSO PARA MORADORES
-## Serra da Liberdade - Controle de Acesso
+## ERP Condomínio - Controle de Acesso
 
 ---
 
@@ -214,6 +214,6 @@ Em caso de dúvidas ou problemas:
 
 ---
 
-**Sistema desenvolvido para Serra da Liberdade**  
+**Sistema desenvolvido para ERP Condomínio**  
 **© 2025 - Todos os direitos reservados**
 

@@ -6,7 +6,7 @@
  * 
  * Função robusta para registrar erros do módulo de dependentes
  * 
- * @author Sistema ERP Serra da Liberdade
+ * @author Sistema ERP Condomínio
  * @date 25/01/2026
  * @version 1.0
  */

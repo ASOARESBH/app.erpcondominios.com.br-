@@ -60,7 +60,7 @@ class SidebarUnificada {
         // Criar elemento de logo
         const logoImg = document.createElement('img');
         logoImg.src = '../uploads/logo/logo_1769740112.jpeg';
-        logoImg.alt = 'Serra da Liberdade';
+        logoImg.alt = 'ERP Condomínio';
         logoImg.className = 'sidebar-logo';
         logoImg.style.cssText = `
             max-width: 180px;

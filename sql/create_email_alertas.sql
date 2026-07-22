@@ -1,6 +1,6 @@
 -- ============================================================
 -- Módulo de E-mail e Alertas — Tabelas
--- Sistema ERP Serra da Liberdade
+-- Sistema ERP ERP Condomínio
 -- ============================================================
 
 -- Tabela de configuração SMTP (estende a existente)

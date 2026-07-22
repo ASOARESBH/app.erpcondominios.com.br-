@@ -1,5 +1,5 @@
 {
-  "name": "Console de Acesso - Serra da Liberdade",
+  "name": "Console de Acesso - ERP Condomínio",
   "short_name": "Console Acesso",
   "description": "Console de acesso para validação de QR Codes e controle de entrada",
   "start_url": "./frontend/console_acesso.html",

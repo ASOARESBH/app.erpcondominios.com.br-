@@ -67,7 +67,7 @@ INSERT IGNORE INTO `tenants` (
 )
 SELECT
   e.id,
-  'serra',
+  'erpcondominios',
   e.razao_social,
   e.nome_fantasia,
   e.cnpj,
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS `usuario_tenant` (
 -- =========================================================================
 -- PASSO 4: VINCULAR TODOS OS USUÁRIOS EXISTENTES AO TENANT 1
 -- =========================================================================
--- Migra todos os usuários para o condomínio Serra da Liberdade (id=1)
+-- Migra todos os usuários para o condomínio ERP Condomínio (id=1)
 
 INSERT IGNORE INTO `usuario_tenant` (`usuario_id`, `tenant_id`, `permissao`, `ativo`)
 SELECT
@@ -136,5 +136,5 @@ SET FOREIGN_KEY_CHECKS = 1;
 --   total_tenants  = 1
 --   total_vinculos = (mesmo número de usuários cadastrados)
 --   total_usuarios = (número de usuários)
---   slug_tenant_1  = 'serra'
+--   slug_tenant_1  = 'erpcondominios'
 -- =========================================================================

@@ -243,7 +243,7 @@ ${link}
 Este link é válido por 48 horas e é de uso único.
 
 Att,
-Condomínio Serra da Liberdade`;
+ERP Condomínio`;
     
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
     window.open(whatsappUrl, '_blank');

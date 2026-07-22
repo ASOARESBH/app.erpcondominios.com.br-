@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS `usuarios` (
 -- =====================================================
 
 INSERT INTO `usuarios` (`id`, `nome`, `email`, `senha`, `funcao`, `departamento`, `permissao`, `ativo`) VALUES
-(1, 'Administrador', 'admin@serraliberdade.com.br', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrador do Sistema', 'TI', 'admin', 1),
+(1, 'Administrador', 'admin@erpcondominios.com.br', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrador do Sistema', 'TI', 'admin', 1),
 (2, 'João Silva', 'joao@serraliberdade.com.br', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Porteiro', 'Portaria', 'operador', 1),
 (3, 'Maria Santos', 'maria@serraliberdade.com.br', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Gerente', 'Administração', 'gerente', 1);
 

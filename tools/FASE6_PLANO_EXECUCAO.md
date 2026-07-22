@@ -14,12 +14,12 @@ Alguém com acesso direto ao servidor PHP precisa executar um teste rápido:
 #### Opção A: Usar script de validação automática (recomendado)
 
 ```
-URL: https://asl.erpcondominios.com.br/validate_cookie_qa.php?cookie=SEU_PHPSESSID_AQUI
+URL: https://app.erpcondominios.com.br/validate_cookie_qa.php?cookie=SEU_PHPSESSID_AQUI
 ```
 
 Substitua `SEU_PHPSESSID_AQUI` com o cookie real. Exemplo:
 ```
-https://asl.erpcondominios.com.br/validate_cookie_qa.php?cookie=abc123def456xyz789
+https://app.erpcondominios.com.br/validate_cookie_qa.php?cookie=abc123def456xyz789
 ```
 
 Esperado (VALID):
@@ -55,7 +55,7 @@ var_dump($_SESSION);
 - [ ] Sessão não está vazia?
 - [ ] Sessão não expirou (age < gc_maxlifetime)?
 - [ ] Handler de sessão correto (files/redis/etc)?
-- [ ] Domínio correto (asl.erpcondominios.com.br)?
+- [ ] Domínio correto (app.erpcondominios.com.br)?
 
 ⚠️ **Se $_SESSION vier vazio → cookie é inválido. PONTO FINAL.**
 
@@ -66,14 +66,14 @@ var_dump($_SESSION);
 ### Forma recomendada (ÚNICA que funciona)
 
 1. **Abrir browser NORMAL** (Chrome/Firefox)
-   - Link: https://asl.erpcondominios.com.br/login.html
+   - Link: https://app.erpcondominios.com.br/login.html
    
 2. **Fazer login manual**
    - Usar credenciais reais de um usuário teste
    - Confirmar que login funcionou (dashboard carrega)
 
 3. **Copiar PHPSESSID ativo**
-   - F12 → Application → Cookies → asl.erpcondominios.com.br
+   - F12 → Application → Cookies → app.erpcondominios.com.br
    - Procurar por `PHPSESSID`
    - **Copiar o VALOR completo** (do lado direito)
    
@@ -105,7 +105,7 @@ var_dump($_SESSION);
 $env:QA_PHPSESSID = "abc123def456xyz789..."
 
 # Execute o script QA
-node "c:\xampp\htdocs\dashboard\asl.erpcondominios.com.br\tools\qa-puppeteer-auth-header.js"
+node "c:\xampp\htdocs\dashboard\app.erpcondominios.com.br\tools\qa-puppeteer-auth-header.js"
 ```
 
 2. **Aguarde ~60 segundos** (testa 4 páginas)

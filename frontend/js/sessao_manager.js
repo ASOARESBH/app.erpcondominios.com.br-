@@ -191,7 +191,7 @@ async function carregarIdentidadeVisualSessao() {
         if (data.sucesso && data.dados) {
             const empresa = data.dados;
             const logoUrl = empresa.logo_url ? '../' + empresa.logo_url : null;
-            const nomeEmpresa = empresa.nome_fantasia || empresa.razao_social || 'Serra da Liberdade';
+            const nomeEmpresa = empresa.nome_fantasia || empresa.razao_social || 'ERP Condomínio';
 
             // Sidebar Logo
             const sidebarLogo = document.getElementById('dynamicSidebarLogo');
@@ -201,8 +201,8 @@ async function carregarIdentidadeVisualSessao() {
             }
 
             // Aba Title
-            if (document.title.includes('Serra da Liberdade')) {
-                document.title = document.title.replace('Serra da Liberdade', nomeEmpresa);
+            if (document.title.includes('ERP Condomínio')) {
+                document.title = document.title.replace('ERP Condomínio', nomeEmpresa);
             }
         }
     } catch (error) { }

@@ -16,7 +16,7 @@
 ## 🚀 TESTE 1: Carregamento de Unidades e Moradores (Básico)
 
 ### Passos:
-1. Abrir: https://asl.erpcondominios.com.br/frontend/relatorios_hidrometro.html
+1. Abrir: https://app.erpcondominios.com.br/frontend/relatorios_hidrometro.html
 2. Aguardar carregamento
 3. Verificar DevTools (F12):
    - **Console** → Não deve ter `SyntaxError: Unexpected token '<'`

@@ -279,7 +279,7 @@ git commit -m "fix: relatorios_hidrometro.html - tratar 403/JSON parse error def
 ## ✍️ Arquivos Modificados
 
 ```
-c:\xampp\htdocs\dashboard\asl.erpcondominios.com.br\frontend\relatorios_hidrometro.html
+c:\xampp\htdocs\dashboard\app.erpcondominios.com.br\frontend\relatorios_hidrometro.html
 ├── Adicionado: apiCall() [~40 linhas]
 ├── Adicionado: const API_BASE [1 linha]
 ├── Modificado: carregarUnidades() [Simplificado]

@@ -4,7 +4,7 @@
 - As sessões são gerenciadas pelo PHP (`PHPSESSID`).
 - O frontend usa `credentials: 'include'` no `fetch()` para enviar o cookie.
 - A API DEVE ter os headers CORS corretos:
-  `Access-Control-Allow-Origin: https://asl.erpcondominios.com.br`
+  `Access-Control-Allow-Origin: https://app.erpcondominios.com.br`
   `Access-Control-Allow-Credentials: true`
 
 ## 2. Hierarquia de Permissões

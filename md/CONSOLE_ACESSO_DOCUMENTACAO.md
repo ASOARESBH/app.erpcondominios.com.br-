@@ -272,7 +272,7 @@ GET /api_console_acesso.php?action=validacoes&limite=50
 ```html
 <div class="header">
     <h1><i class="fas fa-shield-alt"></i> Console de Acesso</h1>
-    <p>Serra da Liberdade</p>
+    <p>ERP Condomínio</p>
 </div>
 ```
 
@@ -615,7 +615,7 @@ Tudo pronto para uso em produção! 🚀
 
 ---
 
-**Desenvolvido com ❤️ para o Condomínio Serra da Liberdade**
+**Desenvolvido com ❤️ para o ERP Condomínio**
 
 **Data:** 18 de Dezembro de 2024  
 **Versão:** 1.0  

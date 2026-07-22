@@ -10,16 +10,16 @@
  *   {
  *     "monitor": {
  *       "request_timeout": "5000",
- *       "hostname": "asl.erpcondominios.com.br",
+ *       "hostname": "app.erpcondominios.com.br",
  *       "port": "443",
  *       "path": "api/controlid_monitor.php"
  *     }
  *   }
  *
  * O equipamento enviará eventos para:
- *   https://asl.erpcondominios.com.br/api/controlid_monitor.php/dao
- *   https://asl.erpcondominios.com.br/api/controlid_monitor.php/door
- *   https://asl.erpcondominios.com.br/api/controlid_monitor.php/operation_mode
+ *   https://app.erpcondominios.com.br/api/controlid_monitor.php/dao
+ *   https://app.erpcondominios.com.br/api/controlid_monitor.php/door
+ *   https://app.erpcondominios.com.br/api/controlid_monitor.php/operation_mode
  */
 
 ob_start();

@@ -384,7 +384,7 @@ if (!empty($params)) {
 
 ---
 
-**Desenvolvido para:** Serra da Liberdade  
+**Desenvolvido para:** ERP Condomínio  
 **Data:** Novembro 2025  
 **Versão:** 2.0  
 **Status:** ✅ Implementado e Testado

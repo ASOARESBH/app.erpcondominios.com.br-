@@ -4,7 +4,7 @@
 
 URL estava duplicando o path do domínio:
 ```
-❌ https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/
+❌ https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/
 
 Resultado:
 - CSS retorna MIME type: text/html (deveria ser text/css)
@@ -76,7 +76,7 @@ fetch('../api/verificar_sessao.php', ...)
    `Ctrl+Shift+Delete` (ou Cmd+Shift+Delete)
 
 2. **Acessar a raiz:**
-   `https://asl.erpcondominios.com.br/`
+   `https://app.erpcondominios.com.br/`
 
 3. **Abrir DevTools (F12):**
    - Network tab

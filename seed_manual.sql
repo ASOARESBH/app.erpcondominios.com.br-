@@ -1,5 +1,5 @@
 -- ============================================================
--- SEED: Manual do Sistema ERP Condomínios Serra da Liberdade
+-- SEED: Manual do Sistema ERP Condomínios ERP Condomínio
 -- Estrutura correta: manual_modulos usa page_id (sem cor)
 --                    manual_artigos usa criado_por (sem autor_id)
 -- ============================================================

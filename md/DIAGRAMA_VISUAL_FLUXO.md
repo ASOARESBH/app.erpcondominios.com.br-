@@ -4,7 +4,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ 1. Acessa: https://asl.erpcondominios.com.br/               │
+│ 1. Acessa: https://app.erpcondominios.com.br/               │
 └────────────────────┬─────────────────────────────────────────┘
                      │ Redireciona por .htaccess
                      ▼
@@ -35,7 +35,7 @@
 │    Antes estava:                                              │
 │    fetch('/api/api_verificar_sessao.php') ❌ ERRO            │
 │           ↓ (caminho absoluto causa duplicação)              │
-│    /home2/inlaud99/asl.erpcondominios.com.br/api/...        │
+│    /home2/inlaud99/app.erpcondominios.com.br/api/...        │
 │                    ↑ DUPLICAÇÃO DE PATH                       │
 └────────────────────┬─────────────────────────────────────────┘
                      │ ✅ Resposta 200 OK
@@ -90,13 +90,13 @@ fetch('/api/api_verificar_sessao.php', {
      ↑ Caminho absoluto - CAUSA DUPLICAÇÃO
   └─ Resolve para: /api/
      Mas servidor espera: /api/
-     Resultado: /home2/inlaud99/asl.erpcondominios.com.br/api/ 🔴
+     Resultado: /home2/inlaud99/app.erpcondominios.com.br/api/ 🔴
 })
 
 // ✅ DEPOIS
 fetch('../api/verificar_sessao.php', {
      ↑ Caminho relativo - SEM DUPLICAÇÃO
-  └─ Resolve para: asl.erpcondominios.com.br/api/ ☑️
+  └─ Resolve para: app.erpcondominios.com.br/api/ ☑️
 })
 ```
 
@@ -136,14 +136,14 @@ RewriteRule ^$ login.html [L]
 ┌─────────────────────────────────────────────────┐
 │  ✅ URL Corrigida                               │
 ├─────────────────────────────────────────────────┤
-│  https://asl.erpcondominios.com.br/             │
-│  https://asl.erpcondominios.com.br/login.html   │
-│  https://asl.erpcondominios.com.br/frontend/... │
-│  https://asl.erpcondominios.com.br/api/...      │
+│  https://app.erpcondominios.com.br/             │
+│  https://app.erpcondominios.com.br/login.html   │
+│  https://app.erpcondominios.com.br/frontend/... │
+│  https://app.erpcondominios.com.br/api/...      │
 │                                                  │
 │  ❌ NÃO MAIS:                                    │
-│  https://asl.erpcondominios.com.br/             │
-│    /home2/inlaud99/asl.erpcondominios.com.br/   │
+│  https://app.erpcondominios.com.br/             │
+│    /home2/inlaud99/app.erpcondominios.com.br/   │
 │    /frontend/...  (DUPLICAÇÃO!)                 │
 └─────────────────────────────────────────────────┘
 ```
@@ -168,7 +168,7 @@ RewriteRule ^$ login.html [L]
 ```bash
 # 1. Abrir DevTools (F12)
 # 2. Network tab
-# 3. Acessar: https://asl.erpcondominios.com.br/
+# 3. Acessar: https://app.erpcondominios.com.br/
 # 4. Fazer login
 # 5. Verificar:
 ✅ Nenhuma linha vermelha (404)

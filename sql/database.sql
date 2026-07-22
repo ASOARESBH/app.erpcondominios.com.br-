@@ -95,6 +95,6 @@ INSERT INTO configuracoes (chave, valor, descricao) VALUES
 ('rfid_senha', '', 'Senha do leitor RFID'),
 ('liberacao_automatica', '1', 'Liberar cancela automaticamente (1=Sim, 0=Não)'),
 ('tempo_abertura_cancela', '5', 'Tempo de abertura da cancela em segundos'),
-('nome_condominio', 'Serra da Liberdade', 'Nome do condomínio')
+('nome_condominio', 'ERP Condomínio', 'Nome do condomínio')
 ON DUPLICATE KEY UPDATE valor=valor;
 

@@ -4,7 +4,7 @@
 
 A arquitetura atual possui um desafio clássico de redes e integração de hardware:
 *   **O Equipamento:** O leitor Control iD (UHF/RFID) está instalado fisicamente na portaria, conectado à rede local (IP: `192.168.3.150`).
-*   **O Sistema:** O ERP do condomínio está hospedado em nuvem na Hostgator (`asl.erpcondominios.com.br`).
+*   **O Sistema:** O ERP do condomínio está hospedado em nuvem na Hostgator (`app.erpcondominios.com.br`).
 *   **O Problema:** O equipamento Control iD em modo *Standalone* não consegue enviar os eventos de acesso diretamente para a Hostgator porque a Hostgator não possui um IP fixo/porta aberta dedicada para receber conexões diretas do equipamento de forma transparente (sem configuração de DNS dinâmico e redirecionamento de portas no roteador local, o que é inseguro e instável).
 
 ## 2. A Solução: Arquitetura "Bridge" (Relay Local)
@@ -18,7 +18,7 @@ A solução consiste em instalar um pequeno script (o "Bridge") em um computador
 1.  **Leitura do TAG:** O morador passa com o veículo e o leitor UHF lê a TAG RFID.
 2.  **Registro Local:** O equipamento Control iD registra o acesso em sua memória interna.
 3.  **Coleta pelo Bridge:** O script Bridge rodando no computador local (PC da Portaria) consulta periodicamente a API do equipamento (`192.168.3.150`) buscando novos logs de acesso.
-4.  **Envio para a Nuvem:** O script Bridge empacota esses novos logs em formato JSON e os envia via requisição HTTP POST segura (HTTPS) para a API no Hostgator (`https://asl.erpcondominios.com.br/api/bridge_receiver.php`).
+4.  **Envio para a Nuvem:** O script Bridge empacota esses novos logs em formato JSON e os envia via requisição HTTP POST segura (HTTPS) para a API no Hostgator (`https://app.erpcondominios.com.br/api/bridge_receiver.php`).
 5.  **Processamento no ERP:** O `bridge_receiver.php` autentica a requisição (via API Key), processa os eventos, identifica o morador vinculado à TAG RFID e registra o acesso na tabela `registros_acesso`.
 
 ## 3. Implementação Prática
@@ -44,7 +44,7 @@ CONTROLID_IP = "http://192.168.3.150"
 CONTROLID_USER = "admin"
 CONTROLID_PASS = "admin" # Substitua pela senha real do equipamento
 
-ERP_URL = "https://asl.erpcondominios.com.br/api/bridge_receiver.php"
+ERP_URL = "https://app.erpcondominios.com.br/api/bridge_receiver.php"
 API_KEY = "SUA_CHAVE_API_AQUI" # Obtenha esta chave na tabela 'configuracoes' do banco
 DISPOSITIVO_ID = 1 # ID do dispositivo cadastrado no ERP
 

@@ -147,7 +147,7 @@ const verificarComponentes = setInterval(() => {
 // Abrir console (F12) e procurar por:
 ✅ "Logo carregada: ../uploads/logo/logo.jpeg"
 // OU
-⚠️ "Logo não encontrada. Exibindo fallback: Serra da Liberdade"
+⚠️ "Logo não encontrada. Exibindo fallback: ERP Condomínio"
 ```
 
 **Como testar**:

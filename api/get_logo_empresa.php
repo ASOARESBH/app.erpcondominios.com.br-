@@ -38,8 +38,8 @@ header('Cache-Control: public, max-age=300'); // Cache de 5 minutos
 
 // CORS - Permitir apenas do mesmo domínio
 $allowed_origins = [
-    'https://asl.erpcondominios.com.br',
-    'http://asl.erpcondominios.com.br',
+    'https://app.erpcondominios.com.br',
+    'http://app.erpcondominios.com.br',
     'http://localhost',
     'http://127.0.0.1'
 ];

@@ -8,7 +8,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ User acessa: https://asl.erpcondominios.com.br/.../frontend/ │
+│ User acessa: https://app.erpcondominios.com.br/.../frontend/ │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
@@ -110,9 +110,9 @@
             // 🔴 LINHA 28 - AQUI OCORRE O ERRO:
             basePath = window.location.origin + path.split('/frontend/')[0] + '/';
             
-            // Quando pathname = "/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html"
-            // Resultado = origin + "/home2/inlaud99/asl.erpcondominios.com.br" + "/"
-            // basePath = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+            // Quando pathname = "/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html"
+            // Resultado = origin + "/home2/inlaud99/app.erpcondominios.com.br" + "/"
+            // basePath = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
         }
     }
 
@@ -124,7 +124,7 @@
 
 **O que você verá no console do navegador:**
 ```
-APP_BASE_PATH detected: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/
+APP_BASE_PATH detected: https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/
 ```
 
 ---
@@ -153,25 +153,25 @@ APP_BASE_PATH detected: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erp
         document.addEventListener("DOMContentLoaded", function () {
             // 🔴 LINHA 379 - USA O VALOR ERRADO:
             const basePath = window.APP_BASE_PATH || '../';
-            // basePath agora é: "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+            // basePath agora é: "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
             
             // 🔴 LINHA 381:
             const logoPath = basePath + "uploads/logo/logo_1769740112.jpeg";
-            // logoPath = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg"
+            // logoPath = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg"
             
             const logoImg = document.getElementById("loginLogo");
 
             if (logoImg) {
                 // 🔴 LINHA 383 - REQUISIÇÃO COM URL DUPLICADA:
                 logoImg.src = logoPath;
-                // Browser tentriar fazer: GET https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/...
+                // Browser tentriar fazer: GET https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/...
                 // ❌ ERRO 404 - Arquivo não encontrado porque caminho está duplicado!
                 
                 logoImg.onerror = function () {
                     console.warn("Logo não encontrada, usando fallback.");
                     // 🔴 LINHA 389 - MESMO ERRO NO FALLBACK:
                     this.src = basePath + "uploads/logo/logo_padrao.png";
-                    // Tenta: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_padrao.png"
+                    // Tenta: https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_padrao.png"
                     // ❌ ERRO 404 NOVAMENTE!
                 };
             }
@@ -183,10 +183,10 @@ APP_BASE_PATH detected: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erp
 
 **Network Tab do Navegador mostrará:**
 ```
-GET https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
+GET https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
     Status: 404 Not Found
     
-GET https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_padrao.png
+GET https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_padrao.png
     Status: 404 Not Found
 ```
 
@@ -198,10 +198,10 @@ Quando você abre o `frontend/login.html`, a aba Network mostra:
 
 | Recurso | URL Esperada | URL Duplicada (Atual) | Status |
 |---------|---------|---------|--------|
-| Logo (primária) | `https://asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg` | `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg` | ❌ 404 |
-| Logo (fallback) | `https://asl.erpcondominios.com.br/uploads/logo/logo_padrao.png` | `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_padrao.png` | ❌ 404 |
-| CSS | `https://asl.erpcondominios.com.br/assets/css/app.css` | `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/assets/css/app.css` | ❌ 404 |
-| JS Scripts | `https://asl.erpcondominios.com.br/frontend/js/...` | `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/js/...` | ❌ 404 |
+| Logo (primária) | `https://app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg` | `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg` | ❌ 404 |
+| Logo (fallback) | `https://app.erpcondominios.com.br/uploads/logo/logo_padrao.png` | `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_padrao.png` | ❌ 404 |
+| CSS | `https://app.erpcondominios.com.br/assets/css/app.css` | `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/assets/css/app.css` | ❌ 404 |
+| JS Scripts | `https://app.erpcondominios.com.br/frontend/js/...` | `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/js/...` | ❌ 404 |
 
 ---
 
@@ -211,7 +211,7 @@ Quando você abre o `frontend/login.html`, a aba Network mostra:
 
 ```javascript
 // Do config.js:
-APP_BASE_PATH detected: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/
+APP_BASE_PATH detected: https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/
 
 // Do login.html quando tenta carregar recursos:
 Logo não encontrada, usando fallback.
@@ -220,9 +220,9 @@ Logo não encontrada, usando fallback.
 **E erros de MIME type que aparecem na aba Resources:**
 
 ```
-Refused to apply style from 'https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/assets/css/app.css' because its MIME type ('text/html') is not a valid CSS MIME type
+Refused to apply style from 'https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/assets/css/app.css' because its MIME type ('text/html') is not a valid CSS MIME type
 
-Refused to execute script from 'https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/js/visual-identity.js' because its MIME type ('text/html') is not a valid JavaScript MIME type
+Refused to execute script from 'https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/js/visual-identity.js' because its MIME type ('text/html') is not a valid JavaScript MIME type
 ```
 
 ---
@@ -248,7 +248,7 @@ Refused to execute script from 'https://asl.erpcondominios.com.br/home2/inlaud99
 **Usada em:** `frontend/login.html` linhas 379-389  
 **Resultado Final:**  
 ```
-https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/
+https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/
 ```
 
 Esta URL está sendo concatenada com paths de recursos como:

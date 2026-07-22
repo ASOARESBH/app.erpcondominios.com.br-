@@ -3,7 +3,7 @@
   "results": [
     {
       "page": "/TEST_FASE6_QA.html",
-      "url": "http://localhost/dashboard/asl.erpcondominios.com.br/frontend/TEST_FASE6_QA.html",
+      "url": "http://localhost/dashboard/app.erpcondominios.com.br/frontend/TEST_FASE6_QA.html",
       "checks": [
         {
           "name": "coreLoaded",
@@ -69,7 +69,7 @@
           "details": {
             "httpStatus": 200,
             "existsOnDisk": true,
-            "diskPath": "c:\\xampp\\htdocs\\dashboard\\asl.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
+            "diskPath": "c:\\xampp\\htdocs\\dashboard\\app.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
           }
         }
       ],
@@ -77,7 +77,7 @@
     },
     {
       "page": "/dashboard.html",
-      "url": "http://localhost/dashboard/asl.erpcondominios.com.br/frontend/dashboard.html",
+      "url": "http://localhost/dashboard/app.erpcondominios.com.br/frontend/dashboard.html",
       "checks": [
         {
           "name": "coreLoaded",
@@ -140,7 +140,7 @@
           "details": {
             "httpStatus": 200,
             "existsOnDisk": true,
-            "diskPath": "c:\\xampp\\htdocs\\dashboard\\asl.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
+            "diskPath": "c:\\xampp\\htdocs\\dashboard\\app.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
           }
         }
       ],
@@ -148,7 +148,7 @@
     },
     {
       "page": "/estoque.html",
-      "url": "http://localhost/dashboard/asl.erpcondominios.com.br/frontend/estoque.html",
+      "url": "http://localhost/dashboard/app.erpcondominios.com.br/frontend/estoque.html",
       "checks": [
         {
           "name": "coreLoaded",
@@ -201,7 +201,7 @@
           "details": {
             "httpStatus": 200,
             "existsOnDisk": true,
-            "diskPath": "c:\\xampp\\htdocs\\dashboard\\asl.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
+            "diskPath": "c:\\xampp\\htdocs\\dashboard\\app.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
           }
         }
       ],
@@ -209,7 +209,7 @@
     },
     {
       "page": "/acesso.html",
-      "url": "http://localhost/dashboard/asl.erpcondominios.com.br/frontend/acesso.html",
+      "url": "http://localhost/dashboard/app.erpcondominios.com.br/frontend/acesso.html",
       "checks": [
         {
           "name": "coreLoaded",
@@ -252,7 +252,7 @@
           "details": {
             "httpStatus": 200,
             "existsOnDisk": true,
-            "diskPath": "c:\\xampp\\htdocs\\dashboard\\asl.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
+            "diskPath": "c:\\xampp\\htdocs\\dashboard\\app.erpcondominios.com.br\\frontend\\js\\session-manager-core.js"
           }
         }
       ],

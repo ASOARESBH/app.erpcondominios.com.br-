@@ -1,6 +1,6 @@
 # Arquitetura do Sistema
 
-O ERP Associação Serra da Liberdade utiliza uma arquitetura **Monolítica Modular** baseada em SPA (Single Page Application) no frontend e APIs RESTful em PHP no backend.
+O ERP Condomínio utiliza uma arquitetura **Monolítica Modular** baseada em SPA (Single Page Application) no frontend e APIs RESTful em PHP no backend.
 
 ## 1. Visão Geral
 - **Frontend**: HTML5, CSS3, Vanilla JS (Sem frameworks como React/Vue)

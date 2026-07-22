@@ -1,6 +1,6 @@
 # 🚀 Guia de Instalação Rápida
 
-## Sistema de Controle de Acesso para Portaria
+## ERP Condomínio — Gestão Inteligente para Portaria
 
 ---
 
@@ -250,7 +250,7 @@ Para problemas técnicos:
 
 Após seguir todos os passos, o sistema estará 100% funcional.
 
-**Desenvolvido para Condomínio Serra da Liberdade**
+**Desenvolvido para ERP Condomínio**
 
 ---
 

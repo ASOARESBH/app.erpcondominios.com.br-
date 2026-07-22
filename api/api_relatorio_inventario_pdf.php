@@ -42,11 +42,11 @@ if ($res_emp && $res_emp->num_rows > 0) {
 }
 $nome_empresa = !empty($empresa['nome_fantasia'])
     ? $empresa['nome_fantasia']
-    : (!empty($empresa['razao_social']) ? $empresa['razao_social'] : 'ASSOCIAÇÃO SERRA DA LIBERDADE');
+    : (!empty($empresa['razao_social']) ? $empresa['razao_social'] : 'ERP CONDOMÍNIO');
 $cnpj_empresa = !empty($empresa['cnpj']) ? $empresa['cnpj'] : '';
 
 $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host      = $_SERVER['HTTP_HOST'] ?? 'asl.erpcondominios.com.br';
+$host      = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
 $logo_url  = !empty($empresa['logo_url'])
     ? $protocolo . '://' . $host . '/' . ltrim($empresa['logo_url'], '/')
     : $protocolo . '://' . $host . '/assets/images/logo.jpeg';

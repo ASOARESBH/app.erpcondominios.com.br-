@@ -2,7 +2,7 @@
 
 **Data:** 2026-02-07T03:29:03Z
 **Script:** `tools/qa-puppeteer-auth.js` → `tools/qa-results-auth.json`
-**Base URL:** https://asl.erpcondominios.com.br
+**Base URL:** https://app.erpcondominios.com.br
 
 ## Objetivo
 Validar comportamento real do `SessionManagerCore` com sessão autenticada via injeção do cookie `PHPSESSID`.
@@ -48,8 +48,8 @@ Motivo principal: `SessionManagerCore` não inicializou com a sessão injetada �
 ## Recomendação imediata (próximo passo)
 Para completar FASE 6 e alcançar PASS total, recomendo os passos a seguir (ordem sugerida):
 
-1. Confirmar com o time backend que o cookie `PHPSESSID` fornecido é válido e ativo para `https://asl.erpcondominios.com.br` e não possui atributos de SameSite que impeçam envio nas requisições do app.
-2. Confirmar que o ambiente onde o script é executado pode acessar `https://asl.erpcondominios.com.br` e confia no certificado TLS (ou configure `CHROME_PATH` para um Chrome com certificados confiáveis).
+1. Confirmar com o time backend que o cookie `PHPSESSID` fornecido é válido e ativo para `https://app.erpcondominios.com.br` e não possui atributos de SameSite que impeçam envio nas requisições do app.
+2. Confirmar que o ambiente onde o script é executado pode acessar `https://app.erpcondominios.com.br` e confia no certificado TLS (ou configure `CHROME_PATH` para um Chrome com certificados confiáveis).
 3. (Opção de teste) Rodar o script em modo que injete o cabeçalho `Cookie` diretamente (apenas para QA) para verificar comportamento da aplicação com sessão — isto valida rapidamente se o problema é o transporte do cookie ou a lógica do frontend.
    - Se aprovar, podemos automatizar essa opção como `--auth-mode header` (não armazenará o cookie nos artefatos).
 4. Confirmar que os principais endpoints `/api/verificar_sessao_completa.php` aceitam cookies em requisições GET ou que o frontend envia `credentials: 'include'` em chamadas relevantes.
@@ -77,6 +77,6 @@ Principais bloqueios: SessionManager não inicializa com o cookie injetado (falh
 Se deseja, eu posso agora:
 - (1) Implementar uma variante de teste que injete o `Cookie` HTTP como header para forçar envio (somente para QA).  
 - (2) Ajustar o script para verificar explicitamente `page.cookies()` e reportar cookie attributes e valores presenciais (não gravar valor no output final).  
-- (3) Re-executar testes após você confirmar que o cookie QA é válido e ativo para `https://asl.erpcondominios.com.br`.
+- (3) Re-executar testes após você confirmar que o cookie QA é válido e ativo para `https://app.erpcondominios.com.br`.
 
 Informe qual opção prefere.  

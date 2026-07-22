@@ -1,4 +1,4 @@
-# 📋 Relatório de Correção CRÍTICA - Sistema Serra da Liberdade v5.3
+# 📋 Relatório de Correção CRÍTICA - Sistema ERP Condomínio v5.3
 
 **Data:** 11 de Janeiro de 2026  
 **Versão:** 5.3  
@@ -345,7 +345,7 @@ rm *.bak
 ## 👨‍💻 Desenvolvedor
 
 **André Programador BH AI**  
-Manus AI Agent - Sistema de Portaria Serra da Liberdade
+Manus AI Agent - Sistema de Portaria ERP Condomínio
 
 ---
 

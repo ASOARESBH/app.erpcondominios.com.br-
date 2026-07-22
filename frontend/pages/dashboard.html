@@ -4,14 +4,31 @@
 <div class="page-wrapper page-dashboard">
     <div class="page-header">
         <h1>Dashboard</h1>
-        <p>Visão geral do Condomínio Serra da Liberdade</p>
+        <p id="dash-tenant-subtitulo">Visão geral do condomínio</p>
     </div>
 
     <!-- Dashboard Content -->
     <div class="welcome">
-        <h2><i class="fas fa-building"></i> Bem-vindo ao Sistema de Controle de Acesso</h2>
-        <p>Condomínio Serra da Liberdade</p>
+        <h2><i class="fas fa-building"></i> Bem-vindo ao <span id="dash-tenant-nome">ERP Condomínio</span></h2>
+        <p id="dash-tenant-plano" style="color:var(--color-text-tertiary);font-size:0.85rem;"></p>
     </div>
+    <script>
+    // Exibir nome do condomínio ativo (Multi-Tenant)
+    (function() {
+        var nome  = localStorage.getItem('tenant_nome')  || 'ERP Condomínio';
+        var plano = localStorage.getItem('tenant_plano') || '';
+        var slug  = localStorage.getItem('tenant_slug')  || '';
+        var el  = document.getElementById('dash-tenant-nome');
+        var sub = document.getElementById('dash-tenant-subtitulo');
+        var pl  = document.getElementById('dash-tenant-plano');
+        if (el)  el.textContent  = nome;
+        if (sub) sub.textContent = 'Visão geral — ' + nome;
+        if (pl && plano) {
+            var planoLabel = { basico: 'Básico', profissional: 'Profissional', enterprise: 'Enterprise' };
+            pl.textContent = 'Plano ' + (planoLabel[plano] || plano) + (slug ? ' · ' + slug + '.erpcondominios.com.br' : '');
+        }
+    })();
+    </script>
 
     <!-- ESTATÍSTICAS GERAIS -->
     <div class="stats-grid">

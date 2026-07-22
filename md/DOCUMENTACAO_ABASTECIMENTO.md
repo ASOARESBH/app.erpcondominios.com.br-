@@ -2,7 +2,7 @@
 
 ## Descrição Geral
 
-O módulo de Controle de Abastecimento foi desenvolvido para gerenciar o abastecimento dos veículos do condomínio Serra da Liberdade. O sistema oferece controle completo sobre cadastro de veículos, lançamento de abastecimentos, sistema de crédito/débito (recargas) e relatórios detalhados de consumo.
+O módulo de Controle de Abastecimento foi desenvolvido para gerenciar o abastecimento dos veículos do condomínio ERP Condomínio. O sistema oferece controle completo sobre cadastro de veículos, lançamento de abastecimentos, sistema de crédito/débito (recargas) e relatórios detalhados de consumo.
 
 ---
 
@@ -321,6 +321,6 @@ O arquivo `manutencao.html` já foi atualizado com o link para o módulo de abas
 
 Para dúvidas ou suporte técnico, entre em contato com a equipe de desenvolvimento.
 
-**Desenvolvido para:** Serra da Liberdade  
+**Desenvolvido para:** ERP Condomínio  
 **Data:** Novembro 2025  
 **Versão:** 1.0

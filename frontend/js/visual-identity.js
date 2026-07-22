@@ -14,7 +14,7 @@ async function carregarIdentidadeVisual(isFrontendPath = false) {
         if (data.sucesso && data.dados) {
             const empresa = data.dados;
             const logoUrl = empresa.logo_url ? baseUploads + empresa.logo_url : null;
-            const nomeEmpresa = empresa.nome_fantasia || empresa.razao_social || 'Serra da Liberdade';
+            const nomeEmpresa = empresa.nome_fantasia || empresa.razao_social || 'ERP Condomínio';
 
             // 1. Atualizar Logo no Login (Várias estruturas possíveis)
             const logoContainers = document.querySelectorAll('.login-logo, .brand-logo, #login-logo');
@@ -35,8 +35,8 @@ async function carregarIdentidadeVisual(isFrontendPath = false) {
             });
 
             // 3. Atualizar Título da Aba
-            if (document.title.includes('Serra da Liberdade')) {
-                document.title = document.title.replace('Serra da Liberdade', nomeEmpresa);
+            if (document.title.includes('ERP Condomínio')) {
+                document.title = document.title.replace('ERP Condomínio', nomeEmpresa);
             }
 
             // 4. Suporte para a nova Sidebar (Fallback)

@@ -36,7 +36,7 @@
 ## 📍 PASSO 2: Acessar a Aplicação
 
 1. Abra uma nova aba
-2. Acesse: `https://asl.erpcondominios.com.br/`
+2. Acesse: `https://app.erpcondominios.com.br/`
 3. **Resultado esperado:**
    - [ ] Página **login.html** carrega
    - [ ] Sem mensagem de erro
@@ -51,8 +51,8 @@
 1. Pressione `Ctrl+H` (ou `Cmd+Y` no Mac)
 2. Procure pela URL atual
 3. **Verificar:**
-   - [ ] URL é: `https://asl.erpcondominios.com.br/` (SEM duplicação)
-   - [ ] URL NÃO é: `.../asl.erpcondominios.com.br/...`
+   - [ ] URL é: `https://app.erpcondominios.com.br/` (SEM duplicação)
+   - [ ] URL NÃO é: `.../app.erpcondominios.com.br/...`
 
 **Se falhar:** Feche todas as abas. Limpe cache novamente.
 

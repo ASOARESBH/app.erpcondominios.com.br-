@@ -2,7 +2,7 @@
 
 ## 📋 Visão Geral
 
-O módulo Financeiro foi desenvolvido para gerenciar contas a pagar, contas a receber e planos de contas do Sistema de Controle de Acesso Serra da Liberdade.
+O módulo Financeiro foi desenvolvido para gerenciar contas a pagar, contas a receber e planos de contas do ERP Condomínio — Gestão Inteligente ERP Condomínio.
 
 **Versão:** 1.0  
 **Data:** 05/01/2026  

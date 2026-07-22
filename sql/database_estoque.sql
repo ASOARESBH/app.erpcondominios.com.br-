@@ -1,6 +1,6 @@
 -- =============================================
 -- SISTEMA DE GESTÃO DE ESTOQUE
--- Condomínio Serra da Liberdade
+-- ERP Condomínio
 -- =============================================
 
 -- Tabela: Categorias de Produtos

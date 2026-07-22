@@ -1,5 +1,5 @@
 ===========================================
-REGISTRO DE ERROS - SISTEMA SERRA DA LIBERDADE
+REGISTRO DE ERROS - SISTEMA ERP CONDOMÍNIO
 ===========================================
 
 Este arquivo serve para registrar erros e problemas identificados no sistema.

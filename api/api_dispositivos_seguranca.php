@@ -1,7 +1,7 @@
 <?php
 // =====================================================
 // API de Gerenciamento de Dispositivos de Segurança
-// Sistema ERP Serra da Liberdade
+// Sistema ERP Condomínio
 // =====================================================
 
 // Função para retornar JSON

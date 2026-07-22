@@ -2,7 +2,7 @@
 
 ## 📋 Visão Geral
 
-Sistema completo de autenticação e gerenciamento de tablets (dispositivos) autorizados para validação de QR Code na portaria do ERP Serra da Liberdade.
+Sistema completo de autenticação e gerenciamento de tablets (dispositivos) autorizados para validação de QR Code na portaria do ERP Condomínio.
 
 **Objetivo**: Garantir que apenas tablets autorizados possam liberar acessos, com controle total sobre dispositivos ativos/inativos e rastreamento de validações.
 
@@ -409,7 +409,7 @@ Para dúvidas ou problemas:
 
 ## 📄 Licença
 
-Sistema proprietário - ERP Serra da Liberdade
+Sistema proprietário - ERP Condomínio
 © 2024 Todos os direitos reservados
 
 ---

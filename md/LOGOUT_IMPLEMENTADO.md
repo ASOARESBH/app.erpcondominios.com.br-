@@ -222,7 +222,7 @@ setTimeout(() => {
 
 ### Passo 1: Acessar Dashboard
 ```
-Abrir: https://asl.erpcondominios.com.br/frontend/layout-base.html?page=dashboard
+Abrir: https://app.erpcondominios.com.br/frontend/layout-base.html?page=dashboard
 (ou dashboard.html diretamente)
 ```
 

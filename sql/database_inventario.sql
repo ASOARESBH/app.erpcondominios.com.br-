@@ -1,6 +1,6 @@
 -- =====================================================
 -- ESTRUTURA DO BANCO DE DADOS - MÓDULO INVENTÁRIO
--- Sistema de Controle de Acesso - Serra da Liberdade
+-- ERP Condomínio — Gestão Inteligente - ERP Condomínio
 -- =====================================================
 
 -- Tabela de Inventário/Patrimônio

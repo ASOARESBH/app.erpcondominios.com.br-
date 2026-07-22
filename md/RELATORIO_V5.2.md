@@ -1,4 +1,4 @@
-# 📋 Relatório de Correção - Sistema Serra da Liberdade v5.2
+# 📋 Relatório de Correção - Sistema ERP Condomínio v5.2
 
 **Data:** 11 de Janeiro de 2026  
 **Versão:** 5.2  
@@ -160,7 +160,7 @@ Se outros módulos apresentarem erro similar, verificar:
 ## 👨‍💻 Desenvolvedor
 
 **André Programador BH AI**  
-Manus AI Agent - Sistema de Portaria Serra da Liberdade
+Manus AI Agent - Sistema de Portaria ERP Condomínio
 
 ---
 

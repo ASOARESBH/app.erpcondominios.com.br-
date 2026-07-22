@@ -1,4 +1,4 @@
-# Manifesto de Atualização - Sistema Serra da Liberdade
+# Manifesto de Atualização - Sistema ERP Condomínio
 **Data**: 07 de Janeiro de 2026  
 **Versão**: 1.0  
 **Status**: ✅ Pronto para Produção
@@ -7,7 +7,7 @@
 
 ## 📦 Conteúdo do Pacote
 
-Este pacote contém todos os arquivos HTML atualizados do Sistema Serra da Liberdade com as seguintes melhorias implementadas:
+Este pacote contém todos os arquivos HTML atualizados do Sistema ERP Condomínio com as seguintes melhorias implementadas:
 
 ### ✅ Melhorias Implementadas
 
@@ -248,7 +248,7 @@ Para dúvidas ou problemas:
 
 ## 📄 Licença
 
-Este pacote é parte do Sistema Serra da Liberdade.
+Este pacote é parte do Sistema ERP Condomínio.
 
 ---
 

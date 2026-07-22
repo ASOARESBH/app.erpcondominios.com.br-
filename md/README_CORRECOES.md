@@ -10,7 +10,7 @@
 ### ❌ PROBLEMA ORIGINAL
 ```
 URL duplicada sendo requisitada:
-https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/
+https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/
                                 ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
                                 ISSO NÃO DEVERIA ESTAR AQUI!
 ```
@@ -91,7 +91,7 @@ Corrigir os 3 arquivos que estavam causando essa duplicação:
 
 ### ✅ Validação (5 minutos)
 4. [ ] Abrir DevTools: `F12`
-5. [ ] Console: `window.APP_BASE_PATH` → deve ser `https://asl.erpcondominios.com.br/`
+5. [ ] Console: `window.APP_BASE_PATH` → deve ser `https://app.erpcondominios.com.br/`
 6. [ ] Network tab → procurar por 404s com `/home2/inlaud99/` → não deve haver nenhum
 7. [ ] Verificar se logo carrega visualmente
 
@@ -132,7 +132,7 @@ Para entender melhor o que foi corrigido:
 
 A aplicação estava em um **subdiretório de servidor compartilhado**:
 ```
-https://domain.com/home2/inlaud99/asl.erpcondominios.com.br/
+https://domain.com/home2/inlaud99/app.erpcondominios.com.br/
                   ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
                    Estrutura do servidor
 ```
@@ -144,10 +144,10 @@ basePath = window.location.origin + window.location.pathname.split('/frontend/')
 
 Ele pegava:
 ```
-origin = https://asl.erpcondominios.com.br
-pathname.split('/frontend/')[0] = /home2/inlaud99/asl.erpcondominios.com.br
+origin = https://app.erpcondominios.com.br
+pathname.split('/frontend/')[0] = /home2/inlaud99/app.erpcondominios.com.br
 resultado = origem + estrutura_de_servidor + /
-          = https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/
+          = https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/
           ❌ DUPLICAÇÃO!
 ```
 

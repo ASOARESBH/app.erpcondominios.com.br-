@@ -1,7 +1,7 @@
 <?php
 /**
  * API de Protocolos de Mercadorias - VERSÃO CORRIGIDA
- * Sistema de Controle de Acesso - Serra da Liberdade
+ * ERP Condomínio — Gestão Inteligente - ERP Condomínio
  * 
  * Correções aplicadas:
  * 1. Adicionado require_once 'auth_helper.php';

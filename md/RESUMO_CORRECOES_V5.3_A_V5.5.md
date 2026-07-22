@@ -1,4 +1,4 @@
-# 📋 Resumo Consolidado de Correções - Sistema Serra da Liberdade
+# 📋 Resumo Consolidado de Correções - Sistema ERP Condomínio
 
 **Período:** 11 de Janeiro de 2026  
 **Versões:** v5.3, v5.4, v5.5  
@@ -301,7 +301,7 @@ Relatórios detalhados ajudam a entender e reproduzir correções no futuro.
 ## 👨‍💻 Desenvolvedor
 
 **André Programador BH AI**  
-Manus AI Agent - Sistema de Portaria Serra da Liberdade
+Manus AI Agent - Sistema de Portaria ERP Condomínio
 
 ---
 

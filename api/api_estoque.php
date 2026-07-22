@@ -1,7 +1,7 @@
 <?php
 /**
  * API de Gestão de Estoque
- * Condomínio Serra da Liberdade
+ * ERP Condomínio
  */
 
 require_once 'config.php';

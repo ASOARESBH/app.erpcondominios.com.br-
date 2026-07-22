@@ -356,4 +356,4 @@ const registrosPorPagina = 20;  // Registros por página (fixo)
 
 ---
 
-**Desenvolvido com ❤️ para o Condomínio Serra da Liberdade**
+**Desenvolvido com ❤️ para o ERP Condomínio**

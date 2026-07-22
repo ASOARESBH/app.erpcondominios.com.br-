@@ -2,7 +2,7 @@
 
 ## 📋 Resumo da Implementação
 
-Este documento detalha a implementação completa dos módulos **Empresa** e **Local de Acessos** para o Sistema de Controle de Acesso da Associação Serra da Liberdade.
+Este documento detalha a implementação completa dos módulos **Empresa** e **Local de Acessos** para o ERP Condomínio — Gestão Inteligente da ERP Condomínio.
 
 ---
 
@@ -139,8 +139,8 @@ mysql -u usuario -p nome_banco < sql/criar_tabelas_empresa_acessos.sql
 Crie o diretório para armazenar logos:
 
 ```bash
-mkdir -p /var/www/html/asl.erpcondominios.com.br/uploads/logo
-chmod 755 /var/www/html/asl.erpcondominios.com.br/uploads/logo
+mkdir -p /var/www/html/app.erpcondominios.com.br/uploads/logo
+chmod 755 /var/www/html/app.erpcondominios.com.br/uploads/logo
 ```
 
 ### Passo 3: Verificar Permissões
@@ -148,7 +148,7 @@ chmod 755 /var/www/html/asl.erpcondominios.com.br/uploads/logo
 Certifique-se de que o servidor web tem permissão de escrita:
 
 ```bash
-chmod 777 /var/www/html/asl.erpcondominios.com.br/uploads/logo
+chmod 777 /var/www/html/app.erpcondominios.com.br/uploads/logo
 ```
 
 ---

@@ -123,7 +123,7 @@ const response = await fetch(
 **VERIFICAÇÃO NECESSÁRIA:**
 ```bash
 # Validar se arquivo existe:
-ls -la /xampp/htdocs/dashboard/asl.erpcondominios.com.br/api/verificar_sessao_completa.php
+ls -la /xampp/htdocs/dashboard/app.erpcondominios.com.br/api/verificar_sessao_completa.php
 
 # Se não existir, usar:
 # - api/api_validar_token.php

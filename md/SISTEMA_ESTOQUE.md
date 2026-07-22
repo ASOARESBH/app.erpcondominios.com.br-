@@ -1,4 +1,4 @@
-# Sistema de Gestão de Estoque - Serra da Liberdade
+# Sistema de Gestão de Estoque - ERP Condomínio
 
 ## 📦 Módulos Criados
 

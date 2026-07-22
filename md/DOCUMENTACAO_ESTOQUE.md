@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-Este documento detalha a implementação e o uso do módulo de **Gestão de Estoque**, uma adição robusta ao sistema de controle de acesso do condomínio Serra da Liberdade. O módulo foi desenvolvido para oferecer um controle completo e intuitivo sobre os produtos e materiais do condomínio, desde o cadastro e categorização até o registro detalhado de entradas e saídas, incluindo a vinculação de retiradas a moradores.
+Este documento detalha a implementação e o uso do módulo de **Gestão de Estoque**, uma adição robusta ao sistema de controle de acesso do condomínio ERP Condomínio. O módulo foi desenvolvido para oferecer um controle completo e intuitivo sobre os produtos e materiais do condomínio, desde o cadastro e categorização até o registro detalhado de entradas e saídas, incluindo a vinculação de retiradas a moradores.
 
 O sistema é composto por uma API backend em PHP, um banco de dados MySQL e uma interface frontend em HTML, CSS e JavaScript, seguindo o padrão visual e funcional do restante da aplicação.
 

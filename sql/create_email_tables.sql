@@ -59,7 +59,7 @@ ADD COLUMN IF NOT EXISTS `erro_mensagem` text AFTER `status`;
 
 -- Inserir template padrão de recuperação de senha se não existir
 INSERT IGNORE INTO `email_templates` (`tipo`, `assunto`, `corpo`, `variaveis_disponiveis`, `ativo`) VALUES
-('recuperacao_senha', 'Recuperação de Senha - Serra da Liberdade', 
+('recuperacao_senha', 'Recuperação de Senha - ERP Condomínio', 
 '<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -84,7 +84,7 @@ INSERT IGNORE INTO `email_templates` (`tipo`, `assunto`, `corpo`, `variaveis_dis
         </div>
         <div class="content">
             <p>Olá, <strong>{{NOME_MORADOR}}</strong>!</p>
-            <p>Recebemos uma solicitação de recuperação de senha para sua conta no sistema <strong>Serra da Liberdade</strong>.</p>
+            <p>Recebemos uma solicitação de recuperação de senha para sua conta no sistema <strong>ERP Condomínio</strong>.</p>
             <p>Para redefinir sua senha, clique no botão abaixo:</p>
             <div style="text-align: center;">
                 <a href="{{LINK_RECUPERACAO}}" class="button">Redefinir Minha Senha</a>
@@ -102,8 +102,8 @@ INSERT IGNORE INTO `email_templates` (`tipo`, `assunto`, `corpo`, `variaveis_dis
             <div class="link-box">{{LINK_RECUPERACAO}}</div>
         </div>
         <div class="footer">
-            <p><strong>Serra da Liberdade</strong></p>
-            <p>Sistema de Controle de Acesso</p>
+            <p><strong>ERP Condomínio</strong></p>
+            <p>ERP Condomínio — Gestão Inteligente</p>
             <p>Este é um e-mail automático, não responda.</p>
             <p>&copy; {{ANO}} - Todos os direitos reservados</p>
         </div>
@@ -115,7 +115,7 @@ INSERT IGNORE INTO `email_templates` (`tipo`, `assunto`, `corpo`, `variaveis_dis
 
 -- Inserir template de boas-vindas se não existir
 INSERT IGNORE INTO `email_templates` (`tipo`, `assunto`, `corpo`, `variaveis_disponiveis`, `ativo`) VALUES
-('boas_vindas', 'Bem-vindo ao Sistema Serra da Liberdade', 
+('boas_vindas', 'Bem-vindo ao Sistema ERP Condomínio', 
 '<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -138,7 +138,7 @@ INSERT IGNORE INTO `email_templates` (`tipo`, `assunto`, `corpo`, `variaveis_dis
         </div>
         <div class="content">
             <p>Olá, <strong>{{NOME_MORADOR}}</strong>!</p>
-            <p>Seja bem-vindo ao <strong>Sistema Serra da Liberdade</strong>!</p>
+            <p>Seja bem-vindo ao <strong>Sistema ERP Condomínio</strong>!</p>
             <p>Seu cadastro foi realizado com sucesso. Através do nosso portal, você poderá:</p>
             <ul>
                 <li>Gerenciar visitantes e acessos</li>
@@ -155,8 +155,8 @@ INSERT IGNORE INTO `email_templates` (`tipo`, `assunto`, `corpo`, `variaveis_dis
             <p>Em caso de dúvidas, entre em contato com a administração.</p>
         </div>
         <div class="footer">
-            <p><strong>Serra da Liberdade</strong></p>
-            <p>Sistema de Controle de Acesso</p>
+            <p><strong>ERP Condomínio</strong></p>
+            <p>ERP Condomínio — Gestão Inteligente</p>
             <p>&copy; {{ANO}} - Todos os direitos reservados</p>
         </div>
     </div>

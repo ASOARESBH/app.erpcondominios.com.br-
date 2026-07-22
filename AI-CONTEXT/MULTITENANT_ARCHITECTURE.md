@@ -2,7 +2,7 @@
 
 ## 1. Visão Geral da Transformação
 
-O sistema ERP Condomínios (anteriormente ERP Associação Serra da Liberdade) foi originalmente projetado para atender a um único condomínio. A análise do código-fonte e do banco de dados (181 tabelas, mais de 230 endpoints de API em PHP) revelou que não há isolamento lógico de dados por condomínio. O objetivo deste plano é detalhar a estratégia técnica para transformar o sistema em uma arquitetura Multi-Tenant (Múltiplos Inquilinos) mantendo o mesmo banco de dados (Single Database, Shared Schema).
+O sistema ERP Condomínios (anteriormente ERP Condomínio) foi originalmente projetado para atender a um único condomínio. A análise do código-fonte e do banco de dados (181 tabelas, mais de 230 endpoints de API em PHP) revelou que não há isolamento lógico de dados por condomínio. O objetivo deste plano é detalhar a estratégia técnica para transformar o sistema em uma arquitetura Multi-Tenant (Múltiplos Inquilinos) mantendo o mesmo banco de dados (Single Database, Shared Schema).
 
 **Abordagem escolhida:** Banco de Dados Único com Isolamento Lógico (Tenant ID).
 Esta abordagem é a mais adequada para a pilha tecnológica atual (PHP + MySQL + Vanilla JS) e permite escalabilidade com menor custo de infraestrutura inicial.
@@ -18,7 +18,7 @@ Esta abordagem é a mais adequada para a pilha tecnológica atual (PHP + MySQL +
 - As APIs fazem consultas globais: `SELECT * FROM moradores`, sem filtro de condomínio.
 - A autenticação (`validar_login.php`) cria uma sessão genérica (`$_SESSION['usuario_id']`), mas não associa o usuário a uma empresa específica.
 - Permissões (`usuario_modulos`) são globais ao sistema, não por condomínio.
-- Há *hardcodes* de domínio (`https://asl.erpcondominios.com.br`) nos headers de CORS em 62 arquivos.
+- Há *hardcodes* de domínio (`https://app.erpcondominios.com.br`) nos headers de CORS em 62 arquivos.
 
 ### 2.3. Frontend (Vanilla JS)
 - O SPA (`app-router.js`) assume um ambiente único.
@@ -73,7 +73,7 @@ Esta é a fase mais trabalhosa. O isolamento de dados deve ser garantido em nív
    - **UPDATE/DELETE:** Todo `UPDATE` e `DELETE` deve validar se o registro pertence ao `tenant_id` atual (`WHERE id = ? AND tenant_id = ?`).
 
 3. **Remoção de Hardcodes:**
-   - Substituir URLs fixas (`asl.erpcondominios.com.br`) nos cabeçalhos de CORS (`Access-Control-Allow-Origin`) por validação dinâmica baseada na variável global de configuração ou na origem da requisição.
+   - Substituir URLs fixas (`app.erpcondominios.com.br`) nos cabeçalhos de CORS (`Access-Control-Allow-Origin`) por validação dinâmica baseada na variável global de configuração ou na origem da requisição.
 
 ### Fase 4: Adaptações no Frontend
 

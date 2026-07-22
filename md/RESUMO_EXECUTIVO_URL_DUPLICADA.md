@@ -2,14 +2,14 @@
 
 **Data:** 13/02/2026  
 **Status:** 🔴 PROBLEMA LOCALIZADO E MAPEADO  
-**URL Duplicada:** `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/`
+**URL Duplicada:** `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/`
 
 ---
 
 ## 🎯 RESPOSTA DIRETA
 
 ### Pergunta do usuário:
-> \"Analyze toda estrutura e localiza onde está fazendo a chamada do link https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/\"
+> \"Analyze toda estrutura e localiza onde está fazendo a chamada do link https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/\"
 
 ### Resposta:
 **A chamada dessa URL duplicada é gerada em TWO arquivos:**
@@ -30,13 +30,13 @@ basePath = window.location.origin + path.split('/frontend/')[0] + '/';
 ```
 
 **O que acontece:**
-- `window.location.origin` = `https://asl.erpcondominios.com.br` ✓
-- `path.split('/frontend/')[0]` = `/home2/inlaud99/asl.erpcondominios.com.br` ❌ **PROBLEMA**
-- Concatenação = `/home2/inlaud99/asl.erpcondominios.com.br/frontend/` ❌
+- `window.location.origin` = `https://app.erpcondominios.com.br` ✓
+- `path.split('/frontend/')[0]` = `/home2/inlaud99/app.erpcondominios.com.br` ❌ **PROBLEMA**
+- Concatenação = `/home2/inlaud99/app.erpcondominios.com.br/frontend/` ❌
 
 **Resultado:**
 ```
-https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/
+https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/
 ```
 
 ### **2️⃣ PROPAGAÇÃO DO ERRO - frontend/login.html (Linha 379)**
@@ -49,7 +49,7 @@ logoImg.src = logoPath;
 
 **Resultado:** Browser tenta requisitar
 ```
-https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
+https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
 ```
 
 ❌ **404 NOT FOUND**
@@ -61,12 +61,12 @@ https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploa
 ### **No Console (F12):**
 ```javascript
 window.APP_BASE_PATH
-// Resultado: "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+// Resultado: "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 ```
 
 ### **Na Network Tab (F12):**
 ```
-Requisição: GET /home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
+Requisição: GET /home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
 Status: 404 Not Found ❌
 ```
 
@@ -166,8 +166,8 @@ OK ✓
 
 ### Quando quebra (hospedagem compartilhada):
 ```
-pathname = /home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html
-split = /home2/inlaud99/asl.erpcondominios.com.br ❌ ERRADO!
+pathname = /home2/inlaud99/app.erpcondominios.com.br/frontend/login.html
+split = /home2/inlaud99/app.erpcondominios.com.br ❌ ERRADO!
 DUPLICAÇÃO ❌
 ```
 
@@ -175,7 +175,7 @@ DUPLICAÇÃO ❌
 
 ## 🎯 CONCLUSÃO
 
-### **A URL `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/...` é chamada:**
+### **A URL `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/...` é chamada:**
 
 ✅ **Gerada em:** `frontend/js/config.js` linha 28  
 ✅ **Usada em:** `frontend/login.html` linha 379-389  

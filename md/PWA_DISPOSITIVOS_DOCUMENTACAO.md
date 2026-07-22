@@ -11,7 +11,7 @@ Transformar o Console de Acesso em um **Progressive Web App (PWA)** instalável 
 ### **1. PWA Completo** 📲
 
 #### **manifest.json**
-- ✅ Nome do app: "Console de Acesso - Serra da Liberdade"
+- ✅ Nome do app: "Console de Acesso - ERP Condomínio"
 - ✅ Nome curto: "Console Acesso"
 - ✅ Display: standalone (sem barra de navegação)
 - ✅ Orientação: portrait (retrato)
@@ -33,7 +33,7 @@ Transformar o Console de Acesso em um **Progressive Web App (PWA)** instalável 
 ```
 ┌─────────────────────────────────────┐
 │   🛡️ Console de Acesso              │
-│   Serra da Liberdade                │
+│   ERP Condomínio                │
 ├─────────────────────────────────────┤
 │                                     │
 │   ┌─────────────────────────────┐   │

@@ -24,8 +24,8 @@
 ### Problema Identificado
 ```
 URL Duplicada:
-    ❌ https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/
-    ✅ https://asl.erpcondominios.com.br/frontend/
+    ❌ https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/
+    ✅ https://app.erpcondominios.com.br/frontend/
 
 Causa Raiz (config.js linha 28):
     ❌ basePath = window.location.origin + pathname.split('/frontend/')[0] + '/'
@@ -47,11 +47,11 @@ Causa Raiz (config.js linha 28):
 // ANTES (❌ Problema)
 const path = window.location.pathname.substr(0, window.location.pathname.lastIndexOf('/frontend/'));
 const basePath = window.location.origin + path + '/';
-// Resultado: https://asl.erpcondominios.com.br//home2/inlaud99/asl.erpcondominios.com.br//
+// Resultado: https://app.erpcondominios.com.br//home2/inlaud99/app.erpcondominios.com.br//
 
 // DEPOIS (✅ Correto)
 const basePath = window.location.origin + '/';
-// Resultado: https://asl.erpcondominios.com.br/
+// Resultado: https://app.erpcondominios.com.br/
 ```
 
 **Impacto:** APP_BASE_PATH agora correto em todo o sistema
@@ -264,7 +264,7 @@ manifest.json                         [MODIFICADO - 60 linhas]
 ```javascript
 // Teste 1: Verificar APP_BASE_PATH
 window.APP_BASE_PATH 
-// Esperado: "https://asl.erpcondominios.com.br/"
+// Esperado: "https://app.erpcondominios.com.br/"
 // Status: ✅ PASSA
 
 // Teste 2: Verificar logo URL
@@ -294,7 +294,7 @@ fetch('./manifest.json').then(r => r.json()).then(m => console.log(m.start_url))
 
 ### ANTES (❌ Problema)
 ```
-URL carregada:  ❌ /home2/inlaud99/asl.erpcondominios.com.br/frontend/
+URL carregada:  ❌ /home2/inlaud99/app.erpcondominios.com.br/frontend/
 Logo:           ❌ 404 not found
 CSS/JS:         ❌ 404 not found
 PWA:            ❌ Não funciona em subdirs
@@ -304,7 +304,7 @@ Sessão:         ❓ Incerto
 
 ### DEPOIS (✅ Sucesso)
 ```
-URL carregada:  ✅ https://asl.erpcondominios.com.br/
+URL carregada:  ✅ https://app.erpcondominios.com.br/
 Logo:           ✅ Carrega normalmente
 CSS/JS:         ✅ Carrega normalmente
 PWA:            ✅ Funciona em qualquer contexto

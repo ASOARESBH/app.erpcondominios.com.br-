@@ -2,7 +2,7 @@
 
 ## 📋 Visão Geral
 
-Sistema completo de registro e visualização de erros técnicos para facilitar o debug e resolução de problemas no ERP Serra da Liberdade.
+Sistema completo de registro e visualização de erros técnicos para facilitar o debug e resolução de problemas no ERP Condomínio.
 
 ## 🎯 Objetivo
 
@@ -347,4 +347,4 @@ SELECT * FROM v_estatisticas_erros;
 
 André Programador BH
 Data: 26/12/2024
-Sistema: ERP Serra da Liberdade
+Sistema: ERP Condomínio

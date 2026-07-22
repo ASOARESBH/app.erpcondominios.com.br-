@@ -124,7 +124,7 @@ $endpoints_para_proteger = [
 
 // Template de proteção
 $template_protecao = <<<'PROTECAO'
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+header('Access-Control-Allow-Origin: https://app.erpcondominios.com.br');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');

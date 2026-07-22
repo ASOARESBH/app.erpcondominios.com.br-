@@ -5,7 +5,7 @@
  * Sidebar simplificada com APENAS logo e menu
  * 
  * ALTERAÇÕES:
- * 1. Removido: Título "Serra da Liberdade"
+ * 1. Removido: Título "ERP Condomínio"
  * 2. Removido: Bloco de perfil (avatar, nome, função, status)
  * 3. Mantido: Logo dinâmica centralizada
  * 4. Mantido: Menu de navegação com "Regra de Ouro"
@@ -20,7 +20,7 @@
     // Configurações
     const CONFIG = {
         logoPath: '../uploads/logo/logo_1769740112.jpeg',
-        companyName: 'Serra da Liberdade',
+        companyName: 'ERP Condomínio',
         extensoes: ['jpeg', 'jpg', 'png', 'webp', 'gif']
     };
 

@@ -136,4 +136,4 @@ CREATE TABLE IF NOT EXISTS `bancos_brasileiros` (
   COMMENT='Tabela de bancos brasileiros — COMPE/BCB';
 -- IMPORTANTE: Após executar esta migration, execute também seed_bancos_brasileiros.sql
 -- para popular a tabela com os 332 bancos brasileiros.
--- OU acesse: https://asl.erpcondominios.com.br/api/api_contas_bancarias.php?acao=migration_bancos
+-- OU acesse: https://app.erpcondominios.com.br/api/api_contas_bancarias.php?acao=migration_bancos

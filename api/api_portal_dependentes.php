@@ -13,7 +13,7 @@
  *   PUT    ?action=atualizar&id=X → Atualiza dependente
  *   DELETE ?action=excluir&id=X → Exclui dependente
  * 
- * @author Sistema ERP Serra da Liberdade
+ * @author Sistema ERP Condomínio
  * @version 1.0
  * @date 2026-03-22
  */

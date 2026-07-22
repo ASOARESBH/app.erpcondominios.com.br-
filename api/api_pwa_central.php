@@ -30,7 +30,7 @@ ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-$allowed = ['https://asl.erpcondominios.com.br','http://asl.erpcondominios.com.br','http://localhost','http://127.0.0.1'];
+$allowed = ['https://app.erpcondominios.com.br','http://app.erpcondominios.com.br','http://localhost','http://127.0.0.1'];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $allowed)) header('Access-Control-Allow-Origin: ' . $origin);
 header('Access-Control-Allow-Credentials: true');

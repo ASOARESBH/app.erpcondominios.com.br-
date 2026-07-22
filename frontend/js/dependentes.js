@@ -10,7 +10,7 @@
  * - Validações completas
  * - Requisições AJAX com retry
  * 
- * @author Sistema ERP Serra da Liberdade
+ * @author Sistema ERP Condomínio
  * @date 25/01/2026
  * @version 2.0
  */

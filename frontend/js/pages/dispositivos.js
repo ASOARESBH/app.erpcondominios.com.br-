@@ -1,6 +1,6 @@
 /**
  * dispositivos.js — Módulo de Dispositivos de Acesso v4.0
- * Sistema ERP Serra da Liberdade
+ * Sistema ERP Condomínio
  *
  * Arquitetura multifabricante: Control iD, Intelbras, Hikvision, Genérico
  * ES Module com export init/destroy para AppRouter

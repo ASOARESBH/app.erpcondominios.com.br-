@@ -165,7 +165,7 @@ DIA 9:    Deploy gradual em produção (1-2 pages/dia)
 ## 📍 LOCALIZAÇÃO DOS DOCUMENTOS
 
 ```
-📁 c:\xampp\htdocs\dashboard\asl.erpcondominios.com.br\
+📁 c:\xampp\htdocs\dashboard\app.erpcondominios.com.br\
 │
 ├─ INDICE_COMPLETO_ARQUITETURA.md          👈 COMECE AQUI
 ├─ RELATORIO_FINAL_EXECUCAO_ARQUITETURAL.md

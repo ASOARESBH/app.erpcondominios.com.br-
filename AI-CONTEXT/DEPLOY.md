@@ -2,7 +2,7 @@
 
 ## 1. Ambiente
 O sistema é hospedado em uma revenda HostGator (cPanel).
-- **Pasta raiz**: `/public_html/` ou pasta do domínio `asl.erpcondominios.com.br`
+- **Pasta raiz**: `/public_html/` ou pasta do domínio `app.erpcondominios.com.br`
 - **Banco de Dados**: MySQL via phpMyAdmin.
 
 ## 2. Processo de Deploy

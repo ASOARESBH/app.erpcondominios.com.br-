@@ -5,7 +5,7 @@
 
 // Headers para API
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+header('Access-Control-Allow-Origin: https://app.erpcondominios.com.br');
 header('Access-Control-Allow-Credentials: true');
 
 // Iniciar sessão ANTES de incluir config.php

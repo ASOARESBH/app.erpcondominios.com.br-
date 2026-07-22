@@ -1,6 +1,6 @@
 // ============================================================
 // unidades.js — Módulo de Gestão de Unidades
-// Associação Serra da Liberdade
+// ERP Condomínio
 // ============================================================
 (function () {
     'use strict';

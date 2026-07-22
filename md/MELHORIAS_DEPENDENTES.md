@@ -322,4 +322,4 @@ Registro não encontrado
 
 ---
 
-**Desenvolvido com ❤️ pela Associação Serra da Liberdade**
+**Desenvolvido com ❤️ pela ERP Condomínio**

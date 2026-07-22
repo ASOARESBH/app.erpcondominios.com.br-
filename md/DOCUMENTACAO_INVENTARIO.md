@@ -1,6 +1,6 @@
 # Módulo de Inventário de Patrimônio
 
-## Sistema de Controle de Acesso - Serra da Liberdade
+## ERP Condomínio — Gestão Inteligente - ERP Condomínio
 
 **Data:** 20 de outubro de 2025  
 **Versão:** 1.0
@@ -22,7 +22,7 @@
 
 ## 📖 Visão Geral
 
-O **Módulo de Inventário** é uma solução completa para gerenciamento de patrimônio do condomínio Serra da Liberdade. Permite cadastro, controle, busca avançada e geração de relatórios de todos os bens do condomínio.
+O **Módulo de Inventário** é uma solução completa para gerenciamento de patrimônio do condomínio ERP Condomínio. Permite cadastro, controle, busca avançada e geração de relatórios de todos os bens do condomínio.
 
 ### Principais Recursos
 
@@ -495,7 +495,7 @@ Para dúvidas ou problemas:
 
 ---
 
-**Sistema de Controle de Acesso - Serra da Liberdade**  
+**ERP Condomínio — Gestão Inteligente - ERP Condomínio**  
 Módulo de Inventário v1.0  
 © 2025 - Todos os direitos reservados
 

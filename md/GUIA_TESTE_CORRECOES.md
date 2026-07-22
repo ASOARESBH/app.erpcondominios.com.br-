@@ -16,7 +16,7 @@ Clique: "Clear now"
 
 ### Passo 2: Acessar Login
 ```
-Abrir: https://asl.erpcondominios.com.br/frontend/login.html
+Abrir: https://app.erpcondominios.com.br/frontend/login.html
 Resultado esperado:
 - ✅ Logo carrega (não fica em branco)
 - ✅ Página não tem erros de CSS
@@ -28,7 +28,7 @@ Resultado esperado:
 Pressione: F12
 Abra aba: Console
 Digite: window.APP_BASE_PATH
-Resultado esperado: "https://asl.erpcondominios.com.br/"
+Resultado esperado: "https://app.erpcondominios.com.br/"
 ```
 
 ### Passo 4: Verificar Network
@@ -50,10 +50,10 @@ Resultado esperado: Nenhum 404 com /home2/inlaud99/ no caminho!
 window.APP_BASE_PATH
 
 // Resultado CORRETO:
-"https://asl.erpcondominios.com.br/"
+"https://app.erpcondominios.com.br/"
 
 // Resultado ERRADO (indicaria falta de correção):
-"https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+"https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 ```
 
 **Status:** ✅ ESPERADO = CORRETO
@@ -63,7 +63,7 @@ window.APP_BASE_PATH
 ### ✅ TESTE 2: Verificar se Logo Carrega
 
 **Manual:**
-1. Abrir `https://asl.erpcondominios.com.br/frontend/login.html`
+1. Abrir `https://app.erpcondominios.com.br/frontend/login.html`
 2. Procurar por imagem no topo (logo da empresa)
 3. Se a imagem aparecer = ✅ CORRETO
 4. Se a imagem NÃO aparecer ou box vazio = ❌ ERRADO
@@ -73,7 +73,7 @@ window.APP_BASE_PATH
 Aba: Network
 Procure por: logo_1769740112.jpeg ou logo_padrao.png
 Status esperado: 200 OK
-URL esperada: https://asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
+URL esperada: https://app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg
 ```
 
 **Status:** ✅ ESPERADO = Logo visível + Status 200
@@ -91,14 +91,14 @@ URL esperada: https://asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpe
 
 **Resultado CORRETO:**
 ```
-Nenhuma URL contendo /home2/inlaud99/asl.erpcondominios.com.br/
+Nenhuma URL contendo /home2/inlaud99/app.erpcondominios.com.br/
 ```
 
 **Resultado ERRADO:**
 ```
 Requests como:
-GET /home2/inlaud99/asl.erpcondominios.com.br/assets/css/app.css 404
-GET /home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/... 404
+GET /home2/inlaud99/app.erpcondominios.com.br/assets/css/app.css 404
+GET /home2/inlaud99/app.erpcondominios.com.br/uploads/logo/... 404
 ```
 
 **Status:** ✅ ESPERADO = Nenhuma URL duplicada
@@ -158,7 +158,7 @@ URLs como /ico/icon-192x192.png (absoluto)
 
 **O que fazer:**
 1. Abrir em dispositivo mobile
-2. Abrir `https://asl.erpcondominios.com.br/frontend/console_acesso.html`
+2. Abrir `https://app.erpcondominios.com.br/frontend/console_acesso.html`
 3. Browser deve sugerir "Add to Home Screen"
 
 **Resultado CORRETO:**
@@ -185,7 +185,7 @@ Cole esses comandos no Console (F12) para testar automaticamente:
 
 ### Teste 1: Verificar basePath
 ```javascript
-if (window.APP_BASE_PATH === 'https://asl.erpcondominios.com.br/') {
+if (window.APP_BASE_PATH === 'https://app.erpcondominios.com.br/') {
     console.log('✅ APP_BASE_PATH CORRETO');
 } else {
     console.log('❌ APP_BASE_PATH ERRADO:', window.APP_BASE_PATH);
@@ -243,7 +243,7 @@ fetch('../uploads/logo/logo_padrao.png')
 
 | Teste | O que verifica | Esperado | Comando |
 |-------|---|---|---|
-| 1 | APP_BASE_PATH | `https://asl.erpcondominios.com.br/` | `window.APP_BASE_PATH` |
+| 1 | APP_BASE_PATH | `https://app.erpcondominios.com.br/` | `window.APP_BASE_PATH` |
 | 2 | Logo | Visível + 200 OK | Visual + Network tab |
 | 3 | URLs duplicadas | Nenhum 404 com `/home2/inlaud99/` | Network tab |
 | 4 | Manifest | Ícones carregados | DevTools > Application |

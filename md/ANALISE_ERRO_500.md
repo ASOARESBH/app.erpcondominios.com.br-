@@ -8,10 +8,10 @@
 ## 🔴 Erro Reportado
 
 ```
-GET https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/
+GET https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/
 Status: 500 (Internal Server Error)
 
-GET https://asl.erpcondominios.com.br/cgi-svs/images/logo-403-page.png
+GET https://app.erpcondominios.com.br/cgi-svs/images/logo-403-page.png
 Status: 404 (Not Found)
 ```
 
@@ -30,7 +30,7 @@ RewriteBase /    # ❌ ERRADO!
 **Por quê é erro:**
 ```
 RewriteBase / faz o Apache pensar que a raiz do projeto é /
-Mas o projeto está em /home2/inlaud99/asl.erpcondominios.com.br/
+Mas o projeto está em /home2/inlaud99/app.erpcondominios.com.br/
 Resultado: Caminhos duplicados ou errados
 Status: 500 Internal Server Error
 ```
@@ -156,7 +156,7 @@ ANTES:              DEPOIS:
 
 2. **Acessar URL:**
    ```
-   https://asl.erpcondominios.com.br/
+   https://app.erpcondominios.com.br/
    ```
 
 3. **Verificar DevTools (F12):**

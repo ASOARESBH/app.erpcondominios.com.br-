@@ -1245,7 +1245,7 @@ async function _carregarRelLicitacao() {
         }
     }
 
-    const nomeEmp = empresa.nome_fantasia || empresa.razao_social || 'ASSOCIAÇÃO SERRA DA LIBERDADE';
+    const nomeEmp = empresa.nome_fantasia || empresa.razao_social || 'ERP CONDOMÍNIO';
     const cnpjEmp = empresa.cnpj || '';
     const endEmp  = [empresa.endereco_rua, empresa.endereco_numero, empresa.endereco_cidade, empresa.endereco_estado]
                     .filter(Boolean).join(', ');

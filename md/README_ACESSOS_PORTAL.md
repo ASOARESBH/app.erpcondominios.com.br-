@@ -376,4 +376,4 @@ AND EXISTS (
 
 ---
 
-© 2024 ERP Serra da Liberdade | Desenvolvido por Manus AI
+© 2024 ERP Condomínio | Desenvolvido por Manus AI

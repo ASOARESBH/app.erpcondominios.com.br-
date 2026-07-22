@@ -345,7 +345,7 @@ function exportarPDF() {
     </style>
 </head>
 <body>
-    <h1>Relatório de Hidrômetros — Serra da Liberdade</h1>
+    <h1>Relatório de Hidrômetros — ERP Condomínio</h1>
     <div class="sub">Gerado em: ${new Date().toLocaleString('pt-BR')}</div>
     <div class="filtros">
         <span><strong>Período:</strong> ${dataInicial} a ${dataFinal}</span>

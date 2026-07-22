@@ -86,7 +86,7 @@
 
 ### Teste 1: Acessar Raiz
 ```bash
-URL: https://asl.erpcondominios.com.br/
+URL: https://app.erpcondominios.com.br/
 Esperado:
   ✅ Status 200 (não 500)
   ✅ Página login.html carrega
@@ -150,7 +150,7 @@ Esperado:
 
 - [ ] **3. Acessar a URL em navegador novo**
   ```
-  https://asl.erpcondominios.com.br/
+  https://app.erpcondominios.com.br/
   Aguardar login.html carregar
   ```
 

@@ -22,8 +22,8 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $allowed_origins = array(
-    'https://asl.erpcondominios.com.br',
-    'https://asl.erpcondominio.com.br',
+    'https://app.erpcondominios.com.br',
+    'https://app.erpcondominios.com.br',
     'http://localhost:8765',
     'http://localhost:8766',
     'http://127.0.0.1:8765',

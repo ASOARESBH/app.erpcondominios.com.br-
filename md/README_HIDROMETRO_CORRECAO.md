@@ -126,7 +126,7 @@ SOLUÇÃO:
 ### Verificação Rápida (2 min)
 ```bash
 # 1. Abrir página
-https://asl.erpcondominios.com.br/frontend/relatorios_hidrometro.html
+https://app.erpcondominios.com.br/frontend/relatorios_hidrometro.html
 
 # 2. Verificar console (F12)
 # Esperado: Nenhum SyntaxError
@@ -170,7 +170,7 @@ git push
 - **Resultado:** Erro legível em vez de SyntaxError
 
 ### Arquivo
-- **Localização:** `c:\xampp\htdocs\dashboard\asl.erpcondominios.com.br\frontend\relatorios_hidrometro.html`
+- **Localização:** `c:\xampp\htdocs\dashboard\app.erpcondominios.com.br\frontend\relatorios_hidrometro.html`
 - **Linhas:** 538 (após correção)
 - **Alterações:** ~80 linhas (add + modify)
 

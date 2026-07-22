@@ -1,7 +1,7 @@
 -- =====================================================
 -- ATUALIZAÇÃO: Adicionar Campos de Origem do Lançamento
 -- VERSÃO SEGURA - Ignora erros se campos já existirem
--- Sistema ERP Serra da Liberdade - Hidrômetros
+-- Sistema ERP ERP Condomínio - Hidrômetros
 -- =====================================================
 
 -- Desabilitar verificação de erros temporariamente

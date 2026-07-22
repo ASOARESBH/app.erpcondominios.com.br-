@@ -1,7 +1,7 @@
 # 🔴 Análise: Localização da URL Duplicada
 
 **Data:** 13/02/2026  
-**URL Duplicada:** `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/`  
+**URL Duplicada:** `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/`  
 **Status:** ✅ LOCALIZADA E MAPEADA
 
 ---
@@ -58,23 +58,23 @@
 
 Quando o usuário acessa:
 ```
-https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html
+https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html
 ```
 
 A propriedade `window.location.pathname` contém:
 ```
-/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html
+/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html
 ```
 
 ### **Passo a Passo do Erro:**
 
 | Passo | Valor | Descrição |
 |-------|-------|-----------|
-| 1 | `window.location.origin` = `https://asl.erpcondominios.com.br` | Origem (correto) |
-| 2 | `path` = `/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html` | Pathname completo |
-| 3 | `path.split('/frontend/')[0]` = `/home2/inlaud99/asl.erpcondominios.com.br` | ❌ PROBLEMA! |
+| 1 | `window.location.origin` = `https://app.erpcondominios.com.br` | Origem (correto) |
+| 2 | `path` = `/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html` | Pathname completo |
+| 3 | `path.split('/frontend/')[0]` = `/home2/inlaud99/app.erpcondominios.com.br` | ❌ PROBLEMA! |
 | 4 | Concatenação = `origin + split + '/'` | |
-| 5 | **Resultado** = `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/` | ❌ **DUPLICADO!** |
+| 5 | **Resultado** = `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/` | ❌ **DUPLICADO!** |
 
 ---
 
@@ -82,15 +82,15 @@ A propriedade `window.location.pathname` contém:
 
 ```javascript
 // Entrada:
-window.location.origin    = "https://asl.erpcondominios.com.br"
-window.location.pathname  = "/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html"
+window.location.origin    = "https://app.erpcondominios.com.br"
+window.location.pathname  = "/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html"
 
 // Processamento:
-path.split('/frontend/')[0] // Retorna: "/home2/inlaud99/asl.erpcondominios.com.br"
+path.split('/frontend/')[0] // Retorna: "/home2/inlaud99/app.erpcondominios.com.br"
 
 // Saída (ERRADA):
-basePath = "https://asl.erpcondominios.com.br" + "/home2/inlaud99/asl.erpcondominios.com.br" + "/"
-basePath = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+basePath = "https://app.erpcondominios.com.br" + "/home2/inlaud99/app.erpcondominios.com.br" + "/"
+basePath = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 ```
 
 ---
@@ -123,9 +123,9 @@ Este arquivo **usa o `basePath` errado** definido em config.js:
 
 **Resultado da concatanação:**
 ```
-basePath            = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+basePath            = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 logoPath            = basePath + "uploads/logo/logo_1769740112.jpeg"
-logoPath (resultado) = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg"
+logoPath (resultado) = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/logo_1769740112.jpeg"
                        ❌ URL DUPLICADA!
 ```
 
@@ -136,17 +136,17 @@ logoPath (resultado) = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erp
 ```
 User Browser
     ↓
-Acessa: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html
+Acessa: https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html
     ↓
 HTML carrega e executa: <script src="js/config.js"></script>
     ↓
 config.js (linha 28) executado:
-    window.location.origin    = "https://asl.erpcondominios.com.br" ✓
-    window.location.pathname  = "/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html"
+    window.location.origin    = "https://app.erpcondominios.com.br" ✓
+    window.location.pathname  = "/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html"
     ↓
     basePath = origin + pathname.split('/frontend/')[0] + '/'
-           = "https://asl.erpcondominios.com.br" + "/home2/inlaud99/asl.erpcondominios.com.br" + "/"
-           = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/" ❌
+           = "https://app.erpcondominios.com.br" + "/home2/inlaud99/app.erpcondominios.com.br" + "/"
+           = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/" ❌
     ↓
 window.APP_BASE_PATH = basePath (VALOR ERRADO ARMAZENADO)
     ↓
@@ -156,7 +156,7 @@ login.html (linha 379) executado:
     imgElement.src = logoPath  // Resultado: URL com duplicação ❌
     ↓
 Browser tenta carregar:
-    GET https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/...
+    GET https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/...
              ❌ DUPLICAÇÃO DO CAMINHO COMPLETO DO DOMÍNIO!
 ```
 
@@ -187,9 +187,9 @@ split antes de /frontend = / (raiz)
 
 **Estrutura real (hospedagem compartilhada):**
 ```
-https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html
-pathname = /home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html
-split antes de /frontend = /home2/inlaud99/asl.erpcondominios.com.br
+https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html
+pathname = /home2/inlaud99/app.erpcondominios.com.br/frontend/login.html
+split antes de /frontend = /home2/inlaud99/app.erpcondominios.com.br
 ❌ Duplicação!
 ```
 
@@ -218,7 +218,7 @@ logoPath = "../uploads/logo/..."  // Sempre relativo!
 
 ## 📌 CONCLUSÃO
 
-**A URL duplicada `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/` é gerada por:**
+**A URL duplicada `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/` é gerada por:**
 
 1. ✅ **Identificado em:** `frontend/js/config.js` linha 28
 2. ✅ **Efeito cascata em:** `frontend/login.html` linhas 379-389

@@ -1,4 +1,4 @@
-# 🏢 ERP Associação Serra da Liberdade
+# 🏢 ERP Condomínio
 
 **Sistema de Gestão Completo para Condomínios e Associações**
 
@@ -10,7 +10,7 @@
 
 ## 📋 Sobre o Projeto
 
-O **ERP Associação Serra da Liberdade** é um sistema completo de gestão desenvolvido especificamente para condomínios e associações, oferecendo controle total sobre:
+O **ERP Condomínio** é um sistema completo de gestão desenvolvido especificamente para condomínios e associações, oferecendo controle total sobre:
 
 - 🚪 **Portaria e Controle de Acesso**
 - 👥 **Gestão de Moradores e Dependentes**
@@ -382,7 +382,7 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 ## 👥 Autores
 
 - **Manus AI** - *Desenvolvimento e Implementação* - [Manus](https://manus.im)
-- **Associação Serra da Liberdade** - *Requisitos e Testes*
+- **ERP Condomínio** - *Requisitos e Testes*
 
 ---
 
@@ -400,9 +400,9 @@ Para suporte técnico:
 
 - Comunidade PHP
 - Contribuidores do projeto
-- Associação Serra da Liberdade
+- ERP Condomínio
 - Manus AI Platform
 
 ---
 
-**Desenvolvido com ❤️ pela Associação Serra da Liberdade**
+**Desenvolvido com ❤️ pela ERP Condomínio**

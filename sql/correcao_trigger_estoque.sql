@@ -1,7 +1,7 @@
 -- =====================================================
 -- CORREÇÃO: REMOVER TRIGGER QUE CAUSA DUPLICAÇÃO
 -- Sistema de Gestão de Estoque
--- Condomínio Serra da Liberdade
+-- ERP Condomínio
 -- =====================================================
 
 -- PROBLEMA IDENTIFICADO:

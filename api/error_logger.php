@@ -7,7 +7,7 @@
  * Classe responsável por registrar erros da aplicação
  * em arquivo de log para auditoria e debugging.
  * 
- * @author Sistema ERP Serra da Liberdade
+ * @author Sistema ERP Condomínio
  * @date 25/01/2026
  * @version 1.0
  */

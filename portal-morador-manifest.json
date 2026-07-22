@@ -1,7 +1,7 @@
 {
-  "name": "Portal do Morador - Serra da Liberdade",
+  "name": "Portal do Morador - ERP Condomínio",
   "short_name": "Portal Morador",
-  "description": "Portal do morador do Condomínio Serra da Liberdade. Acesse notificações, visitantes, chamados e muito mais.",
+  "description": "Portal do morador do ERP Condomínio. Acesse notificações, visitantes, chamados e muito mais.",
   "start_url": "/frontend/portal_morador.html",
   "scope": "/",
   "display": "standalone",

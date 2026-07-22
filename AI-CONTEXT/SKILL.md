@@ -1,4 +1,4 @@
-# AI SKILL: ERP Serra da Liberdade
+# AI SKILL: ERP Condomínio
 
 **ATENÇÃO IA:** Leia este arquivo antes de qualquer interação com o código. Ele contém as regras absolutas e o comportamento esperado.
 

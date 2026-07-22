@@ -181,7 +181,7 @@ class EmailSender
             $assunto = $tpl['assunto'];
             $corpo   = $tpl['corpo'];
         } else {
-            $assunto = 'Recuperação de Senha - Serra da Liberdade';
+            $assunto = 'Recuperação de Senha - ERP Condomínio';
             $corpo   = $this->templateRecuperacaoSenhaPadrao();
         }
 
@@ -266,7 +266,7 @@ class EmailSender
       <p style="word-break:break-all;background:#e2e8f0;padding:10px;border-radius:4px;font-size:12px">{{link_recuperacao}}</p>
     </div>
     <div class="ft">
-      <p>Serra da Liberdade — Sistema de Controle de Acesso</p>
+      <p>ERP Condomínio — ERP Condomínio — Gestão Inteligente</p>
       <p>Este é um e-mail automático, não responda.</p>
     </div>
   </div>

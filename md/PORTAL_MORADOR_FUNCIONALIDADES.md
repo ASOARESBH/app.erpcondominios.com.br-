@@ -434,4 +434,4 @@ Para dúvidas ou problemas:
 
 ---
 
-**Desenvolvido com ❤️ para o Condomínio Serra da Liberdade**
+**Desenvolvido com ❤️ para o ERP Condomínio**

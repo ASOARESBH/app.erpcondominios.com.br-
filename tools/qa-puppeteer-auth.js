@@ -5,7 +5,7 @@ const url = require('url');
 
 (async () => {
   const QA_PHPSESSID = process.env.QA_PHPSESSID;
-  const BASE = process.env.BASE_URL || 'https://asl.erpcondominios.com.br';
+  const BASE = process.env.BASE_URL || 'https://app.erpcondominios.com.br';
   if (!QA_PHPSESSID) {
     console.error('Please set QA_PHPSESSID environment variable (do not commit it).');
     process.exit(2);

@@ -39,9 +39,9 @@ if (script && script.src) {
 
 **Resultado ERRADO:**
 ```
-window.location.pathname = "/home2/inlaud99/asl.erpcondominios.com.br/frontend/login.html"
-basePath = "https://asl.erpcondominios.com.br" + "/home2/inlaud99/asl.erpcondominios.com.br" + "/"
-Resultado: "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/" ❌
+window.location.pathname = "/home2/inlaud99/app.erpcondominios.com.br/frontend/login.html"
+basePath = "https://app.erpcondominios.com.br" + "/home2/inlaud99/app.erpcondominios.com.br" + "/"
+Resultado: "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/" ❌
 ```
 
 **Código Novo (CORRETO):**
@@ -70,8 +70,8 @@ Resultado: "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.
 **Resultado CORRETO:**
 ```
 basePath = window.location.origin + '/'
-basePath = "https://asl.erpcondominios.com.br" + "/"
-Resultado: "https://asl.erpcondominios.com.br/" ✅
+basePath = "https://app.erpcondominios.com.br" + "/"
+Resultado: "https://app.erpcondominios.com.br/" ✅
 ```
 
 **Linhas Modificadas:** 1-33 (Todo o arquivo foi reescrito)
@@ -106,9 +106,9 @@ Resultado: "https://asl.erpcondominios.com.br/" ✅
 
 **Resultado ERRADO:**
 ```
-Con APP_BASE_PATH = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/"
+Con APP_BASE_PATH = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/"
 logoPath = basePath + "uploads/logo/..."
-logoPath = "https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/uploads/logo/..." ❌
+logoPath = "https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/uploads/logo/..." ❌
 Browser GET request retorna 404!
 ```
 
@@ -156,7 +156,7 @@ Browser consegue carregar o arquivo!
 **Código Anterior (ERRADO):**
 ```json
 {
-  "name": "Console de Acesso - Serra da Liberdade",
+  "name": "Console de Acesso - ERP Condomínio",
   "short_name": "Console Acesso",
   "description": "Console de acesso para validação de QR Codes e controle de entrada",
   "start_url": "/console_acesso.html",
@@ -181,14 +181,14 @@ Browser consegue carregar o arquivo!
 **Resultado ERRADO:**
 ```
 PWA tenta carregar: /ico/icon-72x72.png
-Em subdiretório: /home2/inlaud99/asl.erpcondominios.com.br/ico/
+Em subdiretório: /home2/inlaud99/app.erpcondominios.com.br/ico/
 Resultado: Ícones não carregam em PWA ❌
 ```
 
 **Código Novo (CORRETO):**
 ```json
 {
-  "name": "Console de Acesso - Serra da Liberdade",
+  "name": "Console de Acesso - ERP Condomínio",
   "short_name": "Console Acesso",
   "description": "Console de acesso para validação de QR Codes e controle de entrada",
   "start_url": "./frontend/console_acesso.html",
@@ -253,12 +253,12 @@ window.APP_BASE_PATH
 
 **Resultado esperado:**
 ```
-"https://asl.erpcondominios.com.br/"
+"https://app.erpcondominios.com.br/"
 ```
 
 **NÃO deve ser:**
 ```
-"https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/" ❌
+"https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/" ❌
 ```
 
 ### **2. Verificar que Logo carrega corretamente**
@@ -266,7 +266,7 @@ window.APP_BASE_PATH
 Na aba **Network** do DevTools (F12):
 - Procure por `logo_1769740112.jpeg` ou `logo_padrao.png`
 - Status deve ser **200 OK** (não 404)
-- URL deve ser `https://asl.erpcondominios.com.br/uploads/logo/logo_...`
+- URL deve ser `https://app.erpcondominios.com.br/uploads/logo/logo_...`
 
 ### **3. Verificar que Manifest funciona**
 
@@ -300,7 +300,7 @@ As correções não introduzem nenhum risco de segurança porque:
 
 ## 📝 Checklist Pós-Correção
 
-- [ ] Recarregar página de login: `https://asl.erpcondominios.com.br/frontend/login.html`
+- [ ] Recarregar página de login: `https://app.erpcondominios.com.br/frontend/login.html`
 - [ ] Verificar se logo carrega (não fica em branco)
 - [ ] Abrir DevTools e verificar `window.APP_BASE_PATH`
 - [ ] Verificar Network tab - não deve haver 404s de `/home2/inlaud99/...`

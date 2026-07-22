@@ -97,7 +97,7 @@ Auth validation: ❌ FALHANDO (servidor rejeita ou não reconhece o cookie)
 
 **Causas Possíveis:**
 1. ❌ Cookie PHPSESSID fornecido é **inválido** (expirado, formatação errada)
-2. ❌ Cookie pertence a **outro domínio** (não é para `asl.erpcondominios.com.br`)
+2. ❌ Cookie pertence a **outro domínio** (não é para `app.erpcondominios.com.br`)
 3. ❌ Servidor espera **outro formato** de cookie (não é PHPSESSID padrão)
 4. ❌ Sessão no **backend não existe** ou foi deletada
 5. ⚠️ HTTPS/TLS trust issue (menos provável com Header Injection)
@@ -112,14 +112,14 @@ Para avançar de FASE 6 para FASE 7 e alcançar APROVAÇÃO PARA PRODUÇÃO, é 
 ```bash
 # Solicitar ao time backend:
 - Cookie PHPSESSID é válido e ativo?
-- Qual é o domínio correto (asl.erpcondominios.com.br)?
+- Qual é o domínio correto (app.erpcondominios.com.br)?
 - Qual é o usuário/role associado ao cookie?
 - Cookie tem data de expiração? Não expirou?
 ```
 
 ### 2️⃣ Testar Cookie Fornecido Diretamente no Navegador
 ```
-1. Abrir https://asl.erpcondominios.com.br em Chrome
+1. Abrir https://app.erpcondominios.com.br em Chrome
 2. F12 > Console > document.cookie
 3. Verificar se PHPSESSID está presente
 4. Tentar algo.php que requer autenticação

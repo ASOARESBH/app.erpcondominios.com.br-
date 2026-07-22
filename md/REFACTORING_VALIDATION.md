@@ -44,7 +44,7 @@ Todas as chamadas `fetch()` e endpoints foram **mantidos intactos**:
 #### Antes:
 ```html
 <div class="sidebar-header">
-    <h1>Serra da Liberdade</h1>
+    <h1>ERP Condomínio</h1>
     <!-- Perfil do usuário aqui -->
 </div>
 ```
@@ -52,8 +52,8 @@ Todas as chamadas `fetch()` e endpoints foram **mantidos intactos**:
 #### Depois:
 ```html
 <div class="sidebar-header">
-    <img src="../uploads/logo/logo.jpeg" alt="Serra da Liberdade" class="sidebar-logo">
-    <h1 style="display:none;">Serra da Liberdade</h1>
+    <img src="../uploads/logo/logo.jpeg" alt="ERP Condomínio" class="sidebar-logo">
+    <h1 style="display:none;">ERP Condomínio</h1>
 </div>
 ```
 
@@ -332,8 +332,8 @@ Mobile (480px): ✅ Cabeçalho otimizado
 ```html
 <nav class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <img src="../uploads/logo/logo.jpeg" alt="Serra da Liberdade" class="sidebar-logo">
-        <h1 style="display:none;">Serra da Liberdade</h1>
+        <img src="../uploads/logo/logo.jpeg" alt="ERP Condomínio" class="sidebar-logo">
+        <h1 style="display:none;">ERP Condomínio</h1>
     </div>
     <ul class="nav-menu">
         <!-- Links de navegação -->

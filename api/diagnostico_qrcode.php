@@ -14,7 +14,7 @@ require_once 'qrcode_generator.php';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Diagnóstico QR Code - ERP Serra da Liberdade</title>
+    <title>Diagnóstico QR Code - ERP Condomínio</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8fafc; padding: 2rem; }

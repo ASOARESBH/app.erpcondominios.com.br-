@@ -1,4 +1,4 @@
-# Relatório de Consistência de Menus - Sistema Serra da Liberdade
+# Relatório de Consistência de Menus - Sistema ERP Condomínio
 
 **Data**: 07 de Janeiro de 2026  
 **Status**: ✅ CONCLUÍDO COM SUCESSO
@@ -122,7 +122,7 @@ Todas as páginas agora seguem a mesma estrutura de menu:
 
 ```html
 <nav class="sidebar" id="sidebar">
-    <h1>Serra da Liberdade</h1>
+    <h1>ERP Condomínio</h1>
     <ul class="nav-menu">
         <li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="fas fa-chart-line"></i> Dashboard</a></li>
         <li class="nav-item"><a href="moradores.html" class="nav-link"><i class="fas fa-users"></i> Moradores</a></li>

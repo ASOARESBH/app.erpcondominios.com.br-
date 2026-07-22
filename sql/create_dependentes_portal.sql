@@ -1,6 +1,6 @@
 -- ============================================================
 -- SQL: TABELA DEPENDENTES DO PORTAL DO MORADOR
--- Sistema ERP Serra da Liberdade
+-- Sistema ERP ERP Condomínio
 -- Data: 2026-03-22
 -- ============================================================
 -- Cria a tabela de dependentes vinculados a moradores.

@@ -170,7 +170,7 @@ http://seu-servidor/frontend/dashboard.html
 
 - [ ] Logo aparece centralizada
 - [ ] Menu exibe corretamente
-- [ ] Sem título "Serra da Liberdade"
+- [ ] Sem título "ERP Condomínio"
 - [ ] Sem bloco de perfil
 - [ ] Botão "Sair" visível
 
@@ -269,7 +269,7 @@ background: #2563eb;  // Azul
 
 Em `user-profile-sidebar-minimalista.js` (linha 26):
 ```javascript
-companyName: 'Serra da Liberdade'
+companyName: 'ERP Condomínio'
 // Alterar para: 'Seu Condomínio', 'Empresa XYZ', etc.
 ```
 

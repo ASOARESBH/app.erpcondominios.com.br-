@@ -1,6 +1,6 @@
 /**
  * email_alertas.js — Módulo de E-mail e Alertas
- * Sistema ERP Serra da Liberdade
+ * Sistema ERP Condomínio
  * v3.0 — ES Module com export init/destroy para AppRouter
  */
 
@@ -635,7 +635,7 @@ function previewAlerta() {
         .replace(/\{\{nome_usuario\}\}/g, 'João da Silva')
         .replace(/\{\{nome_morador\}\}/g, 'Maria Oliveira')
         .replace(/\{\{unidade\}\}/g, 'Gleba 42')
-        .replace(/\{\{sistema_nome\}\}/g, 'Serra da Liberdade')
+        .replace(/\{\{sistema_nome\}\}/g, 'ERP Condomínio')
         .replace(/\{\{logo_url\}\}/g, window.location.origin + '/assets/img/logo.png')
         .replace(/\{\{data_envio\}\}/g, new Date().toLocaleString('pt-BR'))
         .replace(/\{\{[\w_]+\}\}/g, '<span style="background:#fef3c7;padding:0 4px;border-radius:3px;font-size:11px">[variável]</span>');

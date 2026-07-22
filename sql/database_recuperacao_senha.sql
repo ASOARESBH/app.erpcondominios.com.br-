@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS configuracao_smtp (
     smtp_usuario VARCHAR(255) NOT NULL,
     smtp_senha VARCHAR(255) NOT NULL,
     smtp_de_email VARCHAR(255) NOT NULL,
-    smtp_de_nome VARCHAR(255) NOT NULL DEFAULT 'Serra da Liberdade',
+    smtp_de_nome VARCHAR(255) NOT NULL DEFAULT 'ERP Condomínio',
     smtp_seguranca ENUM('tls', 'ssl', 'none') DEFAULT 'tls',
     smtp_ativo TINYINT(1) DEFAULT 1,
     data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS configuracao_smtp (
 -- Inserir configuração SMTP padrão (precisa ser configurada pelo administrador)
 INSERT INTO configuracao_smtp (smtp_host, smtp_port, smtp_usuario, smtp_senha, smtp_de_email, smtp_de_nome, smtp_seguranca, smtp_ativo)
 VALUES 
-('smtp.gmail.com', 587, 'seu-email@gmail.com', 'sua-senha-de-app', 'noreply@serraliberdade.com.br', 'Serra da Liberdade - Sistema', 'tls', 0)
+('smtp.gmail.com', 587, 'seu-email@gmail.com', 'sua-senha-de-app', 'noreply@serraliberdade.com.br', 'ERP Condomínio - Sistema', 'tls', 0)
 ON DUPLICATE KEY UPDATE id=id;
 
 -- Tabela para templates de e-mail
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS email_templates (
 INSERT INTO email_templates (tipo, assunto, corpo, variaveis, ativo)
 VALUES 
 ('recuperacao_senha', 
- 'Recuperação de Senha - Serra da Liberdade',
+ 'Recuperação de Senha - ERP Condomínio',
  '<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -68,7 +68,7 @@ VALUES
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-        <h1 style="color: #fff; margin: 0; font-size: 24px;">Serra da Liberdade</h1>
+        <h1 style="color: #fff; margin: 0; font-size: 24px;">ERP Condomínio</h1>
         <p style="color: #fff; margin: 10px 0 0 0; opacity: 0.9;">Portal do Morador</p>
     </div>
     
@@ -117,7 +117,7 @@ VALUES
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
         
         <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">
-            © {{ANO}} Serra da Liberdade - Todos os direitos reservados<br>
+            © {{ANO}} ERP Condomínio - Todos os direitos reservados<br>
             Este é um e-mail automático, por favor não responda.
         </p>
     </div>

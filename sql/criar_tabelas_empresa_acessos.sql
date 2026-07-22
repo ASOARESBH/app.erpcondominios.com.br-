@@ -94,16 +94,16 @@ CREATE TABLE IF NOT EXISTS `local_acessos_log` (
 -- INSERÇÃO DE DADOS INICIAIS
 -- =====================================================
 
--- Inserir dados iniciais da empresa (Serra da Liberdade)
+-- Inserir dados iniciais da empresa (ERP Condomínio)
 INSERT INTO `empresa` (
   `cnpj`, `razao_social`, `nome_fantasia`, 
   `endereco_rua`, `endereco_numero`, `endereco_bairro`, 
   `endereco_cidade`, `endereco_estado`, `endereco_cep`,
   `email_principal`, `email_cobranca`, `situacao`
 ) VALUES (
-  '00.000.000/0000-00', 'ASSOCIAÇÃO SERRA DA LIBERDADE', 'Serra da Liberdade',
-  'Rua Serra da Liberdade', '1', 'Centro',
-  'Serra da Liberdade', 'MG', '00000-000',
+  '00.000.000/0000-00', 'ERP CONDOMÍNIO', 'ERP Condomínio',
+  'Rua ERP Condomínio', '1', 'Centro',
+  'ERP Condomínio', 'MG', '00000-000',
   'contato@serradalberdade.com.br', 'cobranca@serradalberdade.com.br', 'ativo'
 ) ON DUPLICATE KEY UPDATE `razao_social` = VALUES(`razao_social`);
 

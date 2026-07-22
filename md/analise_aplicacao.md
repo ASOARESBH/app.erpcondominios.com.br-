@@ -1,9 +1,9 @@
-# Análise da Aplicação ERP Serra da Liberdade
+# Análise da Aplicação ERP Condomínio
 
 ## 1. Visão Geral
 
-**Nome do Sistema:** ERP Serra da Liberdade  
-**Tipo:** Sistema de Gestão Condominial Completo  
+**Nome do Sistema:** ERP Condomínio  
+**Tipo:** ERP Condomínio — Gestão Inteligente Completo  
 **Banco de Dados:** MySQL (inlaud99_erpserra)  
 **Tecnologias:** PHP, HTML5, CSS3, JavaScript, MySQL
 

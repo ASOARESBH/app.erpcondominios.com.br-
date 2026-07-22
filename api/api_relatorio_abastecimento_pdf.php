@@ -43,18 +43,18 @@ if ($res_empresa && $res_empresa->num_rows > 0) {
 
 $nome_empresa  = !empty($empresa['nome_fantasia'])  ? $empresa['nome_fantasia']
                : (!empty($empresa['razao_social'])  ? $empresa['razao_social']
-               : 'ASSOCIAÇÃO SERRA DA LIBERDADE');
+               : 'ERP CONDOMÍNIO');
 $cnpj_empresa  = !empty($empresa['cnpj'])           ? $empresa['cnpj'] : '28.231.106/0001-15';
 
 // Caminho da logo: relativo à raiz do site (a tag <img> usa URL absoluta)
 if (!empty($empresa['logo_url'])) {
     // logo_url pode ser "uploads/logo/arquivo.png" — converter para URL absoluta
     $protocolo   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host        = $_SERVER['HTTP_HOST'] ?? 'asl.erpcondominios.com.br';
+    $host        = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
     $logo_url    = $protocolo . '://' . $host . '/' . ltrim($empresa['logo_url'], '/');
 } else {
     $protocolo   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host        = $_SERVER['HTTP_HOST'] ?? 'asl.erpcondominios.com.br';
+    $host        = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
     $logo_url    = $protocolo . '://' . $host . '/assets/images/logo.jpeg';
 }
 

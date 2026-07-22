@@ -1,4 +1,4 @@
-# 📋 Changelog - ERP Associação Serra da Liberdade
+# 📋 Changelog - ERP Condomínio
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
@@ -315,4 +315,4 @@ END;
 
 ---
 
-**Desenvolvido com ❤️ pela Associação Serra da Liberdade**
+**Desenvolvido com ❤️ pela ERP Condomínio**

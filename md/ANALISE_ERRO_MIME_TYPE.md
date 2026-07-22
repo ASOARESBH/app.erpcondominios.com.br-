@@ -9,7 +9,7 @@
 
 ### **Erro Reportado:**
 ```
-URL: https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/frontend/
+URL: https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/frontend/
 
 Refused to apply style from '..../assets/css/app.css' 
   MIME type: text/html (esperado: text/css)
@@ -24,12 +24,12 @@ Failed to load resource: api/verificar_sessao.php
 ### **Causa Raiz:**
 
 A URL estava **duplicando o path do domínio**:
-- ❌ `https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/`
-- ✅ Deveria ser: `https://asl.erpcondominios.com.br/`
+- ❌ `https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/`
+- ✅ Deveria ser: `https://app.erpcondominios.com.br/`
 
 **Por quê?**
 
-O servidor Apache estava processando requisições com caminhos **absolutos** (começando com `/`), e como o domínio está apontado para um subdiretório (`/home2/inlaud99/asl.erpcondominios.com.br/`), houve duplicação.
+O servidor Apache estava processando requisições com caminhos **absolutos** (começando com `/`), e como o domínio está apontado para um subdiretório (`/home2/inlaud99/app.erpcondominios.com.br/`), houve duplicação.
 
 ---
 
@@ -58,9 +58,9 @@ fetch('/api/api_verificar_sessao.php', {  // ❌ CAMINHO ABSOLUTO
    ↓
 3. Apache processa como /api/ na raiz do servidor
    ↓
-4. Como domínio aponta para /home2/inlaud99/asl.erpcondominios.com.br/
+4. Como domínio aponta para /home2/inlaud99/app.erpcondominios.com.br/
    ↓ (duplicação ocorre no redirecionamento interno)
-5. Resultado: /home2/inlaud99/asl.erpcondominios.com.br/api/
+5. Resultado: /home2/inlaud99/app.erpcondominios.com.br/api/
    ↓
 6. Nginx/Apache retorna 404 HTML em vez de PHP
    ↓
@@ -165,15 +165,15 @@ Header set X-Content-Type-Options "nosniff"
 Quando um projeto está em um subdiretório do servidor:
 
 ```
-Caminho no servidor:  /home/user/public_html/asl.erpcondominios.com.br/
-URL acessada:         https://asl.erpcondominios.com.br/
+Caminho no servidor:  /home/user/public_html/app.erpcondominios.com.br/
+URL acessada:         https://app.erpcondominios.com.br/
 
 ❌ Caminho ABSOLUTO:  /assets/css/app.css
    Resolve para:      /home/user/public_html/assets/css/app.css
    Problema:          Arquivo não está lá!
 
 ✅ Caminho RELATIVO:  ../assets/css/app.css (de /frontend/)
-   Resolve para:      /home/user/public_html/asl.erpcondominios.com.br/assets/css/app.css
+   Resolve para:      /home/user/public_html/app.erpcondominios.com.br/assets/css/app.css
    Sucesso:           Arquivo encontrado!
 ```
 
@@ -183,7 +183,7 @@ URL acessada:         https://asl.erpcondominios.com.br/
 
 ### **Antes (Com Erro):**
 ```
-Acesso: https://asl.erpcondominios.com.br/
+Acesso: https://app.erpcondominios.com.br/
    ↓
 /frontend/index.html carrega
    ↓
@@ -198,7 +198,7 @@ Navegador: "MIME type is text/html"
 
 ### **Depois (Corrigido):**
 ```
-Acesso: https://asl.erpcondominios.com.br/
+Acesso: https://app.erpcondominios.com.br/
    ↓
 login.html carregue (DirectoryIndex)
    ↓
@@ -237,7 +237,7 @@ Sidebar + Dashboard carregam corretamente
 
 2. **Acessar a raiz:**
    ```
-   https://asl.erpcondominios.com.br/
+   https://app.erpcondominios.com.br/
    ```
 
 3. **Fazer login** com credenciais válidas
@@ -263,7 +263,7 @@ Sidebar + Dashboard carregam corretamente
    - Caminho absoluto `/api/` funciona
    - Não há duplicação de path
 
-2. **Em subdiretório de produção** - Projeto em `/home/user/asl.erpcondominios.com.br/`
+2. **Em subdiretório de produção** - Projeto em `/home/user/app.erpcondominios.com.br/`
    - Apache resolve `/api/` na raiz do servidor
    - Resulta em duplicação do path
    - CSS/JS retornam 404 HTML

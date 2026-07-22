@@ -381,7 +381,7 @@ if ($action === 'buscar_cnpj' && $metodo === 'GET') {
             'http' => [
                 'method' => 'GET',
                 'timeout' => 10,
-                'user_agent' => 'ERP-Serra-Liberdade/1.0'
+                'user_agent' => 'ERP-Condominios/2.0'
             ]
         ]);
         $resposta = @file_get_contents($url_api, false, $contexto);

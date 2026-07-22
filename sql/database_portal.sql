@@ -1,6 +1,6 @@
 -- =====================================================
 -- ESTRUTURA DO BANCO DE DADOS - PORTAL DO MORADOR
--- Sistema de Controle de Acesso - Serra da Liberdade
+-- ERP Condomínio — Gestão Inteligente - ERP Condomínio
 -- =====================================================
 
 -- Tabela de Hidrometro

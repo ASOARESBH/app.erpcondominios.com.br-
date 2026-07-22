@@ -1,7 +1,7 @@
 <?php
 /**
  * Executar este arquivo UMA VEZ após o deploy para popular o Manual do Sistema.
- * Acesse: https://asl.erpcondominios.com.br/api/run_manual_seed.php?token=SEED_MANUAL_2026
+ * Acesse: https://app.erpcondominios.com.br/api/run_manual_seed.php?token=SEED_MANUAL_2026
  * APAGUE este arquivo após a execução!
  */
 

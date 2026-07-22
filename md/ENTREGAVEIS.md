@@ -8,7 +8,7 @@
 ## 📂 ESTRUTURA DE ARQUIVOS
 
 ```
-c:\xampp\htdocs\dashboard\asl.erpcondominios.com.br\
+c:\xampp\htdocs\dashboard\app.erpcondominios.com.br\
 │
 ├── frontend/
 │   └── relatorios_hidrometro.html         ⭐ ARQUIVO CORRIGIDO

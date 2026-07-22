@@ -165,7 +165,7 @@
     <div class="container">
         <div class="header">
             <h1>🔍 Verificação de Atualização</h1>
-            <p>Sistema de Verificação de Arquivos do ERP Serra da Liberdade</p>
+            <p>Sistema de Verificação de Arquivos do ERP Condomínio</p>
         </div>
         
         <div class="content">
@@ -352,7 +352,7 @@
         </div>
         
         <div class="footer">
-            <p>ERP Serra da Liberdade - Sistema de Verificação v1.0</p>
+            <p>ERP Condomínio - Sistema de Verificação v1.0</p>
             <p>Desenvolvido em 26 de Dezembro de 2024</p>
         </div>
     </div>

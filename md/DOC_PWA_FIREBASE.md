@@ -1,5 +1,5 @@
 # Guia de Configuração PWA e Firebase Cloud Messaging (FCM)
-**Portal do Morador — Serra da Liberdade**
+**Portal do Morador — ERP Condomínio**
 
 Este documento detalha o passo a passo para configurar o envio de notificações Push no Portal do Morador, utilizando o Firebase Cloud Messaging (FCM).
 

@@ -2,11 +2,11 @@
 
 ## 🔴 O Problema
 
-### Ao acessar `https://asl.erpcondominios.com.br/`:
+### Ao acessar `https://app.erpcondominios.com.br/`:
 
 ```
 ❌ ERRO 1: URL Duplicada
-   https://asl.erpcondominios.com.br/home2/inlaud99/asl.erpcondominios.com.br/
+   https://app.erpcondominios.com.br/home2/inlaud99/app.erpcondominios.com.br/
 
 ❌ ERRO 2: CSS não carrega
    MIME type: text/html (deveria ser text/css)
@@ -33,7 +33,7 @@ Quando o projeto está em subdiretório, isso causa:
 ```
 /api/ na raiz do servidor
     ↓ em vez de ↓
-/asl.erpcondominios.com.br/api/
+/app.erpcondominios.com.br/api/
 ```
 
 ---
@@ -63,7 +63,7 @@ Reorganizado para evitar duplicação de rulesets
 ## 🧪 Como Validar
 
 1. **Limpar cache:** `Ctrl+Shift+Delete`
-2. **Acessar:** `https://asl.erpcondominios.com.br/`
+2. **Acessar:** `https://app.erpcondominios.com.br/`
 3. **Abrir DevTools:** `F12`
 4. **Abrir Network:**
    - Recarregar página

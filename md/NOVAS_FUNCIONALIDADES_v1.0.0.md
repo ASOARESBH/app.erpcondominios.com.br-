@@ -1,5 +1,5 @@
 # NOVAS FUNCIONALIDADES - VERSÃO 1.0.0
-## Sistema de Portaria - Serra da Liberdade
+## Sistema de Portaria - ERP Condomínio
 ### Data: 22/10/2025
 
 ---
@@ -85,7 +85,7 @@
 
 **Informações Exibidas:**
 ```
-Sistema de Portaria - Serra da Liberdade
+Sistema de Portaria - ERP Condomínio
 Versão: v1.0.0 | Tempo de Login: 00:15:42
 ```
 

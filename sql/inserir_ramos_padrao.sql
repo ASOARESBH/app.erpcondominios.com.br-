@@ -1,6 +1,6 @@
 -- =====================================================
 -- Script para Inserir Ramos de Atividade Padrão
--- Sistema ERP Serra da Liberdade - Marketplace
+-- Sistema ERP ERP Condomínio - Marketplace
 -- =====================================================
 
 -- Limpar ramos existentes (opcional - comentar se não quiser limpar)

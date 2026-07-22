@@ -40,7 +40,7 @@
 window.APP_BASE_PATH
 
 // Esperado:
-"https://asl.erpcondominios.com.br/"
+"https://app.erpcondominios.com.br/"
 
 // Status:
 □ ❌ Ainda duplicado

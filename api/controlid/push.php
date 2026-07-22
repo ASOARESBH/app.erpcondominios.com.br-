@@ -7,7 +7,7 @@
  * comando JSON ou {} se não houver nada pendente.
  *
  * URL configurada no equipamento (push_remote_address):
- *   https://asl.erpcondominio.com.br/api/controlid
+ *   https://app.erpcondominios.com.br/api/controlid
  *
  * Request do equipamento:
  *   GET /api/controlid/push?deviceId=<int64>&uuid=<string>

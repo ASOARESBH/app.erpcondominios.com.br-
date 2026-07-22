@@ -1,5 +1,5 @@
 -- =====================================================
--- SISTEMA DE CONTROLE DE ACESSO - SERRA DA LIBERDADE
+-- SISTEMA DE CONTROLE DE ACESSO - ERP CONDOMÍNIO
 -- Módulo: Protocolo de Mercadorias
 -- =====================================================
 

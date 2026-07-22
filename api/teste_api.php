@@ -10,7 +10,7 @@ header('Content-Type: text/html; charset=utf-8');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Teste das APIs - Sistema de Controle de Acesso</title>
+    <title>Teste das APIs - ERP Condomínio — Gestão Inteligente</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
         h1 { color: #333; }
@@ -25,7 +25,7 @@ header('Content-Type: text/html; charset=utf-8');
     </style>
 </head>
 <body>
-    <h1>🧪 Teste das APIs - Sistema de Controle de Acesso</h1>
+    <h1>🧪 Teste das APIs - ERP Condomínio — Gestão Inteligente</h1>
 
     <?php
     require_once 'config.php';

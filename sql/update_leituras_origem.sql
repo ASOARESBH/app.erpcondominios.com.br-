@@ -1,6 +1,6 @@
 -- =====================================================
 -- ATUALIZAÇÃO: Adicionar Campos de Origem do Lançamento
--- Sistema ERP Serra da Liberdade - Hidrômetros
+-- Sistema ERP ERP Condomínio - Hidrômetros
 -- Compatível com MariaDB/MySQL
 -- =====================================================
 

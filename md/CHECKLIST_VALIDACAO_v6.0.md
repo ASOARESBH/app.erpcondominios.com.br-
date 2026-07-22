@@ -13,7 +13,7 @@
    
 2. DevTools: Pressionar `F12` → Aba **Network**
 
-3. Acessar: `https://asl.erpcondominios.com.br/frontend/dashboard.html`
+3. Acessar: `https://app.erpcondominios.com.br/frontend/dashboard.html`
 
 4. Aguardar carregamento completo (~5s)
 

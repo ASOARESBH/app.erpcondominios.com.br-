@@ -1,7 +1,7 @@
 <?php
 /**
  * ============================================================
- * DEMONSTRATIVO DE CONSUMO DE ÁGUA — ASSOCIAÇÃO SERRA DA LIBERDADE
+ * DEMONSTRATIVO DE CONSUMO DE ÁGUA — ERP CONDOMÍNIO
  * ============================================================
  * Gera uma página HTML otimizada para impressão/PDF no estilo
  * de fatura de água, com identidade visual da associação.
@@ -50,7 +50,7 @@ $r = $conn->query("SELECT razao_social, nome_fantasia, cnpj, telefone,
 if ($r && $r->num_rows > 0) {
     $empresa = $r->fetch_assoc();
 }
-$assoc_nome     = !empty($empresa['nome_fantasia']) ? $empresa['nome_fantasia'] : (!empty($empresa['razao_social']) ? $empresa['razao_social'] : 'ASSOCIAÇÃO SERRA DA LIBERDADE');
+$assoc_nome     = !empty($empresa['nome_fantasia']) ? $empresa['nome_fantasia'] : (!empty($empresa['razao_social']) ? $empresa['razao_social'] : 'ERP CONDOMÍNIO');
 $assoc_cnpj     = $empresa['cnpj']     ?? '';
 $assoc_tel      = $empresa['telefone'] ?? '';
 $assoc_end      = $empresa['endereco'] ?? '';
@@ -60,7 +60,7 @@ $assoc_cep      = $empresa['cep']      ?? '';
 
 // URL da logo
 $proto     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host      = $_SERVER['HTTP_HOST'] ?? 'asl.erpcondominios.com.br';
+$host      = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
 $logo_url  = !empty($empresa['logo_url'])
     ? $proto . '://' . $host . '/' . ltrim($empresa['logo_url'], '/')
     : $proto . '://' . $host . '/assets/images/logo.jpeg';

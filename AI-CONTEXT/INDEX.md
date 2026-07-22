@@ -1,6 +1,6 @@
 # AI Context Framework - Índice Mestre
 
-Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidamente qualquer informação arquitetural, regras de negócio ou estrutura do ERP Associação Serra da Liberdade.
+Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidamente qualquer informação arquitetural, regras de negócio ou estrutura do ERP Condomínio.
 
 ## 🗺️ 1. Mapas Arquiteturais
 - **Arquitetura Geral**: [ARCHITECTURE.md](ARCHITECTURE.md)
