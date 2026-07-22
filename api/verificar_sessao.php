@@ -1,53 +1,87 @@
 <?php
-// =====================================================
-// SISTEMA DE CONTROLE DE ACESSO - VERIFICAÇÃO DE SESSÃO (API)
-// =====================================================
+/**
+ * =====================================================
+ * API: VERIFICAÇÃO DE SESSÃO — MULTI-TENANT
+ * =====================================================
+ * Verifica se o usuário está autenticado e retorna
+ * os dados da sessão incluindo o tenant ativo.
+ *
+ * @version 2.0.0 (Multi-Tenant)
+ * @date 2026-07-22
+ */
 
-// Headers para API
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (
+    preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $origin)
+) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-// Tratar requisições OPTIONS (CORS preflight)
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
+
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+require_once 'config.php';
+require_once 'tenant_helper.php';
+
+// Verificar se está logado
+if (!isset($_SESSION['usuario_logado']) || $_SESSION['usuario_logado'] !== true) {
+    http_response_code(401);
+    echo json_encode(['sucesso' => false, 'mensagem' => 'Não autenticado'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// Iniciar sessão
-session_start();
-
-// Incluir arquivo de configuração
-require_once 'config.php';
-
-// Verificar se o usuário está logado
-if (!isset($_SESSION['usuario_logado']) || $_SESSION['usuario_logado'] !== true) {
-    // Usuário não está logado
-    retornar_json(false, 'Não autenticado');
+// Verificar timeout (8 horas)
+$sessao_inativa = (int)($_SESSION['sessao_inativa'] ?? 0);
+if ($sessao_inativa !== 1 && isset($_SESSION['login_timestamp'])) {
+    if ((time() - $_SESSION['login_timestamp']) > 28800) {
+        session_destroy();
+        http_response_code(401);
+        echo json_encode(['sucesso' => false, 'mensagem' => 'Sessão expirada'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $_SESSION['login_timestamp'] = time();
 }
 
-// Verificar timeout da sessão (2 horas)
-$timeout = 7200; // 2 horas em segundos
-if (isset($_SESSION['login_timestamp']) && (time() - $_SESSION['login_timestamp'] > $timeout)) {
-    // Sessão expirada
-    session_destroy();
-    retornar_json(false, 'Sessão expirada');
+// Resolver tenant se não estiver na sessão (compatibilidade)
+$tenant_id = $_SESSION['tenant_id'] ?? null;
+if (empty($tenant_id)) {
+    $slug = resolverTenantSlugDaUrl();
+    if ($slug) {
+        $conexao = conectar_banco();
+        $tenant  = carregarTenantPorSlug($conexao, $slug);
+        if ($tenant) injetarTenantNaSessao($tenant);
+        fechar_conexao($conexao);
+    }
 }
 
-// Atualizar timestamp da última atividade
-$_SESSION['login_timestamp'] = time();
-
-// Retornar informações do usuário
-retornar_json(true, 'Sessão válida', array(
-    'usuario' => array(
-        'id' => $_SESSION['usuario_id'],
-        'nome' => $_SESSION['usuario_nome'],
-        'email' => $_SESSION['usuario_email'],
-        'funcao' => $_SESSION['usuario_funcao'],
-        'departamento' => $_SESSION['usuario_departamento'],
-        'permissao' => $_SESSION['usuario_permissao']
-    )
-));
+echo json_encode([
+    'sucesso' => true,
+    'mensagem'=> 'Sessão válida',
+    'dados'   => [
+        'usuario' => [
+            'id'          => $_SESSION['usuario_id']          ?? null,
+            'nome'        => $_SESSION['usuario_nome']         ?? '',
+            'email'       => $_SESSION['usuario_email']        ?? '',
+            'funcao'      => $_SESSION['usuario_funcao']       ?? '',
+            'departamento'=> $_SESSION['usuario_departamento'] ?? '',
+            'permissao'   => $_SESSION['usuario_permissao']    ?? 'operador',
+        ],
+        'tenant' => [
+            'id'    => (int)($_SESSION['tenant_id']   ?? 1),
+            'slug'  => $_SESSION['tenant_slug']        ?? '',
+            'nome'  => $_SESSION['tenant_nome']        ?? '',
+            'plano' => $_SESSION['tenant_plano']       ?? 'basico',
+            'logo'  => $_SESSION['tenant_logo_url']    ?? null,
+        ]
+    ]
+], JSON_UNESCAPED_UNICODE);
 ?>
