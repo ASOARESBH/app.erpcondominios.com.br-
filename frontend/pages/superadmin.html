@@ -1,0 +1,821 @@
+<!-- Page Metadata for AppRouter -->
+<div id="page-metadata" data-title="Super Admin" data-icon="fa-crown" style="display:none;"></div>
+
+<div class="page-wrapper page-superadmin">
+    <div class="page-header">
+        <h1><i class="fas fa-crown" style="color:#f59e0b;"></i> Painel Super-Admin</h1>
+        <p>Gerenciamento global de condomínios, usuários e planos</p>
+    </div>
+
+    <!-- ── TABS ──────────────────────────────────────────────────────── -->
+    <div class="sa-tabs">
+        <button class="sa-tab active" data-tab="dashboard" onclick="SA.showTab('dashboard')">
+            <i class="fas fa-chart-pie"></i> Dashboard
+        </button>
+        <button class="sa-tab" data-tab="condominios" onclick="SA.showTab('condominios')">
+            <i class="fas fa-building"></i> Condomínios
+        </button>
+        <button class="sa-tab" data-tab="onboarding" onclick="SA.showTab('onboarding')">
+            <i class="fas fa-plus-circle"></i> Novo Condomínio
+        </button>
+    </div>
+
+    <!-- ── TAB: DASHBOARD ────────────────────────────────────────────── -->
+    <div id="tab-dashboard" class="sa-tab-content active">
+        <div class="stats-grid" id="sa-kpis">
+            <div class="stat-card">
+                <i class="fas fa-building icon"></i>
+                <h3>Condomínios Ativos</h3>
+                <div class="value" id="sa-total-ativos">-</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-users icon"></i>
+                <h3>Total de Usuários</h3>
+                <div class="value" id="sa-total-usuarios">-</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-home icon"></i>
+                <h3>Total de Moradores</h3>
+                <div class="value" id="sa-total-moradores">-</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-layer-group icon"></i>
+                <h3>Total de Condomínios</h3>
+                <div class="value" id="sa-total-tenants">-</div>
+            </div>
+        </div>
+
+        <!-- Planos -->
+        <div class="page-card" style="margin-top:1.5rem;">
+            <h2 class="section-title"><i class="fas fa-tags"></i> Distribuição por Plano</h2>
+            <div id="sa-planos-grid" class="sa-planos-grid">
+                <div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+            </div>
+        </div>
+
+        <!-- Últimos cadastrados -->
+        <div class="page-card" style="margin-top:1.5rem;">
+            <h2 class="section-title"><i class="fas fa-clock"></i> Últimos Condomínios Cadastrados</h2>
+            <div class="table-responsive">
+                <table class="data-table" id="sa-table-recentes">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Slug</th>
+                            <th>Nome</th>
+                            <th>Plano</th>
+                            <th>Status</th>
+                            <th>Cadastrado em</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sa-tbody-recentes">
+                        <tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── TAB: CONDOMÍNIOS ──────────────────────────────────────────── -->
+    <div id="tab-condominios" class="sa-tab-content" style="display:none;">
+        <!-- Filtros -->
+        <div class="page-card">
+            <div class="sa-filtros">
+                <div class="form-group" style="flex:2;">
+                    <label>Buscar</label>
+                    <input type="text" id="sa-busca" placeholder="Nome, CNPJ, slug..." oninput="SA.filtrar()">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="sa-filtro-status" onchange="SA.filtrar()">
+                        <option value="">Todos</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                        <option value="suspenso">Suspenso</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Plano</label>
+                    <select id="sa-filtro-plano" onchange="SA.filtrar()">
+                        <option value="">Todos</option>
+                        <option value="basico">Básico</option>
+                        <option value="profissional">Profissional</option>
+                        <option value="enterprise">Enterprise</option>
+                    </select>
+                </div>
+                <div class="form-group" style="align-self:flex-end;">
+                    <button class="btn-primary" onclick="SA.carregarCondominios()">
+                        <i class="fas fa-sync"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de condomínios -->
+        <div id="sa-condominios-grid" class="sa-condominios-grid">
+            <div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando condomínios...</div>
+        </div>
+    </div>
+
+    <!-- ── TAB: ONBOARDING ───────────────────────────────────────────── -->
+    <div id="tab-onboarding" class="sa-tab-content" style="display:none;">
+        <div class="page-card">
+            <h2 class="section-title"><i class="fas fa-rocket"></i> Criar Novo Condomínio</h2>
+            <p style="color:var(--color-text-secondary);margin-bottom:1.5rem;">
+                Preencha os dados abaixo para criar um novo condomínio e seu administrador principal.
+                O sistema criará automaticamente o tenant, o usuário admin e o vínculo entre eles.
+            </p>
+
+            <div id="sa-onboarding-alert" class="alert" style="display:none;"></div>
+
+            <form id="sa-form-onboarding" onsubmit="SA.onboarding(event)">
+                <!-- Seção: Condomínio -->
+                <div class="sa-form-section">
+                    <h3><i class="fas fa-building"></i> Dados do Condomínio</h3>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label>Slug <span class="required">*</span>
+                                <small style="color:var(--color-text-tertiary);font-weight:400;">(ex: serra, parque-verde)</small>
+                            </label>
+                            <input type="text" id="ob-slug" name="slug" placeholder="nome-do-condominio"
+                                   pattern="[a-z0-9\-]+" required
+                                   oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9\-]/g,'');SA.previewUrl()">
+                            <small id="ob-slug-preview" style="color:var(--color-primary-600);"></small>
+                        </div>
+                        <div class="form-group">
+                            <label>Plano <span class="required">*</span></label>
+                            <select id="ob-plano" name="plano" required>
+                                <option value="basico">Básico</option>
+                                <option value="profissional" selected>Profissional</option>
+                                <option value="enterprise">Enterprise</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Razão Social <span class="required">*</span></label>
+                            <input type="text" id="ob-razao" name="razao_social" placeholder="Nome Jurídico Ltda" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Nome Fantasia</label>
+                            <input type="text" id="ob-fantasia" name="nome_fantasia" placeholder="Nome Fantasia">
+                        </div>
+                        <div class="form-group">
+                            <label>CNPJ <span class="required">*</span></label>
+                            <input type="text" id="ob-cnpj" name="cnpj" placeholder="00.000.000/0000-00"
+                                   maxlength="18" required oninput="SA.mascaraCnpj(this)">
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail do Condomínio <span class="required">*</span></label>
+                            <input type="email" id="ob-email-cond" name="email_condominio" placeholder="contato@condominio.com.br" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Telefone</label>
+                            <input type="text" id="ob-telefone" name="telefone" placeholder="(31) 99999-9999">
+                        </div>
+                        <div class="form-group">
+                            <label>Cidade</label>
+                            <input type="text" id="ob-cidade" name="cidade" placeholder="Belo Horizonte">
+                        </div>
+                        <div class="form-group">
+                            <label>Estado</label>
+                            <select id="ob-estado" name="estado">
+                                <option value="">Selecione</option>
+                                <option value="AC">AC</option><option value="AL">AL</option><option value="AP">AP</option>
+                                <option value="AM">AM</option><option value="BA">BA</option><option value="CE">CE</option>
+                                <option value="DF">DF</option><option value="ES">ES</option><option value="GO">GO</option>
+                                <option value="MA">MA</option><option value="MT">MT</option><option value="MS">MS</option>
+                                <option value="MG" selected>MG</option><option value="PA">PA</option><option value="PB">PB</option>
+                                <option value="PR">PR</option><option value="PE">PE</option><option value="PI">PI</option>
+                                <option value="RJ">RJ</option><option value="RN">RN</option><option value="RS">RS</option>
+                                <option value="RO">RO</option><option value="RR">RR</option><option value="SC">SC</option>
+                                <option value="SP">SP</option><option value="SE">SE</option><option value="TO">TO</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção: Admin -->
+                <div class="sa-form-section" style="margin-top:1.5rem;">
+                    <h3><i class="fas fa-user-shield"></i> Administrador Principal</h3>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label>Nome Completo <span class="required">*</span></label>
+                            <input type="text" id="ob-admin-nome" name="admin_nome" placeholder="João da Silva" required>
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail do Admin <span class="required">*</span></label>
+                            <input type="email" id="ob-admin-email" name="admin_email" placeholder="admin@condominio.com.br" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Senha Inicial <span class="required">*</span></label>
+                            <input type="password" id="ob-admin-senha" name="admin_senha" placeholder="Mínimo 6 caracteres" required minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label>Confirmar Senha <span class="required">*</span></label>
+                            <input type="password" id="ob-admin-senha2" placeholder="Repita a senha" required minlength="6">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top:2rem;display:flex;gap:1rem;">
+                    <button type="submit" class="btn-primary" id="btn-onboarding">
+                        <i class="fas fa-rocket"></i> Criar Condomínio
+                    </button>
+                    <button type="reset" class="btn-secondary" onclick="SA.limparOnboarding()">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ── MODAL: DETALHES DO CONDOMÍNIO ─────────────────────────────────── -->
+<div id="sa-modal-cond" class="modal-overlay" style="display:none;" onclick="if(event.target===this)SA.fecharModal()">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h3 id="sa-modal-titulo"><i class="fas fa-building"></i> Detalhes do Condomínio</h3>
+            <button class="modal-close" onclick="SA.fecharModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" id="sa-modal-body">
+            <div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── ESTILOS ───────────────────────────────────────────────────────── -->
+<style>
+.page-superadmin { padding: 0; }
+
+/* Tabs */
+.sa-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0;
+}
+.sa-tab {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    font-family: inherit;
+    border-radius: 6px 6px 0 0;
+}
+.sa-tab:hover { color: var(--color-primary-600); background: rgba(102,126,234,0.05); }
+.sa-tab.active { color: var(--color-primary-600); border-bottom-color: var(--color-primary-600); }
+
+/* Filtros */
+.sa-filtros {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+.sa-filtros .form-group { margin-bottom: 0; flex: 1; min-width: 150px; }
+
+/* Grid de condomínios */
+.sa-condominios-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1.25rem;
+    margin-top: 1.25rem;
+}
+
+/* Card de condomínio */
+.sa-cond-card {
+    background: var(--color-background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: all 0.2s;
+    position: relative;
+}
+.sa-cond-card:hover { box-shadow: var(--shadow-md); border-color: var(--color-primary-300); }
+
+.sa-cond-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.sa-cond-avatar {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 1.2rem; font-weight: 700;
+    flex-shrink: 0;
+}
+.sa-cond-info h4 { margin: 0; font-size: 1rem; color: var(--color-text-primary); }
+.sa-cond-info small { color: var(--color-text-tertiary); font-size: 0.8rem; }
+
+.sa-cond-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+}
+.sa-cond-stat {
+    text-align: center;
+    padding: 0.5rem;
+    background: var(--color-background-tertiary);
+    border-radius: 8px;
+}
+.sa-cond-stat .num { font-size: 1.2rem; font-weight: 700; color: var(--color-primary-600); }
+.sa-cond-stat .lbl { font-size: 0.7rem; color: var(--color-text-tertiary); }
+
+.sa-cond-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+.sa-cond-actions { display: flex; gap: 0.5rem; }
+.sa-cond-actions button {
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--color-background-primary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-family: inherit;
+    transition: all 0.2s;
+    color: var(--color-text-secondary);
+}
+.sa-cond-actions button:hover { background: var(--color-primary-600); color: white; border-color: var(--color-primary-600); }
+.sa-cond-actions button.danger:hover { background: var(--color-error-700); border-color: var(--color-error-700); }
+
+/* Badge de status */
+.badge-status {
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.badge-status.ativo    { background: #d1fae5; color: #065f46; }
+.badge-status.inativo  { background: #f1f5f9; color: #475569; }
+.badge-status.suspenso { background: #fef3c7; color: #92400e; }
+
+/* Badge de plano */
+.badge-plano {
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+.badge-plano.basico       { background: #e0f2fe; color: #0369a1; }
+.badge-plano.profissional { background: #ede9fe; color: #5b21b6; }
+.badge-plano.enterprise   { background: #fef9c3; color: #854d0e; }
+
+/* Planos grid */
+.sa-planos-grid {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.sa-plano-item {
+    flex: 1; min-width: 120px;
+    text-align: center;
+    padding: 1rem;
+    border-radius: 10px;
+    background: var(--color-background-tertiary);
+}
+.sa-plano-item .num { font-size: 2rem; font-weight: 700; color: var(--color-primary-600); }
+.sa-plano-item .lbl { font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 0.25rem; }
+
+/* Formulário */
+.sa-form-section {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.25rem;
+}
+.sa-form-section h3 {
+    margin: 0 0 1rem;
+    font-size: 1rem;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+@media (max-width: 640px) {
+    .form-grid-2 { grid-template-columns: 1fr; }
+    .sa-condominios-grid { grid-template-columns: 1fr; }
+    .sa-tabs { flex-wrap: wrap; }
+    .sa-tab { font-size: 0.85rem; padding: 0.6rem 1rem; }
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; padding: 1rem;
+}
+.modal-content {
+    background: var(--color-background-primary);
+    border-radius: 16px;
+    width: 100%; max-width: 600px;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.modal-content.modal-lg { max-width: 800px; }
+.modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.modal-header h3 { margin: 0; font-size: 1.1rem; }
+.modal-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--color-text-tertiary); font-size: 1.1rem; padding: 0.25rem;
+}
+.modal-close:hover { color: var(--color-text-primary); }
+.modal-body { padding: 1.5rem; }
+
+/* Misc */
+.loading-inline { text-align: center; padding: 2rem; color: var(--color-text-tertiary); }
+.required { color: var(--color-error-700); }
+.btn-secondary {
+    padding: 0.75rem 1.5rem;
+    background: var(--color-background-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: var(--color-text-secondary);
+    transition: all 0.2s;
+}
+.btn-secondary:hover { background: var(--color-background-secondary); }
+
+/* Tabela de usuários no modal */
+.sa-usuarios-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.sa-usuarios-table th, .sa-usuarios-table td {
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.875rem;
+}
+.sa-usuarios-table th { font-weight: 600; color: var(--color-text-secondary); background: var(--color-background-tertiary); }
+</style>
+
+<!-- ── JAVASCRIPT ─────────────────────────────────────────────────────── -->
+<script>
+(function () {
+    'use strict';
+
+    const API = '/api/api_superadmin.php';
+
+    // Debug log
+    const log = (...args) => console.log('[SuperAdmin]', ...args);
+
+    // ── Utilitários ──────────────────────────────────────────────────
+    function req(params, method = 'GET', body = null) {
+        const url = API + '?' + new URLSearchParams(params).toString();
+        const opts = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+        if (body) opts.body = JSON.stringify(body);
+        return fetch(url, opts).then(r => r.json());
+    }
+
+    function statusBadge(s) {
+        const map = { ativo: 'ativo', inativo: 'inativo', suspenso: 'suspenso' };
+        const label = { ativo: 'Ativo', inativo: 'Inativo', suspenso: 'Suspenso' };
+        return `<span class="badge-status ${map[s] || ''}">${label[s] || s}</span>`;
+    }
+
+    function planoBadge(p) {
+        const label = { basico: 'Básico', profissional: 'Profissional', enterprise: 'Enterprise' };
+        return `<span class="badge-plano ${p || ''}">${label[p] || p}</span>`;
+    }
+
+    function avatar(nome) {
+        return (nome || '?').charAt(0).toUpperCase();
+    }
+
+    function fmt(n) { return parseInt(n || 0).toLocaleString('pt-BR'); }
+
+    function showAlert(el, msg, tipo) {
+        el.className = 'alert alert-' + tipo;
+        el.innerHTML = `<i class="fas fa-${tipo === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${msg}`;
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 6000);
+    }
+
+    // ── Tabs ─────────────────────────────────────────────────────────
+    function showTab(tab) {
+        document.querySelectorAll('.sa-tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.sa-tab').forEach(el => el.classList.remove('active'));
+        const content = document.getElementById('tab-' + tab);
+        if (content) content.style.display = 'block';
+        const btn = document.querySelector(`.sa-tab[data-tab="${tab}"]`);
+        if (btn) btn.classList.add('active');
+
+        if (tab === 'dashboard') carregarDashboard();
+        if (tab === 'condominios') carregarCondominios();
+        log('Tab:', tab);
+    }
+
+    // ── Dashboard ────────────────────────────────────────────────────
+    function carregarDashboard() {
+        log('Carregando dashboard...');
+        req({ action: 'dashboard' }).then(res => {
+            if (!res.sucesso) { log('Erro dashboard:', res.mensagem); return; }
+            const d = res.dados;
+
+            document.getElementById('sa-total-ativos').textContent   = fmt(d.tenants?.ativos);
+            document.getElementById('sa-total-usuarios').textContent  = fmt(d.usuarios?.ativos);
+            document.getElementById('sa-total-moradores').textContent = fmt(d.moradores?.total);
+            document.getElementById('sa-total-tenants').textContent   = fmt(d.tenants?.total);
+
+            // Planos
+            const planosEl = document.getElementById('sa-planos-grid');
+            if (d.planos && d.planos.length) {
+                planosEl.innerHTML = d.planos.map(p =>
+                    `<div class="sa-plano-item">
+                        <div class="num">${fmt(p.total)}</div>
+                        <div class="lbl">${planoBadge(p.plano)}</div>
+                    </div>`
+                ).join('');
+            } else {
+                planosEl.innerHTML = '<p style="color:var(--color-text-tertiary)">Nenhum dado</p>';
+            }
+
+            // Recentes
+            const tbody = document.getElementById('sa-tbody-recentes');
+            if (d.recentes && d.recentes.length) {
+                tbody.innerHTML = d.recentes.map(t =>
+                    `<tr>
+                        <td>${t.id}</td>
+                        <td><code style="background:var(--color-background-tertiary);padding:2px 6px;border-radius:4px;">${t.slug}</code></td>
+                        <td>${t.nome_fantasia || t.razao_social || '-'}</td>
+                        <td>${planoBadge(t.plano)}</td>
+                        <td>${statusBadge(t.status)}</td>
+                        <td>${t.data_criacao ? new Date(t.data_criacao).toLocaleDateString('pt-BR') : '-'}</td>
+                    </tr>`
+                ).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum condomínio cadastrado</td></tr>';
+            }
+        }).catch(e => log('Erro dashboard:', e));
+    }
+
+    // ── Condomínios ──────────────────────────────────────────────────
+    let _todosCondominios = [];
+
+    function carregarCondominios() {
+        const grid = document.getElementById('sa-condominios-grid');
+        grid.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
+
+        req({ action: 'tenants' }).then(res => {
+            if (!res.sucesso) {
+                grid.innerHTML = `<div class="loading-inline" style="color:var(--color-error-700)"><i class="fas fa-exclamation-circle"></i> ${res.mensagem}</div>`;
+                return;
+            }
+            _todosCondominios = res.dados.tenants || [];
+            renderCondominios(_todosCondominios);
+        }).catch(e => {
+            grid.innerHTML = '<div class="loading-inline" style="color:var(--color-error-700)"><i class="fas fa-exclamation-circle"></i> Erro ao carregar</div>';
+            log('Erro condominios:', e);
+        });
+    }
+
+    function renderCondominios(lista) {
+        const grid = document.getElementById('sa-condominios-grid');
+        if (!lista.length) {
+            grid.innerHTML = '<div class="loading-inline"><i class="fas fa-building"></i> Nenhum condomínio encontrado</div>';
+            return;
+        }
+        grid.innerHTML = lista.map(t => `
+            <div class="sa-cond-card">
+                <div class="sa-cond-header">
+                    <div class="sa-cond-avatar">${avatar(t.nome_fantasia || t.razao_social)}</div>
+                    <div class="sa-cond-info">
+                        <h4>${t.nome_fantasia || t.razao_social || '-'}</h4>
+                        <small><code>${t.slug}</code> · ${t.cidade || ''} ${t.estado || ''}</small>
+                    </div>
+                </div>
+                <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+                    ${statusBadge(t.status)} ${planoBadge(t.plano)}
+                </div>
+                <div class="sa-cond-stats">
+                    <div class="sa-cond-stat">
+                        <div class="num">${fmt(t.total_usuarios)}</div>
+                        <div class="lbl">Usuários</div>
+                    </div>
+                    <div class="sa-cond-stat">
+                        <div class="num">${fmt(t.total_moradores)}</div>
+                        <div class="lbl">Moradores</div>
+                    </div>
+                    <div class="sa-cond-stat">
+                        <div class="num">${t.id}</div>
+                        <div class="lbl">ID</div>
+                    </div>
+                </div>
+                <div class="sa-cond-footer">
+                    <small style="color:var(--color-text-tertiary);">${t.email_principal || ''}</small>
+                    <div class="sa-cond-actions">
+                        <button onclick="SA.verDetalhes(${t.id})"><i class="fas fa-eye"></i> Ver</button>
+                        <button onclick="SA.alterarStatus(${t.id}, '${t.status}')" class="${t.status === 'ativo' ? 'danger' : ''}">
+                            <i class="fas fa-${t.status === 'ativo' ? 'ban' : 'check'}"></i>
+                            ${t.status === 'ativo' ? 'Suspender' : 'Ativar'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function filtrar() {
+        const busca  = (document.getElementById('sa-busca')?.value || '').toLowerCase();
+        const status = document.getElementById('sa-filtro-status')?.value || '';
+        const plano  = document.getElementById('sa-filtro-plano')?.value  || '';
+
+        const filtrado = _todosCondominios.filter(t => {
+            const matchBusca = !busca ||
+                (t.nome_fantasia || '').toLowerCase().includes(busca) ||
+                (t.razao_social  || '').toLowerCase().includes(busca) ||
+                (t.slug          || '').toLowerCase().includes(busca) ||
+                (t.cnpj          || '').includes(busca);
+            const matchStatus = !status || t.status === status;
+            const matchPlano  = !plano  || t.plano  === plano;
+            return matchBusca && matchStatus && matchPlano;
+        });
+        renderCondominios(filtrado);
+    }
+
+    // ── Detalhes do condomínio ────────────────────────────────────────
+    function verDetalhes(id) {
+        const modal = document.getElementById('sa-modal-cond');
+        const body  = document.getElementById('sa-modal-body');
+        modal.style.display = 'flex';
+        body.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
+
+        req({ action: 'tenant', id }).then(res => {
+            if (!res.sucesso) { body.innerHTML = `<p style="color:red">${res.mensagem}</p>`; return; }
+            const { tenant, usuarios } = res.dados;
+            document.getElementById('sa-modal-titulo').innerHTML = `<i class="fas fa-building"></i> ${tenant.nome_fantasia || tenant.razao_social}`;
+
+            body.innerHTML = `
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                    <div><strong>Slug:</strong> <code>${tenant.slug}</code></div>
+                    <div><strong>CNPJ:</strong> ${tenant.cnpj || '-'}</div>
+                    <div><strong>Plano:</strong> ${planoBadge(tenant.plano)}</div>
+                    <div><strong>Status:</strong> ${statusBadge(tenant.status)}</div>
+                    <div><strong>E-mail:</strong> ${tenant.email_principal || '-'}</div>
+                    <div><strong>Telefone:</strong> ${tenant.telefone || '-'}</div>
+                    <div><strong>Cidade/UF:</strong> ${tenant.cidade || '-'} / ${tenant.estado || '-'}</div>
+                    <div><strong>Cadastrado em:</strong> ${tenant.data_criacao ? new Date(tenant.data_criacao).toLocaleDateString('pt-BR') : '-'}</div>
+                </div>
+                <div style="display:flex;gap:1rem;margin-bottom:1.5rem;">
+                    <div class="sa-cond-stat" style="flex:1;">
+                        <div class="num">${fmt(tenant.total_usuarios)}</div>
+                        <div class="lbl">Usuários</div>
+                    </div>
+                    <div class="sa-cond-stat" style="flex:1;">
+                        <div class="num">${fmt(tenant.total_moradores)}</div>
+                        <div class="lbl">Moradores</div>
+                    </div>
+                    <div class="sa-cond-stat" style="flex:1;">
+                        <div class="num">${fmt(tenant.total_unidades)}</div>
+                        <div class="lbl">Unidades</div>
+                    </div>
+                </div>
+                <h4 style="margin-bottom:0.75rem;"><i class="fas fa-users"></i> Usuários Vinculados</h4>
+                ${usuarios.length ? `
+                    <table class="sa-usuarios-table">
+                        <thead><tr><th>Nome</th><th>E-mail</th><th>Permissão</th><th>Status</th></tr></thead>
+                        <tbody>
+                            ${usuarios.map(u => `
+                                <tr>
+                                    <td>${u.nome}</td>
+                                    <td>${u.email}</td>
+                                    <td><span class="badge-plano">${u.permissao_tenant || u.permissao}</span></td>
+                                    <td>${u.vinculo_ativo ? '<span class="badge-status ativo">Ativo</span>' : '<span class="badge-status inativo">Inativo</span>'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p style="color:var(--color-text-tertiary)">Nenhum usuário vinculado</p>'}
+                <div style="margin-top:1.5rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
+                    <button class="btn-primary" onclick="SA.fecharModal();SA.showTab('onboarding')">
+                        <i class="fas fa-user-plus"></i> Adicionar Usuário
+                    </button>
+                    <button class="btn-secondary" onclick="SA.alterarStatus(${tenant.id}, '${tenant.status}');SA.fecharModal()">
+                        <i class="fas fa-${tenant.status === 'ativo' ? 'ban' : 'check'}"></i>
+                        ${tenant.status === 'ativo' ? 'Suspender' : 'Ativar'}
+                    </button>
+                </div>
+            `;
+        }).catch(e => { body.innerHTML = '<p style="color:red">Erro ao carregar detalhes</p>'; log(e); });
+    }
+
+    function fecharModal() {
+        document.getElementById('sa-modal-cond').style.display = 'none';
+    }
+
+    // ── Alterar status ───────────────────────────────────────────────
+    function alterarStatus(id, statusAtual) {
+        const novo = statusAtual === 'ativo' ? 'suspenso' : 'ativo';
+        const label = novo === 'ativo' ? 'ativar' : 'suspender';
+        if (!confirm(`Deseja ${label} este condomínio?`)) return;
+
+        req({ action: 'status_tenant', id }, 'POST', { status: novo }).then(res => {
+            if (res.sucesso) {
+                carregarCondominios();
+                alert(res.mensagem);
+            } else {
+                alert('Erro: ' + res.mensagem);
+            }
+        });
+    }
+
+    // ── Onboarding ───────────────────────────────────────────────────
+    function onboarding(e) {
+        e.preventDefault();
+        const alertEl = document.getElementById('sa-onboarding-alert');
+        const btn     = document.getElementById('btn-onboarding');
+
+        // Validar senhas
+        const s1 = document.getElementById('ob-admin-senha').value;
+        const s2 = document.getElementById('ob-admin-senha2').value;
+        if (s1 !== s2) {
+            showAlert(alertEl, 'As senhas não coincidem.', 'error');
+            return;
+        }
+
+        const form = document.getElementById('sa-form-onboarding');
+        const fd   = new FormData(form);
+        const body = {};
+        fd.forEach((v, k) => { body[k] = v; });
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
+
+        req({ action: 'onboarding' }, 'POST', body).then(res => {
+            if (res.sucesso) {
+                showAlert(alertEl,
+                    `✅ Condomínio criado! Slug: <strong>${res.dados.tenant_slug}</strong> | Admin: <strong>${res.dados.admin_email}</strong> | URL: <a href="${res.dados.url_acesso}" target="_blank">${res.dados.url_acesso}</a>`,
+                    'success'
+                );
+                form.reset();
+                document.getElementById('ob-slug-preview').textContent = '';
+                // Atualizar lista
+                setTimeout(() => carregarCondominios(), 500);
+            } else {
+                showAlert(alertEl, res.mensagem, 'error');
+            }
+        }).catch(() => {
+            showAlert(alertEl, 'Erro de comunicação com o servidor.', 'error');
+        }).finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-rocket"></i> Criar Condomínio';
+        });
+    }
+
+    function previewUrl() {
+        const slug = document.getElementById('ob-slug')?.value || '';
+        const el   = document.getElementById('ob-slug-preview');
+        if (el) el.textContent = slug ? `URL: https://${slug}.erpcondominios.com.br` : '';
+    }
+
+    function mascaraCnpj(input) {
+        let v = input.value.replace(/\D/g, '').substring(0, 14);
+        v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+        v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+        v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+        v = v.replace(/(\d{4})(\d)/, '$1-$2');
+        input.value = v;
+    }
+
+    function limparOnboarding() {
+        document.getElementById('ob-slug-preview').textContent = '';
+        document.getElementById('sa-onboarding-alert').style.display = 'none';
+    }
+
+    // ── API pública ──────────────────────────────────────────────────
+    window.SA = {
+        showTab, carregarCondominios, filtrar,
+        verDetalhes, fecharModal, alterarStatus,
+        onboarding, previewUrl, mascaraCnpj, limparOnboarding
+    };
+
+    // ── Inicializar ──────────────────────────────────────────────────
+    log('Inicializando Painel Super-Admin v1.0');
+    carregarDashboard();
+
+})();
+</script>

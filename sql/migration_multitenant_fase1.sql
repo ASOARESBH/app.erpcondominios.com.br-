@@ -374,3 +374,16 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- =========================================================================
 -- FIM DA MIGRATION FASE 1
 -- =========================================================================
+
+-- =========================================================================
+-- SEÇÃO 6: ADICIONAR PERMISSÃO super_admin
+-- =========================================================================
+-- Atualiza a coluna permissao para aceitar o valor 'super_admin'
+-- Execute este bloco apenas se a coluna for ENUM
+
+-- Se a coluna for VARCHAR, nenhuma alteração é necessária.
+-- Se for ENUM, execute o ALTER abaixo:
+-- ALTER TABLE `usuarios` MODIFY COLUMN `permissao` ENUM('visualizador','operador','gerente','admin','super_admin') NOT NULL DEFAULT 'operador';
+
+-- Para promover um usuário a super_admin (substitua pelo ID real):
+-- UPDATE usuarios SET permissao = 'super_admin' WHERE id = 1;
