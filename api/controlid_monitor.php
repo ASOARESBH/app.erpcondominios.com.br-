@@ -32,7 +32,13 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Permite qualquer origem (o equipamento não envia Origin)
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-API-KEY');
 

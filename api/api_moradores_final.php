@@ -15,12 +15,19 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Limpar buffer e definir headers
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -50,6 +57,7 @@ if (!function_exists('retornar_json')) {
 try {
     // Verificar autenticação
     verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
     
     $metodo = $_SERVER['REQUEST_METHOD'];
     $conexao = conectar_banco();
@@ -74,7 +82,7 @@ try {
         // Construir query com prepared statement
         $sql = "SELECT id, nome, cpf, unidade, email, telefone, celular, ativo, 
                 DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro 
-                FROM moradores WHERE 1=1";
+                FROM moradores WHERE tenant_id = $tenant_id AND 1=1";
         
         $tipos_param = "";
         $params = array();
@@ -160,7 +168,7 @@ try {
         }
         
         // Verificar se CPF já existe
-        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE cpf = ?");
+        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND cpf = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
@@ -217,7 +225,7 @@ try {
         }
         
         // Verificar se CPF já existe em outro morador
-        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE cpf = ? AND id != ?");
+        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND cpf = ? AND id != ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
@@ -237,14 +245,14 @@ try {
             $senha_hash = password_hash($senha, PASSWORD_DEFAULT);
             
             // Atualizar morador com senha
-            $stmt = $conexao->prepare("UPDATE moradores SET nome=?, cpf=?, unidade=?, email=?, telefone=?, celular=?, senha=? WHERE id=?");
+            $stmt = $conexao->prepare("UPDATE moradores SET nome=?, cpf=?, unidade=?, email=?, telefone=?, celular=?, senha=? WHERE tenant_id = $tenant_id AND id=?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar update: " . $conexao->error);
             }
             $stmt->bind_param("sssssssi", $nome, $cpf, $unidade, $email, $telefone, $celular, $senha_hash, $id);
         } else {
             // Atualizar morador sem senha
-            $stmt = $conexao->prepare("UPDATE moradores SET nome=?, cpf=?, unidade=?, email=?, telefone=?, celular=? WHERE id=?");
+            $stmt = $conexao->prepare("UPDATE moradores SET nome=?, cpf=?, unidade=?, email=?, telefone=?, celular=? WHERE tenant_id = $tenant_id AND id=?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar update: " . $conexao->error);
             }
@@ -276,7 +284,7 @@ try {
         }
         
         // Buscar nome do morador antes de excluir
-        $stmt = $conexao->prepare("SELECT nome FROM moradores WHERE id = ?");
+        $stmt = $conexao->prepare("SELECT nome FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
@@ -288,7 +296,7 @@ try {
         $stmt->close();
         
         // Excluir morador (veículos serão excluídos automaticamente por CASCADE)
-        $stmt = $conexao->prepare("DELETE FROM moradores WHERE id = ?");
+        $stmt = $conexao->prepare("DELETE FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar delete: " . $conexao->error);
         }

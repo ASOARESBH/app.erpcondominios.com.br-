@@ -14,6 +14,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
@@ -26,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Verificar autenticação básica
 $usuario_logado = verificarAutenticacao(true);
+$tenant_id = exigirTenantId();
 $conexao = conectar_banco();
 
 // Garantir que as tabelas existem
@@ -64,7 +66,7 @@ if ($metodo === 'GET' && $acao === 'permissoes_usuario') {
     }
 
     // Buscar dados do usuário
-    $stmt = $conexao->prepare("SELECT id, nome, email, permissao FROM usuarios WHERE id = ? LIMIT 1");
+    $stmt = $conexao->prepare("SELECT id, nome, email, permissao FROM usuarios WHERE tenant_id = $tenant_id AND id = ? LIMIT 1");
     $stmt->bind_param('i', $usuario_id);
     $stmt->execute();
     $usuario = $stmt->get_result()->fetch_assoc();
@@ -235,7 +237,7 @@ if ($metodo === 'POST') {
         }
 
         // Verificar se usuário existe
-        $stmt = $conexao->prepare("SELECT id, permissao FROM usuarios WHERE id = ? LIMIT 1");
+        $stmt = $conexao->prepare("SELECT id, permissao FROM usuarios WHERE tenant_id = $tenant_id AND id = ? LIMIT 1");
         $stmt->bind_param('i', $usuario_id);
         $stmt->execute();
         $usuario = $stmt->get_result()->fetch_assoc();
@@ -285,7 +287,7 @@ if ($metodo === 'POST') {
         if ($usuario_id <= 0) {
             retornar_json(false, 'ID inválido');
         }
-        $stmt = $conexao->prepare("DELETE FROM usuario_modulos WHERE usuario_id = ?");
+        $stmt = $conexao->prepare("DELETE FROM usuario_modulos WHERE tenant_id = $tenant_id AND usuario_id = ?");
         $stmt->bind_param('i', $usuario_id);
         $stmt->execute();
         $stmt->close();

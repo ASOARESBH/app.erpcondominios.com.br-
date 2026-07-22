@@ -6,6 +6,7 @@
 session_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -19,7 +20,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -32,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Verificar autenticação
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 $conexao = conectar_banco();
 $acao = $_POST['acao'] ?? $_GET['acao'] ?? '';
@@ -414,7 +422,7 @@ function deletar_checklist($conexao) {
 }
 
 function listar_veiculos($conexao) {
-    $sql = "SELECT id, placa, modelo, ano, cor FROM abastecimento_veiculos ORDER BY placa";
+    $sql = "SELECT id, placa, modelo, ano, cor FROM abastecimento_veiculos WHERE tenant_id = $tenant_id ORDER BY placa";
     $resultado = $conexao->query($sql);
     
     if ($resultado) {
@@ -429,7 +437,7 @@ function listar_veiculos($conexao) {
 }
 
 function listar_operadores($conexao) {
-    $sql = "SELECT id, nome, funcao, departamento FROM usuarios WHERE ativo = 1 ORDER BY nome";
+    $sql = "SELECT id, nome, funcao, departamento FROM usuarios WHERE tenant_id = $tenant_id AND ativo = 1 ORDER BY nome";
     $resultado = $conexao->query($sql);
     
     if ($resultado) {

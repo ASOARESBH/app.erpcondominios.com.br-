@@ -18,6 +18,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';
 require_once __DIR__ . '/email/EmailCrypto.php';
 
 if (!function_exists('retornar_json')) {
@@ -42,6 +43,7 @@ if (!$conexao) {
     retornar_json(false, 'Erro ao conectar ao banco de dados');
 }
 mysqli_set_charset($conexao, 'utf8mb4');
+$tenant_id = exigirTenantId();
 
 // Garante que a tabela existe e todas as colunas novas estão presentes
 _garantir_tabela($conexao);

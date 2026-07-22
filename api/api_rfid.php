@@ -6,6 +6,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -23,6 +24,7 @@ header('Cache-Control: no-cache, must-revalidate');
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // ========== VERIFICAR TAG RFID ==========
 if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_tag') {
@@ -189,7 +191,7 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
 // ========== TESTAR CONEXÃO COM EQUIPAMENTO RFID ==========
 if ($metodo === 'GET' && isset($_GET['acao']) && $_GET['acao'] === 'testar_conexao') {
     
-    $stmt = $conexao->prepare("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'rfid_%'");
+    $stmt = $conexao->prepare("SELECT chave, valor FROM configuracoes WHERE tenant_id = $tenant_id AND chave LIKE 'rfid_%'");
     $stmt->execute();
     $resultado = $stmt->get_result();
     

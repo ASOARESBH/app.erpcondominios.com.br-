@@ -30,6 +30,7 @@ register_shutdown_function(function () {
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -48,6 +49,7 @@ header('Cache-Control: no-cache, must-revalidate');
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // Constantes
 define('VALOR_METRO_CUBICO', 6.16);
@@ -135,7 +137,7 @@ if ($metodo === 'GET' && !isset($_GET['ultima_leitura']) && !isset($_GET['hidrom
                 WHEN l.lancado_por_tipo = 'morador' THEN CONCAT('🏠 ', l.lancado_por_nome, ' (Morador)')
                 ELSE 'Sistema'
             END as lancado_por_descricao,
-            (SELECT COUNT(*) FROM leituras_fotos lf WHERE lf.leitura_id = l.id) as total_fotos
+            (SELECT COUNT(*) FROM leituras_fotos lf WHERE tenant_id = $tenant_id AND lf.leitura_id = l.id) as total_fotos
             FROM leituras l
             INNER JOIN hidrometros h ON l.hidrometro_id = h.id
             INNER JOIN moradores m ON l.morador_id = m.id
@@ -176,8 +178,7 @@ if ($metodo === 'GET' && isset($_GET['ultima_leitura'])) {
     $hidrometro_id = intval($_GET['ultima_leitura']);
     
     $sql = "SELECT leitura_atual, DATE_FORMAT(data_leitura, '%d/%m/%Y %H:%i') as data_leitura_formatada
-            FROM leituras 
-            WHERE hidrometro_id = $hidrometro_id 
+            FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = $hidrometro_id 
             ORDER BY data_leitura DESC 
             LIMIT 1";
     
@@ -201,8 +202,7 @@ if ($metodo === 'GET' && isset($_GET['hidrometros_ativos'])) {
     // no mês/ano corrente não pode ser lançado de novo, então nem aparece
     // mais na lista de pendentes (evita relançamento ao voltar para a página).
     $condicao_sem_leitura_mes = "NOT EXISTS (
-        SELECT 1 FROM leituras lm
-        WHERE lm.hidrometro_id = h.id
+        SELECT 1 FROM leituras lm WHERE tenant_id = $tenant_id AND lm.hidrometro_id = h.id
         AND MONTH(lm.data_leitura) = MONTH(CURDATE())
         AND YEAR(lm.data_leitura) = YEAR(CURDATE())
     )";
@@ -212,7 +212,7 @@ if ($metodo === 'GET' && isset($_GET['hidrometros_ativos'])) {
     // de página, as páginas ficariam cortadas na ordem alfabética errada.
     $sql = "SELECT h.id, h.numero_hidrometro, h.numero_lacre, h.unidade,
             m.id as morador_id, m.nome as morador_nome,
-            (SELECT leitura_atual FROM leituras WHERE hidrometro_id = h.id ORDER BY data_leitura DESC LIMIT 1) as leitura_anterior
+            (SELECT leitura_atual FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = h.id ORDER BY data_leitura DESC LIMIT 1) as leitura_anterior
             FROM hidrometros h
             INNER JOIN moradores m ON h.morador_id = m.id
             WHERE h.ativo = 1 AND $condicao_sem_leitura_mes";
@@ -306,7 +306,7 @@ if ($metodo === 'POST') {
             $vistos[$hidrometro_id] = true;
 
             // Buscar e travar a linha do hidrômetro dentro da transação
-            $stmt = $conexao->prepare("SELECT morador_id, unidade, numero_hidrometro, ativo FROM hidrometros WHERE id = ? FOR UPDATE");
+            $stmt = $conexao->prepare("SELECT morador_id, unidade, numero_hidrometro, ativo FROM hidrometros WHERE tenant_id = $tenant_id AND id = ? FOR UPDATE");
             $stmt->bind_param("i", $hidrometro_id);
             $stmt->execute();
             $hidrometro = $stmt->get_result()->fetch_assoc();
@@ -322,7 +322,7 @@ if ($metodo === 'POST') {
             }
 
             // Segurança do lançamento: 1 leitura por mês por hidrômetro
-            $stmt_check = $conexao->prepare("SELECT id FROM leituras WHERE hidrometro_id = ? AND MONTH(data_leitura) = ? AND YEAR(data_leitura) = ? LIMIT 1");
+            $stmt_check = $conexao->prepare("SELECT id FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = ? AND MONTH(data_leitura) = ? AND YEAR(data_leitura) = ? LIMIT 1");
             $stmt_check->bind_param("iii", $hidrometro_id, $mes, $ano);
             $stmt_check->execute();
             $ja_lancada = $stmt_check->get_result()->fetch_assoc();
@@ -334,7 +334,7 @@ if ($metodo === 'POST') {
             }
 
             // Última leitura para calcular consumo
-            $stmt = $conexao->prepare("SELECT leitura_atual FROM leituras WHERE hidrometro_id = ? ORDER BY data_leitura DESC LIMIT 1");
+            $stmt = $conexao->prepare("SELECT leitura_atual FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = ? ORDER BY data_leitura DESC LIMIT 1");
             $stmt->bind_param("i", $hidrometro_id);
             $stmt->execute();
             $ultima = $stmt->get_result()->fetch_assoc();
@@ -403,7 +403,7 @@ if ($metodo === 'POST') {
             // já gravada NÃO é afetada — apenas a foto fica sem evidência.
             if (!empty($p['foto_id'])) {
                 $stmt_foto = $conexao->prepare(
-                    "UPDATE leituras_fotos SET leitura_id = ? WHERE id = ? AND hidrometro_id = ? AND leitura_id IS NULL"
+                    "UPDATE leituras_fotos SET leitura_id = ? WHERE tenant_id = $tenant_id AND id = ? AND hidrometro_id = ? AND leitura_id IS NULL"
                 );
                 $stmt_foto->bind_param("iii", $nova_leitura_id, $p['foto_id'], $p['hidrometro_id']);
                 $stmt_foto->execute();
@@ -449,8 +449,7 @@ if ($metodo === 'POST') {
         
         $stmt_check = $conexao->prepare("
             SELECT id, lancado_por_tipo, lancado_por_nome, DATE_FORMAT(data_leitura, '%d/%m/%Y %H:%i') as data_formatada
-            FROM leituras 
-            WHERE hidrometro_id = ? 
+            FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = ? 
             AND MONTH(data_leitura) = ? 
             AND YEAR(data_leitura) = ?
             LIMIT 1
@@ -466,7 +465,7 @@ if ($metodo === 'POST') {
         }
         
         // Buscar dados do hidrômetro
-        $stmt = $conexao->prepare("SELECT morador_id, unidade, numero_hidrometro FROM hidrometros WHERE id = ?");
+        $stmt = $conexao->prepare("SELECT morador_id, unidade, numero_hidrometro FROM hidrometros WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("i", $hidrometro_id);
         $stmt->execute();
         $resultado = $stmt->get_result();
@@ -478,7 +477,7 @@ if ($metodo === 'POST') {
         }
         
         // Buscar última leitura
-        $stmt = $conexao->prepare("SELECT leitura_atual FROM leituras WHERE hidrometro_id = ? ORDER BY data_leitura DESC LIMIT 1");
+        $stmt = $conexao->prepare("SELECT leitura_atual FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = ? ORDER BY data_leitura DESC LIMIT 1");
         $stmt->bind_param("i", $hidrometro_id);
         $stmt->execute();
         $resultado = $stmt->get_result();
@@ -511,7 +510,7 @@ if ($metodo === 'POST') {
             $foto_vinculada = false;
             if ($foto_id !== null) {
                 $stmt_foto = $conexao->prepare(
-                    "UPDATE leituras_fotos SET leitura_id = ? WHERE id = ? AND hidrometro_id = ? AND leitura_id IS NULL"
+                    "UPDATE leituras_fotos SET leitura_id = ? WHERE tenant_id = $tenant_id AND id = ? AND hidrometro_id = ? AND leitura_id IS NULL"
                 );
                 $stmt_foto->bind_param("iii", $id, $foto_id, $hidrometro_id);
                 $stmt_foto->execute();

@@ -5,10 +5,17 @@
  */
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 ob_start();
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 
 $conexao = conectar_banco();
@@ -20,6 +27,7 @@ if (!$conexao) {
 
 // Verifica autenticação
 $sessao = verificarAutenticacao($conexao);
+$tenant_id = exigirTenantId();
 if (!$sessao) {
     ob_end_clean();
     echo json_encode(['sucesso' => false, 'mensagem' => 'Não autorizado.']);

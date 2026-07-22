@@ -23,6 +23,7 @@ if (!function_exists('retornar_json')) {
 header('Content-Type: application/json; charset=utf-8');
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para resposta JSON
 function resposta($sucesso, $mensagem, $dados = null) {
@@ -85,8 +86,7 @@ function listarLogs($conn) {
                 status,
                 mensagem_erro,
                 data_envio
-            FROM email_log
-            WHERE 1=1";
+            FROM email_log WHERE tenant_id = $tenant_id AND 1=1";
     
     // Aplicar filtros
     if (!empty($status)) {
@@ -198,8 +198,7 @@ function obterDetalhes($conn) {
 function limparLogsAntigos($conn) {
     // Verificar se é admin (adicione sua lógica de autenticação aqui)
     
-    $sql = "DELETE FROM email_log 
-            WHERE data_envio < DATE_SUB(NOW(), INTERVAL 90 DAY)
+    $sql = "DELETE FROM email_log WHERE tenant_id = $tenant_id AND data_envio < DATE_SUB(NOW(), INTERVAL 90 DAY)
             AND status = 'enviado'";
     
     $result = mysqli_query($conn, $sql);

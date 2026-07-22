@@ -5,6 +5,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -22,6 +23,7 @@ header('Cache-Control: no-cache, must-revalidate');
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // ========== LISTAR INVENTÁRIO ==========
 if ($metodo === 'GET') {
@@ -118,7 +120,7 @@ if ($metodo === 'POST') {
     if ($status === 'inativo' && empty($motivo_baixa))       retornar_json(false, "Motivo de baixa é obrigatório para itens inativos");
 
     // Verificar duplicidade
-    $stmt = $conexao->prepare("SELECT id FROM inventario WHERE numero_patrimonio = ?");
+    $stmt = $conexao->prepare("SELECT id FROM inventario WHERE tenant_id = $tenant_id AND numero_patrimonio = ?");
     $stmt->bind_param("s", $numero_patrimonio);
     $stmt->execute();
     $stmt->store_result();
@@ -176,7 +178,7 @@ if ($metodo === 'PUT') {
     if ($status === 'inativo' && empty($motivo_baixa)) retornar_json(false, "Motivo de baixa é obrigatório para itens inativos");
 
     // Verificar duplicidade em outro registro
-    $stmt = $conexao->prepare("SELECT id FROM inventario WHERE numero_patrimonio = ? AND id != ?");
+    $stmt = $conexao->prepare("SELECT id FROM inventario WHERE tenant_id = $tenant_id AND numero_patrimonio = ? AND id != ?");
     $stmt->bind_param("si", $numero_patrimonio, $id);
     $stmt->execute();
     $stmt->store_result();
@@ -187,8 +189,7 @@ if ($metodo === 'PUT') {
     $stmt = $conexao->prepare("UPDATE inventario SET
         numero_patrimonio=?, nome_item=?, fabricante=?, modelo=?, numero_serie=?,
         nf=?, data_compra=?, situacao=?, valor=?, status=?, motivo_baixa=?,
-        data_baixa=?, tutela_usuario_id=?, grupo_id=?, observacoes=?
-        WHERE id=?");
+        data_baixa=?, tutela_usuario_id=?, grupo_id=?, observacoes=? WHERE tenant_id = $tenant_id AND id=?");
     // TIPOS: s=string, d=double, i=int
     // Ordem: numero_patrimonio(s), nome_item(s), fabricante(s), modelo(s), numero_serie(s),
     //        nf(s), data_compra(s), situacao(s), valor(d), status(s), motivo_baixa(s),
@@ -215,7 +216,7 @@ if ($metodo === 'DELETE') {
 
     if ($id <= 0) retornar_json(false, "ID inválido");
 
-    $stmt = $conexao->prepare("SELECT numero_patrimonio, nome_item FROM inventario WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT numero_patrimonio, nome_item FROM inventario WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -224,7 +225,7 @@ if ($metodo === 'DELETE') {
 
     if (!$item) retornar_json(false, "Item não encontrado");
 
-    $stmt = $conexao->prepare("DELETE FROM inventario WHERE id = ?");
+    $stmt = $conexao->prepare("DELETE FROM inventario WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
 
     if ($stmt->execute()) {

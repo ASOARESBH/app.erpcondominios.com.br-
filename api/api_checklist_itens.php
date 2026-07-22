@@ -6,6 +6,7 @@
 session_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Verificar se o usuário está logado
 if (!isset($_SESSION['usuario_id'])) {
@@ -13,6 +14,7 @@ if (!isset($_SESSION['usuario_id'])) {
 }
 
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 $acao = $_POST['acao'] ?? $_GET['acao'] ?? '';
 
 switch ($acao) {
@@ -47,8 +49,7 @@ function listar_itens($conexao) {
         retornar_json(false, 'ID do checklist inválido');
     }
     
-    $sql = "SELECT * FROM checklist_itens 
-            WHERE checklist_id = $checklist_id 
+    $sql = "SELECT * FROM checklist_itens WHERE tenant_id = $tenant_id AND checklist_id = $checklist_id 
             ORDER BY tipo_item, categoria";
     
     $resultado = $conexao->query($sql);
@@ -98,7 +99,7 @@ function salvar_itens_abertura($conexao) {
     }
     
     // Deletar itens existentes (caso esteja reeditando)
-    $conexao->query("DELETE FROM checklist_itens WHERE checklist_id = $checklist_id");
+    $conexao->query("DELETE FROM checklist_itens WHERE tenant_id = $tenant_id AND checklist_id = $checklist_id");
     
     // Inserir novos itens
     $stmt = $conexao->prepare("INSERT INTO checklist_itens 
@@ -149,8 +150,7 @@ function salvar_itens_fechamento($conexao) {
     
     // Atualizar valores de fechamento
     $stmt = $conexao->prepare("UPDATE checklist_itens 
-                               SET valor_fechamento = ? 
-                               WHERE checklist_id = ? AND categoria = ?");
+                               SET valor_fechamento = ? WHERE tenant_id = $tenant_id AND checklist_id = ? AND categoria = ?");
     
     $sucesso = true;
     
@@ -186,8 +186,7 @@ function buscar_itens_por_checklist($conexao) {
                 categoria,
                 valor_abertura,
                 valor_fechamento
-            FROM checklist_itens 
-            WHERE checklist_id = $checklist_id 
+            FROM checklist_itens WHERE tenant_id = $tenant_id AND checklist_id = $checklist_id 
             ORDER BY 
                 CASE tipo_item 
                     WHEN 'nivel' THEN 1 

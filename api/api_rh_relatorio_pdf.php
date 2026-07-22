@@ -9,9 +9,11 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 ob_end_clean();
 
-try { verificarAutenticacao(true, 'operador'); }
+try { verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId(); }
 catch (Exception $e) {
     http_response_code(401);
     echo '<h2>Não autenticado. Faça login novamente.</h2>'; exit;

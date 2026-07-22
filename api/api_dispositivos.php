@@ -25,6 +25,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 // verificarAutenticacao() encerra com 401 automaticamente se não logado
 $usuario = verificarAutenticacao();
+$tenant_id = exigirTenantId();
 
 $conn = conectar_banco();
 if (!($conn instanceof mysqli)) {

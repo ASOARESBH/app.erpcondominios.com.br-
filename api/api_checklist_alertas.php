@@ -6,6 +6,7 @@
 session_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Verificar se o usuário está logado
 if (!isset($_SESSION['usuario_id'])) {
@@ -13,6 +14,7 @@ if (!isset($_SESSION['usuario_id'])) {
 }
 
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 $acao = $_POST['acao'] ?? $_GET['acao'] ?? '';
 
 switch ($acao) {

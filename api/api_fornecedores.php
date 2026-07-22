@@ -7,6 +7,7 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -20,7 +21,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
@@ -31,6 +38,7 @@ $metodo = $_SERVER['REQUEST_METHOD'];
 if ($acao === 'listar' && $metodo === 'GET') {
     try {
         $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
         
         $sql = "SELECT * FROM v_fornecedores_completo WHERE ativo=1 ORDER BY nome_estabelecimento";
         $result = $conexao->query($sql);
@@ -102,7 +110,7 @@ if ($acao === 'cadastrar' && $metodo === 'POST') {
         }
         
         // Verificar se CPF/CNPJ já existe
-        $sql_check = "SELECT id FROM fornecedores WHERE cpf_cnpj = ?";
+        $sql_check = "SELECT id FROM fornecedores WHERE tenant_id = $tenant_id AND cpf_cnpj = ?";
         $stmt_check = $conexao->prepare($sql_check);
         
         if (!$stmt_check) {
@@ -122,7 +130,7 @@ if ($acao === 'cadastrar' && $metodo === 'POST') {
         $stmt_check->close();
         
         // Verificar se e-mail já existe
-        $sql_check_email = "SELECT id FROM fornecedores WHERE email = ?";
+        $sql_check_email = "SELECT id FROM fornecedores WHERE tenant_id = $tenant_id AND email = ?";
         $stmt_check_email = $conexao->prepare($sql_check_email);
         
         if (!$stmt_check_email) {

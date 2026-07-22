@@ -6,6 +6,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -23,6 +24,7 @@ header('Cache-Control: no-cache, must-revalidate');
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // ========== LISTAR GRUPOS ==========
 if ($metodo === 'GET') {
@@ -31,8 +33,7 @@ if ($metodo === 'GET') {
 
     $sql = "SELECT id, nome, descricao, ativo,
                 DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro_formatada
-            FROM grupos_inventario
-            WHERE 1=1";
+            FROM grupos_inventario WHERE tenant_id = $tenant_id AND 1=1";
 
     if ($apenas_ativos) {
         $sql .= " AND ativo = 1";
@@ -73,7 +74,7 @@ if ($metodo === 'POST') {
     }
 
     // Verificar duplicidade
-    $stmt = $conexao->prepare("SELECT id FROM grupos_inventario WHERE nome = ?");
+    $stmt = $conexao->prepare("SELECT id FROM grupos_inventario WHERE tenant_id = $tenant_id AND nome = ?");
     $stmt->bind_param("s", $nome);
     $stmt->execute();
     $stmt->store_result();
@@ -92,7 +93,7 @@ if ($metodo === 'POST') {
         $stmt->close();
 
         // Buscar o grupo recém-criado para retornar
-        $stmt2 = $conexao->prepare("SELECT id, nome, descricao, ativo FROM grupos_inventario WHERE id = ?");
+        $stmt2 = $conexao->prepare("SELECT id, nome, descricao, ativo FROM grupos_inventario WHERE tenant_id = $tenant_id AND id = ?");
         $stmt2->bind_param("i", $novo_id);
         $stmt2->execute();
         $res = $stmt2->get_result();
@@ -119,7 +120,7 @@ if ($metodo === 'PUT') {
     if (empty($nome)) retornar_json(false, "Nome do grupo é obrigatório");
 
     // Verificar duplicidade em outro registro
-    $stmt = $conexao->prepare("SELECT id FROM grupos_inventario WHERE nome = ? AND id != ?");
+    $stmt = $conexao->prepare("SELECT id FROM grupos_inventario WHERE tenant_id = $tenant_id AND nome = ? AND id != ?");
     $stmt->bind_param("si", $nome, $id);
     $stmt->execute();
     $stmt->store_result();
@@ -129,7 +130,7 @@ if ($metodo === 'PUT') {
     }
     $stmt->close();
 
-    $stmt = $conexao->prepare("UPDATE grupos_inventario SET nome = ?, descricao = ?, ativo = ? WHERE id = ?");
+    $stmt = $conexao->prepare("UPDATE grupos_inventario SET nome = ?, descricao = ?, ativo = ? WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("ssii", $nome, $descricao, $ativo, $id);
 
     if ($stmt->execute()) {
@@ -148,7 +149,7 @@ if ($metodo === 'DELETE') {
     if ($id <= 0) retornar_json(false, "ID inválido");
 
     // Verificar se há itens usando este grupo
-    $stmt = $conexao->prepare("SELECT COUNT(*) as total FROM inventario WHERE grupo_id = ?");
+    $stmt = $conexao->prepare("SELECT COUNT(*) as total FROM inventario WHERE tenant_id = $tenant_id AND grupo_id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -159,7 +160,7 @@ if ($metodo === 'DELETE') {
         retornar_json(false, "Não é possível excluir: existem {$row['total']} item(ns) neste grupo. Remova os itens primeiro ou altere o grupo deles.");
     }
 
-    $stmt = $conexao->prepare("DELETE FROM grupos_inventario WHERE id = ?");
+    $stmt = $conexao->prepare("DELETE FROM grupos_inventario WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
 
     if ($stmt->execute()) {

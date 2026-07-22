@@ -19,6 +19,7 @@
 // ── 1. Bootstrap ──────────────────────────────────────────────
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Criar conexão com o banco (config.php define a função, não cria $conn automaticamente)
 $conn = conectar_banco();
@@ -26,6 +27,7 @@ $conn = conectar_banco();
 // Verificar autenticação via sessão PHP
 // auth_helper já chama session_start() internamente
 $usuario = verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 // Se não autenticado, verificarAutenticacao() já encerra com HTTP 401 + JSON
 
 // ── 2. Configurações regionais ────────────────────────────────

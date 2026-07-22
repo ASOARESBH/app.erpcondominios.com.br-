@@ -11,6 +11,7 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
@@ -37,6 +38,7 @@ if (!function_exists('retornar_json')) {
 
 $metodo  = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // ===== VERIFICAR / CRIAR COLUNAS EXTRAS =====
 function _tem_coluna($conexao, $tabela, $coluna) {
@@ -140,7 +142,7 @@ if ($metodo === 'POST') {
     if ($tipo === 'Morador') {
         // Se morador_id já foi enviado pelo frontend (seleção manual), usar diretamente
         if ($morador_id) {
-            $stmt2 = $conexao->prepare("SELECT nome, unidade FROM moradores WHERE id = ?");
+            $stmt2 = $conexao->prepare("SELECT nome, unidade FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
             if ($stmt2) {
                 $stmt2->bind_param('i', $morador_id);
                 $stmt2->execute();
@@ -188,7 +190,7 @@ if ($metodo === 'POST') {
 
         // Se for dependente, buscar nome do dependente para o status
         if ($dependente_id) {
-            $stmtDep = $conexao->prepare("SELECT nome_completo FROM dependentes WHERE id = ?");
+            $stmtDep = $conexao->prepare("SELECT nome_completo FROM dependentes WHERE tenant_id = $tenant_id AND id = ?");
             if ($stmtDep) {
                 $stmtDep->bind_param('i', $dependente_id);
                 $stmtDep->execute();
@@ -268,7 +270,7 @@ if ($metodo === 'PUT') {
         retornar_json(false, 'ID inválido');
     }
 
-    $stmt = $conexao->prepare('UPDATE registros_acesso SET observacao=?, status=? WHERE id=?');
+    $stmt = $conexao->prepare('UPDATE registros_acesso SET observacao=?, status=? WHERE tenant_id = $tenant_id AND id=?');
     if (!$stmt) {
         retornar_json(false, 'Erro ao preparar atualização: ' . $conexao->error);
     }
@@ -292,7 +294,7 @@ if ($metodo === 'DELETE') {
         retornar_json(false, 'ID inválido');
     }
 
-    $stmt = $conexao->prepare('DELETE FROM registros_acesso WHERE id = ?');
+    $stmt = $conexao->prepare('DELETE FROM registros_acesso WHERE tenant_id = $tenant_id AND id = ?');
     if (!$stmt) {
         retornar_json(false, 'Erro ao preparar exclusão: ' . $conexao->error);
     }

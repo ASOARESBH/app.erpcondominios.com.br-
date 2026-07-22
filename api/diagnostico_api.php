@@ -96,6 +96,7 @@
         // Teste 2: Testar conexão com banco
         if (file_exists('config.php')) {
             require_once 'config.php';
+require_once 'tenant_helper.php';;
             
             echo '<div class="test">';
             echo '<h3>2. Conexão com Banco de Dados</h3>';

@@ -9,6 +9,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -30,7 +31,8 @@ if (!function_exists('retornar_json')) {
     }
 }
 
-try { verificarAutenticacao(true, 'operador'); }
+try { verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId(); }
 catch (Exception $e) {
     http_response_code(401);
     retornar_json(false, 'Não autenticado.');
@@ -124,8 +126,7 @@ if ($metodo === 'GET' && $acao === 'saldo') {
 
     $st = $conn->prepare(
         "SELECT tipo, SUM(minutos) AS total
-         FROM rh_banco_horas
-         WHERE colaborador_id = ?
+         FROM rh_banco_horas WHERE tenant_id = $tenant_id AND colaborador_id = ?
          GROUP BY tipo"
     );
     $st->bind_param('i', $colab_id);
@@ -170,7 +171,7 @@ if ($metodo === 'POST' && $acao === 'registrar') {
 
     // Verifica se há saldo suficiente para abatimento/pagamento
     $st2 = $conn->prepare(
-        "SELECT tipo, SUM(minutos) AS total FROM rh_banco_horas WHERE colaborador_id = ? GROUP BY tipo"
+        "SELECT tipo, SUM(minutos) AS total FROM rh_banco_horas WHERE tenant_id = $tenant_id AND colaborador_id = ? GROUP BY tipo"
     );
     $st2->bind_param('i', $colab_id);
     $st2->execute();
@@ -212,7 +213,7 @@ if ($metodo === 'DELETE') {
     if ($id <= 0) { fechar_conexao($conn); retornar_json(false, 'ID inválido.'); exit; }
 
     // Só exclui lançamentos sem lancamento_id (manuais)
-    $st4 = $conn->prepare("DELETE FROM rh_banco_horas WHERE id=? AND lancamento_id IS NULL");
+    $st4 = $conn->prepare("DELETE FROM rh_banco_horas WHERE tenant_id = $tenant_id AND id=? AND lancamento_id IS NULL");
     $st4->bind_param('i', $id);
     $ok = $st4->execute(); $afetado = $st4->affected_rows; $st4->close();
     fechar_conexao($conn);

@@ -12,9 +12,16 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
@@ -25,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // ─── Autenticação ────────────────────────────────────────────────────────────
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 // ─── Log de debug ────────────────────────────────────────────────────────────
 function log_contrato(string $tipo, string $descricao, array $extra = []): void {
@@ -218,7 +226,7 @@ function listarContratos($db): void {
     $whereStr = implode(' AND ', $where);
 
     // Contar total
-    $sqlCount = "SELECT COUNT(*) as total FROM contratos c WHERE $whereStr";
+    $sqlCount = "SELECT COUNT(*) as total FROM contratos c WHERE tenant_id = $tenant_id AND $whereStr";
     $stmtC = $db->prepare($sqlCount);
     if (!empty($params)) $stmtC->bind_param($types, ...$params);
     $stmtC->execute();
@@ -229,8 +237,8 @@ function listarContratos($db): void {
     $sql = "SELECT c.*,
                    pc.nome AS plano_conta_nome,
                    pc.codigo AS plano_conta_codigo,
-                   (SELECT COUNT(*) FROM contrato_documentos cd WHERE cd.contrato_id = c.id AND cd.ativo = 1) AS total_documentos,
-                   (SELECT COUNT(*) FROM contrato_orcamentos co WHERE co.contrato_id = c.id) AS total_orcamentos
+                   (SELECT COUNT(*) FROM contrato_documentos cd WHERE tenant_id = $tenant_id AND cd.contrato_id = c.id AND cd.ativo = 1) AS total_documentos,
+                   (SELECT COUNT(*) FROM contrato_orcamentos co WHERE tenant_id = $tenant_id AND co.contrato_id = c.id) AS total_orcamentos
             FROM contratos c
             LEFT JOIN planos_contas pc ON c.plano_conta_id = pc.id
             WHERE $whereStr
@@ -317,7 +325,7 @@ function cadastrarContrato($db): void {
 
     // ── Gerar número sequencial ───────────────────────────────────────────────
     $ano = date('Y');
-    $stmtSeq = $db->prepare("SELECT COUNT(*) as total FROM contratos WHERE YEAR(data_criacao) = ?");
+    $stmtSeq = $db->prepare("SELECT COUNT(*) as total FROM contratos WHERE tenant_id = $tenant_id AND YEAR(data_criacao) = ?");
     $stmtSeq->bind_param('i', $ano);
     $stmtSeq->execute();
     $seq = $stmtSeq->get_result()->fetch_assoc()['total'] + 1;
@@ -536,8 +544,7 @@ function atualizarContrato($db): void {
                 tipo_servico=?, nome_contrato=?, data_inicio=?, data_fim=?,
                 recorrencia=?, valor_total=?, data_vencimento=?,
                 plano_conta_id=?, observacoes=?, status=?,
-                data_atualizacao=NOW()
-            WHERE id=? AND ativo=1";
+                data_atualizacao=NOW() WHERE tenant_id = $tenant_id AND id=? AND ativo=1";
 
     $stmt = $db->prepare($sql);
     $stmt->bind_param('isssssssdssssi',
@@ -561,7 +568,7 @@ function deletarContrato($db): void {
     $id = intval($_POST['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $db->prepare("UPDATE contratos SET ativo=0, data_atualizacao=NOW() WHERE id=?");
+    $stmt = $db->prepare("UPDATE contratos SET ativo=0, data_atualizacao=NOW() WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('i', $id);
     if (!$stmt->execute()) retornar_json(false, 'Erro ao excluir');
     $stmt->close();
@@ -587,14 +594,14 @@ function uploadDocumento($db): void {
     if (empty($tipo_doc))  retornar_json(false, 'Tipo do documento é obrigatório');
 
     // Verificar se o contrato existe
-    $chk = $db->prepare("SELECT id FROM contratos WHERE id=? AND ativo=1");
+    $chk = $db->prepare("SELECT id FROM contratos WHERE tenant_id = $tenant_id AND id=? AND ativo=1");
     $chk->bind_param('i', $contrato_id);
     $chk->execute();
     if ($chk->get_result()->num_rows === 0) retornar_json(false, 'Contrato não encontrado');
     $chk->close();
 
     // Verificar limite de 4 documentos
-    $cnt = $db->prepare("SELECT COUNT(*) as total FROM contrato_documentos WHERE contrato_id=? AND ativo=1");
+    $cnt = $db->prepare("SELECT COUNT(*) as total FROM contrato_documentos WHERE tenant_id = $tenant_id AND contrato_id=? AND ativo=1");
     $cnt->bind_param('i', $contrato_id);
     $cnt->execute();
     $total_docs = $cnt->get_result()->fetch_assoc()['total'];
@@ -674,7 +681,7 @@ function listarDocumentos($db): void {
     $contrato_id = intval($_GET['contrato_id'] ?? 0);
     if ($contrato_id <= 0) retornar_json(false, 'Contrato inválido');
 
-    $stmt = $db->prepare("SELECT * FROM contrato_documentos WHERE contrato_id=? AND ativo=1 ORDER BY data_upload ASC");
+    $stmt = $db->prepare("SELECT * FROM contrato_documentos WHERE tenant_id = $tenant_id AND contrato_id=? AND ativo=1 ORDER BY data_upload ASC");
     $stmt->bind_param('i', $contrato_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -692,7 +699,7 @@ function deletarDocumento($db): void {
     $id = intval($_POST['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $db->prepare("SELECT nome_arquivo, contrato_id FROM contrato_documentos WHERE id=? AND ativo=1");
+    $stmt = $db->prepare("SELECT nome_arquivo, contrato_id FROM contrato_documentos WHERE tenant_id = $tenant_id AND id=? AND ativo=1");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $doc = $stmt->get_result()->fetch_assoc();
@@ -701,7 +708,7 @@ function deletarDocumento($db): void {
     if (!$doc) retornar_json(false, 'Documento não encontrado');
 
     // Soft delete
-    $upd = $db->prepare("UPDATE contrato_documentos SET ativo=0 WHERE id=?");
+    $upd = $db->prepare("UPDATE contrato_documentos SET ativo=0 WHERE tenant_id = $tenant_id AND id=?");
     $upd->bind_param('i', $id);
     $upd->execute();
     $upd->close();
@@ -736,7 +743,7 @@ function salvarOrcamento($db): void {
 
     // Verificar se o valor do orçamento é maior que o valor do contrato
     // e se a justificativa foi preenchida
-    $stmtC = $db->prepare("SELECT valor_total FROM contratos WHERE id=? AND ativo=1");
+    $stmtC = $db->prepare("SELECT valor_total FROM contratos WHERE tenant_id = $tenant_id AND id=? AND ativo=1");
     $stmtC->bind_param('i', $contrato_id);
     $stmtC->execute();
     $contrato = $stmtC->get_result()->fetch_assoc();
@@ -748,7 +755,7 @@ function salvarOrcamento($db): void {
 
     if ($id > 0) {
         // Atualizar
-        $stmt = $db->prepare("UPDATE contrato_orcamentos SET fornecedor=?, descricao=?, valor=?, justificativa=? WHERE id=? AND contrato_id=?");
+        $stmt = $db->prepare("UPDATE contrato_orcamentos SET fornecedor=?, descricao=?, valor=?, justificativa=? WHERE tenant_id = $tenant_id AND id=? AND contrato_id=?");
         $stmt->bind_param('ssdsii', $fornecedor, $descricao, $valor, $justificativa, $id, $contrato_id);
     } else {
         // Inserir
@@ -761,7 +768,7 @@ function salvarOrcamento($db): void {
     $stmt->close();
 
     // Verificar se atingiu 3 orçamentos
-    $cnt = $db->prepare("SELECT COUNT(*) as total FROM contrato_orcamentos WHERE contrato_id=?");
+    $cnt = $db->prepare("SELECT COUNT(*) as total FROM contrato_orcamentos WHERE tenant_id = $tenant_id AND contrato_id=?");
     $cnt->bind_param('i', $contrato_id);
     $cnt->execute();
     $total_orc = $cnt->get_result()->fetch_assoc()['total'];
@@ -782,7 +789,7 @@ function listarOrcamentos($db): void {
     $contrato_id = intval($_GET['contrato_id'] ?? 0);
     if ($contrato_id <= 0) retornar_json(false, 'Contrato inválido');
 
-    $stmt = $db->prepare("SELECT * FROM contrato_orcamentos WHERE contrato_id=? ORDER BY valor ASC");
+    $stmt = $db->prepare("SELECT * FROM contrato_orcamentos WHERE tenant_id = $tenant_id AND contrato_id=? ORDER BY valor ASC");
     $stmt->bind_param('i', $contrato_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -803,7 +810,7 @@ function deletarOrcamento($db): void {
     $id = intval($_POST['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $db->prepare("DELETE FROM contrato_orcamentos WHERE id=?");
+    $stmt = $db->prepare("DELETE FROM contrato_orcamentos WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('i', $id);
     if (!$stmt->execute()) retornar_json(false, 'Erro ao excluir');
     $stmt->close();
@@ -850,7 +857,7 @@ function uploadOrcamentoDocumento($db): void {
     if (empty($tipo_doc))   retornar_json(false, 'Tipo do documento é obrigatório');
 
     // Verificar se o orçamento existe e obter o contrato vinculado
-    $chk = $db->prepare("SELECT contrato_id FROM contrato_orcamentos WHERE id=?");
+    $chk = $db->prepare("SELECT contrato_id FROM contrato_orcamentos WHERE tenant_id = $tenant_id AND id=?");
     $chk->bind_param('i', $orcamento_id);
     $chk->execute();
     $orc = $chk->get_result()->fetch_assoc();
@@ -984,8 +991,7 @@ function buscarFornecedores($db): void {
 
     $like = "%$q%";
     $stmt = $db->prepare("SELECT id, nome_estabelecimento AS nome, cpf_cnpj AS cnpj, email, telefone
-                          FROM fornecedores
-                          WHERE ativo=1 AND aprovado=1
+                          FROM fornecedores WHERE tenant_id = $tenant_id AND ativo=1 AND aprovado=1
                             AND (nome_estabelecimento LIKE ? OR cpf_cnpj LIKE ?)
                           ORDER BY nome_estabelecimento ASC
                           LIMIT 10");
@@ -1090,8 +1096,7 @@ function relatorioPorFornecedor($db): void {
                    SUM(c.valor_total) AS valor_total,
                    SUM(CASE WHEN c.status='ativo' THEN 1 ELSE 0 END) AS ativos,
                    SUM(CASE WHEN c.status='encerrado' THEN 1 ELSE 0 END) AS encerrados
-            FROM contratos c
-            WHERE c.ativo=1
+            FROM contratos c WHERE tenant_id = $tenant_id AND c.ativo=1
             GROUP BY c.fornecedor_nome, c.fornecedor_cnpj
             ORDER BY valor_total DESC";
 

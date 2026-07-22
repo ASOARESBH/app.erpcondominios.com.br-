@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 
 echo "=== TESTE DE DADOS ===\n\n";
 

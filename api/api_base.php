@@ -62,13 +62,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';
 
 // =====================================================
 // 4. CONSTANTES GLOBAIS
 // =====================================================
 
-define('API_VERSION', '2.0.0');
-define('API_TIMEOUT', 7200); // 2 horas
+define('API_VERSION', '3.0.0'); // Multi-Tenant
+define('API_TIMEOUT', 28800); // 8 horas
 define('API_LOG_DIR', '/var/log/erp_api/');
 
 // Criar diretório de logs se não existir
@@ -113,6 +114,7 @@ class ApiBase {
     protected $requer_autenticacao = true;
     protected $tipo_usuario = null; // 'morador', 'fornecedor', 'admin', etc
     protected $usuario_id = null;
+    protected $tenant_id = null;   // MULTI-TENANT: ID do condomínio ativo
     protected $inicio_requisicao = null;
     
     /**
@@ -162,6 +164,13 @@ class ApiBase {
         
         // Armazenar ID do usuário
         $this->usuario_id = $_SESSION['usuario_id'];
+
+        // MULTI-TENANT: Resolver e armazenar tenant_id
+        $tenant_id = $_SESSION['tenant_id'] ?? null;
+        if (empty($tenant_id)) {
+            $tenant_id = _tentarResolverTenantLegado((int)$this->usuario_id);
+        }
+        $this->tenant_id = $tenant_id ? (int)$tenant_id : 1;
         
         // Verificar tipo de usuário se especificado
         if ($this->tipo_usuario !== null) {
@@ -523,17 +532,41 @@ class ApiBase {
     protected function getUsuarioId() {
         return $this->usuario_id ?? $_SESSION['usuario_id'] ?? null;
     }
+
+    /**
+     * MULTI-TENANT: Obter tenant_id do condomínio ativo
+     * Usar em todas as queries SQL: AND tenant_id = $this->getTenantId()
+     */
+    protected function getTenantId(): int {
+        if ($this->tenant_id) return $this->tenant_id;
+        $id = $_SESSION['tenant_id'] ?? 1;
+        $this->tenant_id = (int)$id;
+        return $this->tenant_id;
+    }
+
+    /**
+     * MULTI-TENANT: Retorna dados do tenant ativo
+     */
+    protected function getTenant(): array {
+        return [
+            'id'    => $this->getTenantId(),
+            'slug'  => $_SESSION['tenant_slug']  ?? '',
+            'nome'  => $_SESSION['tenant_nome']  ?? '',
+            'plano' => $_SESSION['tenant_plano'] ?? 'basico',
+        ];
+    }
     
     /**
      * Obter dados do usuário logado
      */
     protected function getUsuario() {
         return [
-            'id' => $_SESSION['usuario_id'] ?? null,
-            'nome' => $_SESSION['usuario_nome'] ?? null,
-            'email' => $_SESSION['usuario_email'] ?? null,
-            'tipo' => $_SESSION['usuario_tipo'] ?? null,
-            'permissao' => $_SESSION['usuario_permissao'] ?? null
+            'id'        => $_SESSION['usuario_id']        ?? null,
+            'nome'      => $_SESSION['usuario_nome']       ?? null,
+            'email'     => $_SESSION['usuario_email']      ?? null,
+            'tipo'      => $_SESSION['usuario_tipo']       ?? null,
+            'permissao' => $_SESSION['usuario_permissao']  ?? null,
+            'tenant_id' => $this->getTenantId(),
         ];
     }
     

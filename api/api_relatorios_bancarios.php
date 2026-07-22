@@ -69,7 +69,7 @@ function _extrato($db) {
         COALESCE(SUM(CASE WHEN mb.tipo='credito' THEN mb.valor ELSE 0 END),0) AS total_credito,
         COALESCE(SUM(CASE WHEN mb.tipo='debito'  THEN mb.valor ELSE 0 END),0) AS total_debito,
         COUNT(*) AS total_registros
-        FROM movimentacoes_bancarias mb WHERE $where")->fetch_assoc();
+        FROM movimentacoes_bancarias mb WHERE tenant_id = $tenant_id AND $where")->fetch_assoc();
 
     $sql = "SELECT
                 mb.id, mb.conta_id, mb.data_lancamento, mb.tipo, mb.valor,
@@ -118,8 +118,7 @@ function _fluxo_caixa($db) {
         DATE_FORMAT(mb.data_lancamento, '%b/%Y') AS mes_label,
         COALESCE(SUM(CASE WHEN mb.tipo='credito' THEN mb.valor ELSE 0 END),0) AS entradas,
         COALESCE(SUM(CASE WHEN mb.tipo='debito'  THEN mb.valor ELSE 0 END),0) AS saidas
-        FROM movimentacoes_bancarias mb
-        WHERE mb.data_lancamento >= DATE_FORMAT(
+        FROM movimentacoes_bancarias mb WHERE tenant_id = $tenant_id AND mb.data_lancamento >= DATE_FORMAT(
             DATE_SUB(CURDATE(), INTERVAL ($meses - 1) MONTH), '%Y-%m-01')
           $where_cb
         GROUP BY DATE_FORMAT(mb.data_lancamento,'%Y-%m')
@@ -132,10 +131,10 @@ function _fluxo_caixa($db) {
     for ($i = 0; $i < $meses; $i++) {
         $mes_dt = date('Y-m', strtotime("-" . ($meses - 1 - $i) . " months"));
         $cr = (float)$db->query("SELECT COALESCE(SUM(valor_original),0) AS v
-            FROM contas_receber WHERE ativo=1 AND status IN('PENDENTE','PARCIAL')
+            FROM contas_receber WHERE tenant_id = $tenant_id AND ativo=1 AND status IN('PENDENTE','PARCIAL')
             AND DATE_FORMAT(data_vencimento,'%Y-%m') = '$mes_dt'")->fetch_assoc()['v'];
         $cp = (float)$db->query("SELECT COALESCE(SUM(valor_original),0) AS v
-            FROM contas_pagar WHERE ativo=1 AND status IN('PENDENTE','PARCIAL')
+            FROM contas_pagar WHERE tenant_id = $tenant_id AND ativo=1 AND status IN('PENDENTE','PARCIAL')
             AND DATE_FORMAT(data_vencimento,'%Y-%m') = '$mes_dt'")->fetch_assoc()['v'];
         $previsao[] = [
             'mes'               => $mes_dt,
@@ -146,8 +145,8 @@ function _fluxo_caixa($db) {
 
     // Saldo acumulado (bancário)
     $saldo_inicial = $conta_id
-        ? (float)$db->query("SELECT saldo_inicial FROM contas_bancarias WHERE id=$conta_id")->fetch_assoc()['saldo_inicial']
-        : (float)$db->query("SELECT COALESCE(SUM(saldo_inicial),0) AS s FROM contas_bancarias WHERE ativo=1")->fetch_assoc()['s'];
+        ? (float)$db->query("SELECT saldo_inicial FROM contas_bancarias WHERE tenant_id = $tenant_id AND id=$conta_id")->fetch_assoc()['saldo_inicial']
+        : (float)$db->query("SELECT COALESCE(SUM(saldo_inicial),0) AS s FROM contas_bancarias WHERE tenant_id = $tenant_id AND ativo=1")->fetch_assoc()['s'];
 
     _json(true, 'OK', [
         'realizado'     => $realizado,
@@ -172,8 +171,7 @@ function _dre($db) {
     $sql_rec = "SELECT
         COALESCE(mb.categoria, 'Sem Categoria') AS categoria,
         COALESCE(SUM(mb.valor),0) AS total
-        FROM movimentacoes_bancarias mb
-        WHERE $where AND mb.tipo = 'credito'
+        FROM movimentacoes_bancarias mb WHERE tenant_id = $tenant_id AND $where AND mb.tipo = 'credito'
         GROUP BY mb.categoria
         ORDER BY total DESC";
     $receitas = $db->query($sql_rec)->fetch_all(MYSQLI_ASSOC);
@@ -182,8 +180,7 @@ function _dre($db) {
     $sql_des = "SELECT
         COALESCE(mb.categoria, 'Sem Categoria') AS categoria,
         COALESCE(SUM(mb.valor),0) AS total
-        FROM movimentacoes_bancarias mb
-        WHERE $where AND mb.tipo = 'debito'
+        FROM movimentacoes_bancarias mb WHERE tenant_id = $tenant_id AND $where AND mb.tipo = 'debito'
         GROUP BY mb.categoria
         ORDER BY total DESC";
     $despesas = $db->query($sql_des)->fetch_all(MYSQLI_ASSOC);

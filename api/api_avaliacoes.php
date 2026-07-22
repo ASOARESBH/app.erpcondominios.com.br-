@@ -13,6 +13,9 @@ if (!function_exists('retornar_json')) {
 header('Content-Type: application/json; charset=utf-8');
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';
+$conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 function resposta($sucesso, $mensagem, $dados = null) {
     echo json_encode(['sucesso' => $sucesso, 'mensagem' => $mensagem, 'dados' => $dados], JSON_UNESCAPED_UNICODE);

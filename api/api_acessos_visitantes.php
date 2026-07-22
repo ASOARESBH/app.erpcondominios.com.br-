@@ -6,6 +6,7 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -19,7 +20,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -47,7 +54,7 @@ if (empty($auth_header_av)) {
 if (preg_match('/Bearer\s+(.+)$/i', $auth_header_av, $m_av)) {
     $bearer_av = trim($m_av[1]);
     $cx_av = conectar_banco();
-    $st_av = $cx_av->prepare("SELECT morador_id FROM sessoes_portal WHERE token = ? AND ativo = 1 AND data_expiracao > NOW() LIMIT 1");
+    $st_av = $cx_av->prepare("SELECT morador_id FROM sessoes_portal WHERE tenant_id = $tenant_id AND token = ? AND ativo = 1 AND data_expiracao > NOW() LIMIT 1");
     $st_av->bind_param('s', $bearer_av);
     $st_av->execute();
     $rr_av = $st_av->get_result();
@@ -60,6 +67,7 @@ if (preg_match('/Bearer\s+(.+)$/i', $auth_header_av, $m_av)) {
 
 if ($metodo !== 'GET' && !$portal_morador_id) {
     verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 }
 
 $conexao = conectar_banco();
@@ -240,7 +248,7 @@ if ($metodo === 'POST') {
         $acesso_id = $conexao->insert_id;
         
         // Buscar dados do visitante para log
-        $stmt_visitante = $conexao->prepare("SELECT nome_completo FROM visitantes WHERE id = ?");
+        $stmt_visitante = $conexao->prepare("SELECT nome_completo FROM visitantes WHERE tenant_id = $tenant_id AND id = ?");
         $stmt_visitante->bind_param("i", $visitante_id);
         $stmt_visitante->execute();
         $visitante = $stmt_visitante->get_result()->fetch_assoc();
@@ -262,7 +270,7 @@ if ($metodo === 'POST') {
         
         // Atualizar acesso com ID do registro
         if ($registro_acesso_id) {
-            $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET registro_acesso_id = ? WHERE id = ?");
+            $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET registro_acesso_id = ? WHERE tenant_id = $tenant_id AND id = ?");
             $stmt_update->bind_param("ii", $registro_acesso_id, $acesso_id);
             $stmt_update->execute();
         }
@@ -353,7 +361,7 @@ if ($metodo === 'PUT') {
     $valores[] = $id;
     $types .= "i";
     
-    $sql = "UPDATE acessos_visitantes SET " . implode(", ", $campos) . " WHERE id = ?";
+    $sql = "UPDATE acessos_visitantes SET " . implode(", ", $campos) . " WHERE tenant_id = $tenant_id AND id = ?";
     $stmt = $conexao->prepare($sql);
     $stmt->bind_param($types, ...$valores);
     
@@ -401,7 +409,7 @@ if ($metodo === 'DELETE') {
     }
     
     // Excluir
-    $stmt = $conexao->prepare("DELETE FROM acessos_visitantes WHERE id = ?");
+    $stmt = $conexao->prepare("DELETE FROM acessos_visitantes WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     
     if ($stmt->execute()) {
@@ -505,7 +513,7 @@ if ($metodo === 'GET' && $action === 'gerar_qrcode') {
     
     // Salvar no banco (opcional)
     error_log("[DEBUG QR] Salvando QR Code no banco de dados...");
-    $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET qr_code_imagem = ? WHERE id = ?");
+    $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET qr_code_imagem = ? WHERE tenant_id = $tenant_id AND id = ?");
     $stmt_update->bind_param("si", $qr_base64, $id);
     
     if (!$stmt_update->execute()) {

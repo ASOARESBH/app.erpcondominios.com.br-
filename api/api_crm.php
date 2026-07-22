@@ -22,6 +22,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 ob_end_clean();
 
@@ -63,7 +64,8 @@ define('CRM_MIME_ACEITOS', [
 
 if (!is_dir(CRM_UPLOAD_DIR)) mkdir(CRM_UPLOAD_DIR, 0755, true);
 
-try { verificarAutenticacao(true, 'operador'); }
+try { verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId(); }
 catch (Exception $e) { retornar_json(false, 'Não autenticado'); }
 
 $metodo = $_SERVER['REQUEST_METHOD'];

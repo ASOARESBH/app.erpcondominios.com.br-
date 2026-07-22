@@ -17,11 +17,13 @@
 // ── Bootstrap ─────────────────────────────────────────────────
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 $conn    = conectar_banco();
 // Autenticação opcional: não bloqueia a abertura em nova aba
 // (sessão PHP pode não estar disponível em nova aba/janela)
 $usuario = verificarAutenticacao(false);
+$tenant_id = exigirTenantId();
 if ($usuario === false) {
     $usuario = ['nome' => 'Sistema', 'id' => null];
 }

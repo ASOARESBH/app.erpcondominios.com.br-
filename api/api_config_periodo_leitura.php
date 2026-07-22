@@ -6,6 +6,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -24,10 +25,11 @@ header('Cache-Control: no-cache, must-revalidate');
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // ========== BUSCAR CONFIGURAÇÃO ATUAL ==========
 if ($metodo === 'GET') {
-    $sql = "SELECT * FROM config_periodo_leitura WHERE ativo = 1 LIMIT 1";
+    $sql = "SELECT * FROM config_periodo_leitura WHERE tenant_id = $tenant_id AND ativo = 1 LIMIT 1";
     $resultado = $conexao->query($sql);
     
     if ($resultado && $resultado->num_rows > 0) {
@@ -75,7 +77,7 @@ if ($metodo === 'POST') {
     }
     
     // Verificar se já existe configuração
-    $sql_check = "SELECT id FROM config_periodo_leitura WHERE ativo = 1 LIMIT 1";
+    $sql_check = "SELECT id FROM config_periodo_leitura WHERE tenant_id = $tenant_id AND ativo = 1 LIMIT 1";
     $resultado_check = $conexao->query($sql_check);
     
     if ($resultado_check && $resultado_check->num_rows > 0) {
@@ -83,7 +85,7 @@ if ($metodo === 'POST') {
         $config = $resultado_check->fetch_assoc();
         $config_id = $config['id'];
         
-        $stmt = $conexao->prepare("UPDATE config_periodo_leitura SET dia_inicio = ?, dia_fim = ?, morador_pode_lancar = ? WHERE id = ?");
+        $stmt = $conexao->prepare("UPDATE config_periodo_leitura SET dia_inicio = ?, dia_fim = ?, morador_pode_lancar = ? WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("iiii", $dia_inicio, $dia_fim, $morador_pode_lancar, $config_id);
         
         if ($stmt->execute()) {

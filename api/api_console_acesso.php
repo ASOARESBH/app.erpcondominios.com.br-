@@ -5,7 +5,13 @@
  */
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
@@ -16,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'funcoes_log.php';
 
 // Função auxiliar para retornar JSON
@@ -361,8 +368,7 @@ if ($metodo === 'GET' && $action === 'estatisticas') {
     // Acessos ativos agora
     $hora_atual = date('H:i:s');
     $stmt_ativos = $conexao->prepare("
-        SELECT COUNT(*) as total FROM acessos_visitantes
-        WHERE ativo = 1 
+        SELECT COUNT(*) as total FROM acessos_visitantes WHERE tenant_id = $tenant_id AND ativo = 1 
         AND ? BETWEEN data_inicial AND data_final
         AND (temporario = 0 OR (temporario = 1 AND ? BETWEEN hora_inicial AND hora_final))
     ");

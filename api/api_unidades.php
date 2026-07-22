@@ -6,6 +6,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -24,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 $metodo  = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // Usuário autenticado (best-effort, apenas para fins de auditoria em logs_sistema;
 // não bloqueia a requisição caso não haja sessão ativa).
@@ -34,7 +36,7 @@ $usuarioAtual  = $usuarioLogado['nome'] ?? null;
 // HELPER: Auto-popular Gleba 1-187 + ADMINISTRATIVO
 // ============================================================
 function garantir_unidades_padrao($conexao) {
-    $result = $conexao->query("SELECT COUNT(*) as total FROM unidades WHERE bloco = 'Gleba'");
+    $result = $conexao->query("SELECT COUNT(*) as total FROM unidades WHERE tenant_id = $tenant_id AND bloco = 'Gleba'");
     $row    = $result->fetch_assoc();
     if (intval($row['total']) >= 187) return;
     for ($i = 1; $i <= 187; $i++) {
@@ -63,7 +65,7 @@ if ($metodo === 'GET') {
 
     // Para selects/dropdowns (retorna id + nome ordenado numericamente)
     if ($acao === 'select' || isset($_GET['select'])) {
-        $sql = "SELECT id, nome, bloco FROM unidades WHERE ativo = 1
+        $sql = "SELECT id, nome, bloco FROM unidades WHERE tenant_id = $tenant_id AND ativo = 1
                 ORDER BY
                     CASE WHEN bloco = 'ADMIN' THEN 9999 ELSE CAST(SUBSTRING_INDEX(nome, ' ', -1) AS UNSIGNED) END ASC,
                     nome ASC";
@@ -118,8 +120,8 @@ if ($metodo === 'GET') {
     // Registros
     $sql = "SELECT id, nome, descricao, bloco, ativo,
                    DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro_fmt,
-                   (SELECT COUNT(*) FROM moradores WHERE unidade = unidades.nome) as total_moradores,
-                   (SELECT COUNT(*) FROM hidrometros WHERE unidade = unidades.nome) as total_hidrometros
+                   (SELECT COUNT(*) FROM moradores WHERE tenant_id = $tenant_id AND unidade = unidades.nome) as total_moradores,
+                   (SELECT COUNT(*) FROM hidrometros WHERE tenant_id = $tenant_id AND unidade = unidades.nome) as total_hidrometros
             FROM unidades $where
             ORDER BY
                 CASE WHEN bloco = 'ADMIN' THEN 9999 ELSE CAST(SUBSTRING_INDEX(nome, ' ', -1) AS UNSIGNED) END ASC,
@@ -158,7 +160,7 @@ if ($metodo === 'POST') {
 
     if (empty($nome)) retornar_json(false, "Nome da unidade é obrigatório");
 
-    $stmt = $conexao->prepare("SELECT id FROM unidades WHERE nome = ?");
+    $stmt = $conexao->prepare("SELECT id FROM unidades WHERE tenant_id = $tenant_id AND nome = ?");
     $stmt->bind_param("s", $nome);
     $stmt->execute();
     $stmt->store_result();
@@ -189,7 +191,7 @@ if ($metodo === 'PUT') {
     if ($id <= 0) retornar_json(false, "ID inválido");
     if (empty($nome)) retornar_json(false, "Nome da unidade é obrigatório");
 
-    $stmt = $conexao->prepare("SELECT id FROM unidades WHERE nome = ? AND id != ?");
+    $stmt = $conexao->prepare("SELECT id FROM unidades WHERE tenant_id = $tenant_id AND nome = ? AND id != ?");
     $stmt->bind_param("si", $nome, $id);
     $stmt->execute();
     $stmt->store_result();
@@ -197,7 +199,7 @@ if ($metodo === 'PUT') {
     $stmt->close();
 
     // Buscar valores antigos (para auditoria e para propagar renomeação)
-    $stmt = $conexao->prepare("SELECT nome, descricao, bloco, ativo FROM unidades WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT nome, descricao, bloco, ativo FROM unidades WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -206,14 +208,14 @@ if ($metodo === 'PUT') {
     if (!$antiga) retornar_json(false, "Unidade não encontrada");
     $nome_antigo = $antiga['nome'];
 
-    $stmt = $conexao->prepare("UPDATE unidades SET nome = ?, descricao = ?, bloco = ?, ativo = ? WHERE id = ?");
+    $stmt = $conexao->prepare("UPDATE unidades SET nome = ?, descricao = ?, bloco = ?, ativo = ? WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("sssii", $nome, $descricao, $bloco, $ativo, $id);
     if ($stmt->execute()) {
         // Propagar renomeação para moradores e hidrometros
         if ($nome_antigo !== $nome) {
-            $s = $conexao->prepare("UPDATE moradores SET unidade = ? WHERE unidade = ?");
+            $s = $conexao->prepare("UPDATE moradores SET unidade = ? WHERE tenant_id = $tenant_id AND unidade = ?");
             $s->bind_param("ss", $nome, $nome_antigo); $s->execute(); $s->close();
-            $s = $conexao->prepare("UPDATE hidrometros SET unidade = ? WHERE unidade = ?");
+            $s = $conexao->prepare("UPDATE hidrometros SET unidade = ? WHERE tenant_id = $tenant_id AND unidade = ?");
             $s->bind_param("ss", $nome, $nome_antigo); $s->execute(); $s->close();
         }
 
@@ -243,7 +245,7 @@ if ($metodo === 'PATCH') {
     $ativo = intval($dados['ativo'] ?? 0);
     if ($id <= 0) retornar_json(false, "ID inválido");
 
-    $stmt = $conexao->prepare("UPDATE unidades SET ativo = ? WHERE id = ?");
+    $stmt = $conexao->prepare("UPDATE unidades SET ativo = ? WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("ii", $ativo, $id);
     if ($stmt->execute()) {
         $status = $ativo ? 'ativada' : 'inativada';
@@ -261,7 +263,7 @@ if ($metodo === 'DELETE') {
     $id    = intval($dados['id'] ?? 0);
     if ($id <= 0) retornar_json(false, "ID inválido");
 
-    $stmt = $conexao->prepare("SELECT nome FROM unidades WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT nome FROM unidades WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -271,17 +273,17 @@ if ($metodo === 'DELETE') {
     $nome = $unidade['nome'];
 
     // Verificar vínculos
-    $stmt = $conexao->prepare("SELECT COUNT(*) as t FROM moradores WHERE unidade = ?");
+    $stmt = $conexao->prepare("SELECT COUNT(*) as t FROM moradores WHERE tenant_id = $tenant_id AND unidade = ?");
     $stmt->bind_param("s", $nome); $stmt->execute();
     $tm = $stmt->get_result()->fetch_assoc()['t']; $stmt->close();
     if ($tm > 0) retornar_json(false, "Não é possível excluir. $tm morador(es) vinculado(s) a '$nome'.");
 
-    $stmt = $conexao->prepare("SELECT COUNT(*) as t FROM hidrometros WHERE unidade = ?");
+    $stmt = $conexao->prepare("SELECT COUNT(*) as t FROM hidrometros WHERE tenant_id = $tenant_id AND unidade = ?");
     $stmt->bind_param("s", $nome); $stmt->execute();
     $th = $stmt->get_result()->fetch_assoc()['t']; $stmt->close();
     if ($th > 0) retornar_json(false, "Não é possível excluir. $th hidrômetro(s) vinculado(s) a '$nome'.");
 
-    $stmt = $conexao->prepare("DELETE FROM unidades WHERE id = ?");
+    $stmt = $conexao->prepare("DELETE FROM unidades WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     if ($stmt->execute()) {
         registrar_log('INFO', "Unidade excluída: $nome (ID: $id)", $usuarioAtual);

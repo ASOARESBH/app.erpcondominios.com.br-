@@ -5,11 +5,13 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 $acao = $_GET['acao'] ?? $_POST['acao'] ?? '';
 $metodo = $_SERVER['REQUEST_METHOD'];
 
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // ========== LISTAR PLANOS DE CONTAS ==========
 if ($acao === 'listar' && $metodo === 'GET') {
@@ -17,7 +19,7 @@ if ($acao === 'listar' && $metodo === 'GET') {
     $categoria = $_GET['categoria'] ?? '';
     $ativo = $_GET['ativo'] ?? 1;
     
-    $sql = "SELECT * FROM planos_contas WHERE ativo = ?";
+    $sql = "SELECT * FROM planos_contas WHERE tenant_id = $tenant_id AND ativo = ?";
     $params = [$ativo];
     $types = "i";
     
@@ -59,7 +61,7 @@ if ($acao === 'buscar' && $metodo === 'GET') {
         retornar_json(false, 'ID inválido');
     }
     
-    $stmt = $conexao->prepare("SELECT * FROM planos_contas WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT * FROM planos_contas WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -102,7 +104,7 @@ if ($acao === 'cadastrar' && $metodo === 'POST') {
     }
     
     // Verificar se código já existe
-    $stmt_check = $conexao->prepare("SELECT id FROM planos_contas WHERE codigo = ?");
+    $stmt_check = $conexao->prepare("SELECT id FROM planos_contas WHERE tenant_id = $tenant_id AND codigo = ?");
     $stmt_check->bind_param("s", $codigo);
     $stmt_check->execute();
     $result_check = $stmt_check->get_result();
@@ -200,7 +202,7 @@ if ($acao === 'deletar' && $metodo === 'POST') {
 
 // ========== LISTAR CATEGORIAS ==========
 if ($acao === 'categorias' && $metodo === 'GET') {
-    $stmt = $conexao->prepare("SELECT DISTINCT categoria FROM planos_contas WHERE ativo = 1 AND categoria IS NOT NULL ORDER BY categoria");
+    $stmt = $conexao->prepare("SELECT DISTINCT categoria FROM planos_contas WHERE tenant_id = $tenant_id AND ativo = 1 AND categoria IS NOT NULL ORDER BY categoria");
     $stmt->execute();
     $result = $stmt->get_result();
     

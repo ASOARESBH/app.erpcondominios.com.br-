@@ -5,6 +5,7 @@
  */
 
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 
 echo "<h1>Teste de Login de Moradores</h1>";
 echo "<hr>";

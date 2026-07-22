@@ -18,7 +18,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -31,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 session_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // ============================================================
 // ANTI-DUPLICIDADE: verificação de chave de idempotência
@@ -73,6 +80,7 @@ function verificarIdempotencia($action) {
 
 // Verificar autenticação
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 // Configuração do banco de dados
 $conn = conectar_banco();
@@ -163,7 +171,7 @@ if ($metodo === 'POST') {
 
 function listarVeiculos($conn) {
     try {
-        $sql = "SELECT * FROM abastecimento_veiculos ORDER BY data_cadastro DESC";
+        $sql = "SELECT * FROM abastecimento_veiculos WHERE tenant_id = $tenant_id ORDER BY data_cadastro DESC";
         $result = $conn->query($sql);
         
         $veiculos = [];
@@ -189,7 +197,7 @@ function cadastrarVeiculo($conn, $dados) {
         $placa = strtoupper(trim($dados['placa']));
         
         // Verificar se placa já existe
-        $stmt = $conn->prepare("SELECT id FROM abastecimento_veiculos WHERE placa = ?");
+        $stmt = $conn->prepare("SELECT id FROM abastecimento_veiculos WHERE tenant_id = $tenant_id AND placa = ?");
         $stmt->bind_param("s", $placa);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -557,7 +565,7 @@ function recalcularSaldo($conn) {
 
 function listarUsuarios($conn) {
     try {
-        $sql = "SELECT id, nome, email FROM usuarios WHERE ativo = 1 ORDER BY nome";
+        $sql = "SELECT id, nome, email FROM usuarios WHERE tenant_id = $tenant_id AND ativo = 1 ORDER BY nome";
         $result = $conn->query($sql);
         
         $usuarios = [];

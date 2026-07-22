@@ -18,6 +18,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 require_once 'rh_ponto_core.php';
 ob_end_clean();
@@ -42,7 +43,8 @@ if (!function_exists('retornar_json')) {
     }
 }
 
-try { verificarAutenticacao(true, 'operador'); }
+try { verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId(); }
 catch (Exception $e) { retornar_json(false, 'Não autenticado'); }
 
 $metodo = $_SERVER['REQUEST_METHOD'];
@@ -223,8 +225,7 @@ if ($acao === 'listar_lancamentos') {
                     TIME_FORMAT(l.hora_saida, '%H:%i')          as hs,
                     DATE_FORMAT(l.data, '%d/%m/%Y')             as data_fmt,
                     DAYNAME(l.data)                             as dia_semana
-             FROM rh_ponto_lancamento l
-             WHERE l.periodo_id = ?
+             FROM rh_ponto_lancamento l WHERE tenant_id = $tenant_id AND l.periodo_id = ?
                AND l.data BETWEEN ? AND ?
              ORDER BY l.data ASC"
         );
@@ -239,8 +240,7 @@ if ($acao === 'listar_lancamentos') {
                     TIME_FORMAT(l.hora_saida, '%H:%i')          as hs,
                     DATE_FORMAT(l.data, '%d/%m/%Y')             as data_fmt,
                     DAYNAME(l.data)                             as dia_semana
-             FROM rh_ponto_lancamento l
-             WHERE l.periodo_id = ?
+             FROM rh_ponto_lancamento l WHERE tenant_id = $tenant_id AND l.periodo_id = ?
              ORDER BY l.data ASC"
         );
         $stmt->bind_param('i', $periodo_id);
@@ -273,7 +273,7 @@ if ($acao === 'salvar_lancamento' && $metodo === 'POST') {
     $calc   = _calcular_minutos($he, $has, $har, $hs, $tipo_dia, $escala, $data);
 
     // Verificar se já existe lançamento para esta data/período (UPSERT)
-    $existe = $conn->prepare("SELECT id FROM rh_ponto_lancamento WHERE periodo_id=? AND data=?");
+    $existe = $conn->prepare("SELECT id FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND periodo_id=? AND data=?");
     $existe->bind_param('is', $periodo_id, $data); $existe->execute();
     $existe->store_result();
     $is_update = $existe->num_rows > 0;
@@ -283,8 +283,7 @@ if ($acao === 'salvar_lancamento' && $metodo === 'POST') {
         $stmt = $conn->prepare(
             "UPDATE rh_ponto_lancamento SET
              hora_entrada=?,hora_almoco_saida=?,hora_almoco_retorno=?,hora_saida=?,
-             tipo_dia=?,horas_trabalhadas_min=?,horas_extras_min=?,atraso_min=?,saida_antecipada_min=?,observacoes=?
-             WHERE periodo_id=? AND data=?"
+             tipo_dia=?,horas_trabalhadas_min=?,horas_extras_min=?,atraso_min=?,saida_antecipada_min=?,observacoes=? WHERE tenant_id = $tenant_id AND periodo_id=? AND data=?"
         );
         $stmt->bind_param('sssssiiiisis',
             $he,$has,$har,$hs,$tipo_dia,
@@ -310,7 +309,7 @@ if ($acao === 'salvar_lancamento' && $metodo === 'POST') {
     if (!$is_update) {
         $lancamento_id_bh = intval($conn->insert_id);
     } else {
-        $ridRow = $conn->query("SELECT id FROM rh_ponto_lancamento WHERE periodo_id=$periodo_id AND data='$data' LIMIT 1");
+        $ridRow = $conn->query("SELECT id FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND periodo_id=$periodo_id AND data='$data' LIMIT 1");
         if ($ridRow) { $ridR = $ridRow->fetch_assoc(); $lancamento_id_bh = intval($ridR['id'] ?? 0); }
     }
     $stmt->close();
@@ -327,7 +326,7 @@ if ($acao === 'salvar_lancamento' && $metodo === 'POST') {
         $prevDate = date('Y-m-d', strtotime($data . ' -1 day'));
         $sp = $conn->prepare(
             "SELECT id, hora_entrada, hora_almoco_saida, hora_almoco_retorno, hora_saida, tipo_dia, periodo_id
-             FROM rh_ponto_lancamento WHERE colaborador_id=? AND data=? LIMIT 1"
+             FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND colaborador_id=? AND data=? LIMIT 1"
         );
         $sp->bind_param('is', $colab_id, $prevDate);
         $sp->execute();
@@ -345,7 +344,7 @@ if ($acao === 'salvar_lancamento' && $metodo === 'POST') {
                 $prevDate
             );
             $prevRowId = intval($prevRow['id']);
-            $su = $conn->prepare("UPDATE rh_ponto_lancamento SET horas_trabalhadas_min=?, horas_extras_min=?, atraso_min=?, saida_antecipada_min=? WHERE id=?");
+            $su = $conn->prepare("UPDATE rh_ponto_lancamento SET horas_trabalhadas_min=?, horas_extras_min=?, atraso_min=?, saida_antecipada_min=? WHERE tenant_id = $tenant_id AND id=?");
             $su->bind_param('iiiii', $prevCalc['trabalhadas'], $prevCalc['extras'], $prevCalc['atraso'], $prevCalc['saida_antecipada'], $prevRowId);
             $su->execute();
             $su->close();
@@ -364,11 +363,11 @@ if ($acao === 'excluir_lancamento' && $metodo === 'DELETE') {
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
     // Pega periodo_id antes de excluir
-    $p = $conn->prepare("SELECT periodo_id FROM rh_ponto_lancamento WHERE id=?");
+    $p = $conn->prepare("SELECT periodo_id FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND id=?");
     $p->bind_param('i',$id); $p->execute();
     $pr = $p->get_result()->fetch_assoc(); $p->close();
 
-    $stmt = $conn->prepare("DELETE FROM rh_ponto_lancamento WHERE id=?");
+    $stmt = $conn->prepare("DELETE FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('i',$id); $ok = $stmt->execute(); $stmt->close();
 
     if ($ok && $pr) _recalcular_totais($conn, $pr['periodo_id']);
@@ -392,13 +391,13 @@ if ($acao === 'recalcular_lancamentos' && $metodo === 'POST') {
 
     $res = $conn->query(
         "SELECT id, data, hora_entrada, hora_almoco_saida, hora_almoco_retorno, hora_saida, tipo_dia
-         FROM rh_ponto_lancamento WHERE periodo_id = $periodo_id ORDER BY data ASC"
+         FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND periodo_id = $periodo_id ORDER BY data ASC"
     );
     $rows = [];
     while ($r = $res->fetch_assoc()) $rows[] = $r;
 
     $stmtUpd = $conn->prepare(
-        "UPDATE rh_ponto_lancamento SET horas_trabalhadas_min=?, horas_extras_min=?, atraso_min=?, saida_antecipada_min=? WHERE id=?"
+        "UPDATE rh_ponto_lancamento SET horas_trabalhadas_min=?, horas_extras_min=?, atraso_min=?, saida_antecipada_min=? WHERE tenant_id = $tenant_id AND id=?"
     );
 
     $atualizados = 0;
@@ -464,9 +463,8 @@ if ($acao === 'recalcular_lancamentos' && $metodo === 'POST') {
             $colabId = intval($rowP['colaborador_id']);
             $nextQ   = $conn->prepare(
                 "SELECT id, hora_entrada, hora_saida, hora_almoco_saida, hora_almoco_retorno, tipo_dia, periodo_id
-                 FROM rh_ponto_lancamento
-                 WHERE colaborador_id = ?
-                   AND data = DATE_ADD((SELECT data FROM rh_ponto_lancamento WHERE id = ?), INTERVAL 1 DAY)
+                 FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND colaborador_id = ?
+                   AND data = DATE_ADD((SELECT data FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND id = ?), INTERVAL 1 DAY)
                  LIMIT 1"
             );
             $nextQ->bind_param('ii', $colabId, $lastId);
@@ -662,8 +660,7 @@ function _dsr_sincronizar(
     // Busca lançamentos da semana (Seg a Dom)
     $stmt = $conn->prepare(
         "SELECT id, data, tipo_dia, DAYOFWEEK(data) AS mysql_dow
-         FROM rh_ponto_lancamento
-         WHERE colaborador_id = ? AND data BETWEEN ? AND ?
+         FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND colaborador_id = ? AND data BETWEEN ? AND ?
          ORDER BY data ASC"
     );
     if (!$stmt) return;
@@ -699,12 +696,12 @@ function _dsr_sincronizar(
     $novoTipo = $hasFalta ? 'falta' : 'folga';
 
     if ($tipoAtual !== $novoTipo) {
-        $conn->query("UPDATE rh_ponto_lancamento SET tipo_dia = '$novoTipo', horas_trabalhadas_min=0, horas_extras_min=0, atraso_min=0 WHERE id = $sunId");
+        $conn->query("UPDATE rh_ponto_lancamento SET tipo_dia = '$novoTipo', horas_trabalhadas_min=0, horas_extras_min=0, atraso_min=0 WHERE tenant_id = $tenant_id AND id = $sunId");
     }
 
     // Atualiza banco de horas do domingo (remove automáticos e recria)
     $conn->query(
-        "DELETE FROM rh_banco_horas WHERE lancamento_id = $sunId AND tipo IN ('credito','debito')"
+        "DELETE FROM rh_banco_horas WHERE tenant_id = $tenant_id AND lancamento_id = $sunId AND tipo IN ('credito','debito')"
     );
 
     if ($hasFalta) {

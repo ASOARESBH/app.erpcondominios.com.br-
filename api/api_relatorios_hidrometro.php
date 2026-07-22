@@ -14,6 +14,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -30,6 +31,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
 
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     retornar_json(false, 'Método não suportado');
@@ -83,8 +85,7 @@ if ($tipo === 'evolucao') {
                           COUNT(*) as leituras,
                           SUM(l.consumo) as consumo_total,
                           SUM(l.valor_total) as valor_total
-                   FROM leituras l
-                   WHERE $where_sql
+                   FROM leituras l WHERE tenant_id = $tenant_id AND $where_sql
                    GROUP BY mes_key
                    ORDER BY mes_key ASC";
 
@@ -107,8 +108,7 @@ if ($tipo === 'evolucao') {
                               l.unidade,
                               SUM(l.consumo) as consumo_total,
                               SUM(l.valor_total) as valor_total
-                       FROM leituras l
-                       WHERE $where_sql
+                       FROM leituras l WHERE tenant_id = $tenant_id AND $where_sql
                        GROUP BY mes_key, l.unidade
                        ORDER BY mes_key ASC";
 
@@ -160,8 +160,8 @@ if ($tipo === 'alertas') {
     // Hidrômetros ativos + última leitura já registrada (qualquer época) como fallback
     $sql_hidros = "SELECT h.id, h.unidade, h.numero_hidrometro, h.data_instalacao,
                           m.nome as morador_nome,
-                          (SELECT l2.consumo FROM leituras l2 WHERE l2.hidrometro_id = h.id ORDER BY l2.data_leitura DESC LIMIT 1) as ultima_consumo_geral,
-                          (SELECT DATE_FORMAT(l3.data_leitura, '%d/%m/%Y') FROM leituras l3 WHERE l3.hidrometro_id = h.id ORDER BY l3.data_leitura DESC LIMIT 1) as ultima_data_geral
+                          (SELECT l2.consumo FROM leituras l2 WHERE tenant_id = $tenant_id AND l2.hidrometro_id = h.id ORDER BY l2.data_leitura DESC LIMIT 1) as ultima_consumo_geral,
+                          (SELECT DATE_FORMAT(l3.data_leitura, '%d/%m/%Y') FROM leituras l3 WHERE tenant_id = $tenant_id AND l3.hidrometro_id = h.id ORDER BY l3.data_leitura DESC LIMIT 1) as ultima_data_geral
                    FROM hidrometros h
                    LEFT JOIN moradores m ON h.morador_id = m.id
                    WHERE $where_h_sql";
@@ -194,8 +194,7 @@ if ($tipo === 'alertas') {
     $where_l_sql = implode(' AND ', $where_l);
 
     $sql_leituras = "SELECT l.hidrometro_id, l.consumo, DATE_FORMAT(l.data_leitura, '%d/%m/%Y') as data_fmt, l.data_leitura
-                      FROM leituras l
-                      WHERE $where_l_sql
+                      FROM leituras l WHERE tenant_id = $tenant_id AND $where_l_sql
                       ORDER BY l.hidrometro_id ASC, l.data_leitura ASC";
     $stmt = $conexao->prepare($sql_leituras);
     $stmt->bind_param($tipos_l, ...$params_l);
@@ -318,7 +317,7 @@ if ($tipo === 'inativos') {
                    inat.data_alteracao as data_inativacao,
                    DATE_FORMAT(inat.data_alteracao, '%d/%m/%Y') as data_inativacao_fmt,
                    inat.observacao as motivo,
-                   (SELECT leitura_atual FROM leituras WHERE hidrometro_id = h.id ORDER BY data_leitura DESC LIMIT 1) as ultima_leitura
+                   (SELECT leitura_atual FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = h.id ORDER BY data_leitura DESC LIMIT 1) as ultima_leitura
             FROM hidrometros h
             LEFT JOIN moradores m ON h.morador_id = m.id
             LEFT JOIN (
@@ -326,8 +325,7 @@ if ($tipo === 'inativos') {
                 FROM hidrometros_historico hh1
                 INNER JOIN (
                     SELECT hidrometro_id, MAX(data_alteracao) as max_data
-                    FROM hidrometros_historico
-                    WHERE campo_alterado = 'ativo' AND valor_novo = '0'
+                    FROM hidrometros_historico WHERE tenant_id = $tenant_id AND campo_alterado = 'ativo' AND valor_novo = '0'
                     GROUP BY hidrometro_id
                 ) ult ON ult.hidrometro_id = hh1.hidrometro_id AND ult.max_data = hh1.data_alteracao
                 WHERE hh1.campo_alterado = 'ativo' AND hh1.valor_novo = '0'
@@ -422,7 +420,7 @@ if ($tipo === 'financeiro') {
     $sql_totais = "SELECT COUNT(*) as total_leituras, COALESCE(SUM(l.consumo),0) as consumo_total,
                           COALESCE(SUM(l.valor_total),0) as valor_total,
                           COUNT(DISTINCT l.unidade) as unidades_distintas
-                   FROM leituras l WHERE $where_sql";
+                   FROM leituras l WHERE tenant_id = $tenant_id AND $where_sql";
     if ($params) {
         $stmt = $conexao->prepare($sql_totais);
         $stmt->bind_param($tipos, ...$params);
@@ -450,7 +448,7 @@ if ($tipo === 'financeiro') {
     $sql_mensal = "SELECT DATE_FORMAT(l.data_leitura, '%Y-%m') as mes_key,
                           DATE_FORMAT(l.data_leitura, '%m/%Y') as mes_label,
                           SUM(l.consumo) as consumo_total, SUM(l.valor_total) as valor_total
-                   FROM leituras l WHERE $where_sql
+                   FROM leituras l WHERE tenant_id = $tenant_id AND $where_sql
                    GROUP BY mes_key ORDER BY mes_key ASC";
     $mensal = [];
     if ($params) {
@@ -597,16 +595,15 @@ if ($tipo === 'analitico') {
     // dados: lançamentos coletivos gravados com data_leitura idêntica).
     $sql = "SELECT h.id AS hidrometro_id, h.unidade, h.numero_hidrometro, h.ativo,
                    m.nome AS morador_nome,
-                   (SELECT la.leitura_atual FROM leituras la WHERE la.hidrometro_id = h.id AND DATE(la.data_leitura) < ?
+                   (SELECT la.leitura_atual FROM leituras la WHERE tenant_id = $tenant_id AND la.hidrometro_id = h.id AND DATE(la.data_leitura) < ?
                     ORDER BY la.data_leitura DESC, la.id DESC LIMIT 1) AS leitura_anterior,
-                   (SELECT la.data_leitura FROM leituras la WHERE la.hidrometro_id = h.id AND DATE(la.data_leitura) < ?
+                   (SELECT la.data_leitura FROM leituras la WHERE tenant_id = $tenant_id AND la.hidrometro_id = h.id AND DATE(la.data_leitura) < ?
                     ORDER BY la.data_leitura DESC, la.id DESC LIMIT 1) AS data_anterior,
-                   (SELECT lb.leitura_atual FROM leituras lb WHERE lb.hidrometro_id = h.id AND DATE(lb.data_leitura) BETWEEN ? AND ?
+                   (SELECT lb.leitura_atual FROM leituras lb WHERE tenant_id = $tenant_id AND lb.hidrometro_id = h.id AND DATE(lb.data_leitura) BETWEEN ? AND ?
                     ORDER BY lb.data_leitura DESC, lb.id DESC LIMIT 1) AS leitura_atual,
-                   (SELECT lb.data_leitura FROM leituras lb WHERE lb.hidrometro_id = h.id AND DATE(lb.data_leitura) BETWEEN ? AND ?
+                   (SELECT lb.data_leitura FROM leituras lb WHERE tenant_id = $tenant_id AND lb.hidrometro_id = h.id AND DATE(lb.data_leitura) BETWEEN ? AND ?
                     ORDER BY lb.data_leitura DESC, lb.id DESC LIMIT 1) AS data_atual,
-                   (SELECT AVG(l4.consumo) FROM leituras l4
-                    WHERE l4.hidrometro_id = h.id AND DATE(l4.data_leitura) < ?) AS consumo_medio_historico
+                   (SELECT AVG(l4.consumo) FROM leituras l4 WHERE tenant_id = $tenant_id AND l4.hidrometro_id = h.id AND DATE(l4.data_leitura) < ?) AS consumo_medio_historico
             FROM hidrometros h
             LEFT JOIN moradores m ON h.morador_id = m.id
             WHERE $where_sql";

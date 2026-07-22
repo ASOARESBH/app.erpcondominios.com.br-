@@ -29,6 +29,7 @@ if (!function_exists('retornar_json')) {
 header('Content-Type: application/json; charset=utf-8');
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para resposta JSON
 function resposta($sucesso, $mensagem, $dados = null) {

@@ -5,6 +5,7 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -18,7 +19,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -31,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Verificar autenticação
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 $acao = $_GET['acao'] ?? $_POST['acao'] ?? '';
 $metodo = $_SERVER['REQUEST_METHOD'];
@@ -49,7 +57,7 @@ if ($acao === 'listar' && $metodo === 'GET') {
     $limite = intval($_GET['limite'] ?? 50);
     $offset = intval($_GET['offset'] ?? 0);
     
-    $sql = "SELECT * FROM contas_receber WHERE ativo = 1";
+    $sql = "SELECT * FROM contas_receber WHERE tenant_id = $tenant_id AND ativo = 1";
     $params = [];
     $types = "";
     
@@ -93,7 +101,7 @@ if ($acao === 'buscar' && $metodo === 'GET') {
         retornar_json(false, 'ID inválido');
     }
     
-    $stmt = $conexao->prepare("SELECT * FROM contas_receber WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT * FROM contas_receber WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -152,7 +160,7 @@ if ($acao === 'cadastrar' && $metodo === 'POST') {
     }
     
     // Verificar se documento já existe
-    $stmt_check = $conexao->prepare("SELECT id FROM contas_receber WHERE numero_documento = ?");
+    $stmt_check = $conexao->prepare("SELECT id FROM contas_receber WHERE tenant_id = $tenant_id AND numero_documento = ?");
     $stmt_check->bind_param("s", $numero_documento);
     $stmt_check->execute();
     $result_check = $stmt_check->get_result();
@@ -222,7 +230,7 @@ if ($acao === 'receber' && $metodo === 'POST') {
     }
     
     // Buscar conta
-    $stmt_busca = $conexao->prepare("SELECT * FROM contas_receber WHERE id = ?");
+    $stmt_busca = $conexao->prepare("SELECT * FROM contas_receber WHERE tenant_id = $tenant_id AND id = ?");
     $stmt_busca->bind_param("i", $id);
     $stmt_busca->execute();
     $result_busca = $stmt_busca->get_result();
@@ -256,7 +264,7 @@ if ($acao === 'receber' && $metodo === 'POST') {
     }
     
     // Atualizar conta
-    $sql_update = "UPDATE contas_receber SET valor_recebido = ?, saldo_devedor = ?, status = ?, data_recebimento = ?, forma_pagamento = ?, data_atualizacao = NOW() WHERE id = ?";
+    $sql_update = "UPDATE contas_receber SET valor_recebido = ?, saldo_devedor = ?, status = ?, data_recebimento = ?, forma_pagamento = ?, data_atualizacao = NOW() WHERE tenant_id = $tenant_id AND id = ?";
     
     $stmt_update = $conexao->prepare($sql_update);
     $stmt_update->bind_param("ddsssi", $novo_valor_recebido, $novo_saldo, $novo_status, $data_recebimento_final, $forma_pagamento, $id);
@@ -295,7 +303,7 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
         retornar_json(false, 'Preencha todos os campos obrigatórios');
     }
 
-    $sql_upd = "UPDATE contas_receber SET numero_documento=?, morador_nome=?, unidade_numero=?, plano_conta_id=?, descricao=?, valor_original=?, data_emissao=?, data_vencimento=?, observacoes=?, data_atualizacao=NOW() WHERE id=?";
+    $sql_upd = "UPDATE contas_receber SET numero_documento=?, morador_nome=?, unidade_numero=?, plano_conta_id=?, descricao=?, valor_original=?, data_emissao=?, data_vencimento=?, observacoes=?, data_atualizacao=NOW() WHERE tenant_id = $tenant_id AND id=?";
     $stmt_upd = $conexao->prepare($sql_upd);
     $stmt_upd->bind_param('sssisdsssi',
         $numero_documento, $morador_nome, $unidade_numero, $plano_conta_id,
@@ -324,7 +332,7 @@ if ($acao === 'deletar' && $metodo === 'POST') {
         retornar_json(false, 'ID inválido');
     }
     
-    $sql_delete = "UPDATE contas_receber SET ativo = 0, data_atualizacao = NOW() WHERE id = ?";
+    $sql_delete = "UPDATE contas_receber SET ativo = 0, data_atualizacao = NOW() WHERE tenant_id = $tenant_id AND id = ?";
     
     $stmt_delete = $conexao->prepare($sql_delete);
     $stmt_delete->bind_param("i", $id);
@@ -350,11 +358,11 @@ if ($acao === 'conciliar_movimentacao' && $metodo === 'POST') {
 
     $conexao->begin_transaction();
     try {
-        $stmt = $conexao->prepare("UPDATE contas_receber SET status='RECEBIDO', data_recebimento=CURDATE() WHERE id=? AND ativo=1");
+        $stmt = $conexao->prepare("UPDATE contas_receber SET status='RECEBIDO', data_recebimento=CURDATE() WHERE tenant_id = $tenant_id AND id=? AND ativo=1");
         $stmt->bind_param('i', $titulo_id);
         $stmt->execute();
 
-        $stmt2 = $conexao->prepare("UPDATE movimentacoes_bancarias SET status='conciliado' WHERE id=?");
+        $stmt2 = $conexao->prepare("UPDATE movimentacoes_bancarias SET status='conciliado' WHERE tenant_id = $tenant_id AND id=?");
         $stmt2->bind_param('i', $mov_id);
         $stmt2->execute();
 
@@ -377,11 +385,11 @@ if ($acao === 'desfazer_conciliacao' && $metodo === 'POST') {
 
     $conexao->begin_transaction();
     try {
-        $stmt = $conexao->prepare("UPDATE contas_receber SET status='PENDENTE', data_recebimento=NULL WHERE id=? AND ativo=1");
+        $stmt = $conexao->prepare("UPDATE contas_receber SET status='PENDENTE', data_recebimento=NULL WHERE tenant_id = $tenant_id AND id=? AND ativo=1");
         $stmt->bind_param('i', $titulo_id);
         $stmt->execute();
 
-        $stmt2 = $conexao->prepare("UPDATE movimentacoes_bancarias SET status='pendente', conciliacao_id=NULL WHERE id=?");
+        $stmt2 = $conexao->prepare("UPDATE movimentacoes_bancarias SET status='pendente', conciliacao_id=NULL WHERE tenant_id = $tenant_id AND id=?");
         $stmt2->bind_param('i', $mov_id);
         $stmt2->execute();
 

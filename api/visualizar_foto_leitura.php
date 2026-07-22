@@ -20,6 +20,7 @@ if (session_status() === PHP_SESSION_NONE) {
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 ob_end_clean();
 
 $conexao = conectar_banco();
@@ -88,6 +89,7 @@ function _lf_resolver_morador_id($conexao) {
 $admin_autenticado = false;
 try {
     $usuario_admin = verificarAutenticacao(false);
+$tenant_id = exigirTenantId();
     $admin_autenticado = ($usuario_admin !== false);
 } catch (Exception $e) {
     $admin_autenticado = false;

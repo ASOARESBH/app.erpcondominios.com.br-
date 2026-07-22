@@ -45,6 +45,7 @@ echo "</pre>";
 echo "<hr><h2>🗄️ Teste de Conexão com Banco</h2>";
 
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 
 $conexao = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
@@ -78,6 +79,7 @@ if (!empty($_POST) && isset($_POST['acao']) && $_POST['acao'] == 'salvar') {
     echo "<hr><h2>🧪 Teste de Inserção</h2>";
     
     require_once 'config.php';
+require_once 'tenant_helper.php';;
     $conexao = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
     mysqli_set_charset($conexao, 'utf8mb4');
     

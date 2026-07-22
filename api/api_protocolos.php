@@ -11,12 +11,19 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Limpar buffer e definir headers
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -45,6 +52,7 @@ if (!function_exists('retornar_json')) {
 
 // Verificar autenticação
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
@@ -157,7 +165,7 @@ try {
         }
         
         // Verificar se morador existe
-        $stmt_check = $conexao->prepare("SELECT id FROM moradores WHERE id = ?");
+        $stmt_check = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt_check) {
             throw new Exception("Erro ao preparar query de verificação: " . $conexao->error);
         }
@@ -253,7 +261,7 @@ try {
             }
             
             // Verificar se já foi entregue
-            $stmt = $conexao->prepare("SELECT status FROM protocolos WHERE id = ?");
+            $stmt = $conexao->prepare("SELECT status FROM protocolos WHERE tenant_id = $tenant_id AND id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -275,8 +283,7 @@ try {
             $stmt = $conexao->prepare("UPDATE protocolos SET 
                     status = 'entregue',
                     nome_recebedor_morador = ?,
-                    data_hora_entrega = ?
-                    WHERE id = ? AND status = 'pendente'");
+                    data_hora_entrega = ? WHERE tenant_id = $tenant_id AND id = ? AND status = 'pendente'");
             
             if (!$stmt) {
                 throw new Exception("Erro ao preparar update: " . $conexao->error);
@@ -303,7 +310,7 @@ try {
             $observacao = sanitizar($conexao, $dados['observacao'] ?? '');
             
             // Verificar se já foi entregue
-            $stmt = $conexao->prepare("SELECT status FROM protocolos WHERE id = ?");
+            $stmt = $conexao->prepare("SELECT status FROM protocolos WHERE tenant_id = $tenant_id AND id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -331,8 +338,7 @@ try {
                         pagina = ?,
                         data_hora_recebimento = ?,
                         recebedor_portaria = ?,
-                        observacao = ?
-                        WHERE id = ? AND status = 'pendente'");
+                        observacao = ? WHERE tenant_id = $tenant_id AND id = ? AND status = 'pendente'");
                 
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar update: " . $conexao->error);
@@ -357,8 +363,7 @@ try {
                         codigo_nf = ?,
                         data_hora_recebimento = ?,
                         recebedor_portaria = ?,
-                        observacao = ?
-                        WHERE id = ? AND status = 'pendente'");
+                        observacao = ? WHERE tenant_id = $tenant_id AND id = ? AND status = 'pendente'");
                 
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar update: " . $conexao->error);
@@ -396,7 +401,7 @@ try {
         }
         
         // Verificar se já foi entregue
-        $stmt = $conexao->prepare("SELECT status, descricao_mercadoria FROM protocolos WHERE id = ?");
+        $stmt = $conexao->prepare("SELECT status, descricao_mercadoria FROM protocolos WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
@@ -415,7 +420,7 @@ try {
         }
         
         // Excluir
-        $stmt = $conexao->prepare("DELETE FROM protocolos WHERE id = ? AND status = 'pendente'");
+        $stmt = $conexao->prepare("DELETE FROM protocolos WHERE tenant_id = $tenant_id AND id = ? AND status = 'pendente'");
         if (!$stmt) {
             throw new Exception("Erro ao preparar delete: " . $conexao->error);
         }

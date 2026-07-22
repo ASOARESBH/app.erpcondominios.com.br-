@@ -12,6 +12,7 @@ if ($chave !== 'diag_erp_2026') {
 }
 
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 header('Content-Type: application/json; charset=utf-8');
 
 $email  = $_GET['email']  ?? '';

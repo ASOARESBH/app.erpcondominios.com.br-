@@ -6,6 +6,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -23,6 +24,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
 
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // Buscar acessos dos últimos 7 dias agrupados por placa
 $sql_placas = "SELECT 

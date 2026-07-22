@@ -12,6 +12,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 ob_end_clean();
 
@@ -42,7 +43,8 @@ define('RH_FOTO_TIPOS', ['image/jpeg' => 'jpg','image/jpg' => 'jpg','image/png' 
 
 if (!is_dir(RH_FOTO_DIR)) mkdir(RH_FOTO_DIR, 0755, true);
 
-try { verificarAutenticacao(true, 'operador'); }
+try { verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId(); }
 catch (Exception $e) { retornar_json(false, 'Não autenticado'); }
 
 $metodo = $_SERVER['REQUEST_METHOD'];
@@ -57,8 +59,7 @@ if ($metodo === 'GET' && $acao === 'listar') {
     $ativo_filtro = isset($_GET['ativo']) ? intval($_GET['ativo']) : 1;
 
     $sql = "SELECT id, nome, cpf, cargo, departamento, tipo_contrato, data_admissao, celular, email, foto_path, ativo
-            FROM rh_colaboradores
-            WHERE ativo = ?
+            FROM rh_colaboradores WHERE tenant_id = $tenant_id AND ativo = ?
               AND (nome LIKE ? OR cpf LIKE ? OR cargo LIKE ? OR departamento LIKE ?)";
     $params = [$ativo_filtro, $busca, $busca, $busca, $busca];
     $types  = 'issss';
@@ -86,7 +87,7 @@ if ($metodo === 'GET' && $acao === 'obter') {
     $id = intval($_GET['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $conn->prepare("SELECT * FROM rh_colaboradores WHERE id = ?");
+    $stmt = $conn->prepare("SELECT * FROM rh_colaboradores WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
@@ -99,7 +100,7 @@ if ($metodo === 'GET' && $acao === 'obter') {
 
 // ── DEPARTAMENTOS (lista para filtros) ────────────────────────────────────────
 if ($metodo === 'GET' && $acao === 'departamentos') {
-    $res  = $conn->query("SELECT DISTINCT departamento FROM rh_colaboradores WHERE departamento IS NOT NULL AND departamento <> '' AND ativo=1 ORDER BY departamento");
+    $res  = $conn->query("SELECT DISTINCT departamento FROM rh_colaboradores WHERE tenant_id = $tenant_id AND departamento IS NOT NULL AND departamento <> '' AND ativo=1 ORDER BY departamento");
     $list = [];
     while ($row = $res->fetch_row()) $list[] = $row[0];
     fechar_conexao($conn);
@@ -119,7 +120,7 @@ if ($metodo === 'POST' && $acao === 'criar') {
     }
 
     // CPF único
-    $chk = $conn->prepare("SELECT id FROM rh_colaboradores WHERE cpf = ?");
+    $chk = $conn->prepare("SELECT id FROM rh_colaboradores WHERE tenant_id = $tenant_id AND cpf = ?");
     $chk->bind_param('s', $d['cpf']); $chk->execute(); $chk->store_result();
     if ($chk->num_rows > 0) { $chk->close(); retornar_json(false, 'CPF já cadastrado'); }
     $chk->close();
@@ -164,7 +165,7 @@ if ($metodo === 'POST' && $acao === 'atualizar') {
     }
 
     // CPF único (exceto o próprio)
-    $chk = $conn->prepare("SELECT id FROM rh_colaboradores WHERE cpf = ? AND id <> ?");
+    $chk = $conn->prepare("SELECT id FROM rh_colaboradores WHERE tenant_id = $tenant_id AND cpf = ? AND id <> ?");
     $chk->bind_param('si', $d['cpf'], $id); $chk->execute(); $chk->store_result();
     if ($chk->num_rows > 0) { $chk->close(); retornar_json(false, 'CPF já em uso por outro colaborador'); }
     $chk->close();
@@ -174,7 +175,7 @@ if ($metodo === 'POST' && $acao === 'atualizar') {
     if (!empty($_FILES['foto'])) {
         $foto_path = _salvar_foto($_FILES['foto']);
         // Remove foto antiga
-        $old = $conn->prepare("SELECT foto_path FROM rh_colaboradores WHERE id=?");
+        $old = $conn->prepare("SELECT foto_path FROM rh_colaboradores WHERE tenant_id = $tenant_id AND id=?");
         $old->bind_param('i',$id); $old->execute();
         $res = $old->get_result()->fetch_assoc(); $old->close();
         if (!empty($res['foto_path'])) @unlink(dirname(__DIR__) . '/' . $res['foto_path']);
@@ -188,8 +189,7 @@ if ($metodo === 'POST' && $acao === 'atualizar') {
             nome=?,cpf=?,rg=?,data_nascimento=?,sexo=?,estado_civil=?,cargo=?,departamento=?,
             tipo_contrato=?,data_admissao=?,data_demissao=?,salario=?,telefone=?,celular=?,email=?,
             cep=?,logradouro=?,numero=?,complemento=?,bairro=?,cidade=?,estado=?,
-            banco=?,agencia=?,conta=?,pix=?,observacoes=?$foto_sql
-            WHERE id=?";
+            banco=?,agencia=?,conta=?,pix=?,observacoes=?$foto_sql WHERE tenant_id = $tenant_id AND id=?";
 
     $stmt = $conn->prepare($sql);
     if (!$stmt) { fechar_conexao($conn); retornar_json(false, 'Erro ao preparar SQL: ' . $conn->error); }
@@ -210,7 +210,7 @@ if ($metodo === 'POST' && $acao === 'atualizar') {
     $stmt->close();
 
     // Atualiza ativo em query dedicada (evita conflito com o bind acima)
-    $stmtA = $conn->prepare("UPDATE rh_colaboradores SET ativo=? WHERE id=?");
+    $stmtA = $conn->prepare("UPDATE rh_colaboradores SET ativo=? WHERE tenant_id = $tenant_id AND id=?");
     if ($stmtA) {
         $stmtA->bind_param('ii', $ativo_novo, $id);
         $stmtA->execute();
@@ -232,12 +232,12 @@ if ($metodo === 'POST' && $acao === 'upload_foto') {
 
     $foto_path = _salvar_foto($_FILES['foto']);
 
-    $old = $conn->prepare("SELECT foto_path FROM rh_colaboradores WHERE id=?");
+    $old = $conn->prepare("SELECT foto_path FROM rh_colaboradores WHERE tenant_id = $tenant_id AND id=?");
     $old->bind_param('i',$id); $old->execute();
     $res = $old->get_result()->fetch_assoc(); $old->close();
     if (!empty($res['foto_path'])) @unlink(dirname(__DIR__) . '/' . $res['foto_path']);
 
-    $stmt = $conn->prepare("UPDATE rh_colaboradores SET foto_path=? WHERE id=?");
+    $stmt = $conn->prepare("UPDATE rh_colaboradores SET foto_path=? WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('si', $foto_path, $id);
     $stmt->execute(); $stmt->close(); fechar_conexao($conn);
     retornar_json(true, 'Foto atualizada', ['foto_path' => $foto_path]);
@@ -249,7 +249,7 @@ if ($metodo === 'DELETE') {
     $id   = intval($body['id'] ?? $_GET['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $conn->prepare("UPDATE rh_colaboradores SET ativo=0 WHERE id=?");
+    $stmt = $conn->prepare("UPDATE rh_colaboradores SET ativo=0 WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('i', $id);
     $ok = $stmt->execute(); $stmt->close(); fechar_conexao($conn);
     retornar_json($ok, $ok ? 'Colaborador removido' : 'Erro ao remover');

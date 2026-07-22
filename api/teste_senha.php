@@ -5,6 +5,7 @@
  */
 
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 
 // CPF para testar (sem pontuação)
 $cpf_teste = '08921646620';  // 089.216.466-20

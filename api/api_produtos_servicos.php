@@ -6,6 +6,7 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'session_helper.php';
 
 // Iniciar sessão com cookie path=/ e CORS correto
@@ -32,12 +33,13 @@ $metodo = $_SERVER['REQUEST_METHOD'];
 
 try {
     $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
     
     // ========== LISTAR PRODUTOS/SERVIÇOS DO FORNECEDOR ==========
     if ($acao === 'listar' && $metodo === 'GET') {
         $tipo = $_GET['tipo'] ?? '';  // 'produto', 'servico' ou vazio para todos
         
-        $sql = "SELECT * FROM produtos_servicos WHERE fornecedor_id = ?";
+        $sql = "SELECT * FROM produtos_servicos WHERE tenant_id = $tenant_id AND fornecedor_id = ?";
         $params = [$fornecedor_id];
         $types = "i";
         
@@ -96,8 +98,7 @@ try {
         // Gerar código sequencial
         $ano = date('Y');
         $count_stmt = $conexao->prepare(
-            "SELECT COUNT(*) as total FROM produtos_servicos 
-             WHERE fornecedor_id = ? AND YEAR(data_criacao) = ?"
+            "SELECT COUNT(*) as total FROM produtos_servicos WHERE tenant_id = $tenant_id AND fornecedor_id = ? AND YEAR(data_criacao) = ?"
         );
         $count_stmt->bind_param("ii", $fornecedor_id, $ano);
         $count_stmt->execute();
@@ -143,7 +144,7 @@ try {
         $link_compartilhamento = "marketplace.php?produto={$produto_id}&token={$hash}";
         
         $update_stmt = $conexao->prepare(
-            "UPDATE produtos_servicos SET link_compartilhamento = ? WHERE id = ?"
+            "UPDATE produtos_servicos SET link_compartilhamento = ? WHERE tenant_id = $tenant_id AND id = ?"
         );
         $update_stmt->bind_param("si", $link_compartilhamento, $produto_id);
         $update_stmt->execute();
@@ -179,7 +180,7 @@ try {
         
         // Verificar se produto pertence ao fornecedor
         $check_stmt = $conexao->prepare(
-            "SELECT id FROM produtos_servicos WHERE id = ? AND fornecedor_id = ?"
+            "SELECT id FROM produtos_servicos WHERE tenant_id = $tenant_id AND id = ? AND fornecedor_id = ?"
         );
         $check_stmt->bind_param("ii", $produto_id, $fornecedor_id);
         $check_stmt->execute();
@@ -191,8 +192,7 @@ try {
         
         // Atualizar
         $sql = "UPDATE produtos_servicos 
-                SET nome = ?, descricao = ?, preco_venda = ?, quantidade_disponivel = ?, observacao = ?
-                WHERE id = ? AND fornecedor_id = ?";
+                SET nome = ?, descricao = ?, preco_venda = ?, quantidade_disponivel = ?, observacao = ? WHERE tenant_id = $tenant_id AND id = ? AND fornecedor_id = ?";
         
         $stmt = $conexao->prepare($sql);
         $stmt->bind_param(
@@ -228,7 +228,7 @@ try {
             throw new Exception('ID do produto inválido');
         }
         
-        $sql = "UPDATE produtos_servicos SET ativo = ? WHERE id = ? AND fornecedor_id = ?";
+        $sql = "UPDATE produtos_servicos SET ativo = ? WHERE tenant_id = $tenant_id AND id = ? AND fornecedor_id = ?";
         $stmt = $conexao->prepare($sql);
         $stmt->bind_param("iii", $ativo, $produto_id, $fornecedor_id);
         
@@ -255,7 +255,7 @@ try {
             throw new Exception('ID do produto inválido');
         }
         
-        $sql = "SELECT * FROM produtos_servicos WHERE id = ? AND fornecedor_id = ?";
+        $sql = "SELECT * FROM produtos_servicos WHERE tenant_id = $tenant_id AND id = ? AND fornecedor_id = ?";
         $stmt = $conexao->prepare($sql);
         $stmt->bind_param("ii", $produto_id, $fornecedor_id);
         $stmt->execute();
@@ -287,7 +287,7 @@ try {
         
         // Verificar se produto pertence ao fornecedor
         $check_stmt = $conexao->prepare(
-            "SELECT id FROM produtos_servicos WHERE id = ? AND fornecedor_id = ?"
+            "SELECT id FROM produtos_servicos WHERE tenant_id = $tenant_id AND id = ? AND fornecedor_id = ?"
         );
         $check_stmt->bind_param("ii", $produto_id, $fornecedor_id);
         $check_stmt->execute();
@@ -302,7 +302,7 @@ try {
         $link_compartilhamento = "marketplace.php?produto={$produto_id}&token={$hash}";
         
         $update_stmt = $conexao->prepare(
-            "UPDATE produtos_servicos SET link_compartilhamento = ? WHERE id = ?"
+            "UPDATE produtos_servicos SET link_compartilhamento = ? WHERE tenant_id = $tenant_id AND id = ?"
         );
         $update_stmt->bind_param("si", $link_compartilhamento, $produto_id);
         $update_stmt->execute();

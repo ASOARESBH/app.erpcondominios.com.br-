@@ -11,6 +11,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 ob_end_clean();
 
@@ -49,7 +50,8 @@ if (!function_exists('retornar_json')) {
     }
 }
 
-try { verificarAutenticacao(true, 'operador'); }
+try { verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId(); }
 catch (Exception $e) {
     rh_log('ERRO', 'Autenticação falhou', ['msg' => $e->getMessage()]);
     retornar_json(false, 'Não autenticado');
@@ -138,8 +140,7 @@ function _migrar_rh_escala(mysqli $conn): void {
         try {
             $resJorn = $conn->query(
                 "SELECT id, tipo, hora_entrada, hora_saida, intervalo_almoco_min, carga_horaria_diaria_min
-                 FROM rh_escala
-                 WHERE tipo IN ('jornada_44h','jornada_40h','jornada_36h') AND ativo = 1"
+                 FROM rh_escala WHERE tenant_id = $tenant_id AND tipo IN ('jornada_44h','jornada_40h','jornada_36h') AND ativo = 1"
             );
             if ($resJorn) {
                 while ($jr = $resJorn->fetch_assoc()) {
@@ -152,7 +153,7 @@ function _migrar_rh_escala(mysqli $conn): void {
                     $calc = $saiM - $entM - $intM;
                     if ($calc > 60 && $calc !== intval($jr['carga_horaria_diaria_min'])) {
                         $idJ = intval($jr['id']);
-                        $conn->query("UPDATE rh_escala SET carga_horaria_diaria_min = $calc WHERE id = $idJ");
+                        $conn->query("UPDATE rh_escala SET carga_horaria_diaria_min = $calc WHERE tenant_id = $tenant_id AND id = $idJ");
                     }
                 }
             }
@@ -249,7 +250,7 @@ if ($acao === 'criar' && $metodo === 'POST') {
     }
 
     // Impede escala duplicada: colaborador já tem escala ativa
-    $stmtChk = $conn->prepare("SELECT COUNT(*) FROM rh_escala WHERE colaborador_id = ? AND ativo = 1");
+    $stmtChk = $conn->prepare("SELECT COUNT(*) FROM rh_escala WHERE tenant_id = $tenant_id AND colaborador_id = ? AND ativo = 1");
     if (!$stmtChk) { retornar_json(false, 'Erro interno: ' . $conn->error); }
     $stmtChk->bind_param('i', $d['colaborador_id']);
     $stmtChk->execute();
@@ -352,7 +353,7 @@ if ($acao === 'criar' && $metodo === 'POST') {
     if ($d['tipo'] === 'escala_manual' && !empty($d['escala_manual_semana'])) {
         try {
             $msJson = $conn->real_escape_string($d['escala_manual_semana']);
-            $conn->query("UPDATE rh_escala SET escala_manual_semana = '$msJson' WHERE id = $novo_id");
+            $conn->query("UPDATE rh_escala SET escala_manual_semana = '$msJson' WHERE tenant_id = $tenant_id AND id = $novo_id");
         } catch (Throwable $e) { }
     }
     fechar_conexao($conn);
@@ -389,8 +390,7 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
              hora_entrada=?, hora_almoco_saida=?, hora_almoco_retorno=?, hora_saida=?,
              tolerancia_minutos=?, intervalo_almoco_min=?,
              alternada_ativa=?, alternada_dia_inicio=?, alternada_semana_a=?, alternada_semana_b=?, alternada_tipo_folga=?,
-             carga_horaria_mensal_min=?, descanso_interjornada_min=?, regime_12x36=?, banco_horas_ativo=?
-             WHERE id=?"
+             carga_horaria_mensal_min=?, descanso_interjornada_min=?, regime_12x36=?, banco_horas_ativo=? WHERE tenant_id = $tenant_id AND id=?"
         );
         if (!$stmt) {
             rh_log('ERRO', 'atualizar: prepare falhou', ['mysql_error' => $conn->error]);
@@ -425,8 +425,7 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
              nome_escala=?, tipo=?, carga_horaria_diaria_min=?, dias_trabalho=?,
              hora_entrada=?, hora_almoco_saida=?, hora_almoco_retorno=?, hora_saida=?,
              tolerancia_minutos=?, intervalo_almoco_min=?,
-             alternada_ativa=?, alternada_dia_inicio=?, alternada_semana_a=?, alternada_semana_b=?, alternada_tipo_folga=?
-             WHERE id=?"
+             alternada_ativa=?, alternada_dia_inicio=?, alternada_semana_a=?, alternada_semana_b=?, alternada_tipo_folga=? WHERE tenant_id = $tenant_id AND id=?"
         );
         if (!$stmt) {
             rh_log('ERRO', 'atualizar: prepare (fallback) falhou', ['mysql_error' => $conn->error]);
@@ -464,7 +463,7 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
     if ($d['tipo'] === 'escala_manual' && !empty($d['escala_manual_semana'])) {
         try {
             $msJson = $conn->real_escape_string($d['escala_manual_semana']);
-            $conn->query("UPDATE rh_escala SET escala_manual_semana = '$msJson' WHERE id = $id");
+            $conn->query("UPDATE rh_escala SET escala_manual_semana = '$msJson' WHERE tenant_id = $tenant_id AND id = $id");
         } catch (Throwable $e) { }
     }
     fechar_conexao($conn);
@@ -481,7 +480,7 @@ if ($metodo === 'DELETE') {
         retornar_json(false, 'ID inválido');
     }
 
-    $stmt = $conn->prepare("UPDATE rh_escala SET ativo=0 WHERE id=?");
+    $stmt = $conn->prepare("UPDATE rh_escala SET ativo=0 WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('i', $id);
     $ok = $stmt->execute(); $stmt->close(); fechar_conexao($conn);
     rh_log($ok ? 'INFO' : 'ERRO', 'excluir: ' . ($ok ? 'OK' : 'falhou'), ['id' => $id]);

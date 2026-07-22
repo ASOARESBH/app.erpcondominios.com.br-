@@ -24,6 +24,7 @@ echo "╚═══════════════════════�
 // Conectar ao banco
 echo "[1] Conectando ao banco de dados...\n";
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 
 $conexao = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if (!$conexao) {

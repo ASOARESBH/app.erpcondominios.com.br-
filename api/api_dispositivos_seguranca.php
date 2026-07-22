@@ -16,7 +16,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
@@ -28,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para responder JSON
 function responder($sucesso, $mensagem, $dados = null) {
@@ -132,7 +139,7 @@ try {
             
             // Verificar se ID do dispositivo já existe
             if (!empty($id_dispositivo)) {
-                $sql = "SELECT id FROM dispositivos_seguranca WHERE id_dispositivo = ? AND id != 0";
+                $sql = "SELECT id FROM dispositivos_seguranca WHERE tenant_id = $tenant_id AND id_dispositivo = ? AND id != 0";
                 $stmt = $conn->prepare($sql);
                 $stmt->bind_param('s', $id_dispositivo);
                 $stmt->execute();
@@ -191,7 +198,7 @@ try {
             
             // Verificar se ID do dispositivo já existe em outro registro
             if (!empty($id_dispositivo)) {
-                $sql = "SELECT id FROM dispositivos_seguranca WHERE id_dispositivo = ? AND id != ?";
+                $sql = "SELECT id FROM dispositivos_seguranca WHERE tenant_id = $tenant_id AND id_dispositivo = ? AND id != ?";
                 $stmt = $conn->prepare($sql);
                 $stmt->bind_param('si', $id_dispositivo, $id);
                 $stmt->execute();
@@ -241,7 +248,7 @@ try {
             }
             
             // Buscar status atual
-            $sql = "SELECT ativo FROM dispositivos_seguranca WHERE id = ?";
+            $sql = "SELECT ativo FROM dispositivos_seguranca WHERE tenant_id = $tenant_id AND id = ?";
             $stmt = $conn->prepare($sql);
             $stmt->bind_param('i', $id);
             $stmt->execute();
@@ -250,7 +257,7 @@ try {
             if ($row = $result->fetch_assoc()) {
                 $novo_status = $row['ativo'] == 1 ? 0 : 1;
                 
-                $sql = "UPDATE dispositivos_seguranca SET ativo = ? WHERE id = ?";
+                $sql = "UPDATE dispositivos_seguranca SET ativo = ? WHERE tenant_id = $tenant_id AND id = ?";
                 $stmt = $conn->prepare($sql);
                 $stmt->bind_param('ii', $novo_status, $id);
                 
@@ -275,7 +282,7 @@ try {
                 responder(false, 'ID do dispositivo é obrigatório');
             }
             
-            $sql = "DELETE FROM dispositivos_seguranca WHERE id = ?";
+            $sql = "DELETE FROM dispositivos_seguranca WHERE tenant_id = $tenant_id AND id = ?";
             $stmt = $conn->prepare($sql);
             $stmt->bind_param('i', $id);
             
@@ -348,12 +355,12 @@ try {
             $stats['total'] = $result->fetch_assoc()['total'];
             
             // Dispositivos ativos
-            $sql = "SELECT COUNT(*) as total FROM dispositivos_seguranca WHERE ativo = 1";
+            $sql = "SELECT COUNT(*) as total FROM dispositivos_seguranca WHERE tenant_id = $tenant_id AND ativo = 1";
             $result = $conn->query($sql);
             $stats['ativos'] = $result->fetch_assoc()['total'];
             
             // Dispositivos inativos
-            $sql = "SELECT COUNT(*) as total FROM dispositivos_seguranca WHERE ativo = 0";
+            $sql = "SELECT COUNT(*) as total FROM dispositivos_seguranca WHERE tenant_id = $tenant_id AND ativo = 0";
             $result = $conn->query($sql);
             $stats['inativos'] = $result->fetch_assoc()['total'];
             

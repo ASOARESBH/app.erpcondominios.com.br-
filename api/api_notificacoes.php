@@ -6,6 +6,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -21,7 +22,13 @@ ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -34,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Verificar autenticação
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
@@ -55,8 +63,7 @@ if ($metodo === 'GET' && !isset($_GET['id']) && !isset($_GET['relatorio'])) {
             DATE_FORMAT(n.data_hora, '%d/%m/%Y %H:%i') as data_hora_formatada,
             (SELECT COUNT(*) FROM notificacoes_visualizacoes WHERE notificacao_id = n.id) as total_visualizacoes,
             (SELECT COUNT(*) FROM notificacoes_downloads WHERE notificacao_id = n.id) as total_downloads
-            FROM notificacoes n
-            WHERE n.ativo = 1
+            FROM notificacoes n WHERE tenant_id = $tenant_id AND n.ativo = 1
             ORDER BY n.data_hora DESC, n.numero_sequencial DESC";
     
     $resultado = $conexao->query($sql);
@@ -75,7 +82,7 @@ if ($metodo === 'GET' && !isset($_GET['id']) && !isset($_GET['relatorio'])) {
 if ($metodo === 'GET' && isset($_GET['id'])) {
     $id = intval($_GET['id']);
     
-    $stmt = $conexao->prepare("SELECT *, DATE_FORMAT(data_hora, '%Y-%m-%dT%H:%i') as data_hora_input FROM notificacoes WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT *, DATE_FORMAT(data_hora, '%Y-%m-%dT%H:%i') as data_hora_input FROM notificacoes WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -97,7 +104,7 @@ if ($metodo === 'GET' && isset($_GET['relatorio'])) {
     $id = intval($_GET['relatorio']);
     
     // Buscar dados da notificação
-    $stmt = $conexao->prepare("SELECT *, DATE_FORMAT(data_hora, '%d/%m/%Y %H:%i') as data_hora_formatada FROM notificacoes WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT *, DATE_FORMAT(data_hora, '%d/%m/%Y %H:%i') as data_hora_formatada FROM notificacoes WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -225,7 +232,7 @@ if ($metodo === 'POST') {
     
     if ($id > 0) {
         // ATUALIZAR
-        $stmt = $conexao->prepare("SELECT anexo_caminho FROM notificacoes WHERE id = ?");
+        $stmt = $conexao->prepare("SELECT anexo_caminho FROM notificacoes WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $resultado = $stmt->get_result();
@@ -245,10 +252,10 @@ if ($metodo === 'POST') {
         }
         
         if ($anexo_caminho) {
-            $stmt = $conexao->prepare("UPDATE notificacoes SET data_hora = ?, assunto = ?, resumo = ?, anexo_nome = ?, anexo_caminho = ?, anexo_tipo = ? WHERE id = ?");
+            $stmt = $conexao->prepare("UPDATE notificacoes SET data_hora = ?, assunto = ?, resumo = ?, anexo_nome = ?, anexo_caminho = ?, anexo_tipo = ? WHERE tenant_id = $tenant_id AND id = ?");
             $stmt->bind_param("ssssssi", $data_hora, $assunto, $resumo, $anexo_nome, $anexo_caminho, $anexo_tipo, $id);
         } else {
-            $stmt = $conexao->prepare("UPDATE notificacoes SET data_hora = ?, assunto = ?, resumo = ? WHERE id = ?");
+            $stmt = $conexao->prepare("UPDATE notificacoes SET data_hora = ?, assunto = ?, resumo = ? WHERE tenant_id = $tenant_id AND id = ?");
             $stmt->bind_param("sssi", $data_hora, $assunto, $resumo, $id);
         }
         
@@ -297,7 +304,7 @@ if ($metodo === 'DELETE') {
     }
     
     // Buscar caminho do anexo antes de excluir
-    $stmt = $conexao->prepare("SELECT anexo_caminho FROM notificacoes WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT anexo_caminho FROM notificacoes WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -312,7 +319,7 @@ if ($metodo === 'DELETE') {
         }
         
         // Marcar como inativo (soft delete)
-        $stmt = $conexao->prepare("UPDATE notificacoes SET ativo = 0 WHERE id = ?");
+        $stmt = $conexao->prepare("UPDATE notificacoes SET ativo = 0 WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("i", $id);
         
         if ($stmt->execute()) {

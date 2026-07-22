@@ -25,6 +25,7 @@ email_error_install_shutdown_handler();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -38,7 +39,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
@@ -47,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 verificarAutenticacao();
 
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 if (!$conexao) retornar_json(false, 'Erro ao conectar ao banco de dados');
 mysqli_set_charset($conexao, 'utf8mb4');
 
@@ -530,8 +538,7 @@ function _alerta_salvar($db) {
     $sql = "UPDATE email_alertas SET
         assunto='$assunto', corpo_html='$corpo',
         destinatario_tipo='$dest_tipo', destinatario_email='$dest_email',
-        cc_emails='$cc'
-        WHERE id=$id";
+        cc_emails='$cc' WHERE tenant_id = $tenant_id AND id=$id";
 
     if (mysqli_query($db, $sql)) {
         retornar_json(true, 'Alerta salvo com sucesso!');
@@ -548,7 +555,7 @@ function _alerta_toggle($db) {
     $ativo = (int)($_POST['ativo'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido.');
 
-    if (mysqli_query($db, "UPDATE email_alertas SET ativo=$ativo WHERE id=$id")) {
+    if (mysqli_query($db, "UPDATE email_alertas SET ativo=$ativo WHERE tenant_id = $tenant_id AND id=$id")) {
         $msg = $ativo ? 'Alerta ativado com sucesso!' : 'Alerta desativado.';
         retornar_json(true, $msg, ['ativo' => $ativo]);
     } else {
@@ -573,8 +580,8 @@ function _log_listar($db) {
     if ($busca)  $where[] = "(destinatario LIKE '%" . mysqli_real_escape_string($db, $busca) . "%' OR assunto LIKE '%" . mysqli_real_escape_string($db, $busca) . "%')";
     $w = implode(' AND ', $where);
 
-    $total = mysqli_fetch_assoc(mysqli_query($db, "SELECT COUNT(*) as t FROM email_log WHERE $w"))['t'];
-    $res   = mysqli_query($db, "SELECT * FROM email_log WHERE $w ORDER BY data_envio DESC LIMIT $limite OFFSET $offset");
+    $total = mysqli_fetch_assoc(mysqli_query($db, "SELECT COUNT(*) as t FROM email_log WHERE tenant_id = $tenant_id AND $w"))['t'];
+    $res   = mysqli_query($db, "SELECT * FROM email_log WHERE tenant_id = $tenant_id AND $w ORDER BY data_envio DESC LIMIT $limite OFFSET $offset");
     $lista = [];
     while ($r = mysqli_fetch_assoc($res)) $lista[] = $r;
 
@@ -592,7 +599,7 @@ function _log_listar($db) {
 function _log_limpar($db) {
     $dias = (int)($_POST['dias'] ?? 30);
     if ($dias < 1) $dias = 30;
-    mysqli_query($db, "DELETE FROM email_log WHERE data_envio < DATE_SUB(NOW(), INTERVAL $dias DAY)");
+    mysqli_query($db, "DELETE FROM email_log WHERE tenant_id = $tenant_id AND data_envio < DATE_SUB(NOW(), INTERVAL $dias DAY)");
     $afetados = mysqli_affected_rows($db);
     retornar_json(true, "$afetados registro(s) removido(s).", ['removidos' => $afetados]);
 }
@@ -750,14 +757,12 @@ function _dashboard_stats($db) {
 
     // Estatísticas de envio do dia (email_log)
     $resEnviados = mysqli_query($db,
-        "SELECT COUNT(*) AS total FROM email_log
-         WHERE DATE(created_at) = '$hoje' AND status = 'enviado'"
+        "SELECT COUNT(*) AS total FROM email_log WHERE tenant_id = $tenant_id AND DATE(created_at) = '$hoje' AND status = 'enviado'"
     );
     $enviados = $resEnviados ? (int) mysqli_fetch_assoc($resEnviados)['total'] : 0;
 
     $resFalhas = mysqli_query($db,
-        "SELECT COUNT(*) AS total FROM email_log
-         WHERE DATE(created_at) = '$hoje' AND status != 'enviado'"
+        "SELECT COUNT(*) AS total FROM email_log WHERE tenant_id = $tenant_id AND DATE(created_at) = '$hoje' AND status != 'enviado'"
     );
     $falhas = $resFalhas ? (int) mysqli_fetch_assoc($resFalhas)['total'] : 0;
 
@@ -794,7 +799,7 @@ function _dashboard_stats($db) {
 
     // Último envio real (email_log)
     $resUltimoEnvio = mysqli_query($db,
-        "SELECT created_at, status FROM email_log ORDER BY id DESC LIMIT 1"
+        "SELECT created_at, status FROM email_log WHERE tenant_id = $tenant_id ORDER BY id DESC LIMIT 1"
     );
     if ($resUltimoEnvio && mysqli_num_rows($resUltimoEnvio) > 0) {
         $ue = mysqli_fetch_assoc($resUltimoEnvio);

@@ -6,6 +6,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -24,14 +25,14 @@ header('Cache-Control: no-cache, must-revalidate');
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // ========== BUSCAR HISTÓRICO (deve vir ANTES do GET genérico) ==========
 if ($metodo === 'GET' && isset($_GET['historico'])) {
     $hidrometro_id = intval($_GET['historico']);
 
     $sql = "SELECT *, DATE_FORMAT(data_alteracao, '%d/%m/%Y %H:%i:%s') as data_formatada
-            FROM hidrometros_historico
-            WHERE hidrometro_id = $hidrometro_id
+            FROM hidrometros_historico WHERE tenant_id = $tenant_id AND hidrometro_id = $hidrometro_id
             ORDER BY data_alteracao DESC";
 
     $resultado = $conexao->query($sql);
@@ -55,7 +56,7 @@ if ($metodo === 'GET' && isset($_GET['id']) && !isset($_GET['historico'])) {
         "SELECT h.*, m.nome as morador_nome, m.cpf as morador_cpf,
          DATE_FORMAT(h.data_instalacao, '%d/%m/%Y %H:%i') as data_instalacao_formatada,
          DATE_FORMAT(h.data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro_formatada,
-         (SELECT leitura_atual FROM leituras WHERE hidrometro_id = h.id ORDER BY data_leitura DESC LIMIT 1) as ultima_leitura
+         (SELECT leitura_atual FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = h.id ORDER BY data_leitura DESC LIMIT 1) as ultima_leitura
          FROM hidrometros h
          LEFT JOIN moradores m ON h.morador_id = m.id
          WHERE h.id = ?"
@@ -138,7 +139,7 @@ if ($metodo === 'GET') {
     $sql = "SELECT h.id, h.morador_id, h.unidade, h.numero_hidrometro, h.numero_lacre,
                    h.ativo, h.inventario_id, m.nome as morador_nome,
                    DATE_FORMAT(h.data_instalacao, '%d/%m/%Y %H:%i') as data_instalacao_formatada,
-                   (SELECT leitura_atual FROM leituras WHERE hidrometro_id = h.id ORDER BY data_leitura DESC LIMIT 1) as ultima_leitura
+                   (SELECT leitura_atual FROM leituras WHERE tenant_id = $tenant_id AND hidrometro_id = h.id ORDER BY data_leitura DESC LIMIT 1) as ultima_leitura
             FROM hidrometros h
             LEFT JOIN moradores m ON h.morador_id = m.id
             WHERE $where_sql
@@ -191,7 +192,7 @@ if ($metodo === 'POST') {
     }
     
     // Verificar se número já existe
-    $stmt = $conexao->prepare("SELECT id FROM hidrometros WHERE numero_hidrometro = ?");
+    $stmt = $conexao->prepare("SELECT id FROM hidrometros WHERE tenant_id = $tenant_id AND numero_hidrometro = ?");
     $stmt->bind_param("s", $numero_hidrometro);
     $stmt->execute();
     $stmt->store_result();
@@ -245,7 +246,7 @@ if ($metodo === 'PUT') {
     }
     
     // Buscar dados anteriores
-    $stmt = $conexao->prepare("SELECT * FROM hidrometros WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT * FROM hidrometros WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -257,7 +258,7 @@ if ($metodo === 'PUT') {
     }
     
     // Verificar se número já existe em outro hidrômetro
-    $stmt = $conexao->prepare("SELECT id FROM hidrometros WHERE numero_hidrometro = ? AND id != ?");
+    $stmt = $conexao->prepare("SELECT id FROM hidrometros WHERE tenant_id = $tenant_id AND numero_hidrometro = ? AND id != ?");
     $stmt->bind_param("si", $numero_hidrometro, $id);
     $stmt->execute();
     $stmt->store_result();
@@ -297,10 +298,10 @@ if ($metodo === 'PUT') {
     
     // Atualizar hidrômetro
     if ($inventario_id !== null) {
-        $stmt = $conexao->prepare("UPDATE hidrometros SET morador_id = ?, unidade = ?, numero_hidrometro = ?, numero_lacre = ?, data_instalacao = ?, ativo = ?, inventario_id = ? WHERE id = ?");
+        $stmt = $conexao->prepare("UPDATE hidrometros SET morador_id = ?, unidade = ?, numero_hidrometro = ?, numero_lacre = ?, data_instalacao = ?, ativo = ?, inventario_id = ? WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("issssiii", $morador_id, $unidade, $numero_hidrometro, $numero_lacre, $data_instalacao, $ativo, $inventario_id, $id);
     } else {
-        $stmt = $conexao->prepare("UPDATE hidrometros SET morador_id = ?, unidade = ?, numero_hidrometro = ?, numero_lacre = ?, data_instalacao = ?, ativo = ?, inventario_id = NULL WHERE id = ?");
+        $stmt = $conexao->prepare("UPDATE hidrometros SET morador_id = ?, unidade = ?, numero_hidrometro = ?, numero_lacre = ?, data_instalacao = ?, ativo = ?, inventario_id = NULL WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("issssii", $morador_id, $unidade, $numero_hidrometro, $numero_lacre, $data_instalacao, $ativo, $id);
     }
     

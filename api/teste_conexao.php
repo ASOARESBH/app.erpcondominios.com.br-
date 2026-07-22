@@ -7,6 +7,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 // Incluir configurações
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 
 $resultado = array(
     'timestamp' => date('Y-m-d H:i:s'),

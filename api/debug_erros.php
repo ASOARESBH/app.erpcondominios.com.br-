@@ -16,6 +16,7 @@ try {
     if (file_exists('config.php')) {
         $resultado['testes']['config_existe'] = true;
         require_once 'config.php';
+require_once 'tenant_helper.php';;
         $resultado['testes']['config_incluido'] = true;
         
         // Verificar constantes

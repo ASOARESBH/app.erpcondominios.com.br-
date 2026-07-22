@@ -23,6 +23,7 @@ if (!function_exists('retornar_json')) {
 header('Content-Type: application/json; charset=utf-8');
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para resposta JSON
 function resposta($sucesso, $mensagem, $dados = null) {
@@ -78,8 +79,7 @@ function listarTemplates($conn) {
                 ativo,
                 data_criacao,
                 data_atualizacao
-            FROM email_templates
-            ORDER BY 
+            FROM email_templates WHERE tenant_id = $tenant_id ORDER BY 
                 CASE tipo
                     WHEN 'recuperacao_senha' THEN 1
                     WHEN 'boas_vindas' THEN 2
@@ -112,7 +112,7 @@ function buscarTemplate($conn) {
         resposta(false, 'ID inválido');
     }
     
-    $sql = "SELECT * FROM email_templates WHERE id = ?";
+    $sql = "SELECT * FROM email_templates WHERE tenant_id = $tenant_id AND id = ?";
     $stmt = mysqli_prepare($conn, $sql);
     mysqli_stmt_bind_param($stmt, 'i', $id);
     mysqli_stmt_execute($stmt);
@@ -166,7 +166,7 @@ function salvarTemplate($conn) {
     
     if (mysqli_stmt_execute($stmt)) {
         // Buscar template atualizado
-        $sql_select = "SELECT * FROM email_templates WHERE id = ?";
+        $sql_select = "SELECT * FROM email_templates WHERE tenant_id = $tenant_id AND id = ?";
         $stmt_select = mysqli_prepare($conn, $sql_select);
         mysqli_stmt_bind_param($stmt_select, 'i', $id);
         mysqli_stmt_execute($stmt_select);

@@ -18,13 +18,20 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 
 // Limpar buffer e definir headers
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -54,6 +61,7 @@ if (!function_exists('retornar_json')) {
 try {
     // Verificar autenticação
     verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
     
     $metodo = $_SERVER['REQUEST_METHOD'];
     $conexao = conectar_banco();
@@ -237,7 +245,7 @@ try {
         }
         
         // Verificar se morador existe
-        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE id = ?");
+        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
@@ -252,7 +260,7 @@ try {
         $stmt->close();
         
         // Verificar se CPF já existe
-        $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE cpf = ?");
+        $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE tenant_id = $tenant_id AND cpf = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
@@ -311,7 +319,7 @@ try {
         }
         
         // Atualizar dependente
-        $stmt = $conexao->prepare("UPDATE dependentes SET nome_completo = ?, cpf = ?, email = ?, telefone = ?, celular = ?, data_nascimento = ?, parentesco = ?, observacao = ? WHERE id = ?");
+        $stmt = $conexao->prepare("UPDATE dependentes SET nome_completo = ?, cpf = ?, email = ?, telefone = ?, celular = ?, data_nascimento = ?, parentesco = ?, observacao = ? WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar update: " . $conexao->error);
         }
@@ -345,7 +353,7 @@ try {
         }
         
         // Obter nome do dependente para log
-        $stmt = $conexao->prepare("SELECT nome_completo FROM dependentes WHERE id = ?");
+        $stmt = $conexao->prepare("SELECT nome_completo FROM dependentes WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
@@ -357,7 +365,7 @@ try {
         $stmt->close();
         
         // Excluir dependente
-        $stmt = $conexao->prepare("DELETE FROM dependentes WHERE id = ?");
+        $stmt = $conexao->prepare("DELETE FROM dependentes WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar delete: " . $conexao->error);
         }

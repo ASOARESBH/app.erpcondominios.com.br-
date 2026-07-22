@@ -13,7 +13,13 @@
  */
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
@@ -24,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 function retornar_json($sucesso, $mensagem, $dados = null) {
     echo json_encode([
@@ -69,6 +76,7 @@ $action = $_GET['action'] ?? '';
 // As demais ações exigem autenticacao de admin
 if ($action !== 'obter') {
     $usuario = verificarAutenticacao(true, 'admin');
+$tenant_id = exigirTenantId();
     $usuario_id = $usuario['id'];
 } else {
     $usuario_id = null;
@@ -86,7 +94,7 @@ if ($action === 'obter' && $metodo === 'GET') {
                    email_principal, email_cobranca, telefone,
                    logo_url, logo_nome_arquivo, situacao,
                    data_criacao, data_atualizacao
-            FROM empresa LIMIT 1
+            FROM empresa WHERE tenant_id = $tenant_id LIMIT 1
         ");
         if (!$stmt) {
             error_log("[API EMPRESA] Erro ao preparar query: " . $conexao->error);
@@ -136,7 +144,7 @@ if ($action === 'atualizar' && $metodo === 'POST') {
             retornar_json(false, 'E-mail de cobrança inválido');
         }
         
-        $stmt_anterior = $conexao->prepare("SELECT * FROM empresa LIMIT 1");
+        $stmt_anterior = $conexao->prepare("SELECT * FROM empresa WHERE tenant_id = $tenant_id LIMIT 1");
         $stmt_anterior->execute();
         $resultado_anterior = $stmt_anterior->get_result();
         $dados_anteriores = $resultado_anterior->fetch_assoc();
@@ -149,8 +157,7 @@ if ($action === 'atualizar' && $metodo === 'POST') {
                     endereco_rua = ?, endereco_numero = ?, endereco_complemento = ?,
                     endereco_bairro = ?, endereco_cidade = ?, endereco_estado = ?, endereco_cep = ?,
                     email_principal = ?, email_cobranca = ?, telefone = ?,
-                    situacao = ?, usuario_atualizacao_id = ?
-                WHERE id = ?
+                    situacao = ?, usuario_atualizacao_id = ? WHERE tenant_id = $tenant_id AND id = ?
             ");
             if (!$stmt) {
                 error_log("[API EMPRESA] Erro ao preparar update: " . $conexao->error);
@@ -295,8 +302,7 @@ if ($action === 'upload_logo' && $metodo === 'POST') {
         // Atualizar no banco de dados
         $stmt = $conexao->prepare("
             UPDATE empresa
-            SET logo_url = ?, logo_nome_arquivo = ?, usuario_atualizacao_id = ?
-            WHERE id = 1
+            SET logo_url = ?, logo_nome_arquivo = ?, usuario_atualizacao_id = ? WHERE tenant_id = $tenant_id AND id = 1
         ");
         if ($stmt) {
             $stmt->bind_param("ssi", $url_relativa, $nome_arquivo, $usuario_id);

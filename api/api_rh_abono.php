@@ -9,10 +9,12 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'rh_ponto_core.php';
 ob_end_clean();
 
-try { verificarAutenticacao(true, 'operador'); }
+try { verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId(); }
 catch (Exception $e) {
     http_response_code(401);
     retornar_json(false, 'Não autenticado.');
@@ -58,8 +60,7 @@ if ($metodo === 'GET' && $acao === 'listar') {
                 abono_atraso, abono_atraso_min,
                 abono_justificativa, abono_usuario,
                 DATE_FORMAT(abono_data,'%d/%m/%Y %H:%i') AS abono_data
-         FROM rh_ponto_lancamento
-         WHERE colaborador_id = ? AND data BETWEEN ? AND ?
+         FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND colaborador_id = ? AND data BETWEEN ? AND ?
          ORDER BY data"
     );
     if (!$st) { fechar_conexao($conn); retornar_json(false, 'Erro: ' . $conn->error); exit; }
@@ -127,8 +128,7 @@ if ($metodo === 'POST' && $acao === 'salvar') {
         "UPDATE rh_ponto_lancamento
          SET abono_extras=?, abono_extras_min=?, abono_falta=?,
              abono_atraso=?, abono_atraso_min=?,
-             abono_justificativa=?, abono_usuario=?, abono_data=?
-         WHERE id=?"
+             abono_justificativa=?, abono_usuario=?, abono_data=? WHERE tenant_id = $tenant_id AND id=?"
     );
     if (!$st) { fechar_conexao($conn); retornar_json(false, 'Erro: ' . $conn->error); exit; }
 
@@ -153,7 +153,7 @@ if ($metodo === 'POST' && $acao === 'salvar') {
     $lRow = $conn->query(
         "SELECT periodo_id, colaborador_id, data, horas_trabalhadas_min,
                 horas_extras_min, atraso_min, saida_antecipada_min
-         FROM rh_ponto_lancamento WHERE id = $lancamento_id"
+         FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND id = $lancamento_id"
     );
     $lRow = $lRow ? $lRow->fetch_assoc() : null;
     if ($lRow) {

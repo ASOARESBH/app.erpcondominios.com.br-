@@ -18,6 +18,7 @@ ini_set('session.cookie_samesite', 'Lax');
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -48,6 +49,7 @@ if (!function_exists('dept_json')) {
 // ─── Auth ─────────────────────────────────────────────
 try {
     verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 } catch (Exception $e) {
     dept_json(false, 'Não autenticado: ' . $e->getMessage());
 }
@@ -99,7 +101,7 @@ switch ($acao) {
 
     // ─── listar_nomes ───────────────────────────────────
     case 'listar_nomes':
-        $res   = $conn->query("SELECT nome FROM departamentos WHERE ativo=1 ORDER BY nome ASC");
+        $res   = $conn->query("SELECT nome FROM departamentos WHERE tenant_id = $tenant_id AND ativo=1 ORDER BY nome ASC");
         $nomes = [];
         if ($res) while ($r = $res->fetch_assoc()) $nomes[] = $r['nome'];
         dept_json(true, 'OK', $nomes);
@@ -113,12 +115,12 @@ switch ($acao) {
         if (mb_strlen($nome) > 100) dept_json(false, 'Nome muito longo (máx 100 caracteres)');
 
         $nome_esc = $conn->real_escape_string($nome);
-        $existe = $conn->query("SELECT id, ativo FROM departamentos WHERE nome = '$nome_esc'")->fetch_assoc();
+        $existe = $conn->query("SELECT id, ativo FROM departamentos WHERE tenant_id = $tenant_id AND nome = '$nome_esc'")->fetch_assoc();
         if ($existe) {
             if (!(int)$existe['ativo']) {
                 // Reativar departamento inativo com mesmo nome
                 $desc_esc = $conn->real_escape_string($descricao);
-                $conn->query("UPDATE departamentos SET ativo=1, descricao='$desc_esc', atualizado_em=NOW() WHERE id={$existe['id']}");
+                $conn->query("UPDATE departamentos SET ativo=1, descricao='$desc_esc', atualizado_em=NOW() WHERE tenant_id = $tenant_id AND id={$existe['id']}");
                 dept_json(true, "Departamento \"$nome\" reativado", ['id' => (int)$existe['id']]);
             }
             dept_json(false, "Departamento \"$nome\" já existe");
@@ -140,10 +142,10 @@ switch ($acao) {
         if (!$nome) dept_json(false, 'Nome é obrigatório');
 
         $nome_esc = $conn->real_escape_string($nome);
-        $dup = $conn->query("SELECT id FROM departamentos WHERE nome='$nome_esc' AND id != $id")->fetch_assoc();
+        $dup = $conn->query("SELECT id FROM departamentos WHERE tenant_id = $tenant_id AND nome='$nome_esc' AND id != $id")->fetch_assoc();
         if ($dup) dept_json(false, "O nome \"$nome\" já existe em outro departamento");
 
-        $stmt = $conn->prepare("UPDATE departamentos SET nome=?, descricao=?, ativo=?, atualizado_em=NOW() WHERE id=?");
+        $stmt = $conn->prepare("UPDATE departamentos SET nome=?, descricao=?, ativo=?, atualizado_em=NOW() WHERE tenant_id = $tenant_id AND id=?");
         $stmt->bind_param('ssii', $nome, $descricao, $ativo, $id);
         $stmt->execute();
         dept_json(true, 'Departamento atualizado com sucesso');
@@ -153,7 +155,7 @@ switch ($acao) {
     case 'excluir':
         $id = (int)($body['id'] ?? $_GET['id'] ?? 0);
         if (!$id) dept_json(false, 'ID inválido');
-        $conn->query("UPDATE departamentos SET ativo=0, atualizado_em=NOW() WHERE id=$id");
+        $conn->query("UPDATE departamentos SET ativo=0, atualizado_em=NOW() WHERE tenant_id = $tenant_id AND id=$id");
         dept_json(true, 'Departamento desativado');
         break;
 

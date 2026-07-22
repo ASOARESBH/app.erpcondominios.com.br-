@@ -23,6 +23,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -60,6 +61,7 @@ if (!is_dir(LF_UPLOAD_DIR)) {
 // (Portal do Morador é somente leitura — usa visualizar_foto_leitura.php)
 try {
     verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 } catch (Exception $e) {
     retornar_json(false, 'Não autenticado');
 }
@@ -74,7 +76,7 @@ if ($metodo === 'GET') {
         $leitura_id = intval($_GET['leitura_id']);
         $stmt = $conexao->prepare(
             "SELECT id, hidrometro_id, origem, lancado_por_nome, data_upload
-             FROM leituras_fotos WHERE leitura_id = ? ORDER BY data_upload ASC"
+             FROM leituras_fotos WHERE tenant_id = $tenant_id AND leitura_id = ? ORDER BY data_upload ASC"
         );
         $stmt->bind_param('i', $leitura_id);
         $stmt->execute();
@@ -122,7 +124,7 @@ if ($metodo === 'POST') {
     }
 
     // Confirma que o hidrômetro existe
-    $stmt = $conexao->prepare("SELECT id FROM hidrometros WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT id FROM hidrometros WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param('i', $hidrometro_id);
     $stmt->execute();
     $stmt->store_result();
@@ -212,7 +214,7 @@ if ($metodo === 'DELETE') {
     $id    = isset($dados['id']) ? intval($dados['id']) : 0;
     if ($id <= 0) { retornar_json(false, 'ID inválido'); }
 
-    $stmt = $conexao->prepare("SELECT caminho, leitura_id FROM leituras_fotos WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT caminho, leitura_id FROM leituras_fotos WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -225,7 +227,7 @@ if ($metodo === 'DELETE') {
         retornar_json(false, 'Esta foto já está vinculada a uma leitura registrada e não pode ser removida');
     }
 
-    $stmt = $conexao->prepare("DELETE FROM leituras_fotos WHERE id = ? AND leitura_id IS NULL");
+    $stmt = $conexao->prepare("DELETE FROM leituras_fotos WHERE tenant_id = $tenant_id AND id = ? AND leitura_id IS NULL");
     $stmt->bind_param('i', $id);
     if ($stmt->execute() && $stmt->affected_rows > 0) {
         $stmt->close();

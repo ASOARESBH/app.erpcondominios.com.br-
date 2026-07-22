@@ -6,6 +6,7 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -19,7 +20,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -32,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Verificar autenticação
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 $conexao = conectar_banco();
 $metodo = $_SERVER['REQUEST_METHOD'];
@@ -46,7 +54,7 @@ if ($metodo !== 'GET') {
 
 // Listar categorias
 if ($action === 'categorias' && $metodo === 'GET') {
-    $stmt = $conexao->prepare("SELECT * FROM categorias_estoque WHERE ativo = 1 ORDER BY nome");
+    $stmt = $conexao->prepare("SELECT * FROM categorias_estoque WHERE tenant_id = $tenant_id AND ativo = 1 ORDER BY nome");
     $stmt->execute();
     $resultado = $stmt->get_result();
     
@@ -151,7 +159,7 @@ if ($action === 'produtos' && $metodo === 'POST') {
     // Gerar código automático se não fornecido
     $codigo = $dados['codigo'] ?? '';
     if (empty($codigo)) {
-        $stmt = $conexao->prepare("SELECT MAX(CAST(SUBSTRING(codigo, 6) AS UNSIGNED)) AS ultimo FROM produtos_estoque WHERE codigo LIKE 'PROD-%'");
+        $stmt = $conexao->prepare("SELECT MAX(CAST(SUBSTRING(codigo, 6) AS UNSIGNED)) AS ultimo FROM produtos_estoque WHERE tenant_id = $tenant_id AND codigo LIKE 'PROD-%'");
         $stmt->execute();
         $resultado = $stmt->get_result();
         $row = $resultado->fetch_assoc();
@@ -205,7 +213,7 @@ if ($action === 'produtos' && $metodo === 'PUT') {
     $fornecedor = sanitizar($conexao, $dados['fornecedor'] ?? '');
     $observacoes = sanitizar($conexao, $dados['observacoes'] ?? '');
     
-    $stmt = $conexao->prepare("UPDATE produtos_estoque SET nome = ?, categoria_id = ?, unidade_medida = ?, descricao = ?, preco_unitario = ?, estoque_minimo = ?, estoque_maximo = ?, localizacao = ?, fornecedor = ?, observacoes = ? WHERE id = ?");
+    $stmt = $conexao->prepare("UPDATE produtos_estoque SET nome = ?, categoria_id = ?, unidade_medida = ?, descricao = ?, preco_unitario = ?, estoque_minimo = ?, estoque_maximo = ?, localizacao = ?, fornecedor = ?, observacoes = ? WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("sissdddsssi", $nome, $categoria_id, $unidade_medida, $descricao, $preco_unitario, $estoque_minimo, $estoque_maximo, $localizacao, $fornecedor, $observacoes, $id);
     $stmt->execute();
     
@@ -218,7 +226,7 @@ if ($action === 'produtos' && $metodo === 'DELETE') {
     $id = intval($_GET['id'] ?? 0);
     
     // Verificar se há movimentações
-    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM movimentacoes_estoque WHERE produto_id = ?");
+    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM movimentacoes_estoque WHERE tenant_id = $tenant_id AND produto_id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -226,7 +234,7 @@ if ($action === 'produtos' && $metodo === 'DELETE') {
     
     if ($row['total'] > 0) {
         // Não deletar, apenas inativar
-        $stmt = $conexao->prepare("UPDATE produtos_estoque SET ativo = 0 WHERE id = ?");
+        $stmt = $conexao->prepare("UPDATE produtos_estoque SET ativo = 0 WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
         
@@ -234,7 +242,7 @@ if ($action === 'produtos' && $metodo === 'DELETE') {
         retornar_json(true, "Produto inativado com sucesso (há movimentações vinculadas)");
     } else {
         // Deletar permanentemente
-        $stmt = $conexao->prepare("DELETE FROM produtos_estoque WHERE id = ?");
+        $stmt = $conexao->prepare("DELETE FROM produtos_estoque WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
         
@@ -329,7 +337,7 @@ if ($action === 'entrada' && $metodo === 'POST') {
     $observacoes = sanitizar($conexao, $dados['observacoes'] ?? '');
     
     // Obter quantidade anterior
-    $stmt = $conexao->prepare("SELECT quantidade_estoque, preco_unitario FROM produtos_estoque WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT quantidade_estoque, preco_unitario FROM produtos_estoque WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $produto_id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -355,7 +363,7 @@ if ($action === 'entrada' && $metodo === 'POST') {
     $stmt->execute();
     
     // Atualizar estoque
-    $stmt = $conexao->prepare("UPDATE produtos_estoque SET quantidade_estoque = ? WHERE id = ?");
+    $stmt = $conexao->prepare("UPDATE produtos_estoque SET quantidade_estoque = ? WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("di", $quantidade_posterior, $produto_id);
     $stmt->execute();
     
@@ -376,7 +384,7 @@ if ($action === 'saida' && $metodo === 'POST') {
     $observacoes = sanitizar($conexao, $dados['observacoes'] ?? '');
     
     // Obter quantidade anterior
-    $stmt = $conexao->prepare("SELECT quantidade_estoque, preco_unitario, nome FROM produtos_estoque WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT quantidade_estoque, preco_unitario, nome FROM produtos_estoque WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $produto_id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -403,7 +411,7 @@ if ($action === 'saida' && $metodo === 'POST') {
     $stmt->execute();
     
     // Atualizar estoque
-    $stmt = $conexao->prepare("UPDATE produtos_estoque SET quantidade_estoque = ? WHERE id = ?");
+    $stmt = $conexao->prepare("UPDATE produtos_estoque SET quantidade_estoque = ? WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("di", $quantidade_posterior, $produto_id);
     $stmt->execute();
     
@@ -418,37 +426,37 @@ if ($action === 'dashboard' && $metodo === 'GET') {
     $stats = array();
     
     // Total de produtos
-    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM produtos_estoque WHERE ativo = 1");
+    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM produtos_estoque WHERE tenant_id = $tenant_id AND ativo = 1");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $stats['total_produtos'] = $resultado->fetch_assoc()['total'];
     
     // Valor total do estoque
-    $stmt = $conexao->prepare("SELECT SUM(quantidade_estoque * preco_unitario) AS valor_total FROM produtos_estoque WHERE ativo = 1");
+    $stmt = $conexao->prepare("SELECT SUM(quantidade_estoque * preco_unitario) AS valor_total FROM produtos_estoque WHERE tenant_id = $tenant_id AND ativo = 1");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $stats['valor_total_estoque'] = floatval($resultado->fetch_assoc()['valor_total']);
     
     // Produtos com estoque baixo
-    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM produtos_estoque WHERE quantidade_estoque <= estoque_minimo AND ativo = 1");
+    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM produtos_estoque WHERE tenant_id = $tenant_id AND quantidade_estoque <= estoque_minimo AND ativo = 1");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $stats['produtos_estoque_baixo'] = $resultado->fetch_assoc()['total'];
     
     // Produtos zerados
-    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM produtos_estoque WHERE quantidade_estoque = 0 AND ativo = 1");
+    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM produtos_estoque WHERE tenant_id = $tenant_id AND quantidade_estoque = 0 AND ativo = 1");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $stats['produtos_zerados'] = $resultado->fetch_assoc()['total'];
     
     // Movimentações do mês
-    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM movimentacoes_estoque WHERE MONTH(data_movimentacao) = MONTH(NOW()) AND YEAR(data_movimentacao) = YEAR(NOW())");
+    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM movimentacoes_estoque WHERE tenant_id = $tenant_id AND MONTH(data_movimentacao) = MONTH(NOW()) AND YEAR(data_movimentacao) = YEAR(NOW())");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $stats['movimentacoes_mes'] = $resultado->fetch_assoc()['total'];
     
     // Entradas do mês
-    $stmt = $conexao->prepare("SELECT COUNT(*) AS total, SUM(valor_total) AS valor FROM movimentacoes_estoque WHERE tipo_movimentacao = 'Entrada' AND MONTH(data_movimentacao) = MONTH(NOW()) AND YEAR(data_movimentacao) = YEAR(NOW())");
+    $stmt = $conexao->prepare("SELECT COUNT(*) AS total, SUM(valor_total) AS valor FROM movimentacoes_estoque WHERE tenant_id = $tenant_id AND tipo_movimentacao = 'Entrada' AND MONTH(data_movimentacao) = MONTH(NOW()) AND YEAR(data_movimentacao) = YEAR(NOW())");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $row = $resultado->fetch_assoc();
@@ -456,7 +464,7 @@ if ($action === 'dashboard' && $metodo === 'GET') {
     $stats['valor_entradas_mes'] = floatval($row['valor']);
     
     // Saídas do mês
-    $stmt = $conexao->prepare("SELECT COUNT(*) AS total, SUM(valor_total) AS valor FROM movimentacoes_estoque WHERE tipo_movimentacao = 'Saida' AND MONTH(data_movimentacao) = MONTH(NOW()) AND YEAR(data_movimentacao) = YEAR(NOW())");
+    $stmt = $conexao->prepare("SELECT COUNT(*) AS total, SUM(valor_total) AS valor FROM movimentacoes_estoque WHERE tenant_id = $tenant_id AND tipo_movimentacao = 'Saida' AND MONTH(data_movimentacao) = MONTH(NOW()) AND YEAR(data_movimentacao) = YEAR(NOW())");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $row = $resultado->fetch_assoc();

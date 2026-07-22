@@ -7,6 +7,7 @@ session_start();
 
 ob_start();
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 ob_end_clean();
 
 // Verificar se o morador está logado

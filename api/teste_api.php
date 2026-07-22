@@ -29,6 +29,7 @@ header('Content-Type: text/html; charset=utf-8');
 
     <?php
     require_once 'config.php';
+require_once 'tenant_helper.php';;
 
     echo "<div class='test-section'>";
     echo "<h2>1. Teste de Conexão com o Banco de Dados</h2>";

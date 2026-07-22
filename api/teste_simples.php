@@ -13,6 +13,7 @@ header('Content-Type: application/json; charset=utf-8');
 try {
     // Teste 1: Incluir config.php
     require_once 'config.php';
+require_once 'tenant_helper.php';;
     $teste1 = "✅ config.php incluído";
     
     // Teste 2: Conectar ao banco

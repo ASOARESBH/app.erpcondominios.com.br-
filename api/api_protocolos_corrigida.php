@@ -4,7 +4,8 @@
  * Sistema de Controle de Acesso - Serra da Liberdade
  * 
  * Correções aplicadas:
- * 1. Adicionado require_once 'auth_helper.php' para autenticação
+ * 1. Adicionado require_once 'auth_helper.php';
+require_once 'tenant_helper.php'; para autenticação
  * 2. Adicionada função retornar_json local para garantir disponibilidade
  * 3. Melhorado tratamento de erros com logging
  * 4. Adicionada validação de entrada mais robusta
@@ -16,6 +17,7 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para retornar JSON (garantir disponibilidade local)
 if (!function_exists('retornar_json')) {
@@ -37,7 +39,13 @@ if (!function_exists('retornar_json')) {
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -50,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Verificar autenticação
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();

@@ -48,6 +48,7 @@ register_shutdown_function(function () {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -61,7 +62,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
@@ -69,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 verificarAutenticacao();
 
 $db  = conectar_banco();
+$tenant_id = exigirTenantId();
 if (!$db) retornar_json(false, 'Erro ao conectar ao banco de dados');
 $db->set_charset('utf8mb4');
 
@@ -342,7 +350,7 @@ function _migrar_departamentos_legado($db) {
             $oldId    = (int)$old['id'];
             $nomeEsc  = $db->real_escape_string(trim($old['nome']));
 
-            $rMatch = $db->query("SELECT id FROM departamentos WHERE UPPER(nome) = UPPER('$nomeEsc') LIMIT 1");
+            $rMatch = $db->query("SELECT id FROM departamentos WHERE tenant_id = $tenant_id AND UPPER(nome) = UPPER('$nomeEsc') LIMIT 1");
             $match  = $rMatch ? $rMatch->fetch_assoc() : null;
 
             if ($match) {
@@ -354,8 +362,8 @@ function _migrar_departamentos_legado($db) {
                 $novoId = $db->insert_id;
             }
 
-            $db->query("UPDATE documentos SET departamento_id=$novoId WHERE departamento_id=$oldId");
-            $db->query("UPDATE documentos_pastas SET departamento_id=$novoId WHERE departamento_id=$oldId");
+            $db->query("UPDATE documentos SET departamento_id=$novoId WHERE tenant_id = $tenant_id AND departamento_id=$oldId");
+            $db->query("UPDATE documentos_pastas SET departamento_id=$novoId WHERE tenant_id = $tenant_id AND departamento_id=$oldId");
         }
     }
 
@@ -410,7 +418,7 @@ function _registrar_acesso($db, $sessao, int $docId, string $tipo, string $orige
     if ($tipo === 'download') {
         $db->query("UPDATE documentos SET total_downloads = total_downloads + 1 WHERE id = $docId");
     } elseif ($tipo === 'visualizacao') {
-        $db->query("UPDATE documentos SET total_visualizacoes = total_visualizacoes + 1 WHERE id = $docId");
+        $db->query("UPDATE documentos SET total_visualizacoes = total_visualizacoes + 1 WHERE tenant_id = $tenant_id AND id = $docId");
     }
 }
 
@@ -420,11 +428,11 @@ function _registrar_acesso($db, $sessao, int $docId, string $tipo, string $orige
 function _dashboard_stats($db) {
     $hoje = date('Y-m-d');
 
-    $rTotal    = $db->query("SELECT COUNT(*) c FROM documentos WHERE status = 'ativo'");
-    $rHoje     = $db->query("SELECT COUNT(*) c FROM documentos WHERE DATE(created_at) = '$hoje'");
+    $rTotal    = $db->query("SELECT COUNT(*) c FROM documentos WHERE tenant_id = $tenant_id AND status = 'ativo'");
+    $rHoje     = $db->query("SELECT COUNT(*) c FROM documentos WHERE tenant_id = $tenant_id AND DATE(created_at) = '$hoje'");
     $rDow      = $db->query("SELECT SUM(total_downloads) c FROM documentos");
     $rVis      = $db->query("SELECT SUM(total_visualizacoes) c FROM documentos");
-    $rExp      = $db->query("SELECT COUNT(*) c FROM documentos WHERE status='ativo' AND data_expiracao IS NOT NULL AND data_expiracao < '$hoje'");
+    $rExp      = $db->query("SELECT COUNT(*) c FROM documentos WHERE tenant_id = $tenant_id AND status='ativo' AND data_expiracao IS NOT NULL AND data_expiracao < '$hoje'");
     $rComp     = $db->query("SELECT COUNT(*) c FROM documentos_compartilhamentos WHERE ativo=1");
 
     // Qualquer uma destas pode falhar (tabela/coluna ausente, permissão de DDL
@@ -507,7 +515,7 @@ function _departamentos_listar($db) {
 // (preserva o histórico quando um departamento é desativado depois).
 function _departamento_ativo_para_associacao($db, int $depId, int $depIdAtual): bool {
     if (!$depId || $depId === $depIdAtual) return true;
-    $res = $db->query("SELECT ativo FROM departamentos WHERE id=$depId LIMIT 1");
+    $res = $db->query("SELECT ativo FROM departamentos WHERE tenant_id = $tenant_id AND id=$depId LIMIT 1");
     $row = $res ? $res->fetch_assoc() : null;
     return $row && (int)$row['ativo'] === 1;
 }
@@ -557,7 +565,7 @@ function _grupo_salvar($db, $sessao) {
     if (!$nome) retornar_json(false, 'Nome é obrigatório.');
 
     if ($id) {
-        $db->query("UPDATE documentos_grupos SET nome='$nome',descricao='$desc',acesso_tipo='$tipo' WHERE id=$id");
+        $db->query("UPDATE documentos_grupos SET nome='$nome',descricao='$desc',acesso_tipo='$tipo' WHERE tenant_id = $tenant_id AND id=$id");
         retornar_json(true, 'Grupo atualizado.');
     } else {
         $uid = (int)($sessao['id'] ?? 0);
@@ -570,7 +578,7 @@ function _grupo_salvar($db, $sessao) {
 function _grupo_excluir($db) {
     $id = (int)($_POST['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
-    $db->query("UPDATE documentos_grupos SET ativo=0 WHERE id=$id");
+    $db->query("UPDATE documentos_grupos SET ativo=0 WHERE tenant_id = $tenant_id AND id=$id");
     retornar_json(true, 'Grupo removido.');
 }
 
@@ -630,7 +638,7 @@ function _pasta_salvar($db, $sessao) {
 
     $depIdAtual = 0;
     if ($id) {
-        $rCur = $db->query("SELECT departamento_id FROM documentos_pastas WHERE id=$id");
+        $rCur = $db->query("SELECT departamento_id FROM documentos_pastas WHERE tenant_id = $tenant_id AND id=$id");
         $depIdAtual = $rCur ? (int)($rCur->fetch_assoc()['departamento_id'] ?? 0) : 0;
     }
     if (!_departamento_ativo_para_associacao($db, $depId, $depIdAtual)) {
@@ -642,7 +650,7 @@ function _pasta_salvar($db, $sessao) {
 
     if ($id) {
         $db->query("UPDATE documentos_pastas SET nome='$nome',departamento_id=$depSql,
-                    pasta_pai_id=$paiSql,descricao='$desc' WHERE id=$id");
+                    pasta_pai_id=$paiSql,descricao='$desc' WHERE tenant_id = $tenant_id AND id=$id");
         retornar_json(true, 'Pasta atualizada.');
     } else {
         $uid = (int)($sessao['id'] ?? 0);
@@ -655,10 +663,10 @@ function _pasta_salvar($db, $sessao) {
 function _pasta_excluir($db) {
     $id = (int)($_POST['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
-    $res = $db->query("SELECT COUNT(*) c FROM documentos WHERE pasta_id=$id");
+    $res = $db->query("SELECT COUNT(*) c FROM documentos WHERE tenant_id = $tenant_id AND pasta_id=$id");
     if ($res && $res->fetch_assoc()['c'] > 0)
         retornar_json(false, 'Pasta contém documentos. Mova-os antes de excluir.');
-    $db->query("UPDATE documentos_pastas SET ativo=0 WHERE id=$id");
+    $db->query("UPDATE documentos_pastas SET ativo=0 WHERE tenant_id = $tenant_id AND id=$id");
     retornar_json(true, 'Pasta removida.');
 }
 
@@ -781,7 +789,7 @@ function _documento_salvar($db, $sessao) {
 
     $depIdAtual = 0;
     if ($id) {
-        $rCur = $db->query("SELECT departamento_id FROM documentos WHERE id=$id");
+        $rCur = $db->query("SELECT departamento_id FROM documentos WHERE tenant_id = $tenant_id AND id=$id");
         $depIdAtual = $rCur ? (int)($rCur->fetch_assoc()['departamento_id'] ?? 0) : 0;
     }
     if (!_departamento_ativo_para_associacao($db, $depId, $depIdAtual)) {
@@ -819,7 +827,7 @@ function _documento_salvar($db, $sessao) {
 
         if ($arquivoNovo) {
             // Remover arquivo anterior
-            $rOld = $db->query("SELECT arquivo FROM documentos WHERE id=$id");
+            $rOld = $db->query("SELECT arquivo FROM documentos WHERE tenant_id = $tenant_id AND id=$id");
             if ($rOld) {
                 $old = $rOld->fetch_assoc();
                 if (!empty($old['arquivo'])) {
@@ -831,7 +839,7 @@ function _documento_salvar($db, $sessao) {
                           arquivo_tamanho=$arquivoTam, arquivo_nome_original='$arquivoOrig'";
         }
 
-        $db->query("UPDATE documentos SET $setSql WHERE id=$id");
+        $db->query("UPDATE documentos SET $setSql WHERE tenant_id = $tenant_id AND id=$id");
         _log($db, $sessao, $id, 'edicao', "Documento editado: $nome");
         _sincronizar_usuarios_acesso($db, $id, $visib, $usuariosIds);
         retornar_json(true, 'Documento atualizado com sucesso.');
@@ -886,7 +894,7 @@ function _sincronizar_usuarios_acesso($db, int $docId, string $visib, $usuariosI
 }
 
 function _usuarios_sistema($db): void {
-    $res = $db->query("SELECT id, nome, email, nivel FROM usuarios WHERE ativo = 1 ORDER BY nome ASC");
+    $res = $db->query("SELECT id, nome, email, nivel FROM usuarios WHERE tenant_id = $tenant_id AND ativo = 1 ORDER BY nome ASC");
     $rows = [];
     if ($res) while ($r = $res->fetch_assoc()) $rows[] = $r;
     retornar_json(true, 'OK', ['usuarios' => $rows]);
@@ -956,12 +964,12 @@ function _documento_excluir($db, $sessao) {
     $id = (int)($_POST['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
 
-    $res = $db->query("SELECT nome, arquivo FROM documentos WHERE id=$id LIMIT 1");
+    $res = $db->query("SELECT nome, arquivo FROM documentos WHERE tenant_id = $tenant_id AND id=$id LIMIT 1");
     if (!$res || $res->num_rows === 0) retornar_json(false, 'Documento não encontrado.');
     $doc = $res->fetch_assoc();
 
     // Marcar como inativo (soft delete) e remover arquivo físico
-    $db->query("UPDATE documentos SET status='expirado' WHERE id=$id");
+    $db->query("UPDATE documentos SET status='expirado' WHERE tenant_id = $tenant_id AND id=$id");
 
     if (!empty($doc['arquivo'])) {
         $path = dirname(__DIR__) . '/uploads/documentos/' . basename($doc['arquivo']);
@@ -979,7 +987,7 @@ function _download($db, $sessao) {
     $id = (int)($_GET['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
 
-    $res = $db->query("SELECT * FROM documentos WHERE id=$id AND status='ativo' LIMIT 1");
+    $res = $db->query("SELECT * FROM documentos WHERE tenant_id = $tenant_id AND id=$id AND status='ativo' LIMIT 1");
     if (!$res || $res->num_rows === 0) retornar_json(false, 'Documento não disponível.');
     $doc = $res->fetch_assoc();
 
@@ -1037,7 +1045,7 @@ function _compartilhamento_gerar($db, $sessao) {
     if (!$docId) retornar_json(false, 'documento_id é obrigatório.');
 
     // Verificar se documento existe e está ativo
-    $res = $db->query("SELECT id, nome FROM documentos WHERE id=$docId AND status='ativo' LIMIT 1");
+    $res = $db->query("SELECT id, nome FROM documentos WHERE tenant_id = $tenant_id AND id=$docId AND status='ativo' LIMIT 1");
     if (!$res || $res->num_rows === 0) retornar_json(false, 'Documento não encontrado ou inativo.');
     $doc = $res->fetch_assoc();
 
@@ -1141,7 +1149,7 @@ function _notificar_novo_documento($db, int $docId, string $nomeDoc, int $grupoI
     try {
         require_once __DIR__ . '/EmailSender.php';
 
-        $rGrupo = $db->query("SELECT nome FROM documentos_grupos WHERE id=$grupoId LIMIT 1");
+        $rGrupo = $db->query("SELECT nome FROM documentos_grupos WHERE tenant_id = $tenant_id AND id=$grupoId LIMIT 1");
         $grupo  = $rGrupo ? ($rGrupo->fetch_assoc()['nome'] ?? 'Todos') : 'Todos';
 
         $rDep = $db->query("SELECT dep.nome FROM documentos d
@@ -1229,7 +1237,7 @@ function _tipo_excluir($db) {
     $id = (int)($_POST['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
     // Verificar se há documentos vinculados
-    $rCheck = $db->query("SELECT COUNT(*) c FROM documentos WHERE tipo_id=$id");
+    $rCheck = $db->query("SELECT COUNT(*) c FROM documentos WHERE tenant_id = $tenant_id AND tipo_id=$id");
     if ($rCheck && (int)$rCheck->fetch_assoc()['c'] > 0) {
         retornar_json(false, 'Não é possível excluir: existem documentos vinculados a este tipo.');
     }
@@ -1241,7 +1249,7 @@ function _tipo_excluir($db) {
 // UNIDADES (integração com tabela unidades)
 // ============================================================
 function _unidades_select($db) {
-    $res = $db->query("SELECT id, nome, bloco FROM unidades WHERE ativo = 1
+    $res = $db->query("SELECT id, nome, bloco FROM unidades WHERE tenant_id = $tenant_id AND ativo = 1
                        ORDER BY CASE WHEN bloco = 'ADMIN' THEN 9999 ELSE CAST(SUBSTRING_INDEX(nome, ' ', -1) AS UNSIGNED) END ASC, nome ASC");
     $rows = [];
     if ($res) while ($r = $res->fetch_assoc()) $rows[] = $r;

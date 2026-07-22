@@ -6,6 +6,7 @@
  */
 
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 
 // Conectar ao banco
 $conexao = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);

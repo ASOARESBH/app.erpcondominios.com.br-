@@ -16,6 +16,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 ob_end_clean();
 
@@ -70,6 +71,7 @@ if (!is_dir(UPLOAD_DIR)) {
 // ── Autenticação ──────────────────────────────────────────────────────────────
 try {
     verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 } catch (Exception $e) {
     retornar_json(false, 'Não autenticado', null);
 }
@@ -81,7 +83,7 @@ if (!$conexao) { retornar_json(false, 'Erro ao conectar ao banco de dados'); }
 // ── GET: download de arquivo ──────────────────────────────────────────────────
 if ($metodo === 'GET' && isset($_GET['download'])) {
     $id = intval($_GET['download']);
-    $stmt = $conexao->prepare("SELECT nome_original, caminho, tipo_mime FROM moradores_anexos WHERE id = ? AND ativo = 1");
+    $stmt = $conexao->prepare("SELECT nome_original, caminho, tipo_mime FROM moradores_anexos WHERE tenant_id = $tenant_id AND id = ? AND ativo = 1");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -131,8 +133,7 @@ if ($metodo === 'GET') {
         "SELECT id, morador_id, nome_documento, nome_original, tipo_mime, tamanho_bytes,
                 DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro,
                 criado_por
-         FROM moradores_anexos
-         WHERE morador_id = ? AND ativo = 1
+         FROM moradores_anexos WHERE tenant_id = $tenant_id AND morador_id = ? AND ativo = 1
          ORDER BY data_cadastro DESC"
     );
     $stmt->bind_param('i', $morador_id);
@@ -185,7 +186,7 @@ if ($metodo === 'POST') {
     }
 
     // Verificar se morador existe
-    $stmt = $conexao->prepare("SELECT id FROM moradores WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param('i', $morador_id);
     $stmt->execute();
     $stmt->store_result();
@@ -247,7 +248,7 @@ if ($metodo === 'DELETE') {
     if ($id <= 0) { retornar_json(false, 'ID inválido'); }
 
     // Buscar caminho do arquivo antes de deletar
-    $stmt = $conexao->prepare("SELECT caminho, nome_documento FROM moradores_anexos WHERE id = ? AND ativo = 1");
+    $stmt = $conexao->prepare("SELECT caminho, nome_documento FROM moradores_anexos WHERE tenant_id = $tenant_id AND id = ? AND ativo = 1");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -256,7 +257,7 @@ if ($metodo === 'DELETE') {
     $stmt->close();
 
     // Soft delete (manter arquivo no disco para auditoria)
-    $stmt = $conexao->prepare("UPDATE moradores_anexos SET ativo = 0 WHERE id = ?");
+    $stmt = $conexao->prepare("UPDATE moradores_anexos SET ativo = 0 WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param('i', $id);
     if ($stmt->execute()) {
         $criado_por = $_SESSION['usuario_nome'] ?? 'Sistema';

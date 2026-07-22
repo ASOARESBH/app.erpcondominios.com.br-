@@ -7,11 +7,18 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -94,6 +101,7 @@ function _migration($db) {
 
 // ─── Autenticação ─────────────────────────────────────────────────────────
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 $db  = conectar_banco();
 $db->set_charset('utf8mb4');
 _migration($db);
@@ -316,8 +324,7 @@ function _verificar_os_abertas($db) {
         // Buscar OS abertas há mais de X horas que ainda não geraram alerta para esta regra
         $sql = "SELECT o.id, o.numero, o.titulo, o.prioridade, o.departamento, o.atendente_nome,
                     TIMESTAMPDIFF(MINUTE, o.data_abertura, NOW()) AS minutos_aberta
-                FROM os_chamados o
-                WHERE o.status IN ('aberto','andamento')
+                FROM os_chamados o WHERE tenant_id = $tenant_id AND o.status IN ('aberto','andamento')
                 AND TIMESTAMPDIFF(MINUTE, o.data_abertura, NOW()) >= $minutos
                 AND NOT EXISTS (
                     SELECT 1 FROM notif_alertas na
@@ -361,7 +368,7 @@ function _obter_destinatarios($db, $regra) {
     }
     // Se não há usuários configurados, notificar todos os admins/gerentes
     if (empty($uids)) {
-        $rows = $db->query("SELECT id FROM usuarios WHERE permissao IN ('admin','gerente') AND ativo=1")->fetch_all(MYSQLI_ASSOC);
+        $rows = $db->query("SELECT id FROM usuarios WHERE tenant_id = $tenant_id AND permissao IN ('admin','gerente') AND ativo=1")->fetch_all(MYSQLI_ASSOC);
         foreach ($rows as $r) $uids[] = intval($r['id']);
     }
     return array_unique($uids);

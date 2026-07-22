@@ -8,6 +8,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -30,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
@@ -82,7 +84,7 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'upload') {
 
     // Atualizar o campo no banco
     $campo_db = ($tipo_upload === 'foto') ? 'foto' : 'documento_arquivo';
-    $stmt = $conexao->prepare("UPDATE visitantes SET $campo_db = ? WHERE id = ?");
+    $stmt = $conexao->prepare("UPDATE visitantes SET $campo_db = ? WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("si", $url_relativa, $visitante_id);
     if (!$stmt->execute()) {
         retornar_json(false, "Arquivo salvo mas erro ao atualizar banco: " . $stmt->error);
@@ -101,8 +103,7 @@ if ($metodo === 'GET' && isset($_GET['documento'])) {
     $stmt = $conexao->prepare(
         "SELECT id, nome_completo, documento, tipo_documento, telefone, celular, telefone_contato,
                 placa_veiculo, foto, observacao, ativo
-         FROM visitantes
-         WHERE REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
+         FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
             OR documento = ?
          LIMIT 1"
     );
@@ -190,8 +191,7 @@ if ($metodo === 'POST') {
     // Verificar duplicidade por documento (ignorando pontuação)
     $doc_limpo_busca = preg_replace('/[^0-9A-Za-z]/', '', $documento);
     $stmt = $conexao->prepare(
-        "SELECT id, nome_completo FROM visitantes
-         WHERE REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?"
+        "SELECT id, nome_completo FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?"
     );
     $stmt->bind_param("s", $doc_limpo_busca);
     $stmt->execute();
@@ -264,8 +264,7 @@ if ($metodo === 'PUT') {
     // Verificar duplicidade em outro visitante
     $doc_limpo_busca = preg_replace('/[^0-9A-Za-z]/', '', $documento);
     $stmt = $conexao->prepare(
-        "SELECT id, nome_completo FROM visitantes
-         WHERE REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
+        "SELECT id, nome_completo FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
            AND id != ?"
     );
     $stmt->bind_param("si", $doc_limpo_busca, $id);
@@ -286,8 +285,7 @@ if ($metodo === 'PUT') {
             telefone_contato = ?, telefone = ?, celular = ?,
             placa_veiculo = ?, email = ?,
             cep = ?, endereco = ?, numero = ?, complemento = ?,
-            bairro = ?, cidade = ?, estado = ?, observacao = ?
-         WHERE id = ?"
+            bairro = ?, cidade = ?, estado = ?, observacao = ? WHERE tenant_id = $tenant_id AND id = ?"
     );
     $stmt->bind_param(
         "ssssssssssssssssi",
@@ -315,7 +313,7 @@ if ($metodo === 'DELETE') {
 
     if ($id <= 0) retornar_json(false, "ID inválido");
 
-    $stmt = $conexao->prepare("SELECT nome_completo, foto, documento_arquivo FROM visitantes WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT nome_completo, foto, documento_arquivo FROM visitantes WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
@@ -323,7 +321,7 @@ if ($metodo === 'DELETE') {
 
     if (!$row) retornar_json(false, "Visitante não encontrado");
 
-    $stmt = $conexao->prepare("DELETE FROM visitantes WHERE id = ?");
+    $stmt = $conexao->prepare("DELETE FROM visitantes WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
 
     if ($stmt->execute()) {

@@ -6,6 +6,7 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'session_helper.php';
 
 // Iniciar sessão com cookie path=/ e CORS correto
@@ -81,6 +82,7 @@ if ($metodo !== 'GET' && $is_erp) {
 
 try {
     $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
     
     // ========== LISTAR PEDIDOS DO FORNECEDOR ==========
     if ($acao === 'listar_fornecedor' && $metodo === 'GET') {
@@ -225,7 +227,7 @@ try {
         
         // Obter dados do produto
         $produto_stmt = $conexao->prepare(
-            "SELECT fornecedor_id, preco_venda FROM produtos_servicos WHERE id = ? AND ativo = 1"
+            "SELECT fornecedor_id, preco_venda FROM produtos_servicos WHERE tenant_id = $tenant_id AND id = ? AND ativo = 1"
         );
         $produto_stmt->bind_param("i", $produto_servico_id);
         $produto_stmt->execute();
@@ -296,7 +298,7 @@ try {
         
         // Verificar se pedido pertence ao fornecedor
         $check_stmt = $conexao->prepare(
-            "SELECT id FROM pedidos WHERE id = ? AND fornecedor_id = ? AND status = 'aguardando'"
+            "SELECT id FROM pedidos WHERE tenant_id = $tenant_id AND id = ? AND fornecedor_id = ? AND status = 'aguardando'"
         );
         $check_stmt->bind_param("ii", $pedido_id, $fornecedor_id);
         $check_stmt->execute();
@@ -344,7 +346,7 @@ try {
         
         // Verificar se pedido pertence ao fornecedor
         $check_stmt = $conexao->prepare(
-            "SELECT id FROM pedidos WHERE id = ? AND fornecedor_id = ? AND status = 'aguardando'"
+            "SELECT id FROM pedidos WHERE tenant_id = $tenant_id AND id = ? AND fornecedor_id = ? AND status = 'aguardando'"
         );
         $check_stmt->bind_param("ii", $pedido_id, $fornecedor_id);
         $check_stmt->execute();
@@ -356,7 +358,7 @@ try {
         $check_stmt->close();
         
         // Atualizar status para 'cancelado'
-        $sql = "UPDATE pedidos SET status = 'cancelado', motivo_recusa = ? WHERE id = ?";
+        $sql = "UPDATE pedidos SET status = 'cancelado', motivo_recusa = ? WHERE tenant_id = $tenant_id AND id = ?";
         $stmt = $conexao->prepare($sql);
         $stmt->bind_param("si", $motivo_recusa, $pedido_id);
         
@@ -387,7 +389,7 @@ try {
         
         // Verificar se pedido pode ser finalizado
         $check_stmt = $conexao->prepare(
-            "SELECT id, status FROM pedidos WHERE id = ? AND (fornecedor_id = ? OR morador_id = ?)"
+            "SELECT id, status FROM pedidos WHERE tenant_id = $tenant_id AND id = ? AND (fornecedor_id = ? OR morador_id = ?)"
         );
         $check_stmt->bind_param("iii", $pedido_id, $usuario_id, $usuario_id);
         $check_stmt->execute();
@@ -441,7 +443,7 @@ try {
         
         // Obter dados do pedido
         $pedido_stmt = $conexao->prepare(
-            "SELECT morador_id, fornecedor_id, produto_servico_id, status FROM pedidos WHERE id = ?"
+            "SELECT morador_id, fornecedor_id, produto_servico_id, status FROM pedidos WHERE tenant_id = $tenant_id AND id = ?"
         );
         $pedido_stmt->bind_param("i", $pedido_id);
         $pedido_stmt->execute();
@@ -459,7 +461,7 @@ try {
         
         // Verificar se avaliação já existe
         $check_stmt = $conexao->prepare(
-            "SELECT id FROM avaliacoes WHERE pedido_id = ?"
+            "SELECT id FROM avaliacoes WHERE tenant_id = $tenant_id AND pedido_id = ?"
         );
         $check_stmt->bind_param("i", $pedido_id);
         $check_stmt->execute();
@@ -520,8 +522,7 @@ try {
                     ROUND(AVG(a.nota_morador), 2) as media_nota_morador,
                     ROUND(AVG(a.nota_fornecedor), 2) as media_nota_fornecedor,
                     ROUND((AVG(a.nota_morador) + AVG(a.nota_fornecedor)) / 2, 2) as media_geral
-                FROM avaliacoes a
-                WHERE a.fornecedor_id = ?";
+                FROM avaliacoes a WHERE tenant_id = $tenant_id AND a.fornecedor_id = ?";
         
         $stmt = $conexao->prepare($sql);
         $stmt->bind_param("i", $fornecedor_id);

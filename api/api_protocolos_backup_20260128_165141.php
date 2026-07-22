@@ -8,6 +8,7 @@
 ob_start();
 
 require_once 'config.php';
+require_once 'tenant_helper.php';;
 
 // Limpar buffer e definir headers
 ob_end_clean();

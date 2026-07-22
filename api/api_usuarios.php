@@ -8,6 +8,7 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Limpar buffer e definir headers
 // Função para retornar JSON
@@ -24,7 +25,13 @@ if (!function_exists('retornar_json')) {
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -37,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Verificar autenticação — GET permite gerente, demais operações exigem admin
 verificarAutenticacao(true);
+$tenant_id = exigirTenantId();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
@@ -64,7 +72,7 @@ if ($metodo === 'PATCH') {
     }
 
     // Buscar dados atuais do usuário
-    $stmt = $conexao->prepare('SELECT nome, ativo, permissao FROM usuarios WHERE id = ? LIMIT 1');
+    $stmt = $conexao->prepare('SELECT nome, ativo, permissao FROM usuarios WHERE tenant_id = $tenant_id AND id = ? LIMIT 1');
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $usuario = $stmt->get_result()->fetch_assoc();
@@ -82,7 +90,7 @@ if ($metodo === 'PATCH') {
     }
 
     // Aplicar alteração
-    $stmt = $conexao->prepare('UPDATE usuarios SET ativo = ? WHERE id = ?');
+    $stmt = $conexao->prepare('UPDATE usuarios SET ativo = ? WHERE tenant_id = $tenant_id AND id = ?');
     $stmt->bind_param('ii', $novo_ativo, $id);
 
     if ($stmt->execute()) {
@@ -115,7 +123,7 @@ if ($metodo === 'GET') {
     if (isset($_GET['id'])) {
         // Buscar usuário específico
         $id = intval($_GET['id']);
-        $stmt = $conexao->prepare("SELECT id, nome, email, funcao, departamento, permissao, ativo, COALESCE(sessao_inativa,0) AS sessao_inativa, DATE_FORMAT(data_criacao, '%d/%m/%Y %H:%i') as data_criacao FROM usuarios WHERE id = ?");
+        $stmt = $conexao->prepare("SELECT id, nome, email, funcao, departamento, permissao, ativo, COALESCE(sessao_inativa,0) AS sessao_inativa, DATE_FORMAT(data_criacao, '%d/%m/%Y %H:%i') as data_criacao FROM usuarios WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $resultado = $stmt->get_result();
@@ -130,8 +138,7 @@ if ($metodo === 'GET') {
         $sql = "SELECT id, nome, email, funcao, departamento, permissao, ativo,
                 COALESCE(sessao_inativa,0) AS sessao_inativa,
                 DATE_FORMAT(data_criacao, '%d/%m/%Y %H:%i') as data_criacao
-                FROM usuarios
-                ORDER BY nome ASC";
+                FROM usuarios WHERE tenant_id = $tenant_id ORDER BY nome ASC";
         
         $resultado = $conexao->query($sql);
         $usuarios = array();
@@ -165,7 +172,7 @@ if ($metodo === 'POST') {
     }
     
     // Verificar se email já existe
-    $stmt = $conexao->prepare("SELECT id FROM usuarios WHERE email = ?");
+    $stmt = $conexao->prepare("SELECT id FROM usuarios WHERE tenant_id = $tenant_id AND email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $stmt->store_result();
@@ -213,7 +220,7 @@ if ($metodo === 'PUT') {
     }
     
     // Verificar se email já existe em outro usuário
-    $stmt = $conexao->prepare("SELECT id FROM usuarios WHERE email = ? AND id != ?");
+    $stmt = $conexao->prepare("SELECT id FROM usuarios WHERE tenant_id = $tenant_id AND email = ? AND id != ?");
     $stmt->bind_param("si", $email, $id);
     $stmt->execute();
     $stmt->store_result();
@@ -227,10 +234,10 @@ if ($metodo === 'PUT') {
     // Atualizar com ou sem senha
     if (isset($dados['senha']) && !empty($dados['senha']) && $dados['senha'] !== '********') {
         $senha_hash = password_hash($dados['senha'], PASSWORD_DEFAULT);
-        $stmt = $conexao->prepare("UPDATE usuarios SET nome=?, email=?, senha=?, funcao=?, departamento=?, permissao=?, ativo=?, sessao_inativa=? WHERE id=?");
+        $stmt = $conexao->prepare("UPDATE usuarios SET nome=?, email=?, senha=?, funcao=?, departamento=?, permissao=?, ativo=?, sessao_inativa=? WHERE tenant_id = $tenant_id AND id=?");
         $stmt->bind_param("sssssssii", $nome, $email, $senha_hash, $funcao, $departamento, $permissao, $ativo, $sessao_inativa, $id);
     } else {
-        $stmt = $conexao->prepare("UPDATE usuarios SET nome=?, email=?, funcao=?, departamento=?, permissao=?, ativo=?, sessao_inativa=? WHERE id=?");
+        $stmt = $conexao->prepare("UPDATE usuarios SET nome=?, email=?, funcao=?, departamento=?, permissao=?, ativo=?, sessao_inativa=? WHERE tenant_id = $tenant_id AND id=?");
         $stmt->bind_param("ssssssii", $nome, $email, $funcao, $departamento, $permissao, $ativo, $sessao_inativa, $id);
     }
     
@@ -259,7 +266,7 @@ if ($metodo === 'DELETE') {
     }
     
     // Buscar nome do usuário antes de excluir
-    $stmt = $conexao->prepare("SELECT nome FROM usuarios WHERE id = ?");
+    $stmt = $conexao->prepare("SELECT nome FROM usuarios WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -268,7 +275,7 @@ if ($metodo === 'DELETE') {
     $stmt->close();
     
     // Excluir usuário
-    $stmt = $conexao->prepare("DELETE FROM usuarios WHERE id = ?");
+    $stmt = $conexao->prepare("DELETE FROM usuarios WHERE tenant_id = $tenant_id AND id = ?");
     $stmt->bind_param("i", $id);
     
     if ($stmt->execute()) {

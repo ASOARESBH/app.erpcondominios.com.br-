@@ -19,6 +19,7 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 require_once 'debug_veiculos.php';
 
@@ -32,7 +33,13 @@ registrar_debug('INICIO', 'API de veículos iniciada', array(
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -146,6 +153,7 @@ function _veic_montar_filtros($conexao) {
 try {
     // Verificar autenticação
     verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
     
     $metodo = $_SERVER['REQUEST_METHOD'];
     $conexao = conectar_banco();
@@ -349,7 +357,7 @@ try {
     // ADMIN sempre por último.
     if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_unidades') {
         $res = $conexao->query("
-            SELECT id, nome, bloco FROM unidades WHERE ativo = 1
+            SELECT id, nome, bloco FROM unidades WHERE tenant_id = $tenant_id AND ativo = 1
             ORDER BY CASE WHEN bloco = 'ADMIN' THEN 9999 ELSE CAST(SUBSTRING_INDEX(nome, ' ', -1) AS UNSIGNED) END ASC,
                      nome ASC
         ");
@@ -401,7 +409,7 @@ try {
         $kpis = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        $resTipos = $conexao->query("SELECT DISTINCT tipo FROM veiculos WHERE tipo IS NOT NULL AND tipo != '' ORDER BY tipo ASC");
+        $resTipos = $conexao->query("SELECT DISTINCT tipo FROM veiculos WHERE tenant_id = $tenant_id AND tipo IS NOT NULL AND tipo != '' ORDER BY tipo ASC");
         $tiposLista = [];
         if ($resTipos) while ($r = $resTipos->fetch_assoc()) $tiposLista[] = $r['tipo'];
 
@@ -489,32 +497,29 @@ try {
         } elseif ($tipoAgregado === 'por_tipo') {
             $res = $conexao->query("
                 SELECT COALESCE(NULLIF(v.tipo,''),'Não informado') AS chave, COUNT(*) AS total
-                FROM veiculos v GROUP BY chave ORDER BY total DESC
+                FROM veiculos v WHERE tenant_id = $tenant_id GROUP BY chave ORDER BY total DESC
             ");
         } elseif ($tipoAgregado === 'por_cor') {
             $res = $conexao->query("
                 SELECT COALESCE(NULLIF(v.cor,''),'Não informada') AS chave, COUNT(*) AS total
-                FROM veiculos v GROUP BY chave ORDER BY total DESC
+                FROM veiculos v WHERE tenant_id = $tenant_id GROUP BY chave ORDER BY total DESC
             ");
         } elseif ($tipoAgregado === 'por_mes') {
             $res = $conexao->query("
                 SELECT DATE_FORMAT(v.data_cadastro, '%Y-%m') AS chave, COUNT(*) AS total
-                FROM veiculos v
-                WHERE v.data_cadastro >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                FROM veiculos v WHERE tenant_id = $tenant_id AND v.data_cadastro >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
                 GROUP BY chave ORDER BY chave ASC
             ");
         } elseif ($tipoAgregado === 'tags_duplicadas') {
             $res = $conexao->query("
                 SELECT v.tag AS chave, COUNT(*) AS total, GROUP_CONCAT(v.placa SEPARATOR ', ') AS placas
-                FROM veiculos v
-                WHERE v.tag IS NOT NULL AND v.tag != ''
+                FROM veiculos v WHERE tenant_id = $tenant_id AND v.tag IS NOT NULL AND v.tag != ''
                 GROUP BY v.tag HAVING COUNT(*) > 1 ORDER BY total DESC
             ");
         } elseif ($tipoAgregado === 'placas_duplicadas') {
             $res = $conexao->query("
                 SELECT v.placa AS chave, COUNT(*) AS total, GROUP_CONCAT(v.tag SEPARATOR ', ') AS tags
-                FROM veiculos v
-                GROUP BY v.placa HAVING COUNT(*) > 1 ORDER BY total DESC
+                FROM veiculos v WHERE tenant_id = $tenant_id GROUP BY v.placa HAVING COUNT(*) > 1 ORDER BY total DESC
             ");
         } else {
             retornar_json(false, "Tipo de agregação inválido");
@@ -549,7 +554,7 @@ try {
         
         try {
             // Verificar se morador existe
-            $stmt = $conexao->prepare("SELECT id FROM moradores WHERE id = ?");
+            $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -565,7 +570,7 @@ try {
             
             // Se dependente_id foi informado, verificar se existe e pertence ao morador
             if ($dependente_id !== null) {
-                $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE id = ? AND morador_id = ?");
+                $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE tenant_id = $tenant_id AND id = ? AND morador_id = ?");
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar query: " . $conexao->error);
                 }
@@ -580,7 +585,7 @@ try {
                 $stmt->close();
                 
                 // Verificar se dependente já tem um veículo
-                $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE dependente_id = ?");
+                $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND dependente_id = ?");
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar query: " . $conexao->error);
                 }
@@ -596,7 +601,7 @@ try {
             }
             
             // Verificar se placa já existe
-            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE placa = ?");
+            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND placa = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -611,7 +616,7 @@ try {
             $stmt->close();
             
             // Verificar se TAG já existe
-            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tag = ?");
+            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND tag = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -680,7 +685,7 @@ try {
         
         try {
             // Verificar se placa já existe em outro veículo
-            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE placa = ? AND id != ?");
+            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND placa = ? AND id != ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -695,7 +700,7 @@ try {
             $stmt->close();
             
             // Verificar se TAG já existe em outro veículo
-            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tag = ? AND id != ?");
+            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND tag = ? AND id != ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -710,7 +715,7 @@ try {
             $stmt->close();
             
             // Atualizar veículo
-            $stmt = $conexao->prepare("UPDATE veiculos SET placa=?, modelo=?, cor=?, tipo=?, tag=? WHERE id=?");
+            $stmt = $conexao->prepare("UPDATE veiculos SET placa=?, modelo=?, cor=?, tipo=?, tag=? WHERE tenant_id = $tenant_id AND id=?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar update: " . $conexao->error);
             }
@@ -749,7 +754,7 @@ try {
         
         try {
             // Buscar placa do veículo antes de excluir
-            $stmt = $conexao->prepare("SELECT placa FROM veiculos WHERE id = ?");
+            $stmt = $conexao->prepare("SELECT placa FROM veiculos WHERE tenant_id = $tenant_id AND id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -761,7 +766,7 @@ try {
             $stmt->close();
             
             // Excluir veículo
-            $stmt = $conexao->prepare("DELETE FROM veiculos WHERE id = ?");
+            $stmt = $conexao->prepare("DELETE FROM veiculos WHERE tenant_id = $tenant_id AND id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar delete: " . $conexao->error);
             }
@@ -793,7 +798,7 @@ try {
         
         try {
             // Obter status atual
-            $stmt = $conexao->prepare("SELECT ativo FROM veiculos WHERE id = ?");
+            $stmt = $conexao->prepare("SELECT ativo FROM veiculos WHERE tenant_id = $tenant_id AND id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -810,7 +815,7 @@ try {
             $novo_status = $veiculo['ativo'] == 1 ? 0 : 1;
             
             // Atualizar status
-            $stmt = $conexao->prepare("UPDATE veiculos SET ativo = ? WHERE id = ?");
+            $stmt = $conexao->prepare("UPDATE veiculos SET ativo = ? WHERE tenant_id = $tenant_id AND id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar update: " . $conexao->error);
             }

@@ -6,6 +6,7 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -19,7 +20,13 @@ if (!function_exists('retornar_json')) {
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
@@ -33,6 +40,7 @@ $metodo = $_SERVER['REQUEST_METHOD'];
 
 try {
     $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
     
     // ========== LISTAR PRODUTOS/SERVIÇOS ATIVOS ==========
     if ($acao === 'listar' && $metodo === 'GET') {
@@ -322,8 +330,7 @@ try {
                     ROUND(AVG(a.nota_morador), 2) as media_nota_morador,
                     ROUND(AVG(a.nota_fornecedor), 2) as media_nota_fornecedor,
                     ROUND((AVG(a.nota_morador) + AVG(a.nota_fornecedor)) / 2, 2) as media_geral
-                FROM avaliacoes a
-                WHERE a.fornecedor_id = ?";
+                FROM avaliacoes a WHERE tenant_id = $tenant_id AND a.fornecedor_id = ?";
         
         $stmt = $conexao->prepare($sql);
         $stmt->bind_param("i", $fornecedor_id);

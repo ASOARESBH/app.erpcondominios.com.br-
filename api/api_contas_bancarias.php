@@ -45,10 +45,17 @@ register_shutdown_function(function() {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 // ─── Headers ────────────────────────────────────────
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: https://asl.erpcondominios.com.br');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -92,6 +99,7 @@ _debug_log('REQUEST', [
 
 // ─── Autenticação ─────────────────────────────────────
 verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 
 $body   = [];
 if ($metodo !== 'GET') {
@@ -173,7 +181,7 @@ function _listar_contas($db) {
     $tem_ofx = $db->query("SHOW TABLES LIKE 'historico_importacoes_ofx'")->num_rows > 0;
 
     $sub_mov = $tem_mov
-        ? "(SELECT COUNT(*) FROM movimentacoes_bancarias mb WHERE mb.conta_id = cb.id)"
+        ? "(SELECT COUNT(*) FROM movimentacoes_bancarias mb WHERE tenant_id = $tenant_id AND mb.conta_id = cb.id)"
         : "0";
     $sub_ofx = $tem_ofx
         ? "(SELECT MAX(importado_em) FROM historico_importacoes_ofx hi WHERE hi.conta_id = cb.id)"
@@ -182,8 +190,7 @@ function _listar_contas($db) {
     $sql = "SELECT cb.*,
                 {$sub_mov} AS total_mov,
                 {$sub_ofx} AS ultima_importacao
-            FROM contas_bancarias cb
-            WHERE cb.ativo = 1
+            FROM contas_bancarias cb WHERE tenant_id = $tenant_id AND cb.ativo = 1
             ORDER BY cb.nome ASC";
     $res = $db->query($sql);
     if (!$res) _json(false, 'Erro ao listar contas: ' . $db->error);
@@ -201,7 +208,7 @@ function _listar_contas($db) {
 function _obter_conta($db) {
     $id = intval($_GET['id'] ?? 0);
     if (!$id) _json(false, 'ID inválido', null, 400);
-    $stmt = $db->prepare("SELECT * FROM contas_bancarias WHERE id = ? AND ativo = 1");
+    $stmt = $db->prepare("SELECT * FROM contas_bancarias WHERE tenant_id = $tenant_id AND id = ? AND ativo = 1");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $r = $stmt->get_result()->fetch_assoc();
@@ -237,8 +244,7 @@ function _atualizar_conta($db, $body) {
     if (!$id) _json(false, 'ID inválido', null, 400);
     $stmt = $db->prepare("UPDATE contas_bancarias SET
         nome=?, banco_codigo=?, banco_nome=?, agencia=?, conta_numero=?,
-        conta_tipo=?, moeda=?, saldo_inicial=?, observacoes=?
-        WHERE id=? AND ativo=1");
+        conta_tipo=?, moeda=?, saldo_inicial=?, observacoes=? WHERE tenant_id = $tenant_id AND id=? AND ativo=1");
     $saldo_ini = (float)($body['saldo_inicial'] ?? 0);
     $moeda = $body['moeda'] ?? 'BRL';
     $obs   = $body['observacoes'] ?? '';
@@ -256,7 +262,7 @@ function _excluir_conta($db, $body) {
     verificarPermissao('admin');
     $id = intval($body['id'] ?? 0);
     if (!$id) _json(false, 'ID inválido', null, 400);
-    $stmt = $db->prepare("UPDATE contas_bancarias SET ativo=0 WHERE id=?");
+    $stmt = $db->prepare("UPDATE contas_bancarias SET ativo=0 WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     _json(true, 'Conta removida');
@@ -311,7 +317,7 @@ function _listar_movimentacoes($db) {
     }
 
     // Total para paginação
-    $sql_count = "SELECT COUNT(*) AS total FROM movimentacoes_bancarias mb WHERE " . implode(' AND ', $where);
+    $sql_count = "SELECT COUNT(*) AS total FROM movimentacoes_bancarias mb WHERE tenant_id = $tenant_id AND " . implode(' AND ', $where);
     $types_count  = substr($types, 0, -2); // remove os 2 'i' do fim (limite e offset)
     $params_count = array_slice($params, 0, -2);
     $stmt2 = $db->prepare($sql_count);
@@ -356,8 +362,7 @@ function _atualizar_movimentacao($db, $body) {
     if (!$id) _json(false, 'ID inválido', null, 400);
     $stmt = $db->prepare("UPDATE movimentacoes_bancarias SET
         tipo=?, valor=?, data_lancamento=?, descricao=?, favorecido=?,
-        checknum=?, numero_documento=?, categoria=?, centro_custo=?, status=?, observacoes=?
-        WHERE id=?");
+        checknum=?, numero_documento=?, categoria=?, centro_custo=?, status=?, observacoes=? WHERE tenant_id = $tenant_id AND id=?");
     $valor       = abs((float)($body['valor'] ?? 0));
     $upd_tipo    = $body['tipo']             ?? '';
     $upd_dt      = $body['data_lancamento']  ?? '';
@@ -376,7 +381,7 @@ function _atualizar_movimentacao($db, $body) {
     );
     if (!$stmt->execute()) _json(false, 'Erro ao atualizar: ' . $stmt->error);
     // Recalcular saldo da conta
-    $r = $db->query("SELECT conta_id FROM movimentacoes_bancarias WHERE id=$id")->fetch_assoc();
+    $r = $db->query("SELECT conta_id FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND id=$id")->fetch_assoc();
     if ($r) _recalcular_saldo($db, $r['conta_id']);
     _json(true, 'Movimentação atualizada');
 }
@@ -385,8 +390,8 @@ function _excluir_movimentacao($db, $body) {
     verificarPermissao('gerente');
     $id = intval($body['id'] ?? 0);
     if (!$id) _json(false, 'ID inválido', null, 400);
-    $r = $db->query("SELECT conta_id FROM movimentacoes_bancarias WHERE id=$id")->fetch_assoc();
-    $stmt = $db->prepare("DELETE FROM movimentacoes_bancarias WHERE id=?");
+    $r = $db->query("SELECT conta_id FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND id=$id")->fetch_assoc();
+    $stmt = $db->prepare("DELETE FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     if ($r) _recalcular_saldo($db, $r['conta_id']);
@@ -400,7 +405,7 @@ function _conciliar($db, $body) {
     if (empty($ids)) _json(false, 'Nenhum ID informado', null, 400);
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $types = str_repeat('i', count($ids));
-    $stmt = $db->prepare("UPDATE movimentacoes_bancarias SET conciliado=? WHERE id IN ($placeholders)");
+    $stmt = $db->prepare("UPDATE movimentacoes_bancarias SET conciliado=? WHERE tenant_id = $tenant_id AND id IN ($placeholders)");
     $params = array_merge([$conciliado], $ids);
     $types = 'i' . $types;
     $stmt->bind_param($types, ...$params);
@@ -436,7 +441,7 @@ function _preview_ofx($db) {
             continue;
         }
         // Verificar se FITID já existe no banco
-        $stmt = $db->prepare("SELECT id FROM movimentacoes_bancarias WHERE conta_id=? AND fitid=?");
+        $stmt = $db->prepare("SELECT id FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND conta_id=? AND fitid=?");
         $stmt->bind_param('is', $conta_id, $t['fitid']);
         $stmt->execute();
         if ($stmt->get_result()->num_rows > 0) { $duplicatas++; } else { $novas++; }
@@ -472,7 +477,7 @@ function _importar_ofx($db) {
     if (!$conta_id) _json(false, 'conta_id obrigatório', null, 400);
 
     // Verificar se conta existe
-    $r = $db->query("SELECT id, nome FROM contas_bancarias WHERE id=$conta_id AND ativo=1")->fetch_assoc();
+    $r = $db->query("SELECT id, nome FROM contas_bancarias WHERE tenant_id = $tenant_id AND id=$conta_id AND ativo=1")->fetch_assoc();
     if (!$r) _json(false, 'Conta não encontrada', null, 404);
 
     $conteudo = _ler_ofx($_FILES['ofx_file']['tmp_name']);
@@ -574,7 +579,7 @@ function _importar_ofx($db) {
         // Atualizar importacao_id nas inseridas
         if ($importadas > 0 && $imp_id_novo && !empty($ids_inseridos)) {
             $placeholders = implode(',', $ids_inseridos);
-            $db->query("UPDATE movimentacoes_bancarias SET importacao_id=$imp_id_novo WHERE id IN ($placeholders)");
+            $db->query("UPDATE movimentacoes_bancarias SET importacao_id=$imp_id_novo WHERE tenant_id = $tenant_id AND id IN ($placeholders)");
         }
 
         $db->commit();
@@ -658,12 +663,11 @@ function _kpis($db) {
         COALESCE(SUM(CASE WHEN mb.tipo='debito'  THEN mb.valor ELSE 0 END), 0) AS total_debitos,
         COUNT(*) AS total_mov,
         SUM(CASE WHEN mb.conciliado=0 THEN 1 ELSE 0 END) AS pendentes_conciliacao
-        FROM movimentacoes_bancarias mb
-        WHERE 1=1 $where_conta $where_mes";
+        FROM movimentacoes_bancarias mb WHERE tenant_id = $tenant_id AND 1=1 $where_conta $where_mes";
     $r = $db->query($sql)->fetch_assoc();
 
-    $saldo_total = $db->query("SELECT COALESCE(SUM(saldo_atual),0) AS s FROM contas_bancarias WHERE ativo=1")->fetch_assoc()['s'];
-    $total_contas = $db->query("SELECT COUNT(*) AS c FROM contas_bancarias WHERE ativo=1")->fetch_assoc()['c'];
+    $saldo_total = $db->query("SELECT COALESCE(SUM(saldo_atual),0) AS s FROM contas_bancarias WHERE tenant_id = $tenant_id AND ativo=1")->fetch_assoc()['s'];
+    $total_contas = $db->query("SELECT COUNT(*) AS c FROM contas_bancarias WHERE tenant_id = $tenant_id AND ativo=1")->fetch_assoc()['c'];
 
     _json(true, 'OK', [
         'saldo_total'           => (float)$saldo_total,
@@ -731,8 +735,8 @@ function _relatorio_extrato($db) {
 function _recalcular_saldo($db, $conta_id) {
     $db->query("UPDATE contas_bancarias cb
         SET saldo_atual = cb.saldo_inicial
-            + COALESCE((SELECT SUM(valor) FROM movimentacoes_bancarias WHERE conta_id=$conta_id AND tipo='credito'),0)
-            - COALESCE((SELECT SUM(valor) FROM movimentacoes_bancarias WHERE conta_id=$conta_id AND tipo='debito'),0)
+            + COALESCE((SELECT SUM(valor) FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND conta_id=$conta_id AND tipo='credito'),0)
+            - COALESCE((SELECT SUM(valor) FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND conta_id=$conta_id AND tipo='debito'),0)
         WHERE id=$conta_id");
 }
 
@@ -1004,7 +1008,7 @@ function _inserir_bancos_inline($db) {
  * Retorna true se auto-conciliou, false se ficou pendente.
  */
 function _motor_conciliacao($db, $mov_id): bool {
-    $mov = $db->query("SELECT * FROM movimentacoes_bancarias WHERE id=$mov_id")->fetch_assoc();
+    $mov = $db->query("SELECT * FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND id=$mov_id")->fetch_assoc();
     if (!$mov || $mov['status'] !== 'pendente') return false;
 
     $tabela = $mov['tipo'] === 'credito' ? 'contas_receber' : 'contas_pagar';
@@ -1064,7 +1068,7 @@ function _conciliar_auto($db, array $mov, string $tabela, array $titulo, int $sc
 
     $db->begin_transaction();
     try {
-        $db->query("UPDATE movimentacoes_bancarias SET status='conciliado' WHERE id={$mov['id']}");
+        $db->query("UPDATE movimentacoes_bancarias SET status='conciliado' WHERE tenant_id = $tenant_id AND id={$mov['id']}");
 
         $status_novo = $tabela === 'contas_receber' ? 'RECEBIDO' : 'PAGO';
         $campo_data  = $tabela === 'contas_receber' ? 'data_recebimento' : 'data_pagamento';
@@ -1080,7 +1084,7 @@ function _conciliar_auto($db, array $mov, string $tabela, array $titulo, int $sc
         if (!$stmt->execute()) { $db->rollback(); return false; }
 
         $conc_id = $db->insert_id;
-        $db->query("UPDATE movimentacoes_bancarias SET conciliacao_id=$conc_id WHERE id={$mov['id']}");
+        $db->query("UPDATE movimentacoes_bancarias SET conciliacao_id=$conc_id WHERE tenant_id = $tenant_id AND id={$mov['id']}");
         $db->commit();
         return true;
     } catch (Exception $e) {
@@ -1104,13 +1108,13 @@ function _conciliar_manual($db, array $body) {
     $usuario     = $_SESSION['usuario_nome'] ?? 'sistema';
 
     // Verificar que a movimentação não está já conciliada
-    $mov = $db->query("SELECT * FROM movimentacoes_bancarias WHERE id=$mov_id")->fetch_assoc();
+    $mov = $db->query("SELECT * FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND id=$mov_id")->fetch_assoc();
     if (!$mov) _json(false, 'Movimentação não encontrada', null, 404);
     if ($mov['status'] === 'conciliado') _json(false, 'Movimentação já está conciliada');
 
     $db->begin_transaction();
     try {
-        $db->query("UPDATE movimentacoes_bancarias SET status='conciliado' WHERE id=$mov_id");
+        $db->query("UPDATE movimentacoes_bancarias SET status='conciliado' WHERE tenant_id = $tenant_id AND id=$mov_id");
         $db->query("UPDATE $tabela SET status='$status_novo', $campo_data=CURDATE() WHERE id=$titulo_id AND ativo=1");
 
         $stmt = $db->prepare("INSERT INTO conciliacoes
@@ -1120,7 +1124,7 @@ function _conciliar_manual($db, array $body) {
         $stmt->execute();
         $conc_id = $db->insert_id;
 
-        $db->query("UPDATE movimentacoes_bancarias SET conciliacao_id=$conc_id WHERE id=$mov_id");
+        $db->query("UPDATE movimentacoes_bancarias SET conciliacao_id=$conc_id WHERE tenant_id = $tenant_id AND id=$mov_id");
         $db->commit();
     } catch (Exception $e) {
         $db->rollback();
@@ -1136,7 +1140,7 @@ function _desfazer_conciliacao($db, array $body) {
     $conc_id = intval($body['conc_id'] ?? 0);
     if (!$conc_id) _json(false, 'conc_id obrigatório', null, 400);
 
-    $conc = $db->query("SELECT * FROM conciliacoes WHERE id=$conc_id AND ativa=1")->fetch_assoc();
+    $conc = $db->query("SELECT * FROM conciliacoes WHERE tenant_id = $tenant_id AND id=$conc_id AND ativa=1")->fetch_assoc();
     if (!$conc) _json(false, 'Conciliação não encontrada ou já desfeita', null, 404);
 
     $tabela      = $conc['tipo_titulo'] === 'receber' ? 'contas_receber' : 'contas_pagar';
@@ -1145,9 +1149,9 @@ function _desfazer_conciliacao($db, array $body) {
 
     $db->begin_transaction();
     try {
-        $db->query("UPDATE movimentacoes_bancarias SET status='pendente', conciliacao_id=NULL WHERE id={$conc['movimentacao_id']}");
+        $db->query("UPDATE movimentacoes_bancarias SET status='pendente', conciliacao_id=NULL WHERE tenant_id = $tenant_id AND id={$conc['movimentacao_id']}");
         $db->query("UPDATE $tabela SET status='PENDENTE', $campo_data=NULL WHERE id={$conc['titulo_id']}");
-        $db->query("UPDATE conciliacoes SET ativa=0, desfeita_por='$usuario', desfeita_em=NOW() WHERE id=$conc_id");
+        $db->query("UPDATE conciliacoes SET ativa=0, desfeita_por='$usuario', desfeita_em=NOW() WHERE tenant_id = $tenant_id AND id=$conc_id");
         $db->commit();
     } catch (Exception $e) {
         $db->rollback();
@@ -1183,13 +1187,11 @@ function _pendentes_conciliacao($db) {
     // Subconsultas de candidatos
     $sql = "SELECT mb.*,
                 cb.nome AS conta_nome,
-                (SELECT COUNT(*) FROM contas_receber cr
-                 WHERE cr.ativo=1 AND cr.status='PENDENTE'
+                (SELECT COUNT(*) FROM contas_receber cr WHERE tenant_id = $tenant_id AND cr.ativo=1 AND cr.status='PENDENTE'
                    AND cr.valor_original BETWEEN mb.valor*0.95 AND mb.valor*1.05
                    AND cr.data_vencimento BETWEEN DATE_SUB(mb.data_lancamento,INTERVAL 30 DAY) AND DATE_ADD(mb.data_lancamento,INTERVAL 30 DAY)
                 ) AS cand_receber,
-                (SELECT COUNT(*) FROM contas_pagar cp
-                 WHERE cp.ativo=1 AND cp.status='PENDENTE'
+                (SELECT COUNT(*) FROM contas_pagar cp WHERE tenant_id = $tenant_id AND cp.ativo=1 AND cp.status='PENDENTE'
                    AND cp.valor_original BETWEEN mb.valor*0.95 AND mb.valor*1.05
                    AND cp.data_vencimento BETWEEN DATE_SUB(mb.data_lancamento,INTERVAL 30 DAY) AND DATE_ADD(mb.data_lancamento,INTERVAL 30 DAY)
                 ) AS cand_pagar
@@ -1213,7 +1215,7 @@ function _pendentes_conciliacao($db) {
 
     $types_c  = substr($types, 0, -2);
     $params_c = array_slice($params, 0, -2);
-    $stmt2 = $db->prepare("SELECT COUNT(*) AS total FROM movimentacoes_bancarias mb WHERE $where_sql");
+    $stmt2 = $db->prepare("SELECT COUNT(*) AS total FROM movimentacoes_bancarias mb WHERE tenant_id = $tenant_id AND $where_sql");
     if ($types_c) $stmt2->bind_param($types_c, ...$params_c);
     $stmt2->execute();
     $total = $stmt2->get_result()->fetch_assoc()['total'] ?? 0;
@@ -1225,7 +1227,7 @@ function _candidatos_conciliacao($db) {
     $mov_id = intval($_GET['mov_id'] ?? 0);
     if (!$mov_id) _json(false, 'mov_id obrigatório', null, 400);
 
-    $mov = $db->query("SELECT * FROM movimentacoes_bancarias WHERE id=$mov_id")->fetch_assoc();
+    $mov = $db->query("SELECT * FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND id=$mov_id")->fetch_assoc();
     if (!$mov) _json(false, 'Movimentação não encontrada', null, 404);
 
     $tol   = $mov['valor'] * 0.05;
@@ -1236,16 +1238,14 @@ function _candidatos_conciliacao($db) {
     $receber = []; $pagar = [];
 
     $res = $db->query("SELECT id, numero_documento, descricao, valor_original, data_vencimento, morador_nome AS favorecido
-                       FROM contas_receber
-                       WHERE ativo=1 AND status='PENDENTE'
+                       FROM contas_receber WHERE tenant_id = $tenant_id AND ativo=1 AND status='PENDENTE'
                          AND valor_original BETWEEN $v_min AND $v_max
                          AND data_vencimento BETWEEN DATE_SUB('$dt',INTERVAL 30 DAY) AND DATE_ADD('$dt',INTERVAL 30 DAY)
                        LIMIT 15");
     if ($res) while ($r = $res->fetch_assoc()) { $r['valor_original'] = (float)$r['valor_original']; $receber[] = $r; }
 
     $res2 = $db->query("SELECT id, numero_documento, descricao, valor_original, data_vencimento, '' AS favorecido
-                        FROM contas_pagar
-                        WHERE ativo=1 AND status='PENDENTE'
+                        FROM contas_pagar WHERE tenant_id = $tenant_id AND ativo=1 AND status='PENDENTE'
                           AND valor_original BETWEEN $v_min AND $v_max
                           AND data_vencimento BETWEEN DATE_SUB('$dt',INTERVAL 30 DAY) AND DATE_ADD('$dt',INTERVAL 30 DAY)
                         LIMIT 15");
@@ -1257,13 +1257,12 @@ function _candidatos_conciliacao($db) {
 function _dashboard_financeiro($db) {
     $mes = date('Y-m');
 
-    $r_banco = $db->query("SELECT COALESCE(SUM(saldo_atual),0) AS s FROM contas_bancarias WHERE ativo=1")->fetch_assoc();
+    $r_banco = $db->query("SELECT COALESCE(SUM(saldo_atual),0) AS s FROM contas_bancarias WHERE tenant_id = $tenant_id AND ativo=1")->fetch_assoc();
     $r_mes   = $db->query("SELECT
         COALESCE(SUM(CASE WHEN tipo='credito' THEN valor ELSE 0 END),0) AS entradas,
         COALESCE(SUM(CASE WHEN tipo='debito'  THEN valor ELSE 0 END),0) AS saidas
-        FROM movimentacoes_bancarias
-        WHERE DATE_FORMAT(data_lancamento,'%Y-%m')='$mes'")->fetch_assoc();
-    $r_pend  = $db->query("SELECT COUNT(*) AS c FROM movimentacoes_bancarias WHERE status='pendente'")->fetch_assoc();
+        FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND DATE_FORMAT(data_lancamento,'%Y-%m')='$mes'")->fetch_assoc();
+    $r_pend  = $db->query("SELECT COUNT(*) AS c FROM movimentacoes_bancarias WHERE tenant_id = $tenant_id AND status='pendente'")->fetch_assoc();
 
     _json(true, 'OK', [
         'saldo_bancario'         => (float)($r_banco['s']        ?? 0),

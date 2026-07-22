@@ -11,6 +11,7 @@ ini_set('log_errors', 1);
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -29,6 +30,7 @@ header('Cache-Control: no-cache, must-revalidate');
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$tenant_id = exigirTenantId();
 
 // Flag para verificar se algum endpoint foi processado
 $endpoint_processado = false;
@@ -52,7 +54,7 @@ function executar_query($conexao, $sql, $endpoint_nome) {
 
 // ========== TOTAL DE MORADORES ==========
 if ($metodo === 'GET' && isset($_GET['total_moradores'])) {
-    $sql = "SELECT COUNT(*) as total FROM moradores WHERE ativo = 1";
+    $sql = "SELECT COUNT(*) as total FROM moradores WHERE tenant_id = $tenant_id AND ativo = 1";
     $resultado = executar_query($conexao, $sql, 'total_moradores');
     $dados = $resultado->fetch_assoc();
     retornar_json(true, "Total de moradores", $dados);
@@ -284,7 +286,7 @@ if ($metodo === 'GET' && isset($_GET['estatisticas_gerais'])) {
     $endpoint_processado = true;
     
     try {
-        $resultado_moradores = $conexao->query("SELECT COUNT(*) as total FROM moradores WHERE ativo = 1");
+        $resultado_moradores = $conexao->query("SELECT COUNT(*) as total FROM moradores WHERE tenant_id = $tenant_id AND ativo = 1");
         $total_moradores = $resultado_moradores ? $resultado_moradores->fetch_assoc()['total'] : 0;
         
         $resultado_consumo = $conexao->query("SELECT COALESCE(SUM(consumo), 0) as total_consumo FROM leituras");

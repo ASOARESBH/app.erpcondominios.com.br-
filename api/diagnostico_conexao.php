@@ -16,6 +16,7 @@ echo "<h2>1. Verificando config.php</h2>";
 if (file_exists('config.php')) {
     echo "✅ config.php existe<br>";
     require_once 'config.php';
+require_once 'tenant_helper.php';;
     echo "✅ config.php incluído com sucesso<br>";
 } else {
     echo "❌ config.php NÃO ENCONTRADO<br>";

@@ -14,7 +14,13 @@
  */
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
+    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
+    header('Access-Control-Allow-Origin: ' . $_mt_origin);
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
@@ -25,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 function retornar_json($sucesso, $mensagem, $dados = null) {
     echo json_encode([
@@ -64,6 +71,7 @@ function registrar_log_local_acesso($local_acesso_id, $acao, $dados_anteriores, 
 }
 
 $usuario = verificarAutenticacao(true, 'admin');
+$tenant_id = exigirTenantId();
 $usuario_id = $usuario['id'];
 $metodo = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
@@ -105,7 +113,7 @@ if ($action === 'buscar' && $metodo === 'GET') {
             retornar_json(false, 'ID não fornecido');
         }
         
-        $stmt = $conexao->prepare("SELECT * FROM local_acessos WHERE id = ?");
+        $stmt = $conexao->prepare("SELECT * FROM local_acessos WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             error_log("[API LOCAL ACESSOS] Erro ao preparar query: " . $conexao->error);
             retornar_json(false, 'Erro ao buscar local');
@@ -184,7 +192,7 @@ if ($action === 'atualizar' && $metodo === 'POST') {
             retornar_json(false, 'ID e Nome são obrigatórios');
         }
         
-        $stmt_anterior = $conexao->prepare("SELECT * FROM local_acessos WHERE id = ?");
+        $stmt_anterior = $conexao->prepare("SELECT * FROM local_acessos WHERE tenant_id = $tenant_id AND id = ?");
         $stmt_anterior->bind_param("i", $id);
         $stmt_anterior->execute();
         $resultado_anterior = $stmt_anterior->get_result();
@@ -197,8 +205,7 @@ if ($action === 'atualizar' && $metodo === 'POST') {
         
         $stmt = $conexao->prepare("
             UPDATE local_acessos
-            SET nome = ?, descricao = ?, observacao = ?, situacao = ?, usuario_atualizacao_id = ?
-            WHERE id = ?
+            SET nome = ?, descricao = ?, observacao = ?, situacao = ?, usuario_atualizacao_id = ? WHERE tenant_id = $tenant_id AND id = ?
         ");
         if (!$stmt) {
             error_log("[API LOCAL ACESSOS] Erro ao preparar update: " . $conexao->error);
@@ -233,7 +240,7 @@ if ($action === 'deletar' && $metodo === 'POST') {
             retornar_json(false, 'ID não fornecido');
         }
         
-        $stmt_anterior = $conexao->prepare("SELECT * FROM local_acessos WHERE id = ?");
+        $stmt_anterior = $conexao->prepare("SELECT * FROM local_acessos WHERE tenant_id = $tenant_id AND id = ?");
         $stmt_anterior->bind_param("i", $id);
         $stmt_anterior->execute();
         $resultado_anterior = $stmt_anterior->get_result();
@@ -244,7 +251,7 @@ if ($action === 'deletar' && $metodo === 'POST') {
             retornar_json(false, 'Local não encontrado');
         }
         
-        $stmt = $conexao->prepare("DELETE FROM local_acessos WHERE id = ?");
+        $stmt = $conexao->prepare("DELETE FROM local_acessos WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             error_log("[API LOCAL ACESSOS] Erro ao preparar delete: " . $conexao->error);
             retornar_json(false, 'Erro ao deletar local');
@@ -278,7 +285,7 @@ if ($action === 'atualizar_status' && $metodo === 'POST') {
             retornar_json(false, 'Dados inválidos');
         }
         
-        $stmt = $conexao->prepare("UPDATE local_acessos SET situacao = ?, usuario_atualizacao_id = ? WHERE id = ?");
+        $stmt = $conexao->prepare("UPDATE local_acessos SET situacao = ?, usuario_atualizacao_id = ? WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {
             error_log("[API LOCAL ACESSOS] Erro ao preparar update de status: " . $conexao->error);
             retornar_json(false, 'Erro ao atualizar status');

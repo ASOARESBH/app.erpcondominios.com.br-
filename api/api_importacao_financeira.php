@@ -22,10 +22,12 @@
  */
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 require_once 'log_financeiro_helper.php';
 
 $conn         = conectar_banco();
 $usuario      = verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 $usuario_nome = $usuario['nome'] ?? 'Sistema';
 
 date_default_timezone_set('America/Sao_Paulo');
@@ -165,7 +167,7 @@ function _importar() {
     }
 
     if (empty($itens)) {
-        $conn->query("UPDATE importacoes_financeiras SET status='ERRO', total_registros=0 WHERE id={$lote_id}");
+        $conn->query("UPDATE importacoes_financeiras SET status='ERRO', total_registros=0 WHERE tenant_id = $tenant_id AND id={$lote_id}");
         log_fin('importacao', 'AVISO', 'importar', 'Nenhum registro encontrado no arquivo', 'Arquivo: ' . $nome_orig . ' | Formato: ' . $formato . ' | Período: ' . $data_inicio . ' a ' . $data_fim, $lote_id);
         retornar_json(false, 'Nenhum registro encontrado no arquivo. Verifique o formato ou o período informado.'); return;
     }
@@ -189,7 +191,7 @@ function _importar() {
             $fn  = $item['fornecedor_nome'];
             $val = (float)$item['valor'];
             $dv  = $item['data_lancamento'];
-            $chk = $conn->prepare("SELECT id FROM contas_pagar WHERE fornecedor_nome = ? AND valor_original = ? AND data_vencimento = ? LIMIT 1");
+            $chk = $conn->prepare("SELECT id FROM contas_pagar WHERE tenant_id = $tenant_id AND fornecedor_nome = ? AND valor_original = ? AND data_vencimento = ? LIMIT 1");
             $chk->bind_param('sds', $fn, $val, $dv);
             $chk->execute();
             $res = $chk->get_result();
@@ -254,8 +256,7 @@ function _importar() {
         total_erros={$erros},
         total_entradas={$sum_entradas},
         total_saidas={$sum_saidas},
-        saldo_final={$saldo_final}
-        WHERE id={$lote_id}");
+        saldo_final={$saldo_final} WHERE tenant_id = $tenant_id AND id={$lote_id}");
 
     retornar_json(true, 'Arquivo processado com sucesso', [
         'lote_id'    => $lote_id,
@@ -624,7 +625,7 @@ function _parseCSV($path, $data_inicio, $data_fim) {
 // ══════════════════════════════════════════════════════════════
 function _listarLotes() {
     global $conn;
-    $res   = $conn->query("SELECT * FROM importacoes_financeiras ORDER BY data_importacao DESC LIMIT 100");
+    $res   = $conn->query("SELECT * FROM importacoes_financeiras WHERE tenant_id = $tenant_id ORDER BY data_importacao DESC LIMIT 100");
     $lotes = [];
     while ($row = $res->fetch_assoc()) $lotes[] = $row;
     retornar_json(true, 'OK', $lotes);
@@ -652,10 +653,10 @@ function _listarItens() {
 
     $where_sql = implode(' AND ', $where);
 
-    $total_res = $conn->query("SELECT COUNT(*) as c FROM importacoes_financeiras_itens WHERE {$where_sql}");
+    $total_res = $conn->query("SELECT COUNT(*) as c FROM importacoes_financeiras_itens WHERE tenant_id = $tenant_id AND {$where_sql}");
     $total_rows = (int)$total_res->fetch_assoc()['c'];
 
-    $res   = $conn->query("SELECT * FROM importacoes_financeiras_itens WHERE {$where_sql} ORDER BY data_lancamento ASC, linha_original ASC LIMIT {$por_pag} OFFSET {$offset}");
+    $res   = $conn->query("SELECT * FROM importacoes_financeiras_itens WHERE tenant_id = $tenant_id AND {$where_sql} ORDER BY data_lancamento ASC, linha_original ASC LIMIT {$por_pag} OFFSET {$offset}");
     $itens = [];
     while ($row = $res->fetch_assoc()) $itens[] = $row;
 
@@ -677,7 +678,7 @@ function _resumoLote() {
     if (!$lote_id) { retornar_json(false, 'lote_id obrigatório'); return; }
 
     // Dados do lote
-    $res_lote = $conn->query("SELECT * FROM importacoes_financeiras WHERE id={$lote_id}");
+    $res_lote = $conn->query("SELECT * FROM importacoes_financeiras WHERE tenant_id = $tenant_id AND id={$lote_id}");
     if (!$res_lote || $res_lote->num_rows === 0) { retornar_json(false, 'Lote não encontrado'); return; }
     $lote = $res_lote->fetch_assoc();
 
@@ -686,8 +687,7 @@ function _resumoLote() {
         COUNT(*) as qtd,
         SUM(valor_entrada) as total_entrada,
         SUM(valor_saida) as total_saida
-        FROM importacoes_financeiras_itens
-        WHERE importacao_id={$lote_id}
+        FROM importacoes_financeiras_itens WHERE tenant_id = $tenant_id AND importacao_id={$lote_id}
         GROUP BY tipo_lancamento ORDER BY total_saida DESC");
     $por_tipo = [];
     while ($row = $res_tipos->fetch_assoc()) $por_tipo[] = $row;
@@ -697,8 +697,7 @@ function _resumoLote() {
         COUNT(*) as qtd,
         SUM(valor_saida) as total_saida,
         SUM(valor_entrada) as total_entrada
-        FROM importacoes_financeiras_itens
-        WHERE importacao_id={$lote_id} AND fornecedor_nome IS NOT NULL
+        FROM importacoes_financeiras_itens WHERE tenant_id = $tenant_id AND importacao_id={$lote_id} AND fornecedor_nome IS NOT NULL
         GROUP BY fornecedor_nome ORDER BY total_saida DESC LIMIT 15");
     $top_fornecedores = [];
     while ($row = $res_forn->fetch_assoc()) $top_fornecedores[] = $row;
@@ -708,8 +707,7 @@ function _resumoLote() {
         COUNT(*) as qtd,
         SUM(valor_saida) as total_saida,
         SUM(valor_entrada) as total_entrada
-        FROM importacoes_financeiras_itens
-        WHERE importacao_id={$lote_id}
+        FROM importacoes_financeiras_itens WHERE tenant_id = $tenant_id AND importacao_id={$lote_id}
         GROUP BY classificacao_despesa ORDER BY total_saida DESC");
     $por_classificacao = [];
     while ($row = $res_class->fetch_assoc()) $por_classificacao[] = $row;
@@ -719,8 +717,7 @@ function _resumoLote() {
         COUNT(*) as qtd,
         SUM(valor_entrada) as total_entrada,
         SUM(valor_saida) as total_saida
-        FROM importacoes_financeiras_itens
-        WHERE importacao_id={$lote_id} AND data_lancamento IS NOT NULL
+        FROM importacoes_financeiras_itens WHERE tenant_id = $tenant_id AND importacao_id={$lote_id} AND data_lancamento IS NOT NULL
         GROUP BY mes ORDER BY mes ASC");
     $por_mes = [];
     while ($row = $res_mes->fetch_assoc()) $por_mes[] = $row;
@@ -744,8 +741,7 @@ function _conciliarItem() {
     $conta_id = (int)($data['conta_id'] ?? 0);
     if (!$item_id) { retornar_json(false, 'item_id obrigatório'); return; }
     $stmt = $conn->prepare("UPDATE importacoes_financeiras_itens SET
-        status_importacao='CONCILIADO', conta_id=?, conciliado_por=?, data_conciliacao=NOW()
-        WHERE id=?");
+        status_importacao='CONCILIADO', conta_id=?, conciliado_por=?, data_conciliacao=NOW() WHERE tenant_id = $tenant_id AND id=?");
     $cid = $conta_id ?: null;
     $stmt->bind_param('isi', $cid, $usuario_nome, $item_id);
     $stmt->execute(); $stmt->close();
@@ -760,7 +756,7 @@ function _ignorarItem() {
     $data    = json_decode(file_get_contents('php://input'), true) ?: $_POST;
     $item_id = (int)($data['item_id'] ?? 0);
     if (!$item_id) { retornar_json(false, 'item_id obrigatório'); return; }
-    $conn->query("UPDATE importacoes_financeiras_itens SET status_importacao='IGNORADO' WHERE id={$item_id}");
+    $conn->query("UPDATE importacoes_financeiras_itens SET status_importacao='IGNORADO' WHERE tenant_id = $tenant_id AND id={$item_id}");
     retornar_json(true, 'Item ignorado');
 }
 
@@ -774,19 +770,18 @@ function _confirmarImportar() {
     $apenas_saidas = isset($data['apenas_saidas']) ? (bool)$data['apenas_saidas'] : true;
     if (!$lote_id) { retornar_json(false, 'lote_id obrigatório'); return; }
 
-    $res_lote = $conn->query("SELECT * FROM importacoes_financeiras WHERE id={$lote_id}");
+    $res_lote = $conn->query("SELECT * FROM importacoes_financeiras WHERE tenant_id = $tenant_id AND id={$lote_id}");
     if (!$res_lote || $res_lote->num_rows === 0) { retornar_json(false, 'Lote não encontrado'); return; }
     $lote = $res_lote->fetch_assoc();
 
     // Buscar plano padrão de despesa
-    $res_plano = $conn->query("SELECT id FROM planos_contas WHERE tipo='DESPESA' AND ativo=1 LIMIT 1");
+    $res_plano = $conn->query("SELECT id FROM planos_contas WHERE tenant_id = $tenant_id AND tipo='DESPESA' AND ativo=1 LIMIT 1");
     $plano_id  = 1;
     if ($res_plano && $res_plano->num_rows > 0) $plano_id = (int)$res_plano->fetch_assoc()['id'];
 
     // Filtro: importar apenas saídas (despesas) para contas_pagar
     $filtro_tipo = $apenas_saidas ? "AND tipo_lancamento IN ('SAIDA','TARIFA')" : "";
-    $res_itens = $conn->query("SELECT * FROM importacoes_financeiras_itens
-        WHERE importacao_id={$lote_id} AND status_importacao='PENDENTE' {$filtro_tipo}");
+    $res_itens = $conn->query("SELECT * FROM importacoes_financeiras_itens WHERE tenant_id = $tenant_id AND importacao_id={$lote_id} AND status_importacao='PENDENTE' {$filtro_tipo}");
 
     $importados = 0; $erros = 0;
 
@@ -817,16 +812,16 @@ function _confirmarImportar() {
         );
         if ($ins->execute()) {
             $conta_id = $conn->insert_id;
-            $conn->query("UPDATE importacoes_financeiras_itens SET status_importacao='IMPORTADO', conta_id={$conta_id} WHERE id={$item['id']}");
+            $conn->query("UPDATE importacoes_financeiras_itens SET status_importacao='IMPORTADO', conta_id={$conta_id} WHERE tenant_id = $tenant_id AND id={$item['id']}");
             $importados++;
         } else {
-            $conn->query("UPDATE importacoes_financeiras_itens SET status_importacao='ERRO', mensagem_erro='" . $conn->real_escape_string($conn->error) . "' WHERE id={$item['id']}");
+            $conn->query("UPDATE importacoes_financeiras_itens SET status_importacao='ERRO', mensagem_erro='" . $conn->real_escape_string($conn->error) . "' WHERE tenant_id = $tenant_id AND id={$item['id']}");
             $erros++;
         }
         $ins->close();
     }
 
-    $conn->query("UPDATE importacoes_financeiras SET total_importados=total_importados+{$importados} WHERE id={$lote_id}");
+    $conn->query("UPDATE importacoes_financeiras SET total_importados=total_importados+{$importados} WHERE tenant_id = $tenant_id AND id={$lote_id}");
     retornar_json(true, "Importação concluída: {$importados} registros importados para Contas a Pagar, {$erros} erros.", [
         'importados' => $importados, 'erros' => $erros
     ]);
@@ -840,8 +835,8 @@ function _excluirLote() {
     $data    = json_decode(file_get_contents('php://input'), true) ?: $_POST;
     $lote_id = (int)($data['lote_id'] ?? $_GET['lote_id'] ?? 0);
     if (!$lote_id) { retornar_json(false, 'lote_id obrigatório'); return; }
-    $conn->query("DELETE FROM importacoes_financeiras_itens WHERE importacao_id={$lote_id}");
-    $conn->query("DELETE FROM importacoes_financeiras WHERE id={$lote_id}");
+    $conn->query("DELETE FROM importacoes_financeiras_itens WHERE tenant_id = $tenant_id AND importacao_id={$lote_id}");
+    $conn->query("DELETE FROM importacoes_financeiras WHERE tenant_id = $tenant_id AND id={$lote_id}");
     retornar_json(true, 'Lote excluído com sucesso');
 }
 

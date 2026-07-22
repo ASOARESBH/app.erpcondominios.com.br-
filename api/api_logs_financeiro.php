@@ -19,9 +19,11 @@
  */
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'tenant_helper.php';;
 
 $conn         = conectar_banco();
 $usuario      = verificarAutenticacao(true, 'operador');
+$tenant_id = exigirTenantId();
 $usuario_nome = $usuario['nome'] ?? 'Sistema';
 
 date_default_timezone_set('America/Sao_Paulo');
