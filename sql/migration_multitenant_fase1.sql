@@ -91,7 +91,7 @@ SELECT
   e.endereco_estado,
   e.data_criacao
 FROM `empresa` e
-ON DUPLICATE KEY UPDATE `id` = `id`;
+ON DUPLICATE KEY UPDATE `slug` = VALUES(`slug`);
 
 -- =========================================================================
 -- SEÇÃO 3: TABELA DE RELACIONAMENTO USUÁRIO × TENANT
