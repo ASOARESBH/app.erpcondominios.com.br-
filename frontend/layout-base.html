@@ -12,123 +12,117 @@
     <link rel="stylesheet" href="/assets/css/themes/theme-blue.css">
     <link rel="stylesheet" href="components/user-menu/user-menu.css">
 
+    <!-- Auth Guard: verifica sessão ANTES de renderizar a página -->
+    <!-- IMPORTANTE: deve estar no HEAD para bloquear o carregamento se não autenticado -->
+    <script src="js/auth-guard.js"></script>
+
+    <!-- Session Manager Core: gerencia a sessão após autenticação -->
+    <script src="js/session-manager-core.js"></script>
 </head>
 
 <body>
+    <button class="menu-toggle" onclick="toggleMenu()">
+        <i class="fas fa-bars"></i>
+    </button>
 
-    <!-- Base Scripts (Head) -->
-    <script src="js/auth-guard.js"></script>
-    <script src="js/session-manager-core.js"></script>
-    </head>
+    <nav class="sidebar" id="sidebar">
+        <!-- Sidebar loaded dynamically by sidebar-controller.js -->
+    </nav>
 
-    <body>
-        <button class="menu-toggle" onclick="toggleMenu()">
-            <i class="fas fa-bars"></i>
-        </button>
+    <main class="main-content">
+        <header class="header">
+            <h1 id="pageTitle"><i class="fas fa-circle"></i> Carregando...</h1>
+            <app-user-menu></app-user-menu>
+        </header>
 
-        <nav class="sidebar" id="sidebar">
-            <!-- Sidebar loaded dynamically by sidebar-controller.js -->
-        </nav>
-
-        <main class="main-content">
-            <header class="header">
-                <h1 id="pageTitle"><i class="fas fa-circle"></i> Carregando...</h1>
-                <app-user-menu></app-user-menu>
-            </header>
-
-            <!-- Dynamic Content Container -->
-            <div id="appContent">
-                <div class="loading" style="display:block; text-align:center; padding: 3rem;">
-                    <i class="fas fa-spinner fa-spin fa-2x" style="color:var(--color-primary-600)"></i>
-                    <p style="margin-top:1rem; color:var(--color-text-tertiary)">Inicializando aplicação...</p>
-                </div>
-            </div>
-        </main>
-
-        <!-- Base Scripts (Body End) -->
-        <script src="components/user-menu/user-menu.js" defer></script>
-        <script src="js/user-profile-sidebar.js"></script>
-        <script src="js/sidebar-controller.js"></script>
-        <!-- Super Admin: exibe item no menu apenas para super_admin -->
-        <script src="js/sidebar-superadmin.js"></script>
-
-        <!-- App Router (Professional Loader) -->
-        <script type="module" src="js/app-router.js"></script>
-
-        <!-- App Initialization -->
-        <script type="module">
-            import { AppRouter } from './js/app-router.js';
-
-            // Menu Toggle — Mobile: abre/fecha sidebar; Desktop: recolhe/expande sidebar
-            window.toggleMenu = function () {
-                const sidebar = document.getElementById('sidebar');
-                const mainContent = document.querySelector('.main-content');
-                if (!sidebar) return;
-                if (window.innerWidth <= 768) {
-                    // Mobile: mostrar/ocultar sidebar
-                    sidebar.classList.toggle('active');
-                } else {
-                    // Desktop: recolher/expandir sidebar
-                    const isCollapsed = sidebar.classList.toggle('collapsed');
-                    if (mainContent) mainContent.classList.toggle('sidebar-collapsed', isCollapsed);
-                    localStorage.setItem('sidebarCollapsed', isCollapsed);
-                    // Atualizar ícone do botão interno (sidebarCollapseBtn) se existir
-                    const icon = document.getElementById('sidebarCollapseBtnIcon');
-                    if (icon) icon.className = isCollapsed ? 'fas fa-bars' : 'fas fa-bars';
-                    console.log('[toggleMenu] Sidebar desktop', isCollapsed ? 'recolhida' : 'expandida');
-                }
-            };
-
-            // Initialize Router
-            document.addEventListener('DOMContentLoaded', function () {
-                console.log('[App] Inicializando aplicação...');
-                AppRouter.init();
-
-                // Load initial page from URL (?page=X) or default to dashboard
-                const initialPage = AppRouter.getPageFromURL('dashboard');
-                console.log(`[App] Página inicial: ${initialPage}`);
-                AppRouter.loadPage(initialPage, false); // Don't update history on initial load
-            });
-
-            // Navigation Handler (será expandido na Fase 5)
-            document.addEventListener('click', function (e) {
-                const link = e.target.closest('[data-page]');
-                if (link) {
-                    e.preventDefault();
-                    const pageName = link.dataset.page;
-                    console.log(`[App] Navegação solicitada: ${pageName}`);
-                    AppRouter.loadPage(pageName);
-                }
-            });
-        </script>
-
-        <!-- Modal Logout -->
-        <div class="modal-logout-overlay" id="modalLogout">
-            <div class="modal-logout-content">
-                <div class="modal-logout-icon">
-                    <i class="fas fa-sign-out-alt"></i>
-                </div>
-
-                <h3 class="modal-logout-title">Encerrar Sessão?</h3>
-                <p class="modal-logout-text">
-                    Sua sessão será encerrada com segurança e seus dados locais serão limpos.
-                </p>
-
-                <div class="modal-logout-buttons">
-                    <button class="btn-cancel" id="cancelLogout">Cancelar</button>
-                    <button class="btn-confirm" id="confirmLogout">Sair Agora</button>
-                </div>
+        <!-- Dynamic Content Container -->
+        <div id="appContent">
+            <div class="loading" style="display:block; text-align:center; padding: 3rem;">
+                <i class="fas fa-spinner fa-spin fa-2x" style="color:var(--color-primary-600)"></i>
+                <p style="margin-top:1rem; color:var(--color-text-tertiary)">Inicializando aplicação...</p>
             </div>
         </div>
-        <!-- Notificações Global Bell -->
-        <script src="js/notif-bell.js" defer></script>
-        <!-- Menu Controller (Single Source of Truth) -->
-        <script src="js/menu-controller.js"></script>
+    </main>
 
-        <!-- Legacy Bridge v2 (Compatibilidade) -->
-        <script src="js/legacy-sidebar-bridge-v2.js"></script>
-        <!-- Controle de Acesso por Módulo (filtra menu conforme permissões do usuário) -->
-        <script src="js/permissoes-modulos.js"></script>
-    </body>
+    <!-- Base Scripts (Body End) -->
+    <script src="components/user-menu/user-menu.js" defer></script>
+    <script src="js/user-profile-sidebar.js"></script>
+    <script src="js/sidebar-controller.js"></script>
+    <!-- Super Admin: exibe item no menu apenas para super_admin -->
+    <script src="js/sidebar-superadmin.js"></script>
+
+    <!-- App Router (Professional Loader) -->
+    <script type="module" src="js/app-router.js"></script>
+
+    <!-- App Initialization -->
+    <script type="module">
+        import { AppRouter } from './js/app-router.js';
+
+        // Menu Toggle — Mobile: abre/fecha sidebar; Desktop: recolhe/expande sidebar
+        window.toggleMenu = function () {
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.querySelector('.main-content');
+            if (!sidebar) return;
+            if (window.innerWidth <= 768) {
+                sidebar.classList.toggle('active');
+            } else {
+                const isCollapsed = sidebar.classList.toggle('collapsed');
+                if (mainContent) mainContent.classList.toggle('sidebar-collapsed', isCollapsed);
+                localStorage.setItem('sidebarCollapsed', isCollapsed);
+                const icon = document.getElementById('sidebarCollapseBtnIcon');
+                if (icon) icon.className = isCollapsed ? 'fas fa-bars' : 'fas fa-bars';
+            }
+        };
+
+        // Initialize Router
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('[App] Inicializando aplicação...');
+            AppRouter.init();
+
+            // Load initial page from URL (?page=X) or default to dashboard
+            const initialPage = AppRouter.getPageFromURL('dashboard');
+            console.log(`[App] Página inicial: ${initialPage}`);
+            AppRouter.loadPage(initialPage, false);
+        });
+
+        // Navigation Handler
+        document.addEventListener('click', function (e) {
+            const link = e.target.closest('[data-page]');
+            if (link) {
+                e.preventDefault();
+                const pageName = link.dataset.page;
+                console.log(`[App] Navegação solicitada: ${pageName}`);
+                AppRouter.loadPage(pageName);
+            }
+        });
+    </script>
+
+    <!-- Modal Logout -->
+    <div class="modal-logout-overlay" id="modalLogout">
+        <div class="modal-logout-content">
+            <div class="modal-logout-icon">
+                <i class="fas fa-sign-out-alt"></i>
+            </div>
+            <h3 class="modal-logout-title">Encerrar Sessão?</h3>
+            <p class="modal-logout-text">
+                Sua sessão será encerrada com segurança e seus dados locais serão limpos.
+            </p>
+            <div class="modal-logout-buttons">
+                <button class="btn-cancel" id="cancelLogout">Cancelar</button>
+                <button class="btn-confirm" id="confirmLogout">Sair Agora</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notificações Global Bell -->
+    <script src="js/notif-bell.js" defer></script>
+    <!-- Menu Controller (Single Source of Truth) -->
+    <script src="js/menu-controller.js"></script>
+    <!-- Legacy Bridge v2 (Compatibilidade) -->
+    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+    <!-- Controle de Acesso por Módulo (filtra menu conforme permissões do usuário) -->
+    <script src="js/permissoes-modulos.js"></script>
+
+</body>
 
 </html>
