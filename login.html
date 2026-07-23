@@ -500,76 +500,7 @@
         </div>
     </div>
 
-    <script>
-        /**
-         * LogoManager
-         * Gerencia o carregamento dinâmico da logo da empresa.
-         * Busca via endpoint público /api/get_logo_empresa.php
-         * Fallback: uploads/logo/logoerp.png (ERP Condomínios)
-         *
-         * Arquitetura: este arquivo está em /frontend/login.html
-         * Portanto, '../' aponta para a raiz do projeto.
-         */
-                const LogoManager = (function () {
-            // Logo estática do ERP Condomínio (sempre disponível)
-            const LOGO_ESTATICA = '/assets/img/logos/logo_padrao.png';
-            // API para logo personalizada do condomínio (opcional)
-            const API_LOGO = window.location.origin + '/api/get_logo_empresa.php';
-            const logoBox = document.getElementById('logoBox');
-            const logoImg = document.getElementById('loginLogo');
-            let _erroContador = 0;
-
-            function init() {
-                // Tentar carregar logo personalizada do condomínio
-                fetch(API_LOGO, {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: { 'Accept': 'application/json' }
-                })
-                .then(function (res) {
-                    if (!res.ok) throw new Error('API indisponível');
-                    return res.json();
-                })
-                .then(function (data) {
-                    if (data && data.sucesso && data.logo_url) {
-                        var url = data.logo_url;
-                        if (!url.startsWith('http') && !url.startsWith('/')) {
-                            url = window.location.origin + '/' + url;
-                        } else if (url.startsWith('/')) {
-                            url = window.location.origin + url;
-                        }
-                        logoImg.src = url;
-                        logoImg.style.display = 'block';
-                    }
-                    // Se não tiver logo personalizada, mantém a estática já carregada
-                })
-                .catch(function () {
-                    // Erro na API: mantém logo estática já carregada
-                    console.log('[LogoManager] API indisponível, usando logo estática.');
-                });
-            }
-
-            function onLoad() {
-                logoBox.classList.remove('loading');
-            }
-
-            function onError() {
-                _erroContador++;
-                logoBox.classList.remove('loading');
-                // Evitar loop: máximo 1 tentativa de fallback
-                if (_erroContador === 1) {
-                    logoImg.onerror = null; // Desabilitar onerror para evitar loop
-                    logoImg.src = LOGO_ESTATICA;
-                } else {
-                    // Último recurso: ícone
-                    logoImg.style.display = 'none';
-                    logoBox.innerHTML = '<i class="fas fa-building logo-fallback-icon"></i>';
-                }
-            }
-
-            return { init: init, onLoad: onLoad, onError: onError };
-        })();
-
+        <script>
         // ============================================
         // LOGIN FORM
         // ============================================

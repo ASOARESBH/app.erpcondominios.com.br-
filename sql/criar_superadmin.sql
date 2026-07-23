@@ -26,7 +26,7 @@ INSERT INTO `usuarios`
 VALUES (
   'Administrador ERP',
   'admin@erpcondominios.com.br',
-  '$2b$10$0KbB2IoVlAp3H0sJBfxWzOIakCpf.CLN3S6M2b5SluObqbwerU1uG',
+  '$2y$10$qQDXsTWCdIz9ENt1ih1X..Ma6FrJKB.5J789erSTSXnWfqIg8M6Kq',
   'Super Administrador',
   'SISTEMA',
   'super_admin',
@@ -36,7 +36,7 @@ VALUES (
 )
 ON DUPLICATE KEY UPDATE
   `nome`          = 'Administrador ERP',
-  `senha`         = '$2b$10$0KbB2IoVlAp3H0sJBfxWzOIakCpf.CLN3S6M2b5SluObqbwerU1uG',
+  `senha`         = '$2y$10$qQDXsTWCdIz9ENt1ih1X..Ma6FrJKB.5J789erSTSXnWfqIg8M6Kq',
   `permissao`     = 'super_admin',
   `ativo`         = 1,
   `sessao_inativa`= 1;
