@@ -654,8 +654,13 @@
             if (tipo === 'erp') {
                 mostrarAlerta('Login realizado! Redirecionando...', 'success');
                 if (data.dados) {
-                    if (data.dados.nome)      localStorage.setItem('usuario_nome', data.dados.nome);
-                    if (data.dados.permissao) localStorage.setItem('usuario_permissao', data.dados.permissao);
+                    if (data.dados.nome)        localStorage.setItem('usuario_nome',       data.dados.nome);
+                    if (data.dados.permissao)   localStorage.setItem('usuario_permissao',  data.dados.permissao);
+                    if (data.dados.tenant_id)   localStorage.setItem('tenant_id',          String(data.dados.tenant_id));
+                    if (data.dados.tenant_nome) localStorage.setItem('tenant_nome',        data.dados.tenant_nome);
+                    if (data.dados.tenant_slug) localStorage.setItem('tenant_slug',        data.dados.tenant_slug);
+                    // Limpar contexto de navegação anterior
+                    localStorage.removeItem('superadmin_tenant_original');
                 }
                 setTimeout(function() {
                     window.location.href = window.location.origin + '/frontend/layout-base.html?page=dashboard';

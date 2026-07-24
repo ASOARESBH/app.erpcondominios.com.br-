@@ -711,6 +711,67 @@ if ($action === 'onboarding') {
     }
 }
 
+// ─── ENTRAR NO TENANT (super_admin navega para uma empresa) ──────────────
+if ($action === 'entrar_tenant') {
+    $tid = (int)($input['tenant_id'] ?? 0);
+    if (!$tid) sa_err('tenant_id obrigatório');
+
+    $stmt = $conexao->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $tid);
+    $stmt->execute();
+    $tenant = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$tenant) { fechar_conexao($conexao); sa_err('Condomínio não encontrado', 404); }
+
+    // Salvar tenant original para poder voltar
+    if (!isset($_SESSION['superadmin_tenant_original'])) {
+        $_SESSION['superadmin_tenant_original']      = $_SESSION['tenant_id']   ?? 1;
+        $_SESSION['superadmin_tenant_original_slug'] = $_SESSION['tenant_slug'] ?? '';
+        $_SESSION['superadmin_tenant_original_nome'] = $_SESSION['tenant_nome'] ?? '';
+    }
+
+    // Injetar contexto do tenant na sessão
+    injetarTenantNaSessao($tenant);
+
+    sa_log($conexao, 'SUPERADMIN_ENTRAR_TENANT', "Super admin entrou no tenant: {$tenant['slug']} (id={$tid})", $tid);
+    fechar_conexao($conexao);
+
+    sa_ok([
+        'tenant' => [
+            'id'    => $tenant['id'],
+            'slug'  => $tenant['slug'],
+            'nome'  => $tenant['nome_fantasia'] ?? $tenant['razao_social'],
+            'plano' => $tenant['plano'],
+            'logo'  => $tenant['logo_url'] ?? null,
+        ],
+        'redirect' => '/frontend/layout-base.html?page=dashboard'
+    ], "Navegando como: " . ($tenant['nome_fantasia'] ?? $tenant['razao_social']));
+}
+
+// ─── SAIR DO TENANT (super_admin retorna ao painel principal) ─────────────
+if ($action === 'sair_tenant') {
+    $tid_original = (int)($_SESSION['superadmin_tenant_original'] ?? 1);
+
+    $stmt = $conexao->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
+    $stmt->bind_param('i', $tid_original);
+    $stmt->execute();
+    $tenant_original = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if ($tenant_original) {
+        injetarTenantNaSessao($tenant_original);
+    }
+
+    unset($_SESSION['superadmin_tenant_original']);
+    unset($_SESSION['superadmin_tenant_original_slug']);
+    unset($_SESSION['superadmin_tenant_original_nome']);
+
+    sa_log($conexao, 'SUPERADMIN_SAIR_TENANT', "Super admin retornou ao tenant original: id={$tid_original}");
+    fechar_conexao($conexao);
+
+    sa_ok(['redirect' => '/frontend/layout-base.html?page=superadmin'], 'Retornado ao painel principal.');
+}
+
 fechar_conexao($conexao);
 sa_err("Ação '{$action}' não reconhecida", 400);
 ?>
