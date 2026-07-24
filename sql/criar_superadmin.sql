@@ -2,13 +2,14 @@
 -- CRIAR USUÁRIO SUPER-ADMIN — ERP Condomínio
 -- =========================================================================
 -- Usuário: admin@erpcondominios.com.br
--- Senha:   Admin259087@  (hash BCRYPT abaixo)
+-- Senha:   Admin259087@  (hash BCRYPT $2y$ abaixo)
 -- Nível:   super_admin
+-- ID:      99 (fixo, fora do range dos usuários normais)
 --
 -- COMO EXECUTAR:
 --   phpMyAdmin → banco inlaud99_erpserra → SQL → Executar
 --
--- SEGURO: usa INSERT IGNORE + ON DUPLICATE KEY — não duplica registros.
+-- SEGURO: usa INSERT ... ON DUPLICATE KEY — não duplica registros.
 -- =========================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -19,11 +20,16 @@ ALTER TABLE `usuarios`
   ENUM('visualizador','operador','gerente','admin','super_admin')
   COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'operador';
 
--- ─── PASSO 2: Criar (ou atualizar) o usuário Super-Admin ─────────────────
--- Senha: Admin259087@  →  hash BCRYPT (cost=10)
+-- ─── PASSO 2: Remover usuário antigo com id=0 (se existir) ───────────────
+DELETE FROM `usuario_tenant` WHERE `usuario_id` = 0;
+DELETE FROM `usuarios` WHERE `id` = 0 AND `email` = 'admin@erpcondominios.com.br';
+
+-- ─── PASSO 3: Criar (ou atualizar) o usuário Super-Admin com id=99 ────────
+-- Senha: Admin259087@  →  hash BCRYPT $2y$ (cost=10, compatível com PHP)
 INSERT INTO `usuarios`
-  (`nome`, `email`, `senha`, `funcao`, `departamento`, `permissao`, `ativo`, `sessao_inativa`, `tenant_id`)
+  (`id`, `nome`, `email`, `senha`, `funcao`, `departamento`, `permissao`, `ativo`, `sessao_inativa`, `tenant_id`)
 VALUES (
+  99,
   'Administrador ERP',
   'admin@erpcondominios.com.br',
   '$2y$10$qQDXsTWCdIz9ENt1ih1X..Ma6FrJKB.5J789erSTSXnWfqIg8M6Kq',
@@ -35,22 +41,21 @@ VALUES (
   1
 )
 ON DUPLICATE KEY UPDATE
+  `id`            = 99,
   `nome`          = 'Administrador ERP',
   `senha`         = '$2y$10$qQDXsTWCdIz9ENt1ih1X..Ma6FrJKB.5J789erSTSXnWfqIg8M6Kq',
   `permissao`     = 'super_admin',
   `ativo`         = 1,
   `sessao_inativa`= 1;
 
--- ─── PASSO 3: Vincular o super_admin ao tenant 1 ─────────────────────────
+-- ─── PASSO 4: Vincular o super_admin ao tenant 1 ─────────────────────────
 INSERT INTO `usuario_tenant` (`usuario_id`, `tenant_id`, `permissao`, `ativo`)
-SELECT u.id, 1, 'super_admin', 1
-FROM `usuarios` u
-WHERE u.email = 'admin@erpcondominios.com.br'
+VALUES (99, 1, 'super_admin', 1)
 ON DUPLICATE KEY UPDATE
   `permissao` = 'super_admin',
   `ativo`     = 1;
 
--- ─── PASSO 4: Verificação final ───────────────────────────────────────────
+-- ─── PASSO 5: Verificação final ───────────────────────────────────────────
 SELECT
   u.id,
   u.nome,
@@ -69,7 +74,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- =========================================================================
 -- RESULTADO ESPERADO:
 --   id  | nome               | email                        | permissao   | ativo
---   XX  | Administrador ERP  | admin@erpcondominios.com.br  | super_admin | 1
+--   99  | Administrador ERP  | admin@erpcondominios.com.br  | super_admin | 1
 --
 -- COMO ACESSAR:
 --   URL:   https://app.erpcondominios.com.br

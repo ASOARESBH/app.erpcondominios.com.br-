@@ -156,7 +156,9 @@ function verificar_sessao_portal($conexao, $token, $cfg) {
 
 function verificar_sessao_erp() {
     if (!isset($_SESSION['usuario_logado']) || $_SESSION['usuario_logado'] !== true) return false;
-    if (!isset($_SESSION['usuario_id'])     || empty($_SESSION['usuario_id']))        return false;
+    // FIX CRITICO: usar is_numeric() em vez de empty() — empty(0) = TRUE em PHP!
+    // usuario_id pode ser 0 (super_admin sem AUTO_INCREMENT), e empty(0) retornaria FALSE incorretamente.
+    if (!isset($_SESSION['usuario_id']) || !is_numeric($_SESSION['usuario_id'])) return false;
 
     // Se sessao_inativa está ativa, nunca expira
     if (!empty($_SESSION['sessao_inativa'])) return true;
