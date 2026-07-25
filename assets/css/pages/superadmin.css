@@ -1008,3 +1008,387 @@
         justify-content: flex-start;
     }
 }
+
+/* ============================================================
+   MODAIS MOVIDOS PARA O BODY (via JS no init())
+   Quando os modais são movidos para document.body, eles perdem
+   o escopo .page-superadmin. Estas regras garantem que os estilos
+   continuem aplicados mesmo fora do escopo da página.
+   ============================================================ */
+body > .sa-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+body > .sa-modal-overlay.open,
+body > .sa-modal-overlay[style*="flex"] {
+    display: flex !important;
+}
+
+body > .sa-modal-overlay .sa-modal {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: sa-slideUp 0.25s ease;
+}
+
+body > .sa-modal-overlay .sa-modal-lg { max-width: 860px; }
+body > .sa-modal-overlay .sa-modal-sm { max-width: 440px; }
+
+body > .sa-modal-overlay .sa-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+body > .sa-modal-overlay .sa-modal-header h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+body > .sa-modal-overlay .sa-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    padding: 0.25rem;
+    border-radius: 6px;
+    transition: color 0.2s, background 0.2s;
+    line-height: 1;
+}
+
+body > .sa-modal-overlay .sa-modal-close:hover {
+    color: #1e293b;
+    background: #f3f4f6;
+}
+
+body > .sa-modal-overlay .sa-modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+body > .sa-modal-overlay .sa-modal-footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* Tabs dentro do modal (body scope) */
+body > .sa-modal-overlay .sa-modal-tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+body > .sa-modal-overlay .sa-modal-tab {
+    padding: 0.6rem 1rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.8rem;
+    font-family: inherit;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+body > .sa-modal-overlay .sa-modal-tab:hover { color: #2563eb; }
+body > .sa-modal-overlay .sa-modal-tab.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+}
+
+body > .sa-modal-overlay .sa-modal-tab-content { display: none; }
+body > .sa-modal-overlay .sa-modal-tab-content.active { display: block; }
+
+/* Formulários dentro do modal (body scope) */
+body > .sa-modal-overlay label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #374151;
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+body > .sa-modal-overlay input[type="text"],
+body > .sa-modal-overlay input[type="email"],
+body > .sa-modal-overlay input[type="password"],
+body > .sa-modal-overlay input[type="tel"],
+body > .sa-modal-overlay select,
+body > .sa-modal-overlay textarea {
+    width: 100%;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: #1e293b;
+    background: #fff;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+body > .sa-modal-overlay input:focus,
+body > .sa-modal-overlay select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+body > .sa-modal-overlay .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+body > .sa-modal-overlay .form-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+body > .sa-modal-overlay .form-grid.cols-1 { grid-template-columns: 1fr; }
+
+body > .sa-modal-overlay .alert {
+    padding: 0.875rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    display: none;
+}
+
+body > .sa-modal-overlay .alert-success {
+    background: #d1fae5; color: #065f46;
+    border-left: 4px solid #10b981;
+    display: block;
+}
+
+body > .sa-modal-overlay .alert-error {
+    background: #fee2e2; color: #7f1d1d;
+    border-left: 4px solid #dc2626;
+    display: block;
+}
+
+/* Botões no modal (body scope) */
+body > .sa-modal-overlay .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+body > .sa-modal-overlay .btn-primary { background: #2563eb; color: #fff; }
+body > .sa-modal-overlay .btn-primary:hover { background: #1d4ed8; }
+body > .sa-modal-overlay .btn-secondary { background: #f3f4f6; color: #1e293b; border: 1px solid #e2e8f0; }
+body > .sa-modal-overlay .btn-secondary:hover { background: #f9fafb; }
+
+/* Módulos no modal */
+body > .sa-modal-overlay .sa-modulos-container {
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.75rem;
+}
+
+body > .sa-modal-overlay .sa-modulos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.4rem;
+}
+
+body > .sa-modal-overlay .sa-modulo-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 7px;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #4b5563;
+    user-select: none;
+    background: #fff;
+    transition: all 0.15s;
+}
+
+body > .sa-modal-overlay .sa-modulo-item:hover,
+body > .sa-modal-overlay .sa-modulo-item.selected {
+    border-color: #2563eb;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-weight: 600;
+}
+
+body > .sa-modal-overlay .sa-modulo-item input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    accent-color: #2563eb;
+}
+
+body > .sa-modal-overlay .sa-modulo-grupo {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.5rem 0.25rem 0.25rem;
+    margin-top: 0.5rem;
+    border-top: 1px solid #f3f4f6;
+    grid-column: 1 / -1;
+}
+
+/* Planos no modal */
+body > .sa-modal-overlay .sa-planos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+}
+
+body > .sa-modal-overlay .sa-plano-card {
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fff;
+}
+
+body > .sa-modal-overlay .sa-plano-card.selected {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+body > .sa-modal-overlay .sa-plano-card h4 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0.5rem 0 0.25rem;
+}
+
+body > .sa-modal-overlay .sa-plano-card p {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin: 0;
+}
+
+/* Tabela de usuários no modal */
+body > .sa-modal-overlay .sa-table-wrapper {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+
+body > .sa-modal-overlay .sa-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+body > .sa-modal-overlay .sa-table thead th {
+    background: #f3f4f6;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #4b5563;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+body > .sa-modal-overlay .sa-table tbody tr {
+    border-bottom: 1px solid #f3f4f6;
+}
+
+body > .sa-modal-overlay .sa-table tbody td {
+    padding: 0.75rem 1rem;
+    color: #1e293b;
+    vertical-align: middle;
+}
+
+/* Badges no modal */
+body > .sa-modal-overlay .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+body > .sa-modal-overlay .badge-ativo     { background: #d1fae5; color: #065f46; }
+body > .sa-modal-overlay .badge-inativo   { background: #f1f5f9; color: #475569; }
+body > .sa-modal-overlay .badge-suspenso  { background: #fef3c7; color: #92400e; }
+body > .sa-modal-overlay .badge-admin     { background: #dcfce7; color: #166534; }
+body > .sa-modal-overlay .badge-super-admin { background: #fef3c7; color: #92400e; }
+body > .sa-modal-overlay .badge-gerente   { background: #dbeafe; color: #1e40af; }
+body > .sa-modal-overlay .badge-operador  { background: #f3f4f6; color: #374151; }
+body > .sa-modal-overlay .badge-visualizador { background: #f3f4f6; color: #6b7280; }
+body > .sa-modal-overlay .badge-basico    { background: #e0f2fe; color: #0369a1; }
+body > .sa-modal-overlay .badge-profissional { background: #ede9fe; color: #5b21b6; }
+body > .sa-modal-overlay .badge-enterprise { background: #fef9c3; color: #854d0e; }
+
+/* Loading inline no modal */
+body > .sa-modal-overlay .loading-inline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    color: #9ca3af;
+    font-size: 0.875rem;
+}
+
+/* Btn sm no modal */
+body > .sa-modal-overlay .btn-sm {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+}
+
+body > .sa-modal-overlay .btn-danger { background: #fee2e2; color: #dc2626; }
+body > .sa-modal-overlay .btn-danger:hover { background: #fecaca; }

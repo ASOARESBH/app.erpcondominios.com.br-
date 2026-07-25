@@ -92,13 +92,13 @@ function sa_log($conexao, $acao, $descricao, $tenant_id = null) {
     $usuario_id   = $_SESSION['usuario_id']   ?? 0;
     $usuario_nome = $_SESSION['usuario_nome'] ?? 'super_admin';
     $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+    // A tabela logs_sistema usa: tipo, descricao, usuario, ip, data_hora
     $stmt = $conexao->prepare(
-        "INSERT INTO logs_sistema (usuario_id, usuario_nome, acao, descricao, tenant_id, ip, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, NOW())
-         ON DUPLICATE KEY UPDATE id = id"
+        "INSERT INTO logs_sistema (tipo, descricao, usuario, ip)
+         VALUES (?, ?, ?, ?)"
     );
     if ($stmt) {
-        $stmt->bind_param('isssss', $usuario_id, $usuario_nome, $acao, $descricao, $tenant_id, $ip);
+        $stmt->bind_param('ssss', $acao, $descricao, $usuario_nome, $ip);
         $stmt->execute();
         $stmt->close();
     }
@@ -580,12 +580,18 @@ if ($action === 'resetar_senha') {
 
 // ─── LOGS DE AUDITORIA ────────────────────────────────────────────────────
 if ($action === 'logs_auditoria') {
-    $limite = min((int)($_GET['limite'] ?? 50), 200);
+    $limite = min((int)($_GET['limite'] ?? 100), 200);
+    // A tabela logs_sistema usa colunas: tipo, descricao, usuario, ip, data_hora
     $r = $conexao->query(
-        "SELECT id, usuario_nome, acao, descricao, tenant_id, ip, created_at
+        "SELECT id,
+                COALESCE(usuario, 'Sistema') AS usuario_nome,
+                tipo AS acao,
+                descricao,
+                ip,
+                DATE_FORMAT(data_hora, '%d/%m/%Y %H:%i') AS created_at
          FROM logs_sistema
-         WHERE acao LIKE 'TENANT_%' OR acao LIKE 'USUARIO_%' OR acao LIKE 'SENHA_%' OR acao LIKE 'SUPERADMIN_%'
-         ORDER BY created_at DESC LIMIT {$limite}"
+         ORDER BY data_hora DESC
+         LIMIT {$limite}"
     );
     $logs = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
     fechar_conexao($conexao);
@@ -599,9 +605,15 @@ if ($action === 'logs_tenant') {
     if (!$id) sa_err('ID obrigatório');
 
     $stmt = $conexao->prepare(
-        "SELECT id, usuario_nome, acao, descricao, ip, created_at
-         FROM logs_sistema WHERE tenant_id = ?
-         ORDER BY created_at DESC LIMIT {$limite}"
+        "SELECT id,
+                COALESCE(usuario, 'Sistema') AS usuario_nome,
+                tipo AS acao,
+                descricao,
+                ip,
+                DATE_FORMAT(data_hora, '%d/%m/%Y %H:%i') AS created_at
+         FROM logs_sistema
+         ORDER BY data_hora DESC
+         LIMIT {$limite}"
     );
     $stmt->bind_param('i', $id);
     $stmt->execute();

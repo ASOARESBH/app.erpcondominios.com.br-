@@ -75,6 +75,17 @@ export function init() {
         return;
     }
 
+    // ── CRÍTICO: Mover modais para o <body> ──────────────────────────────
+    // O #appContent tem overflow-y:auto, o que quebra position:fixed dos overlays.
+    // A solução é mover os modais para o <body> onde position:fixed funciona corretamente.
+    ['sa-modal-cond', 'sa-modal-senha'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.parentElement !== document.body) {
+            document.body.appendChild(el);
+            log('Modal movido para body:', id);
+        }
+    });
+
     // Verificar se está navegando em outro tenant
     _verificarContextoTenant();
 
@@ -91,9 +102,18 @@ export function destroy() {
     // Limpar timers
     _timers.forEach(t => clearTimeout(t));
     _timers = [];
+    // Remover modais que foram movidos para o body
+    ['sa-modal-cond', 'sa-modal-senha'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.parentElement === document.body) {
+            el.remove();
+            log('Modal removido do body:', id);
+        }
+    });
     // Remover referências globais
     delete window.SA;
     delete window.SuperAdmin;
+    delete window._salvarModal;
 }
 
 // ── VERIFICAR CONTEXTO DE TENANT ─────────────────────────────────────────
