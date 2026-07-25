@@ -1,0 +1,1010 @@
+/*
+|--------------------------------------------------------------------------
+| PAGE-SPECIFIC STYLES ONLY - SUPER ADMIN
+|--------------------------------------------------------------------------
+| Scoped to .page-superadmin to avoid global pollution.
+| Follows the ERP Condomínio design system patterns.
+|--------------------------------------------------------------------------
+*/
+
+/* ============================================================
+   HEADER DO PAINEL
+   ============================================================ */
+.page-superadmin .sa-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-superadmin .sa-header-title h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.page-superadmin .sa-header-title h1 i {
+    color: #f59e0b;
+}
+
+.page-superadmin .sa-header-title p {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-top: 0.25rem;
+}
+
+/* ============================================================
+   TABS — padrão do sistema (igual moradores.css)
+   ============================================================ */
+.page-superadmin .tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-color, #e2e8f0);
+    flex-wrap: wrap;
+}
+
+.page-superadmin .tab-button {
+    padding: 0.75rem 1.25rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    color: var(--color-text-secondary, #64748b);
+    font-weight: 600;
+    font-size: 0.875rem;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.page-superadmin .tab-button:hover {
+    color: var(--color-primary-600, #2563eb);
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.page-superadmin .tab-button.active {
+    color: var(--color-primary-600, #2563eb);
+    border-bottom-color: var(--color-primary-600, #2563eb);
+}
+
+.page-superadmin .tab-content {
+    display: none;
+    animation: sa-fadeIn 0.25s ease;
+}
+
+.page-superadmin .tab-content.active {
+    display: block;
+}
+
+@keyframes sa-fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   CARDS DE KPI — padrão dashboard
+   ============================================================ */
+.page-superadmin .sa-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.page-superadmin .sa-kpi-card {
+    background: var(--color-background-primary, #fff);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.08));
+    border-left: 4px solid var(--color-primary-600, #2563eb);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.page-superadmin .sa-kpi-card.kpi-green  { border-left-color: #10b981; }
+.page-superadmin .sa-kpi-card.kpi-blue   { border-left-color: #3b82f6; }
+.page-superadmin .sa-kpi-card.kpi-purple { border-left-color: #8b5cf6; }
+.page-superadmin .sa-kpi-card.kpi-amber  { border-left-color: #f59e0b; }
+
+.page-superadmin .sa-kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.page-superadmin .kpi-green  .sa-kpi-icon { background: #d1fae5; color: #065f46; }
+.page-superadmin .kpi-blue   .sa-kpi-icon { background: #dbeafe; color: #1e40af; }
+.page-superadmin .kpi-purple .sa-kpi-icon { background: #ede9fe; color: #5b21b6; }
+.page-superadmin .kpi-amber  .sa-kpi-icon { background: #fef3c7; color: #92400e; }
+
+.page-superadmin .sa-kpi-info .num {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+}
+
+.page-superadmin .sa-kpi-info .lbl {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    margin-top: 0.2rem;
+}
+
+/* ============================================================
+   GRID DE CONDOMÍNIOS — cards
+   ============================================================ */
+.page-superadmin .sa-condominios-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+}
+
+.page-superadmin .sa-cond-card {
+    background: var(--color-background-primary, #fff);
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.08));
+    border: 1px solid var(--border-color, #e2e8f0);
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.page-superadmin .sa-cond-card:hover {
+    box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,.12));
+    transform: translateY(-2px);
+}
+
+.page-superadmin .sa-cond-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.page-superadmin .sa-cond-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--color-primary-600, #2563eb), var(--color-primary-700, #1d4ed8));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.page-superadmin .sa-cond-info h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.page-superadmin .sa-cond-info small {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+}
+
+.page-superadmin .sa-cond-stats {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.page-superadmin .sa-cond-stat {
+    flex: 1;
+    text-align: center;
+    background: var(--color-background-tertiary, #f3f4f6);
+    border-radius: 8px;
+    padding: 0.5rem 0.25rem;
+}
+
+.page-superadmin .sa-cond-stat .num {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+}
+
+.page-superadmin .sa-cond-stat .lbl {
+    font-size: 0.7rem;
+    color: var(--color-text-tertiary);
+    margin-top: 0.15rem;
+}
+
+.page-superadmin .sa-cond-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+}
+
+.page-superadmin .sa-cond-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+/* ============================================================
+   FILTROS / BUSCA
+   ============================================================ */
+.page-superadmin .sa-filtros {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.page-superadmin .sa-filtros input,
+.page-superadmin .sa-filtros select {
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    background: var(--color-background-primary, #fff);
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.page-superadmin .sa-filtros input {
+    flex: 1;
+    min-width: 200px;
+}
+
+.page-superadmin .sa-filtros input:focus,
+.page-superadmin .sa-filtros select:focus {
+    border-color: var(--color-primary-600, #2563eb);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ============================================================
+   TABELAS — padrão do sistema
+   ============================================================ */
+.page-superadmin .sa-table-wrapper {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.page-superadmin .sa-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.page-superadmin .sa-table thead th {
+    background: var(--color-background-tertiary, #f3f4f6);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-secondary, #4b5563);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    white-space: nowrap;
+}
+
+.page-superadmin .sa-table tbody tr {
+    border-bottom: 1px solid var(--border-color, #f3f4f6);
+    transition: background 0.15s;
+}
+
+.page-superadmin .sa-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.page-superadmin .sa-table tbody tr:hover {
+    background: var(--color-background-secondary, #f9fafb);
+}
+
+.page-superadmin .sa-table tbody td {
+    padding: 0.75rem 1rem;
+    color: var(--color-text-primary);
+    vertical-align: middle;
+}
+
+.page-superadmin .sa-table .text-center {
+    text-align: center;
+    color: var(--color-text-tertiary);
+    padding: 2rem;
+}
+
+/* ============================================================
+   BADGES DE STATUS E PLANO
+   ============================================================ */
+.page-superadmin .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.page-superadmin .badge-ativo     { background: #d1fae5; color: #065f46; }
+.page-superadmin .badge-inativo   { background: #f1f5f9; color: #475569; }
+.page-superadmin .badge-suspenso  { background: #fef3c7; color: #92400e; }
+
+.page-superadmin .badge-basico        { background: #e0f2fe; color: #0369a1; }
+.page-superadmin .badge-profissional  { background: #ede9fe; color: #5b21b6; }
+.page-superadmin .badge-enterprise    { background: #fef9c3; color: #854d0e; }
+.page-superadmin .badge-super-admin   { background: #fef3c7; color: #92400e; }
+.page-superadmin .badge-admin         { background: #dcfce7; color: #166534; }
+.page-superadmin .badge-gerente       { background: #dbeafe; color: #1e40af; }
+.page-superadmin .badge-operador      { background: #f3f4f6; color: #374151; }
+.page-superadmin .badge-visualizador  { background: #f3f4f6; color: #6b7280; }
+
+/* ============================================================
+   BOTÕES — padrão do sistema
+   ============================================================ */
+.page-superadmin .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.page-superadmin .btn-primary {
+    background: var(--color-primary-600, #2563eb);
+    color: #fff;
+}
+.page-superadmin .btn-primary:hover { background: var(--color-primary-700, #1d4ed8); }
+
+.page-superadmin .btn-success {
+    background: #10b981;
+    color: #fff;
+}
+.page-superadmin .btn-success:hover { background: #059669; }
+
+.page-superadmin .btn-danger {
+    background: #fee2e2;
+    color: #dc2626;
+}
+.page-superadmin .btn-danger:hover { background: #fecaca; }
+
+.page-superadmin .btn-warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+.page-superadmin .btn-warning:hover { background: #fde68a; }
+
+.page-superadmin .btn-secondary {
+    background: var(--color-background-tertiary, #f3f4f6);
+    color: var(--color-text-primary);
+    border: 1px solid var(--border-color, #e2e8f0);
+}
+.page-superadmin .btn-secondary:hover { background: var(--color-background-secondary, #f9fafb); }
+
+.page-superadmin .btn-sm {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+}
+
+.page-superadmin .btn-block {
+    width: 100%;
+    justify-content: center;
+}
+
+.page-superadmin .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================================
+   FORMULÁRIOS — padrão do sistema
+   ============================================================ */
+.page-superadmin .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.page-superadmin .form-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.page-superadmin .form-grid.cols-1 { grid-template-columns: 1fr; }
+.page-superadmin .form-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.page-superadmin .form-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+.page-superadmin label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-secondary, #374151);
+}
+
+.page-superadmin input[type="text"],
+.page-superadmin input[type="email"],
+.page-superadmin input[type="password"],
+.page-superadmin input[type="tel"],
+.page-superadmin input[type="number"],
+.page-superadmin select,
+.page-superadmin textarea {
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    background: var(--color-background-primary, #fff);
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.page-superadmin input:focus,
+.page-superadmin select:focus,
+.page-superadmin textarea:focus {
+    border-color: var(--color-primary-600, #2563eb);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.page-superadmin textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.page-superadmin .form-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+    margin-top: 0.15rem;
+}
+
+.page-superadmin .form-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+/* ============================================================
+   ALERTAS
+   ============================================================ */
+.page-superadmin .alert {
+    padding: 0.875rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    display: none;
+    animation: sa-fadeIn 0.3s ease;
+}
+
+.page-superadmin .alert-success {
+    background: #d1fae5;
+    color: #065f46;
+    border-left: 4px solid #10b981;
+}
+
+.page-superadmin .alert-error {
+    background: var(--color-error-100, #fee2e2);
+    color: var(--color-error-900, #7f1d1d);
+    border-left: 4px solid var(--color-error-600, #dc2626);
+}
+
+.page-superadmin .alert-warning {
+    background: #fef3c7;
+    color: #92400e;
+    border-left: 4px solid #f59e0b;
+}
+
+/* ============================================================
+   MODAIS
+   ============================================================ */
+.page-superadmin .sa-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--color-background-overlay, rgba(0,0,0,0.5));
+    z-index: 1050;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    animation: sa-fadeIn 0.2s ease;
+}
+
+.page-superadmin .sa-modal-overlay.open {
+    display: flex;
+}
+
+.page-superadmin .sa-modal {
+    background: var(--color-background-primary, #fff);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: sa-slideUp 0.25s ease;
+}
+
+.page-superadmin .sa-modal-lg { max-width: 860px; }
+.page-superadmin .sa-modal-sm { max-width: 440px; }
+
+@keyframes sa-slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-superadmin .sa-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    flex-shrink: 0;
+}
+
+.page-superadmin .sa-modal-header h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.page-superadmin .sa-modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    font-size: 1.1rem;
+    padding: 0.25rem;
+    border-radius: 6px;
+    transition: color 0.2s, background 0.2s;
+    line-height: 1;
+}
+
+.page-superadmin .sa-modal-close:hover {
+    color: var(--color-text-primary);
+    background: var(--color-background-tertiary, #f3f4f6);
+}
+
+.page-superadmin .sa-modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.page-superadmin .sa-modal-footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* Tabs dentro do modal */
+.page-superadmin .sa-modal-tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 2px solid var(--border-color, #e2e8f0);
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.page-superadmin .sa-modal-tab {
+    padding: 0.6rem 1rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    font-size: 0.8rem;
+    font-family: inherit;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.page-superadmin .sa-modal-tab:hover { color: var(--color-primary-600, #2563eb); }
+.page-superadmin .sa-modal-tab.active {
+    color: var(--color-primary-600, #2563eb);
+    border-bottom-color: var(--color-primary-600, #2563eb);
+}
+
+.page-superadmin .sa-modal-tab-content { display: none; }
+.page-superadmin .sa-modal-tab-content.active { display: block; }
+
+/* ============================================================
+   WIZARD DE ONBOARDING
+   ============================================================ */
+.page-superadmin .sa-wizard-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 2rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+
+.page-superadmin .sa-wizard-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    min-width: 80px;
+}
+
+.page-superadmin .sa-wizard-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 18px;
+    left: calc(50% + 18px);
+    width: calc(100% - 36px);
+    height: 2px;
+    background: var(--border-color, #e2e8f0);
+    z-index: 0;
+}
+
+.page-superadmin .sa-wizard-step.done::after {
+    background: #10b981;
+}
+
+.page-superadmin .sa-step-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--color-background-tertiary, #f3f4f6);
+    border: 2px solid var(--border-color, #e2e8f0);
+    color: var(--color-text-tertiary);
+    font-weight: 700;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.page-superadmin .sa-wizard-step.active .sa-step-num {
+    background: var(--color-primary-600, #2563eb);
+    border-color: var(--color-primary-600, #2563eb);
+    color: #fff;
+}
+
+.page-superadmin .sa-wizard-step.done .sa-step-num {
+    background: #10b981;
+    border-color: #10b981;
+    color: #fff;
+}
+
+.page-superadmin .sa-step-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.page-superadmin .sa-wizard-step.active .sa-step-label {
+    color: var(--color-primary-600, #2563eb);
+}
+
+.page-superadmin .sa-wizard-step.done .sa-step-label {
+    color: #059669;
+}
+
+.page-superadmin .sa-wizard-body { display: none; }
+.page-superadmin .sa-wizard-body.active { display: block; }
+
+/* ============================================================
+   MÓDULOS (checkboxes)
+   ============================================================ */
+.page-superadmin .sa-modulos-container {
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 10px;
+    padding: 0.75rem;
+}
+
+.page-superadmin .sa-modulo-grupo {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.5rem 0.25rem 0.25rem;
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--border-color, #f3f4f6);
+}
+
+.page-superadmin .sa-modulo-grupo:first-child {
+    margin-top: 0;
+    border-top: none;
+}
+
+.page-superadmin .sa-modulos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.4rem;
+    margin-bottom: 0.25rem;
+}
+
+.page-superadmin .sa-modulo-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 7px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--color-background-primary, #fff);
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    user-select: none;
+}
+
+.page-superadmin .sa-modulo-item:hover {
+    border-color: var(--color-primary-600, #2563eb);
+    background: #eff6ff;
+}
+
+.page-superadmin .sa-modulo-item.selected {
+    border-color: var(--color-primary-600, #2563eb);
+    background: #eff6ff;
+    color: var(--color-primary-700, #1d4ed8);
+    font-weight: 600;
+}
+
+.page-superadmin .sa-modulo-item input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    accent-color: var(--color-primary-600, #2563eb);
+    flex-shrink: 0;
+}
+
+.page-superadmin .sa-modulo-item label {
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: inherit;
+    color: inherit;
+    margin: 0;
+}
+
+/* ============================================================
+   RESUMO DO WIZARD
+   ============================================================ */
+.page-superadmin .sa-resumo {
+    background: var(--color-background-secondary, #f9fafb);
+    border-radius: 10px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    overflow: hidden;
+}
+
+.page-superadmin .sa-resumo-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color, #f3f4f6);
+    font-size: 0.875rem;
+}
+
+.page-superadmin .sa-resumo-row:last-child { border-bottom: none; }
+
+.page-superadmin .sa-resumo-row strong {
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+.page-superadmin .sa-resumo-row span {
+    color: var(--color-text-primary);
+    text-align: right;
+}
+
+/* ============================================================
+   SELEÇÃO DE PLANO
+   ============================================================ */
+.page-superadmin .sa-planos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.page-superadmin .sa-plano-card {
+    border: 2px solid var(--border-color, #e2e8f0);
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--color-background-primary, #fff);
+}
+
+.page-superadmin .sa-plano-card:hover {
+    border-color: var(--color-primary-400, #93c5fd);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+}
+
+.page-superadmin .sa-plano-card.selected {
+    border-color: var(--color-primary-600, #2563eb);
+    background: #eff6ff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+.page-superadmin .sa-plano-card h4 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0.5rem 0 0.25rem;
+}
+
+.page-superadmin .sa-plano-card p {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* ============================================================
+   DASHBOARD — seções
+   ============================================================ */
+.page-superadmin .sa-dash-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-top: 1.25rem;
+}
+
+.page-superadmin .sa-dash-section {
+    background: var(--color-background-primary, #fff);
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.08));
+    border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.page-superadmin .sa-dash-section h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+.page-superadmin .sa-toast {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 9999;
+    padding: 0.875rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    min-width: 260px;
+    max-width: 400px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    display: none;
+    animation: sa-fadeIn 0.3s ease;
+}
+
+.page-superadmin .sa-toast-success { background: #d1fae5; color: #065f46; }
+.page-superadmin .sa-toast-error   { background: #fee2e2; color: #991b1b; }
+.page-superadmin .sa-toast-warning { background: #fef3c7; color: #92400e; }
+
+/* ============================================================
+   LOADING INLINE
+   ============================================================ */
+.page-superadmin .loading-inline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    color: var(--color-text-tertiary);
+    font-size: 0.875rem;
+}
+
+/* ============================================================
+   RESPONSIVIDADE
+   ============================================================ */
+@media (max-width: 768px) {
+    .page-superadmin .sa-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .page-superadmin .sa-condominios-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-superadmin .sa-dash-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-superadmin .form-grid.cols-2,
+    .page-superadmin .form-grid.cols-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .page-superadmin .sa-modal {
+        max-height: 95vh;
+    }
+
+    .page-superadmin .sa-filtros {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-superadmin .sa-filtros input {
+        min-width: unset;
+    }
+
+    .page-superadmin .tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+}
+
+@media (max-width: 480px) {
+    .page-superadmin .sa-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-superadmin .sa-wizard-steps {
+        justify-content: flex-start;
+    }
+}

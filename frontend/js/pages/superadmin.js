@@ -22,14 +22,19 @@ function req(params, method = 'GET', body = null) {
 
 function statusBadge(s) {
     const m = { ativo: 'Ativo', inativo: 'Inativo', suspenso: 'Suspenso' };
-    const c = { ativo: '#d1fae5;color:#065f46', inativo: '#f1f5f9;color:#475569', suspenso: '#fef3c7;color:#92400e' };
-    return `<span style="padding:0.2rem 0.6rem;border-radius:20px;font-size:0.75rem;font-weight:600;background:${c[s]||'#f1f5f9;color:#475569'}">${m[s]||s}</span>`;
+    const cls = { ativo: 'badge-ativo', inativo: 'badge-inativo', suspenso: 'badge-suspenso' };
+    return `<span class="badge ${cls[s]||'badge-inativo'}">${m[s]||s}</span>`;
 }
 
 function planoBadge(p) {
-    const m = { basico: 'Básico', profissional: 'Profissional', enterprise: 'Enterprise', admin: 'Admin', gerente: 'Gerente', operador: 'Operador', visualizador: 'Visualizador', super_admin: 'Super Admin' };
-    const c = { basico: '#e0f2fe;color:#0369a1', profissional: '#ede9fe;color:#5b21b6', enterprise: '#fef9c3;color:#854d0e', admin: '#dcfce7;color:#166534', super_admin: '#fef3c7;color:#92400e' };
-    return `<span style="padding:0.2rem 0.6rem;border-radius:20px;font-size:0.72rem;font-weight:600;background:${c[p]||'#f1f5f9;color:#475569'}">${m[p]||p}</span>`;
+    const m = { basico: 'Básico', profissional: 'Profissional', enterprise: 'Enterprise',
+                admin: 'Admin', gerente: 'Gerente', operador: 'Operador',
+                visualizador: 'Visualizador', super_admin: 'Super Admin' };
+    const cls = { basico: 'badge-basico', profissional: 'badge-profissional',
+                  enterprise: 'badge-enterprise', admin: 'badge-admin',
+                  gerente: 'badge-gerente', operador: 'badge-operador',
+                  visualizador: 'badge-visualizador', super_admin: 'badge-super-admin' };
+    return `<span class="badge ${cls[p]||'badge-inativo'}">${m[p]||p}</span>`;
 }
 
 function fmt(n) { return parseInt(n || 0).toLocaleString('pt-BR'); }
@@ -121,13 +126,14 @@ function _verificarContextoTenant() {
 
 // ── TABS ─────────────────────────────────────────────────────────────────
 function _showTab(tab) {
-    document.querySelectorAll('.sa-tab-content').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('.sa-tab').forEach(el => el.classList.remove('active'));
+    // Padrão do design system: .tab-content / .tab-button
+    document.querySelectorAll('.page-superadmin .tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.page-superadmin .tab-button').forEach(el => el.classList.remove('active'));
 
     const content = document.getElementById('tab-' + tab);
     if (content) content.style.display = 'block';
 
-    const btn = document.querySelector(`.sa-tab[data-tab="${tab}"]`);
+    const btn = document.querySelector(`.page-superadmin .tab-button[data-tab="${tab}"]`);
     if (btn) btn.classList.add('active');
 
     if (tab === 'dashboard')   _carregarDashboard();
@@ -157,7 +163,7 @@ function _carregarDashboard() {
                 `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border-color);">
                     <i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i>
                     <span><strong>${t.nome_fantasia || t.razao_social}</strong> — ${statusBadge(t.status)}</span>
-                    <button class="btn-sm" onclick="SA.alterarStatus(${t.id},'${t.status}')">
+                    <button class="btn btn-secondary btn-sm" onclick="SA.alterarStatus(${t.id},'${t.status}')">
                         <i class="fas fa-check"></i> Ativar
                     </button>
                 </div>`
@@ -181,7 +187,7 @@ function _carregarDashboard() {
                 </div>
                 <div style="display:flex;gap:0.4rem;align-items:center;">
                     ${planoBadge(t.plano)} ${statusBadge(t.status)}
-                    <button class="btn-sm" onclick="SA.entrarTenant(${t.id},'${(t.nome_fantasia||t.razao_social).replace(/'/g,'')}')" title="Entrar como este condomínio">
+                    <button class="btn btn-secondary btn-sm" onclick="SA.entrarTenant(${t.id},'${(t.nome_fantasia||t.razao_social).replace(/'/g,'')}')" title="Entrar como este condomínio">
                         <i class="fas fa-sign-in-alt"></i>
                     </button>
                 </div>
@@ -400,9 +406,9 @@ function _renderModalInfo(t, usuarios) {
             <div class="sa-cond-stat" style="flex:1;"><div class="num">${fmt(t.total_unidades)}</div><div class="lbl">Unidades</div></div>
         </div>
         <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-            <button class="btn-sm" onclick="SA.showModalTab('modulos')"><i class="fas fa-puzzle-piece"></i> Módulos</button>
-            <button class="btn-sm" onclick="SA.showModalTab('plano')"><i class="fas fa-tags"></i> Plano</button>
-            <button class="btn-sm" onclick="SA.entrarTenant(${t.id},'${(t.nome_fantasia||t.razao_social||'').replace(/'/g,'')}');SA.fecharModal();" style="color:#2563eb;">
+            <button class="btn btn-secondary btn-sm" onclick="SA.showModalTab('modulos')"><i class="fas fa-puzzle-piece"></i> Módulos</button>
+            <button class="btn btn-secondary btn-sm" onclick="SA.showModalTab('plano')"><i class="fas fa-tags"></i> Plano</button>
+            <button class="btn btn-secondary btn-sm" onclick="SA.entrarTenant(${t.id},'${(t.nome_fantasia||t.razao_social||'').replace(/'/g,'')}');SA.fecharModal();" style="color:#2563eb;">
                 <i class="fas fa-sign-in-alt"></i> Entrar como este Condomínio
             </button>
             <button class="btn-sm ${t.status === 'ativo' ? 'danger' : ''}" onclick="SA.alterarStatus(${t.id},'${t.status}');SA.fecharModal()">
@@ -413,7 +419,7 @@ function _renderModalInfo(t, usuarios) {
 
     // Usuários no modal
     _set('sa-modal-usuarios-body', usuarios && usuarios.length ? `
-        <table class="sa-usuarios-table">
+        <div class="sa-table-wrapper"><table class="sa-table">
             <thead><tr><th>Nome</th><th>E-mail</th><th>Permissão</th><th>Status</th><th>Ações</th></tr></thead>
             <tbody>${usuarios.map(u => `
                 <tr>
@@ -422,16 +428,16 @@ function _renderModalInfo(t, usuarios) {
                     <td>${planoBadge(u.permissao_tenant || u.permissao)}</td>
                     <td>${u.vinculo_ativo ? statusBadge('ativo') : statusBadge('inativo')}</td>
                     <td>
-                        <button class="btn-sm" onclick="SA.abrirResetSenha(${u.id},'${u.nome.replace(/'/g, '')}')">
+                        <button class="btn btn-secondary btn-sm" onclick="SA.abrirResetSenha(${u.id},'${u.nome.replace(/'/g, '')}')">
                             <i class="fas fa-key"></i>
                         </button>
-                        <button class="btn-sm danger" onclick="SA.desvincularUsuario(${u.id},${_modalTenantId})">
+                        <button class="btn btn-danger btn-sm" onclick="SA.desvincularUsuario(${u.id},${_modalTenantId})">
                             <i class="fas fa-unlink"></i>
                         </button>
                     </td>
                 </tr>`).join('')}
             </tbody>
-        </table>` : '<p style="color:var(--color-text-tertiary)">Nenhum usuário vinculado</p>');
+        </table></div>` : '<p style="color:var(--color-text-tertiary)">Nenhum usuário vinculado</p>');
 }
 
 function _fecharModal() {
@@ -581,7 +587,7 @@ function _carregarUsuariosGlobais(busca = '') {
                 <td style="font-size:0.8rem;">${u.condominios || '—'}</td>
                 <td>${u.ativo ? statusBadge('ativo') : statusBadge('inativo')}</td>
                 <td>
-                    <button class="btn-sm" onclick="SA.abrirResetSenha(${u.id},'${u.nome.replace(/'/g, '')}')">
+                    <button class="btn btn-secondary btn-sm" onclick="SA.abrirResetSenha(${u.id},'${u.nome.replace(/'/g, '')}')">
                         <i class="fas fa-key"></i> Senha
                     </button>
                     <button class="btn-sm ${u.ativo ? 'danger' : ''}" onclick="SA.toggleUsuario(${u.id},${u.ativo ? 0 : 1},this)">
