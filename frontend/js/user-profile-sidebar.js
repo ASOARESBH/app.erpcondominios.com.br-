@@ -175,6 +175,57 @@
 
         // 7. Inicializar botão de recolher sidebar (desktop)
         _initSidebarCollapse(sidebar);
+
+        // 8. Carregar logo dinâmica do tenant via API
+        _carregarLogoDinamica();
+    }
+
+    /**
+     * Carrega a logo do tenant ativo e substitui a logo estática no sidebar.
+     * Usa localStorage como cache para evitar chamadas repetidas.
+     */
+    function _carregarLogoDinamica() {
+        const IMG_ID = 'dynamicSidebarLogo';
+        const CACHE_KEY = 'tenant_logo_url';
+        const CACHE_TENANT = 'tenant_id';
+
+        // Verificar se o tenant mudou (invalida cache)
+        const tenantAtual = localStorage.getItem(CACHE_TENANT) || '';
+        const logoCache   = localStorage.getItem(CACHE_KEY + '_' + tenantAtual);
+
+        // Aplicar logo do cache imediatamente (sem esperar a API)
+        if (logoCache) {
+            _aplicarLogo(IMG_ID, logoCache);
+        }
+
+        // Buscar logo atualizada da API
+        const apiBase = window.APP_BASE_PATH || '/';
+        fetch(apiBase + 'api/get_logo_empresa.php', { credentials: 'include' })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data || !data.sucesso || !data.logo_url) return;
+                const logoUrl = data.logo_url;
+                // Salvar no cache por tenant
+                localStorage.setItem(CACHE_KEY + '_' + tenantAtual, logoUrl);
+                // Aplicar no sidebar
+                _aplicarLogo(IMG_ID, logoUrl);
+            })
+            .catch(() => {}); // Silencioso — fallback já está no src da imagem
+    }
+
+    function _aplicarLogo(imgId, logoUrl) {
+        const img = document.getElementById(imgId);
+        if (!img) return;
+        // Construir URL absoluta se for relativa
+        let url = logoUrl;
+        if (!url.startsWith('http') && !url.startsWith('/')) {
+            const apiBase = window.APP_BASE_PATH || '/';
+            url = apiBase + url;
+        }
+        if (img.src !== url) {
+            img.src = url;
+            img.style.display = '';
+        }
     }
 
     function ensureTopHeader() {

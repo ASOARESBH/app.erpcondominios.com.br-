@@ -35,7 +35,8 @@ date_default_timezone_set('America/Sao_Paulo');
 
 // ── 3. Dados da empresa (cabeçalho do relatório) ──────────────
 $empresa = [];
-$sql_empresa = "SELECT razao_social, nome_fantasia, cnpj, logo_url FROM empresa LIMIT 1";
+$_tenant_id_rel = $_SESSION["tenant_id"] ?? 1;
+$sql_empresa = "SELECT razao_social, nome_fantasia, cnpj, logo_url FROM tenants WHERE id = $_tenant_id_rel LIMIT 1";
 $res_empresa = $conn->query($sql_empresa);
 if ($res_empresa && $res_empresa->num_rows > 0) {
     $empresa = $res_empresa->fetch_assoc();
@@ -44,7 +45,7 @@ if ($res_empresa && $res_empresa->num_rows > 0) {
 $nome_empresa  = !empty($empresa['nome_fantasia'])  ? $empresa['nome_fantasia']
                : (!empty($empresa['razao_social'])  ? $empresa['razao_social']
                : 'ERP CONDOMÍNIO');
-$cnpj_empresa  = !empty($empresa['cnpj'])           ? $empresa['cnpj'] : '28.231.106/0001-15';
+$cnpj_empresa  = !empty($empresa['cnpj'])           ? $empresa['cnpj'] : '';
 
 // Caminho da logo: relativo à raiz do site (a tag <img> usa URL absoluta)
 if (!empty($empresa['logo_url'])) {
@@ -55,7 +56,7 @@ if (!empty($empresa['logo_url'])) {
 } else {
     $protocolo   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host        = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
-    $logo_url    = $protocolo . '://' . $host . '/assets/images/logo.jpeg';
+    $logo_url = $protocolo . '://' . $host . '/assets/img/logos/logo_padrao.png';
 }
 
 // ── 4. Filtros ────────────────────────────────────────────────

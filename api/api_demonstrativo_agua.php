@@ -41,14 +41,38 @@ if ($hidrometro_id <= 0) {
     exit;
 }
 
-// ── 1. Dados da empresa / associação ─────────────────────────
+// ── 1. Dados da empresa / associação — Multi-Tenant ─────────────────────
 $empresa = [];
-$r = $conn->query("SELECT razao_social, nome_fantasia, cnpj, telefone,
-    endereco_rua AS endereco, endereco_cidade AS cidade,
-    endereco_estado AS estado, endereco_cep AS cep,
-    logo_url FROM empresa LIMIT 1");
-if ($r && $r->num_rows > 0) {
-    $empresa = $r->fetch_assoc();
+$_tenant_id_rel = $_SESSION['tenant_id'] ?? 1;
+$proto     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host      = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
+
+// Buscar na tabela tenants (fonte primária Multi-Tenant)
+$_stmt_t = $conn->prepare(
+    "SELECT razao_social, nome_fantasia, cnpj, telefone, logo_url,
+            '' AS endereco, '' AS cidade, '' AS estado, '' AS cep
+     FROM tenants WHERE id = ? LIMIT 1"
+);
+if ($_stmt_t) {
+    $_stmt_t->bind_param('i', $_tenant_id_rel);
+    $_stmt_t->execute();
+    $empresa = $_stmt_t->get_result()->fetch_assoc() ?: [];
+    $_stmt_t->close();
+}
+// Fallback: tabela empresa (dados completos de endereço)
+if (empty($empresa['cnpj'])) {
+    $_stmt_e = $conn->prepare(
+        "SELECT razao_social, nome_fantasia, cnpj, telefone, logo_url,
+                endereco_rua AS endereco, endereco_cidade AS cidade,
+                endereco_estado AS estado, endereco_cep AS cep
+         FROM empresa WHERE tenant_id = ? LIMIT 1"
+    );
+    if ($_stmt_e) {
+        $_stmt_e->bind_param('i', $_tenant_id_rel);
+        $_stmt_e->execute();
+        $empresa = array_merge($empresa, $_stmt_e->get_result()->fetch_assoc() ?: []);
+        $_stmt_e->close();
+    }
 }
 $assoc_nome     = !empty($empresa['nome_fantasia']) ? $empresa['nome_fantasia'] : (!empty($empresa['razao_social']) ? $empresa['razao_social'] : 'ERP CONDOMÍNIO');
 $assoc_cnpj     = $empresa['cnpj']     ?? '';
@@ -59,11 +83,9 @@ $assoc_estado   = $empresa['estado']   ?? '';
 $assoc_cep      = $empresa['cep']      ?? '';
 
 // URL da logo
-$proto     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host      = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
 $logo_url  = !empty($empresa['logo_url'])
     ? $proto . '://' . $host . '/' . ltrim($empresa['logo_url'], '/')
-    : $proto . '://' . $host . '/assets/images/logo.jpeg';
+    : $proto . '://' . $host . '/assets/img/logos/logo_padrao.png';
 
 // ── 2. Dados do hidrômetro + morador ─────────────────────────
 $sql_h = "

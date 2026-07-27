@@ -34,9 +34,12 @@ $filtro_resp = intval($_GET['responsavel'] ?? 0);
 
 // ── Dados da empresa ──────────────────────────────────────────
 $empresa = [];
-$res_emp = $conn->query("SELECT razao_social, nome_fantasia, cnpj, logo_url,
-                         endereco_rua, endereco_numero, endereco_cidade, endereco_estado
-                         FROM empresa LIMIT 1");
+$_tenant_id_rel = $_SESSION["tenant_id"] ?? 1;
+$_stmt_emp = $conn->prepare("SELECT razao_social, nome_fantasia, cnpj, logo_url FROM tenants WHERE id = ? LIMIT 1");
+$_stmt_emp->bind_param("i", $_tenant_id_rel);
+$_stmt_emp->execute();
+$res_emp = $_stmt_emp->get_result();
+$_stmt_emp->close();
 if ($res_emp && $res_emp->num_rows > 0) {
     $empresa = $res_emp->fetch_assoc();
 }
@@ -49,7 +52,7 @@ $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https
 $host      = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
 $logo_url  = !empty($empresa['logo_url'])
     ? $protocolo . '://' . $host . '/' . ltrim($empresa['logo_url'], '/')
-    : $protocolo . '://' . $host . '/assets/images/logo.jpeg';
+    : $protocolo . '://' . $host . '/assets/img/logos/logo_padrao.png';
 
 // ── Buscar itens com filtros ──────────────────────────────────
 $where   = ['1=1'];

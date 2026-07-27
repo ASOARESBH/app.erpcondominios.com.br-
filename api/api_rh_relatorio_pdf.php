@@ -400,7 +400,12 @@ switch ($tipo) {
 
 // Busca dados completos da empresa para cabeçalho/rodapé/assinatura
 $empresa_info = ['razao_social'=>'','nome_fantasia'=>'','cnpj'=>'','telefone'=>'','email_principal'=>'','endereco_rua'=>'','endereco_cidade'=>'','endereco_estado'=>''];
-$res_emp = $conn->query("SELECT razao_social, nome_fantasia, cnpj, telefone, email_principal, endereco_rua, endereco_cidade, endereco_estado FROM empresa LIMIT 1");
+$_tenant_id_rel = $_SESSION["tenant_id"] ?? 1;
+$_stmt_emp = $conn->prepare("SELECT e.razao_social, e.nome_fantasia, e.cnpj, e.telefone, e.email_principal, e.endereco_rua, e.endereco_cidade, e.endereco_estado, t.logo_url FROM empresa e JOIN tenants t ON t.id = e.tenant_id WHERE e.tenant_id = ? LIMIT 1");
+$_stmt_emp->bind_param("i", $_tenant_id_rel);
+$_stmt_emp->execute();
+$res_emp = $_stmt_emp->get_result();
+$_stmt_emp->close();
 if ($res_emp && $row_emp = $res_emp->fetch_assoc()) {
     foreach ($row_emp as $k => $v) {
         if ($v !== null) $empresa_info[$k] = $v;

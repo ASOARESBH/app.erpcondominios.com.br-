@@ -32,22 +32,38 @@ $tenant_id = exigirTenantId();
 // ── 2. Configuracoes regionais ────────────────────────────────
 date_default_timezone_set('America/Sao_Paulo');
 
-// ── 3. Dados da empresa ───────────────────────────────────────
+// ── 3. Dados da empresa — Multi-Tenant ─────────────────────────────────
 $empresa = [];
-$res_emp = $conn->query("SELECT razao_social, nome_fantasia, cnpj, logo_url FROM empresa LIMIT 1");
-if ($res_emp && $res_emp->num_rows > 0) {
-    $empresa = $res_emp->fetch_assoc();
+$_tenant_id_rel = $_SESSION['tenant_id'] ?? 1;
+
+// Buscar na tabela tenants (fonte primária)
+$_stmt_t = $conn->prepare("SELECT razao_social, nome_fantasia, cnpj, logo_url FROM tenants WHERE id = ? LIMIT 1");
+if ($_stmt_t) {
+    $_stmt_t->bind_param('i', $_tenant_id_rel);
+    $_stmt_t->execute();
+    $empresa = $_stmt_t->get_result()->fetch_assoc() ?: [];
+    $_stmt_t->close();
+}
+// Fallback: tabela empresa
+if (empty($empresa['logo_url'])) {
+    $_stmt_e = $conn->prepare("SELECT razao_social, nome_fantasia, cnpj, logo_url FROM empresa WHERE tenant_id = ? LIMIT 1");
+    if ($_stmt_e) {
+        $_stmt_e->bind_param('i', $_tenant_id_rel);
+        $_stmt_e->execute();
+        $empresa = array_merge($empresa, $_stmt_e->get_result()->fetch_assoc() ?: []);
+        $_stmt_e->close();
+    }
 }
 $nome_empresa = !empty($empresa['nome_fantasia'])  ? $empresa['nome_fantasia']
               : (!empty($empresa['razao_social'])  ? $empresa['razao_social']
               : 'ASSOCIACAO ERP CONDOMÍNIO');
-$cnpj_empresa = !empty($empresa['cnpj']) ? $empresa['cnpj'] : '28.231.106/0001-15';
+$cnpj_empresa = !empty($empresa['cnpj']) ? $empresa['cnpj'] : '';
 
 $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host      = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
 $logo_url  = !empty($empresa['logo_url'])
            ? $protocolo . '://' . $host . '/' . ltrim($empresa['logo_url'], '/')
-           : $protocolo . '://' . $host . '/assets/images/logo.jpeg';
+           : $protocolo . '://' . $host . '/assets/img/logos/logo_padrao.png';
 
 // ── 4. Filtros ────────────────────────────────────────────────
 $data_inicio  = trim($_GET['data_inicio']  ?? '');

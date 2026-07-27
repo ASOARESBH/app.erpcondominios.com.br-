@@ -272,46 +272,56 @@ if ($action === 'upload_logo' && $metodo === 'POST') {
             retornar_json(false, 'Arquivo muito grande. Máximo 5MB');
         }
         
-        // Caminho do diretório de uploads
-        $diretorio_upload = dirname(__DIR__) . '/uploads/logo';
+        // ── Multi-Tenant: pasta separada por tenant_id ──────────────────────
+        // Cada condomínio tem sua própria pasta: uploads/logo/tenant_{id}/
+        $diretorio_upload = dirname(__DIR__) . '/uploads/logo/tenant_' . $tenant_id;
         if (!is_dir($diretorio_upload)) {
             mkdir($diretorio_upload, 0755, true);
         }
-        
-        // Remover logos anteriores para manter apenas uma
+
+        // Remover logos anteriores deste tenant para manter apenas uma
         $arquivos_existentes = glob($diretorio_upload . '/logo.*');
         foreach ($arquivos_existentes as $arq) {
             if (is_file($arq)) {
                 unlink($arq);
             }
         }
-        
-        // Definir novo nome fixo
+
+        // Definir novo nome fixo para o tenant
         $extensao = strtolower(pathinfo($arquivo['name'], PATHINFO_EXTENSION));
         $nome_arquivo = 'logo.' . $extensao;
         $caminho_completo = $diretorio_upload . '/' . $nome_arquivo;
-        
+
         if (!move_uploaded_file($arquivo['tmp_name'], $caminho_completo)) {
             error_log("[API EMPRESA] Erro ao mover arquivo para: $caminho_completo");
             retornar_json(false, 'Erro ao salvar arquivo');
         }
-        
-        // URL relativa para visualização no frontend
-        $url_relativa = 'uploads/logo/' . $nome_arquivo;
-        
-        // Atualizar no banco de dados
+
+        // URL relativa isolada por tenant
+        $url_relativa = 'uploads/logo/tenant_' . $tenant_id . '/' . $nome_arquivo;
+
+        // Atualizar na tabela empresa (registro do tenant)
         $stmt = $conexao->prepare("
             UPDATE empresa
-            SET logo_url = ?, logo_nome_arquivo = ?, usuario_atualizacao_id = ? WHERE tenant_id = $tenant_id AND id = 1
+            SET logo_url = ?, logo_nome_arquivo = ?, usuario_atualizacao_id = ?
+            WHERE tenant_id = ? AND id = 1
         ");
         if ($stmt) {
-            $stmt->bind_param("ssi", $url_relativa, $nome_arquivo, $usuario_id);
+            $stmt->bind_param("ssii", $url_relativa, $nome_arquivo, $usuario_id, $tenant_id);
             $stmt->execute();
             $stmt->close();
         }
-        
-        error_log("[API EMPRESA] Logo atualizada com sucesso: $nome_arquivo");
-        retornar_json(true, 'Logo atualizada com sucesso', ['url' => $url_relativa]);
+
+        // Atualizar também na tabela tenants (usada pelo sidebar e relatórios)
+        $stmt2 = $conexao->prepare("UPDATE tenants SET logo_url = ? WHERE id = ?");
+        if ($stmt2) {
+            $stmt2->bind_param("si", $url_relativa, $tenant_id);
+            $stmt2->execute();
+            $stmt2->close();
+        }
+
+        error_log("[API EMPRESA] Logo atualizada para tenant {$tenant_id}: $nome_arquivo");
+        retornar_json(true, 'Logo atualizada com sucesso', ['url' => $url_relativa, 'tenant_id' => $tenant_id]);
         
     } catch (Exception $e) {
         error_log("[API EMPRESA] Exceção ao fazer upload: " . $e->getMessage());
