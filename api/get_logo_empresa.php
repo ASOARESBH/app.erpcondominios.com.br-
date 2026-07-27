@@ -119,17 +119,18 @@ try {
         }
     } else {
         // Sem tenant_id: buscar o primeiro registro (compatibilidade)
-        $res = $conexao->query("SELECT logo_url, nome_fantasia, razao_social FROM empresa LIMIT 1");
+        // Sem tenant_id: buscar o primeiro tenant ativo (compatibilidade)
+        $res = $conexao->query("SELECT logo_url, nome_fantasia, razao_social FROM tenants WHERE status = 'ativo' LIMIT 1");
         if ($res) {
-            $empresa = $res->fetch_assoc();
-            if ($empresa && !empty($empresa['logo_url'])) {
-                $caminho = $base_dir . '/' . ltrim($empresa['logo_url'], '/');
+            $tenant_row = $res->fetch_assoc();
+            if ($tenant_row && !empty($tenant_row['logo_url'])) {
+                $caminho = $base_dir . '/' . ltrim($tenant_row['logo_url'], '/');
                 if (file_exists($caminho)) {
                     $conexao->close();
                     retornar_logo(
-                        $empresa['logo_url'],
-                        'empresa_sem_tenant',
-                        $empresa['nome_fantasia'] ?: $empresa['razao_social']
+                        $tenant_row['logo_url'],
+                        'tenant_sem_sessao',
+                        $tenant_row['nome_fantasia'] ?: $tenant_row['razao_social']
                     );
                 }
             }
