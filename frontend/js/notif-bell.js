@@ -13,14 +13,15 @@
 (function () {
     'use strict';
 
-    const API         = '/api/api_notificacoes_os.php';
-    const POLL_MS     = 30000;  // 30 segundos
-    const POLL_FAST   = 10000;  // 10 segundos quando há não lidos
-    let _pollTimer    = null;
-    let _prevCount    = 0;
-    let _alertas      = [];
-    let _audioCtx     = null;
-    let _initialized  = false;
+    const API              = '/api/api_notificacoes_os.php';
+    const POLL_MS          = 30000;  // 30 segundos
+    const POLL_FAST        = 15000;  // 15 segundos quando há não lidos
+    let _pollTimer         = null;
+    let _prevCount         = -1;     // -1 = ainda não inicializado (evita som na 1ª carga)
+    let _primeiraExecucao  = true;   // Flag para suprimir som na inicialização
+    let _alertas           = [];
+    let _audioCtx          = null;
+    let _initialized       = false;
 
     // ─── Injetar HTML do sino no cabeçalho ───────────────────────────────
     function _injetar() {
@@ -346,23 +347,31 @@
     async function _poll() {
         try {
             const r    = await fetch(`${API}?acao=contar_nao_lidos`, { credentials: 'include' });
+            if (!r.ok) return; // Não processar erros HTTP (401, 500, etc.)
             const json = await r.json();
             if (!json.sucesso) return;
             const count = parseInt(json.dados?.nao_lidos || 0);
             _atualizarBadge(count);
 
             // Novas notificações chegaram?
-            if (count > _prevCount && _prevCount >= 0) {
+            // Condições para disparar o som:
+            // 1. Não é a primeira execução (evita som ao carregar a página)
+            // 2. O count aumentou em relação ao último valor conhecido
+            // 3. _prevCount >= 0 (já foi inicializado com um valor real)
+            if (!_primeiraExecucao && count > _prevCount && _prevCount >= 0) {
                 _tocarSom();
                 _animarSino();
             }
+
+            // Após a primeira execução, marcar como inicializado
+            _primeiraExecucao = false;
             _prevCount = count;
 
             // Ajustar intervalo de polling
             clearInterval(_pollTimer);
             _pollTimer = setInterval(_poll, count > 0 ? POLL_FAST : POLL_MS);
         } catch (e) {
-            // Silencioso
+            // Silencioso em caso de erro de rede
         }
     }
 
