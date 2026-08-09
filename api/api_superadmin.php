@@ -109,24 +109,24 @@ if ($action === 'dashboard') {
     $kpis = [];
 
     $r = $conexao->query("SELECT COUNT(*) AS total, SUM(status='ativo') AS ativos, SUM(status='inativo') AS inativos, SUM(status='suspenso') AS suspensos FROM tenants");
-    $kpis['tenants'] = $r->fetch_assoc();
+    $kpis['tenants'] = $r ? $r->fetch_assoc() : ['total'=>0,'ativos'=>0,'inativos'=>0,'suspensos'=>0];
 
     $r = $conexao->query("SELECT COUNT(*) AS total, SUM(ativo=1) AS ativos FROM usuarios");
-    $kpis['usuarios'] = $r->fetch_assoc();
+    $kpis['usuarios'] = $r ? $r->fetch_assoc() : ['total'=>0,'ativos'=>0];
 
     $r = $conexao->query("SELECT COUNT(*) AS total FROM moradores");
-    $kpis['moradores'] = $r->fetch_assoc();
+    $kpis['moradores'] = $r ? $r->fetch_assoc() : ['total'=>0];
 
     $r = $conexao->query("SELECT COUNT(*) AS total FROM unidades");
-    $kpis['unidades'] = $r->fetch_assoc();
+    $kpis['unidades'] = $r ? $r->fetch_assoc() : ['total'=>0];
 
     // Distribuição por plano
     $r = $conexao->query("SELECT plano, COUNT(*) AS total FROM tenants GROUP BY plano ORDER BY total DESC");
-    $kpis['planos'] = $r->fetch_all(MYSQLI_ASSOC);
+    $kpis['planos'] = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
     // Últimos 5 tenants
     $r = $conexao->query("SELECT id, slug, nome_fantasia, razao_social, plano, status, data_criacao FROM tenants ORDER BY data_criacao DESC LIMIT 5");
-    $kpis['recentes'] = $r->fetch_all(MYSQLI_ASSOC);
+    $kpis['recentes'] = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
     // Top 5 tenants por usuários
     $r = $conexao->query(
@@ -135,11 +135,11 @@ if ($action === 'dashboard') {
          LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id AND ut.ativo = 1
          GROUP BY t.id ORDER BY total_usuarios DESC LIMIT 5"
     );
-    $kpis['top_tenants'] = $r->fetch_all(MYSQLI_ASSOC);
+    $kpis['top_tenants'] = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
     // Tenants com alertas (suspensos ou inativos)
     $r = $conexao->query("SELECT id, slug, nome_fantasia, status FROM tenants WHERE status != 'ativo' ORDER BY data_criacao DESC");
-    $kpis['alertas'] = $r->fetch_all(MYSQLI_ASSOC);
+    $kpis['alertas'] = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
 
     fechar_conexao($conexao);
     sa_ok($kpis, 'Dashboard carregado');
@@ -185,22 +185,44 @@ if ($action === 'tenants') {
         $vals = array_merge($vals, [$b, $b, $b, $b]);
     }
 
-    $sql = "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj, t.plano, t.status,
-                   t.logo_url, t.email_principal, t.telefone, t.cidade, t.estado, t.data_criacao,
-                   t.modulos_habilitados,
-                   COUNT(DISTINCT ut.usuario_id) AS total_usuarios,
-                   COUNT(DISTINCT m.id) AS total_moradores
-            FROM tenants t
-            LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id AND ut.ativo = 1
-            LEFT JOIN moradores m ON m.tenant_id = t.id
-            WHERE " . implode(' AND ', $where) . "
-            GROUP BY t.id ORDER BY t.nome_fantasia ASC";
+        // Verificar se moradores tem tenant_id (migration pode não ter sido executada)
+    $chk_m = $conexao->query("SHOW COLUMNS FROM moradores LIKE 'tenant_id'");
+    $tem_tenant_moradores = ($chk_m && $chk_m->num_rows > 0);
 
+    if ($tem_tenant_moradores) {
+        $sql = "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj, t.plano, t.status,
+                       t.logo_url, t.email_principal, t.telefone, t.cidade, t.estado, t.data_criacao,
+                       t.modulos_habilitados,
+                       COUNT(DISTINCT ut.usuario_id) AS total_usuarios,
+                       COUNT(DISTINCT m.id) AS total_moradores
+                FROM tenants t
+                LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id AND ut.ativo = 1
+                LEFT JOIN moradores m ON m.tenant_id = t.id
+                WHERE " . implode(' AND ', $where) . "
+                GROUP BY t.id ORDER BY t.nome_fantasia ASC";
+    } else {
+        $sql = "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj, t.plano, t.status,
+                       t.logo_url, t.email_principal, t.telefone, t.cidade, t.estado, t.data_criacao,
+                       t.modulos_habilitados,
+                       COUNT(DISTINCT ut.usuario_id) AS total_usuarios,
+                       0 AS total_moradores
+                FROM tenants t
+                LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id AND ut.ativo = 1
+                WHERE " . implode(' AND ', $where) . "
+                GROUP BY t.id ORDER BY t.nome_fantasia ASC";
+    }
     $stmt = $conexao->prepare($sql);
     if (!empty($vals)) $stmt->bind_param($tipos, ...$vals);
     $stmt->execute();
     $list = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
+
+    // Se não tem tenant_id em moradores, contar total de moradores para o tenant 1
+    if (!$tem_tenant_moradores && count($list) === 1) {
+        $r = $conexao->query("SELECT COUNT(*) AS c FROM moradores");
+        if ($r) { $row = $r->fetch_assoc(); $list[0]['total_moradores'] = (int)($row['c'] ?? 0); }
+    }
+
     fechar_conexao($conexao);
     sa_ok(['tenants' => $list, 'total' => count($list)]);
 }
@@ -210,24 +232,45 @@ if ($action === 'tenant') {
     $id = (int)($_GET['id'] ?? 0);
     if (!$id) sa_err('ID obrigatório');
 
-    $stmt = $conexao->prepare(
-        "SELECT t.*,
-                COUNT(DISTINCT ut.usuario_id) AS total_usuarios,
-                COUNT(DISTINCT m.id) AS total_moradores,
-                COUNT(DISTINCT u.id) AS total_unidades
-         FROM tenants t
-         LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id AND ut.ativo = 1
-         LEFT JOIN moradores m ON m.tenant_id = t.id
-         LEFT JOIN unidades u ON u.tenant_id = t.id
-         WHERE t.id = ? GROUP BY t.id LIMIT 1"
-    );
+    // Buscar dados básicos do tenant
+    $stmt = $conexao->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $tenant = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     if (!$tenant) { fechar_conexao($conexao); sa_err('Condomínio não encontrado', 404); }
 
-    // Usuários
+    // Contar usuários via usuario_tenant
+    $total_usuarios = 0;
+    $r = $conexao->query("SELECT COUNT(*) AS c FROM usuario_tenant WHERE tenant_id = {$id} AND ativo = 1");
+    if ($r) { $row = $r->fetch_assoc(); $total_usuarios = (int)($row['c'] ?? 0); }
+
+    // Contar moradores (tolerante: verifica se tenant_id existe na tabela)
+    $total_moradores = 0;
+    $chk_m = $conexao->query("SHOW COLUMNS FROM moradores LIKE 'tenant_id'");
+    if ($chk_m && $chk_m->num_rows > 0) {
+        $r = $conexao->query("SELECT COUNT(*) AS c FROM moradores WHERE tenant_id = {$id}");
+    } else {
+        $r = $conexao->query("SELECT COUNT(*) AS c FROM moradores");
+    }
+    if ($r) { $row = $r->fetch_assoc(); $total_moradores = (int)($row['c'] ?? 0); }
+
+    // Contar unidades (tolerante: verifica se tenant_id existe na tabela)
+    $total_unidades = 0;
+    $chk_u = $conexao->query("SHOW COLUMNS FROM unidades LIKE 'tenant_id'");
+    if ($chk_u && $chk_u->num_rows > 0) {
+        $r = $conexao->query("SELECT COUNT(*) AS c FROM unidades WHERE tenant_id = {$id}");
+    } else {
+        $r = $conexao->query("SELECT COUNT(*) AS c FROM unidades");
+    }
+    if ($r) { $row = $r->fetch_assoc(); $total_unidades = (int)($row['c'] ?? 0); }
+
+    $tenant['total_usuarios'] = $total_usuarios;
+    $tenant['total_moradores'] = $total_moradores;
+    $tenant['total_unidades'] = $total_unidades;
+
+    // Usuários vinculados ao tenant
+    $usuarios = [];
     $stmt2 = $conexao->prepare(
         "SELECT u.id, u.nome, u.email, u.funcao, u.permissao, u.ativo,
                 ut.permissao AS permissao_tenant, ut.ativo AS vinculo_ativo, ut.created_at AS vinculado_em
@@ -235,10 +278,12 @@ if ($action === 'tenant') {
          INNER JOIN usuario_tenant ut ON ut.usuario_id = u.id AND ut.tenant_id = ?
          ORDER BY u.nome ASC"
     );
-    $stmt2->bind_param('i', $id);
-    $stmt2->execute();
-    $usuarios = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt2->close();
+    if ($stmt2) {
+        $stmt2->bind_param('i', $id);
+        $stmt2->execute();
+        $usuarios = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt2->close();
+    }
 
     // Módulos habilitados (JSON)
     $modulos_habilitados = [];
