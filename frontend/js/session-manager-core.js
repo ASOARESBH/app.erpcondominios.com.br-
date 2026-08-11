@@ -64,6 +64,7 @@ class SessionManagerCore {
         this.initializationPromise = null;
         this.lastError         = null;
         this.lastSuccessfulCheck = null;
+        this.lastCheckUnauthorized = false; // só 401/403 pode forçar logout
         this.isOnline          = navigator.onLine;
 
         // Configura??es de timeout (preenchidas pela API)
@@ -151,10 +152,15 @@ class SessionManagerCore {
 
             const checkOk = await this.checkSession();
 
-            if (!checkOk && !this.isPublicPage()) {
-                console.warn('[SessionManager] ?? Verifica??o inicial falhou, redirecionando');
+            // Só redirecionar quando a API confirmar que a credencial não é válida.
+            // Falhas 5xx, indisponibilidade temporária ou JSON inválido não podem gerar loop.
+            if (!checkOk && !this.isPublicPage() && this.lastCheckUnauthorized) {
+                console.warn('[SessionManager] Sessão não autorizada na verificação inicial; redirecionando');
                 this.redirectToLogin();
                 return false;
+            }
+            if (!checkOk && !this.isPublicPage()) {
+                console.warn('[SessionManager] Verificação inicial indisponível; mantendo a página e aguardando nova tentativa');
             }
 
             if (!this.isPublicPage()) {
@@ -212,8 +218,18 @@ class SessionManagerCore {
 
             if (!response.ok) {
                 console.warn('[SessionManager] ?? Resposta n?o OK:', response.status);
-                this.handleSessionExpired('response_not_ok');
-                return false;
+                // CORREÇÃO ANTI-LOOP: Só redirecionar em 401/403 (não autorizado)
+                // HTTP 500 = erro do servidor — NÃO é sessão expirada, não redirecionar!
+                if (response.status === 401 || response.status === 403) {
+                    this.lastCheckUnauthorized = true;
+                    this.handleSessionExpired('response_not_ok');
+                    return false;
+                }
+                this.lastCheckUnauthorized = false;
+                // Para 500/503/outros: manter sessão e tentar novamente em 30s
+                console.warn('[SessionManager] ?? Erro ' + response.status + ' no servidor — mantendo sessão');
+                this.isFetching = false;
+                return this.isAuthenticated;
             }
 
             const data = await response.json();
@@ -222,6 +238,7 @@ class SessionManagerCore {
                 console.log('[SessionManager] ? Sess?o ativa');
 
                 this.isAuthenticated   = true;
+                this.lastCheckUnauthorized = false;
                 this.currentUser       = data.usuario;
                 this.sessionExpireTime = data.sessao?.tempo_restante ?? data.tempo_restante_segundos ?? null;
                 this.countdownSeconds  = this.sessionExpireTime;
@@ -265,12 +282,14 @@ class SessionManagerCore {
                 return true;
             } else {
                 console.warn('[SessionManager] ?? Sess?o inativa');
+                this.lastCheckUnauthorized = true;
                 this.handleSessionExpired('not_active');
                 return false;
             }
         } catch (error) {
             console.error('[SessionManager] ? Erro ao verificar sess?o:', error.message);
             this.lastError = { message: error.message, type: error.name || 'unknown', timestamp: Date.now() };
+            this.lastCheckUnauthorized = false;
 
             if (error.name === 'AbortError') {
                 console.warn('[SessionManager] ?? Timeout na verifica??o (15s)');

@@ -21,8 +21,28 @@ ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Lax');
 ini_set('session.gc_maxlifetime', 7200);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 ob_end_clean();
+
+// Garantir JSON válido mesmo em erros fatais — NUNCA retornar HTTP 500
+register_shutdown_function(function() {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        if (ob_get_level() > 0) ob_end_clean();
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(200);
+        }
+        echo json_encode([
+            'sucesso' => false,
+            'sessao_ativa' => false,
+            'mensagem' => 'Erro interno — sessão não verificada',
+            'timestamp' => date('Y-m-d H:i:s')
+        ], JSON_UNESCAPED_UNICODE);
+    }
+});
 
 header('Content-Type: application/json; charset=utf-8');
 $allowed_origins = [
@@ -45,11 +65,13 @@ define('SESSAO_TIMEOUT_INATIVIDADE_MIN',  0);
 define('SESSAO_AVISO_EXPIRACAO_MIN',      5);
 
 function log_sessao($msg, $nivel = 'INFO') {
-    $dir = __DIR__ . '/../logs';
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
-    file_put_contents($dir . '/sessao.txt',
-        '[' . date('Y-m-d H:i:s') . '] [' . $nivel . '] ' . $msg . PHP_EOL,
-        FILE_APPEND | LOCK_EX);
+    try {
+        $dir = __DIR__ . '/../logs';
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        @file_put_contents($dir . '/sessao.txt',
+            '[' . date('Y-m-d H:i:s') . '] [' . $nivel . '] ' . $msg . PHP_EOL,
+            FILE_APPEND | LOCK_EX);
+    } catch (Exception $e) { /* silenciar — log nunca deve quebrar a resposta */ }
 }
 
 function obter_token_bearer() {
@@ -84,6 +106,15 @@ function obter_config_timeout($conexao) {
 
 function verificar_sessao_portal($conexao, $token, $cfg) {
     if (empty($token)) { log_sessao('Token vazio', 'WARN'); return null; }
+    // Verificar se tabela sessoes_portal existe (migration pode não ter sido executada)
+    try {
+        $check = $conexao->query("SHOW TABLES LIKE 'sessoes_portal'");
+        if (!$check || $check->num_rows === 0) {
+            log_sessao('Tabela sessoes_portal inexistente — ignorando verificação portal', 'WARN');
+            return null;
+        }
+    } catch (Exception $e) { return null; }
+    try {
     $stmt = $conexao->prepare("
         SELECT sp.id AS sessao_id, sp.morador_id, sp.data_login, sp.ativo,
                sp.ultimo_ativo, sp.timeout_total_min, sp.timeout_inatividade_min,
@@ -101,6 +132,8 @@ function verificar_sessao_portal($conexao, $token, $cfg) {
     $sess = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     if (!$sess) { log_sessao('Token nao encontrado: ' . substr($token,0,8), 'WARN'); return null; }
+    } catch (Exception $e) { log_sessao('Erro verificar_sessao_portal: ' . $e->getMessage(), 'ERROR'); return null; }
+    try {
 
     $usa_custom = (int)($sess['sessao_personalizada'] ?? 0);
     if ($usa_custom && !empty($sess['m_timeout_total'])) {
@@ -152,6 +185,7 @@ function verificar_sessao_portal($conexao, $token, $cfg) {
         'tempo_restante_seg' => $tempo_rest,
         'restante_total_seg' => $rest_total, 'restante_inatividade_seg' => $rest_inativ,
     ];
+    } catch (Exception $e) { log_sessao('Erro calcular tempo sessao portal: ' . $e->getMessage(), 'ERROR'); return null; }
 }
 
 function verificar_sessao_erp() {
@@ -234,21 +268,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $mm = $tr !== null ? floor($tr/60) : 0;
         $ss = $tr !== null ? ($tr % 60)    : 0;
 
-        // Buscar sessao_inativa atualizado do banco (pode ter sido alterado pelo admin)
+        // Buscar sessao_inativa atualizado do banco — com try/catch para não quebrar
         $uid = (int)($_SESSION['usuario_id'] ?? 0);
         if ($uid > 0) {
-            $stmt_u = $conexao->prepare("SELECT sessao_inativa FROM usuarios WHERE id = ? LIMIT 1");
-            if ($stmt_u) {
-                $stmt_u->bind_param('i', $uid);
-                $stmt_u->execute();
-                $row_u = $stmt_u->get_result()->fetch_assoc();
-                $stmt_u->close();
-                if ($row_u) {
-                    $sessao_inativa_flag = (bool)$row_u['sessao_inativa'];
-                    // Atualizar sessão PHP para refletir mudança
-                    $_SESSION['sessao_inativa'] = $sessao_inativa_flag ? 1 : 0;
-                    if ($sessao_inativa_flag) $tr = null;
+            try {
+                $stmt_u = $conexao->prepare("SELECT sessao_inativa FROM usuarios WHERE id = ? LIMIT 1");
+                if ($stmt_u) {
+                    $stmt_u->bind_param('i', $uid);
+                    $stmt_u->execute();
+                    $row_u = $stmt_u->get_result()->fetch_assoc();
+                    $stmt_u->close();
+                    if ($row_u) {
+                        $sessao_inativa_flag = (bool)$row_u['sessao_inativa'];
+                        $_SESSION['sessao_inativa'] = $sessao_inativa_flag ? 1 : 0;
+                        if ($sessao_inativa_flag) $tr = null;
+                    }
                 }
+            } catch (Exception $e) {
+                log_sessao('Erro buscar sessao_inativa: ' . $e->getMessage(), 'WARN');
+                // Continuar com valor da sessão PHP — não quebrar
             }
         }
 
@@ -289,10 +327,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($acao === 'renovar' || $acao === 'ping') {
         if (!empty($token)) {
+            try {
             $stmt = $conexao->prepare("UPDATE sessoes_portal SET ultimo_ativo=NOW() WHERE token=? AND ativo=1");
-            $stmt->bind_param('s', $token);
-            $stmt->execute();
-            $af = $stmt->affected_rows; $stmt->close();
+            if ($stmt) { $stmt->bind_param('s', $token); $stmt->execute(); $stmt->close(); }
+            } catch (Exception $e) { log_sessao('Erro renovar token: ' . $e->getMessage(), 'WARN'); }
+            $af = 1;
             if ($acao === 'renovar' && $af === 0) retornar_erro_sessao('Sessão não encontrada para renovação');
             log_sessao("Sessao renovada/ping — token: " . substr($token,0,8), 'INFO');
             $tr_renovado = $config['inatividade'] > 0 ? $config['inatividade'] * 60 : null;
