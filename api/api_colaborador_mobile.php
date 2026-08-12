@@ -9,9 +9,14 @@
  * tenant_id nas operações autenticadas.
  */
 ob_start();
-require_once 'config.php';
-require_once 'tenant_helper.php';
-require_once 'helpers/protocol_notification_helper.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/tenant_helper.php';
+// O login não depende do módulo de notificações. Em instalações parciais, uma
+// ausência deste helper não pode provocar erro 500 ao autenticar o colaborador.
+$cm_helper_protocolos = __DIR__ . '/helpers/protocol_notification_helper.php';
+if (is_file($cm_helper_protocolos)) {
+    require_once $cm_helper_protocolos;
+}
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -54,6 +59,18 @@ function cm_input() {
     $corpo = file_get_contents('php://input');
     $json = $corpo ? json_decode($corpo, true) : null;
     return is_array($json) ? $json : $_POST;
+}
+
+function cm_tabela_existe(mysqli $conexao, $tabela) {
+    $stmt = $conexao->prepare(
+        'SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1'
+    );
+    if (!$stmt) return false;
+    $stmt->bind_param('s', $tabela);
+    $stmt->execute();
+    $existe = (bool)$stmt->get_result()->fetch_row();
+    $stmt->close();
+    return $existe;
 }
 
 function cm_token_bearer() {
@@ -186,9 +203,29 @@ function cm_login(mysqli $conexao, array $dados) {
         cm_json(false, 'Informe um e-mail válido e a senha.');
     }
 
+    // Evita o fatal "bind_param() on bool" quando a migração do módulo ainda
+    // não foi executada no HostGator. O app recebe uma resposta tratável.
+    if (!cm_tabela_existe($conexao, 'sessoes_colaborador_mobile')) {
+        cm_log('login_bloqueado', [
+            'email' => $email,
+            'motivo' => 'migracao_sessoes_colaborador_ausente',
+            'ip' => $_SERVER['REMOTE_ADDR'] ?? 'desconhecido',
+        ]);
+        cm_json(
+            false,
+            'O Portal do Colaborador ainda não foi instalado no servidor. Execute a migração migration_portal_colaborador_mobile.sql.',
+            null,
+            503
+        );
+    }
+
     $stmt = $conexao->prepare(
         'SELECT id, nome, email, senha, funcao, departamento, permissao, ativo FROM usuarios WHERE LOWER(email) = ? LIMIT 1'
     );
+    if (!$stmt) {
+        cm_log('login_erro', ['motivo' => 'consulta_usuario_indisponivel']);
+        cm_json(false, 'Não foi possível validar o acesso agora.', null, 503);
+    }
     $stmt->bind_param('s', $email);
     $stmt->execute();
     $usuario = $stmt->get_result()->fetch_assoc();
@@ -210,6 +247,10 @@ function cm_login(mysqli $conexao, array $dados) {
          WHERE ut.usuario_id = ? AND ut.ativo = 1 AND t.status = 'ativo'
          ORDER BY t.nome_fantasia, t.razao_social"
     );
+    if (!$stmt) {
+        cm_log('login_erro', ['usuario_id' => $usuario['id'], 'motivo' => 'vinculo_tenant_indisponivel']);
+        cm_json(false, 'A configuração de condomínios deste usuário ainda não está disponível.', null, 503);
+    }
     $stmt->bind_param('i', $usuario['id']);
     $stmt->execute();
     $tenants = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -251,6 +292,10 @@ function cm_login(mysqli $conexao, array $dados) {
     $hash = hash('sha256', $token);
     $expiracao = date('Y-m-d H:i:s', strtotime('+8 hours'));
     $stmt = $conexao->prepare('UPDATE sessoes_colaborador_mobile SET ativo = 0 WHERE usuario_id = ? AND tenant_id = ? AND ativo = 1');
+    if (!$stmt) {
+        cm_log('login_erro', ['usuario_id' => $usuario['id'], 'tenant_id' => $tenant['id'], 'motivo' => 'sessao_indisponivel']);
+        cm_json(false, 'A sessão móvel não está disponível. Confirme a migração do Portal do Colaborador.', null, 503);
+    }
     $stmt->bind_param('ii', $usuario['id'], $tenant['id']);
     $stmt->execute();
     $stmt->close();
@@ -258,6 +303,10 @@ function cm_login(mysqli $conexao, array $dados) {
     $stmt = $conexao->prepare(
         'INSERT INTO sessoes_colaborador_mobile (usuario_id, tenant_id, token_hash, dispositivo, data_expiracao, ultimo_uso, ativo) VALUES (?, ?, ?, ?, ?, NOW(), 1)'
     );
+    if (!$stmt) {
+        cm_log('login_erro', ['usuario_id' => $usuario['id'], 'tenant_id' => $tenant['id'], 'motivo' => 'insert_sessao_indisponivel']);
+        cm_json(false, 'Não foi possível criar a sessão móvel. Confirme a migração do Portal do Colaborador.', null, 503);
+    }
     $stmt->bind_param('iisss', $usuario['id'], $tenant['id'], $hash, $dispositivo, $expiracao);
     if (!$stmt->execute()) cm_json(false, 'Não foi possível iniciar a sessão do colaborador.', null, 500);
     $stmt->close();
