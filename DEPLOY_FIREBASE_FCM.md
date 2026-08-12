@@ -57,6 +57,8 @@ Em seguida execute:
 sql/configurar_firebase_erp_condominios.sql
 ```
 
+> **Correção do erro #1215:** substitua a cópia antiga de `migration_notificacoes_encomendas_mobile.sql` pela versão atual deste pacote antes de executá-la. A versão corrigida não cria chaves estrangeiras contra as tabelas legadas `moradores` e `protocolos`, cuja estrutura pode ser incompatível no MariaDB 5.7.
+
 O segundo script registra o projeto Firebase `erp-condominios` e habilita `push_encomenda_ativo = 1` para todos os tenants que possuem moradores. Os scripts podem ser rodados novamente sem gerar duplicidade.
 
 ### 5. Confirmar extensões PHP
