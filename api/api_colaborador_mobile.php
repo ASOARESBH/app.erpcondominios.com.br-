@@ -175,8 +175,8 @@ function cm_validar_hidrometro_mobile(mysqli $conexao, $tenant_id, $hidrometro_i
         "SELECT h.id, h.morador_id, h.unidade, h.numero_hidrometro, h.numero_lacre, h.ativo,
                 m.nome AS morador_nome
          FROM hidrometros h
-         INNER JOIN moradores m ON m.id = h.morador_id AND m.tenant_id = h.tenant_id
-         WHERE h.tenant_id = ? AND h.id = ? LIMIT 1"
+         INNER JOIN moradores m ON m.id = h.morador_id
+         WHERE m.tenant_id = ? AND h.id = ? LIMIT 1"
     );
     if (!$stmt) return null;
     $stmt->bind_param('ii', $tenant_id, $hidrometro_id);
@@ -397,7 +397,10 @@ switch ($acao) {
     case 'hidrometros_leiturista':
         $morador_id = (int)($_GET['morador_id'] ?? 0);
         if ($morador_id <= 0) cm_json(false, 'Selecione um morador para consultar o hidrômetro.');
-        foreach ([['hidrometros', 'tenant_id'], ['leituras', 'tenant_id']] as $requisito) {
+        // Hidrômetros pertencem ao tenant por meio do morador. A tabela legada
+        // hidrometros não possui tenant_id em todas as instalações, portanto o
+        // isolamento é aplicado pelo join moradores.tenant_id + leituras.tenant_id.
+        foreach ([['moradores', 'tenant_id'], ['leituras', 'tenant_id']] as $requisito) {
             if (!cm_coluna_existe($conexao, $requisito[0], $requisito[1])) {
                 cm_json(false, 'A estrutura multi-tenant de hidrômetros ainda não foi instalada no servidor.', null, 503);
             }
@@ -406,22 +409,22 @@ switch ($acao) {
             "SELECT h.id, h.numero_hidrometro, h.numero_lacre, h.unidade, h.ativo,
                     m.id AS morador_id, m.nome AS morador_nome,
                     (SELECT l.leitura_atual FROM leituras l
-                     WHERE l.tenant_id = h.tenant_id AND l.hidrometro_id = h.id
+                     WHERE l.tenant_id = ? AND l.hidrometro_id = h.id
                      ORDER BY l.data_leitura DESC LIMIT 1) AS leitura_anterior,
                     (SELECT l.data_leitura FROM leituras l
-                     WHERE l.tenant_id = h.tenant_id AND l.hidrometro_id = h.id
+                     WHERE l.tenant_id = ? AND l.hidrometro_id = h.id
                      ORDER BY l.data_leitura DESC LIMIT 1) AS data_ultima_leitura,
                     (SELECT COUNT(*) FROM leituras l
-                     WHERE l.tenant_id = h.tenant_id AND l.hidrometro_id = h.id
+                     WHERE l.tenant_id = ? AND l.hidrometro_id = h.id
                        AND MONTH(l.data_leitura) = MONTH(CURDATE())
                        AND YEAR(l.data_leitura) = YEAR(CURDATE())) AS leitura_no_mes
              FROM hidrometros h
-             INNER JOIN moradores m ON m.id = h.morador_id AND m.tenant_id = h.tenant_id
-             WHERE h.tenant_id = ? AND h.morador_id = ? AND h.ativo = 1
+             INNER JOIN moradores m ON m.id = h.morador_id
+             WHERE m.tenant_id = ? AND h.morador_id = ? AND h.ativo = 1
              ORDER BY h.numero_hidrometro ASC"
         );
         if (!$stmt) cm_json(false, 'Não foi possível consultar os hidrômetros.', null, 503);
-        $stmt->bind_param('ii', $tenant_id, $morador_id);
+        $stmt->bind_param('iiiii', $tenant_id, $tenant_id, $tenant_id, $tenant_id, $morador_id);
         $stmt->execute();
         $itens = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
