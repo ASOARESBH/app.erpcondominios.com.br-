@@ -2,7 +2,10 @@
 -- AUDITORIA DE BRANDING E MULTI-TENANCY
 -- ERP Condomínio | Compatível com MySQL/MariaDB 5.7
 -- Somente leitura: não altera dados.
+-- Banco de destino: inlaud99_erpcondor.
 -- ============================================================================
+
+USE `inlaud99_erpcondor`;
 
 -- 1. Confirmar as estruturas centrais e colunas necessárias.
 SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT

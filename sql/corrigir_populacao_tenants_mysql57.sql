@@ -5,8 +5,10 @@
 -- Execute APÓS o pre_requisito_multitenant_mysql57.sql.
 -- Corrige o erro #1052: coluna ambígua em ON DUPLICATE KEY UPDATE.
 -- Este arquivo não usa ON DUPLICATE KEY UPDATE.
+-- Banco de destino: inlaud99_erpcondor.
 -- ============================================================================
 
+USE `inlaud99_erpcondor`;
 SET NAMES utf8mb4;
 
 -- 1. Garante um registro-base para o tenant inicial caso a importação anterior

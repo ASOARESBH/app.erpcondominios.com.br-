@@ -6,8 +6,10 @@
 -- e vincular os dados legados ao tenant inicial sem duplicar registros.
 --
 -- IMPORTANTE: gere um backup completo antes de executar no phpMyAdmin.
+-- Banco de destino: inlaud99_erpcondor.
 -- ============================================================================
 
+USE `inlaud99_erpcondor`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

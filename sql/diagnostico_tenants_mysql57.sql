@@ -4,6 +4,8 @@
 -- Execute isoladamente no phpMyAdmin, no banco inlaud99_erpcondor.
 -- ============================================================================
 
+USE `inlaud99_erpcondor`;
+
 -- 1. Confirma o banco efetivamente selecionado nesta conexão.
 SELECT DATABASE() AS banco_em_uso, @@collation_database AS collation_do_banco;
 
