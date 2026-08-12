@@ -175,7 +175,11 @@ if (!function_exists('protocolo_notificacao_enviar_fcm')) {
         }
         $dados_resposta = json_decode($resposta, true);
         if ($codigo_http === 200 && !empty($dados_resposta['name'])) {
-            return ['sucesso' => true, 'invalido' => false];
+            return [
+                'sucesso' => true,
+                'invalido' => false,
+                'message_id' => $dados_resposta['name'],
+            ];
         }
         $status = $dados_resposta['error']['status'] ?? '';
         return [

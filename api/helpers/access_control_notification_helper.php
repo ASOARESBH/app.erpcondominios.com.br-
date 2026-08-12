@@ -22,8 +22,28 @@ if (!function_exists('controle_acesso_notificacao_coluna_existe')) {
     }
 }
 
+if (!function_exists('controle_acesso_notificacao_auditoria')) {
+    /**
+     * Auditoria operacional sem senha, token completo ou dados de documento.
+     * O arquivo permite identificar se a quebra ocorreu antes da persistência,
+     * na resolução do destinatário, no token ou na resposta do FCM.
+     */
+    function controle_acesso_notificacao_auditoria(string $etapa, array $contexto = []): void {
+        unset($contexto['fcm_token'], $contexto['authorization'], $contexto['private_key']);
+        $linha = '[' . date('Y-m-d H:i:s') . '] [ACCESS_NOTIFICATION] ' . $etapa;
+        if ($contexto) $linha .= ' ' . json_encode($contexto, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $linha .= PHP_EOL;
+
+        $diretorio = dirname(__DIR__, 2) . '/logs';
+        if (!is_dir($diretorio)) @mkdir($diretorio, 0750, true);
+        @file_put_contents($diretorio . '/access_notification.log', $linha, FILE_APPEND | LOCK_EX);
+        error_log(rtrim($linha));
+    }
+}
+
 if (!function_exists('controle_acesso_notificacao_debug')) {
     function controle_acesso_notificacao_debug(string $evento, array $contexto = []): void {
+        controle_acesso_notificacao_auditoria($evento, $contexto);
         protocolo_notificacao_debug('controle_acesso_' . $evento, $contexto);
     }
 }
@@ -221,6 +241,14 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
             return ['sucesso' => true, 'motivo' => 'sem_destinatario', 'destinatarios' => 0];
         }
 
+        controle_acesso_notificacao_auditoria('destinatarios_resolvidos', [
+            'registro_acesso_id' => $registro_acesso_id,
+            'tenant_id' => $tenant_id,
+            'morador_origem_id' => $morador_id,
+            'unidade' => $unidade_destino,
+            'destinatarios' => array_map(static fn($item) => (int)$item['id'], $destinatarios),
+        ]);
+
         $entrada = trim($tipo_acesso) !== 'Saída';
         $tipo_evento = $entrada ? 'acesso_entrada' : 'acesso_saida';
         $titulo = $entrada ? 'Entrada registrada' : 'Saída registrada';
@@ -254,6 +282,13 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
             $notificacao_id = (int)$conexao->insert_id;
             $stmt->close();
             $resumo['persistidas']++;
+            controle_acesso_notificacao_auditoria('evento_persistido', [
+                'notificacao_id' => $notificacao_id,
+                'registro_acesso_id' => $registro_acesso_id,
+                'tenant_id' => $tenant_id,
+                'morador_id' => $id_morador,
+                'tipo' => $tipo_evento,
+            ]);
 
             if (!$permitir_push) {
                 controle_acesso_atualizar_push($conexao, $tenant_id, $notificacao_id, 'desativado', 'Alertas de Controle de Acesso desativados para o tenant.');
@@ -264,16 +299,35 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
                 continue;
             }
 
-            $stmt_tokens = $conexao->prepare('SELECT id, fcm_token FROM pwa_fcm_tokens WHERE tenant_id = ? AND morador_id = ? AND ativo = 1');
+            $stmt_tokens = $conexao->prepare('SELECT id, fcm_token, plataforma, device_info FROM pwa_fcm_tokens WHERE tenant_id = ? AND morador_id = ? AND ativo = 1');
             if (!$stmt_tokens) continue;
             $stmt_tokens->bind_param('ii', $tenant_id, $id_morador);
             $stmt_tokens->execute();
             $tokens = $stmt_tokens->get_result()->fetch_all(MYSQLI_ASSOC);
             $stmt_tokens->close();
             if (!$tokens) {
+                controle_acesso_notificacao_auditoria('token_nao_encontrado', [
+                    'notificacao_id' => $notificacao_id,
+                    'registro_acesso_id' => $registro_acesso_id,
+                    'tenant_id' => $tenant_id,
+                    'morador_id' => $id_morador,
+                ]);
                 controle_acesso_atualizar_push($conexao, $tenant_id, $notificacao_id, 'sem_token', 'Nenhum dispositivo ativo para o morador.');
                 continue;
             }
+
+            controle_acesso_notificacao_auditoria('tokens_encontrados', [
+                'notificacao_id' => $notificacao_id,
+                'registro_acesso_id' => $registro_acesso_id,
+                'tenant_id' => $tenant_id,
+                'morador_id' => $id_morador,
+                'tokens' => array_map(static fn($token) => [
+                    'token_id' => (int)$token['id'],
+                    'plataforma' => $token['plataforma'] ?? 'nao_informada',
+                    'device_info' => $token['device_info'] ?? '',
+                    'token_final' => substr((string)$token['fcm_token'], -12),
+                ], $tokens),
+            ]);
 
             $enviados = 0;
             foreach ($tokens as $token) {
@@ -291,6 +345,17 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
                     $project_id,
                     'controle_acesso'
                 );
+                controle_acesso_notificacao_auditoria('fcm_resultado', [
+                    'notificacao_id' => $notificacao_id,
+                    'registro_acesso_id' => $registro_acesso_id,
+                    'token_id' => (int)$token['id'],
+                    'token_final' => substr((string)$token['fcm_token'], -12),
+                    'plataforma' => $token['plataforma'] ?? 'nao_informada',
+                    'fcm_aceito' => (bool)$push['sucesso'],
+                    'fcm_message_id' => $push['message_id'] ?? null,
+                    'erro' => $push['erro'] ?? null,
+                    'status' => $push['status'] ?? null,
+                ]);
                 if ($push['sucesso']) {
                     $enviados++;
                 } elseif ($push['invalido']) {
