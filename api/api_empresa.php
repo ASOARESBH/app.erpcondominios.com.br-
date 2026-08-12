@@ -72,167 +72,128 @@ function registrar_log_empresa($empresa_id, $acao, $dados_anteriores, $dados_nov
 $metodo = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
-// Ação 'obter' é pública (usada na página de login para identidade visual)
-// As demais ações exigem autenticacao de admin
-if ($action !== 'obter') {
-    $usuario = verificarAutenticacao(true, 'admin');
+// Segurança Multi-Tenant: toda leitura e gravação deve usar a sessão autenticada.
+// A identidade visual pública é atendida por get_logo_empresa.php; esta API é administrativa.
+$usuario = verificarAutenticacao(true, 'admin');
 $tenant_id = exigirTenantId();
-    $usuario_id = $usuario['id'];
-} else {
-    $usuario_id = null;
-}
+$usuario_id = (int)($usuario['id'] ?? $_SESSION['usuario_id'] ?? 0);
 
 $conexao = conectar_banco();
 
-// OBTER DADOS DA EMPRESA (público)
+function dados_empresa_consolidados($conexao, $tenant_id) {
+    // tenants mantém a identidade comercial criada no Super-Admin.
+    $stmtTenant = $conexao->prepare("SELECT id, slug, razao_social, nome_fantasia, cnpj, plano, status, logo_url, email_principal, telefone, cidade, estado FROM tenants WHERE id = ? LIMIT 1");
+    if (!$stmtTenant) return null;
+    $stmtTenant->bind_param('i', $tenant_id);
+    $stmtTenant->execute();
+    $tenant = $stmtTenant->get_result()->fetch_assoc();
+    $stmtTenant->close();
+    if (!$tenant) return null;
+
+    // empresa complementa o tenant com endereço, contatos e informações operacionais.
+    $empresa = null;
+    $stmtEmpresa = $conexao->prepare("SELECT * FROM empresa WHERE tenant_id = ? LIMIT 1");
+    if ($stmtEmpresa) {
+        $stmtEmpresa->bind_param('i', $tenant_id);
+        $stmtEmpresa->execute();
+        $empresa = $stmtEmpresa->get_result()->fetch_assoc();
+        $stmtEmpresa->close();
+    }
+
+    $valor = function($campoEmpresa, $campoTenant = null, $padrao = '') use ($empresa, $tenant) {
+        if ($empresa && isset($empresa[$campoEmpresa]) && $empresa[$campoEmpresa] !== '') return $empresa[$campoEmpresa];
+        $campoTenant = $campoTenant ?: $campoEmpresa;
+        return $tenant[$campoTenant] ?? $padrao;
+    };
+
+    return [
+        'id' => (int)($empresa['id'] ?? 0), 'tenant_id' => (int)$tenant_id, 'slug' => $tenant['slug'],
+        'cnpj' => $valor('cnpj'), 'razao_social' => $valor('razao_social'), 'nome_fantasia' => $valor('nome_fantasia'),
+        'endereco_rua' => $valor('endereco_rua'), 'endereco_numero' => $valor('endereco_numero'),
+        'endereco_complemento' => $valor('endereco_complemento'), 'endereco_bairro' => $valor('endereco_bairro'),
+        'endereco_cidade' => $valor('endereco_cidade', 'cidade'), 'endereco_estado' => $valor('endereco_estado', 'estado'),
+        'endereco_cep' => $valor('endereco_cep'), 'email_principal' => $valor('email_principal'),
+        'email_cobranca' => $valor('email_cobranca'), 'telefone' => $valor('telefone'),
+        'logo_url' => $valor('logo_url'), 'logo_nome_arquivo' => $empresa['logo_nome_arquivo'] ?? basename((string)($tenant['logo_url'] ?? '')),
+        'situacao' => $empresa['situacao'] ?? (($tenant['status'] ?? 'ativo') === 'ativo' ? 'ativo' : 'inativo'),
+        'plano' => $tenant['plano'] ?? 'basico', 'origem_dados' => $empresa ? 'empresa_e_tenant' : 'tenant'
+    ];
+}
+
+// OBTER DADOS DO TENANT ATIVO — consolida tabela tenants + detalhes da tabela empresa.
 if ($action === 'obter' && $metodo === 'GET') {
     try {
-        $stmt = $conexao->prepare("
-            SELECT id, cnpj, razao_social, nome_fantasia,
-                   endereco_rua, endereco_numero, endereco_complemento,
-                   endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
-                   email_principal, email_cobranca, telefone,
-                   logo_url, logo_nome_arquivo, situacao,
-                   data_criacao, data_atualizacao
-            FROM empresa WHERE tenant_id = $tenant_id LIMIT 1
-        ");
-        if (!$stmt) {
-            error_log("[API EMPRESA] Erro ao preparar query: " . $conexao->error);
-            retornar_json(false, 'Erro ao buscar dados da empresa');
+        $dados = dados_empresa_consolidados($conexao, $tenant_id);
+        if (!$dados) {
+            error_log("[EMPRESA_MT] tenant_nao_encontrado tenant_id={$tenant_id} usuario_id={$usuario_id}");
+            retornar_json(false, 'Condomínio ativo não encontrado', null);
         }
-        $stmt->execute();
-        $resultado = $stmt->get_result();
-        $empresa = $resultado->fetch_assoc();
-        $stmt->close();
-        if ($empresa) {
-            retornar_json(true, 'Dados da empresa obtidos com sucesso', $empresa);
-        } else {
-            retornar_json(true, 'Nenhuma empresa cadastrada', null);
-        }
-    } catch (Exception $e) {
-        error_log("[API EMPRESA] Exceção ao obter dados: " . $e->getMessage());
-        retornar_json(false, 'Erro ao obter dados da empresa');
+        error_log("[EMPRESA_MT] dados_carregados tenant_id={$tenant_id} origem={$dados['origem_dados']} usuario_id={$usuario_id}");
+        retornar_json(true, 'Dados do condomínio obtidos com sucesso', $dados);
+    } catch (Throwable $e) {
+        error_log("[EMPRESA_MT] erro_obter tenant_id={$tenant_id}: " . $e->getMessage());
+        retornar_json(false, 'Erro ao obter dados do condomínio', null);
     }
 }
 
-// ATUALIZAR DADOS DA EMPRESA
+// ATUALIZAR DADOS — grava detalhes na tabela empresa e sincroniza a identidade no tenant.
 if ($action === 'atualizar' && $metodo === 'POST') {
     try {
         $input = json_decode(file_get_contents('php://input'), true);
-        $cnpj = $input['cnpj'] ?? '';
-        $razao_social = $input['razao_social'] ?? '';
-        $nome_fantasia = $input['nome_fantasia'] ?? '';
-        $endereco_rua = $input['endereco_rua'] ?? '';
-        $endereco_numero = $input['endereco_numero'] ?? '';
-        $endereco_complemento = $input['endereco_complemento'] ?? '';
-        $endereco_bairro = $input['endereco_bairro'] ?? '';
-        $endereco_cidade = $input['endereco_cidade'] ?? '';
-        $endereco_estado = $input['endereco_estado'] ?? '';
-        $endereco_cep = $input['endereco_cep'] ?? '';
-        $email_principal = $input['email_principal'] ?? '';
-        $email_cobranca = $input['email_cobranca'] ?? '';
-        $telefone = $input['telefone'] ?? '';
-        $situacao = $input['situacao'] ?? 'ativo';
-        
-        if (empty($cnpj) || empty($razao_social) || empty($email_principal)) {
-            retornar_json(false, 'CNPJ, Razão Social e E-mail principal são obrigatórios');
+        if (!is_array($input)) retornar_json(false, 'Dados do formulário inválidos');
+        foreach (['cnpj','razao_social','nome_fantasia','endereco_rua','endereco_numero','endereco_complemento','endereco_bairro','endereco_cidade','endereco_estado','endereco_cep','email_principal','email_cobranca','telefone'] as $campo) {
+            ${$campo} = trim((string)($input[$campo] ?? ''));
         }
-        if (!filter_var($email_principal, FILTER_VALIDATE_EMAIL)) {
-            retornar_json(false, 'E-mail principal inválido');
+        $situacao = ($input['situacao'] ?? 'ativo') === 'inativo' ? 'inativo' : 'ativo';
+        if ($razao_social === '' || $email_principal === '') retornar_json(false, 'Razão Social e E-mail principal são obrigatórios');
+        if (!filter_var($email_principal, FILTER_VALIDATE_EMAIL)) retornar_json(false, 'E-mail principal inválido');
+        if ($email_cobranca !== '' && !filter_var($email_cobranca, FILTER_VALIDATE_EMAIL)) retornar_json(false, 'E-mail de cobrança inválido');
+
+        $conexao->begin_transaction();
+        $dados_anteriores = null;
+        try {
+            $stmtAnterior = $conexao->prepare('SELECT * FROM empresa WHERE tenant_id = ? LIMIT 1');
+            $stmtAnterior->bind_param('i', $tenant_id);
+            $stmtAnterior->execute();
+            $dados_anteriores = $stmtAnterior->get_result()->fetch_assoc();
+            $stmtAnterior->close();
+
+            if ($dados_anteriores) {
+                $empresa_id = (int)$dados_anteriores['id'];
+                $stmt = $conexao->prepare('UPDATE empresa SET cnpj=?, razao_social=?, nome_fantasia=?, endereco_rua=?, endereco_numero=?, endereco_complemento=?, endereco_bairro=?, endereco_cidade=?, endereco_estado=?, endereco_cep=?, email_principal=?, email_cobranca=?, telefone=?, situacao=?, usuario_atualizacao_id=? WHERE tenant_id=? AND id=?');
+                $stmt->bind_param('ssssssssssssssiii', $cnpj, $razao_social, $nome_fantasia, $endereco_rua, $endereco_numero, $endereco_complemento, $endereco_bairro, $endereco_cidade, $endereco_estado, $endereco_cep, $email_principal, $email_cobranca, $telefone, $situacao, $usuario_id, $tenant_id, $empresa_id);
+                $stmt->execute();
+                $stmt->close();
+                $acao_log = 'atualizar';
+            } else {
+                $stmt = $conexao->prepare('INSERT INTO empresa (tenant_id, cnpj, razao_social, nome_fantasia, endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep, email_principal, email_cobranca, telefone, situacao, usuario_criacao_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->bind_param('issssssssssssssi', $tenant_id, $cnpj, $razao_social, $nome_fantasia, $endereco_rua, $endereco_numero, $endereco_complemento, $endereco_bairro, $endereco_cidade, $endereco_estado, $endereco_cep, $email_principal, $email_cobranca, $telefone, $situacao, $usuario_id);
+                $stmt->execute();
+                $empresa_id = (int)$stmt->insert_id;
+                $stmt->close();
+                $acao_log = 'criar';
+            }
+
+            $status_tenant = $situacao === 'ativo' ? 'ativo' : 'inativo';
+            $stmtTenant = $conexao->prepare('UPDATE tenants SET cnpj=?, razao_social=?, nome_fantasia=?, email_principal=?, telefone=?, cidade=?, estado=?, status=? WHERE id=?');
+            $stmtTenant->bind_param('ssssssssi', $cnpj, $razao_social, $nome_fantasia, $email_principal, $telefone, $endereco_cidade, $endereco_estado, $status_tenant, $tenant_id);
+            $stmtTenant->execute();
+            $stmtTenant->close();
+
+            $dados_novos = ['cnpj'=>$cnpj,'razao_social'=>$razao_social,'nome_fantasia'=>$nome_fantasia,'email_principal'=>$email_principal,'telefone'=>$telefone,'situacao'=>$situacao];
+            registrar_log_empresa($empresa_id, $acao_log, $dados_anteriores, $dados_novos, $usuario_id);
+            $conexao->commit();
+            $_SESSION['tenant_nome'] = $nome_fantasia ?: $razao_social;
+            $_SESSION['tenant_razao_social'] = $razao_social;
+            error_log("[EMPRESA_MT] dados_salvos tenant_id={$tenant_id} empresa_id={$empresa_id} usuario_id={$usuario_id}");
+            retornar_json(true, 'Dados do condomínio salvos e sincronizados com o tenant', ['empresa_id'=>$empresa_id,'tenant_id'=>$tenant_id]);
+        } catch (Throwable $e) {
+            $conexao->rollback();
+            throw $e;
         }
-        if (!empty($email_cobranca) && !filter_var($email_cobranca, FILTER_VALIDATE_EMAIL)) {
-            retornar_json(false, 'E-mail de cobrança inválido');
-        }
-        
-        $stmt_anterior = $conexao->prepare("SELECT * FROM empresa WHERE tenant_id = $tenant_id LIMIT 1");
-        $stmt_anterior->execute();
-        $resultado_anterior = $stmt_anterior->get_result();
-        $dados_anteriores = $resultado_anterior->fetch_assoc();
-        $stmt_anterior->close();
-        
-        if ($dados_anteriores) {
-            $stmt = $conexao->prepare("
-                UPDATE empresa
-                SET cnpj = ?, razao_social = ?, nome_fantasia = ?,
-                    endereco_rua = ?, endereco_numero = ?, endereco_complemento = ?,
-                    endereco_bairro = ?, endereco_cidade = ?, endereco_estado = ?, endereco_cep = ?,
-                    email_principal = ?, email_cobranca = ?, telefone = ?,
-                    situacao = ?, usuario_atualizacao_id = ? WHERE tenant_id = $tenant_id AND id = ?
-            ");
-            if (!$stmt) {
-                error_log("[API EMPRESA] Erro ao preparar update: " . $conexao->error);
-                retornar_json(false, 'Erro ao atualizar dados da empresa');
-            }
-            $empresa_id = $dados_anteriores['id'];
-            $stmt->bind_param(
-                "ssssssssssssssii",
-                $cnpj, $razao_social, $nome_fantasia,
-                $endereco_rua, $endereco_numero, $endereco_complemento,
-                $endereco_bairro, $endereco_cidade, $endereco_estado, $endereco_cep,
-                $email_principal, $email_cobranca, $telefone,
-                $situacao, $usuario_id, $empresa_id
-            );
-            if (!$stmt->execute()) {
-                error_log("[API EMPRESA] Erro ao executar update: " . $stmt->error);
-                retornar_json(false, 'Erro ao atualizar dados da empresa');
-            }
-            $stmt->close();
-            
-            $dados_novos = [
-                'cnpj' => $cnpj, 'razao_social' => $razao_social, 'nome_fantasia' => $nome_fantasia,
-                'endereco_rua' => $endereco_rua, 'endereco_numero' => $endereco_numero,
-                'endereco_complemento' => $endereco_complemento, 'endereco_bairro' => $endereco_bairro,
-                'endereco_cidade' => $endereco_cidade, 'endereco_estado' => $endereco_estado,
-                'endereco_cep' => $endereco_cep, 'email_principal' => $email_principal,
-                'email_cobranca' => $email_cobranca, 'telefone' => $telefone, 'situacao' => $situacao
-            ];
-            registrar_log_empresa($empresa_id, 'atualizar', $dados_anteriores, $dados_novos, $usuario_id);
-            error_log("[API EMPRESA] Empresa atualizada: ID $empresa_id");
-            retornar_json(true, 'Dados da empresa atualizados com sucesso', ['empresa_id' => $empresa_id]);
-        } else {
-            $stmt = $conexao->prepare("
-                INSERT INTO empresa (
-                    cnpj, razao_social, nome_fantasia,
-                    endereco_rua, endereco_numero, endereco_complemento,
-                    endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
-                    email_principal, email_cobranca, telefone,
-                    situacao, usuario_criacao_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            if (!$stmt) {
-                error_log("[API EMPRESA] Erro ao preparar insert: " . $conexao->error);
-                retornar_json(false, 'Erro ao criar dados da empresa');
-            }
-            $stmt->bind_param(
-                "ssssssssssssssi",
-                $cnpj, $razao_social, $nome_fantasia,
-                $endereco_rua, $endereco_numero, $endereco_complemento,
-                $endereco_bairro, $endereco_cidade, $endereco_estado, $endereco_cep,
-                $email_principal, $email_cobranca, $telefone,
-                $situacao, $usuario_id
-            );
-            if (!$stmt->execute()) {
-                error_log("[API EMPRESA] Erro ao executar insert: " . $stmt->error);
-                retornar_json(false, 'Erro ao criar dados da empresa');
-            }
-            $empresa_id = $stmt->insert_id;
-            $stmt->close();
-            
-            $dados_novos = [
-                'cnpj' => $cnpj, 'razao_social' => $razao_social, 'nome_fantasia' => $nome_fantasia,
-                'endereco_rua' => $endereco_rua, 'endereco_numero' => $endereco_numero,
-                'endereco_complemento' => $endereco_complemento, 'endereco_bairro' => $endereco_bairro,
-                'endereco_cidade' => $endereco_cidade, 'endereco_estado' => $endereco_estado,
-                'endereco_cep' => $endereco_cep, 'email_principal' => $email_principal,
-                'email_cobranca' => $email_cobranca, 'telefone' => $telefone, 'situacao' => $situacao
-            ];
-            registrar_log_empresa($empresa_id, 'criar', null, $dados_novos, $usuario_id);
-            error_log("[API EMPRESA] Empresa criada: ID $empresa_id");
-            retornar_json(true, 'Dados da empresa criados com sucesso', ['empresa_id' => $empresa_id]);
-        }
-    } catch (Exception $e) {
-        error_log("[API EMPRESA] Exceção ao atualizar: " . $e->getMessage());
-        retornar_json(false, 'Erro ao atualizar dados da empresa');
+    } catch (Throwable $e) {
+        error_log("[EMPRESA_MT] erro_atualizar tenant_id={$tenant_id}: " . $e->getMessage());
+        retornar_json(false, 'Erro ao atualizar dados do condomínio');
     }
 }
 
@@ -300,31 +261,33 @@ if ($action === 'upload_logo' && $metodo === 'POST') {
         // URL relativa isolada por tenant
         $url_relativa = 'uploads/logo/tenant_' . $tenant_id . '/' . $nome_arquivo;
 
-        // Atualizar na tabela empresa (registro do tenant)
-        $stmt = $conexao->prepare("
-            UPDATE empresa
-            SET logo_url = ?, logo_nome_arquivo = ?, usuario_atualizacao_id = ?
-            WHERE tenant_id = ? AND id = 1
-        ");
+        // Atualizar somente o registro associado ao tenant atual. Nunca usar id=1,
+        // pois o primeiro registro da tabela pode pertencer a outro condomínio.
+        $conexao->begin_transaction();
+        $stmt = $conexao->prepare("UPDATE empresa SET logo_url = ?, logo_nome_arquivo = ?, usuario_atualizacao_id = ? WHERE tenant_id = ?");
         if ($stmt) {
             $stmt->bind_param("ssii", $url_relativa, $nome_arquivo, $usuario_id, $tenant_id);
             $stmt->execute();
             $stmt->close();
         }
 
-        // Atualizar também na tabela tenants (usada pelo sidebar e relatórios)
+        // tenants é a fonte usada pelo sidebar, Super-Admin e relatórios.
         $stmt2 = $conexao->prepare("UPDATE tenants SET logo_url = ? WHERE id = ?");
-        if ($stmt2) {
-            $stmt2->bind_param("si", $url_relativa, $tenant_id);
-            $stmt2->execute();
-            $stmt2->close();
-        }
+        if (!$stmt2) throw new Exception('Não foi possível preparar a atualização da logo do tenant');
+        $stmt2->bind_param("si", $url_relativa, $tenant_id);
+        $stmt2->execute();
+        $stmt2->close();
+        $conexao->commit();
 
-        error_log("[API EMPRESA] Logo atualizada para tenant {$tenant_id}: $nome_arquivo");
+        $_SESSION['tenant_logo_url'] = $url_relativa;
+        error_log("[EMPRESA_MT] logo_atualizada tenant_id={$tenant_id} usuario_id={$usuario_id} arquivo={$nome_arquivo}");
         retornar_json(true, 'Logo atualizada com sucesso', ['url' => $url_relativa, 'tenant_id' => $tenant_id]);
         
-    } catch (Exception $e) {
-        error_log("[API EMPRESA] Exceção ao fazer upload: " . $e->getMessage());
+    } catch (Throwable $e) {
+        if (isset($conexao) && $conexao instanceof mysqli) {
+            @$conexao->rollback();
+        }
+        error_log("[EMPRESA_MT] erro_upload_logo tenant_id={$tenant_id}: " . $e->getMessage());
         retornar_json(false, 'Erro ao fazer upload da logo');
     }
 }

@@ -83,10 +83,14 @@ function mostrarAlerta(mensagem, tipo = 'success') {
 
 async function carregarDados() {
     try {
-        const response = await fetch(`${state.apiBase}api_empresa.php?action=obter`);
+        console.debug('[Empresa] Carregando dados do tenant ativo...');
+        const response = await fetch(`${state.apiBase}api_empresa.php?action=obter`, { credentials: 'include' });
         const data = await response.json();
+        if (!response.ok || !data.sucesso) {
+            throw new Error(data.mensagem || `Erro HTTP ${response.status}`);
+        }
 
-        if (data.sucesso && data.dados) {
+        if (data.dados) {
             const empresa = data.dados;
 
             state.dom.cnpj.value = empresa.cnpj || '';
@@ -106,14 +110,17 @@ async function carregarDados() {
 
             if (empresa.logo_url && state.dom.logoPreview) {
                 let logoUrl = empresa.logo_url;
-                if (!logoUrl.startsWith('http') && !logoUrl.startsWith('/')) {
-                    logoUrl = '/' + logoUrl;
-                }
-                state.dom.logoPreview.innerHTML = `<img src="${logoUrl}" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
+                if (!logoUrl.startsWith('http') && !logoUrl.startsWith('/')) logoUrl = '/' + logoUrl;
+                state.dom.logoPreview.innerHTML = `<img src="${logoUrl}?v=${Date.now()}" alt="Logo do condomínio" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
             }
+            localStorage.setItem('tenant_id', String(empresa.tenant_id || ''));
+            localStorage.setItem('tenant_nome', empresa.nome_fantasia || empresa.razao_social || '');
+            localStorage.setItem('tenant_slug', empresa.slug || '');
+            console.debug('[Empresa] Dados carregados com sucesso.', { tenant_id: empresa.tenant_id, origem: empresa.origem_dados });
         }
     } catch (error) {
-        console.error('[Empresa] Erro ao carregar dados:', error);
+        console.error('[Empresa] Erro ao carregar dados do tenant:', error);
+        mostrarAlerta(`Não foi possível carregar os dados do condomínio: ${error.message}`, 'error');
     }
 }
 
@@ -176,14 +183,15 @@ async function uploadLogo(e) {
     formData.append('logo', arquivo);
 
     try {
-        const response = await fetch(`${state.apiBase}api_empresa.php?action=upload_logo`, { method: 'POST', body: formData });
+        const response = await fetch(`${state.apiBase}api_empresa.php?action=upload_logo`, { method: 'POST', body: formData, credentials: 'include' });
         const data = await response.json();
 
         if (data.sucesso && state.dom.logoPreview) {
             const logoUrl = data.dados.url;
             console.log('[Empresa] Upload sucesso. URL:', logoUrl);
-            state.dom.logoPreview.innerHTML = `<img src="${logoUrl}" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
-            mostrarAlerta('Logo enviada com sucesso!', 'success');
+            state.dom.logoPreview.innerHTML = `<img src="/${logoUrl.replace(/^\//, '')}?v=${Date.now()}" alt="Logo do condomínio" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
+            localStorage.setItem('tenant_logo_url', logoUrl);
+            mostrarAlerta('Logo enviada com sucesso! A identidade visual foi atualizada para este condomínio.', 'success');
 
             setTimeout(() => carregarDados(), 1000);
         } else {
@@ -220,13 +228,15 @@ async function salvarEmpresa(e) {
         const response = await fetch(`${state.apiBase}api_empresa.php?action=atualizar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(dados)
         });
 
         const data = await response.json();
 
-        if (data.sucesso) {
-            mostrarAlerta('Dados da empresa salvos com sucesso!', 'success');
+        if (response.ok && data.sucesso) {
+            localStorage.setItem('tenant_nome', dados.nome_fantasia || dados.razao_social);
+            mostrarAlerta('Dados do condomínio salvos e sincronizados com o tenant!', 'success');
         } else {
             mostrarAlerta(data.mensagem, 'error');
         }
