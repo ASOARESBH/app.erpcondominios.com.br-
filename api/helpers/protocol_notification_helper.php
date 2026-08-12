@@ -120,7 +120,7 @@ if (!function_exists('protocolo_notificacao_token_oauth')) {
 }
 
 if (!function_exists('protocolo_notificacao_enviar_fcm')) {
-    function protocolo_notificacao_enviar_fcm($token_dispositivo, $titulo, $corpo, array $dados, $project_id) {
+    function protocolo_notificacao_enviar_fcm($token_dispositivo, $titulo, $corpo, array $dados, $project_id, $canal_android = 'encomendas') {
         $oauth = protocolo_notificacao_token_oauth();
         if (!$oauth) {
             return ['sucesso' => false, 'invalido' => false, 'erro' => 'firebase_nao_configurado'];
@@ -142,7 +142,7 @@ if (!function_exists('protocolo_notificacao_enviar_fcm')) {
                 'android' => [
                     'priority' => 'high',
                     'notification' => [
-                        'channel_id' => 'encomendas',
+                        'channel_id' => $canal_android,
                         'sound' => 'default',
                         'notification_priority' => 'PRIORITY_HIGH',
                     ],

@@ -22,6 +22,7 @@ require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 require_once 'debug_veiculos.php';
+require_once __DIR__ . '/helpers/access_control_notification_helper.php';
 
 // Registrar debug inicial
 registrar_debug('INICIO', 'API de veículos iniciada', array(
@@ -648,8 +649,36 @@ $tenant_id = exigirTenantId();
             if ($stmt->execute()) {
                 $id_inserido = $conexao->insert_id;
                 registrar_log('VEICULO_CRIADO', "Veículo criado: $placa (ID: $id_inserido)", $placa);
-                $errorLogger->registrarInfo('Veículo criado com sucesso', array('id' => $id_inserido, 'placa' => $placa, 'tag' => $tag, 'morador_id' => $morador_id, 'dependente_id' => $dependente_id));
-                retornar_json(true, "Veículo cadastrado com sucesso", array('id' => $id_inserido));
+
+                // Evento complementar: a falha em notificação nunca pode impedir
+                // o cadastro do veículo. O helper valida tenant, morador e migração.
+                $notificacao = array('sucesso' => false, 'motivo' => 'nao_processada');
+                try {
+                    $notificacao = controle_acesso_criar_notificacao_veiculo(
+                        $conexao,
+                        (int)$tenant_id,
+                        (int)$morador_id,
+                        (int)$id_inserido,
+                        $placa,
+                        $modelo
+                    );
+                } catch (Throwable $erro_notificacao) {
+                    error_log('[NotificacaoVeiculo] falha não bloqueante: ' . $erro_notificacao->getMessage());
+                    $notificacao = array('sucesso' => false, 'motivo' => 'excecao_nao_bloqueante');
+                }
+
+                $errorLogger->registrarInfo('Veículo criado com sucesso', array(
+                    'id' => $id_inserido,
+                    'placa' => $placa,
+                    'tag' => $tag,
+                    'morador_id' => $morador_id,
+                    'dependente_id' => $dependente_id,
+                    'notificacao_controle_acesso' => $notificacao,
+                ));
+                retornar_json(true, "Veículo cadastrado com sucesso", array(
+                    'id' => $id_inserido,
+                    'notificacao_veiculo' => $notificacao,
+                ));
             } else {
                 $errorLogger->registrarErroAPI('criar', "Erro ao cadastrar veículo: " . $stmt->error, array('placa' => $placa, 'tag' => $tag, 'morador_id' => $morador_id, 'dependente_id' => $dependente_id));
                 throw new Exception("Erro ao cadastrar veículo: " . $stmt->error);
