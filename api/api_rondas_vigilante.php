@@ -215,6 +215,12 @@ if (in_array($acao, ['qr_detalhe', 'registrar_leitura'], true)) {
 $tenantId = rv_exigir_contexto_operacional();
 $tenant = rv_tenant_contexto($conn, $tenantId);
 
+// Libera o lock nativo do PHP sobre a sessão. Assim, a verificação periódica
+// da sessão não fica bloqueada enquanto a API grava uma rota ou consulta SLA.
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
+
 switch ($acao) {
     case 'contexto':
         rv_json(true, 'Condomínio selecionado.', $tenant);

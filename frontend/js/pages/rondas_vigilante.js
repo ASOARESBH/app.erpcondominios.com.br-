@@ -1,5 +1,5 @@
 const API = '/api/api_rondas_vigilante.php';
-const state = { tenantId: 0, rotas: [], colaboradores: [], report: [], timer: null, tab: 'dashboard' };
+const state = { tenantId: 0, rotas: [], colaboradores: [], report: [], timer: null, tab: 'dashboard', salvandoRota: false, carregandoDashboard: false };
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -40,11 +40,18 @@ async function carregarContexto() {
 async function carregarTudo() { await Promise.all([carregarDashboard(), carregarColaboradores()]); }
 async function carregarColaboradores() { const res = await request('listar_colaboradores'); state.colaboradores = res.sucesso ? (res.dados || []) : []; preencherFiltros(); }
 async function carregarDashboard() {
-    const res = await request('dashboard'); if (!res.sucesso) { toast(res.mensagem, 'error'); return; }
-    state.rotas = res.dados.rotas || []; const k = res.dados.kpis || {};
-    log('Dashboard carregado', { rotas: state.rotas.length, alertas: (res.dados.alertas || []).length, kpis: k });
-    $('#rv-kpi-rotas').textContent = k.rotas_ativas ?? 0; $('#rv-kpi-vigilantes').textContent = k.vigilantes ?? 0; $('#rv-kpi-leituras').textContent = k.leituras_hoje ?? 0; $('#rv-kpi-atrasos').textContent = k.atrasos_hoje ?? 0;
-    renderAlertas(res.dados.alertas || []); renderRotasDashboard(); renderRotas(); renderQrs(); preencherFiltros();
+    if (state.carregandoDashboard) { log('Dashboard já está em carregamento; requisição ignorada.'); return; }
+    state.carregandoDashboard = true;
+    try {
+        const res = await request('dashboard');
+        if (!res.sucesso) { toast(res.mensagem, 'error'); return; }
+        state.rotas = res.dados.rotas || []; const k = res.dados.kpis || {};
+        log('Dashboard carregado', { rotas: state.rotas.length, alertas: (res.dados.alertas || []).length, kpis: k });
+        $('#rv-kpi-rotas').textContent = k.rotas_ativas ?? 0; $('#rv-kpi-vigilantes').textContent = k.vigilantes ?? 0; $('#rv-kpi-leituras').textContent = k.leituras_hoje ?? 0; $('#rv-kpi-atrasos').textContent = k.atrasos_hoje ?? 0;
+        renderAlertas(res.dados.alertas || []); renderRotasDashboard(); renderRotas(); renderQrs(); preencherFiltros();
+    } finally {
+        state.carregandoDashboard = false;
+    }
 }
 function renderAlertas(alertas) {
     const el = $('#rv-alertas'); if (!el) return;
@@ -77,7 +84,26 @@ function preencherFiltros() {
 function abrirRota(rota=null) { $('#rv-form-rota').reset(); $('#rv-rota-id').value=rota?.id||''; $('#rv-rota-modal-titulo').textContent=rota?'Editar rota':'Nova rota'; if(rota){$('#rv-rota-nome').value=rota.nome||'';$('#rv-rota-descricao').value=rota.descricao||'';$('#rv-rota-inicio').value=String(rota.hora_inicio||'').slice(0,5);$('#rv-rota-fim').value=String(rota.hora_fim||'').slice(0,5);$('#rv-rota-intervalo').value=rota.intervalo_minutos;$('#rv-rota-repeticoes').value=rota.repeticoes_por_dia;$('#rv-rota-tolerancia').value=rota.tolerancia_minutos;$('#rv-rota-ativo').checked=Number(rota.ativo)===1;document.querySelectorAll('.rv-weekdays input').forEach((i)=>i.checked=(rota.dias||[]).map(Number).includes(Number(i.value)));} modal('rv-modal-rota',true); }
 function abrirPonto(rotaId,ponto=null){$('#rv-form-ponto').reset();$('#rv-ponto-rota-id').value=rotaId;$('#rv-ponto-id').value=ponto?.id||'';$('#rv-ponto-modal-titulo').textContent=ponto?'Editar ponto QR':'Novo ponto QR';if(ponto){$('#rv-ponto-nome').value=ponto.nome||'';$('#rv-ponto-local').value=ponto.localizacao||'';$('#rv-ponto-instrucoes').value=ponto.instrucoes||'';$('#rv-ponto-ordem').value=ponto.ordem||1;$('#rv-ponto-ativo').checked=Number(ponto.ativo)===1;}modal('rv-modal-ponto',true);}
 function abrirVigilante(rotaId){$('#rv-vig-rota-id').value=rotaId;preencherFiltros();modal('rv-modal-vigilante',true);}
-async function salvarRota(event){event.preventDefault();const dias=[...document.querySelectorAll('.rv-weekdays input:checked')].map((i)=>Number(i.value));const d={id:Number($('#rv-rota-id').value)||0,nome:$('#rv-rota-nome').value,descricao:$('#rv-rota-descricao').value,hora_inicio:$('#rv-rota-inicio').value,hora_fim:$('#rv-rota-fim').value,intervalo_minutos:Number($('#rv-rota-intervalo').value),repeticoes_por_dia:Number($('#rv-rota-repeticoes').value),tolerancia_minutos:Number($('#rv-rota-tolerancia').value),dias_semana:dias,ativo:$('#rv-rota-ativo').checked};const r=await request('salvar_rota',d,'POST');if(!r.sucesso){toast(r.mensagem,'error');return;}modal('rv-modal-rota',false);toast(r.mensagem);carregarDashboard();}
+async function salvarRota(event){
+    event.preventDefault();
+    if (state.salvandoRota) { log('Tentativa de salvar rota ignorada: gravação já em andamento.'); return; }
+    const form = $('#rv-form-rota');
+    const botao = form.querySelector('button[type="submit"]');
+    const textoOriginal = botao.innerHTML;
+    const dias=[...document.querySelectorAll('.rv-weekdays input:checked')].map((i)=>Number(i.value));
+    const d={id:Number($('#rv-rota-id').value)||0,nome:$('#rv-rota-nome').value.trim(),descricao:$('#rv-rota-descricao').value.trim(),hora_inicio:$('#rv-rota-inicio').value,hora_fim:$('#rv-rota-fim').value,intervalo_minutos:Number($('#rv-rota-intervalo').value),repeticoes_por_dia:Number($('#rv-rota-repeticoes').value),tolerancia_minutos:Number($('#rv-rota-tolerancia').value),dias_semana:dias,ativo:$('#rv-rota-ativo').checked};
+    if (!d.nome || !d.hora_inicio) { toast('Informe o nome e a hora inicial da rota.', 'warn'); return; }
+    state.salvandoRota = true;
+    botao.disabled = true; botao.classList.add('is-loading'); botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    try {
+        const r=await request('salvar_rota',d,'POST');
+        if(!r.sucesso){toast(r.mensagem,'error');return;}
+        modal('rv-modal-rota',false);toast(r.mensagem);await carregarDashboard();
+    } finally {
+        state.salvandoRota = false;
+        botao.disabled = false; botao.classList.remove('is-loading'); botao.innerHTML = textoOriginal;
+    }
+}
 async function salvarPonto(event){event.preventDefault();const d={id:Number($('#rv-ponto-id').value)||0,rota_id:Number($('#rv-ponto-rota-id').value),nome:$('#rv-ponto-nome').value,localizacao:$('#rv-ponto-local').value,instrucoes:$('#rv-ponto-instrucoes').value,ordem:Number($('#rv-ponto-ordem').value),ativo:$('#rv-ponto-ativo').checked};const r=await request('salvar_ponto',d,'POST');if(!r.sucesso){toast(r.mensagem,'error');return;}modal('rv-modal-ponto',false);toast(r.mensagem);carregarDashboard();}
 async function salvarVigilante(event){event.preventDefault();const d={rota_id:Number($('#rv-vig-rota-id').value),colaborador_id:Number($('#rv-vig-colaborador').value)};const r=await request('vincular_vigilante',d,'POST');if(!r.sucesso){toast(r.mensagem,'error');return;}modal('rv-modal-vigilante',false);toast(r.mensagem);carregarDashboard();}
 async function gerarRelatorio(){const r=await request('relatorio',{data_de:$('#rv-rel-de').value,data_ate:$('#rv-rel-ate').value,rota_id:$('#rv-rel-rota').value,colaborador_id:$('#rv-rel-vigilante').value});if(!r.sucesso){toast(r.mensagem,'error');return;}state.report=r.dados.linhas||[];const s=r.dados.resumo||{};$('#rv-rel-total').textContent=s.total??0;$('#rv-rel-prazo').textContent=s.no_prazo??0;$('#rv-rel-atrasado').textContent=s.atrasado??0;$('#rv-rel-tbody').innerHTML=state.report.length?state.report.map((l)=>`<tr><td>${fmtDate(l.registrado_em)}</td><td>${esc(l.rota_nome)}</td><td>${esc(l.ponto_nome)}</td><td>${esc(l.vigilante_nome)}</td><td><span class="rv-sla ${l.status_sla==='atrasado'?'atrasado':'prazo'}">${l.status_sla==='atrasado'?'Atrasado':'No prazo'}</span></td><td>${Number(l.atraso_minutos)||0} min</td></tr>`).join(''):'<tr><td colspan="6" class="rv-empty">Nenhuma leitura encontrada no período.</td></tr>';}
