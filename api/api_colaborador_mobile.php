@@ -11,6 +11,7 @@
 ob_start();
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 // O login não depende do módulo de notificações. Em instalações parciais, uma
 // ausência deste helper não pode provocar erro 500 ao autenticar o colaborador.
 $cm_helper_protocolos = __DIR__ . '/helpers/protocol_notification_helper.php';
@@ -161,6 +162,28 @@ function cm_numero_os(mysqli $conexao, $tenant_id) {
     $ultimo = (int)($stmt->get_result()->fetch_assoc()['ultimo'] ?? 0);
     $stmt->close();
     return 'OS-' . $ano . '-' . str_pad((string)($ultimo + 1), 4, '0', STR_PAD_LEFT);
+}
+
+function cm_calcular_valor_agua($consumo) {
+    // Mantém a regra vigente de api_leituras.php: mínimo de 10 m³ / R$ 61,60
+    // e R$ 6,16 por m³ acima do mínimo.
+    return $consumo <= 10 ? 61.60 : $consumo * 6.16;
+}
+
+function cm_validar_hidrometro_mobile(mysqli $conexao, $tenant_id, $hidrometro_id) {
+    $stmt = $conexao->prepare(
+        "SELECT h.id, h.morador_id, h.unidade, h.numero_hidrometro, h.numero_lacre, h.ativo,
+                m.nome AS morador_nome
+         FROM hidrometros h
+         INNER JOIN moradores m ON m.id = h.morador_id AND m.tenant_id = h.tenant_id
+         WHERE h.tenant_id = ? AND h.id = ? LIMIT 1"
+    );
+    if (!$stmt) return null;
+    $stmt->bind_param('ii', $tenant_id, $hidrometro_id);
+    $stmt->execute();
+    $hidrometro = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $hidrometro ?: null;
 }
 
 function cm_buscar_protocolo_qr(mysqli $conexao, $tenant_id, $codigo) {
@@ -369,6 +392,141 @@ switch ($acao) {
         $stmt->bind_param('i', $tenant_id); $stmt->execute();
         $resultado['entregas_hoje'] = (int)$stmt->get_result()->fetch_assoc()['total']; $stmt->close();
         cm_json(true, 'Painel carregado.', $resultado);
+        break;
+
+    case 'hidrometros_leiturista':
+        $morador_id = (int)($_GET['morador_id'] ?? 0);
+        if ($morador_id <= 0) cm_json(false, 'Selecione um morador para consultar o hidrômetro.');
+        foreach ([['hidrometros', 'tenant_id'], ['leituras', 'tenant_id']] as $requisito) {
+            if (!cm_coluna_existe($conexao, $requisito[0], $requisito[1])) {
+                cm_json(false, 'A estrutura multi-tenant de hidrômetros ainda não foi instalada no servidor.', null, 503);
+            }
+        }
+        $stmt = $conexao->prepare(
+            "SELECT h.id, h.numero_hidrometro, h.numero_lacre, h.unidade, h.ativo,
+                    m.id AS morador_id, m.nome AS morador_nome,
+                    (SELECT l.leitura_atual FROM leituras l
+                     WHERE l.tenant_id = h.tenant_id AND l.hidrometro_id = h.id
+                     ORDER BY l.data_leitura DESC LIMIT 1) AS leitura_anterior,
+                    (SELECT l.data_leitura FROM leituras l
+                     WHERE l.tenant_id = h.tenant_id AND l.hidrometro_id = h.id
+                     ORDER BY l.data_leitura DESC LIMIT 1) AS data_ultima_leitura,
+                    (SELECT COUNT(*) FROM leituras l
+                     WHERE l.tenant_id = h.tenant_id AND l.hidrometro_id = h.id
+                       AND MONTH(l.data_leitura) = MONTH(CURDATE())
+                       AND YEAR(l.data_leitura) = YEAR(CURDATE())) AS leitura_no_mes
+             FROM hidrometros h
+             INNER JOIN moradores m ON m.id = h.morador_id AND m.tenant_id = h.tenant_id
+             WHERE h.tenant_id = ? AND h.morador_id = ? AND h.ativo = 1
+             ORDER BY h.numero_hidrometro ASC"
+        );
+        if (!$stmt) cm_json(false, 'Não foi possível consultar os hidrômetros.', null, 503);
+        $stmt->bind_param('ii', $tenant_id, $morador_id);
+        $stmt->execute();
+        $itens = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        cm_log('hidrometros_consultados', ['tenant_id' => $tenant_id, 'usuario_id' => $usuario_id, 'morador_id' => $morador_id, 'total' => count($itens)]);
+        cm_json(true, 'Hidrômetros carregados.', $itens);
+        break;
+
+    case 'foto_hidrometro':
+        if ($metodo !== 'POST') cm_json(false, 'Método não permitido.', null, 405);
+        if (!cm_coluna_existe($conexao, 'leituras_fotos', 'client_uuid')) {
+            cm_json(false, 'A estrutura de evidências móveis ainda não foi instalada. Execute migration_leiturista_hidrometros_mobile.sql.', null, 503);
+        }
+        $hidrometro_id = (int)($_POST['hidrometro_id'] ?? 0);
+        $client_uuid = trim((string)($_POST['client_uuid'] ?? ''));
+        if ($hidrometro_id <= 0 || !preg_match('/^[a-zA-Z0-9-]{16,64}$/', $client_uuid)) {
+            cm_json(false, 'Hidrômetro ou identificador da leitura inválido.');
+        }
+        $hidrometro = cm_validar_hidrometro_mobile($conexao, $tenant_id, $hidrometro_id);
+        if (!$hidrometro || (int)$hidrometro['ativo'] !== 1) cm_json(false, 'Hidrômetro não encontrado ou inativo.', null, 404);
+        $stmt = $conexao->prepare('SELECT id FROM leituras_fotos WHERE tenant_id = ? AND client_uuid = ? LIMIT 1');
+        $stmt->bind_param('is', $tenant_id, $client_uuid); $stmt->execute();
+        $foto_existente = $stmt->get_result()->fetch_assoc(); $stmt->close();
+        if ($foto_existente) cm_json(true, 'Foto já recebida anteriormente.', ['id' => (int)$foto_existente['id'], 'idempotente' => true]);
+        if (!isset($_FILES['arquivo']) || $_FILES['arquivo']['error'] !== UPLOAD_ERR_OK) {
+            cm_json(false, 'Envie uma foto válida do hidrômetro.');
+        }
+        $arquivo = $_FILES['arquivo'];
+        if ((int)$arquivo['size'] > 8 * 1024 * 1024) cm_json(false, 'A foto excede o limite de 8 MB.');
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $tipo_mime = $finfo->file($arquivo['tmp_name']);
+        $tipos = ['image/jpeg' => 'jpg', 'image/jpg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        if (!isset($tipos[$tipo_mime])) cm_json(false, 'Formato de foto não permitido. Use JPG, PNG ou WEBP.');
+        $nome_servidor = 'leitura_mobile_' . $hidrometro_id . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $tipos[$tipo_mime];
+        $caminho_rel = 'uploads/leituras_fotos/tenant_' . $tenant_id . '/' . $nome_servidor;
+        try {
+            tenant_file_gravar_upload($conexao, $tenant_id, $arquivo, 'leitura_foto', $caminho_rel, false);
+        } catch (Throwable $e) {
+            cm_log('foto_hidrometro_erro', ['tenant_id' => $tenant_id, 'usuario_id' => $usuario_id, 'motivo' => 'armazenamento']);
+            cm_json(false, 'Não foi possível armazenar a foto.', null, 500);
+        }
+        $origem = 'camera'; $nome_original = substr((string)$arquivo['name'], 0, 255); $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+        $stmt = $conexao->prepare(
+            "INSERT INTO leituras_fotos
+                (tenant_id, leitura_id, hidrometro_id, client_uuid, nome_arquivo, nome_original, caminho, tipo_mime, tamanho_bytes, origem, lancado_por_tipo, lancado_por_id, lancado_por_nome, ip_origem)
+             VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'usuario', ?, ?, ?)"
+        );
+        if (!$stmt) cm_json(false, 'Não foi possível registrar a foto.', null, 503);
+        $stmt->bind_param('iisssssisiss', $tenant_id, $hidrometro_id, $client_uuid, $nome_servidor, $nome_original, $caminho_rel, $tipo_mime, $arquivo['size'], $origem, $usuario_id, $usuario['nome'], $ip);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            try { tenant_file_desativar_caminho($conexao, $tenant_id, $caminho_rel); } catch (Throwable $e) {}
+            cm_json(false, 'Não foi possível registrar a foto.', null, 500);
+        }
+        $foto_id = (int)$conexao->insert_id; $stmt->close();
+        cm_log('foto_hidrometro_recebida', ['tenant_id' => $tenant_id, 'usuario_id' => $usuario_id, 'hidrometro_id' => $hidrometro_id, 'foto_id' => $foto_id]);
+        cm_json(true, 'Foto recebida.', ['id' => $foto_id]);
+        break;
+
+    case 'registrar_leitura_hidrometro':
+        if ($metodo !== 'POST') cm_json(false, 'Método não permitido.', null, 405);
+        if (!cm_coluna_existe($conexao, 'leituras', 'client_uuid')) {
+            cm_json(false, 'A estrutura de leituras móveis ainda não foi instalada. Execute migration_leiturista_hidrometros_mobile.sql.', null, 503);
+        }
+        $hidrometro_id = (int)($dados['hidrometro_id'] ?? 0);
+        $client_uuid = trim((string)($dados['client_uuid'] ?? ''));
+        $leitura_atual = isset($dados['leitura_atual']) && is_numeric($dados['leitura_atual']) ? (float)$dados['leitura_atual'] : -1;
+        $data_leitura = trim((string)($dados['data_leitura'] ?? date('Y-m-d H:i:s')));
+        $observacao = substr(trim((string)($dados['observacao'] ?? '')), 0, 1000);
+        $foto_id = isset($dados['foto_id']) ? (int)$dados['foto_id'] : 0;
+        if ($hidrometro_id <= 0 || !preg_match('/^[a-zA-Z0-9-]{16,64}$/', $client_uuid) || $leitura_atual < 0 || strtotime($data_leitura) === false) {
+            cm_json(false, 'Dados da leitura inválidos.');
+        }
+        $stmt = $conexao->prepare('SELECT id, consumo, valor_total FROM leituras WHERE tenant_id = ? AND client_uuid = ? LIMIT 1');
+        $stmt->bind_param('is', $tenant_id, $client_uuid); $stmt->execute();
+        $leitura_existente = $stmt->get_result()->fetch_assoc(); $stmt->close();
+        if ($leitura_existente) cm_json(true, 'Leitura já sincronizada anteriormente.', ['id' => (int)$leitura_existente['id'], 'consumo' => (float)$leitura_existente['consumo'], 'valor_total' => (float)$leitura_existente['valor_total'], 'idempotente' => true]);
+        $hidrometro = cm_validar_hidrometro_mobile($conexao, $tenant_id, $hidrometro_id);
+        if (!$hidrometro || (int)$hidrometro['ativo'] !== 1) cm_json(false, 'Hidrômetro não encontrado ou inativo.', null, 404);
+        $mes = (int)date('m', strtotime($data_leitura)); $ano = (int)date('Y', strtotime($data_leitura));
+        $stmt = $conexao->prepare('SELECT id FROM leituras WHERE tenant_id = ? AND hidrometro_id = ? AND MONTH(data_leitura) = ? AND YEAR(data_leitura) = ? LIMIT 1');
+        $stmt->bind_param('iiii', $tenant_id, $hidrometro_id, $mes, $ano); $stmt->execute();
+        $ja_lancada = $stmt->get_result()->fetch_assoc(); $stmt->close();
+        if ($ja_lancada) cm_json(false, 'Já existe uma leitura registrada para este hidrômetro nesta competência.', null, 409);
+        $stmt = $conexao->prepare('SELECT leitura_atual FROM leituras WHERE tenant_id = ? AND hidrometro_id = ? ORDER BY data_leitura DESC LIMIT 1');
+        $stmt->bind_param('ii', $tenant_id, $hidrometro_id); $stmt->execute();
+        $ultima = $stmt->get_result()->fetch_assoc(); $stmt->close();
+        $anterior = $ultima ? (float)$ultima['leitura_atual'] : 0.0;
+        if ($leitura_atual < $anterior) cm_json(false, 'A leitura informada não pode ser menor que a última leitura (' . $anterior . ' m³).');
+        $consumo = $leitura_atual - $anterior; $valor_mc = 6.16; $valor_min = 61.60; $valor_total = cm_calcular_valor_agua($consumo);
+        $stmt = $conexao->prepare(
+            "INSERT INTO leituras
+                (tenant_id, client_uuid, hidrometro_id, morador_id, unidade, leitura_anterior, leitura_atual, consumo, valor_metro_cubico, valor_minimo, valor_total, data_leitura, observacao, lancado_por_tipo, lancado_por_id, lancado_por_nome)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'usuario', ?, ?)"
+        );
+        if (!$stmt) cm_json(false, 'Não foi possível preparar o lançamento da leitura.', null, 503);
+        $stmt->bind_param('isiisddddddssiss', $tenant_id, $client_uuid, $hidrometro_id, $hidrometro['morador_id'], $hidrometro['unidade'], $anterior, $leitura_atual, $consumo, $valor_mc, $valor_min, $valor_total, $data_leitura, $observacao, $usuario_id, $usuario['nome']);
+        if (!$stmt->execute()) { $stmt->close(); cm_json(false, 'Não foi possível registrar a leitura.', null, 500); }
+        $leitura_id = (int)$conexao->insert_id; $stmt->close();
+        $foto_vinculada = false;
+        if ($foto_id > 0) {
+            $stmt = $conexao->prepare('UPDATE leituras_fotos SET leitura_id = ? WHERE tenant_id = ? AND id = ? AND hidrometro_id = ? AND leitura_id IS NULL');
+            if ($stmt) { $stmt->bind_param('iiii', $leitura_id, $tenant_id, $foto_id, $hidrometro_id); $stmt->execute(); $foto_vinculada = $stmt->affected_rows > 0; $stmt->close(); }
+        }
+        cm_log('leitura_hidrometro_registrada', ['tenant_id' => $tenant_id, 'usuario_id' => $usuario_id, 'hidrometro_id' => $hidrometro_id, 'leitura_id' => $leitura_id, 'foto_vinculada' => $foto_vinculada]);
+        cm_json(true, 'Leitura registrada com sucesso.', ['id' => $leitura_id, 'consumo' => $consumo, 'valor_total' => $valor_total, 'foto_vinculada' => $foto_vinculada]);
         break;
 
     case 'moradores':
