@@ -57,7 +57,7 @@ proc: BEGIN
 
     SELECT COUNT(*) INTO v_existe
       FROM INFORMATION_SCHEMA.TABLES
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = p_tabela;
+     WHERE BINARY TABLE_SCHEMA = BINARY DATABASE() AND BINARY TABLE_NAME = BINARY p_tabela;
     IF v_existe = 0 THEN
         INSERT INTO os_integridade_interacoes_log(tabela, acao, mensagem)
         VALUES (p_tabela, 'ignorada', 'Tabela não encontrada');
@@ -81,7 +81,7 @@ proc: BEGIN
     IF v_zeros > 0 THEN
         SELECT COUNT(*) INTO v_col_reparo
           FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = p_tabela AND COLUMN_NAME = '_mt_reparo_linha';
+         WHERE BINARY TABLE_SCHEMA = BINARY DATABASE() AND BINARY TABLE_NAME = BINARY p_tabela AND BINARY COLUMN_NAME = BINARY '_mt_reparo_linha';
         IF v_col_reparo = 0 THEN
             SET @sql = CONCAT('ALTER TABLE `', p_tabela, '` ADD COLUMN `_mt_reparo_linha` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE');
             PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
@@ -100,8 +100,8 @@ proc: BEGIN
 
     SELECT COUNT(*) INTO v_pk
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = p_tabela
-       AND CONSTRAINT_NAME = 'PRIMARY' AND COLUMN_NAME = 'id';
+     WHERE BINARY TABLE_SCHEMA = BINARY DATABASE() AND BINARY TABLE_NAME = BINARY p_tabela
+       AND BINARY CONSTRAINT_NAME = BINARY 'PRIMARY' AND BINARY COLUMN_NAME = BINARY 'id';
     IF v_pk = 0 THEN
         SET @sql = CONCAT('ALTER TABLE `', p_tabela, '` ADD PRIMARY KEY (`id`)');
         PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
@@ -109,8 +109,8 @@ proc: BEGIN
 
     SELECT COUNT(*) INTO v_ai
       FROM INFORMATION_SCHEMA.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = p_tabela
-       AND COLUMN_NAME = 'id' AND EXTRA LIKE '%auto_increment%';
+     WHERE BINARY TABLE_SCHEMA = BINARY DATABASE() AND BINARY TABLE_NAME = BINARY p_tabela
+       AND BINARY COLUMN_NAME = BINARY 'id' AND EXTRA LIKE '%auto_increment%';
     IF v_ai = 0 THEN
         SET @sql = CONCAT('ALTER TABLE `', p_tabela, '` MODIFY `id` INT NOT NULL AUTO_INCREMENT');
         PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;

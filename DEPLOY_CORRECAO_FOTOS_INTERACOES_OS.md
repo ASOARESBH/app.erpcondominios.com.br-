@@ -15,7 +15,7 @@ A análise do dump do banco identificou que as tabelas `os_interacoes` e `os_int
 ## Implantação obrigatória
 
 1. Faça um backup completo do banco `inlaud99_erpcondor` no phpMyAdmin.
-2. Importe `sql/corrigir_integridade_interacoes_os_mysql57.sql` uma única vez.
+2. Importe `sql/corrigir_integridade_interacoes_os_mysql57.sql` uma única vez. Se uma execução anterior parou no erro de *collation*, use a versão corrigida deste pacote e execute-a novamente: a migration é idempotente e conclui as etapas pendentes.
 3. Confira no resultado da migration a tabela `os_integridade_interacoes_log`. As linhas de `os_interacoes` e `os_interacao_fotos` devem estar com ação `corrigida`.
 4. Confira `os_interacao_fotos_quarentena`. Ela preserva as fotos cujo vínculo era `interacao_id = 0`; tais fotos não podem ser atribuídas automaticamente sem risco de vinculá-las à interação errada.
 5. Envie os arquivos PHP do pacote ao HostGator, preservando a estrutura de pastas.
