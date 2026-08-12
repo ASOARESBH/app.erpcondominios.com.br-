@@ -15,6 +15,10 @@ SET @OLD_FOREIGN_KEY_CHECKS = @@FOREIGN_KEY_CHECKS;
 SET FOREIGN_KEY_CHECKS = 0;
 SET SESSION group_concat_max_len = 1048576;
 
+-- Se a versão anterior parou no meio de uma transação nesta mesma conexão,
+-- desfaz a cópia parcial antes de iniciar a execução idempotente corrigida.
+ROLLBACK;
+
 -- Falha cedo caso um dos dois bancos não esteja disponível.
 DROP PROCEDURE IF EXISTS `inlaud99_erpcondor`.`mt_validar_consolidacao`;
 DELIMITER $$
@@ -67,23 +71,23 @@ CREATE TABLE IF NOT EXISTS `mt_consolidacao_exclusoes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Registra de forma explícita as tabelas não transferidas por serem infraestrutura transitória.
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('bancos_brasileiros', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('bridge_fila_comandos', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('config_sessao', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('controlid_fila_comandos', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('controlid_push_queue', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('modulos_sistema', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('publico_rate_limit', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('pwa_fcm_tokens', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('pwa_oauth_cache', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('qrcode_tokens', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('qrcodes_temporarios', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('recuperacao_senha_tokens', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('senha_recuperacao_logs', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('sessoes_portal', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('sessoes_usuarios', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('usuarios', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
-INSERT INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('view_dispositivos_ativos', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('bancos_brasileiros', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('bridge_fila_comandos', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('config_sessao', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('controlid_fila_comandos', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('controlid_push_queue', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('modulos_sistema', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('publico_rate_limit', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('pwa_fcm_tokens', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('pwa_oauth_cache', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('qrcode_tokens', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('qrcodes_temporarios', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('recuperacao_senha_tokens', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('senha_recuperacao_logs', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('sessoes_portal', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('sessoes_usuarios', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('usuarios', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
+INSERT IGNORE INTO mt_consolidacao_exclusoes (tabela, motivo) VALUES ('view_dispositivos_ativos', 'Infraestrutura, sessão, token, fila ou referência global; mantida apenas no backup legado.');
 
 -- Motor genérico: usa apenas colunas compartilhadas entre origem e destino.
 -- Se a tabela de destino tiver tenant_id, injeta o tenant fixo 1.
@@ -137,7 +141,8 @@ proc: BEGIN
        AND BINARY s.COLUMN_NAME = BINARY d.COLUMN_NAME
      WHERE BINARY d.TABLE_SCHEMA = BINARY 'inlaud99_erpcondor'
        AND BINARY d.TABLE_NAME = BINARY p_tabela
-       AND BINARY d.COLUMN_NAME <> BINARY 'tenant_id';
+       AND BINARY d.COLUMN_NAME <> BINARY 'tenant_id'
+       AND UPPER(IFNULL(d.EXTRA, '')) NOT LIKE '%GENERATED%';
 
     SELECT GROUP_CONCAT(CONCAT('s.`', d.COLUMN_NAME, '`') ORDER BY d.ORDINAL_POSITION SEPARATOR ',') INTO @mt_vals
       FROM INFORMATION_SCHEMA.COLUMNS d
@@ -147,7 +152,8 @@ proc: BEGIN
        AND BINARY s.COLUMN_NAME = BINARY d.COLUMN_NAME
      WHERE BINARY d.TABLE_SCHEMA = BINARY 'inlaud99_erpcondor'
        AND BINARY d.TABLE_NAME = BINARY p_tabela
-       AND BINARY d.COLUMN_NAME <> BINARY 'tenant_id';
+       AND BINARY d.COLUMN_NAME <> BINARY 'tenant_id'
+       AND UPPER(IFNULL(d.EXTRA, '')) NOT LIKE '%GENERATED%';
 
     SELECT GROUP_CONCAT(CONCAT('`', d.COLUMN_NAME, '`=VALUES(`', d.COLUMN_NAME, '`)') ORDER BY d.ORDINAL_POSITION SEPARATOR ',') INTO @mt_updates
       FROM INFORMATION_SCHEMA.COLUMNS d
@@ -157,7 +163,8 @@ proc: BEGIN
        AND BINARY s.COLUMN_NAME = BINARY d.COLUMN_NAME
      WHERE BINARY d.TABLE_SCHEMA = BINARY 'inlaud99_erpcondor'
        AND BINARY d.TABLE_NAME = BINARY p_tabela
-       AND BINARY d.COLUMN_NAME <> BINARY 'tenant_id';
+       AND BINARY d.COLUMN_NAME <> BINARY 'tenant_id'
+       AND UPPER(IFNULL(d.EXTRA, '')) NOT LIKE '%GENERATED%';
 
     IF v_tem_tenant > 0 THEN
         SET @mt_cols = CONCAT(@mt_cols, ',`tenant_id`');
