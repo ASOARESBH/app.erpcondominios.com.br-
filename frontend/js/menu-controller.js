@@ -21,7 +21,8 @@
     // No contexto global, o Super-Admin não deve receber o menu operacional
     // de nenhuma unidade. As funções administrativas vivem no próprio painel.
     const SUPERADMIN_MENU_ITEMS = [
-        { id: 'superadmin', label: 'Painel Super-Admin', icon: 'fas fa-crown', page: 'superadmin', href: 'layout-base.html?page=superadmin', order: 1, style: 'color: #f59e0b; font-weight: 700;' }
+        { id: 'superadmin', label: 'Painel Super-Admin', icon: 'fas fa-crown', page: 'superadmin', href: 'layout-base.html?page=superadmin', order: 1, style: 'color: #f59e0b; font-weight: 700;' },
+        { id: 'aplicativos', label: 'Aplicativos', icon: 'fas fa-mobile-screen-button', page: 'aplicativos', href: 'layout-base.html?page=aplicativos', order: 2, style: 'color: #93c5fd; font-weight: 700;' }
     ];
 
     const LEGACY_GROUP_BY_PAGE = {

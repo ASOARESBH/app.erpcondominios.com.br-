@@ -1,0 +1,69 @@
+<section class="page-aplicativos" id="aplicativos-page">
+    <header class="apps-header">
+        <div>
+            <span class="apps-kicker"><i class="fas fa-crown"></i> Portal Super-Admin</span>
+            <h1><i class="fas fa-mobile-screen-button"></i> Aplicativos</h1>
+            <p>Controle institucional de aplicativos, releases APK e preparação para distribuição pela Google Play.</p>
+        </div>
+        <button type="button" class="apps-btn apps-btn-primary" id="apps-novo-aplicativo">
+            <i class="fas fa-plus"></i> Novo aplicativo
+        </button>
+    </header>
+
+    <div class="apps-alert apps-alert-info">
+        <i class="fas fa-shield-halved"></i>
+        <div><strong>Distribuição controlada.</strong> Registre o <em>version code</em>, hash SHA-256 e notas da release antes de publicar. A integração automática com a Google Play Developer API permanece preparada para a próxima etapa.</div>
+    </div>
+
+    <div class="apps-kpis" id="apps-kpis">
+        <article class="apps-kpi"><span class="apps-kpi-icon blue"><i class="fab fa-android"></i></span><div><strong id="apps-total">—</strong><small>Aplicativos cadastrados</small></div></article>
+        <article class="apps-kpi"><span class="apps-kpi-icon green"><i class="fas fa-rocket"></i></span><div><strong id="apps-publicadas">—</strong><small>Releases publicadas</small></div></article>
+        <article class="apps-kpi"><span class="apps-kpi-icon orange"><i class="fab fa-google-play"></i></span><div><strong id="apps-play">—</strong><small>Prontas para Google Play</small></div></article>
+    </div>
+
+    <section class="apps-panel" id="apps-form-aplicativo-panel" hidden>
+        <div class="apps-panel-title"><h2 id="apps-form-aplicativo-titulo">Novo aplicativo</h2><button type="button" class="apps-close" data-apps-fechar="aplicativo" title="Fechar">&times;</button></div>
+        <form id="apps-form-aplicativo" class="apps-form">
+            <input type="hidden" id="app-id">
+            <label>Nome do aplicativo<input id="app-nome" maxlength="150" required placeholder="Ex.: ERP Condomínios Android"></label>
+            <label>Chave interna<input id="app-chave" maxlength="60" required placeholder="erp_condominios_android"></label>
+            <label>Plataforma<select id="app-plataforma"><option value="android">Android</option><option value="ios">iOS</option><option value="web">Web</option></select></label>
+            <label>Status<select id="app-status"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></label>
+            <label>Package name Android<input id="app-package" maxlength="180" placeholder="br.com.erpcondominios.app"></label>
+            <label>Package na Google Play<input id="app-play-package" maxlength="180" placeholder="br.com.erpcondominios.app"></label>
+            <label class="apps-span-2">Link da Google Play<input id="app-play-url" type="url" maxlength="500" placeholder="https://play.google.com/store/apps/details?id=..."></label>
+            <label class="apps-span-2">Descrição<textarea id="app-descricao" rows="3" placeholder="Finalidade e público do aplicativo."></textarea></label>
+            <div class="apps-form-actions apps-span-2"><button type="button" class="apps-btn apps-btn-light" data-apps-fechar="aplicativo">Cancelar</button><button type="submit" class="apps-btn apps-btn-primary"><i class="fas fa-save"></i> Salvar aplicativo</button></div>
+        </form>
+    </section>
+
+    <section class="apps-panel" id="apps-form-versao-panel" hidden>
+        <div class="apps-panel-title"><h2 id="apps-form-versao-titulo">Nova versão</h2><button type="button" class="apps-close" data-apps-fechar="versao" title="Fechar">&times;</button></div>
+        <form id="apps-form-versao" class="apps-form">
+            <input type="hidden" id="release-id">
+            <label>Aplicativo<select id="release-aplicativo" required></select></label>
+            <label>Versão exibida<input id="release-nome" required placeholder="1.0.0" pattern="\d+\.\d+\.\d+([+-][A-Za-z0-9.-]+)?"></label>
+            <label>Version code<input id="release-code" required type="number" min="1" step="1" placeholder="100"></label>
+            <label>Canal<select id="release-canal"><option value="interno">Interno</option><option value="teste">Teste</option><option value="producao">Produção</option></select></label>
+            <label>Distribuição<select id="release-distribuicao"><option value="apk_direto">APK direto</option><option value="google_play">Google Play</option><option value="ambos">APK e Google Play</option></select></label>
+            <label>Status<select id="release-status"><option value="rascunho">Rascunho</option><option value="publicado">Publicado</option><option value="arquivado">Arquivado</option></select></label>
+            <label class="apps-span-2">URL HTTPS do APK<input id="release-url-apk" type="url" maxlength="700" placeholder="https://downloads.erpcondominios.com.br/app-release.apk"></label>
+            <label>SHA-256 do APK<input id="release-sha256" maxlength="64" placeholder="64 caracteres hexadecimais"></label>
+            <label>Tamanho do APK (bytes)<input id="release-tamanho" type="number" min="0" step="1" placeholder="0"></label>
+            <label>Min SDK<input id="release-min-sdk" maxlength="20" placeholder="23"></label>
+            <label>Target SDK<input id="release-target-sdk" maxlength="20" placeholder="35"></label>
+            <label>Track Google Play<select id="release-play-track"><option value="">Não definido</option><option value="internal">Internal testing</option><option value="alpha">Closed testing</option><option value="beta">Open testing</option><option value="production">Production</option></select></label>
+            <label>Release ID Google Play<input id="release-play-id" maxlength="120" placeholder="Preenchido em integração futura"></label>
+            <label class="apps-check"><input id="release-obrigatoria" type="checkbox"> Atualização obrigatória</label>
+            <label class="apps-span-2">Notas da versão<textarea id="release-notas" rows="4" placeholder="Funcionalidades, correções, instruções de atualização e observações de segurança."></textarea></label>
+            <div class="apps-form-actions apps-span-2"><button type="button" class="apps-btn apps-btn-light" data-apps-fechar="versao">Cancelar</button><button type="submit" class="apps-btn apps-btn-primary"><i class="fas fa-save"></i> Salvar versão</button></div>
+        </form>
+    </section>
+
+    <section class="apps-list-section">
+        <div class="apps-list-title"><div><h2>Catálogo de aplicativos</h2><p>Releases e distribuição por aplicativo.</p></div><button type="button" class="apps-btn apps-btn-outline" id="apps-atualizar"><i class="fas fa-rotate"></i> Atualizar</button></div>
+        <div id="apps-lista" class="apps-lista"><div class="apps-loading"><i class="fas fa-spinner fa-spin"></i> Carregando catálogo...</div></div>
+    </section>
+
+    <div id="apps-toast" class="apps-toast" role="status" aria-live="polite"></div>
+</section>
