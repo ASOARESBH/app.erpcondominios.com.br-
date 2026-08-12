@@ -78,9 +78,11 @@ $fotoRow = null;
 if ($tipo === 'foto') {
     if (!$fotoId) img_negar('ID inválido.', 400);
     $res = $conn->query(
-        "SELECT f.arquivo, i.os_id FROM os_interacao_fotos f
-         JOIN os_interacoes i ON i.id = f.interacao_id
-         WHERE f.id = $fotoId LIMIT 1"
+        "SELECT f.arquivo, f.tenant_id, i.os_id
+         FROM os_interacao_fotos f
+         JOIN os_interacoes i ON i.id = f.interacao_id AND i.tenant_id = f.tenant_id
+         JOIN os_chamados o ON o.id = i.os_id AND o.tenant_id = i.tenant_id
+         WHERE f.id = $fotoId AND f.interacao_id > 0 LIMIT 1"
     );
     $fotoRow = $res ? $res->fetch_assoc() : null;
     if (!$fotoRow) img_negar('Foto não encontrada.', 404);
@@ -89,7 +91,11 @@ if ($tipo === 'foto') {
 
 if (!$osId) img_negar('os_id inválido.', 400);
 
-$res = $conn->query("SELECT tenant_id, projeto_publico, projeto_imagem_capa FROM os_chamados WHERE id = $osId LIMIT 1");
+$osTenantDaFoto = (int)($fotoRow['tenant_id'] ?? 0);
+$sqlOs = $tipo === 'foto'
+    ? "SELECT tenant_id, projeto_publico, projeto_imagem_capa FROM os_chamados WHERE id = $osId AND tenant_id = $osTenantDaFoto LIMIT 1"
+    : "SELECT tenant_id, projeto_publico, projeto_imagem_capa FROM os_chamados WHERE id = $osId LIMIT 1";
+$res = $conn->query($sqlOs);
 $os  = $res ? $res->fetch_assoc() : null;
 if (!$os) img_negar('Projeto não encontrado.', 404);
 

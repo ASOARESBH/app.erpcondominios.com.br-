@@ -524,6 +524,32 @@ function _os_salvar_campos_projeto($conn, $os_id, $dados) {
     return ['ok' => $ok, 'auditoria' => $auditoria];
 }
 
+// Confere se os identificadores que fazem o vínculo entre interação e foto
+// são gerados de forma única. Sem PK/AUTO_INCREMENT, INSERTs podem produzir
+// id=0 e todas as fotos desse id acabam aparecendo em várias interações.
+function _os_interacoes_ids_prontos($conn): bool {
+    $sql = "SELECT
+                SUM(CASE WHEN c.COLUMN_NAME='id' AND c.EXTRA LIKE '%auto_increment%' THEN 1 ELSE 0 END) AS auto_increment_id,
+                SUM(CASE WHEN k.CONSTRAINT_NAME='PRIMARY' AND k.COLUMN_NAME='id' THEN 1 ELSE 0 END) AS primary_id
+            FROM INFORMATION_SCHEMA.COLUMNS c
+            LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k
+                ON k.TABLE_SCHEMA = c.TABLE_SCHEMA
+               AND k.TABLE_NAME = c.TABLE_NAME
+               AND k.COLUMN_NAME = c.COLUMN_NAME
+               AND k.CONSTRAINT_NAME = 'PRIMARY'
+            WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = 'os_interacoes'";
+    $res = $conn->query($sql);
+    $row = $res ? $res->fetch_assoc() : [];
+    return (int)($row['auto_increment_id'] ?? 0) > 0 && (int)($row['primary_id'] ?? 0) > 0;
+}
+
+function _os_exigir_integridade_interacoes($conn): void {
+    if (!_os_interacoes_ids_prontos($conn)) {
+        http_response_code(503);
+        retornar_json(false, 'A integridade das interações precisa ser atualizada antes de registrar novas fotos ou finalizações. Execute a migration de correção de fotos de O.S.');
+    }
+}
+
 // Upload de imagem (capa do projeto ou foto de obra) — mesmas validações de
 // extensão/MIME/tamanho já usadas pelo GED em api_documentos.php.
 function _os_processar_upload_imagem($conn, $file, string $tipo) {
@@ -627,6 +653,13 @@ function _os_promover_foto_a_capa($conn, int $osId, string $arquivoFoto): void {
 }
 
 // ─── Roteamento por ação ─────────────────────────────
+// Operações que criam interações são bloqueadas antes da migration caso a
+// tabela ainda possa gerar id=0. Assim, nenhuma nova foto será vinculada de
+// forma ambígua a outra finalização.
+if (in_array($acao, ['criar', 'adicionar_interacao', 'finalizar', 'assumir_portal', 'adicionar_material'], true)) {
+    _os_exigir_integridade_interacoes($conn);
+}
+
 switch ($acao) {
 
     // ─────────────────────────────────────────────────
@@ -1397,10 +1430,10 @@ switch ($acao) {
 
         $stmt = $conn->prepare(
             "SELECT i.*, e.nome AS etapa_nome FROM os_interacoes i
-             LEFT JOIN os_etapas e ON e.id = i.etapa_id
-             WHERE i.os_id = ? ORDER BY i.criado_em ASC"
+             LEFT JOIN os_etapas e ON e.id = i.etapa_id AND e.tenant_id = i.tenant_id
+             WHERE i.tenant_id = ? AND i.os_id = ? ORDER BY i.criado_em ASC, i.id ASC"
         );
-        $stmt->bind_param('i', $os_id);
+        $stmt->bind_param('ii', $tenant_id, $os_id);
         $stmt->execute();
         $lista = [];
         $res = $stmt->get_result();
@@ -1408,11 +1441,17 @@ switch ($acao) {
 
         // Anexar fotos de obra em lote (evita N+1 — uma consulta para todas as interações)
         if ($lista) {
-            $ids_sql = implode(',', array_map(fn($r) => (int)$r['id'], $lista));
-            $res_fotos = $conn->query("SELECT * FROM os_interacao_fotos WHERE tenant_id = $tenant_id AND interacao_id IN ($ids_sql) ORDER BY criado_em ASC");
+            // IDs 0 são legados ambíguos: nunca associar suas fotos a toda a
+            // timeline. A migration preserva essas referências em backup para
+            // recuperação, enquanto a interface deixa de exibir imagens erradas.
+            $ids_validos = array_values(array_filter(array_map(fn($r) => (int)$r['id'], $lista), fn($id) => $id > 0));
             $fotos_por_interacao = [];
-            if ($res_fotos) while ($f = $res_fotos->fetch_assoc()) $fotos_por_interacao[(int)$f['interacao_id']][] = $f;
-            foreach ($lista as &$row) $row['fotos'] = $fotos_por_interacao[(int)$row['id']] ?? [];
+            if ($ids_validos) {
+                $ids_sql = implode(',', $ids_validos);
+                $res_fotos = $conn->query("SELECT * FROM os_interacao_fotos WHERE tenant_id = $tenant_id AND interacao_id > 0 AND interacao_id IN ($ids_sql) ORDER BY criado_em ASC, id ASC");
+                if ($res_fotos) while ($f = $res_fotos->fetch_assoc()) $fotos_por_interacao[(int)$f['interacao_id']][] = $f;
+            }
+            foreach ($lista as &$row) $row['fotos'] = ((int)$row['id'] > 0) ? ($fotos_por_interacao[(int)$row['id']] ?? []) : [];
             unset($row);
         }
 
