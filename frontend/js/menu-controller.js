@@ -18,16 +18,42 @@
         { id: 'manual', label: 'Manual do Sistema', icon: 'fas fa-book-open', page: 'manual', href: 'layout-base.html?page=manual', order: 13, style: 'color: #60a5fa; font-weight: 600;', separator: true }
     ];
 
+    // No contexto global, o Super-Admin não deve receber o menu operacional
+    // de nenhuma unidade. As funções administrativas vivem no próprio painel.
+    const SUPERADMIN_MENU_ITEMS = [
+        { id: 'superadmin', label: 'Painel Super-Admin', icon: 'fas fa-crown', page: 'superadmin', href: 'layout-base.html?page=superadmin', order: 1, style: 'color: #f59e0b; font-weight: 700;' }
+    ];
+
     const LEGACY_GROUP_BY_PAGE = {
         contas_pagar: 'financeiro',
         contas_receber: 'financeiro',
         planos_contas: 'financeiro'
     };
 
+    function emContextoGlobalSuperAdmin() {
+        try {
+            return String(localStorage.getItem('usuario_permissao') || '').toLowerCase() === 'super_admin' &&
+                !localStorage.getItem('superadmin_tenant_original');
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function emContextoTenantSuperAdmin() {
+        try {
+            return String(localStorage.getItem('usuario_permissao') || '').toLowerCase() === 'super_admin' &&
+                !!localStorage.getItem('superadmin_tenant_original');
+        } catch (error) {
+            return false;
+        }
+    }
+
     const state = {
         logEnabled: false,
         initialized: false,
-        items: MENU_ITEMS.map((item) => ({ ...item }))
+        mode: emContextoGlobalSuperAdmin() ? 'superadmin' : 'operacional',
+        items: MENU_ITEMS.map((item) => ({ ...item })),
+        superadminItems: SUPERADMIN_MENU_ITEMS.map((item) => ({ ...item }))
     };
 
     function log(message, data) {
@@ -140,7 +166,18 @@
     }
 
     function sortItems() {
-        return [...state.items].sort((a, b) => (a.order || 0) - (b.order || 0));
+        const items = state.mode === 'superadmin' ? state.superadminItems : state.items;
+        return [...items].sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+
+    function renderRetornoSuperAdmin() {
+        if (state.mode !== 'operacional' || !emContextoTenantSuperAdmin()) return '';
+        return [
+            '<li class="nav-item" style="margin:0.5rem 0;border-top:1px solid rgba(255,255,255,0.12);padding-top:0.5rem;">',
+            '<a href="#" class="nav-link" data-superadmin-retorno="1" style="color:#fbbf24;font-weight:700;">',
+            '<i class="fas fa-arrow-left"></i><span>Voltar ao Painel</span>',
+            '</a></li>'
+        ].join('');
     }
 
     function renderMenu(options = {}) {
@@ -152,8 +189,17 @@
 
         try {
             const activePage = detectCurrentPage();
-            const menuHtml = sortItems().map((item) => renderItem(item, activePage)).join('') + renderLogout();
+            const menuHtml = sortItems().map((item) => renderItem(item, activePage)).join('') + renderRetornoSuperAdmin() + renderLogout();
             container.innerHTML = menuHtml;
+            const retorno = container.querySelector('[data-superadmin-retorno="1"]');
+            if (retorno) {
+                retorno.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    if (typeof window._sairTenantSuperAdmin === 'function') {
+                        window._sairTenantSuperAdmin();
+                    }
+                });
+            }
             return true;
         } catch (error) {
             log('Erro ao renderizar menu, aplicando fallback', error);
@@ -212,6 +258,17 @@
         return true;
     }
 
+    function addSuperAdminItem(item) {
+        if (!validateItem(item)) return false;
+        if (state.superadminItems.some((current) => current.id === item.id || current.page === item.page)) {
+            return false;
+        }
+        const nextOrder = state.superadminItems.reduce((acc, current) => Math.max(acc, current.order || 0), 0) + 1;
+        state.superadminItems.push({ ...item, order: item.order || nextOrder });
+        if (state.mode === 'superadmin') renderMenu();
+        return true;
+    }
+
     function updateItem(itemId, updates) {
         const index = state.items.findIndex((item) => item.id === itemId);
         if (index === -1) return false;
@@ -227,6 +284,19 @@
         if (duplicate) return false;
 
         state.items[index] = nextItem;
+        renderMenu();
+        markActive();
+        return true;
+    }
+
+    function setMode(mode) {
+        const proximoModo = mode === 'superadmin' ? 'superadmin' : 'operacional';
+        if (state.mode === proximoModo) {
+            renderMenu();
+            return true;
+        }
+        state.mode = proximoModo;
+        log('Modo de navegação atualizado:', state.mode);
         renderMenu();
         markActive();
         return true;
@@ -255,8 +325,14 @@
         getPageToHref,
         getCurrentPage: detectCurrentPage,
         getItems: function () { return state.items.map((item) => ({ ...item })); },
-        getItem: function (id) { return state.items.find((item) => item.id === id) || null; },
+        getItem: function (id) {
+            const items = state.mode === 'superadmin' ? state.superadminItems : state.items;
+            return items.find((item) => item.id === id) || null;
+        },
+        getMode: function () { return state.mode; },
+        setMode,
         addItem,
+        addSuperAdminItem,
         removeItem,
         updateItem,
         setLogEnabled: function (enabled) { state.logEnabled = !!enabled; }

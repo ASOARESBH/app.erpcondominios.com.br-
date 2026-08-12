@@ -325,11 +325,11 @@ function _filtrar() {
 function _entrarTenant(tenantId, tenantNome) {
     if (!confirm(`Deseja entrar como "${tenantNome}"?\n\nVocê verá o sistema como se fosse um usuário deste condomínio.\nPara voltar ao painel, clique em "Voltar ao Painel".`)) return;
 
-    // Salvar tenant original no localStorage
-    const tenantAtualId = localStorage.getItem('tenant_id');
-    if (tenantAtualId) {
-        localStorage.setItem('superadmin_tenant_original', tenantAtualId);
-    }
+    // Marcar o contexto global antes de entrar. A API mantém o tenant
+    // original na sessão; a flag local governa exclusivamente a navegação.
+    const contextoAnterior = localStorage.getItem('superadmin_tenant_original');
+    const tenantAtualId = localStorage.getItem('tenant_id') || '__global__';
+    if (!contextoAnterior) localStorage.setItem('superadmin_tenant_original', tenantAtualId);
 
     req({ action: 'entrar_tenant' }, 'POST', { tenant_id: tenantId })
         .then(res => {
@@ -342,15 +342,24 @@ function _entrarTenant(tenantId, tenantNome) {
                     localStorage.setItem('tenant_plano', res.dados.tenant.plano || '');
                 }
                 toast(`Navegando como: ${tenantNome}`, 'success');
-                // Redirecionar para o dashboard do tenant
+                // Cada unidade começa no módulo operacional definido pela API.
+                const destino = typeof res.dados?.redirect === 'string'
+                    ? res.dados.redirect
+                    : '/frontend/layout-base.html?page=dashboard';
                 setTimeout(() => {
-                    window.location.href = '/frontend/layout-base.html?page=dashboard';
+                    window.location.href = destino.indexOf('/frontend/layout-base.html') === 0
+                        ? destino
+                        : '/frontend/layout-base.html?page=dashboard';
                 }, 800);
             } else {
+                if (!contextoAnterior) localStorage.removeItem('superadmin_tenant_original');
                 toast(res.mensagem || 'Erro ao entrar no condomínio', 'error');
             }
         })
-        .catch(() => toast('Erro de comunicação com o servidor', 'error'));
+        .catch(() => {
+            if (!contextoAnterior) localStorage.removeItem('superadmin_tenant_original');
+            toast('Erro de comunicação com o servidor', 'error');
+        });
 }
 
 function _sairTenant() {

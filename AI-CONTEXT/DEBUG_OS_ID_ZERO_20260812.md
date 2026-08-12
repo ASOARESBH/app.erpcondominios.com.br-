@@ -37,3 +37,9 @@ O dump disponível confirma que `admin@erpcondominios.com.br` está cadastrado c
 O modal enviava corretamente `GET /api/api_superadmin.php?action=tenant&id=1`, mas a API retornava 500 sem corpo. A consulta de usuários vinculados usava `usuario_tenant.created_at`, porém a estrutura do banco utiliza a coluna `usuario_tenant.criado_em`. Com o modo de exceções do MySQLi, essa coluna inexistente abortava a requisição antes da resposta JSON. A mesma incompatibilidade também existia no gráfico de crescimento de usuários do Super-Admin.
 
 A API foi alinhada para `criado_em` em todos os pontos. O cliente do Super-Admin agora lê a resposta como texto antes do JSON e apresenta uma mensagem controlada quando um endpoint retornar erro HTTP ou corpo inválido, sem lançar `Unexpected end of JSON input` nem deixar o modal preso em carregamento.
+
+## Navegação isolada do Super-Admin — 12/08/2026
+
+Foi criado um modo explícito de menu no `MenuController`. Quando a sessão possui `usuario_permissao = super_admin` e não existe a marca `superadmin_tenant_original`, a barra lateral renderiza somente o item **Painel Super-Admin** e os controles utilitários de sessão. Os módulos operacionais de moradores, financeiro, unidades e demais áreas não são exibidos no contexto global.
+
+Ao usar **Entrar** em um condomínio, o frontend grava a marca de contexto antes da troca de sessão, respeita o `redirect` devolvido pela API e abre o dashboard operacional da unidade. Nesse contexto, o menu operacional é restaurado e passa a exibir **Voltar ao Painel**, que encerra o contexto de tenant e retorna ao ambiente global isolado. O controlador agora também possui `addSuperAdminItem()` para futuros menus exclusivos do painel administrativo, sem misturá-los ao menu de qualquer tenant.

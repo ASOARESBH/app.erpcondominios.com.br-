@@ -133,10 +133,17 @@
                 } catch (e) {}
             }
 
-            // Adicionar item Super Admin se for super_admin
+            // O Super-Admin possui dois contextos de navegação mutuamente
+            // exclusivos: painel global ou operação dentro de uma unidade.
             if (usuario && usuario.permissao === 'super_admin') {
-                adicionarItemMenu();
-                log('super_admin confirmado via API:', usuario.email);
+                var emTenant = false;
+                try { emTenant = !!localStorage.getItem('superadmin_tenant_original'); } catch (e) {}
+                if (window.MenuController && typeof window.MenuController.setMode === 'function') {
+                    window.MenuController.setMode(emTenant ? 'operacional' : 'superadmin');
+                } else if (!emTenant) {
+                    adicionarItemMenu();
+                }
+                log('super_admin confirmado via API; contexto:', emTenant ? 'tenant' : 'global');
             }
 
             // Verificar e exibir banner de contexto
@@ -252,7 +259,13 @@
 
         // 1. Verificação rápida via localStorage (sem delay)
         if (verificarLocalStorage()) {
-            adicionarItemMenu();
+            var emTenant = false;
+            try { emTenant = !!localStorage.getItem('superadmin_tenant_original'); } catch (e) {}
+            if (window.MenuController && typeof window.MenuController.setMode === 'function') {
+                window.MenuController.setMode(emTenant ? 'operacional' : 'superadmin');
+            } else if (!emTenant) {
+                adicionarItemMenu();
+            }
         }
 
         // 2. Confirmação via API em background (atualiza dados e exibe banner)
@@ -263,9 +276,17 @@
     document.addEventListener('sidebarLoaded', function () {
         log('sidebarLoaded recebido');
         init();
-        // Re-tentar adicionar o item após o sidebar ser renderizado
+        // Reaplicar o modo correto após o sidebar ser renderizado.
         if (verificarLocalStorage()) {
-            setTimeout(adicionarItemMenu, 100);
+            setTimeout(function () {
+                var emTenant = false;
+                try { emTenant = !!localStorage.getItem('superadmin_tenant_original'); } catch (e) {}
+                if (window.MenuController && typeof window.MenuController.setMode === 'function') {
+                    window.MenuController.setMode(emTenant ? 'operacional' : 'superadmin');
+                } else if (!emTenant) {
+                    adicionarItemMenu();
+                }
+            }, 100);
         }
     });
 
