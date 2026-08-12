@@ -1,0 +1,960 @@
+{
+  "arquivos": {
+    "origem_erpserra": "/home/ubuntu/upload/inlaud99_erpserra(4).sql",
+    "base_erpcondor_antes": "/home/ubuntu/upload/inlaud99_erpcondor(1).sql",
+    "atual_erpcondor_depois": "/home/ubuntu/upload/inlaud99_erpcondor(3).sql"
+  },
+  "tabelas_analisadas": 111,
+  "tabelas_com_indicio": [
+    {
+      "tabela": "logs_sistema",
+      "origem_linhas": 26908,
+      "base_linhas": 26529,
+      "atual_linhas": 53824,
+      "excesso_vs_origem": 26916,
+      "assinaturas_origem_na_base": 26529,
+      "assinaturas_distintas_atual": 28716,
+      "duplicatas_exatas_estimadas": 25108
+    },
+    {
+      "tabela": "registros_acesso",
+      "origem_linhas": 25159,
+      "base_linhas": 24419,
+      "atual_linhas": 48887,
+      "excesso_vs_origem": 23728,
+      "assinaturas_origem_na_base": 23824,
+      "assinaturas_distintas_atual": 24978,
+      "duplicatas_exatas_estimadas": 23909
+    },
+    {
+      "tabela": "notif_destinatarios",
+      "origem_linhas": 739,
+      "base_linhas": 11162,
+      "atual_linhas": 14260,
+      "excesso_vs_origem": 13521,
+      "assinaturas_origem_na_base": 220,
+      "assinaturas_distintas_atual": 915,
+      "duplicatas_exatas_estimadas": 13345
+    },
+    {
+      "tabela": "leituras",
+      "origem_linhas": 1101,
+      "base_linhas": 985,
+      "atual_linhas": 2086,
+      "excesso_vs_origem": 985,
+      "assinaturas_origem_na_base": 985,
+      "assinaturas_distintas_atual": 1101,
+      "duplicatas_exatas_estimadas": 985
+    },
+    {
+      "tabela": "protocolos",
+      "origem_linhas": 725,
+      "base_linhas": 645,
+      "atual_linhas": 1370,
+      "excesso_vs_origem": 645,
+      "assinaturas_origem_na_base": 644,
+      "assinaturas_distintas_atual": 726,
+      "duplicatas_exatas_estimadas": 644
+    },
+    {
+      "tabela": "rh_ponto_lancamento",
+      "origem_linhas": 641,
+      "base_linhas": 610,
+      "atual_linhas": 1251,
+      "excesso_vs_origem": 610,
+      "assinaturas_origem_na_base": 532,
+      "assinaturas_distintas_atual": 719,
+      "duplicatas_exatas_estimadas": 532
+    },
+    {
+      "tabela": "checklist_itens",
+      "origem_linhas": 600,
+      "base_linhas": 600,
+      "atual_linhas": 1200,
+      "excesso_vs_origem": 600,
+      "assinaturas_origem_na_base": 600,
+      "assinaturas_distintas_atual": 600,
+      "duplicatas_exatas_estimadas": 600
+    },
+    {
+      "tabela": "inventario",
+      "origem_linhas": 205,
+      "base_linhas": 205,
+      "atual_linhas": 410,
+      "excesso_vs_origem": 205,
+      "assinaturas_origem_na_base": 205,
+      "assinaturas_distintas_atual": 205,
+      "duplicatas_exatas_estimadas": 205
+    },
+    {
+      "tabela": "movimentacoes_estoque",
+      "origem_linhas": 205,
+      "base_linhas": 196,
+      "atual_linhas": 401,
+      "excesso_vs_origem": 196,
+      "assinaturas_origem_na_base": 196,
+      "assinaturas_distintas_atual": 205,
+      "duplicatas_exatas_estimadas": 196
+    },
+    {
+      "tabela": "unidades",
+      "origem_linhas": 188,
+      "base_linhas": 188,
+      "atual_linhas": 376,
+      "excesso_vs_origem": 188,
+      "assinaturas_origem_na_base": 188,
+      "assinaturas_distintas_atual": 188,
+      "duplicatas_exatas_estimadas": 188
+    },
+    {
+      "tabela": "moradores",
+      "origem_linhas": 178,
+      "base_linhas": 180,
+      "atual_linhas": 366,
+      "excesso_vs_origem": 188,
+      "assinaturas_origem_na_base": 173,
+      "assinaturas_distintas_atual": 190,
+      "duplicatas_exatas_estimadas": 176
+    },
+    {
+      "tabela": "produtos_estoque",
+      "origem_linhas": 155,
+      "base_linhas": 148,
+      "atual_linhas": 303,
+      "excesso_vs_origem": 148,
+      "assinaturas_origem_na_base": 146,
+      "assinaturas_distintas_atual": 157,
+      "duplicatas_exatas_estimadas": 146
+    },
+    {
+      "tabela": "hidrometros",
+      "origem_linhas": 142,
+      "base_linhas": 142,
+      "atual_linhas": 284,
+      "excesso_vs_origem": 142,
+      "assinaturas_origem_na_base": 142,
+      "assinaturas_distintas_atual": 142,
+      "duplicatas_exatas_estimadas": 142
+    },
+    {
+      "tabela": "log_reset_senha",
+      "origem_linhas": 176,
+      "base_linhas": 176,
+      "atual_linhas": 315,
+      "excesso_vs_origem": 139,
+      "assinaturas_origem_na_base": 176,
+      "assinaturas_distintas_atual": 176,
+      "duplicatas_exatas_estimadas": 139
+    },
+    {
+      "tabela": "os_interacoes",
+      "origem_linhas": 262,
+      "base_linhas": 119,
+      "atual_linhas": 381,
+      "excesso_vs_origem": 119,
+      "assinaturas_origem_na_base": 119,
+      "assinaturas_distintas_atual": 262,
+      "duplicatas_exatas_estimadas": 119
+    },
+    {
+      "tabela": "notif_alertas",
+      "origem_linhas": 219,
+      "base_linhas": 102,
+      "atual_linhas": 321,
+      "excesso_vs_origem": 102,
+      "assinaturas_origem_na_base": 102,
+      "assinaturas_distintas_atual": 219,
+      "duplicatas_exatas_estimadas": 102
+    },
+    {
+      "tabela": "veiculos",
+      "origem_linhas": 88,
+      "base_linhas": 65,
+      "atual_linhas": 153,
+      "excesso_vs_origem": 65,
+      "assinaturas_origem_na_base": 62,
+      "assinaturas_distintas_atual": 91,
+      "duplicatas_exatas_estimadas": 62
+    },
+    {
+      "tabela": "ramos_atividade",
+      "origem_linhas": 57,
+      "base_linhas": 57,
+      "atual_linhas": 114,
+      "excesso_vs_origem": 57,
+      "assinaturas_origem_na_base": 57,
+      "assinaturas_distintas_atual": 57,
+      "duplicatas_exatas_estimadas": 57
+    },
+    {
+      "tabela": "os_recursos_humanos",
+      "origem_linhas": 104,
+      "base_linhas": 57,
+      "atual_linhas": 161,
+      "excesso_vs_origem": 57,
+      "assinaturas_origem_na_base": 54,
+      "assinaturas_distintas_atual": 107,
+      "duplicatas_exatas_estimadas": 54
+    },
+    {
+      "tabela": "hidrometros_historico",
+      "origem_linhas": 56,
+      "base_linhas": 56,
+      "atual_linhas": 112,
+      "excesso_vs_origem": 56,
+      "assinaturas_origem_na_base": 56,
+      "assinaturas_distintas_atual": 56,
+      "duplicatas_exatas_estimadas": 56
+    },
+    {
+      "tabela": "dependentes",
+      "origem_linhas": 73,
+      "base_linhas": 54,
+      "atual_linhas": 127,
+      "excesso_vs_origem": 54,
+      "assinaturas_origem_na_base": 54,
+      "assinaturas_distintas_atual": 73,
+      "duplicatas_exatas_estimadas": 54
+    },
+    {
+      "tabela": "checklist_veicular",
+      "origem_linhas": 50,
+      "base_linhas": 50,
+      "atual_linhas": 100,
+      "excesso_vs_origem": 50,
+      "assinaturas_origem_na_base": 50,
+      "assinaturas_distintas_atual": 50,
+      "duplicatas_exatas_estimadas": 50
+    },
+    {
+      "tabela": "email_log",
+      "origem_linhas": 47,
+      "base_linhas": 45,
+      "atual_linhas": 92,
+      "excesso_vs_origem": 45,
+      "assinaturas_origem_na_base": 45,
+      "assinaturas_distintas_atual": 47,
+      "duplicatas_exatas_estimadas": 45
+    },
+    {
+      "tabela": "abastecimento_lancamentos",
+      "origem_linhas": 33,
+      "base_linhas": 32,
+      "atual_linhas": 65,
+      "excesso_vs_origem": 32,
+      "assinaturas_origem_na_base": 32,
+      "assinaturas_distintas_atual": 33,
+      "duplicatas_exatas_estimadas": 32
+    },
+    {
+      "tabela": "alertas_estoque",
+      "origem_linhas": 33,
+      "base_linhas": 31,
+      "atual_linhas": 64,
+      "excesso_vs_origem": 31,
+      "assinaturas_origem_na_base": 31,
+      "assinaturas_distintas_atual": 33,
+      "duplicatas_exatas_estimadas": 31
+    },
+    {
+      "tabela": "contrato_documentos",
+      "origem_linhas": 35,
+      "base_linhas": 29,
+      "atual_linhas": 64,
+      "excesso_vs_origem": 29,
+      "assinaturas_origem_na_base": 29,
+      "assinaturas_distintas_atual": 35,
+      "duplicatas_exatas_estimadas": 29
+    },
+    {
+      "tabela": "contrato_orcamentos",
+      "origem_linhas": 35,
+      "base_linhas": 28,
+      "atual_linhas": 63,
+      "excesso_vs_origem": 28,
+      "assinaturas_origem_na_base": 24,
+      "assinaturas_distintas_atual": 39,
+      "duplicatas_exatas_estimadas": 24
+    },
+    {
+      "tabela": "os_assuntos",
+      "origem_linhas": 24,
+      "base_linhas": 23,
+      "atual_linhas": 47,
+      "excesso_vs_origem": 23,
+      "assinaturas_origem_na_base": 23,
+      "assinaturas_distintas_atual": 24,
+      "duplicatas_exatas_estimadas": 23
+    },
+    {
+      "tabela": "manual_categorias",
+      "origem_linhas": 22,
+      "base_linhas": 22,
+      "atual_linhas": 44,
+      "excesso_vs_origem": 22,
+      "assinaturas_origem_na_base": 22,
+      "assinaturas_distintas_atual": 22,
+      "duplicatas_exatas_estimadas": 22
+    },
+    {
+      "tabela": "pwa_configuracoes",
+      "origem_linhas": 22,
+      "base_linhas": 22,
+      "atual_linhas": 44,
+      "excesso_vs_origem": 22,
+      "assinaturas_origem_na_base": 22,
+      "assinaturas_distintas_atual": 22,
+      "duplicatas_exatas_estimadas": 22
+    },
+    {
+      "tabela": "checklist_alertas_gerados",
+      "origem_linhas": 20,
+      "base_linhas": 20,
+      "atual_linhas": 40,
+      "excesso_vs_origem": 20,
+      "assinaturas_origem_na_base": 20,
+      "assinaturas_distintas_atual": 20,
+      "duplicatas_exatas_estimadas": 20
+    },
+    {
+      "tabela": "checklist_km_acumulado",
+      "origem_linhas": 20,
+      "base_linhas": 20,
+      "atual_linhas": 40,
+      "excesso_vs_origem": 20,
+      "assinaturas_origem_na_base": 20,
+      "assinaturas_distintas_atual": 20,
+      "duplicatas_exatas_estimadas": 20
+    },
+    {
+      "tabela": "documentos_logs",
+      "origem_linhas": 27,
+      "base_linhas": 20,
+      "atual_linhas": 47,
+      "excesso_vs_origem": 20,
+      "assinaturas_origem_na_base": 20,
+      "assinaturas_distintas_atual": 27,
+      "duplicatas_exatas_estimadas": 20
+    },
+    {
+      "tabela": "rh_ponto_periodo",
+      "origem_linhas": 21,
+      "base_linhas": 20,
+      "atual_linhas": 41,
+      "excesso_vs_origem": 20,
+      "assinaturas_origem_na_base": 16,
+      "assinaturas_distintas_atual": 25,
+      "duplicatas_exatas_estimadas": 16
+    },
+    {
+      "tabela": "modelos_dispositivo",
+      "origem_linhas": 19,
+      "base_linhas": 19,
+      "atual_linhas": 38,
+      "excesso_vs_origem": 19,
+      "assinaturas_origem_na_base": 19,
+      "assinaturas_distintas_atual": 19,
+      "duplicatas_exatas_estimadas": 19
+    },
+    {
+      "tabela": "dispositivos_controlid_sync_log",
+      "origem_linhas": 18,
+      "base_linhas": 18,
+      "atual_linhas": 36,
+      "excesso_vs_origem": 18,
+      "assinaturas_origem_na_base": 18,
+      "assinaturas_distintas_atual": 18,
+      "duplicatas_exatas_estimadas": 18
+    },
+    {
+      "tabela": "os_etapas",
+      "origem_linhas": 17,
+      "base_linhas": 17,
+      "atual_linhas": 34,
+      "excesso_vs_origem": 17,
+      "assinaturas_origem_na_base": 17,
+      "assinaturas_distintas_atual": 17,
+      "duplicatas_exatas_estimadas": 17
+    },
+    {
+      "tabela": "rh_escala",
+      "origem_linhas": 17,
+      "base_linhas": 17,
+      "atual_linhas": 34,
+      "excesso_vs_origem": 17,
+      "assinaturas_origem_na_base": 17,
+      "assinaturas_distintas_atual": 17,
+      "duplicatas_exatas_estimadas": 17
+    },
+    {
+      "tabela": "manual_modulos",
+      "origem_linhas": 15,
+      "base_linhas": 15,
+      "atual_linhas": 30,
+      "excesso_vs_origem": 15,
+      "assinaturas_origem_na_base": 15,
+      "assinaturas_distintas_atual": 15,
+      "duplicatas_exatas_estimadas": 15
+    },
+    {
+      "tabela": "marcas_dispositivo",
+      "origem_linhas": 15,
+      "base_linhas": 15,
+      "atual_linhas": 30,
+      "excesso_vs_origem": 15,
+      "assinaturas_origem_na_base": 15,
+      "assinaturas_distintas_atual": 15,
+      "duplicatas_exatas_estimadas": 15
+    },
+    {
+      "tabela": "planos_contas",
+      "origem_linhas": 15,
+      "base_linhas": 15,
+      "atual_linhas": 30,
+      "excesso_vs_origem": 15,
+      "assinaturas_origem_na_base": 15,
+      "assinaturas_distintas_atual": 15,
+      "duplicatas_exatas_estimadas": 15
+    },
+    {
+      "tabela": "tipos_dispositivo",
+      "origem_linhas": 15,
+      "base_linhas": 15,
+      "atual_linhas": 30,
+      "excesso_vs_origem": 15,
+      "assinaturas_origem_na_base": 15,
+      "assinaturas_distintas_atual": 15,
+      "duplicatas_exatas_estimadas": 15
+    },
+    {
+      "tabela": "crm_interacoes",
+      "origem_linhas": 14,
+      "base_linhas": 14,
+      "atual_linhas": 28,
+      "excesso_vs_origem": 14,
+      "assinaturas_origem_na_base": 14,
+      "assinaturas_distintas_atual": 14,
+      "duplicatas_exatas_estimadas": 14
+    },
+    {
+      "tabela": "contas_pagar",
+      "origem_linhas": 14,
+      "base_linhas": 12,
+      "atual_linhas": 26,
+      "excesso_vs_origem": 12,
+      "assinaturas_origem_na_base": 12,
+      "assinaturas_distintas_atual": 14,
+      "duplicatas_exatas_estimadas": 12
+    },
+    {
+      "tabela": "fornecedores",
+      "origem_linhas": 12,
+      "base_linhas": 12,
+      "atual_linhas": 24,
+      "excesso_vs_origem": 12,
+      "assinaturas_origem_na_base": 12,
+      "assinaturas_distintas_atual": 12,
+      "duplicatas_exatas_estimadas": 12
+    },
+    {
+      "tabela": "notificacoes_downloads",
+      "origem_linhas": 12,
+      "base_linhas": 12,
+      "atual_linhas": 24,
+      "excesso_vs_origem": 12,
+      "assinaturas_origem_na_base": 12,
+      "assinaturas_distintas_atual": 12,
+      "duplicatas_exatas_estimadas": 12
+    },
+    {
+      "tabela": "contratos",
+      "origem_linhas": 14,
+      "base_linhas": 12,
+      "atual_linhas": 26,
+      "excesso_vs_origem": 12,
+      "assinaturas_origem_na_base": 11,
+      "assinaturas_distintas_atual": 15,
+      "duplicatas_exatas_estimadas": 11
+    },
+    {
+      "tabela": "empresa_log",
+      "origem_linhas": 9,
+      "base_linhas": 9,
+      "atual_linhas": 21,
+      "excesso_vs_origem": 12,
+      "assinaturas_origem_na_base": 9,
+      "assinaturas_distintas_atual": 12,
+      "duplicatas_exatas_estimadas": 9
+    },
+    {
+      "tabela": "media_avaliacoes_fornecedor",
+      "origem_linhas": 0,
+      "base_linhas": 0,
+      "atual_linhas": 12,
+      "excesso_vs_origem": 12,
+      "assinaturas_origem_na_base": 0,
+      "assinaturas_distintas_atual": 12,
+      "duplicatas_exatas_estimadas": 0
+    },
+    {
+      "tabela": "grupos_inventario",
+      "origem_linhas": 11,
+      "base_linhas": 11,
+      "atual_linhas": 22,
+      "excesso_vs_origem": 11,
+      "assinaturas_origem_na_base": 11,
+      "assinaturas_distintas_atual": 11,
+      "duplicatas_exatas_estimadas": 11
+    },
+    {
+      "tabela": "documentos",
+      "origem_linhas": 12,
+      "base_linhas": 11,
+      "atual_linhas": 23,
+      "excesso_vs_origem": 11,
+      "assinaturas_origem_na_base": 8,
+      "assinaturas_distintas_atual": 15,
+      "duplicatas_exatas_estimadas": 8
+    },
+    {
+      "tabela": "checklist_alertas_config",
+      "origem_linhas": 10,
+      "base_linhas": 10,
+      "atual_linhas": 20,
+      "excesso_vs_origem": 10,
+      "assinaturas_origem_na_base": 10,
+      "assinaturas_distintas_atual": 10,
+      "duplicatas_exatas_estimadas": 10
+    },
+    {
+      "tabela": "documentos_tipos",
+      "origem_linhas": 10,
+      "base_linhas": 10,
+      "atual_linhas": 20,
+      "excesso_vs_origem": 10,
+      "assinaturas_origem_na_base": 10,
+      "assinaturas_distintas_atual": 10,
+      "duplicatas_exatas_estimadas": 10
+    },
+    {
+      "tabela": "rh_banco_horas",
+      "origem_linhas": 14,
+      "base_linhas": 10,
+      "atual_linhas": 24,
+      "excesso_vs_origem": 10,
+      "assinaturas_origem_na_base": 8,
+      "assinaturas_distintas_atual": 16,
+      "duplicatas_exatas_estimadas": 8
+    },
+    {
+      "tabela": "usuario_tenant",
+      "origem_linhas": 0,
+      "base_linhas": 10,
+      "atual_linhas": 10,
+      "excesso_vs_origem": 10,
+      "assinaturas_origem_na_base": 0,
+      "assinaturas_distintas_atual": 10,
+      "duplicatas_exatas_estimadas": 0
+    },
+    {
+      "tabela": "configuracoes",
+      "origem_linhas": 9,
+      "base_linhas": 9,
+      "atual_linhas": 18,
+      "excesso_vs_origem": 9,
+      "assinaturas_origem_na_base": 9,
+      "assinaturas_distintas_atual": 9,
+      "duplicatas_exatas_estimadas": 9
+    },
+    {
+      "tabela": "departamentos",
+      "origem_linhas": 9,
+      "base_linhas": 9,
+      "atual_linhas": 18,
+      "excesso_vs_origem": 9,
+      "assinaturas_origem_na_base": 9,
+      "assinaturas_distintas_atual": 9,
+      "duplicatas_exatas_estimadas": 9
+    },
+    {
+      "tabela": "email_alertas",
+      "origem_linhas": 9,
+      "base_linhas": 9,
+      "atual_linhas": 18,
+      "excesso_vs_origem": 9,
+      "assinaturas_origem_na_base": 9,
+      "assinaturas_distintas_atual": 9,
+      "duplicatas_exatas_estimadas": 9
+    },
+    {
+      "tabela": "categorias_estoque",
+      "origem_linhas": 8,
+      "base_linhas": 8,
+      "atual_linhas": 16,
+      "excesso_vs_origem": 8,
+      "assinaturas_origem_na_base": 8,
+      "assinaturas_distintas_atual": 8,
+      "duplicatas_exatas_estimadas": 8
+    },
+    {
+      "tabela": "documentos_pastas",
+      "origem_linhas": 9,
+      "base_linhas": 8,
+      "atual_linhas": 17,
+      "excesso_vs_origem": 8,
+      "assinaturas_origem_na_base": 8,
+      "assinaturas_distintas_atual": 9,
+      "duplicatas_exatas_estimadas": 8
+    },
+    {
+      "tabela": "abastecimento_recargas",
+      "origem_linhas": 7,
+      "base_linhas": 7,
+      "atual_linhas": 14,
+      "excesso_vs_origem": 7,
+      "assinaturas_origem_na_base": 7,
+      "assinaturas_distintas_atual": 7,
+      "duplicatas_exatas_estimadas": 7
+    },
+    {
+      "tabela": "logs_erro",
+      "origem_linhas": 6,
+      "base_linhas": 6,
+      "atual_linhas": 12,
+      "excesso_vs_origem": 6,
+      "assinaturas_origem_na_base": 6,
+      "assinaturas_distintas_atual": 6,
+      "duplicatas_exatas_estimadas": 6
+    },
+    {
+      "tabela": "notif_regras",
+      "origem_linhas": 6,
+      "base_linhas": 6,
+      "atual_linhas": 12,
+      "excesso_vs_origem": 6,
+      "assinaturas_origem_na_base": 6,
+      "assinaturas_distintas_atual": 6,
+      "duplicatas_exatas_estimadas": 6
+    },
+    {
+      "tabela": "os_chamados",
+      "origem_linhas": 13,
+      "base_linhas": 6,
+      "atual_linhas": 19,
+      "excesso_vs_origem": 6,
+      "assinaturas_origem_na_base": 6,
+      "assinaturas_distintas_atual": 13,
+      "duplicatas_exatas_estimadas": 6
+    },
+    {
+      "tabela": "os_materiais_usados",
+      "origem_linhas": 8,
+      "base_linhas": 6,
+      "atual_linhas": 14,
+      "excesso_vs_origem": 6,
+      "assinaturas_origem_na_base": 6,
+      "assinaturas_distintas_atual": 8,
+      "duplicatas_exatas_estimadas": 6
+    },
+    {
+      "tabela": "rh_colaboradores",
+      "origem_linhas": 6,
+      "base_linhas": 6,
+      "atual_linhas": 12,
+      "excesso_vs_origem": 6,
+      "assinaturas_origem_na_base": 6,
+      "assinaturas_distintas_atual": 6,
+      "duplicatas_exatas_estimadas": 6
+    },
+    {
+      "tabela": "controlid_push_eventos",
+      "origem_linhas": 4,
+      "base_linhas": 4,
+      "atual_linhas": 8,
+      "excesso_vs_origem": 4,
+      "assinaturas_origem_na_base": 4,
+      "assinaturas_distintas_atual": 4,
+      "duplicatas_exatas_estimadas": 4
+    },
+    {
+      "tabela": "dispositivos_console",
+      "origem_linhas": 4,
+      "base_linhas": 4,
+      "atual_linhas": 8,
+      "excesso_vs_origem": 4,
+      "assinaturas_origem_na_base": 4,
+      "assinaturas_distintas_atual": 4,
+      "duplicatas_exatas_estimadas": 4
+    },
+    {
+      "tabela": "notificacoes",
+      "origem_linhas": 4,
+      "base_linhas": 4,
+      "atual_linhas": 8,
+      "excesso_vs_origem": 4,
+      "assinaturas_origem_na_base": 4,
+      "assinaturas_distintas_atual": 4,
+      "duplicatas_exatas_estimadas": 4
+    },
+    {
+      "tabela": "notificacoes_visualizacoes",
+      "origem_linhas": 4,
+      "base_linhas": 4,
+      "atual_linhas": 8,
+      "excesso_vs_origem": 4,
+      "assinaturas_origem_na_base": 4,
+      "assinaturas_distintas_atual": 4,
+      "duplicatas_exatas_estimadas": 4
+    },
+    {
+      "tabela": "os_interacao_fotos",
+      "origem_linhas": 9,
+      "base_linhas": 4,
+      "atual_linhas": 13,
+      "excesso_vs_origem": 4,
+      "assinaturas_origem_na_base": 4,
+      "assinaturas_distintas_atual": 9,
+      "duplicatas_exatas_estimadas": 4
+    },
+    {
+      "tabela": "recebedores",
+      "origem_linhas": 4,
+      "base_linhas": 4,
+      "atual_linhas": 8,
+      "excesso_vs_origem": 4,
+      "assinaturas_origem_na_base": 4,
+      "assinaturas_distintas_atual": 4,
+      "duplicatas_exatas_estimadas": 4
+    },
+    {
+      "tabela": "crm_relacionamentos",
+      "origem_linhas": 3,
+      "base_linhas": 3,
+      "atual_linhas": 6,
+      "excesso_vs_origem": 3,
+      "assinaturas_origem_na_base": 3,
+      "assinaturas_distintas_atual": 3,
+      "duplicatas_exatas_estimadas": 3
+    },
+    {
+      "tabela": "documentos_grupos",
+      "origem_linhas": 3,
+      "base_linhas": 3,
+      "atual_linhas": 6,
+      "excesso_vs_origem": 3,
+      "assinaturas_origem_na_base": 3,
+      "assinaturas_distintas_atual": 3,
+      "duplicatas_exatas_estimadas": 3
+    },
+    {
+      "tabela": "produtos_servicos",
+      "origem_linhas": 3,
+      "base_linhas": 3,
+      "atual_linhas": 6,
+      "excesso_vs_origem": 3,
+      "assinaturas_origem_na_base": 3,
+      "assinaturas_distintas_atual": 3,
+      "duplicatas_exatas_estimadas": 3
+    },
+    {
+      "tabela": "media_avaliacoes_produto",
+      "origem_linhas": 0,
+      "base_linhas": 0,
+      "atual_linhas": 3,
+      "excesso_vs_origem": 3,
+      "assinaturas_origem_na_base": 0,
+      "assinaturas_distintas_atual": 3,
+      "duplicatas_exatas_estimadas": 0
+    },
+    {
+      "tabela": "abastecimento_veiculos",
+      "origem_linhas": 2,
+      "base_linhas": 2,
+      "atual_linhas": 4,
+      "excesso_vs_origem": 2,
+      "assinaturas_origem_na_base": 2,
+      "assinaturas_distintas_atual": 2,
+      "duplicatas_exatas_estimadas": 2
+    },
+    {
+      "tabela": "crm_anexos",
+      "origem_linhas": 2,
+      "base_linhas": 2,
+      "atual_linhas": 4,
+      "excesso_vs_origem": 2,
+      "assinaturas_origem_na_base": 2,
+      "assinaturas_distintas_atual": 2,
+      "duplicatas_exatas_estimadas": 2
+    },
+    {
+      "tabela": "importacoes_financeiras",
+      "origem_linhas": 2,
+      "base_linhas": 2,
+      "atual_linhas": 4,
+      "excesso_vs_origem": 2,
+      "assinaturas_origem_na_base": 2,
+      "assinaturas_distintas_atual": 2,
+      "duplicatas_exatas_estimadas": 2
+    },
+    {
+      "tabela": "local_acessos",
+      "origem_linhas": 2,
+      "base_linhas": 2,
+      "atual_linhas": 4,
+      "excesso_vs_origem": 2,
+      "assinaturas_origem_na_base": 2,
+      "assinaturas_distintas_atual": 2,
+      "duplicatas_exatas_estimadas": 2
+    },
+    {
+      "tabela": "usuarios",
+      "origem_linhas": 9,
+      "base_linhas": 11,
+      "atual_linhas": 11,
+      "excesso_vs_origem": 2,
+      "assinaturas_origem_na_base": 8,
+      "assinaturas_distintas_atual": 11,
+      "duplicatas_exatas_estimadas": 0
+    },
+    {
+      "tabela": "config_periodo_leitura",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "configuracao_smtp",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "contas_bancarias",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "controlid_dispositivos",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "crm_sequencia",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "dispositivos_controlid",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "documentos_compartilhamentos",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "historico_importacoes_ofx",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "usuario_modulos",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "visitantes",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 1
+    },
+    {
+      "tabela": "abastecimento_saldo",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 0,
+      "assinaturas_distintas_atual": 2,
+      "duplicatas_exatas_estimadas": 0
+    },
+    {
+      "tabela": "empresa",
+      "origem_linhas": 1,
+      "base_linhas": 1,
+      "atual_linhas": 2,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 1,
+      "assinaturas_distintas_atual": 2,
+      "duplicatas_exatas_estimadas": 0
+    },
+    {
+      "tabela": "manual_buscas",
+      "origem_linhas": 0,
+      "base_linhas": 1,
+      "atual_linhas": 1,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 0,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 0
+    },
+    {
+      "tabela": "tenants",
+      "origem_linhas": 0,
+      "base_linhas": 1,
+      "atual_linhas": 1,
+      "excesso_vs_origem": 1,
+      "assinaturas_origem_na_base": 0,
+      "assinaturas_distintas_atual": 1,
+      "duplicatas_exatas_estimadas": 0
+    }
+  ]
+}
