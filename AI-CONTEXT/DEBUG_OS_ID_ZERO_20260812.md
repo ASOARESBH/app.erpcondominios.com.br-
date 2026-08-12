@@ -25,3 +25,9 @@ Na sessão autenticada do navegador, a página de Visitantes apresentou a logo d
 A captura do usuário mostra erros 404 associados a `logo.jpg`, enquanto a página autenticada observada refere `logo.jpeg`. Isso indica uma URL de logo legada ou em cache divergente e exige normalização no carregador de identidade visual, com fallback institucional quando a URL não puder ser servida pela API central.
 
 O log novo registra três requisições válidas de busca para `id=260`, sem requisições `listar_interacoes` ou `listar_materiais` subsequentes. Portanto, a abertura está sendo interrompida durante o processamento da resposta de `buscar`, não pela validação de ID zero.
+
+## Diagnóstico Super-Admin — 12/08/2026
+
+O fluxo de login do ERP gravava corretamente a sessão, porém o frontend ignorava o campo `redirect` retornado pela API e redirecionava todos os usuários ERP para `?page=dashboard`. Além disso, quando a sessão tinha `permissao = super_admin`, a API de permissões de módulos não a tratava como perfil administrativo total, permitindo que guards de módulo removessem ou bloqueassem o painel global.
+
+O dump disponível confirma que `admin@erpcondominios.com.br` está cadastrado como `super_admin` na tabela `usuarios`. O vínculo correspondente em `usuario_tenant` não é fonte confiável de elevação global; a permissão global da tabela `usuarios` deve prevalecer para o acesso ao painel Super-Admin.

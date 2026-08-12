@@ -653,8 +653,16 @@
                     // Limpar contexto de navegação anterior
                     localStorage.removeItem('superadmin_tenant_original');
                 }
+                // O backend define o destino conforme a permissão efetiva da
+                // sessão. Super-Admin sempre inicia no painel global.
+                var destino = (data.dados && typeof data.dados.redirect === 'string')
+                    ? data.dados.redirect
+                    : '/frontend/layout-base.html?page=dashboard';
+                if (destino.charAt(0) !== '/' || destino.indexOf('/frontend/layout-base.html') !== 0) {
+                    destino = '/frontend/layout-base.html?page=dashboard';
+                }
                 setTimeout(function() {
-                    window.location.href = window.location.origin + '/frontend/layout-base.html?page=dashboard';
+                    window.location.href = window.location.origin + destino;
                 }, 500);
                 return;
             }

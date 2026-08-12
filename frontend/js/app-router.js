@@ -40,6 +40,15 @@ const AppRouter = {
     getPageFromURL(defaultPage = 'dashboard') {
         const urlParams = new URLSearchParams(window.location.search);
         const page = urlParams.get('page');
+        const permissoes = String(localStorage.getItem('usuario_permissao') || '').toLowerCase();
+        const emContextoDeTenant = !!localStorage.getItem('superadmin_tenant_original');
+
+        // Depois do login, e também para URLs antigas apontando ao dashboard,
+        // o Super-Admin deve iniciar no painel global. Ao entrar em um tenant,
+        // a flag superadmin_tenant_original preserva a navegação operacional.
+        if (permissoes === 'super_admin' && !emContextoDeTenant && (!page || page === 'dashboard')) {
+            return 'superadmin';
+        }
         return page || defaultPage;
     },
 

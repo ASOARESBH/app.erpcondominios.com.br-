@@ -216,6 +216,10 @@ try {
 
     // ─── 5. AUTENTICAÇÃO ERP + RESOLUÇÃO DE TENANT ───────────────────────
     if ($tipo_final === 'erp') {
+        // A permissão global é a autoridade para Super-Admin. Um vínculo local
+        // em usuario_tenant nunca pode reduzir super_admin para admin.
+        $permissao_global = strtolower(trim((string)($dados_erp['permissao'] ?? 'operador')));
+        $dados_erp['permissao'] = $permissao_global;
 
         // 5a. Identificar tenant pelo subdomínio da requisição
         $tenant_slug = resolverTenantSlugDaUrl();
@@ -262,8 +266,9 @@ try {
             } elseif (count($tenants_usuario) === 1) {
                 // Apenas 1 tenant: usar automaticamente
                 $tenant = $tenants_usuario[0];
-                // Atualizar permissão da sessão com a permissão do tenant
-                if (!empty($tenants_usuario[0]['permissao'])) {
+                // A permissão local pode restringir usuários comuns dentro do
+                // tenant, mas nunca reduz a autoridade global do Super-Admin.
+                if ($permissao_global !== 'super_admin' && !empty($tenants_usuario[0]['permissao'])) {
                     $dados_erp['permissao'] = $tenants_usuario[0]['permissao'];
                 }
             } else {
@@ -328,7 +333,10 @@ try {
                 'tenant_id'    => $tenant['id'],
                 'tenant_nome'  => $tenant['nome_fantasia'] ?? $tenant['razao_social'],
                 'tenant_slug'  => $tenant['slug'],
-                'redirect'     => '/frontend/layout-base.html?page=dashboard'
+                'is_super_admin' => ($dados_erp['permissao'] === 'super_admin'),
+                'redirect'     => ($dados_erp['permissao'] === 'super_admin')
+                    ? '/frontend/layout-base.html?page=superadmin'
+                    : '/frontend/layout-base.html?page=dashboard'
             ]
         ], JSON_UNESCAPED_UNICODE);
         exit;

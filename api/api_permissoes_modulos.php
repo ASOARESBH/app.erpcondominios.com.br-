@@ -166,8 +166,9 @@ if ($metodo === 'GET' && $acao === 'meus_modulos') {
     $uid = $usuario_logado['id'];
     $permissao = $usuario_logado['permissao'] ?? 'operador';
 
-    // Admin tem acesso total
-    if ($permissao === 'admin') {
+    // Admin e Super-Admin têm acesso total aos módulos. O Super-Admin
+    // recebe adicionalmente a autorização específica da API Super-Admin.
+    if (in_array($permissao, ['admin', 'super_admin'], true)) {
         $sql = "SELECT chave, nome, grupo, icone, ordem FROM modulos_sistema WHERE ativo = 1 ORDER BY ordem ASC";
         $res = $conexao->query($sql);
         $modulos = [];
@@ -183,7 +184,7 @@ if ($metodo === 'GET' && $acao === 'meus_modulos') {
         retornar_json(true, 'Módulos carregados', ['modulos' => $modulos, 'is_admin' => true]);
     }
 
-    $hierarquia = ['visualizador' => 1, 'operador' => 2, 'gerente' => 3, 'admin' => 4];
+    $hierarquia = ['visualizador' => 1, 'operador' => 2, 'gerente' => 3, 'admin' => 4, 'super_admin' => 5];
     $nivel_usuario = $hierarquia[$permissao] ?? 1;
 
     $sql = "SELECT ms.chave, ms.nome, ms.grupo, ms.icone, ms.ordem,
