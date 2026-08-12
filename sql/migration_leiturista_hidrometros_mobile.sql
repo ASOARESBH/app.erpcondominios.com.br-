@@ -17,9 +17,10 @@ SET @tem_tenant_fotos := (
     SELECT COUNT(*) FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'leituras_fotos' AND COLUMN_NAME = 'tenant_id'
 );
+SET @estrutura_valida := IF(@tem_tenant_leituras = 1 AND @tem_tenant_fotos = 1, 1, 0);
 
 SET @sql := IF(
-    @tem_tenant_leituras = 1 AND @tem_tenant_fotos = 1,
+    @estrutura_valida = 1,
     'SELECT ''Estrutura multi-tenant validada'' AS resultado',
     'SELECT ''ERRO: execute primeiro migration_multitenant_fase1.sql e a migracao de fotos de leituras.'' AS resultado'
 );
@@ -33,9 +34,9 @@ SET @tem_client_uuid_leituras := (
     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'leituras' AND COLUMN_NAME = 'client_uuid'
 );
 SET @sql := IF(
-    @tem_client_uuid_leituras = 0,
+    @estrutura_valida = 1 AND @tem_client_uuid_leituras = 0,
     'ALTER TABLE leituras ADD COLUMN client_uuid VARCHAR(64) NULL AFTER data_leitura',
-    'SELECT ''Coluna leituras.client_uuid ja existe'' AS resultado'
+    IF(@estrutura_valida = 1, 'SELECT ''Coluna leituras.client_uuid ja existe'' AS resultado', 'SELECT ''Migração bloqueada: pré-requisito multi-tenant ausente'' AS resultado')
 );
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
@@ -46,9 +47,9 @@ SET @tem_idx_uuid_leituras := (
     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'leituras' AND INDEX_NAME = 'uq_leituras_tenant_client_uuid'
 );
 SET @sql := IF(
-    @tem_idx_uuid_leituras = 0,
+    @estrutura_valida = 1 AND @tem_idx_uuid_leituras = 0,
     'ALTER TABLE leituras ADD UNIQUE KEY uq_leituras_tenant_client_uuid (tenant_id, client_uuid)',
-    'SELECT ''Indice de idempotencia das leituras ja existe'' AS resultado'
+    IF(@estrutura_valida = 1, 'SELECT ''Indice de idempotencia das leituras ja existe'' AS resultado', 'SELECT ''Migração bloqueada: pré-requisito multi-tenant ausente'' AS resultado')
 );
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
@@ -60,9 +61,9 @@ SET @tem_client_uuid_fotos := (
     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'leituras_fotos' AND COLUMN_NAME = 'client_uuid'
 );
 SET @sql := IF(
-    @tem_client_uuid_fotos = 0,
+    @estrutura_valida = 1 AND @tem_client_uuid_fotos = 0,
     'ALTER TABLE leituras_fotos ADD COLUMN client_uuid VARCHAR(64) NULL AFTER hidrometro_id',
-    'SELECT ''Coluna leituras_fotos.client_uuid ja existe'' AS resultado'
+    IF(@estrutura_valida = 1, 'SELECT ''Coluna leituras_fotos.client_uuid ja existe'' AS resultado', 'SELECT ''Migração bloqueada: pré-requisito multi-tenant ausente'' AS resultado')
 );
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
@@ -73,9 +74,9 @@ SET @tem_idx_uuid_fotos := (
     WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'leituras_fotos' AND INDEX_NAME = 'uq_leituras_fotos_tenant_client_uuid'
 );
 SET @sql := IF(
-    @tem_idx_uuid_fotos = 0,
+    @estrutura_valida = 1 AND @tem_idx_uuid_fotos = 0,
     'ALTER TABLE leituras_fotos ADD UNIQUE KEY uq_leituras_fotos_tenant_client_uuid (tenant_id, client_uuid)',
-    'SELECT ''Indice de idempotencia das fotos ja existe'' AS resultado'
+    IF(@estrutura_valida = 1, 'SELECT ''Indice de idempotencia das fotos ja existe'' AS resultado', 'SELECT ''Migração bloqueada: pré-requisito multi-tenant ausente'' AS resultado')
 );
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
