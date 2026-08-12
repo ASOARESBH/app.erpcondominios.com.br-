@@ -31,3 +31,7 @@ temp/
 tmp/
 *.tmp
 logs/*.log
+
+# Firebase service-account credentials (nunca versionar)
+/config/firebase/service-account.json
+/config/firebase/*.private.json
