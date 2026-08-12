@@ -13,11 +13,34 @@ const API = '/api/api_superadmin.php';
 const log = (...a) => console.log('[SuperAdmin v3]', ...a);
 
 // ── Utilitários ──────────────────────────────────────────────────────────
-function req(params, method = 'GET', body = null) {
+async function req(params, method = 'GET', body = null) {
     const url = API + '?' + new URLSearchParams(params).toString();
     const opts = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
-    return fetch(url, opts).then(r => r.json());
+
+    try {
+        const response = await fetch(url, opts);
+        const texto = await response.text();
+        let dados;
+        try {
+            dados = texto ? JSON.parse(texto) : null;
+        } catch (_) {
+            return {
+                sucesso: false,
+                mensagem: `Erro HTTP ${response.status}: a API não retornou uma resposta válida.`
+            };
+        }
+        if (!response.ok) {
+            return {
+                sucesso: false,
+                mensagem: dados?.mensagem || `Erro HTTP ${response.status} ao processar a solicitação.`
+            };
+        }
+        return dados || { sucesso: false, mensagem: 'A API retornou uma resposta vazia.' };
+    } catch (erro) {
+        console.error('[SuperAdmin] Falha de comunicação:', erro);
+        return { sucesso: false, mensagem: 'Não foi possível comunicar com o painel administrativo.' };
+    }
 }
 
 function statusBadge(s) {

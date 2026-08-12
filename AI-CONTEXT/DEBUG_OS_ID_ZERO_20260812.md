@@ -31,3 +31,9 @@ O log novo registra três requisições válidas de busca para `id=260`, sem req
 O fluxo de login do ERP gravava corretamente a sessão, porém o frontend ignorava o campo `redirect` retornado pela API e redirecionava todos os usuários ERP para `?page=dashboard`. Além disso, quando a sessão tinha `permissao = super_admin`, a API de permissões de módulos não a tratava como perfil administrativo total, permitindo que guards de módulo removessem ou bloqueassem o painel global.
 
 O dump disponível confirma que `admin@erpcondominios.com.br` está cadastrado como `super_admin` na tabela `usuarios`. O vínculo correspondente em `usuario_tenant` não é fonte confiável de elevação global; a permissão global da tabela `usuarios` deve prevalecer para o acesso ao painel Super-Admin.
+
+## Diagnóstico do modal de condomínio Super-Admin — 12/08/2026
+
+O modal enviava corretamente `GET /api/api_superadmin.php?action=tenant&id=1`, mas a API retornava 500 sem corpo. A consulta de usuários vinculados usava `usuario_tenant.created_at`, porém a estrutura do banco utiliza a coluna `usuario_tenant.criado_em`. Com o modo de exceções do MySQLi, essa coluna inexistente abortava a requisição antes da resposta JSON. A mesma incompatibilidade também existia no gráfico de crescimento de usuários do Super-Admin.
+
+A API foi alinhada para `criado_em` em todos os pontos. O cliente do Super-Admin agora lê a resposta como texto antes do JSON e apresenta uma mensagem controlada quando um endpoint retornar erro HTTP ou corpo inválido, sem lançar `Unexpected end of JSON input` nem deixar o modal preso em carregamento.

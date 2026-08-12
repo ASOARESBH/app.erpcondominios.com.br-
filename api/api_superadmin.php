@@ -159,9 +159,9 @@ if ($action === 'dashboard_grafico') {
 
     // Crescimento de usuários nos últimos 12 meses
     $r2 = $conexao->query(
-        "SELECT DATE_FORMAT(created_at, '%Y-%m') AS mes, COUNT(*) AS novos
+        "SELECT DATE_FORMAT(criado_em, '%Y-%m') AS mes, COUNT(*) AS novos
          FROM usuario_tenant
-         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+         WHERE criado_em >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
          GROUP BY mes ORDER BY mes ASC"
     );
     $meses['usuarios'] = $r2->fetch_all(MYSQLI_ASSOC);
@@ -273,7 +273,7 @@ if ($action === 'tenant') {
     $usuarios = [];
     $stmt2 = $conexao->prepare(
         "SELECT u.id, u.nome, u.email, u.funcao, u.permissao, u.ativo,
-                ut.permissao AS permissao_tenant, ut.ativo AS vinculo_ativo, ut.created_at AS vinculado_em
+                ut.permissao AS permissao_tenant, ut.ativo AS vinculo_ativo, ut.criado_em AS vinculado_em
          FROM usuarios u
          INNER JOIN usuario_tenant ut ON ut.usuario_id = u.id AND ut.tenant_id = ?
          ORDER BY u.nome ASC"
@@ -503,7 +503,7 @@ if ($action === 'usuarios') {
 
     $stmt = $conexao->prepare(
         "SELECT u.id, u.nome, u.email, u.funcao, u.departamento, u.permissao, u.ativo,
-                ut.permissao AS permissao_tenant, ut.ativo AS vinculo_ativo, ut.created_at AS vinculado_em
+                ut.permissao AS permissao_tenant, ut.ativo AS vinculo_ativo, ut.criado_em AS vinculado_em
          FROM usuarios u
          INNER JOIN usuario_tenant ut ON ut.usuario_id = u.id AND ut.tenant_id = ?
          ORDER BY u.nome ASC"
