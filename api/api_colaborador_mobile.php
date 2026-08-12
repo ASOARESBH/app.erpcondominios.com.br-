@@ -444,22 +444,72 @@ switch ($acao) {
         break;
 
     case 'protocolos':
+        // A leitura só é permitida quando as três tabelas já têm isolamento
+        // multi-tenant. Sem tenant_id não há como listar dados com segurança.
+        $requisitos = [
+            ['protocolos', 'tenant_id'],
+            ['moradores', 'tenant_id'],
+            ['unidades', 'tenant_id'],
+        ];
+        foreach ($requisitos as $requisito) {
+            if (!cm_coluna_existe($conexao, $requisito[0], $requisito[1])) {
+                cm_log('protocolos_bloqueados', [
+                    'tenant_id' => $tenant_id,
+                    'motivo' => 'coluna_tenant_ausente',
+                    'tabela' => $requisito[0],
+                ]);
+                cm_json(
+                    false,
+                    'A estrutura multi-tenant de protocolos ainda não foi instalada no servidor. Execute migration_multitenant_fase1.sql antes de usar este módulo.',
+                    null,
+                    503
+                );
+            }
+        }
+
         $status = trim((string)($_GET['status'] ?? ''));
-        $sql = "SELECT p.id, p.codigo_nf, p.descricao_mercadoria, p.pagina, p.status, p.data_hora_recebimento, p.data_hora_entrega, p.nome_recebedor_morador, m.nome AS morador_nome, u.nome AS unidade_nome
+        $status_valido = in_array($status, ['pendente', 'entregue'], true) ? $status : '';
+        $sql = "SELECT p.id, p.codigo_nf, p.descricao_mercadoria, p.pagina,
+                       p.status, p.data_hora_recebimento, p.data_hora_entrega,
+                       p.nome_recebedor_morador, m.nome AS morador_nome,
+                       u.nome AS unidade_nome
                 FROM protocolos p
-                INNER JOIN moradores m ON m.id = p.morador_id AND m.tenant_id = p.tenant_id
+                LEFT JOIN moradores m ON m.id = p.morador_id AND m.tenant_id = p.tenant_id
                 LEFT JOIN unidades u ON u.id = p.unidade_id AND u.tenant_id = p.tenant_id
                 WHERE p.tenant_id = ?";
-        $status_valido = in_array($status, ['pendente', 'entregue'], true) ? $status : '';
         if ($status_valido !== '') {
-            $sql .= ' AND p.status = ? ORDER BY p.data_hora_recebimento DESC LIMIT 100';
-            $stmt = $conexao->prepare($sql); $stmt->bind_param('is', $tenant_id, $status_valido);
-        } else {
-            $sql .= ' ORDER BY p.data_hora_recebimento DESC LIMIT 100';
-            $stmt = $conexao->prepare($sql); $stmt->bind_param('i', $tenant_id);
+            $sql .= ' AND p.status = ?';
         }
-        $stmt->execute();
-        $itens = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
+        $sql .= ' ORDER BY p.data_hora_recebimento DESC LIMIT 100';
+        $stmt = $conexao->prepare($sql);
+        if (!$stmt) {
+            cm_log('protocolos_erro', [
+                'tenant_id' => $tenant_id,
+                'motivo' => 'consulta_indisponivel',
+            ]);
+            cm_json(false, 'Não foi possível consultar protocolos no servidor.', null, 503);
+        }
+        if ($status_valido !== '') {
+            $stmt->bind_param('is', $tenant_id, $status_valido);
+        } else {
+            $stmt->bind_param('i', $tenant_id);
+        }
+        if (!$stmt->execute()) {
+            $stmt->close();
+            cm_log('protocolos_erro', [
+                'tenant_id' => $tenant_id,
+                'motivo' => 'execucao_indisponivel',
+            ]);
+            cm_json(false, 'Não foi possível carregar protocolos no momento.', null, 503);
+        }
+        $resultado = $stmt->get_result();
+        $itens = $resultado ? $resultado->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        cm_log('protocolos_listados', [
+            'tenant_id' => $tenant_id,
+            'status' => $status_valido ?: 'todos',
+            'total' => count($itens),
+        ]);
         cm_json(true, 'Protocolos carregados.', $itens);
         break;
 
