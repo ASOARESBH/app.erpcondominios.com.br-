@@ -50,6 +50,11 @@ function toast(msg, tipo = 'sucesso') {
     el._timeout = setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
 
+function normalizarIdOS(valor) {
+    const id = Number(valor);
+    return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 async function _post(acao, dados = {}) {
     try {
         const res = await fetch(API, {
@@ -258,7 +263,7 @@ async function carregarDashboard() {
         listaEl.innerHTML = '<div class="os-loading-text">Nenhuma OS encontrada</div>';
     } else {
         listaEl.innerHTML = d.ultimas_os.map(os => `
-            <div class="os-ultima-item" data-id="${os.id}" onclick="osVerDetalhe(${os.id})">
+            <div class="os-ultima-item" data-id="${os.id}" onclick="osVerDetalhe(${os.id}, ${JSON.stringify(os.numero || '')})">
                 <div class="os-ultima-numero">${os.numero}</div>
                 <div class="os-ultima-titulo">${os.titulo}</div>
                 ${badgeStatus(os.status)}
@@ -317,7 +322,7 @@ async function carregarChamados(pagina = 1) {
             <td style="white-space:nowrap;font-size:.82rem">${formatarData(os.data_abertura)}</td>
             <td>${os.atendente_nome || '—'}</td>
             <td>
-                <button class="os-btn-acao ver" onclick="osVerDetalhe(${os.id})" title="Ver detalhes"><i class="fas fa-eye"></i></button>
+                <button class="os-btn-acao ver" onclick="osVerDetalhe(${os.id}, ${JSON.stringify(os.numero || '')})" title="Ver detalhes"><i class="fas fa-eye"></i></button>
                 ${os.status !== 'finalizado' ? `<button class="os-btn-acao editar" onclick="osAbrirEditar(${os.id})" title="Editar"><i class="fas fa-edit"></i></button>` : ''}
                 <button class="os-btn-acao imprimir" onclick="osImprimir(${os.id})" title="Imprimir / Gerar PDF"><i class="fas fa-print"></i></button>
                 ${os.status !== 'finalizado' ? `<button class="os-btn-acao excluir" onclick="osExcluir(${os.id},'${os.numero}')" title="Excluir"><i class="fas fa-trash"></i></button>` : ''}
@@ -347,15 +352,43 @@ function renderizarPaginacao(total, porPagina, atual) {
     el.innerHTML = html;
 }
 
-// Expor para uso inline nos botões
+// Expor para uso inline nos botões. Nunca envie ID zero: a API deve continuar
+// recusando esse valor, e a migration recupera os registros legados afetados.
+function abrirDetalheSeguro(id, numero = '') {
+    const idSeguro = normalizarIdOS(id);
+    if (!idSeguro && !numero) {
+        console.error('[OS] Tentativa de abrir O.S. sem identificador válido:', id);
+        toast('Esta O.S. está com identificador inválido e precisa da correção de integridade.', 'erro');
+        return;
+    }
+    // Compatibilidade temporária: permite consultar uma O.S. legada id=0 pelo
+    // número, porém em modo somente leitura até a migration reatribuir o ID.
+    return abrirDetalhe(idSeguro || 0, numero);
+}
+
+function abrirEditarSeguro(id) {
+    const idSeguro = normalizarIdOS(id);
+    if (!idSeguro) {
+        toast('Esta O.S. está com identificador inválido e não pode ser editada antes da correção.', 'erro');
+        return;
+    }
+    return abrirEditar(idSeguro);
+}
+
 window.osPaginar = (p) => carregarChamados(p);
-window.osVerDetalhe = (id) => abrirDetalhe(id);
-window.osAbrirEditar = (id) => abrirEditar(id);
-window.osExcluir = (id, numero) => excluirOS(id, numero);
+window.osVerDetalhe = (id, numero = '') => abrirDetalheSeguro(id, numero);
+window.osAbrirEditar = (id) => abrirEditarSeguro(id);
+window.osExcluir = (id, numero) => {
+    const idSeguro = normalizarIdOS(id);
+    if (!idSeguro) { toast('Esta O.S. está com identificador inválido e não pode ser excluída antes da correção.', 'erro'); return; }
+    return excluirOS(idSeguro, numero);
+};
 
 // ─── IMPRIMIR / GERAR PDF ─────────────────────────────────────────────────
 function imprimirOS(id) {
-    const url = window.location.origin + '/frontend/pages/imprimir_os.html?id=' + id;
+    const idSeguro = normalizarIdOS(id);
+    if (!idSeguro) { toast('Esta O.S. precisa da correção de integridade antes da impressão.', 'erro'); return; }
+    const url = window.location.origin + '/frontend/pages/imprimir_os.html?id=' + idSeguro;
     window.open(url, '_blank', 'width=900,height=750,scrollbars=yes,resizable=yes');
 }
 window.osImprimir = (id) => imprimirOS(id);
@@ -665,15 +698,18 @@ function fecharModalOS() {
 }
 
 // ─── MODAL: DETALHE DA OS ─────────────────────────────────────────────────
-async function abrirDetalhe(id) {
-    const res = await _get('buscar', { id });
+async function abrirDetalhe(id, numeroLegado = '') {
+    const res = await _get('buscar', { id, numero: numeroLegado });
     if (!res.sucesso) { toast('Erro ao carregar OS', 'erro'); return; }
     const os = res.dados;
+    const idValido = normalizarIdOS(os.id);
+    const legadoComIdZero = !idValido;
+    os._idInvalido = legadoComIdZero;
     state.osAtual = os;
 
     // Cabeçalho
     document.getElementById('detalhe-titulo').innerHTML = `<i class="fas fa-wrench"></i> ${os.numero} — ${os.titulo}`;
-    document.getElementById('detalhe-badges').innerHTML = badgeStatus(os.status) + ' ' + badgePrioridade(os.prioridade);
+    document.getElementById('detalhe-badges').innerHTML = badgeStatus(os.status) + ' ' + badgePrioridade(os.prioridade) + (legadoComIdZero ? ' <span class="os-badge os-badge-cancelado">Reparo de ID pendente</span>' : '');
 
     // Informações
     document.getElementById('d-numero').textContent     = os.numero;
@@ -700,12 +736,13 @@ async function abrirDetalhe(id) {
 
     // Mostrar/ocultar formulários conforme status
     const finalizado = os.status === 'finalizado' || os.status === 'cancelado';
-    document.getElementById('os-nova-interacao-form').style.display = finalizado ? 'none' : 'block';
+    const somenteLeitura = finalizado || legadoComIdZero;
+    document.getElementById('os-nova-interacao-form').style.display = somenteLeitura ? 'none' : 'block';
     document.getElementById('os-finalizar-form').style.display = 'none';
-    document.getElementById('btnIniciarFinalizacao').style.display = finalizado ? 'none' : 'inline-flex';
-    // Ocultar form de adicionar material em OS encerrada
+    document.getElementById('btnIniciarFinalizacao').style.display = somenteLeitura ? 'none' : 'inline-flex';
+    // Ocultar form de adicionar material em O.S. encerrada ou com id legado inválido.
     const matBusca = document.querySelector('#dtab-materiais .os-mat-busca');
-    if (matBusca) matBusca.style.display = finalizado ? 'none' : '';
+    if (matBusca) matBusca.style.display = somenteLeitura ? 'none' : '';
 
     // Limpar editor e anexos ao abrir
     const intEditor = document.getElementById('int-mensagem-editor');
@@ -733,11 +770,18 @@ async function abrirDetalhe(id) {
     const tabProjeto = document.querySelector('.os-detalhe-tab[data-dtab="projeto"]');
     if (tabProjeto) tabProjeto.style.display = ehProjetoAtual ? '' : 'none';
 
-    // Carregar interações
-    carregarInteracoes(id);
-
-    // Carregar materiais
-    carregarMateriais(id);
+    // IDs legados iguais a zero não podem consultar filhos por os_id, pois a
+    // chave não é única. A migration reatribui os IDs antes de liberar ações.
+    if (idValido) {
+        carregarInteracoes(idValido);
+        carregarMateriais(idValido);
+    } else {
+        const interacoesEl = document.getElementById('lista-interacoes');
+        const materiaisEl = document.getElementById('tbody-materiais');
+        if (interacoesEl) interacoesEl.innerHTML = '<div class="os-loading-text">Histórico será liberado após a correção do identificador desta O.S.</div>';
+        if (materiaisEl) materiaisEl.innerHTML = '<tr><td colspan="6" class="os-loading-text">Materiais serão liberados após a correção do identificador desta O.S.</td></tr>';
+        toast('O.S. legada aberta em modo somente leitura. Execute a migration de integridade para liberar ações.', 'aviso');
+    }
 
     // Carregar equipe
     renderizarEquipe(os.recursos_humanos || []);
@@ -754,6 +798,10 @@ function initDetalheAbas() {
             document.querySelectorAll('.os-detalhe-content').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById('dtab-' + dtab).classList.add('active');
+            if (state.osAtual?._idInvalido && dtab !== 'info') {
+                toast('Esta O.S. está em modo somente leitura até a correção do identificador.', 'aviso');
+                return;
+            }
             if (dtab === 'interacoes' && state.osAtual) carregarInteracoes(state.osAtual.id);
             if (dtab === 'materiais'  && state.osAtual) carregarMateriais(state.osAtual.id);
             if (dtab === 'projeto'    && state.osAtual) carregarAbaProjeto(state.osAtual);

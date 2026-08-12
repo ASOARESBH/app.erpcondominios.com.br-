@@ -936,9 +936,10 @@ switch ($acao) {
         $por_pagina   = max(1, min(100, (int)($_GET['por_pagina'] ?? 25)));
         $offset       = ($pagina - 1) * $por_pagina;
 
-        $where  = ['1=1'];
-        $params = [];
-        $types  = '';
+        // O tenant é resolvido exclusivamente da sessão; nunca liste O.S. de outra empresa.
+        $where  = ['o.tenant_id = ?'];
+        $params = [(int)$tenant_id];
+        $types  = 'i';
 
         if ($status !== '') {
             $where[] = 'o.status = ?';
@@ -978,7 +979,7 @@ switch ($acao) {
         $where_sql = implode(' AND ', $where);
 
         // Contar total (LEFT JOIN necessário para busca em assunto)
-        $sql_count = "SELECT COUNT(*) as total FROM os_chamados o LEFT JOIN os_assuntos a ON o.assunto_id = a.id WHERE $where_sql";
+        $sql_count = "SELECT COUNT(*) as total FROM os_chamados o LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id WHERE $where_sql";
         if (!empty($params)) {
             $stmt = $conn->prepare($sql_count);
             $stmt->bind_param($types, ...$params);
@@ -995,7 +996,7 @@ switch ($acao) {
 
         $sql = "SELECT o.*, a.nome as assunto_nome
                 FROM os_chamados o
-                LEFT JOIN os_assuntos a ON o.assunto_id = a.id
+                LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id
                 WHERE $where_sql
                 ORDER BY $order
                 LIMIT ? OFFSET ?";
@@ -1023,18 +1024,44 @@ switch ($acao) {
     // ─────────────────────────────────────────────────
     case 'buscar':
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
-        if (!$id) retornar_json(false, 'ID inválido');
+        $numero_legado = trim((string)($_GET['numero'] ?? $body['numero'] ?? ''));
+        if ($id <= 0 && $numero_legado === '') retornar_json(false, 'ID inválido');
 
-        $stmt = $conn->prepare(
-            "SELECT o.*, a.nome as assunto_nome
-             FROM os_chamados o
-             LEFT JOIN os_assuntos a ON o.assunto_id = a.id
-             WHERE o.id = ?"
-        );
-        $stmt->bind_param('i', $id);
+        // Compatibilidade temporária para O.S. legadas gravadas com id=0 antes
+        // da correção de AUTO_INCREMENT. O número é único por tenant e permite
+        // ao menos consultar o registro sem expor dados de outra empresa.
+        if ($id > 0) {
+            $stmt = $conn->prepare(
+                "SELECT o.*, a.nome as assunto_nome
+                 FROM os_chamados o
+                 LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id
+                 WHERE o.tenant_id = ? AND o.id = ?"
+            );
+            $stmt->bind_param('ii', $tenant_id, $id);
+        } else {
+            $stmt = $conn->prepare(
+                "SELECT o.*, a.nome as assunto_nome
+                 FROM os_chamados o
+                 LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id
+                 WHERE o.tenant_id = ? AND o.numero = ?
+                 ORDER BY o.data_abertura DESC LIMIT 1"
+            );
+            $stmt->bind_param('is', $tenant_id, $numero_legado);
+        }
         $stmt->execute();
         $os = $stmt->get_result()->fetch_assoc();
         if (!$os) retornar_json(false, 'OS não encontrada');
+        // Em consultas de compatibilidade pelo número, use o identificador
+        // íntegro devolvido pelo banco para carregar os vínculos do registro.
+        $id = (int)$os['id'];
+        if ($id <= 0) {
+            // os_id=0 não é uma chave única: nunca carregue filhos desse valor,
+            // pois poderiam pertencer a outra O.S. legada. A tela abre somente
+            // com os dados principais até a migration reatribuir os IDs.
+            $os['recursos_humanos'] = [];
+            $os['materiais'] = [];
+            retornar_json(true, 'O.S. legada encontrada; correção de identificador pendente', $os);
+        }
 
         // Buscar recursos humanos vinculados
         $stmt2 = $conn->prepare("SELECT * FROM os_recursos_humanos WHERE tenant_id = $tenant_id AND os_id = ? ORDER BY vinculado_em ASC");
@@ -1092,7 +1119,15 @@ switch ($acao) {
         $criado_por_id   = $usuario ? (int)$usuario['id'] : null;
         $criado_por_nome = $usuario ? $usuario['nome'] : null;
 
-        // INSERT com 16 colunas (sem data_abertura que usa DEFAULT CURRENT_TIMESTAMP)
+        // Não permita novo cadastro enquanto a estrutura ainda puder gerar id=0.
+        // A correção de banco fornecida cria PRIMARY KEY(id) e AUTO_INCREMENT.
+        $estruturaId = $conn->query("SELECT EXTRA FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'os_chamados' AND COLUMN_NAME = 'id' LIMIT 1");
+        $metaId = $estruturaId ? $estruturaId->fetch_assoc() : null;
+        if (!$metaId || stripos((string)$metaId['EXTRA'], 'auto_increment') === false) {
+            retornar_json(false, 'A estrutura de Ordens de Serviço ainda não possui AUTO_INCREMENT. Execute a migration de integridade antes de criar novas O.S.');
+        }
+
+        // INSERT com 17 parâmetros, sem data_abertura que usa DEFAULT CURRENT_TIMESTAMP
         // Tipos: s=numero, s=titulo, i=assunto_id, s=departamento, s=prioridade,
         //        i=morador_id, s=morador_nome, s=morador_unidade,
         //        i=atendente_id, s=atendente_nome,
@@ -1100,19 +1135,19 @@ switch ($acao) {
         //        i=criado_por_id, s=criado_por_nome
         $stmt = $conn->prepare(
             "INSERT INTO os_chamados
-             (numero, titulo, assunto_id, departamento, prioridade, status,
+             (tenant_id, numero, titulo, assunto_id, departamento, prioridade, status,
               morador_id, morador_nome, morador_unidade,
               atendente_id, atendente_nome,
               descricao, horas_estimadas, data_previsao, os_pai_id,
               criado_por_id, criado_por_nome)
-             VALUES (?,?,?,?,?,'aberto',?,?,?,?,?,?,?,?,?,?,?)"
+             VALUES (?,?,?,?,?,?,'aberto',?,?,?,?,?,?,?,?,?,?,?)"
         );
         // 16 parâmetros (s=numero, s=titulo, i=assunto_id, s=departamento, s=prioridade,
         //  i=morador_id, s=morador_nome, s=morador_unidade, i=atendente_id, s=atendente_nome,
         //  s=descricao, d=horas_estimadas, s=data_previsao, i=os_pai_id, i=criado_por_id, s=criado_por_nome)
         $stmt->bind_param(
-            'ssissississdsiis',
-            $numero, $titulo, $assunto_id, $departamento, $prioridade,
+            'ississississdsiis',
+            $tenant_id, $numero, $titulo, $assunto_id, $departamento, $prioridade,
             $morador_id, $morador_nome, $morador_unidade,
             $atendente_id, $atendente_nome,
             $descricao, $horas_estimadas, $data_previsao, $os_pai_id,
@@ -1123,7 +1158,13 @@ switch ($acao) {
             os_log('erro', 'Erro ao criar O.S', ['error' => $conn->error, 'sql_error' => $stmt->error]);
             retornar_json(false, 'Erro ao criar O.S: ' . $stmt->error);
         }
-        $os_id = $conn->insert_id;
+        $os_id = (int)$conn->insert_id;
+        // Não continue se o banco não devolver um identificador íntegro. Isso evita
+        // registros novos com ID zero e vínculos ambíguos em interações e materiais.
+        if ($os_id <= 0) {
+            os_log('erro', 'O.S criada sem ID válido', ['tenant_id' => $tenant_id, 'numero' => $numero]);
+            retornar_json(false, 'Não foi possível gerar o identificador da O.S. Execute a migration de integridade de Ordens de Serviço.');
+        }
 
         // Projeto Público — flag aditiva; não faz parte do INSERT original para
         // não alterar a assinatura/tipos já validados do bind_param acima.
@@ -1143,7 +1184,7 @@ switch ($acao) {
         // Vincular recursos humanos
         if (!empty($recursos_humanos) && is_array($recursos_humanos)) {
             $stmt_rh = $conn->prepare(
-                "INSERT INTO os_recursos_humanos (os_id, colaborador_id, colaborador_nome, cargo, departamento) VALUES (?,?,?,?,?)"
+                "INSERT INTO os_recursos_humanos (tenant_id, os_id, colaborador_id, colaborador_nome, cargo, departamento) VALUES (?,?,?,?,?,?)"
             );
             foreach ($recursos_humanos as $rh) {
                 $col_id   = (int)($rh['id'] ?? 0);
@@ -1151,7 +1192,7 @@ switch ($acao) {
                 $col_cargo = $rh['cargo'] ?? '';
                 $col_dep  = $rh['departamento'] ?? '';
                 if ($col_id && $col_nome) {
-                    $stmt_rh->bind_param('iisss', $os_id, $col_id, $col_nome, $col_cargo, $col_dep);
+                    $stmt_rh->bind_param('iiisss', $tenant_id, $os_id, $col_id, $col_nome, $col_cargo, $col_dep);
                     $stmt_rh->execute();
                 }
             }
@@ -1160,9 +1201,9 @@ switch ($acao) {
         // Interação inicial automática
         $msg_inicial = "O.S criada com status **Aberto**. Prioridade: {$prioridade}.";
         $stmt_int = $conn->prepare(
-            "INSERT INTO os_interacoes (os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,'comentario',?,?,?)"
+            "INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,?,'comentario',?,?,?)"
         );
-        $stmt_int->bind_param('isis', $os_id, $msg_inicial, $criado_por_id, $criado_por_nome);
+        $stmt_int->bind_param('iisis', $tenant_id, $os_id, $msg_inicial, $criado_por_id, $criado_por_nome);
         $stmt_int->execute();
 
         os_log('info', 'O.S criada', ['os_id' => $os_id, 'numero' => $numero]);
