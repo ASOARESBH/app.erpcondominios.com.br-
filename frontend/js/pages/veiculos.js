@@ -11,6 +11,14 @@ let modoEdicao = false;
 let veiculoEditId = null;
 let dependentesCache = [];
 
+// ── Estado da lista principal ─────────────────────────────────────────────
+let _veicPaginaAtual = 1;
+let _veicTotalPaginas = 1;
+let _veicTotal = 0;
+let _veicPorPagina = 20;
+let _veicTermoBusca = '';
+let _veicBuscaTimer = null;
+
 // ── Estado da aba Relatórios ──────────────────────────────────────────────
 let _relCarregado = false;
 let _relPagina = 1;
@@ -37,6 +45,8 @@ export function init() {
         buscar: buscarVeiculos,
         editar: editarVeiculo,
         excluir: excluirVeiculo,
+        irPagina: irPaginaVeiculos,
+        mudarPorPagina: mudarPorPaginaVeiculos,
         cancelarEdicao: resetForm,
         gerarPDF: gerarPDF,
 
@@ -55,6 +65,11 @@ export function destroy() {
     console.log('[Veiculos] Limpando...');
     delete window.VeiculosPage;
     veiculosCache = [];
+    _veicPaginaAtual = 1;
+    _veicTotalPaginas = 1;
+    _veicTotal = 0;
+    _veicTermoBusca = '';
+    clearTimeout(_veicBuscaTimer);
     modoEdicao = false;
     veiculoEditId = null;
 
@@ -81,12 +96,14 @@ function setupBusca() {
     if (!inputBusca) return;
 
     inputBusca.addEventListener('input', () => {
-        filtrarVeiculos(inputBusca.value);
+        clearTimeout(_veicBuscaTimer);
+        _veicBuscaTimer = setTimeout(() => buscarVeiculos(), 350);
     });
 
     inputBusca.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
+            clearTimeout(_veicBuscaTimer);
             buscarVeiculos();
         }
     });
@@ -119,6 +136,21 @@ function setupActions() {
     radiosDestino.forEach((radio) => {
         radio.addEventListener('change', aplicarModoVinculo);
     });
+
+    const porPagina = document.getElementById('veiculosPorPagina');
+    if (porPagina) porPagina.addEventListener('change', () => mudarPorPaginaVeiculos(porPagina.value));
+
+    const tabela = document.querySelector('#tabelaVeiculos tbody');
+    if (tabela) {
+        tabela.addEventListener('click', (event) => {
+            const botao = event.target.closest('[data-veiculo-acao]');
+            if (!botao) return;
+            const id = Number(botao.dataset.veiculoId || 0);
+            if (!id) return;
+            if (botao.dataset.veiculoAcao === 'editar') editarVeiculo(id);
+            if (botao.dataset.veiculoAcao === 'excluir') excluirVeiculo(id);
+        });
+    }
 }
 
 function setLoading(ativo) {
@@ -160,60 +192,87 @@ async function carregarMoradores() {
     }
 }
 
-async function carregarVeiculos() {
+async function carregarVeiculos(pagina = 1) {
     const tbody = document.querySelector('#tabelaVeiculos tbody');
+    _veicPaginaAtual = Math.max(1, Number(pagina) || 1);
     setLoading(true);
 
-    try {
-        const response = await fetch(API_VEICULOS);
-        const data = await response.json();
+    const params = new URLSearchParams({
+        acao: 'listar_paginado',
+        pagina: String(_veicPaginaAtual),
+        por_pagina: String(_veicPorPagina)
+    });
+    if (_veicTermoBusca) params.set('busca', _veicTermoBusca);
 
-        if (!data.sucesso) {
-            renderMensagemTabela(tbody, data.mensagem || 'Erro ao carregar veiculos.');
+    try {
+        const response = await fetch(`${API_VEICULOS}?${params.toString()}`, { credentials: 'include' });
+        const texto = await response.text();
+        let data = null;
+        try { data = texto ? JSON.parse(texto) : null; } catch (_) {}
+        if (!response.ok || !data?.sucesso) {
+            const mensagem = data?.mensagem || `Erro HTTP ${response.status} ao carregar veículos.`;
+            renderMensagemTabela(tbody, mensagem);
+            console.error('[Veiculos] Falha na listagem:', mensagem);
             return;
         }
 
-        veiculosCache = Array.isArray(data.dados) ? data.dados : [];
+        const resultado = data.dados || {};
+        veiculosCache = Array.isArray(resultado.itens) ? resultado.itens : [];
+        _veicTotal = Number(resultado.total || 0);
+        _veicPaginaAtual = Number(resultado.pagina || 1);
+        _veicTotalPaginas = Number(resultado.total_paginas || 1);
         renderVeiculos(veiculosCache);
+        renderPaginacaoVeiculos();
     } catch (error) {
         console.error('[Veiculos] Erro ao carregar veiculos:', error);
-        renderMensagemTabela(tbody, 'Erro de conexao ao carregar dados.');
+        renderMensagemTabela(tbody, 'Falha de comunicação ao carregar veículos.');
     } finally {
         setLoading(false);
     }
 }
 
 function buscarVeiculos() {
-    const termo = document.getElementById('buscaVeiculo')?.value || '';
-    filtrarVeiculos(termo);
+    _veicTermoBusca = (document.getElementById('buscaVeiculo')?.value || '').trim();
+    carregarVeiculos(1);
 }
 
-function filtrarVeiculos(termo) {
-    if (!termo || !termo.trim()) {
-        renderVeiculos(veiculosCache);
-        return;
+function irPaginaVeiculos(pagina) {
+    const destino = Math.max(1, Math.min(Number(pagina) || 1, _veicTotalPaginas));
+    if (destino !== _veicPaginaAtual) carregarVeiculos(destino);
+}
+
+function mudarPorPaginaVeiculos(valor) {
+    const permitido = [20, 50, 100];
+    const novo = Number(valor);
+    _veicPorPagina = permitido.includes(novo) ? novo : 20;
+    const select = document.getElementById('veiculosPorPagina');
+    if (select) select.value = String(_veicPorPagina);
+    carregarVeiculos(1);
+}
+
+function renderPaginacaoVeiculos() {
+    const resumo = document.getElementById('veiculosPaginacaoResumo');
+    const controles = document.getElementById('veiculosPaginacao');
+    if (resumo) {
+        const inicio = _veicTotal ? ((_veicPaginaAtual - 1) * _veicPorPagina) + 1 : 0;
+        const fim = Math.min(_veicPaginaAtual * _veicPorPagina, _veicTotal);
+        resumo.textContent = _veicTotal ? `Mostrando ${inicio}–${fim} de ${_veicTotal} veículo(s)` : 'Nenhum veículo encontrado';
     }
+    if (!controles) return;
+    if (_veicTotalPaginas <= 1) { controles.innerHTML = ''; return; }
 
-    const termoNormalizado = termo.toLowerCase().trim();
-    const filtrados = veiculosCache.filter((veiculo) => {
-        const morador = (veiculo.morador_nome || '').toLowerCase();
-        const modelo = (veiculo.modelo || '').toLowerCase();
-        const placa = (veiculo.placa || '').toLowerCase();
-        const tag = (veiculo.tag || '').toLowerCase();
-        const cor = (veiculo.cor || '').toLowerCase();
-        const tipo = (veiculo.tipo || '').toLowerCase();
-
-        return (
-            morador.includes(termoNormalizado) ||
-            modelo.includes(termoNormalizado) ||
-            placa.includes(termoNormalizado) ||
-            tag.includes(termoNormalizado) ||
-            cor.includes(termoNormalizado) ||
-            tipo.includes(termoNormalizado)
-        );
+    const botoes = [];
+    botoes.push(`<button type="button" ${_veicPaginaAtual <= 1 ? 'disabled' : ''} data-veiculo-pagina="${_veicPaginaAtual - 1}" aria-label="Página anterior"><i class="fas fa-chevron-left"></i></button>`);
+    const inicio = Math.max(1, _veicPaginaAtual - 2);
+    const fim = Math.min(_veicTotalPaginas, _veicPaginaAtual + 2);
+    for (let pagina = inicio; pagina <= fim; pagina++) {
+        botoes.push(`<button type="button" class="${pagina === _veicPaginaAtual ? 'ativo' : ''}" data-veiculo-pagina="${pagina}">${pagina}</button>`);
+    }
+    botoes.push(`<button type="button" ${_veicPaginaAtual >= _veicTotalPaginas ? 'disabled' : ''} data-veiculo-pagina="${_veicPaginaAtual + 1}" aria-label="Próxima página"><i class="fas fa-chevron-right"></i></button>`);
+    controles.innerHTML = botoes.join('');
+    controles.querySelectorAll('[data-veiculo-pagina]').forEach((botao) => {
+        botao.addEventListener('click', () => irPaginaVeiculos(botao.dataset.veiculoPagina));
     });
-
-    renderVeiculos(filtrados);
 }
 
 function renderVeiculos(veiculos) {
@@ -246,10 +305,10 @@ function renderVeiculos(veiculos) {
                 <td>${cor}</td>
                 <td>${tipo}</td>
                 <td>
-                    <button class="action-btn edit" type="button" onclick="window.VeiculosPage.editar(${id})" title="Editar veiculo">
+                    <button class="action-btn edit" type="button" data-veiculo-acao="editar" data-veiculo-id="${Number(v.id) || ''}" title="Editar veículo" aria-label="Editar veículo">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="action-btn delete" type="button" onclick="window.VeiculosPage.excluir(${id})" title="Excluir veiculo">
+                    <button class="action-btn delete" type="button" data-veiculo-acao="excluir" data-veiculo-id="${Number(v.id) || ''}" title="Excluir veículo" aria-label="Excluir veículo">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -330,7 +389,15 @@ async function salvarVeiculo() {
 
 function editarVeiculo(id) {
     const veiculo = veiculosCache.find((item) => Number(item.id) === Number(id));
-    if (!veiculo) return;
+    if (!veiculo) {
+        console.warn('[Veiculos] Veículo não localizado na página atual:', id);
+        return;
+    }
+
+    // A edição acontece no formulário da aba Cadastrar. Sem ativar essa aba,
+    // o scroll apontava para conteúdo oculto e parecia que o botão não fazia nada.
+    const abaCadastro = document.querySelector('.page-veiculos .tab-button[data-tab="cadastrar"]');
+    if (abaCadastro && !abaCadastro.classList.contains('active')) abaCadastro.click();
 
     modoEdicao = true;
     veiculoEditId = Number(id);

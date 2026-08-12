@@ -793,3 +793,84 @@
         display: none !important;
     }
 }
+
+/* ============================================
+   PAGINAÇÃO DA LISTA PRINCIPAL
+   ============================================ */
+.page-veiculos .veic-list-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 16px 4px 0;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.page-veiculos .veic-pagination-summary {
+    font-weight: 600;
+    color: #475569;
+}
+
+.page-veiculos .veic-per-page-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.page-veiculos .veic-per-page-label select {
+    width: auto;
+    min-width: 68px;
+    padding: 7px 28px 7px 10px;
+    background: #fff;
+    border-radius: 7px;
+    font-size: 13px;
+}
+
+.page-veiculos .veic-pagination-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.page-veiculos .veic-pagination-controls button {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #fff;
+    color: #475569;
+    cursor: pointer;
+    font-weight: 700;
+    transition: all .18s ease;
+}
+
+.page-veiculos .veic-pagination-controls button:hover:not(:disabled),
+.page-veiculos .veic-pagination-controls button.ativo {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+.page-veiculos .veic-pagination-controls button:disabled {
+    opacity: .42;
+    cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+    .page-veiculos .veic-list-pagination {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .page-veiculos .veic-pagination-controls {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}

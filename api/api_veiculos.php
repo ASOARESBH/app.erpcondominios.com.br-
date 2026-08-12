@@ -74,9 +74,11 @@ if (!function_exists('retornar_json')) {
 // pela exportação CSV, que é a mesma ação sem paginação) para nunca haver
 // duas implementações divergentes do mesmo WHERE.
 function _veic_montar_filtros($conexao) {
-    $where  = ['1=1'];
-    $params = [];
-    $tipos  = '';
+    global $tenant_id;
+    // Toda consulta de relatório parte do tenant resolvido pela sessão.
+    $where  = ['v.tenant_id = ?', 'm.tenant_id = ?'];
+    $params = [(int)$tenant_id, (int)$tenant_id];
+    $tipos  = 'ii';
 
     if (!empty($_GET['data_inicio'])) {
         $where[] = 'DATE(v.data_cadastro) >= ?';
@@ -151,6 +153,67 @@ function _veic_montar_filtros($conexao) {
     return [implode(' AND ', $where), $params, $tipos];
 }
 
+/**
+ * Lista principal do módulo: paginação no servidor para evitar retorno de
+ * todos os veículos e manter a resposta isolada no tenant da sessão.
+ */
+function _veic_listar_paginado($conexao, $tenantId) {
+    $pagina = max(1, (int)($_GET['pagina'] ?? 1));
+    $porPagina = (int)($_GET['por_pagina'] ?? 20);
+    $porPagina = in_array($porPagina, [20, 50, 100], true) ? $porPagina : 20;
+    $offset = ($pagina - 1) * $porPagina;
+    $busca = trim((string)($_GET['busca'] ?? ''));
+
+    $where = 'v.tenant_id = ? AND m.tenant_id = ?';
+    $params = [(int)$tenantId, (int)$tenantId];
+    $tipos = 'ii';
+    if ($busca !== '') {
+        $where .= ' AND (m.nome LIKE ? OR v.modelo LIKE ? OR v.placa LIKE ? OR v.tag LIKE ? OR v.cor LIKE ? OR v.tipo LIKE ? OR d.nome_completo LIKE ?)';
+        $like = '%' . $busca . '%';
+        for ($i = 0; $i < 7; $i++) { $params[] = $like; $tipos .= 's'; }
+    }
+
+    $stmtCount = $conexao->prepare("SELECT COUNT(*) AS total FROM veiculos v INNER JOIN moradores m ON m.id = v.morador_id LEFT JOIN dependentes d ON d.id = v.dependente_id WHERE {$where}");
+    if (!$stmtCount) throw new Exception('Erro ao preparar a contagem de veículos: ' . $conexao->error);
+    $stmtCount->bind_param($tipos, ...$params);
+    $stmtCount->execute();
+    $total = (int)($stmtCount->get_result()->fetch_assoc()['total'] ?? 0);
+    $stmtCount->close();
+
+    $totalPaginas = max(1, (int)ceil($total / $porPagina));
+    if ($pagina > $totalPaginas) { $pagina = $totalPaginas; $offset = ($pagina - 1) * $porPagina; }
+
+    $sql = "SELECT v.id, v.placa, v.modelo, v.cor, v.tipo, v.tag, v.morador_id, v.dependente_id, v.ativo,
+                   DATE_FORMAT(v.data_cadastro, '%d/%m/%Y %H:%i') AS data_cadastro,
+                   m.nome AS morador_nome, m.unidade AS morador_unidade,
+                   d.nome_completo AS dependente_nome
+            FROM veiculos v
+            INNER JOIN moradores m ON m.id = v.morador_id
+            LEFT JOIN dependentes d ON d.id = v.dependente_id
+            WHERE {$where}
+            ORDER BY v.data_cadastro DESC, v.id DESC
+            LIMIT ? OFFSET ?";
+    $stmt = $conexao->prepare($sql);
+    if (!$stmt) throw new Exception('Erro ao preparar a listagem de veículos: ' . $conexao->error);
+    $paramsLista = $params;
+    $paramsLista[] = $porPagina;
+    $paramsLista[] = $offset;
+    $stmt->bind_param($tipos . 'ii', ...$paramsLista);
+    $stmt->execute();
+    $resultado = $stmt->get_result();
+    $itens = [];
+    while ($resultado && ($linha = $resultado->fetch_assoc())) $itens[] = $linha;
+    $stmt->close();
+
+    retornar_json(true, 'Veículos listados com sucesso', [
+        'itens' => $itens,
+        'total' => $total,
+        'pagina' => $pagina,
+        'por_pagina' => $porPagina,
+        'total_paginas' => $totalPaginas
+    ]);
+}
+
 try {
     // Verificar autenticação
     verificarAutenticacao(true, 'operador');
@@ -168,17 +231,16 @@ $tenant_id = exigirTenantId();
         verificarPermissao('admin');
     }
 
-    // Coluna aditiva "tipo" — o formulário de cadastro já coleta este campo
-    // (Carro/Moto/Caminhonete/Utilitario) mas a tabela nunca teve a coluna,
-    // então o valor sempre era descartado silenciosamente. Correção aditiva
-    // (não altera nenhuma regra de negócio existente, apenas passa a
-    // persistir um campo que o formulário já envia).
-    $rCol = $conexao->query("SELECT COUNT(*) c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='veiculos' AND COLUMN_NAME='tipo'");
-    if ($rCol && (int)$rCol->fetch_assoc()['c'] === 0) {
-        $conexao->query("ALTER TABLE veiculos ADD COLUMN tipo VARCHAR(50) DEFAULT NULL AFTER cor");
-    }
+    // A estrutura da tabela é alterada exclusivamente por migrations SQL.
+    // Nunca executar ALTER TABLE durante uma requisição: em hospedagem
+    // compartilhada isso pode bloquear a tabela e resultar em HTTP 503.
     
-    // ========== LISTAR TODOS OS VEÍCULOS (COM SUPORTE A FILTROS) ==========
+    // ========== LISTAR VEÍCULOS PAGINADOS (TELA PRINCIPAL) ==========
+    if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'listar_paginado') {
+        _veic_listar_paginado($conexao, $tenant_id);
+    }
+
+    // ========== LISTAR TODOS OS VEÍCULOS (COMPATIBILIDADE LEGADA) ==========
     // A checagem de "acao" abaixo é aditiva: nenhuma chamada existente envia
     // esse parâmetro, então o comportamento atual continua idêntico; só as
     // novas rotas da aba Relatórios (?acao=relatorio_*) são desviadas dela.
@@ -194,12 +256,12 @@ $tenant_id = exigirTenantId();
                        d.nome_completo as dependente_nome
                 FROM veiculos v
                 INNER JOIN moradores m ON v.morador_id = m.id
-                LEFT JOIN dependentes d ON v.dependente_id = d.id
-                WHERE 1=1
+                LEFT JOIN dependentes d ON v.dependente_id = d.id AND d.tenant_id = ?
+                WHERE v.tenant_id = ? AND m.tenant_id = ?
             ";
             
-            $params = array();
-            $tipos = '';
+            $params = [(int)$tenant_id, (int)$tenant_id, (int)$tenant_id];
+            $tipos = 'iii';
             
             // Filtro por placa
             if (!empty($_GET['placa'])) {
@@ -255,7 +317,7 @@ $tenant_id = exigirTenantId();
             ));
             
             retornar_json(true, "Veículos listados com sucesso", $veiculos);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             registrar_debug('LISTAR_TODOS_ERRO', $e->getMessage());
             $errorLogger->registrarErroAPI('listar_todos', $e->getMessage());
             throw $e;
@@ -276,8 +338,8 @@ $tenant_id = exigirTenantId();
                        v.ativo, DATE_FORMAT(v.data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro,
                        d.nome_completo as dependente_nome
                 FROM veiculos v
-                LEFT JOIN dependentes d ON v.dependente_id = d.id
-                WHERE v.morador_id = ?
+                LEFT JOIN dependentes d ON v.dependente_id = d.id AND d.tenant_id = ?
+                WHERE v.morador_id = ? AND v.tenant_id = ?
                 ORDER BY v.data_cadastro DESC
             ");
             
@@ -285,7 +347,7 @@ $tenant_id = exigirTenantId();
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
             
-            $stmt->bind_param("i", $morador_id);
+            $stmt->bind_param("iii", $tenant_id, $morador_id, $tenant_id);
             $stmt->execute();
             $resultado = $stmt->get_result();
             $veiculos = array();
@@ -299,7 +361,7 @@ $tenant_id = exigirTenantId();
             $stmt->close();
             
             retornar_json(true, "Veículos listados com sucesso", $veiculos);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $errorLogger->registrarErroAPI('listar', $e->getMessage(), array('morador_id' => $morador_id));
             throw $e;
         }
@@ -319,15 +381,15 @@ $tenant_id = exigirTenantId();
                        v.ativo, DATE_FORMAT(v.data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro,
                        d.nome_completo as dependente_nome
                 FROM veiculos v
-                LEFT JOIN dependentes d ON v.dependente_id = d.id
-                WHERE v.id = ?
+                LEFT JOIN dependentes d ON v.dependente_id = d.id AND d.tenant_id = ?
+                WHERE v.id = ? AND v.tenant_id = ?
             ");
             
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
             
-            $stmt->bind_param("i", $id);
+            $stmt->bind_param("iii", $tenant_id, $id, $tenant_id);
             $stmt->execute();
             $resultado = $stmt->get_result();
             
@@ -339,7 +401,7 @@ $tenant_id = exigirTenantId();
                 $stmt->close();
                 retornar_json(false, "Veículo não encontrado");
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $errorLogger->registrarErroAPI('obter', $e->getMessage(), array('id' => $id));
             throw $e;
         }
@@ -375,12 +437,12 @@ $tenant_id = exigirTenantId();
         $stmt = $conexao->prepare("
             SELECT DISTINCT d.id, d.nome_completo, d.cpf, m.unidade
             FROM veiculos v
-            INNER JOIN dependentes d ON v.dependente_id = d.id
-            INNER JOIN moradores m ON v.morador_id = m.id
-            WHERE d.nome_completo LIKE ? OR d.cpf LIKE ?
+            INNER JOIN dependentes d ON v.dependente_id = d.id AND d.tenant_id = ?
+            INNER JOIN moradores m ON v.morador_id = m.id AND m.tenant_id = ?
+            WHERE v.tenant_id = ? AND (d.nome_completo LIKE ? OR d.cpf LIKE ?)
             ORDER BY d.nome_completo ASC LIMIT 10
         ");
-        $stmt->bind_param('ss', $qLike, $qLike);
+        $stmt->bind_param('iiiss', $tenant_id, $tenant_id, $tenant_id, $qLike, $qLike);
         $stmt->execute();
         $res = $stmt->get_result();
         $lista = [];
@@ -633,17 +695,17 @@ $tenant_id = exigirTenantId();
             
             // Inserir veículo
             if ($dependente_id !== null) {
-                $stmt = $conexao->prepare("INSERT INTO veiculos (placa, modelo, cor, tipo, tag, morador_id, dependente_id, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
+                $stmt = $conexao->prepare("INSERT INTO veiculos (placa, modelo, cor, tipo, tag, morador_id, dependente_id, tenant_id, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)");
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar insert: " . $conexao->error);
                 }
-                $stmt->bind_param("sssssii", $placa, $modelo, $cor, $tipo, $tag, $morador_id, $dependente_id);
+                $stmt->bind_param("sssssiii", $placa, $modelo, $cor, $tipo, $tag, $morador_id, $dependente_id, $tenant_id);
             } else {
-                $stmt = $conexao->prepare("INSERT INTO veiculos (placa, modelo, cor, tipo, tag, morador_id, ativo) VALUES (?, ?, ?, ?, ?, ?, 1)");
+                $stmt = $conexao->prepare("INSERT INTO veiculos (placa, modelo, cor, tipo, tag, morador_id, tenant_id, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar insert: " . $conexao->error);
                 }
-                $stmt->bind_param("sssssi", $placa, $modelo, $cor, $tipo, $tag, $morador_id);
+                $stmt->bind_param("sssssii", $placa, $modelo, $cor, $tipo, $tag, $morador_id, $tenant_id);
             }
             
             if ($stmt->execute()) {
@@ -685,7 +747,7 @@ $tenant_id = exigirTenantId();
             }
             
             $stmt->close();
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $errorLogger->registrarErroAPI('criar', $e->getMessage(), array('placa' => $placa, 'tag' => $tag, 'morador_id' => $morador_id, 'dependente_id' => $dependente_id));
             throw $e;
         }
@@ -760,7 +822,7 @@ $tenant_id = exigirTenantId();
             }
             
             $stmt->close();
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $errorLogger->registrarErroAPI('atualizar', $e->getMessage(), array('id' => $id, 'placa' => $placa, 'tag' => $tag));
             throw $e;
         }
@@ -811,7 +873,7 @@ $tenant_id = exigirTenantId();
             }
             
             $stmt->close();
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $errorLogger->registrarErroAPI('deletar', $e->getMessage(), array('id' => $id));
             throw $e;
         }
@@ -861,7 +923,7 @@ $tenant_id = exigirTenantId();
             }
             
             $stmt->close();
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $errorLogger->registrarErroAPI('alterar_status', $e->getMessage(), array('id' => $id));
             throw $e;
         }
@@ -870,8 +932,9 @@ $tenant_id = exigirTenantId();
     // Se nenhuma ação foi executada
     retornar_json(false, "Ação não reconhecida");
     
-} catch (Exception $e) {
-    $errorLogger->registrarErroAPI('geral', $e->getMessage(), array());
-    retornar_json(false, "Erro: " . $e->getMessage());
+} catch (Throwable $e) {
+    error_log('[api_veiculos] ' . $e->getMessage());
+    if (isset($errorLogger)) $errorLogger->registrarErroAPI('geral', $e->getMessage(), array());
+    retornar_json(false, 'Não foi possível processar a solicitação de veículos.');
 }
 ?>
