@@ -12,7 +12,7 @@ ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
-require_once 'helpers/protocol_notification_helper.php';;
+require_once 'helpers/protocol_notification_helper.php';
 
 // Limpar buffer e definir headers
 ob_end_clean();
@@ -73,8 +73,8 @@ try {
                     u.nome as unidade_nome,
                     m.nome as morador_nome
                     FROM protocolos p
-                    LEFT JOIN unidades u ON p.unidade_id = u.id
-                    LEFT JOIN moradores m ON p.morador_id = m.id
+                    LEFT JOIN unidades u ON p.unidade_id = u.id AND u.tenant_id = p.tenant_id
+                    LEFT JOIN moradores m ON p.morador_id = m.id AND m.tenant_id = p.tenant_id
                     WHERE p.tenant_id = ? AND p.id = ?");
             
             if (!$stmt) {
@@ -99,8 +99,8 @@ try {
                     u.nome as unidade_nome,
                     m.nome as morador_nome
                     FROM protocolos p
-                    LEFT JOIN unidades u ON p.unidade_id = u.id
-                    LEFT JOIN moradores m ON p.morador_id = m.id
+                    LEFT JOIN unidades u ON p.unidade_id = u.id AND u.tenant_id = p.tenant_id
+                    LEFT JOIN moradores m ON p.morador_id = m.id AND m.tenant_id = p.tenant_id
                     WHERE p.tenant_id = ?";
             
             if ($filtro) {
@@ -228,7 +228,12 @@ try {
         }
         
         if ($stmt->execute()) {
-            $id_inserido = $conexao->insert_id;
+            $id_inserido = (int)$conexao->insert_id;
+            if ($id_inserido <= 0) {
+                error_log("[Protocolos][ID_INVALIDO] tenant={$tenant_id}; protocolo sem AUTO_INCREMENT; operacao bloqueada");
+                throw new Exception("O banco retornou um ID inválido para o protocolo. Execute a correção de integridade da tabela protocolos.");
+            }
+            error_log("[Protocolos][CRIADO] tenant={$tenant_id}; id={$id_inserido}; unidade={$unidade_id}; morador={$morador_id}");
 
             // Evento interno sempre é criado; falha de push não bloqueia a portaria.
             $resultado_notificacao = protocolo_criar_notificacao_morador(
