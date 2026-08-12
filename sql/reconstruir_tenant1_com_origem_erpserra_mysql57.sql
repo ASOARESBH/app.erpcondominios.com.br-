@@ -440,10 +440,22 @@ INSERT INTO `inlaud99_erpcondor`.`documentos_acessos` (`tenant_id`,`documento_id
 SELECT 1,s.documento_id,'visualizacao','interno',s.usuario_id,s.created_at
 FROM `inlaud99_erpserra`.`documentos_usuarios_acesso` s;
 
--- Recria vínculos de acesso de todos os usuários importados e da conta global.
-INSERT INTO `inlaud99_erpcondor`.`usuario_tenant` (`usuario_id`,`tenant_id`,`permissao`,`ativo`,`criado_em`)
-SELECT u.id,1,CASE WHEN u.permissao='super_admin' THEN 'admin' ELSE u.permissao END,u.ativo,NOW()
-FROM `inlaud99_erpcondor`.`usuarios` u WHERE u.tenant_id=1;
+-- Recria vínculos sem CASE e sem duplicar a conta global; compatível com o parser do phpMyAdmin.
+INSERT IGNORE INTO `inlaud99_erpcondor`.`usuario_tenant` (`usuario_id`,`tenant_id`,`permissao`,`ativo`,`criado_em`)
+SELECT u.id,1,u.permissao,u.ativo,u.data_criacao
+FROM `inlaud99_erpcondor`.`usuarios` u
+WHERE u.tenant_id=1 AND u.permissao<>'super_admin';
+
+INSERT IGNORE INTO `inlaud99_erpcondor`.`usuario_tenant` (`usuario_id`,`tenant_id`,`permissao`,`ativo`,`criado_em`)
+SELECT u.id,1,'admin',u.ativo,u.data_criacao
+FROM `inlaud99_erpcondor`.`usuarios` u
+WHERE u.tenant_id=1 AND u.permissao='super_admin';
+
+UPDATE `inlaud99_erpcondor`.`usuario_tenant` ut
+INNER JOIN `inlaud99_erpcondor`.`usuarios` u ON u.id=ut.usuario_id AND u.tenant_id=ut.tenant_id
+SET ut.permissao=IF(u.permissao='super_admin','admin',u.permissao),
+    ut.ativo=u.ativo
+WHERE ut.tenant_id=1;
 
 -- Sincroniza o cadastro mestre do tenant conforme a empresa reimportada da origem.
 UPDATE `inlaud99_erpcondor`.`tenants` t INNER JOIN `inlaud99_erpcondor`.`empresa` e ON e.tenant_id=t.id
