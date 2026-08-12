@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Esta entrega transfere a administração da **Central PWA** para o contexto global do **Super-Admin**, dentro do submenu **Aplicativos**, e introduz o módulo **Aplicativos → Vigilante** para gestão de rondas por QR Code. A operação de rondas é isolada por condomínio selecionado e usa os colaboradores ativos do módulo de Recursos Humanos como vigilantes vinculáveis.
+Esta entrega transfere a administração da **Central PWA** para o contexto global do **Super-Admin**, dentro do submenu **Aplicativos**, e introduz o módulo operacional **Manutenção → Vigilante** para gestão de rondas por QR Code. A operação de rondas é isolada automaticamente pelo condomínio da sessão e usa os colaboradores ativos do módulo de Recursos Humanos como vigilantes vinculáveis.
 
 > A Central PWA passa a ser uma configuração institucional. Ela não deve mais ser acessada pelos menus operacionais de um condomínio.
 
@@ -18,9 +18,9 @@ Esta entrega transfere a administração da **Central PWA** para o contexto glob
 
 ## Acesso administrativo
 
-O Super-Admin deve acessar **Aplicativos → Central PWA** para configurações institucionais do Portal do Morador, Firebase, dispositivos, logs e versões PWA. O menu operacional e a tela de Manutenção não exibem mais atalhos para essa central.
+O Super-Admin deve acessar **Aplicativos → Central PWA** para configurações institucionais do Portal do Morador, Firebase, dispositivos, logs e versões PWA. O menu operacional e a tela de Manutenção não exibem atalhos para essa central; no lugar dela, a área de Manutenção apresenta o cartão e a aba **Vigilante**.
 
-O módulo **Aplicativos → Vigilante** deve ser usado no contexto global do Super-Admin. Primeiro, selecione o condomínio no topo da página. A seleção é mantida apenas para a administração das rondas; ela não troca a sessão operacional do Super-Admin para esse condomínio.
+O módulo **Manutenção → Vigilante** deve ser usado dentro da sessão operacional do condomínio. O tenant é resolvido exclusivamente pela sessão autenticada; não existe seletor de condomínio e nenhum `tenant_id` é aceito pela URL ou pelo formulário.
 
 ## Configuração de uma rota
 
@@ -38,9 +38,9 @@ A página inclui relatório por período, rota e vigilante, além de exportaçã
 
 | Verificação | Resultado esperado |
 |---|---|
-| Super-Admin global | Exibe `Painel Super-Admin` e `Aplicativos`, com `Central PWA` e `Vigilante` como submenus. |
-| Usuário de condomínio | Não acessa as APIs administrativas de Central PWA ou Vigilante. |
-| Nova rota | É criada somente para o condomínio selecionado. |
+| Super-Admin global | Exibe `Painel Super-Admin` e `Aplicativos`, com `Central PWA` como submenu institucional. |
+| Usuário de condomínio | Acessa `Manutenção → Vigilante`, mas não acessa a API administrativa da Central PWA. |
+| Nova rota | É criada somente para o condomínio da sessão ativa. |
 | Ponto QR | Gera etiqueta distinta, com URL de leitura própria. |
 | Vigilante não vinculado | Recebe bloqueio ao tentar registrar leitura. |
 | Leitura repetida no mesmo ciclo | Recebe bloqueio para evitar duplicidade. |

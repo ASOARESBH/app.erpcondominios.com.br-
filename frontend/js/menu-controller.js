@@ -25,8 +25,7 @@
         {
             id: 'aplicativos', label: 'Aplicativos', icon: 'fas fa-mobile-screen-button', page: 'aplicativos', href: 'layout-base.html?page=aplicativos', order: 2, style: 'color: #93c5fd; font-weight: 700;',
             children: [
-                { id: 'pwa_central', label: 'Central PWA', icon: 'fas fa-mobile-alt', page: 'pwa_central', href: 'layout-base.html?page=pwa_central' },
-                { id: 'rondas_vigilante', label: 'Vigilante', icon: 'fas fa-shield-halved', page: 'rondas_vigilante', href: 'layout-base.html?page=rondas_vigilante' }
+                { id: 'pwa_central', label: 'Central PWA', icon: 'fas fa-mobile-alt', page: 'pwa_central', href: 'layout-base.html?page=pwa_central' }
             ]
         }
     ];

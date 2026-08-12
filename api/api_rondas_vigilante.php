@@ -53,25 +53,20 @@ function rv_auditar(mysqli $conn, int $tenantId, ?int $rotaId, string $acao, str
     $stmt->close();
 }
 
-function rv_exigir_superadmin_global(): void {
-    verificarAutenticacao(true, 'super_admin');
-    if (isset($_SESSION['superadmin_tenant_original'])) {
-        rv_json(false, 'Retorne ao Painel Super-Admin para administrar as rondas.', null, 403);
-    }
+function rv_exigir_contexto_operacional(): int {
+    // Vigilante é um módulo operacional de Manutenção. O tenant nunca vem de
+    // GET/POST: é sempre resolvido pela sessão autenticada atual.
+    verificarAutenticacao(true, 'operador');
+    return (int)exigirTenantId();
 }
 
-function rv_tenant_contexto(mysqli $conn): array {
-    $tenantId = (int)($_SESSION['ronda_tenant_gerenciado_id'] ?? 0);
-    if ($tenantId <= 0) rv_json(false, 'Selecione primeiro o condomínio que terá as rotas de ronda.', null, 409);
+function rv_tenant_contexto(mysqli $conn, int $tenantId): array {
     $stmt = $conn->prepare("SELECT id, nome_fantasia, razao_social FROM tenants WHERE id=? AND status='ativo' LIMIT 1");
     $stmt->bind_param('i', $tenantId);
     $stmt->execute();
     $tenant = $stmt->get_result()->fetch_assoc();
     $stmt->close();
-    if (!$tenant) {
-        unset($_SESSION['ronda_tenant_gerenciado_id']);
-        rv_json(false, 'O condomínio selecionado não está ativo.', null, 403);
-    }
+    if (!$tenant) rv_json(false, 'O condomínio da sessão não está ativo.', null, 403);
     return $tenant;
 }
 
@@ -217,21 +212,8 @@ if (in_array($acao, ['qr_detalhe', 'registrar_leitura'], true)) {
     rv_json(true, $sla === 'atrasado' ? 'Leitura registrada com atraso de SLA.' : 'Leitura de ronda registrada no prazo.', ['status_sla'=>$sla,'atraso_minutos'=>$atraso,'ponto'=>$ponto['ponto_nome'],'rota'=>$ponto['nome']]);
 }
 
-rv_exigir_superadmin_global();
-
-if ($acao === 'selecionar_tenant') {
-    $tenantId = (int)($input['tenant_id'] ?? 0);
-    if ($tenantId <= 0) rv_json(false, 'Selecione um condomínio.', null, 400);
-    $stmt = $conn->prepare("SELECT id,nome_fantasia,razao_social FROM tenants WHERE id=? AND status='ativo' LIMIT 1");
-    $stmt->bind_param('i', $tenantId); $stmt->execute();
-    $tenant = $stmt->get_result()->fetch_assoc(); $stmt->close();
-    if (!$tenant) rv_json(false, 'Condomínio não encontrado ou inativo.', null, 404);
-    $_SESSION['ronda_tenant_gerenciado_id'] = $tenantId;
-    rv_json(true, 'Condomínio selecionado para as rondas.', $tenant);
-}
-
-$tenant = rv_tenant_contexto($conn);
-$tenantId = (int)$tenant['id'];
+$tenantId = rv_exigir_contexto_operacional();
+$tenant = rv_tenant_contexto($conn, $tenantId);
 
 switch ($acao) {
     case 'contexto':

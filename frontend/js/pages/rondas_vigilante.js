@@ -1,6 +1,5 @@
 const API = '/api/api_rondas_vigilante.php';
-const SA_API = '/api/api_superadmin.php';
-const state = { tenantId: 0, tenants: [], rotas: [], colaboradores: [], report: [], timer: null, tab: 'dashboard' };
+const state = { tenantId: 0, rotas: [], colaboradores: [], report: [], timer: null, tab: 'dashboard' };
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -27,30 +26,18 @@ async function request(action, data = null, method = 'GET') {
         return json || { sucesso:false, mensagem:'A API não retornou dados.' };
     } catch (error) { console.error('[Vigilante]', action, error); return { sucesso:false, mensagem:'Falha de comunicação com o módulo Vigilante.' }; }
 }
-async function superRequest(action) {
-    const response = await fetch(`${SA_API}?${new URLSearchParams({ action })}`, { credentials:'include' });
-    const text = await response.text(); try { return JSON.parse(text); } catch (_) { return { sucesso:false }; }
-}
 function modal(id, open) { const el = document.getElementById(id); if (el) { el.classList.toggle('open', open); el.setAttribute('aria-hidden', open ? 'false' : 'true'); } }
 function diasNome(dias) { const n=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']; return (dias || []).map((d)=>n[Number(d)]).filter(Boolean).join(', ') || 'Todos os dias'; }
 function qrUrl(token) { return `${window.location.origin}/frontend/ronda_checkin.html?token=${encodeURIComponent(token)}`; }
 
-async function carregarTenants() {
-    const res = await superRequest('tenants');
-    state.tenants = res?.dados?.tenants || res?.dados || [];
-    const select = $('#rv-tenant-select');
-    if (!select) return;
-    select.innerHTML = '<option value="">Selecione o condomínio</option>' + state.tenants.filter((t)=>t.status === 'ativo').map((t)=>`<option value="${Number(t.id)}">${esc(t.nome_fantasia || t.razao_social || t.slug)}</option>`).join('');
+async function carregarContexto() {
     const ctx = await request('contexto');
-    if (ctx.sucesso) { state.tenantId = Number(ctx.dados.id); select.value = String(state.tenantId); $('#rv-contexto-nome').textContent = ctx.dados.nome_fantasia || ctx.dados.razao_social; await carregarTudo(); }
+    if (!ctx.sucesso) { $('#rv-contexto-nome').textContent = ctx.mensagem || 'Não foi possível identificar o condomínio da sessão.'; toast(ctx.mensagem, 'error'); return; }
+    state.tenantId = Number(ctx.dados.id);
+    $('#rv-contexto-nome').textContent = ctx.dados.nome_fantasia || ctx.dados.razao_social || 'Condomínio ativo';
+    await carregarTudo();
 }
-async function selecionarTenant(id) {
-    if (!id) { state.tenantId = 0; $('#rv-contexto-nome').textContent = 'Selecione um condomínio para configurar as rotas.'; return; }
-    const res = await request('selecionar_tenant', { tenant_id:Number(id) }, 'POST');
-    if (!res.sucesso) { toast(res.mensagem, 'error'); return; }
-    state.tenantId = Number(res.dados.id); $('#rv-contexto-nome').textContent = res.dados.nome_fantasia || res.dados.razao_social; await carregarTudo(); toast('Condomínio selecionado para as rondas.');
-}
-async function carregarTudo() { if (!state.tenantId) return; await Promise.all([carregarDashboard(), carregarColaboradores()]); }
+async function carregarTudo() { await Promise.all([carregarDashboard(), carregarColaboradores()]); }
 async function carregarColaboradores() { const res = await request('listar_colaboradores'); state.colaboradores = res.sucesso ? (res.dados || []) : []; preencherFiltros(); }
 async function carregarDashboard() {
     const res = await request('dashboard'); if (!res.sucesso) { toast(res.mensagem, 'error'); return; }
@@ -99,5 +86,5 @@ function imprimirQr(id=null){const cards=[...document.querySelectorAll('.rv-qr-c
 function exportarCsv(){if(!state.report.length){toast('Gere um relatório antes de exportar.','warn');return;}const cols=['registrado_em','rota_nome','ponto_nome','vigilante_nome','status_sla','atraso_minutos'];const csv=[cols.join(';'),...state.report.map((l)=>cols.map((c)=>`"${String(l[c]??'').replace(/"/g,'""')}"`).join(';'))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`relatorio-rondas-${hoje()}.csv`;a.click();URL.revokeObjectURL(a.href);}
 async function actionClick(event){const b=event.target.closest('[data-action]');if(!b)return;const action=b.dataset.action,id=Number(b.dataset.id),rotaId=Number(b.dataset.rota);const rota=state.rotas.find((r)=>Number(r.id)===(rotaId||id));if(action==='edit-rota')abrirRota(rota);if(action==='add-ponto')abrirPonto(id);if(action==='add-vig')abrirVigilante(id);if(action==='edit-ponto'){const r=state.rotas.find((x)=>Number(x.id)===rotaId);abrirPonto(rotaId,(r?.pontos||[]).find((p)=>Number(p.id)===id));}if(action==='remove-rota'&&confirm('Remover esta rota e seus pontos? Os registros históricos serão preservados.')){const r=await request('remover_rota',{id},'POST');toast(r.mensagem,r.sucesso?'success':'error');if(r.sucesso)carregarDashboard();}if(action==='remove-ponto'&&confirm('Remover este ponto QR?')){const r=await request('remover_ponto',{id},'POST');toast(r.mensagem,r.sucesso?'success':'error');if(r.sucesso)carregarDashboard();}if(action==='remove-vig'){const r=await request('remover_vigilante',{id},'POST');toast(r.mensagem,r.sucesso?'success':'error');if(r.sucesso)carregarDashboard();}if(action==='regen-qr'&&confirm('Regenerar o QR Code? O adesivo anterior ficará inválido.')){const r=await request('regenerar_qr',{id},'POST');toast(r.mensagem,r.sucesso?'success':'error');if(r.sucesso)carregarDashboard();}if(action==='download-qr')downloadQr(id);if(action==='print-qr')imprimirQr(id);}
 function trocarTab(tab){state.tab=tab;document.querySelectorAll('.rv-tab').forEach((b)=>b.classList.toggle('active',b.dataset.tab===tab));document.querySelectorAll('.rv-panel').forEach((p)=>p.classList.toggle('active',p.id===`rv-panel-${tab}`));}
-export async function init(){log('Inicializando módulo de rondas');$('#rv-rel-de').value=new Date(Date.now()-6*86400000).toISOString().slice(0,10);$('#rv-rel-ate').value=hoje();document.querySelectorAll('.rv-tab').forEach((b)=>b.addEventListener('click',()=>trocarTab(b.dataset.tab)));$('#rv-tenant-select').addEventListener('change',(e)=>selecionarTenant(e.target.value));$('#rv-btn-atualizar').addEventListener('click',carregarTudo);$('#rv-btn-nova-rota').addEventListener('click',()=>abrirRota());$('#rv-btn-imprimir-qrs').addEventListener('click',()=>imprimirQr());$('#rv-btn-gerar-relatorio').addEventListener('click',gerarRelatorio);$('#rv-btn-exportar-csv').addEventListener('click',exportarCsv);$('#rv-form-rota').addEventListener('submit',salvarRota);$('#rv-form-ponto').addEventListener('submit',salvarPonto);$('#rv-form-vigilante').addEventListener('submit',salvarVigilante);document.addEventListener('click',actionClick);document.querySelectorAll('[data-rv-close]').forEach((b)=>b.addEventListener('click',()=>modal(b.dataset.rvClose,false)));await carregarTenants();state.timer=setInterval(()=>{if(state.tab==='dashboard'&&state.tenantId)carregarDashboard();},60000);}
+export async function init(){log('Inicializando módulo de rondas no tenant da sessão');$('#rv-rel-de').value=new Date(Date.now()-6*86400000).toISOString().slice(0,10);$('#rv-rel-ate').value=hoje();document.querySelectorAll('.rv-tab').forEach((b)=>b.addEventListener('click',()=>trocarTab(b.dataset.tab)));$('#rv-btn-atualizar').addEventListener('click',carregarTudo);$('#rv-btn-nova-rota').addEventListener('click',()=>abrirRota());$('#rv-btn-imprimir-qrs').addEventListener('click',()=>imprimirQr());$('#rv-btn-gerar-relatorio').addEventListener('click',gerarRelatorio);$('#rv-btn-exportar-csv').addEventListener('click',exportarCsv);$('#rv-form-rota').addEventListener('submit',salvarRota);$('#rv-form-ponto').addEventListener('submit',salvarPonto);$('#rv-form-vigilante').addEventListener('submit',salvarVigilante);document.addEventListener('click',actionClick);document.querySelectorAll('[data-rv-close]').forEach((b)=>b.addEventListener('click',()=>modal(b.dataset.rvClose,false)));await carregarContexto();state.timer=setInterval(()=>{if(state.tab==='dashboard')carregarDashboard();},60000);}
 export function destroy(){if(state.timer)clearInterval(state.timer);document.removeEventListener('click',actionClick);document.getElementById('rv-print-area')?.remove();}
