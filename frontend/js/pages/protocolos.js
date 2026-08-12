@@ -642,6 +642,13 @@ function _exportarHistoricoCSV() {
 
 function _salvarProtocolo() {
     const id = document.getElementById('protocoloId')?.value;
+    const idNumerico = Number(id);
+    const idValido = Number.isInteger(idNumerico) && idNumerico > 0;
+    if (id && !idValido) {
+        console.error('[Protocolos][ID_INVALIDO] Tentativa de salvar protocolo com ID inválido:', id);
+        _toast('Este protocolo possui ID inválido. Execute a correção de integridade do banco antes de editá-lo.', 'error');
+        return;
+    }
     const dados = {
         unidade_id: document.getElementById('unidadeId')?.value,
         morador_id: document.getElementById('moradorId')?.value,
@@ -659,8 +666,8 @@ function _salvarProtocolo() {
     if (!dados.descricao_mercadoria) { _toast('Informe a descrição da mercadoria', 'warning'); return; }
     if (!dados.recebedor_portaria) { _toast('Selecione o recebedor da portaria', 'warning'); return; }
 
-    const metodo = id ? 'PUT' : 'POST';
-    if (id) dados.id = parseInt(id);
+    const metodo = idValido ? 'PUT' : 'POST';
+    if (idValido) dados.id = idNumerico;
 
     const btnSalvar = document.getElementById('btnSalvarProtocolo');
     if (btnSalvar) { btnSalvar.disabled = true; btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
@@ -691,7 +698,13 @@ function _salvarProtocolo() {
 }
 
 function _editarProtocolo(id) {
-    const p = _state.protocolos.find(x => x.id == id);
+    const idNumerico = Number(id);
+    if (!Number.isInteger(idNumerico) || idNumerico <= 0) {
+        console.error('[Protocolos][ID_INVALIDO] Edição bloqueada para ID:', id);
+        _toast('Protocolo com ID inválido. Execute a correção de integridade do banco.', 'error');
+        return;
+    }
+    const p = _state.protocolos.find(x => Number(x.id) === idNumerico);
     if (!p) return;
 
     if (p.status === 'entregue') {
@@ -800,6 +813,12 @@ function _fecharModalEntrega() {
 
 function _registrarEntrega() {
     const id = document.getElementById('entregaProtocoloId')?.value;
+    const idNumerico = Number(id);
+    if (!Number.isInteger(idNumerico) || idNumerico <= 0) {
+        console.error('[Protocolos][ID_INVALIDO] Entrega bloqueada para ID:', id);
+        _toast('Protocolo com ID inválido. Execute a correção de integridade do banco.', 'error');
+        return;
+    }
     const nomeRecebedor = document.getElementById('nomeRecebedorMorador')?.value?.trim();
     const dataHoraEntrega = document.getElementById('dataHoraEntrega')?.value;
 
@@ -811,7 +830,7 @@ function _registrarEntrega() {
 
     const dados = {
         acao: 'entregar',
-        id: parseInt(id),
+        id: idNumerico,
         nome_recebedor_morador: nomeRecebedor,
         data_hora_entrega: dataHoraEntrega
     };

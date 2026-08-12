@@ -1,0 +1,1010 @@
+[
+  {
+    "tabela": "abastecimento_lancamentos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "abastecimento_recargas",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "abastecimento_saldo",
+    "id_definicao": "`id` int(11) NOT NULL DEFAULT '1'",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "abastecimento_veiculos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "acessos_visitantes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "alertas_estoque",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "avaliacoes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "avaliacoes_backup",
+    "id_definicao": "`id` int(11) NOT NULL DEFAULT '0'",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "bancos_brasileiros",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "bridge_eventos_log",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "bridge_fila_comandos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "bridge_status",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "categorias_estoque",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "checklist_alertas_config",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "checklist_alertas_gerados",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "checklist_itens",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "checklist_km_acumulado",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "checklist_veicular",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "conciliacoes",
+    "id_definicao": "`id` bigint(20) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "configuracao_smtp",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "configuracoes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "config_periodo_leitura",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "config_sessao",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "contas_bancarias",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "contas_pagar",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "contas_receber",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "contratos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "contrato_aditivos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "contrato_documentos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "contrato_orcamentos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "contrato_orcamento_documentos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "controlid_dispositivos",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "controlid_eventos_acesso",
+    "id_definicao": "`id` bigint(20) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "controlid_fila_comandos",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "controlid_push_eventos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "controlid_push_queue",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "crm_anexos",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "crm_interacoes",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "crm_relacionamentos",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "departamentos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "dependentes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "dispositivos_console",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "dispositivos_controlid",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "dispositivos_controlid_leituras",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "dispositivos_controlid_sync_log",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "dispositivos_seguranca",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "dispositivos_tablets",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_acessos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_compartilhamentos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_departamentos_migrado_bkp",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_grupos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_grupos_moradores",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_grupos_usuarios",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_logs",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_pastas",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_tipos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "documentos_usuarios_acesso",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": true,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "email_alertas",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "email_delivery_logs",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "email_log",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "email_providers",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "email_templates",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "empresa",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "empresa_log",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "face_descriptors",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "fornecedores",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "grupos_inventario",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "hidrometro",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "hidrometros",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "hidrometros_historico",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "historico_importacoes_ofx",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "historico_pagamentos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "historico_status_pedido",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "importacoes_financeiras",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "importacoes_financeiras_itens",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "inventario",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "lancamentos_agua",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "leituras",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "leituras_fotos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "local_acessos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "local_acessos_log",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "local_acessos_tipos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "logs_acesso_qrcode",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "logs_erro",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "logs_financeiro",
+    "id_definicao": "`id` bigint(20) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "logs_sistema",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "logs_validacoes_dispositivo",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "log_reset_senha",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "manual_artigos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "manual_avaliacoes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "manual_buscas",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "manual_categorias",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "manual_historico",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "manual_modulos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "marcas_dispositivo",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "modelos_dispositivo",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "modulos_sistema",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "moradores",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "movimentacoes_bancarias",
+    "id_definicao": "`id` bigint(20) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "movimentacoes_estoque",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "mt_consolidacao_exclusoes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": true,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "mt_consolidacao_tabelas",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": true,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "notificacoes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "notificacoes_downloads",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "notificacoes_visualizacoes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "notif_alertas",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "notif_destinatarios",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "notif_regras",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "os_assuntos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "os_chamados",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "os_config_homem_hora",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "os_etapas",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "os_interacao_fotos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "os_interacoes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "os_materiais_usados",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "os_recursos_humanos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "pedidos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "planos_contas",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "produtos_estoque",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "produtos_servicos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "protocolos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "publico_rate_limit",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "pwa_configuracoes",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "pwa_fcm_tokens",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "pwa_logs",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "pwa_notificacoes_push",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "pwa_notificacoes_recebidas",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "pwa_oauth_cache",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "pwa_versao",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "qrcodes_temporarios",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "qrcode_tokens",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "ramos_atividade",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "recebedores",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "recuperacao_senha_tokens",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "registros_acesso",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "rh_banco_horas",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "rh_colaboradores",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "rh_escala",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "rh_ponto_lancamento",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "rh_ponto_periodo",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "senha_recuperacao_logs",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "sessoes_portal",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "sessoes_usuarios",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "tenants",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": true,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "tipos_dispositivo",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "unidades",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "usuarios",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "usuario_modulos",
+    "id_definicao": "`id` int(10) UNSIGNED NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "usuario_tenant",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": true,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "validacoes_acesso",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "validacoes_face_id",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "veiculos",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "view_dispositivos_ativos",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "view_tokens_ativos",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "visitantes",
+    "id_definicao": "`id` int(11) NOT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_alertas_pendentes",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_checklist_completo",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_consumo_veiculos",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_dependentes_ativos",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_dependentes_completo",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_extrato_bancario",
+    "id_definicao": "`id` bigint(20) UNSIGNED DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_movimentacoes_detalhadas",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_pendencias_conciliacao",
+    "id_definicao": "`id` bigint(20) UNSIGNED DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_produtos_estoque_baixo",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_saldo_contas",
+    "id_definicao": "`id` int(10) UNSIGNED DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "vw_ultimos_abastecimentos",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  },
+  {
+    "tabela": "v_emails_recentes",
+    "id_definicao": "`id` int(11) DEFAULT NULL",
+    "primary_key_id": false,
+    "auto_increment_id": false
+  }
+]
