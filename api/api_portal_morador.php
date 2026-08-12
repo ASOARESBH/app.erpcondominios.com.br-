@@ -52,9 +52,9 @@ function verificar_sessao_portal($conexao, $token) {
     }
     
     $stmt = $conexao->prepare("
-        SELECT morador_id 
-        FROM sessoes_portal 
-        WHERE token = ? AND data_expiracao > NOW()
+        SELECT morador_id, tenant_id
+        FROM sessoes_portal
+        WHERE token = ? AND ativo = 1 AND data_expiracao > NOW()
         LIMIT 1
     ");
     $stmt->bind_param("s", $token);
@@ -62,8 +62,7 @@ function verificar_sessao_portal($conexao, $token) {
     $resultado = $stmt->get_result();
     
     if ($resultado->num_rows > 0) {
-        $sessao = $resultado->fetch_assoc();
-        return $sessao['morador_id'];
+        return $resultado->fetch_assoc();
     }
     
     return false;
@@ -71,7 +70,9 @@ function verificar_sessao_portal($conexao, $token) {
 
 // ========== MIDDLEWARE: VERIFICAR AUTENTICAÇÃO ==========
 $token = obter_token_portal();
-$morador_id = verificar_sessao_portal($conexao, $token);
+$sessao_portal = verificar_sessao_portal($conexao, $token);
+$morador_id = $sessao_portal ? (int)$sessao_portal['morador_id'] : 0;
+$tenant_id = $sessao_portal ? (int)$sessao_portal['tenant_id'] : 0;
 
 if (!$morador_id && $action !== 'login') {
     http_response_code(401);
@@ -193,6 +194,127 @@ if ($action === 'perfil' && $metodo === 'PUT') {
             retornar_json(false, "Erro ao alterar senha");
         }
     }
+}
+
+// ========================================
+// NOTIFICAÇÕES DE ENCOMENDAS
+// ========================================
+
+// GET: Histórico das notificações do próprio morador.
+if ($action === 'notificacoes' && $metodo === 'GET') {
+    $limite = min(max((int)($_GET['limite'] ?? 50), 1), 100);
+    $somente_nao_lidas = (($_GET['somente_nao_lidas'] ?? '0') === '1');
+
+    $sql = "SELECT id, protocolo_id, tipo, titulo, mensagem, descricao_mercadoria,
+                   nome_recebedor, lida, lida_em, criado_em
+            FROM notificacoes_morador
+            WHERE tenant_id = ? AND morador_id = ?";
+    if ($somente_nao_lidas) $sql .= ' AND lida = 0';
+    $sql .= ' ORDER BY criado_em DESC, id DESC LIMIT ?';
+
+    $stmt = $conexao->prepare($sql);
+    if (!$stmt) {
+        retornar_json(false, 'Erro ao preparar a consulta de notificações.');
+    }
+    $stmt->bind_param('iii', $tenant_id, $morador_id, $limite);
+    $stmt->execute();
+    $notificacoes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    $stmt = $conexao->prepare(
+        'SELECT COUNT(*) AS total FROM notificacoes_morador WHERE tenant_id = ? AND morador_id = ? AND lida = 0'
+    );
+    $stmt->bind_param('ii', $tenant_id, $morador_id);
+    $stmt->execute();
+    $nao_lidas = (int)($stmt->get_result()->fetch_assoc()['total'] ?? 0);
+    $stmt->close();
+
+    error_log('[NotificacaoEncomenda][portal] listar tenant=' . $tenant_id . ' morador=' . $morador_id . ' total=' . count($notificacoes));
+    retornar_json(true, 'Notificações obtidas com sucesso.', [
+        'notificacoes' => $notificacoes,
+        'nao_lidas' => $nao_lidas,
+    ]);
+}
+
+// POST: Marca um evento como lido. O morador somente altera seu próprio evento.
+if ($action === 'marcar_notificacao_lida' && $metodo === 'POST') {
+    $dados = json_decode(file_get_contents('php://input'), true);
+    $notificacao_id = (int)($dados['notificacao_id'] ?? 0);
+    if ($notificacao_id <= 0) {
+        retornar_json(false, 'Notificação inválida.');
+    }
+
+    $stmt = $conexao->prepare(
+        'UPDATE notificacoes_morador
+         SET lida = 1, lida_em = COALESCE(lida_em, NOW())
+         WHERE id = ? AND tenant_id = ? AND morador_id = ?'
+    );
+    $stmt->bind_param('iii', $notificacao_id, $tenant_id, $morador_id);
+    $stmt->execute();
+    $atualizadas = $stmt->affected_rows;
+    $stmt->close();
+
+    if ($atualizadas === 0) {
+        retornar_json(false, 'Notificação não encontrada.');
+    }
+    error_log('[NotificacaoEncomenda][portal] lida tenant=' . $tenant_id . ' morador=' . $morador_id . ' notificacao=' . $notificacao_id);
+    retornar_json(true, 'Notificação marcada como lida.');
+}
+
+// POST: Registra ou reativa o token do dispositivo do próprio morador.
+if ($action === 'registrar_token_push' && $metodo === 'POST') {
+    $dados = json_decode(file_get_contents('php://input'), true);
+    $fcm_token = trim((string)($dados['fcm_token'] ?? ''));
+    $plataforma = in_array(($dados['plataforma'] ?? 'android'), ['android', 'ios'], true)
+        ? $dados['plataforma'] : 'android';
+    $device_info = substr(trim((string)($dados['device_info'] ?? 'Aplicativo ERP Condomínios')), 0, 512);
+
+    if ($fcm_token === '') retornar_json(false, 'Token do dispositivo é obrigatório.');
+    $stmt = $conexao->prepare(
+        'SELECT id FROM pwa_fcm_tokens WHERE tenant_id = ? AND morador_id = ? AND fcm_token = ? LIMIT 1'
+    );
+    $stmt->bind_param('iis', $tenant_id, $morador_id, $fcm_token);
+    $stmt->execute();
+    $existente = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if ($existente) {
+        $stmt = $conexao->prepare(
+            'UPDATE pwa_fcm_tokens SET ativo = 1, plataforma = ?, device_info = ?, ultimo_uso = NOW() WHERE id = ? AND tenant_id = ?'
+        );
+        $stmt->bind_param('ssii', $plataforma, $device_info, $existente['id'], $tenant_id);
+        $stmt->execute();
+        $token_id = (int)$existente['id'];
+    } else {
+        $stmt = $conexao->prepare(
+            'INSERT INTO pwa_fcm_tokens (tenant_id, morador_id, fcm_token, plataforma, device_info, ativo, ultimo_uso)
+             VALUES (?, ?, ?, ?, ?, 1, NOW())'
+        );
+        $stmt->bind_param('iisss', $tenant_id, $morador_id, $fcm_token, $plataforma, $device_info);
+        $stmt->execute();
+        $token_id = (int)$conexao->insert_id;
+    }
+    $stmt->close();
+
+    error_log('[NotificacaoEncomenda][portal] token_registrado tenant=' . $tenant_id . ' morador=' . $morador_id . ' token_id=' . $token_id);
+    retornar_json(true, 'Alertas no dispositivo habilitados.', ['token_id' => $token_id]);
+}
+
+// POST: Desativa somente o token do dispositivo atual, sem afetar outros aparelhos do morador.
+if ($action === 'desativar_token_push' && $metodo === 'POST') {
+    $dados = json_decode(file_get_contents('php://input'), true);
+    $fcm_token = trim((string)($dados['fcm_token'] ?? ''));
+    if ($fcm_token === '') retornar_json(false, 'Token do dispositivo é obrigatório.');
+
+    $stmt = $conexao->prepare(
+        'UPDATE pwa_fcm_tokens SET ativo = 0 WHERE tenant_id = ? AND morador_id = ? AND fcm_token = ?'
+    );
+    $stmt->bind_param('iis', $tenant_id, $morador_id, $fcm_token);
+    $stmt->execute();
+    $stmt->close();
+
+    error_log('[NotificacaoEncomenda][portal] token_desativado tenant=' . $tenant_id . ' morador=' . $morador_id);
+    retornar_json(true, 'Alertas no dispositivo desabilitados.');
 }
 
 // ========================================

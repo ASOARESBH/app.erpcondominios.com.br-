@@ -11,7 +11,8 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once 'helpers/protocol_notification_helper.php';;
 
 // Limpar buffer e definir headers
 ob_end_clean();
@@ -74,13 +75,13 @@ try {
                     FROM protocolos p
                     LEFT JOIN unidades u ON p.unidade_id = u.id
                     LEFT JOIN moradores m ON p.morador_id = m.id
-                    WHERE p.id = ?");
+                    WHERE p.tenant_id = ? AND p.id = ?");
             
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
             
-            $stmt->bind_param('i', $id);
+            $stmt->bind_param('ii', $tenant_id, $id);
             $stmt->execute();
             $resultado = $stmt->get_result();
             
@@ -99,23 +100,26 @@ try {
                     m.nome as morador_nome
                     FROM protocolos p
                     LEFT JOIN unidades u ON p.unidade_id = u.id
-                    LEFT JOIN moradores m ON p.morador_id = m.id";
+                    LEFT JOIN moradores m ON p.morador_id = m.id
+                    WHERE p.tenant_id = ?";
             
             if ($filtro) {
-                $sql .= " WHERE p.status = ?";
+                $sql .= " AND p.status = ?";
                 $stmt = $conexao->prepare($sql . " ORDER BY p.data_hora_recebimento DESC");
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar query: " . $conexao->error);
                 }
-                $stmt->bind_param('s', $filtro);
+                $stmt->bind_param('is', $tenant_id, $filtro);
                 $stmt->execute();
                 $resultado = $stmt->get_result();
             } else {
-                $sql .= " ORDER BY p.data_hora_recebimento DESC";
-                $resultado = $conexao->query($sql);
-                if (!$resultado) {
-                    throw new Exception("Erro ao executar query: " . $conexao->error);
+                $stmt = $conexao->prepare($sql . " ORDER BY p.data_hora_recebimento DESC");
+                if (!$stmt) {
+                    throw new Exception("Erro ao preparar query: " . $conexao->error);
                 }
+                $stmt->bind_param('i', $tenant_id);
+                $stmt->execute();
+                $resultado = $stmt->get_result();
             }
             
             $protocolos = array();
@@ -182,15 +186,16 @@ try {
         // Inserir protocolo
         if ($pagina !== null) {
             $stmt = $conexao->prepare("INSERT INTO protocolos 
-                    (unidade_id, morador_id, descricao_mercadoria, codigo_nf, pagina, 
+                    (tenant_id, unidade_id, morador_id, descricao_mercadoria, codigo_nf, pagina,
                      data_hora_recebimento, recebedor_portaria, observacao, status) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendente')");
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente')");
             
             if (!$stmt) {
                 throw new Exception("Erro ao preparar insert: " . $conexao->error);
             }
             
-            $stmt->bind_param('iississs', 
+            $stmt->bind_param('iiississs',
+                $tenant_id,
                 $unidade_id, 
                 $morador_id, 
                 $descricao_mercadoria, 
@@ -202,15 +207,16 @@ try {
             );
         } else {
             $stmt = $conexao->prepare("INSERT INTO protocolos 
-                    (unidade_id, morador_id, descricao_mercadoria, codigo_nf, 
+                    (tenant_id, unidade_id, morador_id, descricao_mercadoria, codigo_nf,
                      data_hora_recebimento, recebedor_portaria, observacao, status) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')");
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendente')");
             
             if (!$stmt) {
                 throw new Exception("Erro ao preparar insert: " . $conexao->error);
             }
             
-            $stmt->bind_param('iisssss', 
+            $stmt->bind_param('iiisssss',
+                $tenant_id,
                 $unidade_id, 
                 $morador_id, 
                 $descricao_mercadoria, 
@@ -223,8 +229,21 @@ try {
         
         if ($stmt->execute()) {
             $id_inserido = $conexao->insert_id;
+
+            // Evento interno sempre é criado; falha de push não bloqueia a portaria.
+            $resultado_notificacao = protocolo_criar_notificacao_morador(
+                $conexao,
+                $tenant_id,
+                $morador_id,
+                $id_inserido,
+                'mercadoria_chegou',
+                $descricao_mercadoria
+            );
             registrar_log('PROTOCOLO_CRIADO', "Protocolo criado: $descricao_mercadoria (ID: $id_inserido)", $recebedor_portaria);
-            retornar_json(true, "Protocolo cadastrado com sucesso", array('id' => $id_inserido));
+            retornar_json(true, "Protocolo cadastrado com sucesso", array(
+                'id' => $id_inserido,
+                'notificacao' => $resultado_notificacao
+            ));
         } else {
             throw new Exception("Erro ao cadastrar protocolo: " . $stmt->error);
         }
@@ -260,8 +279,8 @@ try {
                 retornar_json(false, "Data e hora da entrega são obrigatórias");
             }
             
-            // Verificar se já foi entregue
-            $stmt = $conexao->prepare("SELECT status FROM protocolos WHERE tenant_id = $tenant_id AND id = ?");
+            // Verificar se já foi entregue e obter o proprietário do protocolo.
+            $stmt = $conexao->prepare("SELECT status, morador_id, descricao_mercadoria FROM protocolos WHERE tenant_id = $tenant_id AND id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -292,8 +311,18 @@ try {
             $stmt->bind_param('ssi', $nome_recebedor_morador, $data_hora_entrega, $id);
             
             if ($stmt->execute() && $stmt->affected_rows > 0) {
+                // A confirmação fica disponível na lista mesmo que o push falhe.
+                $resultado_notificacao = protocolo_criar_notificacao_morador(
+                    $conexao,
+                    $tenant_id,
+                    (int)$protocolo['morador_id'],
+                    $id,
+                    'mercadoria_entregue',
+                    $protocolo['descricao_mercadoria'],
+                    $nome_recebedor_morador
+                );
                 registrar_log('PROTOCOLO_ENTREGUE', "Protocolo entregue (ID: $id) para $nome_recebedor_morador", $nome_recebedor_morador);
-                retornar_json(true, "Entrega registrada com sucesso");
+                retornar_json(true, "Entrega registrada com sucesso", array('notificacao' => $resultado_notificacao));
             } else {
                 retornar_json(false, "Erro ao registrar entrega ou protocolo já entregue");
             }
