@@ -26,9 +26,9 @@ BEGIN
 
     SELECT COUNT(*) INTO v_existe
     FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = p_tabela
-      AND COLUMN_NAME = p_coluna;
+    WHERE BINARY TABLE_SCHEMA = BINARY DATABASE()
+      AND BINARY TABLE_NAME = BINARY p_tabela
+      AND BINARY COLUMN_NAME = BINARY p_coluna;
 
     IF v_existe = 0 THEN
         SET @sql_mt = CONCAT('ALTER TABLE `', p_tabela, '` ADD COLUMN `', p_coluna, '` ', p_definicao);
@@ -80,28 +80,28 @@ INSERT INTO `tenants` (
 SELECT
     1,
     'serra-da-liberdade',
-    COALESCE(NULLIF(TRIM(e.razao_social), ''), 'ERP Condomínio'),
-    NULLIF(TRIM(e.nome_fantasia), ''),
-    COALESCE(NULLIF(TRIM(e.cnpj), ''), '00000000000000'),
+    IF(CHAR_LENGTH(TRIM(e.razao_social)) > 0, TRIM(e.razao_social), 'ERP Condomínio'),
+    IF(CHAR_LENGTH(TRIM(e.nome_fantasia)) > 0, TRIM(e.nome_fantasia), NULL),
+    IF(CHAR_LENGTH(TRIM(e.cnpj)) > 0, TRIM(e.cnpj), '00000000000000'),
     'profissional',
-    CASE WHEN e.situacao = 'inativo' THEN 'inativo' ELSE 'ativo' END,
-    NULLIF(TRIM(e.logo_url), ''),
-    NULLIF(TRIM(e.email_principal), ''),
-    NULLIF(TRIM(e.telefone), ''),
-    CONCAT_WS(', ', NULLIF(TRIM(e.endereco_rua), ''), NULLIF(TRIM(e.endereco_numero), ''), NULLIF(TRIM(e.endereco_bairro), '')),
-    NULLIF(TRIM(e.endereco_cidade), ''),
-    NULLIF(TRIM(e.endereco_estado), '')
+    CASE WHEN BINARY e.situacao = BINARY 'inativo' THEN 'inativo' ELSE 'ativo' END,
+    IF(CHAR_LENGTH(TRIM(e.logo_url)) > 0, TRIM(e.logo_url), NULL),
+    IF(CHAR_LENGTH(TRIM(e.email_principal)) > 0, TRIM(e.email_principal), NULL),
+    IF(CHAR_LENGTH(TRIM(e.telefone)) > 0, TRIM(e.telefone), NULL),
+    CONCAT_WS(', ', IF(CHAR_LENGTH(TRIM(e.endereco_rua)) > 0, TRIM(e.endereco_rua), NULL), IF(CHAR_LENGTH(TRIM(e.endereco_numero)) > 0, TRIM(e.endereco_numero), NULL), IF(CHAR_LENGTH(TRIM(e.endereco_bairro)) > 0, TRIM(e.endereco_bairro), NULL)),
+    IF(CHAR_LENGTH(TRIM(e.endereco_cidade)) > 0, TRIM(e.endereco_cidade), NULL),
+    IF(CHAR_LENGTH(TRIM(e.endereco_estado)) > 0, TRIM(e.endereco_estado), NULL)
 FROM `empresa` e
 ORDER BY e.id ASC
 LIMIT 1
 ON DUPLICATE KEY UPDATE
-    `razao_social` = COALESCE(NULLIF(`razao_social`, ''), VALUES(`razao_social`)),
-    `nome_fantasia` = COALESCE(NULLIF(`nome_fantasia`, ''), VALUES(`nome_fantasia`)),
-    `logo_url` = COALESCE(NULLIF(`logo_url`, ''), VALUES(`logo_url`)),
-    `email_principal` = COALESCE(NULLIF(`email_principal`, ''), VALUES(`email_principal`)),
-    `telefone` = COALESCE(NULLIF(`telefone`, ''), VALUES(`telefone`)),
-    `cidade` = COALESCE(NULLIF(`cidade`, ''), VALUES(`cidade`)),
-    `estado` = COALESCE(NULLIF(`estado`, ''), VALUES(`estado`));
+    `razao_social` = IF(CHAR_LENGTH(TRIM(`razao_social`)) > 0, `razao_social`, VALUES(`razao_social`)),
+    `nome_fantasia` = IF(CHAR_LENGTH(TRIM(`nome_fantasia`)) > 0, `nome_fantasia`, VALUES(`nome_fantasia`)),
+    `logo_url` = IF(CHAR_LENGTH(TRIM(`logo_url`)) > 0, `logo_url`, VALUES(`logo_url`)),
+    `email_principal` = IF(CHAR_LENGTH(TRIM(`email_principal`)) > 0, `email_principal`, VALUES(`email_principal`)),
+    `telefone` = IF(CHAR_LENGTH(TRIM(`telefone`)) > 0, `telefone`, VALUES(`telefone`)),
+    `cidade` = IF(CHAR_LENGTH(TRIM(`cidade`)) > 0, `cidade`, VALUES(`cidade`)),
+    `estado` = IF(CHAR_LENGTH(TRIM(`estado`)) > 0, `estado`, VALUES(`estado`));
 
 -- Proteção para instalações sem registro em empresa.
 INSERT IGNORE INTO `tenants` (
@@ -159,9 +159,9 @@ BEGIN
 
     SELECT COUNT(*) INTO v_existe
     FROM INFORMATION_SCHEMA.STATISTICS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = p_tabela
-      AND INDEX_NAME = p_indice;
+    WHERE BINARY TABLE_SCHEMA = BINARY DATABASE()
+      AND BINARY TABLE_NAME = BINARY p_tabela
+      AND BINARY INDEX_NAME = BINARY p_indice;
 
     IF v_existe = 0 THEN
         SET @sql_idx = CONCAT('ALTER TABLE `', p_tabela, '` ADD INDEX `', p_indice, '` ', p_colunas);

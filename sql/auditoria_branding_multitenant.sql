@@ -7,9 +7,9 @@
 -- 1. Confirmar as estruturas centrais e colunas necessárias.
 SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
 FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_NAME IN ('tenants', 'empresa', 'usuarios', 'usuario_tenant', 'empresa_log')
-  AND COLUMN_NAME IN ('id', 'tenant_id', 'slug', 'status', 'situacao', 'logo_url', 'ativo')
+WHERE BINARY TABLE_SCHEMA = BINARY DATABASE()
+  AND BINARY TABLE_NAME IN (BINARY 'tenants', BINARY 'empresa', BINARY 'usuarios', BINARY 'usuario_tenant', BINARY 'empresa_log')
+  AND BINARY COLUMN_NAME IN (BINARY 'id', BINARY 'tenant_id', BINARY 'slug', BINARY 'status', BINARY 'situacao', BINARY 'logo_url', BINARY 'ativo')
 ORDER BY TABLE_NAME, ORDINAL_POSITION;
 
 -- 2. Visão consolidada das empresas/tenants e suas logos.
@@ -25,10 +25,10 @@ SELECT
     e.nome_fantasia AS nome_empresa,
     e.logo_url AS logo_empresa,
     CASE
-        WHEN t.logo_url IS NULL OR t.logo_url = '' THEN 'SEM_LOGO_TENANT'
+        WHEN IFNULL(CHAR_LENGTH(t.logo_url), 0) = 0 THEN 'SEM_LOGO_TENANT'
         WHEN e.id IS NULL THEN 'SEM_CADASTRO_EMPRESA'
-        WHEN e.logo_url IS NULL OR e.logo_url = '' THEN 'LOGO_SOMENTE_TENANT'
-        WHEN t.logo_url <> e.logo_url THEN 'LOGOS_DIVERGENTES'
+        WHEN IFNULL(CHAR_LENGTH(e.logo_url), 0) = 0 THEN 'LOGO_SOMENTE_TENANT'
+        WHEN BINARY t.logo_url <> BINARY e.logo_url THEN 'LOGOS_DIVERGENTES'
         ELSE 'SINCRONIZADO'
     END AS situacao_branding
 FROM tenants t
@@ -52,19 +52,19 @@ ORDER BY t.id;
 SELECT
     COUNT(*) AS tabelas_com_tenant_id
 FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = DATABASE()
-  AND COLUMN_NAME = 'tenant_id';
+WHERE BINARY TABLE_SCHEMA = BINARY DATABASE()
+  AND BINARY COLUMN_NAME = BINARY 'tenant_id';
 
 -- 5. Tabelas de negócio sem tenant_id: revisar antes de considerá-las globais.
 SELECT TABLE_NAME
 FROM INFORMATION_SCHEMA.TABLES t
-WHERE t.TABLE_SCHEMA = DATABASE()
-  AND t.TABLE_TYPE = 'BASE TABLE'
+WHERE BINARY t.TABLE_SCHEMA = BINARY DATABASE()
+  AND BINARY t.TABLE_TYPE = BINARY 'BASE TABLE'
   AND t.TABLE_NAME NOT IN (
       SELECT c.TABLE_NAME
       FROM INFORMATION_SCHEMA.COLUMNS c
-      WHERE c.TABLE_SCHEMA = DATABASE()
-        AND c.COLUMN_NAME = 'tenant_id'
+      WHERE BINARY c.TABLE_SCHEMA = BINARY DATABASE()
+        AND BINARY c.COLUMN_NAME = BINARY 'tenant_id'
   )
 ORDER BY t.TABLE_NAME;
 
@@ -77,5 +77,5 @@ SELECT
     e.data_atualizacao AS empresa_atualizada_em
 FROM tenants t
 INNER JOIN empresa e ON e.tenant_id = t.id
-WHERE COALESCE(t.logo_url, '') <> COALESCE(e.logo_url, '')
+WHERE BINARY IFNULL(t.logo_url, '') <> BINARY IFNULL(e.logo_url, '')
 ORDER BY t.id;
