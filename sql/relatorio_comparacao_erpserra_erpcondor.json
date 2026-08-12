@@ -1,0 +1,3354 @@
+{
+  "source_tables": 152,
+  "target_tables": 177,
+  "common_tables": 151,
+  "target_tenant_tables": 145,
+  "source_only_tables": [
+    "documentos_usuarios_acesso"
+  ],
+  "target_only_tables": [
+    "media_avaliacoes_produto",
+    "modelos_dispositivo",
+    "tenants",
+    "usuario_tenant",
+    "v_emails_recentes",
+    "view_estatisticas_dispositivos",
+    "view_estatisticas_tokens",
+    "view_tokens_ativos",
+    "visitantes",
+    "vw_alertas_pendentes",
+    "vw_checklist_completo",
+    "vw_consumo_por_morador",
+    "vw_consumo_veiculos",
+    "vw_dashboard_financeiro",
+    "vw_dependentes_ativos",
+    "vw_dependentes_completo",
+    "vw_estatisticas_veiculo",
+    "vw_extrato_bancario",
+    "vw_fluxo_caixa",
+    "vw_movimentacoes_detalhadas",
+    "vw_pendencias_conciliacao",
+    "vw_produtos_estoque_baixo",
+    "vw_saldo_contas",
+    "vw_ultimos_abastecimentos",
+    "vw_validacao_dependente_visitante",
+    "vw_valor_total_estoque"
+  ],
+  "tables": [
+    {
+      "table": "abastecimento_lancamentos",
+      "source_rows_approx": 33,
+      "target_rows_approx": 32,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_abastecimento",
+        "data_registro",
+        "id",
+        "km_abastecimento",
+        "litros",
+        "operador_id",
+        "tipo_combustivel",
+        "usuario_logado",
+        "valor",
+        "veiculo_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "abastecimento_recargas",
+      "source_rows_approx": 7,
+      "target_rows_approx": 7,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_recarga",
+        "data_registro",
+        "id",
+        "nf",
+        "saldo_apos",
+        "usuario_id",
+        "valor_minimo",
+        "valor_recarga"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "abastecimento_saldo",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_atualizacao",
+        "id",
+        "valor",
+        "valor_minimo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "abastecimento_veiculos",
+      "source_rows_approx": 2,
+      "target_rows_approx": 2,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ano",
+        "cor",
+        "data_cadastro",
+        "id",
+        "km_inicial",
+        "modelo",
+        "placa"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "acessos_visitantes",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "cor",
+        "data_final",
+        "data_inicial",
+        "dias_permanencia",
+        "hora_final",
+        "hora_inicial",
+        "id",
+        "modelo",
+        "placa",
+        "temporario",
+        "tipo_acesso",
+        "tipo_identificacao",
+        "tipo_visitante",
+        "visitante_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "alertas_estoque",
+      "source_rows_approx": 33,
+      "target_rows_approx": 31,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "lido",
+        "mensagem",
+        "produto_id",
+        "tipo_alerta"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "avaliacoes",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "fornecedor_id",
+        "id",
+        "morador_id",
+        "nota_morador",
+        "pedido_id",
+        "produto_servico_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "avaliacoes_backup",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "avaliado_id",
+        "avaliado_tipo",
+        "avaliador_id",
+        "avaliador_tipo",
+        "comentario",
+        "data_avaliacao",
+        "id",
+        "nota",
+        "pedido_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "bancos_brasileiros",
+      "source_rows_approx": 332,
+      "target_rows_approx": 332,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": false,
+      "shared_columns": [
+        "ativo",
+        "codigo",
+        "id",
+        "ispb",
+        "nome",
+        "nome_curto"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [],
+      "target_required_without_default": []
+    },
+    {
+      "table": "bridge_eventos_log",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "dispositivo_id",
+        "id",
+        "log_id_externo",
+        "user_id_controlid"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "bridge_fila_comandos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "body",
+        "created_at",
+        "created_by",
+        "dispositivo_id",
+        "endpoint",
+        "executado_em",
+        "id",
+        "resultado",
+        "status",
+        "verb"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "bridge_status",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "bridge_id",
+        "id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "categorias_estoque",
+      "source_rows_approx": 8,
+      "target_rows_approx": 8,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "cor",
+        "descricao",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "checklist_alertas_config",
+      "source_rows_approx": 10,
+      "target_rows_approx": 10,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "categoria",
+        "data_criacao",
+        "descricao",
+        "id",
+        "km_alerta",
+        "nome_alerta"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "checklist_alertas_gerados",
+      "source_rows_approx": 20,
+      "target_rows_approx": 20,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "alerta_config_id",
+        "categoria",
+        "checklist_id",
+        "data_geracao",
+        "data_resolucao",
+        "descricao",
+        "id",
+        "km_atual",
+        "km_limite",
+        "resolvido_por",
+        "status",
+        "veiculo_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "checklist_itens",
+      "source_rows_approx": 600,
+      "target_rows_approx": 600,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "categoria",
+        "checklist_id",
+        "data_registro",
+        "id",
+        "nome_item",
+        "tipo_item",
+        "valor_abertura",
+        "valor_fechamento"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "checklist_km_acumulado",
+      "source_rows_approx": 20,
+      "target_rows_approx": 20,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "categoria",
+        "id",
+        "km_acumulado",
+        "ultimo_checklist_id",
+        "veiculo_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "checklist_veicular",
+      "source_rows_approx": 50,
+      "target_rows_approx": 50,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_hora_abertura",
+        "id",
+        "km_final",
+        "km_inicial",
+        "operador_id",
+        "status",
+        "veiculo_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "conciliacoes",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "movimentacao_id",
+        "score",
+        "tipo_conciliacao",
+        "tipo_titulo",
+        "titulo_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "config_periodo_leitura",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "data_atualizacao",
+        "data_criacao",
+        "dia_fim",
+        "dia_inicio",
+        "id",
+        "morador_pode_lancar"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "config_sessao",
+      "source_rows_approx": 3,
+      "target_rows_approx": 3,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": false,
+      "shared_columns": [
+        "chave",
+        "descricao",
+        "id",
+        "valor"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [],
+      "target_required_without_default": []
+    },
+    {
+      "table": "configuracao_smtp",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "provedor",
+        "smtp_ativo",
+        "smtp_de_email",
+        "smtp_de_nome",
+        "smtp_host",
+        "smtp_port",
+        "smtp_seguranca",
+        "smtp_senha",
+        "smtp_usuario",
+        "timeout"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "configuracoes",
+      "source_rows_approx": 9,
+      "target_rows_approx": 9,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "chave",
+        "data_atualizacao",
+        "descricao",
+        "id",
+        "valor"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "contas_bancarias",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "agencia",
+        "ativo",
+        "atualizado_em",
+        "banco_codigo",
+        "banco_nome",
+        "conta_numero",
+        "conta_tipo",
+        "criado_em",
+        "id",
+        "moeda",
+        "nome",
+        "observacoes",
+        "saldo_atual",
+        "saldo_inicial"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "contas_pagar",
+      "source_rows_approx": 14,
+      "target_rows_approx": 12,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "fornecedor_id",
+        "id",
+        "numero_documento"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "contas_receber",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "morador_id",
+        "numero_documento"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "contrato_aditivos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "contrato_id",
+        "descricao",
+        "id",
+        "numero_aditivo",
+        "valor_adicional"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "contrato_documentos",
+      "source_rows_approx": 35,
+      "target_rows_approx": 29,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "contrato_id",
+        "id",
+        "nome_arquivo",
+        "nome_documento",
+        "tamanho",
+        "tipo_documento",
+        "url_arquivo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "contrato_orcamento_documentos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "nome_arquivo",
+        "nome_documento",
+        "orcamento_id",
+        "tamanho",
+        "tipo_documento",
+        "url_arquivo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "contrato_orcamentos",
+      "source_rows_approx": 35,
+      "target_rows_approx": 28,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "contrato_id",
+        "data_criacao",
+        "descricao",
+        "fornecedor",
+        "id",
+        "justificativa",
+        "valor"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "contratos",
+      "source_rows_approx": 14,
+      "target_rows_approx": 12,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "fornecedor_id",
+        "id",
+        "numero_contrato"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "controlid_dispositivos",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "area_instalacao",
+        "ativo",
+        "atualizado_em",
+        "bridge_api_key",
+        "criado_em",
+        "descricao",
+        "device_id_controlid",
+        "fabricante",
+        "id",
+        "ip_local",
+        "modelo",
+        "nome_dispositivo",
+        "porta_local",
+        "senha_api",
+        "sentido_acesso",
+        "serial_number",
+        "tipo_integracao",
+        "tipo_leitor",
+        "token_autenticacao",
+        "ultimo_keep_alive",
+        "usuario_api"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "controlid_eventos_acesso",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "criado_em",
+        "data_hora",
+        "id",
+        "raw_payload",
+        "serial_number",
+        "tipo_evento",
+        "user_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "controlid_fila_comandos",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "corpo_json",
+        "criado_em",
+        "endpoint",
+        "enviado_em",
+        "id",
+        "serial_number",
+        "status",
+        "verbo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "controlid_push_eventos",
+      "source_rows_approx": 4,
+      "target_rows_approx": 4,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "dispositivo_id",
+        "id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "controlid_push_queue",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "device_id",
+        "dispositivo_id",
+        "id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "crm_anexos",
+      "source_rows_approx": 2,
+      "target_rows_approx": 2,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "caminho",
+        "created_at",
+        "id",
+        "interacao_id",
+        "nome_arquivo",
+        "nome_documento",
+        "nome_original",
+        "relacionamento_id",
+        "tamanho_bytes",
+        "tipo_mime",
+        "usuario_id",
+        "usuario_nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "crm_interacoes",
+      "source_rows_approx": 14,
+      "target_rows_approx": 14,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "created_at",
+        "id",
+        "mensagem",
+        "relacionamento_id",
+        "status_anterior",
+        "status_novo",
+        "tipo",
+        "usuario_id",
+        "usuario_nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "crm_relacionamentos",
+      "source_rows_approx": 3,
+      "target_rows_approx": 3,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "assunto",
+        "ativo",
+        "created_at",
+        "data_finalizacao",
+        "data_limite",
+        "departamento",
+        "descricao",
+        "destinatario_id",
+        "destinatario_nome",
+        "destinatario_tipo",
+        "id",
+        "numero",
+        "prioridade",
+        "remetente_id",
+        "remetente_nome",
+        "sla_alertado",
+        "status",
+        "updated_at"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "crm_sequencia",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ano",
+        "ultimo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "departamentos",
+      "source_rows_approx": 9,
+      "target_rows_approx": 9,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "atualizado_em",
+        "criado_em",
+        "descricao",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "dependentes",
+      "source_rows_approx": 73,
+      "target_rows_approx": 54,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "celular",
+        "cpf",
+        "data_nascimento",
+        "email",
+        "id",
+        "morador_id",
+        "nome_completo",
+        "parentesco",
+        "telefone"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "dispositivos_console",
+      "source_rows_approx": 4,
+      "target_rows_approx": 4,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_ultimo_acesso",
+        "id",
+        "ip_cadastro",
+        "ip_ultimo_acesso",
+        "localizacao",
+        "nome_dispositivo",
+        "responsavel",
+        "tipo_dispositivo",
+        "token_acesso",
+        "total_acessos",
+        "user_agent"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "dispositivos_controlid",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "area_instalacao",
+        "ativo",
+        "bridge_id",
+        "bridge_versao",
+        "descricao",
+        "erros_consecutivos",
+        "id",
+        "ip_address",
+        "modelo",
+        "modo_operacao",
+        "nome",
+        "online",
+        "porta",
+        "push_ativo",
+        "push_device_id",
+        "senha_api",
+        "tipo",
+        "ultimo_contato",
+        "ultimo_log_id",
+        "usuario_api"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "dispositivos_controlid_leituras",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "controlid_log_id",
+        "dispositivo_id",
+        "id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "dispositivos_controlid_sync_log",
+      "source_rows_approx": 18,
+      "target_rows_approx": 18,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acao",
+        "detalhes",
+        "dispositivo_id",
+        "id",
+        "status",
+        "total_enviados"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "dispositivos_seguranca",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "marca_id",
+        "nome",
+        "tipo_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "dispositivos_tablets",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "atualizado_em",
+        "criado_em",
+        "descricao",
+        "id",
+        "local",
+        "nome",
+        "secret",
+        "status",
+        "token",
+        "total_validacoes",
+        "ultimo_acesso"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos",
+      "source_rows_approx": 12,
+      "target_rows_approx": 11,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "departamento_id",
+        "descricao",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_acessos",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "documento_id",
+        "id",
+        "origem",
+        "tipo",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_compartilhamentos",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "descricao",
+        "documento_id",
+        "id",
+        "token"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_departamentos_migrado_bkp",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "cor",
+        "criado_por",
+        "descricao",
+        "icone",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_grupos",
+      "source_rows_approx": 3,
+      "target_rows_approx": 3,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acesso_tipo",
+        "ativo",
+        "criado_por",
+        "descricao",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_grupos_moradores",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "created_at",
+        "grupo_id",
+        "id",
+        "morador_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_grupos_usuarios",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "created_at",
+        "grupo_id",
+        "id",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_logs",
+      "source_rows_approx": 27,
+      "target_rows_approx": 20,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "documento_id",
+        "id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_pastas",
+      "source_rows_approx": 9,
+      "target_rows_approx": 8,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "departamento_id",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "documentos_tipos",
+      "source_rows_approx": 10,
+      "target_rows_approx": 10,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "descricao",
+        "icone",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "email_alertas",
+      "source_rows_approx": 9,
+      "target_rows_approx": 9,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "assunto",
+        "ativo",
+        "codigo",
+        "corpo_html",
+        "descricao",
+        "destinatario_email",
+        "destinatario_tipo",
+        "evento",
+        "id",
+        "modulo",
+        "nome",
+        "variaveis"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "email_delivery_logs",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "assunto",
+        "destinatario",
+        "fallback_chain",
+        "id",
+        "provider_usado"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "email_log",
+      "source_rows_approx": 47,
+      "target_rows_approx": 45,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "alerta_codigo",
+        "id",
+        "morador_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "email_providers",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "api_key",
+        "ativo",
+        "id",
+        "prioridade",
+        "provider"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "email_templates",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "assunto",
+        "ativo",
+        "corpo",
+        "id",
+        "tipo",
+        "variaveis"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "empresa",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "cnpj",
+        "data_atualizacao",
+        "data_criacao",
+        "email_cobranca",
+        "email_principal",
+        "endereco_bairro",
+        "endereco_cep",
+        "endereco_cidade",
+        "endereco_complemento",
+        "endereco_estado",
+        "endereco_numero",
+        "endereco_rua",
+        "id",
+        "logo_nome_arquivo",
+        "logo_url",
+        "nome_fantasia",
+        "razao_social",
+        "situacao",
+        "telefone",
+        "usuario_criacao_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "empresa_log",
+      "source_rows_approx": 9,
+      "target_rows_approx": 9,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acao",
+        "dados_anteriores",
+        "dados_novos",
+        "empresa_id",
+        "id",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "face_descriptors",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acesso_id",
+        "id",
+        "visitante_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "fornecedores",
+      "source_rows_approx": 12,
+      "target_rows_approx": 12,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "cpf_cnpj",
+        "descricao_negocio",
+        "email",
+        "endereco",
+        "horario_funcionamento",
+        "id",
+        "logo",
+        "nome_estabelecimento",
+        "nome_responsavel",
+        "ramo_atividade_id",
+        "senha",
+        "telefone"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "grupos_inventario",
+      "source_rows_approx": 11,
+      "target_rows_approx": 11,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "data_atualizacao",
+        "data_cadastro",
+        "descricao",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "hidrometro",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_cadastro",
+        "data_instalacao",
+        "id",
+        "localizacao",
+        "numero_hidrometro",
+        "observacoes",
+        "status",
+        "unidade_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "hidrometros",
+      "source_rows_approx": 142,
+      "target_rows_approx": 142,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "inventario_id",
+        "morador_id",
+        "numero_hidrometro",
+        "numero_lacre",
+        "unidade"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "hidrometros_historico",
+      "source_rows_approx": 56,
+      "target_rows_approx": 56,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "campo_alterado",
+        "data_alteracao",
+        "hidrometro_id",
+        "id",
+        "observacao",
+        "usuario",
+        "valor_anterior",
+        "valor_novo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "historico_importacoes_ofx",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acct_id_ofx",
+        "banco_id_ofx",
+        "conta_id",
+        "dt_fim_ofx",
+        "dt_inicio_ofx",
+        "duplicadas",
+        "id",
+        "importadas",
+        "nome_arquivo",
+        "saldo_final_ofx",
+        "total_transacoes",
+        "ultima_data",
+        "ultimo_fitid"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "historico_pagamentos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "conta_id",
+        "data_criacao",
+        "data_pagamento",
+        "forma_pagamento",
+        "id",
+        "numero_comprovante",
+        "observacoes",
+        "tipo",
+        "usuario",
+        "valor"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "historico_status_pedido",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_mudanca",
+        "id",
+        "observacao",
+        "pedido_id",
+        "status_anterior",
+        "status_novo",
+        "usuario_id",
+        "usuario_tipo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "importacoes_financeiras",
+      "source_rows_approx": 2,
+      "target_rows_approx": 2,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_fim",
+        "data_inicio",
+        "id",
+        "nome_arquivo",
+        "tipo_arquivo",
+        "tipo_conta",
+        "total_registros"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "importacoes_financeiras_itens",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "importacao_id",
+        "linha_original"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "inventario",
+      "source_rows_approx": 205,
+      "target_rows_approx": 205,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_compra",
+        "fabricante",
+        "id",
+        "modelo",
+        "nf",
+        "nome_item",
+        "numero_patrimonio",
+        "numero_serie",
+        "situacao",
+        "valor"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "lancamentos_agua",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "hidrometro_id",
+        "id",
+        "leitura_anterior",
+        "mes_referencia",
+        "unidade_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "leituras",
+      "source_rows_approx": 1101,
+      "target_rows_approx": 985,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "hidrometro_id",
+        "id",
+        "lancado_por_id",
+        "lancado_por_tipo",
+        "morador_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "leituras_fotos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "leitura_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "local_acessos",
+      "source_rows_approx": 2,
+      "target_rows_approx": 2,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_atualizacao",
+        "data_criacao",
+        "descricao",
+        "id",
+        "nome",
+        "observacao",
+        "situacao",
+        "usuario_criacao_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "local_acessos_log",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acao",
+        "dados_anteriores",
+        "dados_novos",
+        "id",
+        "local_acesso_id",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "local_acessos_tipos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "local_acesso_id",
+        "permissao_acesso",
+        "tipo_usuario"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "log_reset_senha",
+      "source_rows_approx": 177,
+      "target_rows_approx": 177,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "morador_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "logs_acesso_qrcode",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acesso_id",
+        "id",
+        "ip_address",
+        "local_validacao",
+        "token",
+        "usado_em",
+        "user_agent"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "logs_erro",
+      "source_rows_approx": 6,
+      "target_rows_approx": 6,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "arquivo",
+        "id",
+        "nivel",
+        "tipo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "logs_financeiro",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acao",
+        "detalhe",
+        "id",
+        "ip",
+        "mensagem",
+        "modulo",
+        "nivel",
+        "post_data",
+        "referencia_id",
+        "request_method",
+        "request_uri",
+        "user_agent",
+        "usuario"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "logs_sistema",
+      "source_rows_approx": 26944,
+      "target_rows_approx": 26560,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": false,
+      "shared_columns": [
+        "data_hora",
+        "descricao",
+        "id",
+        "ip",
+        "tipo",
+        "usuario"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [],
+      "target_required_without_default": []
+    },
+    {
+      "table": "logs_validacoes_dispositivo",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acesso_id",
+        "dispositivo_id",
+        "id",
+        "token_qrcode"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "manual_artigos",
+      "source_rows_approx": 10,
+      "target_rows_approx": 10,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "categoria_id",
+        "id",
+        "modulo_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "manual_avaliacoes",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "artigo_id",
+        "comentario",
+        "data_avaliacao",
+        "id",
+        "usuario_id",
+        "util"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "manual_buscas",
+      "source_rows_approx": 0,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "termo",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "manual_categorias",
+      "source_rows_approx": 22,
+      "target_rows_approx": 22,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "modulo_id",
+        "nome",
+        "ordem"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "manual_favoritos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "artigo_id",
+        "data_favorito",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "manual_historico",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "artigo_id",
+        "conteudo",
+        "id",
+        "modificado_em",
+        "modificado_por",
+        "titulo",
+        "versao"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "manual_modulos",
+      "source_rows_approx": 15,
+      "target_rows_approx": 15,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "icone",
+        "id",
+        "nome",
+        "ordem",
+        "page_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "marcas_dispositivo",
+      "source_rows_approx": 15,
+      "target_rows_approx": 15,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "descricao",
+        "id",
+        "logo",
+        "nome",
+        "site"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "media_avaliacoes_fornecedor",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": false,
+      "shared_columns": [
+        "fornecedor_id"
+      ],
+      "source_only_columns": [
+        "descricao",
+        "id",
+        "marca_id",
+        "nome",
+        "produto_servico_id",
+        "tipo_id"
+      ],
+      "target_only_columns": [],
+      "target_required_without_default": []
+    },
+    {
+      "table": "modulos_sistema",
+      "source_rows_approx": 40,
+      "target_rows_approx": 40,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": false,
+      "shared_columns": [
+        "ativo",
+        "chave",
+        "descricao",
+        "grupo",
+        "icone",
+        "id",
+        "nome",
+        "ordem",
+        "permissao_minima"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [],
+      "target_required_without_default": []
+    },
+    {
+      "table": "moradores",
+      "source_rows_approx": 179,
+      "target_rows_approx": 181,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "celular",
+        "cpf",
+        "email",
+        "id",
+        "nome",
+        "senha",
+        "telefone",
+        "unidade"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "movimentacoes_bancarias",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "atualizado_em",
+        "banco_origem",
+        "categoria",
+        "centro_custo",
+        "checknum",
+        "conciliacao_id",
+        "conciliado",
+        "conta_id",
+        "conta_pagar_id",
+        "conta_receber_id",
+        "criado_em",
+        "data_importacao",
+        "data_lancamento",
+        "descricao",
+        "favorecido",
+        "fitid",
+        "id",
+        "importacao_id",
+        "memo",
+        "numero_documento",
+        "observacoes",
+        "origem",
+        "payee",
+        "status",
+        "tipo",
+        "usuario_importacao",
+        "valor"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "movimentacoes_estoque",
+      "source_rows_approx": 205,
+      "target_rows_approx": 196,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "produto_id",
+        "quantidade",
+        "quantidade_anterior",
+        "quantidade_posterior",
+        "tipo_destino",
+        "tipo_movimentacao"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "notif_alertas",
+      "source_rows_approx": 219,
+      "target_rows_approx": 102,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "regra_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "notif_destinatarios",
+      "source_rows_approx": 739,
+      "target_rows_approx": 11162,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "alerta_id",
+        "dispensado",
+        "id",
+        "lido",
+        "lido_em",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "notif_regras",
+      "source_rows_approx": 6,
+      "target_rows_approx": 6,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "canais",
+        "emails",
+        "evento",
+        "horas_limite",
+        "id",
+        "modulo",
+        "usuarios_ids"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "notificacoes",
+      "source_rows_approx": 4,
+      "target_rows_approx": 4,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "anexo_caminho",
+        "anexo_nome",
+        "anexo_tipo",
+        "assunto",
+        "ativo",
+        "data_hora",
+        "id",
+        "numero_sequencial",
+        "resumo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "notificacoes_downloads",
+      "source_rows_approx": 12,
+      "target_rows_approx": 12,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_download",
+        "id",
+        "ip_address",
+        "morador_id",
+        "notificacao_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "notificacoes_visualizacoes",
+      "source_rows_approx": 4,
+      "target_rows_approx": 4,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_visualizacao",
+        "id",
+        "ip_address",
+        "morador_id",
+        "notificacao_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "os_assuntos",
+      "source_rows_approx": 24,
+      "target_rows_approx": 23,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "criado_em",
+        "departamento",
+        "descricao",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "os_chamados",
+      "source_rows_approx": 51,
+      "target_rows_approx": 25,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "assunto_id",
+        "id",
+        "numero",
+        "titulo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "os_config_homem_hora",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "assunto_id",
+        "id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "os_etapas",
+      "source_rows_approx": 17,
+      "target_rows_approx": 17,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "criado_em",
+        "id",
+        "nome",
+        "ordem"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "os_interacao_fotos",
+      "source_rows_approx": 10,
+      "target_rows_approx": 4,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "arquivo",
+        "arquivo_nome_original",
+        "arquivo_tamanho",
+        "criado_em",
+        "id",
+        "interacao_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "os_interacoes",
+      "source_rows_approx": 286,
+      "target_rows_approx": 133,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "anexos",
+        "id",
+        "mensagem",
+        "os_id",
+        "tipo",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "os_materiais_usados",
+      "source_rows_approx": 8,
+      "target_rows_approx": 6,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "os_id",
+        "preco_unitario",
+        "produto_id",
+        "produto_nome",
+        "quantidade"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "os_recursos_humanos",
+      "source_rows_approx": 104,
+      "target_rows_approx": 57,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "cargo",
+        "colaborador_id",
+        "colaborador_nome",
+        "departamento",
+        "id",
+        "os_id",
+        "vinculado_em"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "pedidos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "fornecedor_id",
+        "id",
+        "morador_id",
+        "produto_servico_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "planos_contas",
+      "source_rows_approx": 15,
+      "target_rows_approx": 15,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "categoria",
+        "codigo",
+        "descricao",
+        "id",
+        "natureza",
+        "nome",
+        "tipo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "produtos_estoque",
+      "source_rows_approx": 155,
+      "target_rows_approx": 148,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "categoria_id",
+        "codigo",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "produtos_servicos",
+      "source_rows_approx": 3,
+      "target_rows_approx": 3,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "codigo_sequencial",
+        "descricao",
+        "fornecedor_id",
+        "id",
+        "nome",
+        "preco_venda",
+        "quantidade_disponivel",
+        "tipo",
+        "valor_negociavel"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "protocolos",
+      "source_rows_approx": 725,
+      "target_rows_approx": 645,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "codigo_nf",
+        "descricao_mercadoria",
+        "id",
+        "morador_id",
+        "pagina",
+        "unidade_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "publico_rate_limit",
+      "source_rows_approx": 126,
+      "target_rows_approx": 76,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "criado_em",
+        "id",
+        "ip",
+        "rota"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "pwa_configuracoes",
+      "source_rows_approx": 22,
+      "target_rows_approx": 22,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "atualizado_em",
+        "chave",
+        "descricao",
+        "id",
+        "valor"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "pwa_fcm_tokens",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "atualizado_em",
+        "criado_em",
+        "device_browser",
+        "device_info",
+        "device_model",
+        "device_os",
+        "fcm_token",
+        "id",
+        "morador_id",
+        "plataforma",
+        "ultimo_uso"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "pwa_logs",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "id",
+        "morador_id",
+        "nivel",
+        "tipo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "pwa_notificacoes_push",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "corpo",
+        "dados_extras",
+        "destinatario",
+        "icone",
+        "id",
+        "morador_id",
+        "tag",
+        "tipo",
+        "titulo",
+        "url_destino"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "pwa_notificacoes_recebidas",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "criado_em",
+        "erro_fcm",
+        "fcm_token_id",
+        "id",
+        "lida",
+        "lida_em",
+        "morador_id",
+        "notificacao_id",
+        "status_envio"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "pwa_oauth_cache",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "access_token",
+        "criado_em",
+        "expires_at",
+        "id",
+        "token_type"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "pwa_versao",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "cache_version",
+        "changelog",
+        "id",
+        "publicado_por",
+        "tipo",
+        "versao"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "qrcode_tokens",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acesso_id",
+        "criado_em",
+        "expira_em",
+        "id",
+        "invalidado_manualmente",
+        "token",
+        "usado",
+        "usado_em"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "qrcodes_temporarios",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_acesso",
+        "empresa",
+        "hora_final",
+        "hora_inicial",
+        "id",
+        "nome_entregador",
+        "placa",
+        "qr_code",
+        "telefone",
+        "tipo_acesso",
+        "token",
+        "unidade_destino",
+        "usado"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "ramos_atividade",
+      "source_rows_approx": 57,
+      "target_rows_approx": 57,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "descricao",
+        "icone",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "recebedores",
+      "source_rows_approx": 4,
+      "target_rows_approx": 4,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "cargo",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "recuperacao_senha_tokens",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_criacao",
+        "data_expiracao",
+        "email",
+        "id",
+        "morador_id",
+        "token",
+        "usado"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "registros_acesso",
+      "source_rows_approx": 25177,
+      "target_rows_approx": 24432,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "cor",
+        "data_hora",
+        "id",
+        "modelo",
+        "morador_id",
+        "placa",
+        "tag",
+        "tipo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "rh_banco_horas",
+      "source_rows_approx": 14,
+      "target_rows_approx": 10,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "colaborador_id",
+        "id",
+        "lancamento_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "rh_colaboradores",
+      "source_rows_approx": 6,
+      "target_rows_approx": 6,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "cargo",
+        "cpf",
+        "data_admissao",
+        "data_demissao",
+        "data_nascimento",
+        "departamento",
+        "estado_civil",
+        "id",
+        "nome",
+        "rg",
+        "salario",
+        "sexo",
+        "tipo_contrato"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "rh_escala",
+      "source_rows_approx": 17,
+      "target_rows_approx": 17,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "alternada_ativa",
+        "alternada_dia_inicio",
+        "alternada_semana_a",
+        "alternada_semana_b",
+        "alternada_tipo_folga",
+        "ativo",
+        "banco_horas_ativo",
+        "carga_horaria_diaria_min",
+        "carga_horaria_mensal_min",
+        "colaborador_id",
+        "created_at",
+        "descanso_interjornada_min",
+        "dias_trabalho",
+        "escala_manual_semana",
+        "hora_almoco_retorno",
+        "hora_almoco_saida",
+        "hora_entrada",
+        "hora_saida",
+        "id",
+        "intervalo_almoco_min",
+        "nome_escala",
+        "regime_12x36",
+        "tipo",
+        "tolerancia_minutos",
+        "updated_at"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "rh_ponto_lancamento",
+      "source_rows_approx": 641,
+      "target_rows_approx": 610,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "colaborador_id",
+        "data",
+        "hora_almoco_retorno",
+        "hora_almoco_saida",
+        "hora_entrada",
+        "hora_saida",
+        "horas_trabalhadas_min",
+        "id",
+        "periodo_id",
+        "tipo_dia"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "rh_ponto_periodo",
+      "source_rows_approx": 21,
+      "target_rows_approx": 20,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ano",
+        "colaborador_id",
+        "id",
+        "mes",
+        "status",
+        "total_horas_trabalhadas_min"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "senha_recuperacao_logs",
+      "source_rows_approx": 7,
+      "target_rows_approx": 5,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "data_solicitacao",
+        "data_utilizacao",
+        "id",
+        "ip_solicitacao",
+        "morador_id",
+        "senha_temp_hash",
+        "utilizada"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "sessoes_portal",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "data_expiracao",
+        "data_login",
+        "id",
+        "ip_address",
+        "morador_id",
+        "token",
+        "user_agent"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "sessoes_usuarios",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "data_expiracao",
+        "data_login",
+        "id",
+        "ip_address",
+        "session_id",
+        "ultima_atividade",
+        "user_agent",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "tipos_dispositivo",
+      "source_rows_approx": 15,
+      "target_rows_approx": 15,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "descricao",
+        "icone",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "unidades",
+      "source_rows_approx": 188,
+      "target_rows_approx": 188,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "bloco",
+        "descricao",
+        "id",
+        "nome"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "usuario_modulos",
+      "source_rows_approx": 1,
+      "target_rows_approx": 1,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "atualizado_em",
+        "criado_em",
+        "id",
+        "modulo_chave",
+        "pode_acessar",
+        "pode_criar",
+        "pode_editar",
+        "pode_excluir",
+        "pode_exportar",
+        "usuario_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "usuarios",
+      "source_rows_approx": 9,
+      "target_rows_approx": 11,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "ativo",
+        "data_atualizacao",
+        "data_criacao",
+        "departamento",
+        "email",
+        "funcao",
+        "id",
+        "nome",
+        "permissao",
+        "senha",
+        "sessao_inativa"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "validacoes_acesso",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acesso_id",
+        "id",
+        "tipo_validacao"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "validacoes_face_id",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "acesso_id",
+        "face_descriptor_id",
+        "id",
+        "visitante_id"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "veiculos",
+      "source_rows_approx": 88,
+      "target_rows_approx": 65,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": true,
+      "shared_columns": [
+        "cor",
+        "dependente_id",
+        "id",
+        "modelo",
+        "morador_id",
+        "placa",
+        "tag",
+        "tipo"
+      ],
+      "source_only_columns": [],
+      "target_only_columns": [
+        "tenant_id"
+      ],
+      "target_required_without_default": []
+    },
+    {
+      "table": "view_dispositivos_ativos",
+      "source_rows_approx": 0,
+      "target_rows_approx": 0,
+      "source_pk": [],
+      "target_pk": [],
+      "target_tenant_id": false,
+      "shared_columns": [
+        "id"
+      ],
+      "source_only_columns": [
+        "morador_id",
+        "total_dispositivos",
+        "total_tokens"
+      ],
+      "target_only_columns": [],
+      "target_required_without_default": []
+    }
+  ]
+}
