@@ -284,22 +284,83 @@ function _setupActions() {
 async function _carregarVisitantes() {
     const tbody = document.querySelector('#tabelaVisitantes tbody');
     _setLoading(true);
+
     try {
-        const response = await fetch(API_VISITANTES);
-        const data = await response.json();
+        const data = await _requisitarJsonComRetry(API_VISITANTES, {
+            credentials: 'include'
+        });
+
         console.log('[Visitantes] Resposta da API:', data);
         if (!data.sucesso) {
             _renderMensagemTabela(tbody, data.mensagem || 'Erro ao carregar visitantes.');
             return;
         }
+
         visitantesCache = Array.isArray(data.dados) ? data.dados : [];
+        _atualizarKpis(visitantesCache);
         _renderVisitantes(visitantesCache);
     } catch (error) {
-        console.error('[Visitantes] Erro ao carregar:', error);
-        _renderMensagemTabela(tbody, 'Erro de conexão ao carregar dados.');
+        const detalhe = error?.message || 'Falha desconhecida';
+        console.error('[Visitantes][Carga] Falha ao carregar visitantes:', {
+            mensagem: detalhe,
+            url: API_VISITANTES,
+            tenantId: localStorage.getItem('tenant_id') || null,
+            horario: new Date().toISOString()
+        });
+
+        const indisponivel = /^HTTP 503\b/.test(detalhe);
+        _renderMensagemTabela(
+            tbody,
+            indisponivel
+                ? 'Serviço temporariamente indisponível. Aguarde alguns segundos e atualize a lista.'
+                : 'Não foi possível carregar os visitantes. Tente novamente.'
+        );
     } finally {
         _setLoading(false);
     }
+}
+
+/**
+ * Faz requisição JSON autenticada. Reintenta apenas HTTP 503, que representa
+ * indisponibilidade temporária do servidor e não falha de sessão do usuário.
+ */
+async function _requisitarJsonComRetry(url, options = {}, tentativa = 1) {
+    const maxTentativas = 2;
+    let response;
+
+    try {
+        response = await fetch(url, {
+            credentials: 'include',
+            ...options
+        });
+    } catch (erroRede) {
+        throw new Error(`Falha de rede: ${erroRede?.message || 'conexão indisponível'}`);
+    }
+
+    const corpo = await response.text();
+    let dados;
+    try {
+        dados = corpo ? JSON.parse(corpo) : null;
+    } catch (_) {
+        dados = null;
+    }
+
+    if (response.status === 503 && tentativa < maxTentativas) {
+        console.warn(`[Visitantes][Carga] HTTP 503; nova tentativa ${tentativa + 1}/${maxTentativas}.`);
+        await new Promise(resolve => setTimeout(resolve, 1200 * tentativa));
+        return _requisitarJsonComRetry(url, options, tentativa + 1);
+    }
+
+    if (!response.ok) {
+        const mensagemApi = dados?.mensagem ? ` — ${dados.mensagem}` : '';
+        throw new Error(`HTTP ${response.status}${mensagemApi}`);
+    }
+
+    if (!dados || typeof dados !== 'object') {
+        throw new Error('Resposta inválida da API de visitantes');
+    }
+
+    return dados;
 }
 
 function _buscarVisitantes() {

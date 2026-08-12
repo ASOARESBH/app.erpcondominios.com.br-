@@ -14,8 +14,8 @@
     'use strict';
 
     const API              = '/api/api_notificacoes_os.php';
-    const POLL_MS          = 30000;  // 30 segundos
-    const POLL_FAST        = 15000;  // 15 segundos quando há não lidos
+    const POLL_MS          = 60000;  // 60 segundos
+    const POLL_FAST        = 30000;  // 30 segundos quando há não lidos
     let _pollTimer         = null;
     let _prevCount         = -1;     // -1 = ainda não inicializado (evita som na 1ª carga)
     let _primeiraExecucao  = true;   // Flag para suprimir som na inicialização
@@ -346,10 +346,19 @@
 
     async function _poll() {
         try {
-            const r    = await fetch(`${API}?acao=contar_nao_lidos`, { credentials: 'include' });
-            if (!r.ok) return; // Não processar erros HTTP (401, 500, etc.)
+            const r = await fetch(`${API}?acao=contar_nao_lidos`, {
+                credentials: 'include',
+                cache: 'no-store'
+            });
+            if (!r.ok) {
+                console.warn(`[NotifBell] Polling ignorado: HTTP ${r.status}.`);
+                return; // Nunca afeta a navegação ou a sessão do usuário.
+            }
             const json = await r.json();
-            if (!json.sucesso) return;
+            if (!json.sucesso) {
+                console.warn('[NotifBell] Polling sem sucesso:', json.mensagem || 'resposta inválida');
+                return;
+            }
             const count = parseInt(json.dados?.nao_lidos || 0);
             _atualizarBadge(count);
 
@@ -371,7 +380,8 @@
             clearInterval(_pollTimer);
             _pollTimer = setInterval(_poll, count > 0 ? POLL_FAST : POLL_MS);
         } catch (e) {
-            // Silencioso em caso de erro de rede
+            console.warn('[NotifBell] Falha temporária no polling:', e?.message || e);
+            // Falha de notificações não pode bloquear módulos nem encerrar sessão.
         }
     }
 

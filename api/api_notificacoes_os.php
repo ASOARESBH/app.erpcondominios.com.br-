@@ -104,7 +104,18 @@ verificarAutenticacao(true, 'operador');
 $tenant_id = exigirTenantId();
 $db  = conectar_banco();
 $db->set_charset('utf8mb4');
-_migration($db);
+
+/*
+ * Não execute DDL a cada polling do sino. CREATE TABLE IF NOT EXISTS em cada
+ * requisição concorrente pode gerar bloqueios e HTTP 503 em hospedagem
+ * compartilhada. A estrutura é instalada pela migration de banco e, quando
+ * necessário, pode ser recriada explicitamente por super_admin.
+ */
+if (($_GET['acao'] ?? '') === 'instalar_estrutura') {
+    verificarPermissao('super_admin');
+    _migration($db);
+    _json(true, 'Estrutura de notificações verificada com sucesso');
+}
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $body   = [];
@@ -208,14 +219,19 @@ switch ($acao) {
     // ── Contar não lidos (polling leve) ──────────────────────────────────
     case 'contar_nao_lidos':
         $uid = intval($usuario['id']);
-        // Auto-sync: incluir alertas de OS onde o usuário é atendente, morador ou criador
-        $db->query("INSERT IGNORE INTO notif_destinatarios (alerta_id, usuario_id)
-            SELECT a.id, $uid
-            FROM notif_alertas a
-            INNER JOIN os_chamados o ON o.id = a.link_id AND a.link_pagina = 'ordens_servico'
-            WHERE o.atendente_id = $uid OR o.morador_id = $uid OR o.criado_por_id = $uid");
-        $n = $db->query("SELECT COUNT(*) AS n FROM notif_destinatarios WHERE usuario_id=$uid AND lido=0 AND dispensado=0")->fetch_assoc()['n'] ?? 0;
-        _json(true, 'OK', ['nao_lidos' => intval($n)]);
+
+        /*
+         * Este endpoint é chamado periodicamente pelo sino. Ele deve fazer
+         * somente uma leitura indexada. A sincronização de alertas de O.S.
+         * permanece em meus_alertas/historico, acionados pelo usuário.
+         */
+        $resultadoContagem = $db->query(
+            "SELECT COUNT(*) AS n
+             FROM notif_destinatarios
+             WHERE usuario_id = $uid AND lido = 0 AND dispensado = 0"
+        );
+        $n = $resultadoContagem ? (int)($resultadoContagem->fetch_assoc()['n'] ?? 0) : 0;
+        _json(true, 'OK', ['nao_lidos' => $n]);
 
     // ── Histórico completo de notificações do usuário ─────────────────────
     case 'historico':
