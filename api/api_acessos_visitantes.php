@@ -7,6 +7,7 @@
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
+require_once __DIR__ . '/helpers/access_control_notification_helper.php';
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -269,19 +270,40 @@ if ($metodo === 'POST') {
         ]);
         
         // Atualizar acesso com ID do registro
+        $notificacao_acesso = ['sucesso' => false, 'motivo' => 'registro_nao_criado'];
         if ($registro_acesso_id) {
             $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET registro_acesso_id = ? WHERE tenant_id = $tenant_id AND id = ?");
             $stmt_update->bind_param("ii", $registro_acesso_id, $acesso_id);
             $stmt_update->execute();
+
+            // Evento complementar; falhas de push não afetam a autorização já criada.
+            try {
+                $notificacao_acesso = controle_acesso_criar_notificacao_registro(
+                    $conexao,
+                    (int)$tenant_id,
+                    (int)$registro_acesso_id,
+                    $morador_id ? (int)$morador_id : null,
+                    $unidade_destino,
+                    'Entrada',
+                    ucfirst($tipo_visitante),
+                    $placa,
+                    $modelo,
+                    $data_inicial . ' ' . ($hora_inicial ?: '00:00:00')
+                );
+            } catch (Throwable $erro_notificacao) {
+                error_log('[NotificacaoAcessoQR] falha não bloqueante: ' . $erro_notificacao->getMessage());
+                $notificacao_acesso = ['sucesso' => false, 'motivo' => 'excecao_nao_bloqueante'];
+            }
         }
         
-        registrar_log('ACESSO_CADASTRADO', "Acesso cadastrado para visitante: {$visitante['nome_completo']}", "Tipo: {$tipo_acesso}, Período: {$data_inicial} a {$data_final}, Placa: {$placa}");
+        registrar_log('ACESSO_CADASTRADO', "Acesso cadastrado para visitante: {$visitante['nome_completo']}", "Tipo: {$tipo_acesso}, Período: {$data_inicial} a {$data_final}, Placa: {$placa}, Notificacao: " . json_encode($notificacao_acesso));
         
         retornar_json(true, "Acesso cadastrado com sucesso", [
             'id' => $acesso_id,
             'qr_code' => $qr_code,
             'dias_permanencia' => $dias_permanencia,
-            'registro_acesso_id' => $registro_acesso_id
+            'registro_acesso_id' => $registro_acesso_id,
+            'notificacao_controle_acesso' => $notificacao_acesso
         ]);
     } else {
         retornar_json(false, "Erro ao cadastrar acesso: " . $stmt->error);

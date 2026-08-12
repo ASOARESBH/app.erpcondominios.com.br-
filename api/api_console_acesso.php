@@ -24,6 +24,7 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 require_once 'funcoes_log.php';
+require_once __DIR__ . '/helpers/access_control_notification_helper.php';
 
 // Função auxiliar para retornar JSON
 function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -115,7 +116,8 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
             v.nome_completo AS visitante_nome,
             v.documento AS visitante_documento,
             m.nome AS morador_nome,
-            m.unidade AS morador_unidade
+            m.unidade AS morador_unidade,
+            m.tenant_id AS morador_tenant_id
         FROM acessos_visitantes a
         INNER JOIN visitantes v ON a.visitante_id = v.id
         LEFT JOIN moradores m ON a.morador_id = m.id
@@ -159,7 +161,7 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
         registrarValidacao($conexao, 'visitante', $acesso['id'], null, $qr_code, $acesso['token_acesso'], 'permitido', null, $data_hora, $ip_validacao, $user_agent, $console_usuario, $dispositivo_id);
         
         // Registrar no controle de acesso
-        registrarControleAcessoValidacao($conexao, [
+        $registro_console_id = registrarControleAcessoValidacao($conexao, [
             'placa' => $acesso['placa'],
             'modelo' => $acesso['modelo'],
             'cor' => $acesso['cor'],
@@ -172,8 +174,28 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
             'liberado' => 1,
             'observacao' => $acesso['temporario'] == 1 ? "Acesso temporário: {$acesso['hora_inicial']} - {$acesso['hora_final']}" : "Tipo de acesso: {$acesso['tipo_acesso']}"
         ]);
+        $notificacao_console = ['sucesso' => false, 'motivo' => 'registro_nao_criado'];
+        if ($registro_console_id && !empty($acesso['morador_tenant_id'])) {
+            try {
+                $notificacao_console = controle_acesso_criar_notificacao_registro(
+                    $conexao,
+                    (int)$acesso['morador_tenant_id'],
+                    (int)$registro_console_id,
+                    $acesso['morador_id'] ? (int)$acesso['morador_id'] : null,
+                    $acesso['unidade_destino'],
+                    'Entrada',
+                    ucfirst($acesso['tipo_visitante']),
+                    $acesso['placa'],
+                    $acesso['modelo'],
+                    $data_hora
+                );
+            } catch (Throwable $erro_notificacao) {
+                error_log('[NotificacaoAcessoConsole] falha não bloqueante: ' . $erro_notificacao->getMessage());
+                $notificacao_console = ['sucesso' => false, 'motivo' => 'excecao_nao_bloqueante'];
+            }
+        }
         
-        registrar_log('ACESSO_PERMITIDO', "Acesso liberado para: {$acesso['visitante_nome']}", "QR Code: {$qr_code}, Console: {$console_usuario}");
+        registrar_log('ACESSO_PERMITIDO', "Acesso liberado para: {$acesso['visitante_nome']}", "QR Code: {$qr_code}, Console: {$console_usuario}, Notificacao: " . json_encode($notificacao_console));
         
         $tipo_texto = $acesso['temporario'] == 1 ? 'DELIVERY' : strtoupper($acesso['tipo_visitante']);
         

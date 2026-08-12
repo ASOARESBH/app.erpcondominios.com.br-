@@ -12,6 +12,7 @@ ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
+require_once __DIR__ . '/helpers/access_control_notification_helper.php';
 
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
@@ -249,7 +250,42 @@ if ($metodo === 'POST') {
         $id_inserido = $conexao->insert_id;
         log_registro('INSERT OK', ['id' => $id_inserido, 'status' => $status, 'tipo_acesso' => $tipo_acesso]);
         registrar_log('REGISTRO_CRIADO', "Registro manual criado: $placa ($tipo) - $tipo_acesso");
-        retornar_json(true, $status, ['id' => $id_inserido, 'liberado' => $liberado, 'status' => $status, 'tipo_acesso' => $tipo_acesso]);
+
+        // O acesso é a operação prioritária. A notificação é complementar e
+        // jamais pode desfazer uma entrada/saída registrada com sucesso.
+        $notificacao = ['sucesso' => false, 'motivo' => 'nao_processada'];
+        try {
+            $notificacao = controle_acesso_criar_notificacao_registro(
+                $conexao,
+                (int)$tenant_id,
+                (int)$id_inserido,
+                $morador_id ? (int)$morador_id : null,
+                $unidade_destino,
+                $tipo_acesso,
+                $tipo,
+                $placa,
+                $modelo,
+                $data_hora
+            );
+        } catch (Throwable $erro_notificacao) {
+            log_registro('NOTIFICACAO ACESSO FALHOU (não bloqueante)', [
+                'registro_id' => $id_inserido,
+                'erro' => $erro_notificacao->getMessage(),
+            ]);
+            $notificacao = ['sucesso' => false, 'motivo' => 'excecao_nao_bloqueante'];
+        }
+        log_registro('NOTIFICACAO ACESSO PROCESSADA', [
+            'registro_id' => $id_inserido,
+            'resultado' => $notificacao,
+        ]);
+
+        retornar_json(true, $status, [
+            'id' => $id_inserido,
+            'liberado' => $liberado,
+            'status' => $status,
+            'tipo_acesso' => $tipo_acesso,
+            'notificacao_controle_acesso' => $notificacao,
+        ]);
     } else {
         log_registro('ERRO execute INSERT', ['erro' => $stmt->error, 'errno' => $stmt->errno]);
         retornar_json(false, 'Erro ao criar registro: ' . $stmt->error);
