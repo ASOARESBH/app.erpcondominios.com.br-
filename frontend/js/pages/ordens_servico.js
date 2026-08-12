@@ -262,14 +262,18 @@ async function carregarDashboard() {
     if (!d.ultimas_os || !d.ultimas_os.length) {
         listaEl.innerHTML = '<div class="os-loading-text">Nenhuma OS encontrada</div>';
     } else {
-        listaEl.innerHTML = d.ultimas_os.map(os => `
-            <div class="os-ultima-item" data-id="${os.id}" onclick="osVerDetalhe(${os.id}, ${JSON.stringify(os.numero || '')})">
+        listaEl.innerHTML = d.ultimas_os.map(os => {
+            const idOS = normalizarIdOS(os.id) || 0;
+            const numeroJS = JSON.stringify(String(os.numero || '')).replace(/'/g, '&#39;');
+            return `
+            <div class="os-ultima-item" data-id="${idOS}" onclick='osVerDetalhe(${idOS}, ${numeroJS})'>
                 <div class="os-ultima-numero">${os.numero}</div>
                 <div class="os-ultima-titulo">${os.titulo}</div>
                 ${badgeStatus(os.status)}
                 <div class="os-ultima-data">${os.data_abertura}</div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 }
 
@@ -299,6 +303,8 @@ async function carregarChamados(pagina = 1) {
         return;
     }
     tbody.innerHTML = lista.map(os => {
+        const idOS = normalizarIdOS(os.id) || 0;
+        const numeroJS = JSON.stringify(String(os.numero || '')).replace(/'/g, '&#39;');
         const isPortal = os.origem_portal === 'portal_morador';
         const precisaAssumir = isPortal && !os.assumido_por_id;
         const trStyle = isPortal ? 'background:linear-gradient(90deg,#fff7ed 0,transparent 8px);border-left:3px solid #d97706;' : '';
@@ -322,11 +328,11 @@ async function carregarChamados(pagina = 1) {
             <td style="white-space:nowrap;font-size:.82rem">${formatarData(os.data_abertura)}</td>
             <td>${os.atendente_nome || '—'}</td>
             <td>
-                <button class="os-btn-acao ver" onclick="osVerDetalhe(${os.id}, ${JSON.stringify(os.numero || '')})" title="Ver detalhes"><i class="fas fa-eye"></i></button>
-                ${os.status !== 'finalizado' ? `<button class="os-btn-acao editar" onclick="osAbrirEditar(${os.id})" title="Editar"><i class="fas fa-edit"></i></button>` : ''}
-                <button class="os-btn-acao imprimir" onclick="osImprimir(${os.id})" title="Imprimir / Gerar PDF"><i class="fas fa-print"></i></button>
-                ${os.status !== 'finalizado' ? `<button class="os-btn-acao excluir" onclick="osExcluir(${os.id},'${os.numero}')" title="Excluir"><i class="fas fa-trash"></i></button>` : ''}
-                ${precisaAssumir ? `<button class="os-btn-acao" style="background:#d97706;color:#fff;border-color:#d97706" onclick="osAbrirAssumirPortal(${os.id})" title="Assumir OS do Portal"><i class="fas fa-hand-paper"></i></button>` : ''}
+                <button class="os-btn-acao ver" onclick='osVerDetalhe(${idOS}, ${numeroJS})' title="Ver detalhes"><i class="fas fa-eye"></i></button>
+                ${os.status !== 'finalizado' ? `<button class="os-btn-acao editar" onclick="osAbrirEditar(${idOS})" title="Editar"><i class="fas fa-edit"></i></button>` : ''}
+                <button class="os-btn-acao imprimir" onclick="osImprimir(${idOS})" title="Imprimir / Gerar PDF"><i class="fas fa-print"></i></button>
+                ${os.status !== 'finalizado' ? `<button class="os-btn-acao excluir" onclick="osExcluir(${idOS},'${os.numero}')" title="Excluir"><i class="fas fa-trash"></i></button>` : ''}
+                ${precisaAssumir ? `<button class="os-btn-acao" style="background:#d97706;color:#fff;border-color:#d97706" onclick="osAbrirAssumirPortal(${idOS})" title="Assumir OS do Portal"><i class="fas fa-hand-paper"></i></button>` : ''}
             </td>
         </tr>
     `;

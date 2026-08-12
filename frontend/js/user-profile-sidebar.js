@@ -122,11 +122,12 @@
         if (sidebarHeader) {
             sidebarHeader.innerHTML = `
                 <div class="sidebar-logo-container">
-                    <img src="../assets/img/logos/logo_padrao.png"
+                    <img src="/assets/img/logos/logo_padrao.png"
                          alt="ERP Condomínio"
                          class="sidebar-logo"
                          id="dynamicSidebarLogo"
-                         onerror="this.onerror=null;this.style.display='none';">
+                         data-branding-managed="1"
+                         onerror="this.onerror=null;this.src='/assets/img/logos/logo_padrao.png';this.style.display='';">
                 </div>
                 <button id="sidebarCollapseBtn" title="Recolher menu" style="
                     background: none;
@@ -191,7 +192,8 @@
         const tenantEmCache = String(localStorage.getItem(CACHE_TENANT) || '');
         const logoCache = tenantEmCache ? localStorage.getItem(CACHE_KEY + '_' + tenantEmCache) : null;
 
-        // Cache é somente uma prévia. A API autenticada sempre confirma o tenant efetivo.
+        // Cache é somente uma prévia. URLs legadas incompletas (por exemplo,
+        // "logo.jpg") não são aplicadas e nunca devem gerar request 404 na raiz.
         if (logoCache) _aplicarLogo(IMG_ID, logoCache);
 
         const apiBase = window.APP_BASE_PATH || '/';
@@ -222,17 +224,43 @@
 
     function _aplicarLogo(imgId, logoUrl) {
         const img = document.getElementById(imgId);
-        if (!img) return;
-        // Construir URL absoluta se for relativa
-        let url = logoUrl;
-        if (!url.startsWith('http') && !url.startsWith('/')) {
-            const apiBase = window.APP_BASE_PATH || '/';
-            url = apiBase + url;
-        }
-        if (img.src !== url) {
-            img.src = url;
+        if (!img) return false;
+
+        const fallback = window.location.origin + '/assets/img/logos/logo_padrao.png';
+        let url;
+        try {
+            // A logo só pode vir da API central, da marca institucional ou de
+            // uma URL legada dentro de /uploads/logo durante a transição para BLOB.
+            const origem = new URL(String(logoUrl || ''), window.location.origin);
+            const caminho = origem.pathname;
+            const permitido = origem.origin === window.location.origin && (
+                caminho === '/assets/img/logos/logo_padrao.png' ||
+                caminho === '/api/api_arquivos_tenant.php' ||
+                caminho.indexOf('/uploads/logo/') === 0
+            );
+            if (!permitido) throw new Error('URL de logo não permitida');
+            url = origem.href;
+        } catch (_) {
+            console.warn('[TenantBranding] URL de logo inválida descartada:', logoUrl);
+            const tenant = String(localStorage.getItem('tenant_id') || '');
+            if (tenant) localStorage.removeItem('tenant_logo_url_' + tenant);
+            img.onerror = null;
+            img.src = fallback;
             img.style.display = '';
+            return false;
         }
+
+        img.onerror = () => {
+            console.warn('[TenantBranding] Falha ao carregar logo do tenant; aplicando marca institucional.');
+            const tenant = String(localStorage.getItem('tenant_id') || '');
+            if (tenant) localStorage.removeItem('tenant_logo_url_' + tenant);
+            img.onerror = null;
+            img.src = fallback;
+            img.style.display = '';
+        };
+        if (img.src !== url) img.src = url;
+        img.style.display = '';
+        return true;
     }
 
     function ensureTopHeader() {

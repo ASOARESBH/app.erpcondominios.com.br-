@@ -184,7 +184,12 @@ document.addEventListener('DOMContentLoaded', () => {
 // IDENTIDADE VISUAL — somente ambiente autenticado do tenant.
 async function carregarIdentidadeVisualSessao() {
     const emLogin = /(^|\/)(login|login_morador|login_fornecedor)\.html$/i.test(window.location.pathname);
-    if (emLogin || !document.getElementById('dynamicSidebarLogo')) return;
+    const sidebarLogoGerenciada = document.getElementById('dynamicSidebarLogo');
+    if (emLogin || !sidebarLogoGerenciada) return;
+    // A barra lateral atual é administrada por user-profile-sidebar.js, que
+    // valida URL e tenant antes de aplicar a imagem. Não sobrescreva a marca
+    // com caminhos legados ou cache antigo neste carregador de compatibilidade.
+    if (sidebarLogoGerenciada.dataset.brandingManaged === '1') return;
 
     try {
         const response = await fetch('../api/get_logo_empresa.php', {

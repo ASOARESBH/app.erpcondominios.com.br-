@@ -17,3 +17,11 @@ A falha ocorre no frontend: pelo menos um item renderizado dispara `osVerDetalhe
 - Capturas fornecidas: `/home/ubuntu/upload/pasted_file_PE19cv_image.png` e `/home/ubuntu/upload/pasted_file_OPNyoM_image.png`
 - Frontend: `frontend/js/pages/ordens_servico.js`
 - Backend: `api/api_ordens_servico.php`
+
+## Verificação visual adicional — 12/08/2026
+
+Na sessão autenticada do navegador, a página de Visitantes apresentou a logo do tenant com origem `/uploads/logo/tenant_1/logo.jpeg`, demonstrando que a logo cadastrada ainda é uma URL legada física e que o navegador consegue carregá-la naquele contexto. A tentativa de abrir diretamente `layout-base.html?page=ordens_servico` foi redirecionada ao login pelo navegador de sandbox, de modo que não foi possível reproduzir a resposta autenticada da O.S. 260 nesse ambiente.
+
+A captura do usuário mostra erros 404 associados a `logo.jpg`, enquanto a página autenticada observada refere `logo.jpeg`. Isso indica uma URL de logo legada ou em cache divergente e exige normalização no carregador de identidade visual, com fallback institucional quando a URL não puder ser servida pela API central.
+
+O log novo registra três requisições válidas de busca para `id=260`, sem requisições `listar_interacoes` ou `listar_materiais` subsequentes. Portanto, a abertura está sendo interrompida durante o processamento da resposta de `buscar`, não pela validação de ID zero.
