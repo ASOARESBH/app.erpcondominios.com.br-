@@ -22,7 +22,13 @@
     // de nenhuma unidade. As funções administrativas vivem no próprio painel.
     const SUPERADMIN_MENU_ITEMS = [
         { id: 'superadmin', label: 'Painel Super-Admin', icon: 'fas fa-crown', page: 'superadmin', href: 'layout-base.html?page=superadmin', order: 1, style: 'color: #f59e0b; font-weight: 700;' },
-        { id: 'aplicativos', label: 'Aplicativos', icon: 'fas fa-mobile-screen-button', page: 'aplicativos', href: 'layout-base.html?page=aplicativos', order: 2, style: 'color: #93c5fd; font-weight: 700;' }
+        {
+            id: 'aplicativos', label: 'Aplicativos', icon: 'fas fa-mobile-screen-button', page: 'aplicativos', href: 'layout-base.html?page=aplicativos', order: 2, style: 'color: #93c5fd; font-weight: 700;',
+            children: [
+                { id: 'pwa_central', label: 'Central PWA', icon: 'fas fa-mobile-alt', page: 'pwa_central', href: 'layout-base.html?page=pwa_central' },
+                { id: 'rondas_vigilante', label: 'Vigilante', icon: 'fas fa-shield-halved', page: 'rondas_vigilante', href: 'layout-base.html?page=rondas_vigilante' }
+            ]
+        }
     ];
 
     const LEGACY_GROUP_BY_PAGE = {
@@ -96,7 +102,9 @@
     function detectCurrentPage() {
         const params = new URLSearchParams(window.location.search);
         const pageParam = params.get('page');
-        if (pageParam && state.items.some((item) => item.page === pageParam)) {
+        const itensAtuais = state.mode === 'superadmin' ? state.superadminItems : state.items;
+        const paginasAtuais = itensAtuais.flatMap((item) => [item, ...(item.children || [])]);
+        if (pageParam && paginasAtuais.some((item) => item.page === pageParam)) {
             return pageParam;
         }
 
@@ -115,10 +123,15 @@
     }
 
     function renderItem(item, activePage) {
-        const activeClass = item.page === activePage ? ' active' : '';
+        const ativoFilho = (item.children || []).some((child) => child.page === activePage);
+        const activeClass = item.page === activePage || ativoFilho ? ' active' : '';
         const styleAttr = item.style ? ` style="${item.style}"` : '';
         const liStyle = item.liStyle ? ` style="${item.liStyle}"` : '';
         const separator = item.separator ? '<li class="nav-item"><hr style="border:none;border-top:1px solid rgba(255,255,255,0.1);margin:0.5rem 0.75rem;"></li>' : '';
+        const filhos = (item.children || []).map((child) => {
+            const childActive = child.page === activePage ? ' active' : '';
+            return `<li class="nav-item nav-subitem"><a href="${child.href}" data-page="${child.page}" class="nav-link nav-sublink${childActive}" title="${child.label}"><i class="${child.icon}"></i><span>${child.label}</span></a></li>`;
+        }).join('');
         return [
             separator,
             `<li class="nav-item"${liStyle}>`,
@@ -126,6 +139,7 @@
             `<i class="${item.icon}"></i>`,
             `<span>${item.label}</span>`,
             '</a>',
+            filhos ? `<ul class="nav-submenu show" aria-label="Submenu ${item.label}">${filhos}</ul>` : '',
             '</li>'
         ].join('');
     }
@@ -226,8 +240,10 @@
 
     function getPageToHref() {
         const mapping = {};
-        state.items.forEach((item) => {
+        const itens = state.mode === 'superadmin' ? state.superadminItems : state.items;
+        itens.forEach((item) => {
             mapping[item.page] = item.href;
+            (item.children || []).forEach((child) => { mapping[child.page] = child.href; });
         });
         return mapping;
     }

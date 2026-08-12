@@ -38,8 +38,14 @@ header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
-verificarAutenticacao(true, 'operador');
-$tenant_id = exigirTenantId();
+// A Central PWA é uma configuração institucional: somente o Super-Admin
+// no contexto global pode visualizar, alterar credenciais e publicar versão.
+verificarAutenticacao(true, 'super_admin');
+if (isset($_SESSION['superadmin_tenant_original'])) {
+    http_response_code(403);
+    echo json_encode(['sucesso' => false, 'mensagem' => 'Retorne ao Painel Super-Admin para administrar a Central PWA.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 $conn   = conectar_banco();
 $metodo = $_SERVER['REQUEST_METHOD'];

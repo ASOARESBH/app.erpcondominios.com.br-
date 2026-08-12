@@ -1,0 +1,72 @@
+<!-- page: rondas_vigilante | css: rondas_vigilante -->
+<div id="page-metadata" data-title="Vigilante — Rondas" data-icon="fa-shield-halved" style="display:none"></div>
+
+<div class="page-wrapper page-rondas-vigilante">
+    <div class="page-header rv-header">
+        <div>
+            <h1><i class="fas fa-shield-halved"></i> Vigilante</h1>
+            <p>Controle de rondas, pontos QR, equipes, SLAs e evidências operacionais por condomínio.</p>
+        </div>
+        <button class="rv-btn secondary" id="rv-btn-atualizar"><i class="fas fa-rotate"></i> Atualizar</button>
+    </div>
+
+    <section class="rv-context-card" aria-label="Condomínio gerenciado">
+        <div class="rv-context-icon"><i class="fas fa-building"></i></div>
+        <div class="rv-context-copy"><strong>Condomínio das rondas</strong><span id="rv-contexto-nome">Selecione um condomínio para configurar as rotas.</span></div>
+        <select id="rv-tenant-select" aria-label="Selecionar condomínio"><option value="">Carregando condomínios...</option></select>
+    </section>
+
+    <nav class="rv-tabs" aria-label="Navegação do módulo Vigilante">
+        <button class="rv-tab active" data-tab="dashboard"><i class="fas fa-chart-line"></i> Dashboard</button>
+        <button class="rv-tab" data-tab="rotas"><i class="fas fa-route"></i> Rotas e Pontos</button>
+        <button class="rv-tab" data-tab="qrcodes"><i class="fas fa-qrcode"></i> QR Codes</button>
+        <button class="rv-tab" data-tab="relatorios"><i class="fas fa-file-chart-column"></i> Relatórios</button>
+    </nav>
+
+    <section class="rv-panel active" id="rv-panel-dashboard">
+        <div class="rv-kpi-grid">
+            <article class="rv-kpi"><span class="rv-kpi-icon blue"><i class="fas fa-route"></i></span><div><strong id="rv-kpi-rotas">—</strong><small>Rotas ativas</small></div></article>
+            <article class="rv-kpi"><span class="rv-kpi-icon purple"><i class="fas fa-user-shield"></i></span><div><strong id="rv-kpi-vigilantes">—</strong><small>Vigilantes vinculados</small></div></article>
+            <article class="rv-kpi"><span class="rv-kpi-icon green"><i class="fas fa-circle-check"></i></span><div><strong id="rv-kpi-leituras">—</strong><small>Leituras hoje</small></div></article>
+            <article class="rv-kpi"><span class="rv-kpi-icon orange"><i class="fas fa-triangle-exclamation"></i></span><div><strong id="rv-kpi-atrasos">—</strong><small>Atrasos de SLA hoje</small></div></article>
+        </div>
+        <article class="rv-card">
+            <div class="rv-card-heading"><div><h3><i class="fas fa-bell"></i> Alertas de SLA</h3><p>Rondas previstas que ainda não concluíram todos os pontos dentro da tolerância configurada.</p></div><span class="rv-status-pulse">Atualização em tempo real</span></div>
+            <div id="rv-alertas" class="rv-alert-list"><div class="rv-loading"><i class="fas fa-spinner fa-spin"></i> Carregando alertas...</div></div>
+        </article>
+        <article class="rv-card">
+            <div class="rv-card-heading"><div><h3><i class="fas fa-list-check"></i> Rotas programadas</h3><p>Resumo da configuração ativa do condomínio selecionado.</p></div></div>
+            <div id="rv-dashboard-rotas" class="rv-route-summary"></div>
+        </article>
+    </section>
+
+    <section class="rv-panel" id="rv-panel-rotas">
+        <div class="rv-panel-actionbar"><div><h2>Rotas de ronda</h2><p>Cadastre ciclos, horários, dias, pontos QR e os vigilantes que podem executar cada rota.</p></div><button class="rv-btn primary" id="rv-btn-nova-rota"><i class="fas fa-plus"></i> Nova rota</button></div>
+        <div id="rv-rotas-lista" class="rv-route-list"><div class="rv-loading"><i class="fas fa-spinner fa-spin"></i> Carregando rotas...</div></div>
+    </section>
+
+    <section class="rv-panel" id="rv-panel-qrcodes">
+        <div class="rv-panel-actionbar"><div><h2>Etiquetas de pontos QR</h2><p>Gere, imprima e fixe os QR Codes nos pontos físicos de cada rota.</p></div><button class="rv-btn secondary" id="rv-btn-imprimir-qrs"><i class="fas fa-print"></i> Imprimir selecionados</button></div>
+        <div id="rv-qrcodes-lista" class="rv-qr-grid"><div class="rv-empty"><i class="fas fa-qrcode"></i><p>Crie uma rota e seus pontos para gerar QR Codes.</p></div></div>
+    </section>
+
+    <section class="rv-panel" id="rv-panel-relatorios">
+        <div class="rv-panel-actionbar"><div><h2>Relatórios de ronda</h2><p>Consulte cumprimento de SLA, leituras por rota e histórico da equipe.</p></div><button class="rv-btn primary" id="rv-btn-exportar-csv"><i class="fas fa-file-csv"></i> Exportar CSV</button></div>
+        <div class="rv-card rv-report-filter">
+            <label>De<input type="date" id="rv-rel-de"></label>
+            <label>Até<input type="date" id="rv-rel-ate"></label>
+            <label>Rota<select id="rv-rel-rota"><option value="">Todas as rotas</option></select></label>
+            <label>Vigilante<select id="rv-rel-vigilante"><option value="">Todos os vigilantes</option></select></label>
+            <button class="rv-btn secondary" id="rv-btn-gerar-relatorio"><i class="fas fa-filter"></i> Gerar relatório</button>
+        </div>
+        <div class="rv-report-kpis"><span>Total: <strong id="rv-rel-total">—</strong></span><span>No prazo: <strong class="success" id="rv-rel-prazo">—</strong></span><span>Atrasadas: <strong class="danger" id="rv-rel-atrasado">—</strong></span></div>
+        <div class="rv-table-wrap"><table><thead><tr><th>Data/Hora</th><th>Rota</th><th>Ponto</th><th>Vigilante</th><th>SLA</th><th>Atraso</th></tr></thead><tbody id="rv-rel-tbody"><tr><td colspan="6" class="rv-loading">Defina os filtros e gere o relatório.</td></tr></tbody></table></div>
+    </section>
+</div>
+
+<div class="rv-modal" id="rv-modal-rota" aria-hidden="true"><div class="rv-modal-box rv-modal-lg"><button class="rv-modal-close" data-rv-close="rv-modal-rota">×</button><h2 id="rv-rota-modal-titulo">Nova rota</h2><p class="rv-muted">Defina a janela operacional e o ciclo de repetição da ronda.</p>
+    <form id="rv-form-rota" class="rv-form-grid"><input type="hidden" id="rv-rota-id"><label class="full">Nome da ronda<input id="rv-rota-nome" required maxlength="120" placeholder="Ex.: Ronda Perimetral Noturna"></label><label class="full">Descrição<textarea id="rv-rota-descricao" maxlength="500" placeholder="Objetivo e orientações da ronda"></textarea></label><label>Hora para início<input id="rv-rota-inicio" type="time" required value="20:00"></label><label>Hora final (opcional)<input id="rv-rota-fim" type="time"></label><label>Tempo por ciclo (min.)<input id="rv-rota-intervalo" type="number" min="5" max="1440" value="60" required></label><label>Repetições previstas<input id="rv-rota-repeticoes" type="number" min="1" max="288" value="1" required></label><label>Tolerância de SLA (min.)<input id="rv-rota-tolerancia" type="number" min="0" max="240" value="10" required></label><label class="rv-switch-label">Rota ativa<input id="rv-rota-ativo" type="checkbox" checked><span></span></label><div class="full"><strong>Dias da semana</strong><div class="rv-weekdays"><label><input type="checkbox" value="0">Dom</label><label><input type="checkbox" value="1" checked>Seg</label><label><input type="checkbox" value="2" checked>Ter</label><label><input type="checkbox" value="3" checked>Qua</label><label><input type="checkbox" value="4" checked>Qui</label><label><input type="checkbox" value="5" checked>Sex</label><label><input type="checkbox" value="6">Sáb</label></div></div><div class="rv-form-actions full"><button type="button" class="rv-btn secondary" data-rv-close="rv-modal-rota">Cancelar</button><button class="rv-btn primary" type="submit"><i class="fas fa-save"></i> Salvar rota</button></div></form></div></div>
+
+<div class="rv-modal" id="rv-modal-ponto" aria-hidden="true"><div class="rv-modal-box"><button class="rv-modal-close" data-rv-close="rv-modal-ponto">×</button><h2 id="rv-ponto-modal-titulo">Novo ponto QR</h2><form id="rv-form-ponto" class="rv-form-grid"><input type="hidden" id="rv-ponto-id"><input type="hidden" id="rv-ponto-rota-id"><label class="full">Nome do ponto<input id="rv-ponto-nome" required maxlength="120" placeholder="Ex.: Portão lateral"></label><label class="full">Localização<input id="rv-ponto-local" maxlength="255" placeholder="Ex.: Fundos, próximo ao gerador"></label><label class="full">Instruções<textarea id="rv-ponto-instrucoes" maxlength="500" placeholder="O que deve ser verificado neste ponto"></textarea></label><label>Ordem do percurso<input id="rv-ponto-ordem" type="number" min="1" value="1" required></label><label class="rv-switch-label">Ponto ativo<input id="rv-ponto-ativo" type="checkbox" checked><span></span></label><div class="rv-form-actions full"><button type="button" class="rv-btn secondary" data-rv-close="rv-modal-ponto">Cancelar</button><button class="rv-btn primary" type="submit"><i class="fas fa-qrcode"></i> Salvar ponto</button></div></form></div></div>
+
+<div class="rv-modal" id="rv-modal-vigilante" aria-hidden="true"><div class="rv-modal-box"><button class="rv-modal-close" data-rv-close="rv-modal-vigilante">×</button><h2>Vincular vigilante</h2><p class="rv-muted">Os colaboradores são carregados diretamente do Recursos Humanos do condomínio selecionado.</p><form id="rv-form-vigilante" class="rv-form-grid"><input type="hidden" id="rv-vig-rota-id"><label class="full">Colaborador<select id="rv-vig-colaborador" required><option value="">Selecione</option></select></label><div class="rv-form-actions full"><button type="button" class="rv-btn secondary" data-rv-close="rv-modal-vigilante">Cancelar</button><button class="rv-btn primary" type="submit"><i class="fas fa-link"></i> Vincular</button></div></form></div></div>

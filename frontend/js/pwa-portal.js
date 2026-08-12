@@ -39,7 +39,7 @@ const PWAPortal = (() => {
                 console.log('[PWA] Config carregada do banco. Projeto:', FIREBASE_CONFIG.projectId);
                 return true;
             }
-            console.warn('[PWA] Firebase não configurado — acesse o ERP → Portal PWA → Central PWA para configurar.');
+            console.warn('[PWA] Firebase não configurado — acesse o Super-Admin → Aplicativos → Central PWA para configurar.');
             return false;
         } catch (e) {
             console.error('[PWA] Erro ao carregar config:', e);
