@@ -16,7 +16,8 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 require_once 'error_logger.php';
 ob_end_clean();
 
@@ -51,8 +52,6 @@ if (!function_exists('retornar_json')) {
 }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
-define('UPLOAD_DIR',      dirname(__DIR__) . '/uploads/moradores_anexos/');
-define('UPLOAD_URL_PATH', 'uploads/moradores_anexos/');
 define('MAX_TAMANHO',     10 * 1024 * 1024); // 10 MB
 define('TIPOS_ACEITOS', [
     'application/pdf'  => 'pdf',
@@ -62,11 +61,6 @@ define('TIPOS_ACEITOS', [
     'image/gif'        => 'gif',
     'image/webp'       => 'webp',
 ]);
-
-// Garantir que o diretório de upload existe
-if (!is_dir(UPLOAD_DIR)) {
-    mkdir(UPLOAD_DIR, 0755, true);
-}
 
 // ── Autenticação ──────────────────────────────────────────────────────────────
 try {
@@ -90,18 +84,16 @@ if ($metodo === 'GET' && isset($_GET['download'])) {
     if ($res->num_rows === 0) { retornar_json(false, 'Anexo não encontrado'); }
     $row = $res->fetch_assoc();
     $stmt->close();
+
+    $caminho = ltrim($row['caminho'], './');
+    $lookup = $conexao->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+    $lookup->bind_param('is', $tenant_id, $caminho);
+    $lookup->execute();
+    $arquivoBanco = $lookup->get_result()->fetch_assoc();
+    $lookup->close();
     fechar_conexao($conexao);
-
-    $caminho_abs = dirname(__DIR__) . '/' . $row['caminho'];
-    if (!file_exists($caminho_abs)) { retornar_json(false, 'Arquivo não encontrado no servidor'); }
-
-    // Servir o arquivo diretamente
-    header('Content-Type: ' . $row['tipo_mime']);
-    header('Content-Disposition: attachment; filename="' . addslashes($row['nome_original']) . '"');
-    header('Content-Length: ' . filesize($caminho_abs));
-    header('Cache-Control: private');
-    ob_end_clean();
-    readfile($caminho_abs);
+    if (!$arquivoBanco) { retornar_json(false, 'Arquivo não encontrado no armazenamento do tenant'); }
+    header('Location: /api/api_arquivos_tenant.php?acao=conteudo&id=' . (int)$arquivoBanco['id'] . '&download=1');
     exit;
 }
 
@@ -111,10 +103,10 @@ if ($metodo === 'GET' && isset($_GET['id'])) {
     $stmt = $conexao->prepare(
         "SELECT a.*, m.nome as morador_nome
          FROM moradores_anexos a
-         LEFT JOIN moradores m ON a.morador_id = m.id
-         WHERE a.id = ? AND a.ativo = 1"
+         LEFT JOIN moradores m ON a.morador_id = m.id AND m.tenant_id = a.tenant_id
+         WHERE a.tenant_id = ? AND a.id = ? AND a.ativo = 1"
     );
-    $stmt->bind_param('i', $id);
+    $stmt->bind_param('ii', $tenant_id, $id);
     $stmt->execute();
     $res = $stmt->get_result();
     if ($res->num_rows === 0) { retornar_json(false, 'Anexo não encontrado'); }
@@ -196,11 +188,12 @@ if ($metodo === 'POST') {
     // Gerar nome único para o arquivo
     $extensao      = TIPOS_ACEITOS[$tipo_mime];
     $nome_servidor = time() . '_' . uniqid() . '.' . $extensao;
-    $caminho_abs   = UPLOAD_DIR . $nome_servidor;
-    $caminho_rel   = UPLOAD_URL_PATH . $nome_servidor;
-
-    if (!move_uploaded_file($arquivo['tmp_name'], $caminho_abs)) {
-        retornar_json(false, 'Falha ao mover o arquivo para o servidor');
+    $caminho_rel   = 'uploads/moradores_anexos/tenant_' . (int)$tenant_id . '/' . $nome_servidor;
+    try {
+        tenant_file_gravar_upload($conexao, (int)$tenant_id, $arquivo, 'morador_anexo', $caminho_rel, false);
+    } catch (Throwable $e) {
+        error_log('[MoradoresAnexos][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        retornar_json(false, 'Falha ao armazenar arquivo no banco');
     }
 
     // Obter usuário logado
@@ -209,11 +202,12 @@ if ($metodo === 'POST') {
     // Inserir no banco
     $stmt = $conexao->prepare(
         "INSERT INTO moradores_anexos
-         (morador_id, nome_documento, nome_arquivo, nome_original, caminho, tipo_mime, tamanho_bytes, criado_por)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+         (tenant_id, morador_id, nome_documento, nome_arquivo, nome_original, caminho, tipo_mime, tamanho_bytes, criado_por)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
     $stmt->bind_param(
-        'isssssss',
+        'iisssssis',
+        $tenant_id,
         $morador_id,
         $nome_documento,
         $nome_servidor,
@@ -231,8 +225,8 @@ if ($metodo === 'POST') {
         fechar_conexao($conexao);
         retornar_json(true, 'Anexo enviado com sucesso', ['id' => $id_inserido]);
     } else {
-        // Remover arquivo se falhou a inserção
-        @unlink($caminho_abs);
+        // Desativa o BLOB se o vínculo no módulo falhar.
+        try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, $caminho_rel); } catch (Throwable $e) { error_log('[MoradoresAnexos][Arquivo] ' . $e->getMessage()); }
         $stmt->close();
         fechar_conexao($conexao);
         retornar_json(false, 'Erro ao salvar no banco de dados');
@@ -261,6 +255,7 @@ if ($metodo === 'DELETE') {
     $stmt->bind_param('i', $id);
     if ($stmt->execute()) {
         $criado_por = $_SESSION['usuario_nome'] ?? 'Sistema';
+        try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, ltrim($row['caminho'], './')); } catch (Throwable $e) { error_log('[MoradoresAnexos][Arquivo] ' . $e->getMessage()); }
         registrar_log('ANEXO_MORADOR_REMOVIDO', "Anexo '{$row['nome_documento']}' removido (ID $id)", $criado_por);
         $stmt->close();
         fechar_conexao($conexao);

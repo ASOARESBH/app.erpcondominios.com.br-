@@ -10,6 +10,9 @@
  */
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth_helper.php';
+require_once __DIR__ . '/tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 
 header('Content-Type: application/json; charset=utf-8');
 $_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -546,7 +549,7 @@ function responder_meus_votos() {
 // ANEXOS
 // ════════════════════════════════════════════════════════════
 function responder_upload_anexo() {
-    global $conn, $uid;
+    global $conn, $uid, $tenant_id;
     _exigir_admin();
     $aid       = (int)($_POST['assembleia_id'] ?? 0);
     $tipo_anx  = $_POST['tipo_anexo'] ?? 'documento';
@@ -560,22 +563,28 @@ function responder_upload_anexo() {
     $ext    = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, $ext_ok)) { _erro('Extensão não permitida'); return; }
 
-    $dir = __DIR__ . '/../uploads/assembleias/' . $aid . '/';
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $ass = mysqli_prepare($conn, 'SELECT id FROM assembleias WHERE tenant_id=? AND id=? LIMIT 1');
+    mysqli_stmt_bind_param($ass, 'ii', $tenant_id, $aid); mysqli_stmt_execute($ass);
+    $assembleia = mysqli_fetch_assoc(mysqli_stmt_get_result($ass)); mysqli_stmt_close($ass);
+    if (!$assembleia) { _erro('Assembleia não encontrada'); return; }
 
     $fname = uniqid('anx_') . '.' . $ext;
-    $dest  = $dir . $fname;
-    if (!move_uploaded_file($file['tmp_name'], $dest)) { _erro('Falha ao salvar arquivo'); return; }
-
-    $caminho = 'uploads/assembleias/' . $aid . '/' . $fname;
+    $caminho = 'uploads/assembleias/tenant_' . (int)$tenant_id . '/assembleia_' . $aid . '/' . $fname;
     $tamanho = $file['size'];
-    $mime    = $file['type'];
-    $nome    = $file['name'];
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($file['tmp_name']) ?: 'application/octet-stream';
+    $nome = $file['name'];
+    try {
+        tenant_file_gravar_upload($conn, (int)$tenant_id, $file, 'assembleia_anexo', $caminho, false);
+    } catch (Throwable $e) {
+        error_log('[Assembleia][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        _erro('Falha ao armazenar arquivo no banco'); return;
+    }
 
     $stmt = mysqli_prepare($conn,
-        "INSERT INTO assembleia_anexos (assembleia_id, tipo_anexo, nome_arquivo, caminho_arquivo, tamanho_bytes, mime_type, enviado_por)
-         VALUES (?,?,?,?,?,?,?)");
-    mysqli_stmt_bind_param($stmt, 'isssiis', $aid, $tipo_anx, $nome, $caminho, $tamanho, $mime, $uid);
+        "INSERT INTO assembleia_anexos (tenant_id, assembleia_id, tipo_anexo, nome_arquivo, caminho_arquivo, tamanho_bytes, mime_type, enviado_por)
+         VALUES (?,?,?,?,?,?,?,?)");
+    mysqli_stmt_bind_param($stmt, 'iisssisi', $tenant_id, $aid, $tipo_anx, $nome, $caminho, $tamanho, $mime, $uid);
     if (mysqli_stmt_execute($stmt)) {
         echo json_encode(['ok' => true, 'id' => mysqli_insert_id($conn), 'caminho' => $caminho, 'mensagem' => 'Arquivo enviado']);
     } else {
@@ -584,11 +593,11 @@ function responder_upload_anexo() {
 }
 
 function responder_listar_anexos() {
-    global $conn;
+    global $conn, $tenant_id;
     $aid = (int)($_GET['assembleia_id'] ?? 0);
     if (!$aid) { _erro('assembleia_id obrigatório'); return; }
-    $stmt = mysqli_prepare($conn, "SELECT * FROM assembleia_anexos WHERE assembleia_id=? ORDER BY enviado_em DESC");
-    mysqli_stmt_bind_param($stmt, 'i', $aid);
+    $stmt = mysqli_prepare($conn, "SELECT * FROM assembleia_anexos WHERE tenant_id=? AND assembleia_id=? ORDER BY enviado_em DESC");
+    mysqli_stmt_bind_param($stmt, 'ii', $tenant_id, $aid);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
     $rows = [];
@@ -597,19 +606,18 @@ function responder_listar_anexos() {
 }
 
 function responder_excluir_anexo() {
-    global $conn, $body;
+    global $conn, $body, $tenant_id;
     _exigir_admin();
     $id = (int)($body['id'] ?? $_GET['id'] ?? 0);
     if (!$id) { _erro('ID obrigatório'); return; }
-    $r = mysqli_query($conn, "SELECT caminho_arquivo FROM assembleia_anexos WHERE id=$id");
-    $anx = mysqli_fetch_assoc($r);
-    if ($anx) {
-        $path = __DIR__ . '/../' . $anx['caminho_arquivo'];
-        if (file_exists($path)) @unlink($path);
-    }
-    $stmt = mysqli_prepare($conn, "DELETE FROM assembleia_anexos WHERE id=?");
-    mysqli_stmt_bind_param($stmt, 'i', $id);
+    $stmtBusca = mysqli_prepare($conn, 'SELECT caminho_arquivo FROM assembleia_anexos WHERE tenant_id=? AND id=?');
+    mysqli_stmt_bind_param($stmtBusca, 'ii', $tenant_id, $id); mysqli_stmt_execute($stmtBusca);
+    $anx = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtBusca)); mysqli_stmt_close($stmtBusca);
+    if (!$anx) { _erro('Anexo não encontrado', 404); return; }
+    $stmt = mysqli_prepare($conn, "DELETE FROM assembleia_anexos WHERE tenant_id=? AND id=?");
+    mysqli_stmt_bind_param($stmt, 'ii', $tenant_id, $id);
     mysqli_stmt_execute($stmt);
+    try { tenant_file_desativar_caminho($conn, (int)$tenant_id, ltrim($anx['caminho_arquivo'], './')); } catch (Throwable $e) { error_log('[Assembleia][Arquivo] ' . $e->getMessage()); }
     echo json_encode(['ok' => true, 'mensagem' => 'Anexo excluído']);
 }
 

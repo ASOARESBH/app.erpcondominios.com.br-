@@ -8,7 +8,8 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -36,15 +37,8 @@ $tenant_id = exigirTenantId();
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
 
-// Diretório de uploads
-define('UPLOAD_DIR_FOTOS', __DIR__ . '/../uploads/visitantes/fotos/');
-define('UPLOAD_DIR_DOCS',  __DIR__ . '/../uploads/visitantes/documentos/');
-define('UPLOAD_URL_FOTOS', '../uploads/visitantes/fotos/');
-define('UPLOAD_URL_DOCS',  '../uploads/visitantes/documentos/');
-
-// Criar diretórios se não existirem
-if (!is_dir(UPLOAD_DIR_FOTOS)) @mkdir(UPLOAD_DIR_FOTOS, 0755, true);
-if (!is_dir(UPLOAD_DIR_DOCS))  @mkdir(UPLOAD_DIR_DOCS,  0755, true);
+// Armazenamento físico removido: fotos e documentos são persistidos em tenant_arquivos.
+// Os campos da tabela mantêm URLs legadas apenas como chave de compatibilidade.
 
 // ========== UPLOAD DE FOTO / DOCUMENTO ==========
 if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'upload') {
@@ -75,11 +69,13 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'upload') {
     }
 
     $nome_arquivo = ($tipo_upload === 'foto' ? 'foto' : 'doc') . '_' . $visitante_id . '_' . time() . '.' . $ext;
-    $dir_destino  = ($tipo_upload === 'foto') ? UPLOAD_DIR_FOTOS : UPLOAD_DIR_DOCS;
-    $url_relativa = ($tipo_upload === 'foto') ? UPLOAD_URL_FOTOS . $nome_arquivo : UPLOAD_URL_DOCS . $nome_arquivo;
-
-    if (!move_uploaded_file($campo_arquivo['tmp_name'], $dir_destino . $nome_arquivo)) {
-        retornar_json(false, "Erro ao salvar arquivo no servidor");
+    $caminho_legado = ($tipo_upload === 'foto') ? 'uploads/visitantes/fotos/' . $nome_arquivo : 'uploads/visitantes/documentos/' . $nome_arquivo;
+    try {
+        $arquivoBanco = tenant_file_gravar_upload($conexao, (int)$tenant_id, $campo_arquivo, $tipo_upload === 'foto' ? 'visitante_foto' : 'visitante_documento', $caminho_legado, false);
+        $url_relativa = '../' . $arquivoBanco['caminho_legado'];
+    } catch (Throwable $e) {
+        error_log('[Visitantes][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        retornar_json(false, 'Erro ao armazenar arquivo no banco');
     }
 
     // Atualizar o campo no banco
@@ -129,13 +125,13 @@ if ($metodo === 'GET') {
                    cep, endereco, numero, complemento, bairro, cidade, estado,
                    observacao, ativo,
                    DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro_formatada
-            FROM visitantes ";
+            FROM visitantes WHERE tenant_id = $tenant_id ";
 
     if (!empty($busca)) {
-        $sql .= "WHERE nome_completo LIKE '%$busca%'
+        $sql .= "AND (nome_completo LIKE '%$busca%'
                     OR documento LIKE '%$busca%'
                     OR telefone_contato LIKE '%$busca%'
-                    OR placa_veiculo LIKE '%$busca%' ";
+                    OR placa_veiculo LIKE '%$busca%') ";
     }
 
     $sql .= "ORDER BY nome_completo ASC";
@@ -212,13 +208,13 @@ if ($metodo === 'POST') {
     // Inserir visitante
     $stmt = $conexao->prepare(
         "INSERT INTO visitantes
-            (nome_completo, documento, tipo_documento, telefone_contato, telefone, celular,
+            (tenant_id, nome_completo, documento, tipo_documento, telefone_contato, telefone, celular,
              placa_veiculo, email, cep, endereco, numero, complemento, bairro, cidade, estado, observacao)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
     $stmt->bind_param(
-        "ssssssssssssssss",
-        $nome_completo, $documento, $tipo_documento, $telefone_contato, $telefone, $celular,
+        "issssssssssssssss",
+        $tenant_id, $nome_completo, $documento, $tipo_documento, $telefone_contato, $telefone, $celular,
         $placa_veiculo, $email, $cep, $endereco, $numero, $complemento, $bairro, $cidade, $estado, $observacao
     );
 
@@ -325,9 +321,11 @@ if ($metodo === 'DELETE') {
     $stmt->bind_param("i", $id);
 
     if ($stmt->execute()) {
-        // Remover arquivos de upload
-        if (!empty($row['foto']))              @unlink(__DIR__ . '/../' . ltrim($row['foto'], './'));
-        if (!empty($row['documento_arquivo'])) @unlink(__DIR__ . '/../' . ltrim($row['documento_arquivo'], './'));
+        // Desativa os BLOBs do tenant; nunca apaga arquivos físicos do domínio.
+        foreach ([$row['foto'], $row['documento_arquivo']] as $caminho) {
+            if (!$caminho) continue;
+            try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, ltrim($caminho, './')); } catch (Throwable $e) { error_log('[Visitantes][Arquivo] ' . $e->getMessage()); }
+        }
 
         registrar_log($conexao, 'INFO', "Visitante excluído: " . $row['nome_completo'] . " (ID: $id)");
         retornar_json(true, "Visitante excluído com sucesso");

@@ -1,0 +1,13 @@
+# Compatibilidade de URLs legadas /uploads/... com arquivos guardados no banco.
+# Após a migração, esta pasta deve conter somente este arquivo de roteamento.
+Options -Indexes
+RewriteEngine On
+
+# Nunca permitir execução de código enviado por usuário.
+<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
+    Require all denied
+</FilesMatch>
+
+# Todo caminho legado é resolvido por tenant_arquivos. A API verifica sessão,
+# tenant_id e a flag público antes de transmitir o conteúdo binário.
+RewriteRule ^(.+)$ ../api/api_arquivos_tenant.php?acao=legado&caminho=uploads/$1 [QSA,L,NE]

@@ -51,28 +51,26 @@ function responder_logo($sucesso, $mensagem, $dados = [], $status = 200) {
 }
 
 function caminho_logo_valido($base_dir, $url) {
-    if (!$url || !is_string($url)) {
-        return null;
-    }
-
+    if (!$url || !is_string($url)) return null;
     $url = ltrim(trim($url), '/');
-    if (strpos($url, '..') !== false || strpos($url, '://') !== false) {
-        return null;
-    }
-
+    if (strpos($url, '..') !== false || strpos($url, '://') !== false) return null;
     $caminho = $base_dir . '/' . $url;
     $real_arquivo = realpath($caminho);
     $real_diretorio_logo = realpath($base_dir . '/uploads/logo');
-
-    if (!$real_arquivo || !$real_diretorio_logo || !is_file($real_arquivo)) {
-        return null;
-    }
-
-    if (strpos($real_arquivo, $real_diretorio_logo . DIRECTORY_SEPARATOR) !== 0) {
-        return null;
-    }
-
+    if (!$real_arquivo || !$real_diretorio_logo || !is_file($real_arquivo)) return null;
+    if (strpos($real_arquivo, $real_diretorio_logo . DIRECTORY_SEPARATOR) !== 0) return null;
     return $url;
+}
+
+function url_logo_banco($conexao, $tenant_id, $caminho_legado) {
+    if (!$caminho_legado || !is_string($caminho_legado)) return null;
+    $stmt = $conexao->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+    if (!$stmt) return null;
+    $stmt->bind_param('is', $tenant_id, $caminho_legado);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ? '/api/api_arquivos_tenant.php?acao=conteudo&id=' . (int)$row['id'] : null;
 }
 
 try {
@@ -101,8 +99,9 @@ try {
         responder_logo(false, 'Tenant ativo não localizado.', [], 404);
     }
 
-    $logo_url = caminho_logo_valido($base_dir, $tenant['logo_url'] ?? null);
-    $fonte = 'tenants';
+    $logo_url = url_logo_banco($conexao, $tenant_id, $tenant['logo_url'] ?? null);
+    $fonte = $logo_url ? 'tenants_banco' : 'tenants';
+    if (!$logo_url) $logo_url = caminho_logo_valido($base_dir, $tenant['logo_url'] ?? null);
 
     // Compatibilidade com dados detalhados do mesmo tenant, sem cruzar empresas.
     if (!$logo_url) {
@@ -118,9 +117,12 @@ try {
             $stmt->execute();
             $empresa = $stmt->get_result()->fetch_assoc();
             $stmt->close();
-            $logo_url = caminho_logo_valido($base_dir, $empresa['logo_url'] ?? null);
+            $logo_url = url_logo_banco($conexao, $tenant_id, $empresa['logo_url'] ?? null);
             if ($logo_url) {
-                $fonte = 'empresa';
+                $fonte = 'empresa_banco';
+            } else {
+                $logo_url = caminho_logo_valido($base_dir, $empresa['logo_url'] ?? null);
+                if ($logo_url) $fonte = 'empresa_legado';
             }
         }
     }

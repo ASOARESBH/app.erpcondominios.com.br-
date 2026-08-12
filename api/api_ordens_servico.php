@@ -67,7 +67,8 @@ ini_set('session.gc_maxlifetime', 7200);
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 ob_end_clean();
 
 // ─── Headers ─────────────────────────────────────────
@@ -454,9 +455,10 @@ function _os_garantir_esquema_projetos($conn) {
         UNIQUE KEY uk_nome (nome)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-    // Fotos de obra por interação — arquivo real em disco (não base64), no padrão de uploads do GED
+    // Fotos de obra por interação — conteúdo persistido em tenant_arquivos.
     $conn->query("CREATE TABLE IF NOT EXISTS os_interacao_fotos (
         id                    INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id             INT NOT NULL DEFAULT 1,
         interacao_id          INT NOT NULL,
         arquivo               VARCHAR(255) NOT NULL,
         arquivo_nome_original VARCHAR(255) DEFAULT NULL,
@@ -473,20 +475,7 @@ function _os_garantir_esquema_projetos($conn) {
         _os_add_column_if_missing($conn, 'documentos', 'os_id', "INT DEFAULT NULL");
     }
 
-    // Diretórios de upload (capa do projeto + fotos de obra). Mesmo essas
-    // imagens sendo eventualmente públicas, o acesso direto à pasta é
-    // bloqueado — toda entrega passa por api_imagem_projeto.php, que valida
-    // se o projeto está publicado antes de servir o arquivo (nunca expor
-    // fotos de um projeto ainda não publicado por URL previsível).
-    foreach (['projetos_capas', 'projetos_fotos'] as $subdir) {
-        $dir = dirname(__DIR__) . '/uploads/' . $subdir;
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-        if (!is_file($dir . '/.htaccess')) {
-            file_put_contents($dir . '/.htaccess', "Order Deny,Allow\nDeny from all\n");
-        }
-    }
+    // Capas e fotos de obra são mantidas em tenant_arquivos; não há diretórios públicos.
 }
 _os_garantir_esquema_projetos($conn);
 
@@ -537,7 +526,8 @@ function _os_salvar_campos_projeto($conn, $os_id, $dados) {
 
 // Upload de imagem (capa do projeto ou foto de obra) — mesmas validações de
 // extensão/MIME/tamanho já usadas pelo GED em api_documentos.php.
-function _os_processar_upload_imagem($file, $dir) {
+function _os_processar_upload_imagem($conn, $file, string $tipo) {
+    global $tenant_id;
     $tipos_permitidos = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
     $exts_permitidas  = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
     $limite_bytes     = 15 * 1024 * 1024; // 15 MB
@@ -554,14 +544,16 @@ function _os_processar_upload_imagem($file, $dir) {
     $mime  = $finfo->file($file['tmp_name']);
     if (!in_array($mime, $tipos_permitidos)) return ['ok' => false, 'erro' => "Tipo MIME não permitido: $mime."];
 
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
     $nome_unico = uniqid('img_', true) . '.' . $ext;
-    $destino    = $dir . '/' . $nome_unico;
-    if (!move_uploaded_file($file['tmp_name'], $destino)) return ['ok' => false, 'erro' => 'Falha ao salvar o arquivo no servidor.'];
-
-    _os_gerar_thumbnail($destino, $dir, $nome_unico);
-
-    return ['ok' => true, 'arquivo' => $nome_unico, 'original' => $file['name'], 'tamanho' => (int)$file['size']];
+    $pasta = $tipo === 'projeto_imagem_capa' ? 'projetos_capas' : 'projetos_fotos';
+    $caminho = 'uploads/' . $pasta . '/tenant_' . (int)$tenant_id . '/' . $nome_unico;
+    try {
+        tenant_file_gravar_upload($conn, (int)$tenant_id, $file, 'projeto_imagem', $caminho, true);
+    } catch (Throwable $e) {
+        error_log('[OS][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        return ['ok' => false, 'erro' => 'Falha ao armazenar imagem no banco.'];
+    }
+    return ['ok' => true, 'arquivo' => $caminho, 'original' => $file['name'], 'tamanho' => (int)$file['size']];
 }
 
 // Gera uma miniatura 400x250 em WebP ao lado do original, para os cards do
@@ -619,21 +611,19 @@ function _os_gerar_thumbnail(string $origemPath, string $dir, string $nomeArquiv
 // original na pasta de fotos, nunca o substitui) e atualiza
 // os_chamados.projeto_imagem_capa. Falha silenciosamente se o arquivo de
 // origem não existir — nunca interrompe o fluxo de adicionar_interacao.
-function _os_promover_foto_a_capa($conn, int $osId, string $dirOrigem, string $dirCapas, string $arquivoFoto): void {
-    $nomeOrigem = basename($arquivoFoto);
-    $caminhoOrigem = $dirOrigem . '/' . $nomeOrigem;
-    if (!is_file($caminhoOrigem)) return;
-
-    if (!is_dir($dirCapas)) mkdir($dirCapas, 0755, true);
-    $ext = pathinfo($nomeOrigem, PATHINFO_EXTENSION);
-    $novoNome = uniqid('capa_', true) . '.' . $ext;
-    $destino  = $dirCapas . '/' . $novoNome;
-    if (!copy($caminhoOrigem, $destino)) return;
-
-    _os_gerar_thumbnail($destino, $dirCapas, $novoNome);
-
-    $novoNomeEsc = $conn->real_escape_string($novoNome);
-    $conn->query("UPDATE os_chamados SET projeto_imagem_capa='$novoNomeEsc' WHERE tenant_id = $tenant_id AND id=$osId");
+function _os_promover_foto_a_capa($conn, int $osId, string $arquivoFoto): void {
+    global $tenant_id;
+    $caminho = ltrim($arquivoFoto, './');
+    $stmt = $conn->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+    $stmt->bind_param('is', $tenant_id, $caminho);
+    $stmt->execute();
+    $arquivo = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$arquivo) return;
+    $stmt = $conn->prepare('UPDATE os_chamados SET projeto_imagem_capa=? WHERE tenant_id=? AND id=?');
+    $stmt->bind_param('sii', $caminho, $tenant_id, $osId);
+    $stmt->execute();
+    $stmt->close();
 }
 
 // ─── Roteamento por ação ─────────────────────────────
@@ -1481,7 +1471,6 @@ switch ($acao) {
         // Upload de fotos de obra (opcional, mesma requisição multipart)
         $fotos_salvas = [];
         if (!empty($_FILES['fotos']['tmp_name']) && is_array($_FILES['fotos']['tmp_name'])) {
-            $dir_fotos = dirname(__DIR__) . '/uploads/projetos_fotos';
             $total_fotos = count($_FILES['fotos']['tmp_name']);
             for ($i = 0; $i < min($total_fotos, 10); $i++) {
                 if (($_FILES['fotos']['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) continue;
@@ -1491,10 +1480,10 @@ switch ($acao) {
                     'size'     => $_FILES['fotos']['size'][$i],
                     'error'    => $_FILES['fotos']['error'][$i],
                 ];
-                $up_foto = _os_processar_upload_imagem($file_foto, $dir_fotos);
+                $up_foto = _os_processar_upload_imagem($conn, $file_foto, 'projeto_imagem');
                 if ($up_foto['ok']) {
-                    $stmt_foto = $conn->prepare("INSERT INTO os_interacao_fotos (interacao_id, arquivo, arquivo_nome_original, arquivo_tamanho) VALUES (?,?,?,?)");
-                    $stmt_foto->bind_param('issi', $int_id, $up_foto['arquivo'], $up_foto['original'], $up_foto['tamanho']);
+                    $stmt_foto = $conn->prepare("INSERT INTO os_interacao_fotos (tenant_id, interacao_id, arquivo, arquivo_nome_original, arquivo_tamanho) VALUES (?,?,?,?,?)");
+                    $stmt_foto->bind_param('iissi', $tenant_id, $int_id, $up_foto['arquivo'], $up_foto['original'], $up_foto['tamanho']);
                     $stmt_foto->execute();
                     $fotos_salvas[] = $up_foto['arquivo'];
                 }
@@ -1503,7 +1492,7 @@ switch ($acao) {
 
         // "Imagem principal": a primeira foto deste envio passa a ser a capa pública do projeto.
         if ($fotos_salvas && !empty($dados['definir_capa'])) {
-            _os_promover_foto_a_capa($conn, $os_id, dirname(__DIR__) . '/uploads/projetos_fotos', dirname(__DIR__) . '/uploads/projetos_capas', $fotos_salvas[0]);
+            _os_promover_foto_a_capa($conn, $os_id, $fotos_salvas[0]);
         }
 
         os_log('info', 'Interação adicionada', ['os_id' => $os_id, 'tipo' => $tipo]);
@@ -1926,8 +1915,7 @@ switch ($acao) {
         $res = $conn->query("SELECT id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
         if (!$res || $res->num_rows === 0) retornar_json(false, 'O.S não encontrada');
 
-        $dir = dirname(__DIR__) . '/uploads/projetos_capas';
-        $up  = _os_processar_upload_imagem($_FILES['imagem'], $dir);
+        $up  = _os_processar_upload_imagem($conn, $_FILES['imagem'], 'projeto_imagem_capa');
         if (!$up['ok']) retornar_json(false, $up['erro']);
 
         $stmt = $conn->prepare("UPDATE os_chamados SET projeto_imagem_capa=? WHERE tenant_id = $tenant_id AND id=?");
@@ -1947,7 +1935,6 @@ switch ($acao) {
         $interacaoRow = $res ? $res->fetch_assoc() : null;
         if (!$interacaoRow) retornar_json(false, 'Interação não encontrada');
 
-        $dir = dirname(__DIR__) . '/uploads/projetos_fotos';
         $salvas = [];
         $arquivos = $_FILES['fotos'] ?? null;
         if ($arquivos && is_array($arquivos['tmp_name'])) {
@@ -1960,10 +1947,10 @@ switch ($acao) {
                     'size'     => $arquivos['size'][$i],
                     'error'    => $arquivos['error'][$i],
                 ];
-                $up = _os_processar_upload_imagem($file, $dir);
+                $up = _os_processar_upload_imagem($conn, $file, 'projeto_imagem');
                 if ($up['ok']) {
-                    $stmt = $conn->prepare("INSERT INTO os_interacao_fotos (interacao_id, arquivo, arquivo_nome_original, arquivo_tamanho) VALUES (?,?,?,?)");
-                    $stmt->bind_param('issi', $interacao_id, $up['arquivo'], $up['original'], $up['tamanho']);
+                    $stmt = $conn->prepare("INSERT INTO os_interacao_fotos (tenant_id, interacao_id, arquivo, arquivo_nome_original, arquivo_tamanho) VALUES (?,?,?,?,?)");
+                    $stmt->bind_param('iissi', $tenant_id, $interacao_id, $up['arquivo'], $up['original'], $up['tamanho']);
                     $stmt->execute();
                     $salvas[] = $up['arquivo'];
                 }
@@ -1975,7 +1962,7 @@ switch ($acao) {
         // pública do projeto — cópia física para uploads/projetos_capas
         // (mantém a foto original intacta na galeria/timeline).
         if (!empty($_POST['definir_capa'])) {
-            _os_promover_foto_a_capa($conn, (int)$interacaoRow['os_id'], $dir, dirname(__DIR__) . '/uploads/projetos_capas', $salvas[0]);
+            _os_promover_foto_a_capa($conn, (int)$interacaoRow['os_id'], $salvas[0]);
         }
 
         os_log('info', 'Fotos de obra enviadas', ['interacao_id' => $interacao_id, 'total' => count($salvas)]);

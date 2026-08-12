@@ -6,7 +6,8 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -49,12 +50,6 @@ $conexao = conectar_banco();
 // Para operações de escrita, verificar permissão de admin
 if ($metodo !== 'GET') {
     verificarPermissao('admin');
-}
-
-// Criar diretório de uploads se não existir
-$upload_dir = 'uploads/notificacoes/';
-if (!file_exists($upload_dir)) {
-    mkdir($upload_dir, 0755, true);
 }
 
 // ========== LISTAR NOTIFICAÇÕES ==========
@@ -208,25 +203,16 @@ if ($metodo === 'POST') {
             retornar_json(false, "Arquivo muito grande. Tamanho máximo: 10MB");
         }
         
-        // Verificar se o diretório existe e tem permissão de escrita
-        if (!is_dir($upload_dir)) {
-            if (!mkdir($upload_dir, 0755, true)) {
-                retornar_json(false, "Erro: Não foi possível criar diretório de upload");
-            }
-        }
-        
-        if (!is_writable($upload_dir)) {
-            retornar_json(false, "Erro: Diretório de upload sem permissão de escrita");
-        }
-        
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
         $anexo_nome = $arquivo['name'];
-        $anexo_tipo = $arquivo['type'];
+        $anexo_tipo = $finfo->file($arquivo['tmp_name']) ?: 'application/octet-stream';
         $nome_arquivo = time() . '_' . uniqid() . '.' . $extensao;
-        $anexo_caminho = $upload_dir . $nome_arquivo;
-        
-        if (!move_uploaded_file($arquivo['tmp_name'], $anexo_caminho)) {
-            $erro = error_get_last();
-            retornar_json(false, "Erro ao fazer upload do arquivo. Verifique permissões do diretório uploads/notificacoes/");
+        $anexo_caminho = 'uploads/notificacoes/tenant_' . (int)$tenant_id . '/' . $nome_arquivo;
+        try {
+            tenant_file_gravar_upload($conexao, (int)$tenant_id, $arquivo, 'notificacao_anexo', $anexo_caminho, false);
+        } catch (Throwable $e) {
+            error_log('[Notificacoes][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+            retornar_json(false, 'Erro ao armazenar o anexo no banco');
         }
     }
     
@@ -247,8 +233,8 @@ if ($metodo === 'POST') {
         $stmt->close();
         
         // Se novo arquivo foi enviado, excluir o anterior
-        if ($anexo_caminho && $notif_anterior['anexo_caminho'] && file_exists($notif_anterior['anexo_caminho'])) {
-            unlink($notif_anterior['anexo_caminho']);
+        if ($anexo_caminho && !empty($notif_anterior['anexo_caminho'])) {
+            try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, ltrim($notif_anterior['anexo_caminho'], './')); } catch (Throwable $e) { error_log('[Notificacoes][Arquivo] ' . $e->getMessage()); }
         }
         
         if ($anexo_caminho) {
@@ -273,12 +259,12 @@ if ($metodo === 'POST') {
     } else {
         // CRIAR
         // Obter próximo número sequencial
-        $resultado = $conexao->query("SELECT MAX(numero_sequencial) as max_num FROM notificacoes");
+        $resultado = $conexao->query("SELECT MAX(numero_sequencial) as max_num FROM notificacoes WHERE tenant_id = $tenant_id");
         $row = $resultado->fetch_assoc();
         $numero_sequencial = ($row['max_num'] ?? 0) + 1;
         
-        $stmt = $conexao->prepare("INSERT INTO notificacoes (numero_sequencial, data_hora, assunto, resumo, anexo_nome, anexo_caminho, anexo_tipo) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("issssss", $numero_sequencial, $data_hora, $assunto, $resumo, $anexo_nome, $anexo_caminho, $anexo_tipo);
+        $stmt = $conexao->prepare("INSERT INTO notificacoes (tenant_id, numero_sequencial, data_hora, assunto, resumo, anexo_nome, anexo_caminho, anexo_tipo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("iissssss", $tenant_id, $numero_sequencial, $data_hora, $assunto, $resumo, $anexo_nome, $anexo_caminho, $anexo_tipo);
         
         if ($stmt->execute()) {
             $novo_id = $conexao->insert_id;
@@ -313,9 +299,8 @@ if ($metodo === 'DELETE') {
         $notif = $resultado->fetch_assoc();
         $stmt->close();
         
-        // Excluir arquivo físico se existir
-        if ($notif['anexo_caminho'] && file_exists($notif['anexo_caminho'])) {
-            unlink($notif['anexo_caminho']);
+        if (!empty($notif['anexo_caminho'])) {
+            try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, ltrim($notif['anexo_caminho'], './')); } catch (Throwable $e) { error_log('[Notificacoes][Arquivo] ' . $e->getMessage()); }
         }
         
         // Marcar como inativo (soft delete)

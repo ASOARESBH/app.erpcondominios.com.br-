@@ -30,7 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 
 function retornar_json($sucesso, $mensagem, $dados = null) {
     echo json_encode([
@@ -233,33 +234,21 @@ if ($action === 'upload_logo' && $metodo === 'POST') {
             retornar_json(false, 'Arquivo muito grande. Máximo 5MB');
         }
         
-        // ── Multi-Tenant: pasta separada por tenant_id ──────────────────────
-        // Cada condomínio tem sua própria pasta: uploads/logo/tenant_{id}/
-        $diretorio_upload = dirname(__DIR__) . '/uploads/logo/tenant_' . $tenant_id;
-        if (!is_dir($diretorio_upload)) {
-            mkdir($diretorio_upload, 0755, true);
-        }
-
-        // Remover logos anteriores deste tenant para manter apenas uma
-        $arquivos_existentes = glob($diretorio_upload . '/logo.*');
-        foreach ($arquivos_existentes as $arq) {
-            if (is_file($arq)) {
-                unlink($arq);
-            }
-        }
-
-        // Definir novo nome fixo para o tenant
+        // Armazenamento Multi-Tenant centralizado no banco. O caminho legado é
+        // preservado somente como chave de compatibilidade para links existentes.
         $extensao = strtolower(pathinfo($arquivo['name'], PATHINFO_EXTENSION));
         $nome_arquivo = 'logo.' . $extensao;
-        $caminho_completo = $diretorio_upload . '/' . $nome_arquivo;
-
-        if (!move_uploaded_file($arquivo['tmp_name'], $caminho_completo)) {
-            error_log("[API EMPRESA] Erro ao mover arquivo para: $caminho_completo");
-            retornar_json(false, 'Erro ao salvar arquivo');
-        }
-
-        // URL relativa isolada por tenant
         $url_relativa = 'uploads/logo/tenant_' . $tenant_id . '/' . $nome_arquivo;
+        $arquivoBanco = tenant_file_gravar_upload(
+            $conexao,
+            (int)$tenant_id,
+            $arquivo,
+            'logo_tenant',
+            $url_relativa,
+            false,
+            (int)$usuario_id
+        );
+        $url_relativa = $arquivoBanco['caminho_legado'];
 
         // Atualizar somente o registro associado ao tenant atual. Nunca usar id=1,
         // pois o primeiro registro da tabela pode pertencer a outro condomínio.

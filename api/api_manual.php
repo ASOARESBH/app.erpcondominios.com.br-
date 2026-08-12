@@ -5,7 +5,8 @@
  */
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 
 ob_start();
 header('Content-Type: application/json; charset=utf-8');
@@ -454,6 +455,7 @@ function _artigos_pendentes($db, $sessao) {
 }
 
 function _upload_imagem($db, $sessao) {
+    global $tenant_id;
     if (!_pode_editar($sessao)) {
         echo json_encode(['sucesso' => false, 'mensagem' => 'Sem permissão.']);
         return;
@@ -473,16 +475,14 @@ function _upload_imagem($db, $sessao) {
         return;
     }
 
-    $dir = '../uploads/manual/';
-    if (!is_dir($dir)) mkdir($dir, 0777, true);
-
-    $filename = 'manual_' . time() . '_' . rand(1000,9999) . '.' . $ext;
-    $path = $dir . $filename;
-
-    if (move_uploaded_file($file['tmp_name'], $path)) {
-        $url = 'https://app.erpcondominios.com.br/uploads/manual/' . $filename;
+    $filename = 'manual_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $caminho = 'uploads/manual/tenant_' . (int)$tenant_id . '/' . $filename;
+    try {
+        $arquivo = tenant_file_gravar_upload($db, (int)$tenant_id, $file, 'anexo_geral', $caminho, true, (int)($sessao['id'] ?? 0));
+        $url = '/api/api_arquivos_tenant.php?acao=publico&token=' . rawurlencode($arquivo['token_publico']);
         echo json_encode(['sucesso' => true, 'url' => $url]);
-    } else {
-        echo json_encode(['sucesso' => false, 'mensagem' => 'Falha ao salvar arquivo.']);
+    } catch (Throwable $e) {
+        error_log('[Manual][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        echo json_encode(['sucesso' => false, 'mensagem' => 'Falha ao armazenar imagem no banco.']);
     }
 }

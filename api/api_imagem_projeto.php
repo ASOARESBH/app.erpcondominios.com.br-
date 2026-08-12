@@ -33,17 +33,21 @@ function img_negar($msg = 'Acesso negado.', $code = 403) {
     exit;
 }
 
-// Serve o arquivo e finaliza a execução se ele existir; caso contrário,
-// apenas retorna false (o chamador tenta o próximo item da cascata).
-function img_servir_se_existir($caminho) {
-    if (!$caminho || !is_file($caminho)) return false;
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($caminho) ?: 'image/jpeg';
+// Serve um BLOB vinculado ao tenant e finaliza; retorna false se não encontrado.
+function img_servir_banco($conn, int $tenantId, string $caminho): bool {
+    $caminho = ltrim($caminho, './');
+    if ($tenantId <= 0 || $caminho === '') return false;
+    $stmt = $conn->prepare('SELECT mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE tenant_id=? AND caminho_legado=? AND ativo=1 AND publico=1 LIMIT 1');
+    $stmt->bind_param('is', $tenantId, $caminho);
+    $stmt->execute();
+    $arquivo = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$arquivo) return false;
     if (ob_get_length()) ob_clean();
-    header('Content-Type: ' . $mime);
+    header('Content-Type: ' . ($arquivo['mime_type'] ?: 'image/jpeg'));
     header('Cache-Control: public, max-age=86400');
-    header('Content-Length: ' . filesize($caminho));
-    readfile($caminho);
+    header('Content-Length: ' . (int)$arquivo['tamanho_bytes']);
+    echo $arquivo['conteudo'];
     exit;
 }
 
@@ -59,12 +63,6 @@ function img_servir_padrao() {
     img_negar('Imagem padrão não encontrada.', 404);
 }
 
-// Caminho da miniatura correspondente a um arquivo original, se existir.
-function img_caminho_thumb($dir, $arquivo) {
-    $base = pathinfo($arquivo, PATHINFO_FILENAME);
-    return $dir . '/' . $base . '_thumb.webp';
-}
-
 $conn = conectar_banco();
 if (!$conn) img_negar('Erro ao conectar ao banco de dados.', 500);
 $conn->set_charset('utf8mb4');
@@ -75,9 +73,6 @@ $fotoId  = (int)($_GET['id'] ?? 0);
 $thumb   = !empty($_GET['thumb']);
 
 if (!in_array($tipo, ['capa', 'foto'], true)) img_negar('Tipo inválido.', 400);
-
-$dirCapas = dirname(__DIR__) . '/uploads/projetos_capas';
-$dirFotos = dirname(__DIR__) . '/uploads/projetos_fotos';
 
 $fotoRow = null;
 if ($tipo === 'foto') {
@@ -94,7 +89,7 @@ if ($tipo === 'foto') {
 
 if (!$osId) img_negar('os_id inválido.', 400);
 
-$res = $conn->query("SELECT projeto_publico, projeto_imagem_capa FROM os_chamados WHERE id = $osId LIMIT 1");
+$res = $conn->query("SELECT tenant_id, projeto_publico, projeto_imagem_capa FROM os_chamados WHERE id = $osId LIMIT 1");
 $os  = $res ? $res->fetch_assoc() : null;
 if (!$os) img_negar('Projeto não encontrado.', 404);
 
@@ -107,30 +102,24 @@ if (!$autorizado) img_negar('Este projeto não está disponível.', 403);
 
 // ── Servir ────────────────────────────────────────────
 if ($tipo === 'foto') {
-    $arquivo = basename($fotoRow['arquivo']);
-    if ($thumb) img_servir_se_existir(img_caminho_thumb($dirFotos, $arquivo));
-    img_servir_se_existir($dirFotos . '/' . $arquivo);
+    if (img_servir_banco($conn, (int)$os['tenant_id'], $fotoRow['arquivo'])) exit;
     img_servir_padrao();
 }
 
 // tipo === 'capa' — prioridade: projeto_imagem_capa → primeira foto → padrão
 if (!empty($os['projeto_imagem_capa'])) {
-    $arquivo = basename($os['projeto_imagem_capa']);
-    if ($thumb) img_servir_se_existir(img_caminho_thumb($dirCapas, $arquivo));
-    img_servir_se_existir($dirCapas . '/' . $arquivo);
+    if (img_servir_banco($conn, (int)$os['tenant_id'], $os['projeto_imagem_capa'])) exit;
 }
 
 $resPrimeira = $conn->query(
     "SELECT f.arquivo FROM os_interacao_fotos f
      JOIN os_interacoes i ON i.id = f.interacao_id
-     WHERE i.os_id = $osId
+     WHERE f.tenant_id = " . (int)$os['tenant_id'] . " AND i.os_id = $osId
      ORDER BY f.criado_em ASC LIMIT 1"
 );
 $primeira = $resPrimeira ? $resPrimeira->fetch_assoc() : null;
 if ($primeira) {
-    $arquivo = basename($primeira['arquivo']);
-    if ($thumb) img_servir_se_existir(img_caminho_thumb($dirFotos, $arquivo));
-    img_servir_se_existir($dirFotos . '/' . $arquivo);
+    if (img_servir_banco($conn, (int)$os['tenant_id'], $primeira['arquivo'])) exit;
 }
 
 img_servir_padrao();

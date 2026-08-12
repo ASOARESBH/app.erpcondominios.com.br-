@@ -48,7 +48,8 @@ register_shutdown_function(function () {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -322,14 +323,7 @@ function _criar_tabelas($db) {
         $db->query("ALTER TABLE documentos ADD COLUMN `visibilidade` ENUM('todos','moradores','usuarios','unidades_especificas') NOT NULL DEFAULT 'todos' AFTER `unidades_acesso`");
     }
 
-    // Garantir diretório de uploads
-    $dir = dirname(__DIR__) . '/uploads/documentos';
-    if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
-        file_put_contents($dir . '/.htaccess',
-            "Order Deny,Allow\nDeny from all\n"
-        );
-    }
+    // Arquivos GED são persistidos exclusivamente em tenant_arquivos.
 }
 
 // ============================================================
@@ -769,6 +763,7 @@ function _documento_carregar($db) {
 }
 
 function _documento_salvar($db, $sessao) {
+    global $tenant_id;
     $id          = (int)($_POST['id'] ?? 0);
     $nome        = _esc($db, $_POST['nome']    ?? '');
     $desc        = _esc($db, $_POST['descricao'] ?? '');
@@ -811,7 +806,7 @@ function _documento_salvar($db, $sessao) {
     $arquivoOrig = '';
 
     if (!empty($_FILES['arquivo']['tmp_name'])) {
-        $upload = _processar_upload($_FILES['arquivo']);
+        $upload = _processar_upload($db, $_FILES['arquivo']);
         if (!$upload['success']) retornar_json(false, $upload['error']);
         $arquivoNovo = _esc($db, $upload['path']);
         $arquivoTipo = _esc($db, $upload['mime']);
@@ -831,8 +826,7 @@ function _documento_salvar($db, $sessao) {
             if ($rOld) {
                 $old = $rOld->fetch_assoc();
                 if (!empty($old['arquivo'])) {
-                    $oldPath = dirname(__DIR__) . '/uploads/documentos/' . basename($old['arquivo']);
-                    if (file_exists($oldPath)) unlink($oldPath);
+                    try { tenant_file_desativar_caminho($db, (int)$tenant_id, ltrim($old['arquivo'], './')); } catch (Throwable $e) { error_log('[GED][Arquivo] ' . $e->getMessage()); }
                 }
             }
             $setSql .= ", arquivo='$arquivoNovo', arquivo_tipo='$arquivoTipo',
@@ -850,11 +844,11 @@ function _documento_salvar($db, $sessao) {
 
         $arqMimeSql = $arquivoTipo ? "'$arquivoTipo'" : 'NULL';
         $db->query("INSERT INTO documentos
-                    (nome, descricao, departamento_id, pasta_id, grupo_id, tipo_id,
+                    (tenant_id, nome, descricao, departamento_id, pasta_id, grupo_id, tipo_id,
                      visibilidade, unidades_acesso, tags,
                      arquivo, arquivo_tipo, arquivo_tamanho, arquivo_nome_original,
                      link_externo, status, data_publicacao, data_expiracao, criado_por, atualizado_por)
-                    VALUES ('$nome','$desc',$depSql,$pastSql,$grupoSql,$tipoSqlId,
+                    VALUES ($tenant_id,'$nome','$desc',$depSql,$pastSql,$grupoSql,$tipoSqlId,
                             '$visib',$unidSql,'$tags',
                             $arqSql,$arqMimeSql,$arquivoTam,$origSql,
                             '$linkExt','$status',$pubSql,$expSql,$uid,$uid)");
@@ -909,7 +903,8 @@ function _doc_usuarios($db): void {
     retornar_json(true, 'OK', ['usuarios_ids' => $ids]);
 }
 
-function _processar_upload(array $file): array {
+function _processar_upload($db, array $file): array {
+    global $tenant_id;
     $tipos_permitidos = [
         'application/pdf', 'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -942,18 +937,18 @@ function _processar_upload(array $file): array {
     if (!in_array($mime, $tipos_permitidos))
         return ['success' => false, 'error' => "Tipo MIME não permitido: $mime."];
 
-    $dir = dirname(__DIR__) . '/uploads/documentos';
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
-
     $nomeUnico = uniqid('doc_', true) . '.' . $ext;
-    $destino   = $dir . '/' . $nomeUnico;
-
-    if (!move_uploaded_file($file['tmp_name'], $destino))
-        return ['success' => false, 'error' => 'Falha ao salvar o arquivo no servidor.'];
+    $caminho = 'uploads/documentos/tenant_' . (int)$tenant_id . '/' . $nomeUnico;
+    try {
+        tenant_file_gravar_upload($db, (int)$tenant_id, $file, 'documento', $caminho, false);
+    } catch (Throwable $e) {
+        error_log('[GED][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        return ['success' => false, 'error' => 'Falha ao armazenar o arquivo no banco.'];
+    }
 
     return [
         'success'  => true,
-        'path'     => $nomeUnico,
+        'path'     => $caminho,
         'mime'     => $mime,
         'size'     => $file['size'],
         'original' => $file['name'],
@@ -961,6 +956,7 @@ function _processar_upload(array $file): array {
 }
 
 function _documento_excluir($db, $sessao) {
+    global $tenant_id;
     $id = (int)($_POST['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
 
@@ -972,8 +968,7 @@ function _documento_excluir($db, $sessao) {
     $db->query("UPDATE documentos SET status='expirado' WHERE tenant_id = $tenant_id AND id=$id");
 
     if (!empty($doc['arquivo'])) {
-        $path = dirname(__DIR__) . '/uploads/documentos/' . basename($doc['arquivo']);
-        if (file_exists($path)) unlink($path);
+        try { tenant_file_desativar_caminho($db, (int)$tenant_id, ltrim($doc['arquivo'], './')); } catch (Throwable $e) { error_log('[GED][Arquivo] ' . $e->getMessage()); }
     }
 
     _log($db, $sessao, $id, 'exclusao', "Documento excluído: " . $doc['nome']);
@@ -984,6 +979,7 @@ function _documento_excluir($db, $sessao) {
 // DOWNLOAD (autenticado, registra acesso)
 // ============================================================
 function _download($db, $sessao) {
+    global $tenant_id;
     $id = (int)($_GET['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
 
@@ -996,18 +992,17 @@ function _download($db, $sessao) {
         retornar_json(true, 'OK', ['link_externo' => $doc['link_externo']]);
     }
 
-    $path = dirname(__DIR__) . '/uploads/documentos/' . basename($doc['arquivo']);
-    if (!file_exists($path)) retornar_json(false, 'Arquivo não encontrado no servidor.');
+    $caminho = ltrim($doc['arquivo'], './');
+    $lookup = $db->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+    $lookup->bind_param('is', $tenant_id, $caminho);
+    $lookup->execute();
+    $arquivoBanco = $lookup->get_result()->fetch_assoc();
+    $lookup->close();
+    if (!$arquivoBanco) retornar_json(false, 'Arquivo não encontrado no armazenamento do tenant.');
 
     _registrar_acesso($db, $sessao, $id, 'download', 'interno');
     _log($db, $sessao, $id, 'download', "Download: " . $doc['nome']);
-
-    if (ob_get_length()) ob_clean();
-    header('Content-Type: ' . ($doc['arquivo_tipo'] ?: 'application/octet-stream'));
-    header('Content-Disposition: attachment; filename="' . rawurlencode($doc['arquivo_nome_original'] ?: basename($doc['arquivo'])) . '"');
-    header('Content-Length: ' . filesize($path));
-    header('Cache-Control: private, no-cache');
-    readfile($path);
+    header('Location: /api/api_arquivos_tenant.php?acao=conteudo&id=' . (int)$arquivoBanco['id'] . '&download=1');
     exit;
 }
 

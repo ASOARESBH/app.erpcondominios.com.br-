@@ -12,7 +12,8 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 require_once 'error_logger.php';
 ob_end_clean();
 
@@ -36,12 +37,8 @@ if (!function_exists('retornar_json')) {
     }
 }
 
-define('RH_FOTO_DIR',  dirname(__DIR__) . '/uploads/rh_fotos/');
-define('RH_FOTO_URL',  'uploads/rh_fotos/');
 define('RH_MAX_SIZE',  5 * 1024 * 1024);
 define('RH_FOTO_TIPOS', ['image/jpeg' => 'jpg','image/jpg' => 'jpg','image/png' => 'png','image/webp' => 'webp','image/gif' => 'gif']);
-
-if (!is_dir(RH_FOTO_DIR)) mkdir(RH_FOTO_DIR, 0755, true);
 
 try { verificarAutenticacao(true, 'operador');
 $tenant_id = exigirTenantId(); }
@@ -130,20 +127,21 @@ if ($metodo === 'POST' && $acao === 'criar') {
 
     $stmt = $conn->prepare(
         "INSERT INTO rh_colaboradores
-         (nome,cpf,rg,data_nascimento,sexo,estado_civil,cargo,departamento,tipo_contrato,
+         (tenant_id,nome,cpf,rg,data_nascimento,sexo,estado_civil,cargo,departamento,tipo_contrato,
           data_admissao,data_demissao,salario,telefone,celular,email,
           cep,logradouro,numero,complemento,bairro,cidade,estado,
           banco,agencia,conta,pix,foto_path,observacoes)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     );
-    $stmt->bind_param('sssssssssssdssssssssssssssss',
-        $d['nome'],$d['cpf'],$d['rg'],$d['data_nascimento'],$d['sexo'],$d['estado_civil'],
+    $valoresCriacao = [
+        $tenant_id, $d['nome'],$d['cpf'],$d['rg'],$d['data_nascimento'],$d['sexo'],$d['estado_civil'],
         $d['cargo'],$d['departamento'],$d['tipo_contrato'],
         $d['data_admissao'],$d['data_demissao'],$d['salario'],
         $d['telefone'],$d['celular'],$d['email'],
         $d['cep'],$d['logradouro'],$d['numero'],$d['complemento'],$d['bairro'],$d['cidade'],$d['estado'],
         $d['banco'],$d['agencia'],$d['conta'],$d['pix'],$foto_path,$d['observacoes']
-    );
+    ];
+    $stmt->bind_param('i' . 'sssssssssssdssssssssssssssss', ...$valoresCriacao);
     if (!$stmt->execute()) { $erro = $stmt->error ?: $conn->error; $stmt->close(); fechar_conexao($conn); retornar_json(false, 'Erro ao criar colaborador: ' . $erro); }
     $novo_id = $conn->insert_id;
     $stmt->close();
@@ -178,7 +176,7 @@ if ($metodo === 'POST' && $acao === 'atualizar') {
         $old = $conn->prepare("SELECT foto_path FROM rh_colaboradores WHERE tenant_id = $tenant_id AND id=?");
         $old->bind_param('i',$id); $old->execute();
         $res = $old->get_result()->fetch_assoc(); $old->close();
-        if (!empty($res['foto_path'])) @unlink(dirname(__DIR__) . '/' . $res['foto_path']);
+        if (!empty($res['foto_path'])) { try { tenant_file_desativar_caminho($conn, (int)$tenant_id, ltrim($res['foto_path'], './')); } catch (Throwable $e) { error_log('[RH][Arquivo] ' . $e->getMessage()); } }
     }
 
     // ativo: 0 se demissão preenchida, 1 se removida
@@ -235,7 +233,7 @@ if ($metodo === 'POST' && $acao === 'upload_foto') {
     $old = $conn->prepare("SELECT foto_path FROM rh_colaboradores WHERE tenant_id = $tenant_id AND id=?");
     $old->bind_param('i',$id); $old->execute();
     $res = $old->get_result()->fetch_assoc(); $old->close();
-    if (!empty($res['foto_path'])) @unlink(dirname(__DIR__) . '/' . $res['foto_path']);
+    if (!empty($res['foto_path'])) { try { tenant_file_desativar_caminho($conn, (int)$tenant_id, ltrim($res['foto_path'], './')); } catch (Throwable $e) { error_log('[RH][Arquivo] ' . $e->getMessage()); } }
 
     $stmt = $conn->prepare("UPDATE rh_colaboradores SET foto_path=? WHERE tenant_id = $tenant_id AND id=?");
     $stmt->bind_param('si', $foto_path, $id);
@@ -294,17 +292,21 @@ function _extrair_dados_colaborador() {
 }
 
 function _salvar_foto(array $file): string {
+    global $conn, $tenant_id;
     if ($file['error'] !== UPLOAD_ERR_OK) retornar_json(false, 'Erro no upload da foto');
     if ($file['size'] > RH_MAX_SIZE) retornar_json(false, 'Foto excede 5 MB');
-
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime  = $finfo->file($file['tmp_name']);
     if (!isset(RH_FOTO_TIPOS[$mime])) retornar_json(false, 'Formato de foto inválido (JPG, PNG, WEBP, GIF)');
-
-    $ext      = RH_FOTO_TIPOS[$mime];
+    $ext = RH_FOTO_TIPOS[$mime];
     $filename = 'foto_' . time() . '_' . uniqid() . '.' . $ext;
-    $dest     = RH_FOTO_DIR . $filename;
-    if (!move_uploaded_file($file['tmp_name'], $dest)) retornar_json(false, 'Falha ao salvar foto');
-    return RH_FOTO_URL . $filename;
+    $caminho = 'uploads/rh_fotos/tenant_' . (int)$tenant_id . '/' . $filename;
+    try {
+        $arquivo = tenant_file_gravar_upload($conn, (int)$tenant_id, $file, 'rh_foto', $caminho, false);
+        return $arquivo['caminho_legado'];
+    } catch (Throwable $e) {
+        error_log('[RH][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        retornar_json(false, 'Falha ao armazenar foto no banco');
+    }
 }
 ?>

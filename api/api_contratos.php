@@ -12,7 +12,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 
 header('Content-Type: application/json; charset=utf-8');
 $_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -52,8 +53,6 @@ function log_contrato(string $tipo, string $descricao, array $extra = []): void 
 }
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
-define('UPLOAD_CONTRATOS', dirname(__DIR__) . '/uploads/contratos/');
-define('UPLOAD_CONTRATOS_URL', '../uploads/contratos/');
 define('TIPOS_MIME_PERMITIDOS', [
     'image/jpeg', 'image/jpg', 'image/png',
     'application/pdf',
@@ -188,6 +187,7 @@ try {
  * Listar contratos com filtros opcionais
  */
 function listarContratos($db): void {
+    global $tenant_id;
     $status     = $_GET['status']      ?? '';
     $fornecedor = $_GET['fornecedor']  ?? '';
     $tipo       = $_GET['tipo']        ?? '';
@@ -273,6 +273,7 @@ function listarContratos($db): void {
  * Buscar um contrato específico por ID
  */
 function buscarContrato($db): void {
+    global $tenant_id;
     $id = intval($_GET['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
@@ -295,6 +296,7 @@ function buscarContrato($db): void {
  * Cadastrar novo contrato e gerar lançamentos em contas_pagar
  */
 function cadastrarContrato($db): void {
+    global $tenant_id;
     // ── Coleta de campos ──────────────────────────────────────────────────────
     $fornecedor_id   = intval($_POST['fornecedor_id']   ?? 0);
     $fornecedor_nome = trim($_POST['fornecedor_nome']   ?? '');
@@ -346,13 +348,14 @@ function cadastrarContrato($db): void {
 
     // ── Inserir contrato ──────────────────────────────────────────────────────
     $sql = "INSERT INTO contratos
-                (numero_contrato, fornecedor_id, fornecedor_nome, fornecedor_cnpj,
+                (tenant_id, numero_contrato, fornecedor_id, fornecedor_nome, fornecedor_cnpj,
                  tipo_servico, nome_contrato, data_inicio, data_fim, recorrencia,
                  valor_total, data_vencimento, plano_conta_id, observacoes, status, ativo, data_criacao)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'".addslashes($status)."',1,NOW())";
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'".addslashes($status)."',1,NOW())";
 
     $stmt = $db->prepare($sql);
-    $stmt->bind_param('sisssssssdiss',
+    $stmt->bind_param('isisssssssdiss',
+        $tenant_id,
         $numero_contrato,
         $fornecedor_id,
         $fornecedor_nome,
@@ -406,6 +409,7 @@ function cadastrarContrato($db): void {
 function _gerarLancamentosContasPagar($db, $contrato_id, $numero_contrato, $fornecedor_nome,
     $plano_conta_id, $descricao, $valor_total, $data_inicio, $data_vencimento,
     $recorrencia, $data_fim): bool {
+    global $tenant_id;
 
     $vencimentos = [];
     try {
@@ -465,11 +469,11 @@ function _gerarLancamentosContasPagar($db, $contrato_id, $numero_contrato, $forn
     $valor_parcela = $recorrencia === 'unica' ? $valor_total : round($valor_total / $total_parcelas, 2);
 
     $sql = "INSERT INTO contas_pagar
-                (numero_documento, fornecedor_nome, plano_conta_id, descricao,
+                (tenant_id, numero_documento, fornecedor_nome, plano_conta_id, descricao,
                  valor_original, valor_pago, saldo_devedor,
                  data_emissao, data_vencimento, status, observacoes,
                  contrato_id, ativo, data_criacao)
-            VALUES (?,?,?,?,?,0,?,?,?,'PENDENTE',?,?,1,NOW())";
+            VALUES (?,?,?,?,?,?,0,?,?,?,'PENDENTE',?,?,1,NOW())";
 
     $stmt = $db->prepare($sql);
     if (!$stmt) {
@@ -484,7 +488,8 @@ function _gerarLancamentosContasPagar($db, $contrato_id, $numero_contrato, $forn
         $data_emis  = date('Y-m-d');
         $saldo      = $valor_parcela;
 
-        if (!$stmt->bind_param('ssissdsssi',
+        if (!$stmt->bind_param('ississdsssi',
+            $tenant_id,
             $num_doc,
             $fornecedor_nome,
             $plano_conta_id,
@@ -515,6 +520,7 @@ function _gerarLancamentosContasPagar($db, $contrato_id, $numero_contrato, $forn
  * Atualizar contrato existente
  */
 function atualizarContrato($db): void {
+    global $tenant_id;
     $id              = intval($_POST['id']            ?? 0);
     $fornecedor_id   = intval($_POST['fornecedor_id'] ?? 0);
     $fornecedor_nome = trim($_POST['fornecedor_nome'] ?? '');
@@ -565,6 +571,7 @@ function atualizarContrato($db): void {
  * Soft delete de contrato
  */
 function deletarContrato($db): void {
+    global $tenant_id;
     $id = intval($_POST['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
@@ -585,6 +592,7 @@ function deletarContrato($db): void {
  * Upload de documento vinculado a um contrato (máx. 4 por contrato)
  */
 function uploadDocumento($db): void {
+    global $tenant_id;
     $contrato_id  = intval($_POST['contrato_id']  ?? 0);
     $nome_doc     = trim($_POST['nome_documento'] ?? '');
     $tipo_doc     = trim($_POST['tipo_documento'] ?? ''); // contrato | aditivo | ata | outros
@@ -640,31 +648,26 @@ function uploadDocumento($db): void {
         retornar_json(false, 'Extensão não permitida');
     }
 
-    // Criar diretório
-    $dir = UPLOAD_CONTRATOS . $contrato_id . '/';
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
-
-    // Nome único
     $nome_arquivo = uniqid("doc_{$contrato_id}_") . '.' . $ext;
-    $caminho      = $dir . $nome_arquivo;
-
-    if (!move_uploaded_file($arquivo['tmp_name'], $caminho)) {
-        retornar_json(false, 'Erro ao salvar arquivo no servidor');
+    $url_relativa = 'uploads/contratos/tenant_' . (int)$tenant_id . '/contrato_' . $contrato_id . '/' . $nome_arquivo;
+    try {
+        tenant_file_gravar_upload($db, (int)$tenant_id, $arquivo, 'contrato_anexo', $url_relativa, false);
+    } catch (Throwable $e) {
+        error_log('[Contratos][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        retornar_json(false, 'Erro ao armazenar documento no banco');
     }
-
-    $url_relativa = UPLOAD_CONTRATOS_URL . $contrato_id . '/' . $nome_arquivo;
 
     // Inserir no banco
     $stmt = $db->prepare("INSERT INTO contrato_documentos
-                            (contrato_id, nome_documento, tipo_documento, nome_arquivo, url_arquivo, tamanho, mime_type, ativo, data_upload)
-                          VALUES (?,?,?,?,?,?,?,1,NOW())");
-    $stmt->bind_param('issssds',
-        $contrato_id, $nome_doc, $tipo_doc, $nome_arquivo, $url_relativa,
+                            (tenant_id, contrato_id, nome_documento, tipo_documento, nome_arquivo, url_arquivo, tamanho, mime_type, ativo, data_upload)
+                          VALUES (?,?,?,?,?,?,?,?,1,NOW())");
+    $stmt->bind_param('iissssds',
+        $tenant_id, $contrato_id, $nome_doc, $tipo_doc, $nome_arquivo, $url_relativa,
         $arquivo['size'], $mime
     );
 
     if (!$stmt->execute()) {
-        @unlink($caminho);
+        try { tenant_file_desativar_caminho($db, (int)$tenant_id, $url_relativa); } catch (Throwable $e) { error_log('[Contratos][Arquivo] ' . $e->getMessage()); }
         retornar_json(false, 'Erro ao registrar documento: ' . $stmt->error);
     }
     $doc_id = $stmt->insert_id;
@@ -678,6 +681,7 @@ function uploadDocumento($db): void {
  * Listar documentos de um contrato
  */
 function listarDocumentos($db): void {
+    global $tenant_id;
     $contrato_id = intval($_GET['contrato_id'] ?? 0);
     if ($contrato_id <= 0) retornar_json(false, 'Contrato inválido');
 
@@ -696,10 +700,11 @@ function listarDocumentos($db): void {
  * Excluir documento (soft delete + remove arquivo físico)
  */
 function deletarDocumento($db): void {
+    global $tenant_id;
     $id = intval($_POST['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $db->prepare("SELECT nome_arquivo, contrato_id FROM contrato_documentos WHERE tenant_id = $tenant_id AND id=? AND ativo=1");
+    $stmt = $db->prepare("SELECT nome_arquivo, contrato_id, url_arquivo FROM contrato_documentos WHERE tenant_id = $tenant_id AND id=? AND ativo=1");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $doc = $stmt->get_result()->fetch_assoc();
@@ -713,9 +718,7 @@ function deletarDocumento($db): void {
     $upd->execute();
     $upd->close();
 
-    // Remover arquivo físico
-    $caminho = UPLOAD_CONTRATOS . $doc['contrato_id'] . '/' . $doc['nome_arquivo'];
-    if (file_exists($caminho)) @unlink($caminho);
+    try { tenant_file_desativar_caminho($db, (int)$tenant_id, ltrim($doc['url_arquivo'], './')); } catch (Throwable $e) { error_log('[Contratos][Arquivo] ' . $e->getMessage()); }
 
     log_contrato('DOC_DELETADO', "Documento ID $id excluído do contrato {$doc['contrato_id']}");
     retornar_json(true, 'Documento excluído com sucesso');
@@ -729,6 +732,7 @@ function deletarDocumento($db): void {
  * Salvar orçamento (INSERT ou UPDATE)
  */
 function salvarOrcamento($db): void {
+    global $tenant_id;
     $id           = intval($_POST['id']           ?? 0);
     $contrato_id  = intval($_POST['contrato_id']  ?? 0);
     $fornecedor   = trim($_POST['fornecedor']     ?? '');
@@ -759,8 +763,8 @@ function salvarOrcamento($db): void {
         $stmt->bind_param('ssdsii', $fornecedor, $descricao, $valor, $justificativa, $id, $contrato_id);
     } else {
         // Inserir
-        $stmt = $db->prepare("INSERT INTO contrato_orcamentos (contrato_id, fornecedor, descricao, valor, justificativa, data_criacao) VALUES (?,?,?,?,?,NOW())");
-        $stmt->bind_param('issds', $contrato_id, $fornecedor, $descricao, $valor, $justificativa);
+        $stmt = $db->prepare("INSERT INTO contrato_orcamentos (tenant_id, contrato_id, fornecedor, descricao, valor, justificativa, data_criacao) VALUES (?,?,?,?,?,?,NOW())");
+        $stmt->bind_param('iissds', $tenant_id, $contrato_id, $fornecedor, $descricao, $valor, $justificativa);
     }
 
     if (!$stmt->execute()) retornar_json(false, 'Erro ao salvar orçamento: ' . $stmt->error);
@@ -786,6 +790,7 @@ function salvarOrcamento($db): void {
  * Listar orçamentos de um contrato
  */
 function listarOrcamentos($db): void {
+    global $tenant_id;
     $contrato_id = intval($_GET['contrato_id'] ?? 0);
     if ($contrato_id <= 0) retornar_json(false, 'Contrato inválido');
 
@@ -807,6 +812,7 @@ function listarOrcamentos($db): void {
  * Excluir orçamento
  */
 function deletarOrcamento($db): void {
+    global $tenant_id;
     $id = intval($_POST['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
@@ -829,6 +835,7 @@ function deletarOrcamento($db): void {
 function garantirTabelaOrcamentoDocumentos($db): void {
     $db->query("CREATE TABLE IF NOT EXISTS `contrato_orcamento_documentos` (
         `id`              INT AUTO_INCREMENT PRIMARY KEY,
+        `tenant_id`       INT          NOT NULL,
         `orcamento_id`    INT          NOT NULL,
         `nome_documento`  VARCHAR(255) NOT NULL,
         `tipo_documento`  VARCHAR(50)  NOT NULL,
@@ -838,7 +845,7 @@ function garantirTabelaOrcamentoDocumentos($db): void {
         `mime_type`       VARCHAR(100) DEFAULT NULL,
         `ativo`           TINYINT(1)   NOT NULL DEFAULT 1,
         `data_upload`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX `idx_orcamento_id` (`orcamento_id`),
+        INDEX `idx_tenant_orcamento` (`tenant_id`, `orcamento_id`),
         INDEX `idx_ativo`        (`ativo`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
@@ -847,6 +854,7 @@ function garantirTabelaOrcamentoDocumentos($db): void {
  * Upload de documento vinculado a um orçamento
  */
 function uploadOrcamentoDocumento($db): void {
+    global $tenant_id;
     garantirTabelaOrcamentoDocumentos($db);
     $orcamento_id = intval($_POST['orcamento_id'] ?? 0);
     $nome_doc     = trim($_POST['nome_documento'] ?? '');
@@ -896,31 +904,26 @@ function uploadOrcamentoDocumento($db): void {
         retornar_json(false, 'Extensão não permitida');
     }
 
-    // Criar diretório
-    $dir = UPLOAD_CONTRATOS . $contrato_id . '/orcamentos/' . $orcamento_id . '/';
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
-
-    // Nome único
     $nome_arquivo = uniqid("orcdoc_{$orcamento_id}_") . '.' . $ext;
-    $caminho      = $dir . $nome_arquivo;
-
-    if (!move_uploaded_file($arquivo['tmp_name'], $caminho)) {
-        retornar_json(false, 'Erro ao salvar arquivo no servidor');
+    $url_relativa = 'uploads/contratos/tenant_' . (int)$tenant_id . '/contrato_' . $contrato_id . '/orcamentos/' . $orcamento_id . '/' . $nome_arquivo;
+    try {
+        tenant_file_gravar_upload($db, (int)$tenant_id, $arquivo, 'contrato_anexo', $url_relativa, false);
+    } catch (Throwable $e) {
+        error_log('[Contratos][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        retornar_json(false, 'Erro ao armazenar documento no banco');
     }
-
-    $url_relativa = UPLOAD_CONTRATOS_URL . $contrato_id . '/orcamentos/' . $orcamento_id . '/' . $nome_arquivo;
 
     // Inserir no banco
     $stmt = $db->prepare("INSERT INTO contrato_orcamento_documentos
-                            (orcamento_id, nome_documento, tipo_documento, nome_arquivo, url_arquivo, tamanho, mime_type, ativo, data_upload)
-                          VALUES (?,?,?,?,?,?,?,1,NOW())");
-    $stmt->bind_param('issssds',
-        $orcamento_id, $nome_doc, $tipo_doc, $nome_arquivo, $url_relativa,
+                            (tenant_id, orcamento_id, nome_documento, tipo_documento, nome_arquivo, url_arquivo, tamanho, mime_type, ativo, data_upload)
+                          VALUES (?,?,?,?,?,?,?,?,1,NOW())");
+    $stmt->bind_param('iissssds',
+        $tenant_id, $orcamento_id, $nome_doc, $tipo_doc, $nome_arquivo, $url_relativa,
         $arquivo['size'], $mime
     );
 
     if (!$stmt->execute()) {
-        @unlink($caminho);
+        try { tenant_file_desativar_caminho($db, (int)$tenant_id, $url_relativa); } catch (Throwable $e) { error_log('[Contratos][Arquivo] ' . $e->getMessage()); }
         retornar_json(false, 'Erro ao registrar documento: ' . $stmt->error);
     }
     $doc_id = $stmt->insert_id;
@@ -934,12 +937,13 @@ function uploadOrcamentoDocumento($db): void {
  * Listar documentos de um orçamento
  */
 function listarOrcamentoDocumentos($db): void {
+    global $tenant_id;
     garantirTabelaOrcamentoDocumentos($db);
     $orcamento_id = intval($_GET['orcamento_id'] ?? 0);
     if ($orcamento_id <= 0) retornar_json(false, 'Orçamento inválido');
 
-    $stmt = $db->prepare("SELECT * FROM contrato_orcamento_documentos WHERE orcamento_id=? AND ativo=1 ORDER BY data_upload ASC");
-    $stmt->bind_param('i', $orcamento_id);
+    $stmt = $db->prepare("SELECT * FROM contrato_orcamento_documentos WHERE tenant_id=? AND orcamento_id=? AND ativo=1 ORDER BY data_upload ASC");
+    $stmt->bind_param('ii', $tenant_id, $orcamento_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $docs = [];
@@ -953,14 +957,15 @@ function listarOrcamentoDocumentos($db): void {
  * Excluir documento do orçamento (soft delete + remove arquivo físico)
  */
 function deletarOrcamentoDocumento($db): void {
+    global $tenant_id;
     $id = intval($_POST['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $db->prepare("SELECT od.nome_arquivo, od.orcamento_id, o.contrato_id
+    $stmt = $db->prepare("SELECT od.nome_arquivo, od.url_arquivo, od.orcamento_id, o.contrato_id
                            FROM contrato_orcamento_documentos od
-                           JOIN contrato_orcamentos o ON o.id = od.orcamento_id
-                           WHERE od.id=? AND od.ativo=1");
-    $stmt->bind_param('i', $id);
+                           JOIN contrato_orcamentos o ON o.id = od.orcamento_id AND o.tenant_id = od.tenant_id
+                           WHERE od.tenant_id=? AND od.id=? AND od.ativo=1");
+    $stmt->bind_param('ii', $tenant_id, $id);
     $stmt->execute();
     $doc = $stmt->get_result()->fetch_assoc();
     $stmt->close();
@@ -968,14 +973,12 @@ function deletarOrcamentoDocumento($db): void {
     if (!$doc) retornar_json(false, 'Documento não encontrado');
 
     // Soft delete
-    $upd = $db->prepare("UPDATE contrato_orcamento_documentos SET ativo=0 WHERE id=?");
-    $upd->bind_param('i', $id);
+    $upd = $db->prepare("UPDATE contrato_orcamento_documentos SET ativo=0 WHERE tenant_id=? AND id=?");
+    $upd->bind_param('ii', $tenant_id, $id);
     $upd->execute();
     $upd->close();
 
-    // Remover arquivo físico
-    $caminho = UPLOAD_CONTRATOS . $doc['contrato_id'] . '/orcamentos/' . $doc['orcamento_id'] . '/' . $doc['nome_arquivo'];
-    if (file_exists($caminho)) @unlink($caminho);
+    try { tenant_file_desativar_caminho($db, (int)$tenant_id, ltrim($doc['url_arquivo'], './')); } catch (Throwable $e) { error_log('[Contratos][Arquivo] ' . $e->getMessage()); }
 
     log_contrato('ORC_DOC_DELETADO', "Documento ID $id excluído do orçamento {$doc['orcamento_id']}");
     retornar_json(true, 'Documento excluído com sucesso');
@@ -986,6 +989,7 @@ function deletarOrcamentoDocumento($db): void {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function buscarFornecedores($db): void {
+    global $tenant_id;
     $q = trim($_GET['q'] ?? '');
     if (strlen($q) < 2) retornar_json(true, 'OK', []);
 
@@ -1013,6 +1017,7 @@ function buscarFornecedores($db): void {
  * Relatório: Contratos Ativos
  */
 function relatorioAtivos($db): void {
+    global $tenant_id;
     $tipo = $_GET['tipo'] ?? '';
 
     $where = ["c.ativo=1", "c.status='ativo'"];
@@ -1059,6 +1064,7 @@ function relatorioAtivos($db): void {
  * Relatório: Contratos por Vencimento (próximos 30/60/90 dias)
  */
 function relatorioVencimentos($db): void {
+    global $tenant_id;
     $dias = intval($_GET['dias'] ?? 30);
 
     $sql = "SELECT c.numero_contrato, c.fornecedor_nome, c.nome_contrato,
@@ -1091,7 +1097,8 @@ function relatorioVencimentos($db): void {
  * Relatório: Contratos por Fornecedor
  */
 function relatorioPorFornecedor($db): void {
-    $sql = "SELECT c.fornecedor_nome, c.fornecedor_cnpj,
+    global $tenant_id;
+    $fornecedorsql = "SELECT c.fornecedor_nome, c.fornecedor_cnpj,
                    COUNT(*) AS total_contratos,
                    SUM(c.valor_total) AS valor_total,
                    SUM(CASE WHEN c.status='ativo' THEN 1 ELSE 0 END) AS ativos,
@@ -1114,6 +1121,7 @@ function relatorioPorFornecedor($db): void {
  * Relatório: Financeiro (contratos x contas_pagar)
  */
 function relatorioFinanceiro($db): void {
+    global $tenant_id;
     $data_ini = $_GET['data_ini'] ?? date('Y-01-01');
     $data_fim = $_GET['data_fim'] ?? date('Y-12-31');
 

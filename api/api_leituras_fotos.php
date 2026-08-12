@@ -23,7 +23,8 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -43,8 +44,6 @@ if (!function_exists('retornar_json')) {
     }
 }
 
-define('LF_UPLOAD_DIR',  dirname(__DIR__) . '/uploads/leituras_fotos/');
-define('LF_UPLOAD_PATH', 'uploads/leituras_fotos/');
 define('LF_MAX_TAMANHO', 8 * 1024 * 1024); // 8 MB (já vem comprimido do front-end)
 define('LF_TIPOS_ACEITOS', [
     'image/jpeg' => 'jpg',
@@ -52,10 +51,6 @@ define('LF_TIPOS_ACEITOS', [
     'image/png'  => 'png',
     'image/webp' => 'webp',
 ]);
-
-if (!is_dir(LF_UPLOAD_DIR)) {
-    mkdir(LF_UPLOAD_DIR, 0755, true);
-}
 
 // ── Autenticação: só o ERP Administrativo captura/anexa fotos ──────────────
 // (Portal do Morador é somente leitura — usa visualizar_foto_leitura.php)
@@ -96,9 +91,9 @@ if ($metodo === 'GET') {
                        DATE_FORMAT(l.data_leitura, '%d/%m/%Y %H:%i') as data_leitura_formatada,
                        l.leitura_atual, l.consumo
                 FROM leituras_fotos f
-                INNER JOIN hidrometros h ON h.id = f.hidrometro_id
-                LEFT JOIN leituras l ON l.id = f.leitura_id
-                WHERE f.hidrometro_id = ?
+                INNER JOIN hidrometros h ON h.id = f.hidrometro_id AND h.tenant_id = f.tenant_id
+                LEFT JOIN leituras l ON l.id = f.leitura_id AND l.tenant_id = f.tenant_id
+                WHERE f.tenant_id = $tenant_id AND f.hidrometro_id = ?
                 ORDER BY f.data_upload DESC" . ($apenas_ultima ? " LIMIT 1" : "");
 
         $stmt = $conexao->prepare($sql);
@@ -161,11 +156,12 @@ if ($metodo === 'POST') {
 
     $extensao      = LF_TIPOS_ACEITOS[$tipo_mime];
     $nome_servidor = 'leitura_' . $hidrometro_id . '_' . time() . '_' . uniqid() . '.' . $extensao;
-    $caminho_abs   = LF_UPLOAD_DIR . $nome_servidor;
-    $caminho_rel   = LF_UPLOAD_PATH . $nome_servidor;
-
-    if (!move_uploaded_file($arquivo['tmp_name'], $caminho_abs)) {
-        retornar_json(false, 'Falha ao salvar a foto no servidor');
+    $caminho_rel   = 'uploads/leituras_fotos/tenant_' . (int)$tenant_id . '/' . $nome_servidor;
+    try {
+        tenant_file_gravar_upload($conexao, (int)$tenant_id, $arquivo, 'leitura_foto', $caminho_rel, false);
+    } catch (Throwable $e) {
+        error_log('[LeiturasFotos][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        retornar_json(false, 'Falha ao armazenar a foto no banco');
     }
 
     $usuario_nome = $_SESSION['usuario_nome'] ?? $_SESSION['usuario_email'] ?? 'Sistema';
@@ -174,12 +170,13 @@ if ($metodo === 'POST') {
 
     $stmt = $conexao->prepare(
         "INSERT INTO leituras_fotos
-            (leitura_id, hidrometro_id, nome_arquivo, nome_original, caminho, tipo_mime, tamanho_bytes,
+            (tenant_id, leitura_id, hidrometro_id, nome_arquivo, nome_original, caminho, tipo_mime, tamanho_bytes,
              origem, lancado_por_tipo, lancado_por_id, lancado_por_nome, ip_origem)
-         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, 'usuario', ?, ?, ?)"
+         VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'usuario', ?, ?, ?)"
     );
     $stmt->bind_param(
-        'isssssisss',
+        'iissssisiss',
+        $tenant_id,
         $hidrometro_id,
         $nome_servidor,
         $arquivo['name'],
@@ -202,7 +199,7 @@ if ($metodo === 'POST') {
         );
         retornar_json(true, 'Foto enviada com sucesso', ['id' => $foto_id]);
     } else {
-        @unlink($caminho_abs);
+        try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, $caminho_rel); } catch (Throwable $e) { error_log('[LeiturasFotos][Arquivo] ' . $e->getMessage()); }
         $stmt->close();
         retornar_json(false, 'Erro ao salvar a foto no banco de dados');
     }
@@ -231,7 +228,7 @@ if ($metodo === 'DELETE') {
     $stmt->bind_param('i', $id);
     if ($stmt->execute() && $stmt->affected_rows > 0) {
         $stmt->close();
-        @unlink(dirname(__DIR__) . '/' . $foto['caminho']);
+        try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, ltrim($foto['caminho'], './')); } catch (Throwable $e) { error_log('[LeiturasFotos][Arquivo] ' . $e->getMessage()); }
         retornar_json(true, 'Foto removida com sucesso');
     }
     $stmt->close();

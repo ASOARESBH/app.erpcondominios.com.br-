@@ -22,7 +22,8 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 require_once 'error_logger.php';
 ob_end_clean();
 
@@ -46,8 +47,6 @@ if (!function_exists('retornar_json')) {
     }
 }
 
-define('CRM_UPLOAD_DIR', dirname(__DIR__) . '/uploads/crm_anexos/');
-define('CRM_UPLOAD_URL', 'uploads/crm_anexos/');
 define('CRM_MAX_SIZE',   15 * 1024 * 1024);
 define('CRM_MIME_ACEITOS', [
     'application/pdf'       => 'pdf',
@@ -61,8 +60,6 @@ define('CRM_MIME_ACEITOS', [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
     'text/plain'            => 'txt',
 ]);
-
-if (!is_dir(CRM_UPLOAD_DIR)) mkdir(CRM_UPLOAD_DIR, 0755, true);
 
 try { verificarAutenticacao(true, 'operador');
 $tenant_id = exigirTenantId(); }
@@ -231,9 +228,9 @@ if ($metodo === 'GET' && $acao === 'anexos') {
     $stmt = $conn->prepare(
         "SELECT id, nome_documento, nome_original, tipo_mime, tamanho_bytes, usuario_nome,
                 DATE_FORMAT(created_at,'%d/%m/%Y %H:%i') as criado_fmt
-         FROM crm_anexos WHERE relacionamento_id = ? AND ativo = 1 ORDER BY created_at ASC"
+         FROM crm_anexos WHERE tenant_id = ? AND relacionamento_id = ? AND ativo = 1 ORDER BY created_at ASC"
     );
-    $stmt->bind_param('i', $id);
+    $stmt->bind_param('ii', $tenant_id, $id);
     $stmt->execute();
     $list = [];
     while ($r = $stmt->get_result()->fetch_assoc()) $list[] = $r;
@@ -248,22 +245,20 @@ if ($metodo === 'GET' && $acao === 'download_anexo') {
     $id = intval($_GET['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $conn->prepare("SELECT * FROM crm_anexos WHERE id = ? AND ativo = 1");
-    $stmt->bind_param('i', $id);
+    $stmt = $conn->prepare("SELECT caminho FROM crm_anexos WHERE tenant_id = ? AND id = ? AND ativo = 1");
+    $stmt->bind_param('ii', $tenant_id, $id);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close(); fechar_conexao($conn);
-    if (!$row) retornar_json(false, 'Anexo não encontrado');
-
-    $abs = dirname(__DIR__) . '/' . $row['caminho'];
-    if (!file_exists($abs)) retornar_json(false, 'Arquivo não encontrado no servidor');
-
-    header('Content-Type: ' . $row['tipo_mime']);
-    header('Content-Disposition: attachment; filename="' . addslashes($row['nome_original']) . '"');
-    header('Content-Length: ' . filesize($abs));
-    header('Cache-Control: private');
-    ob_end_clean();
-    readfile($abs);
+    $stmt->close();
+    if (!$row) { fechar_conexao($conn); retornar_json(false, 'Anexo não encontrado'); }
+    $caminho = ltrim($row['caminho'], './');
+    $lookup = $conn->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+    $lookup->bind_param('is', $tenant_id, $caminho);
+    $lookup->execute();
+    $arquivoBanco = $lookup->get_result()->fetch_assoc();
+    $lookup->close(); fechar_conexao($conn);
+    if (!$arquivoBanco) retornar_json(false, 'Arquivo não encontrado no armazenamento do tenant');
+    header('Location: /api/api_arquivos_tenant.php?acao=conteudo&id=' . (int)$arquivoBanco['id'] . '&download=1');
     exit;
 }
 
@@ -453,6 +448,13 @@ if ($metodo === 'POST' && $acao === 'upload_anexo') {
     if (empty($nome_doc))   retornar_json(false, 'Nome do documento é obrigatório');
     if (empty($_FILES['arquivo'])) retornar_json(false, 'Nenhum arquivo enviado');
 
+    $validarRel = $conn->prepare('SELECT id FROM crm_relacionamentos WHERE tenant_id = ? AND id = ? AND ativo = 1');
+    $validarRel->bind_param('ii', $tenant_id, $id);
+    $validarRel->execute();
+    $relExiste = $validarRel->get_result()->fetch_assoc();
+    $validarRel->close();
+    if (!$relExiste) retornar_json(false, 'Relacionamento não encontrado');
+
     $file = $_FILES['arquivo'];
     if ($file['error'] !== UPLOAD_ERR_OK) retornar_json(false, 'Erro no upload');
     if ($file['size'] > CRM_MAX_SIZE) retornar_json(false, 'Arquivo excede 15 MB');
@@ -463,22 +465,25 @@ if ($metodo === 'POST' && $acao === 'upload_anexo') {
 
     $ext      = CRM_MIME_ACEITOS[$mime];
     $filename = 'crm_' . $id . '_' . time() . '_' . uniqid() . '.' . $ext;
-    $dest     = CRM_UPLOAD_DIR . $filename;
-    if (!move_uploaded_file($file['tmp_name'], $dest)) retornar_json(false, 'Falha ao salvar arquivo');
-
-    $caminho = CRM_UPLOAD_URL . $filename;
+    $caminho = 'uploads/crm_anexos/tenant_' . (int)$tenant_id . '/' . $filename;
+    try {
+        tenant_file_gravar_upload($conn, (int)$tenant_id, $file, 'crm_anexo', $caminho, false);
+    } catch (Throwable $e) {
+        error_log('[CRM][Arquivo] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+        retornar_json(false, 'Falha ao armazenar arquivo no banco');
+    }
 
     $stmt = $conn->prepare(
         "INSERT INTO crm_anexos
-         (relacionamento_id,interacao_id,usuario_id,usuario_nome,nome_documento,nome_arquivo,nome_original,caminho,tipo_mime,tamanho_bytes)
-         VALUES (?,?,?,?,?,?,?,?,?,?)"
+         (tenant_id,relacionamento_id,interacao_id,usuario_id,usuario_nome,nome_documento,nome_arquivo,nome_original,caminho,tipo_mime,tamanho_bytes)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)"
     );
-    $stmt->bind_param('iiissssssi',
-        $id, $interacao_id, $uid, $unome,
+    $stmt->bind_param('iiiissssssi',
+        $tenant_id, $id, $interacao_id, $uid, $unome,
         $nome_doc, $filename, $file['name'],
         $caminho, $mime, $file['size']
     );
-    if (!$stmt->execute()) { @unlink($dest); $stmt->close(); fechar_conexao($conn); retornar_json(false, 'Erro ao salvar no banco'); }
+    if (!$stmt->execute()) { try { tenant_file_desativar_caminho($conn, (int)$tenant_id, $caminho); } catch (Throwable $e) { error_log('[CRM][Arquivo] ' . $e->getMessage()); } $stmt->close(); fechar_conexao($conn); retornar_json(false, 'Erro ao salvar no banco'); }
     $anex_id = $conn->insert_id;
     $stmt->close();
 
@@ -509,9 +514,15 @@ if ($metodo === 'DELETE' && $acao === 'excluir_anexo') {
     $id   = intval($body['id'] ?? $_GET['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    $stmt = $conn->prepare("UPDATE crm_anexos SET ativo=0 WHERE id=?");
-    $stmt->bind_param('i', $id);
-    $ok = $stmt->execute(); $stmt->close(); fechar_conexao($conn);
+    $stmt = $conn->prepare("SELECT caminho FROM crm_anexos WHERE tenant_id=? AND id=? AND ativo=1");
+    $stmt->bind_param('ii', $tenant_id, $id); $stmt->execute();
+    $anexo = $stmt->get_result()->fetch_assoc(); $stmt->close();
+    if (!$anexo) { fechar_conexao($conn); retornar_json(false, 'Anexo não encontrado'); }
+    $stmt = $conn->prepare("UPDATE crm_anexos SET ativo=0 WHERE tenant_id=? AND id=?");
+    $stmt->bind_param('ii', $tenant_id, $id);
+    $ok = $stmt->execute(); $stmt->close();
+    if ($ok) { try { tenant_file_desativar_caminho($conn, (int)$tenant_id, ltrim($anexo['caminho'], './')); } catch (Throwable $e) { error_log('[CRM][Arquivo] ' . $e->getMessage()); } }
+    fechar_conexao($conn);
     retornar_json($ok, $ok ? 'Anexo removido' : 'Erro ao remover');
 }
 
