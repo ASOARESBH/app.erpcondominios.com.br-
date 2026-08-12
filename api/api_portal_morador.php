@@ -197,6 +197,103 @@ if ($action === 'perfil' && $metodo === 'PUT') {
 }
 
 // ========================================
+// CONTROLE DE ACESSO DO MORADOR
+// ========================================
+
+function portal_coluna_existe(mysqli $conexao, string $tabela, string $coluna): bool {
+    $stmt = $conexao->prepare(
+        'SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+    );
+    if (!$stmt) return false;
+    $stmt->bind_param('ss', $tabela, $coluna);
+    $stmt->execute();
+    $existe = (bool)$stmt->get_result()->fetch_row();
+    $stmt->close();
+    return $existe;
+}
+
+function portal_log_controle_acesso(string $evento, array $contexto = []): void {
+    $diretorio = __DIR__ . '/../logs';
+    if (!is_dir($diretorio)) @mkdir($diretorio, 0755, true);
+    $linha = '[' . date('Y-m-d H:i:s') . '] ' . $evento;
+    if ($contexto) $linha .= ' | ' . json_encode($contexto, JSON_UNESCAPED_UNICODE);
+    @file_put_contents($diretorio . '/portal_controle_acesso.log', $linha . PHP_EOL, FILE_APPEND);
+}
+
+// GET: Histórico de entradas e saídas destinado exclusivamente à unidade da sessão.
+if ($action === 'controle_acesso' && $metodo === 'GET') {
+    if (!portal_coluna_existe($conexao, 'registros_acesso', 'tenant_id')) {
+        retornar_json(false, 'A estrutura multi-tenant de Controle de Acesso ainda não foi instalada no servidor.', null);
+    }
+
+    $limite = min(max((int)($_GET['limite'] ?? 50), 1), 100);
+    $data_inicio = trim((string)($_GET['data_inicio'] ?? ''));
+    $data_fim = trim((string)($_GET['data_fim'] ?? ''));
+    $tipo = trim((string)($_GET['tipo'] ?? ''));
+    if ($data_inicio !== '' && !preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $data_inicio)) {
+        retornar_json(false, 'Data inicial inválida.');
+    }
+    if ($data_fim !== '' && !preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $data_fim)) {
+        retornar_json(false, 'Data final inválida.');
+    }
+    if ($tipo !== '' && !in_array($tipo, ['Morador', 'Visitante', 'Prestador'], true)) {
+        retornar_json(false, 'Tipo de acesso inválido.');
+    }
+
+    $stmt = $conexao->prepare('SELECT unidade FROM moradores WHERE id = ? AND tenant_id = ? AND ativo = 1 LIMIT 1');
+    if (!$stmt) retornar_json(false, 'Não foi possível identificar a unidade do morador.', null);
+    $stmt->bind_param('ii', $morador_id, $tenant_id);
+    $stmt->execute();
+    $morador = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    $unidade = trim((string)($morador['unidade'] ?? ''));
+    if ($unidade === '') retornar_json(false, 'Sua unidade não está identificada no cadastro.', null);
+
+    $tem_tipo_acesso = portal_coluna_existe($conexao, 'registros_acesso', 'tipo_acesso');
+    $campo_tipo_acesso = $tem_tipo_acesso ? "COALESCE(NULLIF(r.tipo_acesso, ''), 'Entrada')" : "'Entrada'";
+    $sql = "SELECT r.id, r.data_hora, DATE_FORMAT(r.data_hora, '%d/%m/%Y %H:%i') AS data_hora_formatada,
+                   r.placa, r.modelo, r.cor, r.tipo,
+                   COALESCE(NULLIF(r.nome_visitante, ''), m.nome, 'Acesso identificado') AS nome,
+                   COALESCE(NULLIF(r.unidade_destino, ''), ?) AS unidade_destino,
+                   r.status, r.liberado, r.observacao, $campo_tipo_acesso AS tipo_acesso
+            FROM registros_acesso r
+            LEFT JOIN moradores m ON m.id = r.morador_id AND m.tenant_id = ?
+            WHERE r.tenant_id = ?
+              AND (r.morador_id = ?
+                   OR UPPER(TRIM(COALESCE(r.unidade_destino, ''))) = UPPER(TRIM(?))
+                   OR REPLACE(UPPER(TRIM(COALESCE(r.unidade_destino, ''))), 'GLEBA ', '') = REPLACE(UPPER(TRIM(?)), 'GLEBA ', ''))";
+    $tipos = 'siiiss';
+    $parametros = [$unidade, $tenant_id, $tenant_id, $morador_id, $unidade, $unidade];
+    if ($data_inicio !== '') { $sql .= ' AND DATE(r.data_hora) >= ?'; $tipos .= 's'; $parametros[] = $data_inicio; }
+    if ($data_fim !== '') { $sql .= ' AND DATE(r.data_hora) <= ?'; $tipos .= 's'; $parametros[] = $data_fim; }
+    if ($tipo !== '') { $sql .= ' AND r.tipo = ?'; $tipos .= 's'; $parametros[] = $tipo; }
+    $sql .= ' ORDER BY r.data_hora DESC, r.id DESC LIMIT ?';
+    $tipos .= 'i'; $parametros[] = $limite;
+
+    $stmt = $conexao->prepare($sql);
+    if (!$stmt) {
+        portal_log_controle_acesso('consulta_indisponivel', ['tenant_id' => $tenant_id, 'morador_id' => $morador_id]);
+        retornar_json(false, 'Não foi possível consultar os acessos no momento.', null);
+    }
+    $stmt->bind_param($tipos, ...$parametros);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        portal_log_controle_acesso('execucao_indisponivel', ['tenant_id' => $tenant_id, 'morador_id' => $morador_id]);
+        retornar_json(false, 'Não foi possível carregar os acessos no momento.', null);
+    }
+    $acessos = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    portal_log_controle_acesso('listagem', [
+        'tenant_id' => $tenant_id,
+        'morador_id' => $morador_id,
+        'total' => count($acessos),
+        'tipo' => $tipo ?: 'todos',
+        'periodo' => [$data_inicio ?: null, $data_fim ?: null],
+    ]);
+    retornar_json(true, 'Acessos carregados com sucesso.', ['acessos' => $acessos, 'unidade' => $unidade]);
+}
+
+// ========================================
 // NOTIFICAÇÕES DE ENCOMENDAS
 // ========================================
 

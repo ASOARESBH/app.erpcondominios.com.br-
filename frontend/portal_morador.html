@@ -1556,6 +1556,35 @@
         }
 
         /* ============================================================
+           CONTROLE DE ACESSO DO MORADOR
+           ============================================================ */
+        .ca-intro { display:flex; align-items:flex-start; gap:1rem; background:var(--info-bg); border:1px solid #bfdbfe; border-radius:var(--radius-md); padding:1rem; color:var(--info-text); margin-bottom:1rem; }
+        .ca-intro i { font-size:1.45rem; margin-top:.1rem; }
+        .ca-intro h3 { font-size:1rem; margin-bottom:.25rem; }
+        .ca-intro p { font-size:.88rem; color:inherit; }
+        .ca-toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:.75rem; padding:1rem; margin-bottom:1rem; }
+        .ca-toolbar .form-group { margin:0; min-width:145px; flex:1; }
+        .ca-toolbar-actions { display:flex; gap:.5rem; align-items:center; }
+        .ca-list { display:grid; gap:.75rem; }
+        .ca-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); box-shadow:var(--shadow-sm); padding:1rem; display:flex; gap:.85rem; }
+        .ca-card-icon { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:1rem; }
+        .ca-card-icon.entrada { background:var(--success-bg); color:var(--success); }
+        .ca-card-icon.saida { background:var(--warning-bg); color:var(--warning-text); }
+        .ca-card-main { min-width:0; flex:1; }
+        .ca-card-top { display:flex; gap:.6rem; align-items:center; justify-content:space-between; }
+        .ca-card-title { font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ca-badge { font-size:.74rem; font-weight:700; padding:.27rem .55rem; border-radius:999px; white-space:nowrap; }
+        .ca-badge.entrada { background:var(--success-bg); color:var(--success-text); }
+        .ca-badge.saida { background:var(--warning-bg); color:var(--warning-text); }
+        .ca-card-name { margin:.3rem 0 .5rem; color:var(--text-secondary); font-size:.9rem; }
+        .ca-meta { display:flex; flex-wrap:wrap; gap:.65rem 1rem; font-size:.8rem; color:var(--text-secondary); }
+        .ca-meta span { display:flex; gap:.35rem; align-items:center; }
+        .ca-status { margin-top:.55rem; color:var(--text-muted); font-size:.78rem; }
+        .ca-empty { text-align:center; padding:3rem 1rem; color:var(--text-secondary); }
+        .ca-empty i { font-size:2.5rem; color:var(--text-muted); display:block; margin-bottom:.8rem; }
+        @media (max-width: 640px) { .ca-toolbar { display:grid; grid-template-columns:1fr 1fr; } .ca-toolbar .form-group:first-child { grid-column:1/-1; } .ca-toolbar-actions { grid-column:1/-1; } .ca-toolbar .btn { flex:1; justify-content:center; } .ca-card { padding:.85rem; } }
+
+        /* ============================================================
            PRINT
            ============================================================ */
         @media print {
@@ -1641,6 +1670,10 @@
             <i class="fas fa-hard-hat" aria-hidden="true"></i>
             <span>Projetos</span>
         </button>
+        <button class="nav-tab" onclick="abrirAba('controle_acesso', this)" aria-label="Controle de Acesso">
+            <i class="fas fa-shield-alt" aria-hidden="true"></i>
+            <span>Controle de Acesso</span>
+        </button>
         <button class="nav-tab nav-tab-os" onclick="abrirAba('ordens_servico', this)" aria-label="Ordens de Serviço">
             <i class="fas fa-tools" aria-hidden="true"></i>
             <span>Chamados</span>
@@ -1715,6 +1748,11 @@
             onclick="abrirAbaMobile('projetos', 'fa-hard-hat', 'Projetos', this)" role="menuitem">
             <i class="fas fa-hard-hat" aria-hidden="true"></i>
             <span>Projetos</span>
+        </button>
+        <button class="mobile-menu-item" id="mmi-controle_acesso"
+            onclick="abrirAbaMobile('controle_acesso', 'fa-shield-alt', 'Controle de Acesso', this)" role="menuitem">
+            <i class="fas fa-shield-alt" aria-hidden="true"></i>
+            <span>Controle de Acesso</span>
         </button>
         <button class="mobile-menu-item mobile-menu-item-os" id="mmi-ordens_servico"
             onclick="abrirAbaMobile('ordens_servico', 'fa-tools', 'Chamados', this)" role="menuitem">
@@ -2366,6 +2404,55 @@
     </div>
 
     <!-- ================================================================
+         PAINEL: CONTROLE DE ACESSO
+         ================================================================ -->
+    <div id="panel-controle_acesso" class="tab-panel" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-header-icon"><i class="fas fa-shield-alt" aria-hidden="true"></i></div>
+                <div>
+                    <h2>Controle de Acesso</h2>
+                    <p>Acompanhe as entradas e saídas destinadas à sua unidade.</p>
+                </div>
+            </div>
+            <div class="ca-intro">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                <div>
+                    <h3>Histórico privado da sua unidade</h3>
+                    <p>Os registros são consultados diretamente na portaria e exibidos somente para a unidade vinculada à sua sessão.</p>
+                </div>
+            </div>
+            <div class="ca-toolbar card" style="box-shadow:none;">
+                <div class="form-group">
+                    <label for="caTipo">Tipo</label>
+                    <select id="caTipo" onchange="caCarregar()">
+                        <option value="">Todos os tipos</option>
+                        <option value="Morador">Morador</option>
+                        <option value="Visitante">Visitante</option>
+                        <option value="Prestador">Prestador</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="caDataInicio">De</label>
+                    <input type="date" id="caDataInicio" onchange="caCarregar()">
+                </div>
+                <div class="form-group">
+                    <label for="caDataFim">Até</label>
+                    <input type="date" id="caDataFim" onchange="caCarregar()">
+                </div>
+                <div class="ca-toolbar-actions">
+                    <button type="button" class="btn btn-primary" onclick="caCarregar()"><i class="fas fa-sync-alt"></i> Atualizar</button>
+                    <button type="button" class="btn btn-secondary" onclick="caLimparFiltros()">Limpar</button>
+                </div>
+            </div>
+            <div id="caResumo" style="margin:.25rem 0 1rem;color:var(--text-secondary);font-size:.88rem;"></div>
+            <div id="caLista" class="ca-list" aria-live="polite">
+                <div class="ca-empty"><i class="fas fa-spinner fa-spin"></i><p>Carregando acessos...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================
          PAINEL: ORDENS DE SERVIÇO / CHAMADOS
          ================================================================ -->
     <div id="panel-ordens_servico" class="tab-panel" role="tabpanel">
@@ -2814,6 +2901,7 @@ function abrirAba(aba, btnEl) {
         veiculos:    carregarVeiculos,
         documentos:  carregarDocumentosPortal,
         projetos:    carregarProjetosPortal,
+        controle_acesso: carregarControleAcesso,
         marketplace:    () => { if (!MKT.carregado) mktInicializar(); },
         ordens_servico: () => carregarOSPortal()
     };
@@ -2890,6 +2978,7 @@ const ABAS_INFO = {
     veiculos:    { icon: 'fa-car',           label: 'Veículos'    },
     documentos:  { icon: 'fa-folder-open',   label: 'Documentos'  },
     projetos:    { icon: 'fa-hard-hat',      label: 'Projetos'    },
+    controle_acesso: { icon: 'fa-shield-alt', label: 'Controle de Acesso' },
     ordens_servico: { icon: 'fa-tools', label: 'Chamados' },
     marketplace: { icon: 'fa-store',         label: 'Marketplace' }
 };
@@ -5186,6 +5275,80 @@ document.addEventListener('click', function(e) {
     if (e.target.id === 'modalNovaOS')    osPortalFecharFormulario();
     if (e.target.id === 'modalDetalheOS') osPortalFecharDetalhe();
 });
+
+/* ──────────────────────────────────────────────────────────────────
+   CONTROLE DE ACESSO — HISTÓRICO DO MORADOR
+   ────────────────────────────────────────────────────────────────── */
+function caCarregar() {
+    const lista = document.getElementById('caLista');
+    const resumo = document.getElementById('caResumo');
+    if (!lista || !resumo) return;
+    const tipo = document.getElementById('caTipo').value;
+    const dataInicio = document.getElementById('caDataInicio').value;
+    const dataFim = document.getElementById('caDataFim').value;
+    const params = new URLSearchParams({ action: 'controle_acesso', limite: '100' });
+    if (tipo) params.set('tipo', tipo);
+    if (dataInicio) params.set('data_inicio', dataInicio);
+    if (dataFim) params.set('data_fim', dataFim);
+    lista.innerHTML = '<div class="ca-empty"><i class="fas fa-spinner fa-spin"></i><p>Carregando acessos...</p></div>';
+    resumo.textContent = '';
+
+    fetch(window.location.origin + '/api/api_portal_morador.php?' + params.toString(), {
+        headers: { 'Authorization': 'Bearer ' + Portal.token }
+    })
+    .then(async response => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data || !data.sucesso) throw new Error(data?.mensagem || 'Não foi possível carregar os acessos.');
+        return data.dados || {};
+    })
+    .then(dados => {
+        const acessos = Array.isArray(dados.acessos) ? dados.acessos : [];
+        console.log('[ControleAcesso] Registros carregados:', acessos.length, '| unidade:', dados.unidade || 'não informada');
+        resumo.textContent = acessos.length
+            ? `${acessos.length} registro${acessos.length === 1 ? '' : 's'} de acesso encontrado${acessos.length === 1 ? '' : 's'}${dados.unidade ? ' para a unidade ' + dados.unidade : ''}.`
+            : 'Nenhum registro encontrado para os filtros selecionados.';
+        if (!acessos.length) {
+            lista.innerHTML = '<div class="ca-empty"><i class="fas fa-shield-alt"></i><p>Nenhum acesso foi registrado para sua unidade no período selecionado.</p></div>';
+            return;
+        }
+        lista.innerHTML = acessos.map(caCard).join('');
+    })
+    .catch(error => {
+        console.error('[ControleAcesso] Falha ao carregar:', error.message);
+        resumo.textContent = '';
+        lista.innerHTML = `<div class="ca-empty"><i class="fas fa-exclamation-triangle"></i><p>${escHtml(error.message || 'Não foi possível carregar os acessos.')}</p><button class="btn btn-secondary" onclick="caCarregar()"><i class="fas fa-sync-alt"></i> Tentar novamente</button></div>`;
+    });
+}
+
+function caLimparFiltros() {
+    document.getElementById('caTipo').value = '';
+    document.getElementById('caDataInicio').value = '';
+    document.getElementById('caDataFim').value = '';
+    caCarregar();
+}
+
+function caCard(acesso) {
+    const saida = String(acesso.tipo_acesso || '').toLowerCase() === 'saída' || String(acesso.tipo_acesso || '').toLowerCase() === 'saida';
+    const direcao = saida ? 'Saída' : 'Entrada';
+    const classe = saida ? 'saida' : 'entrada';
+    const placa = String(acesso.placa || '').trim();
+    const nome = String(acesso.nome || 'Acesso identificado');
+    const modelo = String(acesso.modelo || '').trim();
+    const titulo = placa || nome;
+    const subtitulo = placa && modelo ? `${nome} • ${modelo}` : nome;
+    const data = acesso.data_hora_formatada || acesso.data_hora || 'Data não informada';
+    const tipo = acesso.tipo || 'Acesso';
+    const status = String(acesso.status || '').trim();
+    return `<article class="ca-card">
+        <div class="ca-card-icon ${classe}"><i class="fas fa-${saida ? 'sign-out-alt' : 'sign-in-alt'}"></i></div>
+        <div class="ca-card-main">
+            <div class="ca-card-top"><strong class="ca-card-title">${escHtml(titulo)}</strong><span class="ca-badge ${classe}">${direcao}</span></div>
+            <p class="ca-card-name">${escHtml(subtitulo)}</p>
+            <div class="ca-meta"><span><i class="fas fa-id-badge"></i>${escHtml(tipo)}</span><span><i class="far fa-clock"></i>${escHtml(data)}</span></div>
+            ${status ? `<div class="ca-status">${escHtml(status)}</div>` : ''}
+        </div>
+    </article>`;
+}
 
 /* ──────────────────────────────────────────────────────────────────
    UTILITÁRIOS
