@@ -32,7 +32,7 @@ date_default_timezone_set('America/Sao_Paulo');
 // ── 3. Dados da empresa ───────────────────────────────────────
 $empresa = [];
 $_tenant_id_rel = $_SESSION['tenant_id'] ?? 1;
-$res_emp = $conn->prepare("SELECT razao_social, nome_fantasia, cnpj, logo_url FROM empresa WHERE tenant_id = ? LIMIT 1");
+$res_emp = $conn->prepare("SELECT COALESCE(NULLIF(t.razao_social, ''), e.razao_social) AS razao_social, COALESCE(NULLIF(t.nome_fantasia, ''), e.nome_fantasia) AS nome_fantasia, COALESCE(NULLIF(t.cnpj, ''), e.cnpj) AS cnpj, COALESCE(NULLIF(t.logo_url, ''), e.logo_url) AS logo_url FROM tenants t LEFT JOIN empresa e ON e.tenant_id = t.id WHERE t.id = ? AND t.status = 'ativo' LIMIT 1");
 $res_emp->bind_param('i', $_tenant_id_rel);
 $res_emp->execute();
 $res_emp = $res_emp->get_result();

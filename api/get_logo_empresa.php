@@ -1,180 +1,150 @@
 <?php
 /**
- * =====================================================
- * GET LOGO EMPRESA — Multi-Tenant v2.0
- * =====================================================
- * Hierarquia de busca:
- *   1. tenants.logo_url (fonte primária Multi-Tenant)
- *   2. empresa.logo_url (fallback legado)
- *   3. uploads/logo/tenant_{id}/logo.* (arquivo físico por tenant)
- *   4. uploads/logo/logo.* (legado)
- *   5. uploads/logo/logoerp.png (fallback ERP)
- *   6. assets/img/logos/logo_padrao.png (fallback estático)
+ * API DE LOGO DO TENANT ATIVO
  *
- * GET /api/get_logo_empresa.php
- * GET /api/get_logo_empresa.php?tenant_id=X (para relatórios PDF)
+ * Regra de branding Multi-Tenant:
+ * - Tela de login: usa somente /assets/img/logos/logo_padrao.png.
+ * - Aplicação autenticada: recebe somente a logo do tenant da sessão.
+ * - Esta API nunca seleciona um tenant por fallback, parâmetro GET ou "primeiro ativo".
  */
 
 ob_start();
 
-$_gl_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_gl_origin) ||
-    preg_match('/^https?:\/\/localhost(:\d+)?$/', $_gl_origin)) {
-    header('Access-Control-Allow-Origin: ' . $_gl_origin);
-} else {
-    header('Access-Control-Allow-Origin: *');
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$origens_permitidas = [
+    'https://app.erpcondominios.com.br',
+    'https://erpcondominios.com.br',
+    'http://localhost',
+    'http://127.0.0.1'
+];
+if (in_array($origin, $origens_permitidas, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
 }
+header('Vary: Origin');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: private, max-age=60');
+header('Cache-Control: private, no-store, max-age=0');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+    http_response_code(204);
     ob_end_clean();
     exit;
 }
+
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth_helper.php';
 ob_end_clean();
 
+$auth = verificarAutenticacao(true);
+$tenant_id = (int)$auth['tenant_id'];
 $base_dir = dirname(__DIR__);
 
-function retornar_logo($logo_url, $fonte, $nome_empresa = null) {
-    echo json_encode([
-        'sucesso'      => true,
-        'logo_url'     => $logo_url,
-        'fonte'        => $fonte,
-        'nome_empresa' => $nome_empresa,
-        'timestamp'    => date('Y-m-d H:i:s')
-    ], JSON_UNESCAPED_UNICODE);
+function responder_logo($sucesso, $mensagem, $dados = [], $status = 200) {
+    http_response_code($status);
+    echo json_encode(array_merge([
+        'sucesso' => $sucesso,
+        'mensagem' => $mensagem
+    ], $dados), JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// ── Determinar tenant_id ──────────────────────────────────────────────────
-$tenant_id = null;
-
-// 1. Parâmetro GET explícito (relatórios PDF passam ?tenant_id=X)
-if (!empty($_GET['tenant_id']) && is_numeric($_GET['tenant_id'])) {
-    $tenant_id = (int)$_GET['tenant_id'];
-}
-
-// 2. Sessão PHP (usuário logado)
-if (!$tenant_id) {
-    if (session_status() === PHP_SESSION_NONE) {
-        @session_start();
+function caminho_logo_valido($base_dir, $url) {
+    if (!$url || !is_string($url)) {
+        return null;
     }
-    $tenant_id = isset($_SESSION['tenant_id']) ? (int)$_SESSION['tenant_id'] : null;
+
+    $url = ltrim(trim($url), '/');
+    if (strpos($url, '..') !== false || strpos($url, '://') !== false) {
+        return null;
+    }
+
+    $caminho = $base_dir . '/' . $url;
+    $real_arquivo = realpath($caminho);
+    $real_diretorio_logo = realpath($base_dir . '/uploads/logo');
+
+    if (!$real_arquivo || !$real_diretorio_logo || !is_file($real_arquivo)) {
+        return null;
+    }
+
+    if (strpos($real_arquivo, $real_diretorio_logo . DIRECTORY_SEPARATOR) !== 0) {
+        return null;
+    }
+
+    return $url;
 }
 
-// ── Buscar no banco ───────────────────────────────────────────────────────
 try {
-    require_once __DIR__ . '/config.php';
     $conexao = conectar_banco();
-
-    // REGRA 1: tabela tenants (fonte primária Multi-Tenant)
-    if ($tenant_id) {
-        $stmt = $conexao->prepare(
-            "SELECT logo_url, nome_fantasia, razao_social FROM tenants WHERE id = ? LIMIT 1"
-        );
-        if ($stmt) {
-            $stmt->bind_param('i', $tenant_id);
-            $stmt->execute();
-            $tenant = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if ($tenant && !empty($tenant['logo_url'])) {
-                $caminho = $base_dir . '/' . ltrim($tenant['logo_url'], '/');
-                if (file_exists($caminho)) {
-                    $conexao->close();
-                    retornar_logo(
-                        $tenant['logo_url'],
-                        'tenants',
-                        $tenant['nome_fantasia'] ?: $tenant['razao_social']
-                    );
-                }
-            }
-        }
+    if (!$conexao) {
+        throw new RuntimeException('Não foi possível conectar ao banco de dados.');
     }
 
-    // REGRA 2: tabela empresa (fallback legado)
-    if ($tenant_id) {
+    // Fonte primária: cadastro mestre do tenant ativo.
+    $stmt = $conexao->prepare(
+        'SELECT id, slug, logo_url, nome_fantasia, razao_social
+         FROM tenants
+         WHERE id = ? AND status = \'ativo\'
+         LIMIT 1'
+    );
+    if (!$stmt) {
+        throw new RuntimeException('Falha ao preparar consulta do tenant.');
+    }
+    $stmt->bind_param('i', $tenant_id);
+    $stmt->execute();
+    $tenant = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$tenant) {
+        $conexao->close();
+        responder_logo(false, 'Tenant ativo não localizado.', [], 404);
+    }
+
+    $logo_url = caminho_logo_valido($base_dir, $tenant['logo_url'] ?? null);
+    $fonte = 'tenants';
+
+    // Compatibilidade com dados detalhados do mesmo tenant, sem cruzar empresas.
+    if (!$logo_url) {
         $stmt = $conexao->prepare(
-            "SELECT logo_url, nome_fantasia, razao_social FROM empresa WHERE tenant_id = ? LIMIT 1"
+            'SELECT logo_url, nome_fantasia, razao_social
+             FROM empresa
+             WHERE tenant_id = ? AND situacao = \'ativo\'
+             ORDER BY id ASC
+             LIMIT 1'
         );
         if ($stmt) {
             $stmt->bind_param('i', $tenant_id);
             $stmt->execute();
             $empresa = $stmt->get_result()->fetch_assoc();
             $stmt->close();
-            if ($empresa && !empty($empresa['logo_url'])) {
-                $caminho = $base_dir . '/' . ltrim($empresa['logo_url'], '/');
-                if (file_exists($caminho)) {
-                    $conexao->close();
-                    retornar_logo(
-                        $empresa['logo_url'],
-                        'empresa',
-                        $empresa['nome_fantasia'] ?: $empresa['razao_social']
-                    );
-                }
-            }
-        }
-    } else {
-        // Sem tenant_id: buscar o primeiro registro (compatibilidade)
-        // Sem tenant_id: buscar o primeiro tenant ativo (compatibilidade)
-        $res = $conexao->query("SELECT logo_url, nome_fantasia, razao_social FROM tenants WHERE status = 'ativo' LIMIT 1");
-        if ($res) {
-            $tenant_row = $res->fetch_assoc();
-            if ($tenant_row && !empty($tenant_row['logo_url'])) {
-                $caminho = $base_dir . '/' . ltrim($tenant_row['logo_url'], '/');
-                if (file_exists($caminho)) {
-                    $conexao->close();
-                    retornar_logo(
-                        $tenant_row['logo_url'],
-                        'tenant_sem_sessao',
-                        $tenant_row['nome_fantasia'] ?: $tenant_row['razao_social']
-                    );
-                }
+            $logo_url = caminho_logo_valido($base_dir, $empresa['logo_url'] ?? null);
+            if ($logo_url) {
+                $fonte = 'empresa';
             }
         }
     }
 
     $conexao->close();
-} catch (Exception $e) {
-    error_log("[GET_LOGO] Erro banco: " . $e->getMessage());
-}
 
-// REGRA 3: arquivo físico na pasta do tenant
-if ($tenant_id) {
-    foreach (['png','jpg','jpeg','gif','webp'] as $ext) {
-        $caminho = $base_dir . '/uploads/logo/tenant_' . $tenant_id . '/logo.' . $ext;
-        if (file_exists($caminho)) {
-            retornar_logo('uploads/logo/tenant_' . $tenant_id . '/logo.' . $ext, 'arquivo_tenant');
-        }
+    if (!$logo_url) {
+        responder_logo(true, 'Tenant sem logo personalizada; usando marca institucional.', [
+            'logo_url' => 'assets/img/logos/logo_padrao.png',
+            'fonte' => 'plataforma_fallback',
+            'tenant_id' => $tenant_id,
+            'tenant_slug' => $tenant['slug'],
+            'nome_empresa' => $tenant['nome_fantasia'] ?: $tenant['razao_social']
+        ]);
     }
-}
 
-// REGRA 4: arquivo físico legado (sem tenant)
-foreach (['png','jpg','jpeg','gif','webp','svg'] as $ext) {
-    $caminho = $base_dir . '/uploads/logo/logo.' . $ext;
-    if (file_exists($caminho)) {
-        retornar_logo('uploads/logo/logo.' . $ext, 'arquivo_legado');
-    }
+    responder_logo(true, 'Logo do tenant ativo obtida com sucesso.', [
+        'logo_url' => $logo_url,
+        'fonte' => $fonte,
+        'tenant_id' => $tenant_id,
+        'tenant_slug' => $tenant['slug'],
+        'nome_empresa' => $tenant['nome_fantasia'] ?: $tenant['razao_social']
+    ]);
+} catch (Throwable $e) {
+    error_log('[TENANT_LOGO] tenant=' . $tenant_id . ' erro=' . $e->getMessage());
+    responder_logo(false, 'Não foi possível carregar a identidade visual do condomínio.', [], 500);
 }
-
-// REGRA 5: fallback logoerp.png
-if (file_exists($base_dir . '/uploads/logo/logoerp.png')) {
-    retornar_logo('uploads/logo/logoerp.png', 'fallback_erp', 'ERP Condomínio');
-}
-
-// REGRA 6: fallback estático
-if (file_exists($base_dir . '/assets/img/logos/logo_padrao.png')) {
-    retornar_logo('assets/img/logos/logo_padrao.png', 'fallback_estatico', 'ERP Condomínio');
-}
-
-// Nenhuma logo encontrada
-echo json_encode([
-    'sucesso'      => true,
-    'logo_url'     => null,
-    'fonte'        => 'nenhuma',
-    'nome_empresa' => null,
-    'timestamp'    => date('Y-m-d H:i:s')
-], JSON_UNESCAPED_UNICODE);

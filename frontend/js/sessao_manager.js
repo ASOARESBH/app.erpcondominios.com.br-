@@ -181,31 +181,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// IDENTIDADE VISUAL (Fallback & Login)
+// IDENTIDADE VISUAL — somente ambiente autenticado do tenant.
 async function carregarIdentidadeVisualSessao() {
+    const emLogin = /(^|\/)(login|login_morador|login_fornecedor)\.html$/i.test(window.location.pathname);
+    if (emLogin || !document.getElementById('dynamicSidebarLogo')) return;
+
     try {
-        const response = await fetch('../api/api_empresa.php?action=obter');
+        const response = await fetch('../api/get_logo_empresa.php', {
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store'
+        });
         if (!response.ok) return;
         const data = await response.json();
+        if (!data.sucesso || !data.logo_url || !data.tenant_id) return;
 
-        if (data.sucesso && data.dados) {
-            const empresa = data.dados;
-            const logoUrl = empresa.logo_url ? '../' + empresa.logo_url : null;
-            const nomeEmpresa = empresa.nome_fantasia || empresa.razao_social || 'ERP Condomínio';
-
-            // Sidebar Logo
-            const sidebarLogo = document.getElementById('dynamicSidebarLogo');
-            if (sidebarLogo && logoUrl) {
-                sidebarLogo.src = logoUrl;
-                sidebarLogo.alt = nomeEmpresa;
-            }
-
-            // Aba Title
-            if (document.title.includes('ERP Condomínio')) {
-                document.title = document.title.replace('ERP Condomínio', nomeEmpresa);
-            }
+        const sidebarLogo = document.getElementById('dynamicSidebarLogo');
+        if (sidebarLogo) {
+            sidebarLogo.src = data.logo_url.startsWith('/') ? data.logo_url : '../' + data.logo_url;
+            sidebarLogo.alt = data.nome_empresa || 'Condomínio';
         }
-    } catch (error) { }
+        console.debug('[TenantBranding] Identidade do tenant carregada por sessão.');
+    } catch (error) {
+        console.debug('[TenantBranding] Fallback institucional preservado.');
+    }
 }
 
 document.addEventListener('DOMContentLoaded', carregarIdentidadeVisualSessao);

@@ -188,29 +188,36 @@
         const IMG_ID = 'dynamicSidebarLogo';
         const CACHE_KEY = 'tenant_logo_url';
         const CACHE_TENANT = 'tenant_id';
+        const tenantEmCache = String(localStorage.getItem(CACHE_TENANT) || '');
+        const logoCache = tenantEmCache ? localStorage.getItem(CACHE_KEY + '_' + tenantEmCache) : null;
 
-        // Verificar se o tenant mudou (invalida cache)
-        const tenantAtual = localStorage.getItem(CACHE_TENANT) || '';
-        const logoCache   = localStorage.getItem(CACHE_KEY + '_' + tenantAtual);
+        // Cache é somente uma prévia. A API autenticada sempre confirma o tenant efetivo.
+        if (logoCache) _aplicarLogo(IMG_ID, logoCache);
 
-        // Aplicar logo do cache imediatamente (sem esperar a API)
-        if (logoCache) {
-            _aplicarLogo(IMG_ID, logoCache);
-        }
-
-        // Buscar logo atualizada da API
         const apiBase = window.APP_BASE_PATH || '/';
-        fetch(apiBase + 'api/get_logo_empresa.php', { credentials: 'include' })
+        fetch(apiBase + 'api/get_logo_empresa.php', {
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store'
+        })
             .then(r => r.ok ? r.json() : null)
             .then(data => {
-                if (!data || !data.sucesso || !data.logo_url) return;
+                if (!data || !data.sucesso || !data.logo_url || !data.tenant_id) return;
+
+                const tenantConfirmado = String(data.tenant_id);
                 const logoUrl = data.logo_url;
-                // Salvar no cache por tenant
-                localStorage.setItem(CACHE_KEY + '_' + tenantAtual, logoUrl);
-                // Aplicar no sidebar
+                localStorage.setItem(CACHE_TENANT, tenantConfirmado);
+                localStorage.setItem('tenant_nome', data.nome_empresa || '');
+                localStorage.setItem('tenant_slug', data.tenant_slug || '');
+                localStorage.setItem(CACHE_KEY + '_' + tenantConfirmado, logoUrl);
+
+                // Nunca exibe cache de outro tenant após uma troca de contexto.
                 _aplicarLogo(IMG_ID, logoUrl);
+                console.debug('[TenantBranding] Logo aplicada para tenant ' + tenantConfirmado + '.');
             })
-            .catch(() => {}); // Silencioso — fallback já está no src da imagem
+            .catch(() => {
+                console.debug('[TenantBranding] Logo do tenant indisponível; mantendo fallback institucional.');
+            });
     }
 
     function _aplicarLogo(imgId, logoUrl) {

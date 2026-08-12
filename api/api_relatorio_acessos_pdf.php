@@ -46,7 +46,7 @@ if ($_stmt_t) {
 }
 // Fallback: tabela empresa
 if (empty($empresa['logo_url'])) {
-    $_stmt_e = $conn->prepare("SELECT razao_social, nome_fantasia, cnpj, logo_url FROM empresa WHERE tenant_id = ? LIMIT 1");
+    $_stmt_e = $conn->prepare("SELECT COALESCE(NULLIF(t.razao_social, ''), e.razao_social) AS razao_social, COALESCE(NULLIF(t.nome_fantasia, ''), e.nome_fantasia) AS nome_fantasia, COALESCE(NULLIF(t.cnpj, ''), e.cnpj) AS cnpj, COALESCE(NULLIF(t.logo_url, ''), e.logo_url) AS logo_url FROM tenants t LEFT JOIN empresa e ON e.tenant_id = t.id WHERE t.id = ? AND t.status = 'ativo' LIMIT 1");
     if ($_stmt_e) {
         $_stmt_e->bind_param('i', $_tenant_id_rel);
         $_stmt_e->execute();
