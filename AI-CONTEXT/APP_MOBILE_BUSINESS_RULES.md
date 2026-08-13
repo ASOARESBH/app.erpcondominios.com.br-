@@ -104,3 +104,16 @@ Todas as respostas seguem o padrão `{sucesso, mensagem, dados}` (ver [API.md](A
 - **Padrão de resposta**: toda tela espera `{sucesso, mensagem, dados}`; como os dois clientes HTTP aceitam qualquer status < 500 como resposta "normal" (ver arquitetura §2), **qualquer tela nova deve checar `sucesso` explicitamente e tratar o caso `false` com feedback ao usuário** — não presumir que ausência de exceção significa sucesso. O bug de Documentos é o exemplo real desse padrão de erro passando despercebido.
 - **CPF/telefone**: sempre limpos de máscara (`replaceAll(RegExp(r'[^\d]'), '')`) antes de enviar ao backend, tanto no login do morador quanto na confirmação de identidade na Entrega do colaborador.
 - **Confirmações destrutivas** (excluir visitante, dependente, revogar acesso) sempre passam por `AlertDialog` de confirmação antes da chamada de API.
+
+
+### Ações de Vigilante
+
+| Constante | Action | Uso no app |
+|---|---|---|
+| `actionVigilanteQrDetalhe` | `vigilante_qr_detalhe` | Valida o QR lido e retorna ponto, rota, instruções e, apenas quando necessário, opções opacas de vigilante. |
+| `actionVigilanteRegistrarLeitura` | `vigilante_registrar_leitura` | Registra o ponto confirmado, sem `tenant_id` ou `colaborador_id` do cliente. |
+| `actionVigilanteHistoricoHoje` | `vigilante_historico_hoje` | Lista as últimas 20 leituras do próprio vigilante no dia. |
+
+**Vigilante/Rondas** (`employee_vigilante_screen.dart`): o atalho abre uma tela-hub. O botão principal reutiliza o scanner genérico e aceita somente token QR hexadecimal de 64 caracteres. Após a validação, um diálogo apresenta ponto, local, rota, janela e instruções. O colaborador confirma antes de gravar. Caso o e-mail da sessão não esteja associado de forma única a `rh_colaboradores`, a API oferece as opções opacas de vigilante vinculadas à rota; o app não recebe nem envia ID de colaborador cru.
+
+O resultado mostra SLA em verde para `no_prazo` e laranja para `atrasado`, incluindo atraso em minutos. Erros do backend — QR de outro condomínio, rota fora do dia/janela, vínculo ausente e duplicidade do mesmo ponto no ciclo — são exibidos textualmente. A tela mantém o histórico de hoje e permite atualização por pull-to-refresh. Não há GPS na primeira versão; a ausência de localização não impede o registro.

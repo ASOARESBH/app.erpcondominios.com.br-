@@ -93,3 +93,12 @@ Correção sugerida (não aplicada nesta análise): remover as duas chamadas a `
 ## 9. Dependências relevantes (pubspec.yaml)
 
 Flutter + Riverpod, go_router, Dio, flutter_secure_storage, local_auth (biometria, não usado nas telas), firebase_core/firebase_messaging/flutter_local_notifications, connectivity_plus, sqflite + path/path_provider (fila offline), disk_space_plus (checagem de espaço livre), google_mlkit_text_recognition (OCR on-device), image_picker (foto do hidrômetro), mobile_scanner (QR/código de barras), qr_flutter (geração de QR Code de acesso), fl_chart (gráfico de consumo de água), intl (formatação de data).
+
+
+## 10. Módulo Vigilante/Rondas Mobile
+
+A rota autenticada `/employee/vigilante` pertence à `ShellRoute` do colaborador e é renderizada por `employee_vigilante_screen.dart`. O dashboard do colaborador expõe o oitavo atalho **Vigilante — Registrar ronda**. A tela não cria dependência adicional: reaproveita `EmployeeQrScannerScreen` e `mobile_scanner` por `context.push<String>('/employee/scan')`.
+
+O fluxo usa `EmployeeApiClient` e as constantes `actionVigilanteQrDetalhe`, `actionVigilanteRegistrarLeitura` e `actionVigilanteHistoricoHoje`. A sequência é scanner → GET de detalhe → `AlertDialog` de confirmação → POST de registro → diálogo visual de SLA → atualização do histórico. A tela trata expressamente `data['sucesso'] == false`, inclusive respostas 4xx, e exibe a mensagem devolvida pelo PHP sem reescrever a regra de negócio.
+
+A primeira versão deliberadamente não pede localização. O backend aceita GPS opcional para clientes futuros, mas a indisponibilidade de GPS não bloqueia a ronda. O histórico do dia é recarregado no início, após registro e por pull-to-refresh. Logs Dart usam somente tipo de erro, sem QR, token, CPF ou coordenadas.

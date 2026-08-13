@@ -23,3 +23,10 @@
 ## 5. Documentos (GED)
 - Documentos podem ter visibilidade: `todos`, `moradores`, `usuarios` ou `unidades_especificas`.
 - Arquivos são armazenados em `uploads/documentos/` com nome gerado por hash para evitar conflitos.
+
+
+## 6. Inadimplência por snapshot BRCondos
+
+A importação de inadimplência é exclusivamente analítica. Cada PDF gera um novo snapshot histórico e jamais altera títulos, baixas, negociações ou qualquer lançamento operacional. A comparação usa identificador BRCondos, tipo de cobrança e vencimento; quando não existe identificador, usa chave alternativa composta. Uma Gleba ausente do relatório mais recente é exibida como possível regularização para análise, mas não pode gerar baixa ou ação de cobrança automática.
+
+O risco alto é uma heurística explicável e não uma previsão: a Gleba deve apresentar aumento em duas comparações consecutivas sem quitação intermediária. Importação, leitura, CSV e PDF devem sempre usar o `tenant_id` obtido da sessão autenticada.

@@ -1,0 +1,99 @@
+<div id="page-metadata" data-title="Inadimplência" data-icon="fa-user-clock" style="display:none;"></div>
+
+<div class="page-wrapper page-inadimplencia">
+    <div class="page-header inad-header">
+        <div>
+            <div class="inad-breadcrumb"><a href="#" data-nav-financeiro>Financeiro</a><span>/</span><span>Inadimplência</span></div>
+            <h1><i class="fas fa-user-clock"></i> Inadimplência</h1>
+            <p>Importe relatórios BRCondos, acompanhe a carteira de cobrança e compare a evolução por unidade.</p>
+        </div>
+        <div class="inad-header-actions">
+            <button type="button" class="btn-secondary-modern" id="inad-btn-pdf"><i class="fas fa-file-pdf"></i> Gerar PDF</button>
+            <button type="button" class="btn-secondary-modern" id="inad-btn-csv"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+        </div>
+    </div>
+
+    <div id="inad-flash" class="inad-flash" role="status" aria-live="polite" hidden></div>
+
+    <section class="page-card inad-import-card" aria-labelledby="inad-import-title">
+        <div class="inad-section-head">
+            <div>
+                <h2 id="inad-import-title"><i class="fas fa-file-import"></i> Importar relatório BRCondos</h2>
+                <p>Envie o PDF de Inadimplência Detalhado. O snapshot será preservado para comparação histórica.</p>
+            </div>
+            <span class="inad-badge"><i class="fas fa-shield-alt"></i> Dados isolados por condomínio</span>
+        </div>
+        <form id="inad-form-importacao" class="inad-upload-row" novalidate>
+            <label class="inad-file-picker" for="inad-arquivo">
+                <i class="fas fa-file-pdf"></i>
+                <span><strong>Selecionar PDF</strong><small>Relatório BRCondos de até 20 MB</small></span>
+            </label>
+            <input id="inad-arquivo" name="arquivo" type="file" accept="application/pdf,.pdf" required hidden>
+            <span id="inad-arquivo-nome" class="inad-file-name">Nenhum arquivo selecionado</span>
+            <button id="inad-btn-importar" type="submit" class="btn-primary-modern"><i class="fas fa-upload"></i> Importar e analisar</button>
+        </form>
+        <div id="inad-import-feedback" class="inad-import-feedback" hidden></div>
+    </section>
+
+    <section id="inad-empty" class="page-card inad-empty-state" hidden>
+        <i class="fas fa-chart-line"></i>
+        <h2>Nenhum relatório importado</h2>
+        <p>Importe o primeiro Relatório de Inadimplência Detalhado do BRCondos para montar a carteira de cobrança deste condomínio.</p>
+    </section>
+
+    <div id="inad-dashboard" hidden>
+        <section class="stats-grid inad-kpis" aria-label="Indicadores de inadimplência">
+            <div class="page-card kpi-card inad-kpi inad-kpi-amber"><div class="kpi-content"><h3>Total projetado atual</h3><div id="inad-kpi-total" class="value">—</div><small id="inad-kpi-data">—</small></div><div class="kpi-icon"><i class="fas fa-wallet"></i></div></div>
+            <div class="page-card kpi-card inad-kpi inad-kpi-purple"><div class="kpi-content"><h3>Unidades inadimplentes</h3><div id="inad-kpi-unidades" class="value">—</div><small>Glebas no snapshot atual</small></div><div class="kpi-icon"><i class="fas fa-home"></i></div></div>
+            <div class="page-card kpi-card inad-kpi inad-kpi-red"><div class="kpi-content"><h3>Carteira judicial</h3><div id="inad-kpi-judicial" class="value">—</div><small>Unidades com restrição de recebimento</small></div><div class="kpi-icon"><i class="fas fa-gavel"></i></div></div>
+            <div class="page-card kpi-card inad-kpi inad-kpi-blue"><div class="kpi-content"><h3>Variação no período</h3><div id="inad-kpi-variacao" class="value">—</div><small id="inad-kpi-variacao-desc">Aguardando comparação</small></div><div class="kpi-icon"><i id="inad-kpi-variacao-icone" class="fas fa-arrows-alt-v"></i></div></div>
+        </section>
+
+        <section id="inad-alerta-reconciliacao" class="inad-alert inad-alert-warning" hidden><i class="fas fa-exclamation-triangle"></i><div><strong>Importação com divergência de totais.</strong><span id="inad-alerta-reconciliacao-texto"></span></div></section>
+        <section id="inad-alerta-vinculos" class="inad-alert inad-alert-info" hidden><i class="fas fa-link"></i><div><strong>Há lançamentos sem vínculo de morador ou unidade.</strong><span id="inad-alerta-vinculos-texto"></span></div></section>
+
+        <div class="inad-insights-grid">
+            <section class="page-card inad-chart-card">
+                <div class="inad-section-head"><div><h2>Distribuição por carteira</h2><p>Saldo projetado por situação de cobrança.</p></div></div>
+                <div id="inad-carteiras" class="inad-bars" aria-label="Distribuição por carteira"></div>
+            </section>
+            <section class="page-card inad-chart-card">
+                <div class="inad-section-head"><div><h2>Evolução histórica</h2><p>Total projetado por importação.</p></div></div>
+                <div id="inad-historico-grafico" class="inad-line-chart" aria-label="Gráfico de evolução histórica"></div>
+            </section>
+        </div>
+
+        <section class="page-card inad-change-card">
+            <div class="inad-section-head"><div><h2>O que mudou desde a última importação</h2><p>Comparação por Gleba baseada nos lançamentos presentes em cada snapshot.</p></div><span id="inad-comparacao-data" class="inad-muted">—</span></div>
+            <div class="inad-changes-grid">
+                <article class="inad-change inad-new"><h3><i class="fas fa-plus-circle"></i> Novas em inadimplência</h3><ul id="inad-mudancas-novo"></ul></article>
+                <article class="inad-change inad-worse"><h3><i class="fas fa-arrow-trend-up"></i> Maior piora</h3><ul id="inad-mudancas-evoluindo"></ul></article>
+                <article class="inad-change inad-good"><h3><i class="fas fa-check-circle"></i> Quitadas ou regularizadas</h3><ul id="inad-mudancas-quitado"></ul></article>
+            </div>
+        </section>
+
+        <section class="page-card inad-heuristica-card">
+            <div class="inad-section-head"><div><h2><i class="fas fa-compass"></i> Tendência baseada em histórico</h2><p id="inad-heuristica-texto">—</p></div><span class="inad-badge inad-badge-neutral">Heurística explicável, não previsão automática</span></div>
+            <div id="inad-risco-alto" class="inad-risk-list"></div>
+        </section>
+
+        <section class="page-card inad-ranking-card">
+            <div class="inad-section-head inad-ranking-head"><div><h2>Ranking de unidades por dívida</h2><p>Consolidação por Gleba da importação selecionada.</p></div><div class="inad-select-import"><label for="inad-importacao-select">Snapshot</label><select id="inad-importacao-select" class="form-control"></select></div></div>
+            <div class="inad-filters">
+                <div class="input-wrapper"><i class="fas fa-search"></i><input id="inad-busca" class="form-control" type="search" placeholder="Buscar Gleba, morador ou CPF"></div>
+                <select id="inad-carteira-filtro" class="form-control"><option value="">Todas as carteiras</option><option value="RECEBER">Receber</option><option value="EM COBRANÇA JUDICIAL - JURÍDICO EXTERNO">Cobrança judicial</option><option value="EM COBRANÇA EXTRA JUDICIAL - JURÍDICO EXTERNO">Cobrança extra judicial</option></select>
+                <select id="inad-ordem" class="form-control"><option value="divida_desc">Maior dívida</option><option value="divida_asc">Menor dívida</option><option value="meses_desc">Mais meses em aberto</option><option value="gleba_asc">Gleba crescente</option></select>
+                <button id="inad-btn-filtrar" type="button" class="btn-secondary-modern"><i class="fas fa-filter"></i> Filtrar</button>
+            </div>
+            <div class="table-responsive"><table class="data-table"><thead><tr><th>Gleba</th><th>Morador / proprietário</th><th>Carteira</th><th>Meses</th><th>Projetado</th><th>Vínculo</th><th>Ação</th></tr></thead><tbody id="inad-ranking-body"><tr><td colspan="7" class="empty-table">Carregando ranking...</td></tr></tbody></table></div>
+            <div id="inad-paginacao" class="inad-pagination"></div>
+        </section>
+
+        <section class="page-card inad-history-card">
+            <div class="inad-section-head"><div><h2>Histórico de importações</h2><p>Todos os relatórios permanecem disponíveis como snapshots auditáveis.</p></div></div>
+            <div class="table-responsive"><table class="data-table"><thead><tr><th>Data base</th><th>Arquivo</th><th>Unidades</th><th>Lançado</th><th>Projetado</th><th>Validação</th><th>Ação</th></tr></thead><tbody id="inad-historico-body"></tbody></table></div>
+        </section>
+    </div>
+</div>
+
+<div id="inad-modal" class="modal-overlay" hidden><div class="modal-content inad-modal-content"><button type="button" class="modal-close" aria-label="Fechar" data-inad-close>&times;</button><div id="inad-modal-body"></div></div></div>

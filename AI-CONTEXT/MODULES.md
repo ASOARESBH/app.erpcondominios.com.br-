@@ -25,3 +25,5 @@ O ERP é dividido em módulos de negócios independentes, acessíveis pelo `side
 
 ## 5. Portal PWA
 - **App do Morador**: Interface PWA para celular (notificações push via Firebase, reserva de espaços, visualização de boletos).
+
+- **Inadimplência**: Importação do Relatório de Inadimplência Detalhado BRCondos, snapshots históricos, comparação por Gleba, ranking, CSV e geração de PDF pelo fluxo de impressão. Exige permissão `inadimplencia` com nível mínimo `gerente`; consulte `AI-CONTEXT/INADIMPLENCIA.md`.

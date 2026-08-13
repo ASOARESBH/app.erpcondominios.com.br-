@@ -12,6 +12,7 @@ ob_start();
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
+require_once __DIR__ . '/helpers/ronda_helper.php';
 // O login não depende do módulo de notificações. Em instalações parciais, uma
 // ausência deste helper não pode provocar erro 500 ao autenticar o colaborador.
 $cm_helper_protocolos = __DIR__ . '/helpers/protocol_notification_helper.php';
@@ -216,6 +217,116 @@ function cm_buscar_protocolo_qr(mysqli $conexao, $tenant_id, $codigo) {
     return $protocolo ?: null;
 }
 
+function cm_vigilante_colaboradores_da_sessao(mysqli $conexao, int $tenant_id, string $email): array {
+    $email = strtolower(trim($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return [];
+    $stmt = $conexao->prepare(
+        "SELECT id, nome, cargo, departamento FROM rh_colaboradores
+         WHERE tenant_id = ? AND LOWER(email) = ? AND ativo = 1
+         ORDER BY id ASC LIMIT 2"
+    );
+    if (!$stmt) return [];
+    $stmt->bind_param('is', $tenant_id, $email);
+    $stmt->execute();
+    $colaboradores = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $colaboradores;
+}
+
+function cm_vigilante_ponto_por_token(mysqli $conexao, string $token): ?array {
+    $stmt = $conexao->prepare(
+        "SELECT p.id AS ponto_id, p.tenant_id, p.rota_id, p.nome AS ponto_nome,
+                p.localizacao, p.instrucoes, p.ordem,
+                r.nome AS rota_nome, r.descricao AS rota_descricao, r.hora_inicio,
+                r.hora_fim, r.intervalo_minutos, r.repeticoes_por_dia,
+                r.tolerancia_minutos, r.dias_semana
+         FROM ronda_pontos p
+         INNER JOIN ronda_rotas r ON r.id = p.rota_id AND r.tenant_id = p.tenant_id
+         INNER JOIN tenants t ON t.id = p.tenant_id
+         WHERE p.token_qr = ? AND p.ativo = 1 AND r.ativo = 1 AND t.status = 'ativo'
+         LIMIT 1"
+    );
+    if (!$stmt) return null;
+    $stmt->bind_param('s', $token);
+    $stmt->execute();
+    $ponto = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $ponto ?: null;
+}
+
+function cm_vigilante_opcoes_rota(mysqli $conexao, int $tenant_id, int $rota_id, int $sessao_id): array {
+    $stmt = $conexao->prepare(
+        "SELECT c.id, c.nome, c.cargo, c.departamento
+         FROM ronda_vigilantes rv
+         INNER JOIN rh_colaboradores c ON c.id = rv.colaborador_id AND c.tenant_id = rv.tenant_id
+         WHERE rv.tenant_id = ? AND rv.rota_id = ? AND rv.ativo = 1 AND c.ativo = 1
+         ORDER BY c.nome ASC"
+    );
+    if (!$stmt) return [];
+    $stmt->bind_param('ii', $tenant_id, $rota_id);
+    $stmt->execute();
+    $vigilantes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    $expira_em = time() + 300;
+    $opcoes = [];
+    foreach ($vigilantes as $vigilante) {
+        $conteudo = implode('|', [$sessao_id, $tenant_id, $rota_id, (int)$vigilante['id'], $expira_em]);
+        $assinatura = hash_hmac('sha256', $conteudo, DB_PASS);
+        $opcoes[] = [
+            'opcao' => rtrim(strtr(base64_encode($conteudo . '|' . $assinatura), '+/', '-_'), '='),
+            'nome' => $vigilante['nome'],
+            'cargo' => $vigilante['cargo'],
+            'departamento' => $vigilante['departamento'],
+        ];
+    }
+    return $opcoes;
+}
+
+function cm_vigilante_validar_opcao(mysqli $conexao, string $opcao, int $sessao_id, int $tenant_id, int $rota_id): ?array {
+    $opcao = trim($opcao);
+    if ($opcao === '' || !preg_match('/^[A-Za-z0-9_-]{40,512}$/', $opcao)) return null;
+    $codificado = strtr($opcao, '-_', '+/');
+    $codificado .= str_repeat('=', (4 - strlen($codificado) % 4) % 4);
+    $decodificado = base64_decode($codificado, true);
+    if ($decodificado === false) return null;
+    $partes = explode('|', $decodificado);
+    if (count($partes) !== 6) return null;
+    [$sessao, $tenant, $rota, $colaborador, $expira_em, $assinatura] = $partes;
+    if (!ctype_digit($sessao) || !ctype_digit($tenant) || !ctype_digit($rota)
+        || !ctype_digit($colaborador) || !ctype_digit($expira_em)
+        || (int)$sessao !== $sessao_id || (int)$tenant !== $tenant_id
+        || (int)$rota !== $rota_id || (int)$expira_em < time()) return null;
+    $conteudo = implode('|', [$sessao, $tenant, $rota, $colaborador, $expira_em]);
+    if (!hash_equals(hash_hmac('sha256', $conteudo, DB_PASS), $assinatura)) return null;
+
+    $stmt = $conexao->prepare(
+        "SELECT c.id, c.nome, c.cargo, c.departamento
+         FROM ronda_vigilantes rv
+         INNER JOIN rh_colaboradores c ON c.id = rv.colaborador_id AND c.tenant_id = rv.tenant_id
+         WHERE rv.tenant_id = ? AND rv.rota_id = ? AND rv.colaborador_id = ?
+           AND rv.ativo = 1 AND c.ativo = 1 LIMIT 1"
+    );
+    if (!$stmt) return null;
+    $colaborador_id = (int)$colaborador;
+    $stmt->bind_param('iii', $tenant_id, $rota_id, $colaborador_id);
+    $stmt->execute();
+    $vigilante = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $vigilante ?: null;
+}
+
+function cm_vigilante_auditar(mysqli $conexao, int $tenant_id, int $rota_id, int $usuario_id, string $descricao, array $dados = []): void {
+    $json = $dados ? json_encode($dados, JSON_UNESCAPED_UNICODE) : null;
+    $ip = substr((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+    $acao = 'LEITURA_QR_MOBILE';
+    $stmt = $conexao->prepare('INSERT INTO ronda_auditoria (tenant_id, rota_id, usuario_id, acao, descricao, dados_json, ip) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    if (!$stmt) return;
+    $stmt->bind_param('iiissss', $tenant_id, $rota_id, $usuario_id, $acao, $descricao, $json, $ip);
+    $stmt->execute();
+    $stmt->close();
+}
+
 function cm_login(mysqli $conexao, array $dados) {
     $email = strtolower(trim((string)($dados['email'] ?? '')));
     $senha = (string)($dados['senha'] ?? '');
@@ -392,6 +503,114 @@ switch ($acao) {
         $stmt->bind_param('i', $tenant_id); $stmt->execute();
         $resultado['entregas_hoje'] = (int)$stmt->get_result()->fetch_assoc()['total']; $stmt->close();
         cm_json(true, 'Painel carregado.', $resultado);
+        break;
+
+    case 'vigilante_qr_detalhe':
+        if ($metodo !== 'GET') cm_json(false, 'Método não permitido.', null, 405);
+        $token_qr = strtolower(trim((string)($_GET['token'] ?? '')));
+        if (!preg_match('/^[a-f0-9]{64}$/', $token_qr)) cm_json(false, 'QR Code inválido.', null, 400);
+        $ponto = cm_vigilante_ponto_por_token($conexao, $token_qr);
+        if (!$ponto) cm_json(false, 'Este ponto QR está inativo ou não foi encontrado.', null, 404);
+        if ((int)$ponto['tenant_id'] !== $tenant_id) {
+            cm_log('vigilante_qr_bloqueado', ['tenant_id' => $tenant_id, 'usuario_id' => $usuario_id, 'motivo' => 'tenant_divergente']);
+            cm_json(false, 'Este QR Code não pertence ao condomínio da sua sessão.', null, 403);
+        }
+        $colaboradores = cm_vigilante_colaboradores_da_sessao($conexao, $tenant_id, (string)$usuario['email']);
+        $requer_selecao = count($colaboradores) !== 1;
+        $dados_ponto = [
+            'ponto' => ['nome' => $ponto['ponto_nome'], 'localizacao' => $ponto['localizacao'], 'ordem' => (int)$ponto['ordem']],
+            'rota' => [
+                'nome' => $ponto['rota_nome'], 'descricao' => $ponto['rota_descricao'],
+                'hora_inicio' => $ponto['hora_inicio'], 'hora_fim' => $ponto['hora_fim'],
+                'intervalo_minutos' => (int)$ponto['intervalo_minutos'],
+                'tolerancia_minutos' => (int)$ponto['tolerancia_minutos'],
+            ],
+            'instrucoes' => $ponto['instrucoes'],
+            'requer_selecao_vigilante' => $requer_selecao,
+        ];
+        if ($requer_selecao) {
+            $dados_ponto['opcoes_vigilante'] = cm_vigilante_opcoes_rota($conexao, $tenant_id, (int)$ponto['rota_id'], (int)$usuario['sessao_id']);
+            $dados_ponto['mensagem_identidade'] = 'Seu acesso não foi associado automaticamente a um colaborador ativo. Selecione o vigilante vinculado à rota.';
+        } else {
+            $dados_ponto['vigilante'] = ['nome' => $colaboradores[0]['nome']];
+        }
+        cm_log('vigilante_qr_validado', ['tenant_id' => $tenant_id, 'usuario_id' => $usuario_id, 'ponto_id' => $ponto['ponto_id'], 'rota_id' => $ponto['rota_id']]);
+        cm_json(true, 'Ponto de ronda validado.', $dados_ponto);
+        break;
+
+    case 'vigilante_registrar_leitura':
+        if ($metodo !== 'POST') cm_json(false, 'Método não permitido.', null, 405);
+        $token_qr = strtolower(trim((string)($dados['token'] ?? '')));
+        if (!preg_match('/^[a-f0-9]{64}$/', $token_qr)) cm_json(false, 'QR Code inválido.', null, 400);
+        $ponto = cm_vigilante_ponto_por_token($conexao, $token_qr);
+        if (!$ponto) cm_json(false, 'Ponto QR inválido ou inativo.', null, 404);
+        if ((int)$ponto['tenant_id'] !== $tenant_id) {
+            cm_log('vigilante_registro_bloqueado', ['tenant_id' => $tenant_id, 'usuario_id' => $usuario_id, 'motivo' => 'tenant_divergente']);
+            cm_json(false, 'Este QR Code não pertence ao condomínio da sua sessão.', null, 403);
+        }
+        $colaboradores = cm_vigilante_colaboradores_da_sessao($conexao, $tenant_id, (string)$usuario['email']);
+        if (count($colaboradores) === 1) {
+            $vigilante = $colaboradores[0];
+        } else {
+            $vigilante = cm_vigilante_validar_opcao($conexao, (string)($dados['opcao_vigilante'] ?? ''), (int)$usuario['sessao_id'], $tenant_id, (int)$ponto['rota_id']);
+            if (!$vigilante) cm_json(false, 'Confirme o vigilante vinculado à rota antes de registrar a leitura.', null, 409);
+        }
+        $colaborador_id = (int)$vigilante['id'];
+        $stmt = $conexao->prepare('SELECT 1 FROM ronda_vigilantes WHERE tenant_id = ? AND rota_id = ? AND colaborador_id = ? AND ativo = 1 LIMIT 1');
+        if (!$stmt) cm_json(false, 'Não foi possível validar o vínculo do vigilante.', null, 503);
+        $stmt->bind_param('iii', $tenant_id, $ponto['rota_id'], $colaborador_id);
+        $stmt->execute();
+        $vinculo = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$vinculo) cm_json(false, 'O vigilante da sessão não está vinculado a esta rota.', null, 403);
+        if (!rv_rota_ativa_hoje($ponto)) cm_json(false, 'Esta rota não está programada para hoje.', null, 409);
+        [$status_sla, $atraso_minutos, $ciclo] = rv_status_sla($ponto);
+        if ($status_sla === 'fora_janela') cm_json(false, 'Esta leitura está fora da janela programada da rota.', null, 409);
+
+        $latitude = null; $longitude = null; $precisao = null;
+        $tem_gps = isset($dados['latitude']) || isset($dados['longitude']) || isset($dados['precisao_metros']);
+        if ($tem_gps) {
+            if (!is_numeric($dados['latitude'] ?? null) || !is_numeric($dados['longitude'] ?? null)
+                || (isset($dados['precisao_metros']) && !is_numeric($dados['precisao_metros']))) {
+                cm_json(false, 'Dados de localização inválidos.', null, 400);
+            }
+            $latitude = (float)$dados['latitude'];
+            $longitude = (float)$dados['longitude'];
+            $precisao = isset($dados['precisao_metros']) ? (float)$dados['precisao_metros'] : null;
+            if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180
+                || ($precisao !== null && ($precisao < 0 || $precisao > 100000))) {
+                cm_json(false, 'Dados de localização inválidos.', null, 400);
+            }
+        }
+        $ciclo_chave = hash('sha256', $tenant_id . '|' . $ponto['rota_id'] . '|' . $colaborador_id . '|' . $ciclo['chave_base']);
+        $previsto_em = $ciclo['previsto_em'];
+        $ip = substr((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+        $user_agent = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
+        $stmt = $conexao->prepare('INSERT INTO ronda_registros (tenant_id, rota_id, ponto_id, colaborador_id, ciclo_chave, previsto_em, status_sla, atraso_minutos, latitude, longitude, precisao_metros, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        if (!$stmt) cm_json(false, 'Não foi possível preparar o registro da ronda.', null, 503);
+        $stmt->bind_param('iiiisssidddss', $tenant_id, $ponto['rota_id'], $ponto['ponto_id'], $colaborador_id, $ciclo_chave, $previsto_em, $status_sla, $atraso_minutos, $latitude, $longitude, $precisao, $ip, $user_agent);
+        $registrado = $stmt->execute();
+        $errno = $stmt->errno;
+        $stmt->close();
+        if (!$registrado && $errno === 1062) cm_json(false, 'Este ponto já foi registrado neste ciclo de ronda.', ['status_sla' => $status_sla], 409);
+        if (!$registrado) cm_json(false, 'Não foi possível registrar a leitura da ronda.', null, 500);
+        cm_vigilante_auditar($conexao, $tenant_id, (int)$ponto['rota_id'], $usuario_id, 'Leitura registrada no aplicativo no ponto ' . $ponto['ponto_nome'], ['colaborador_id' => $colaborador_id, 'ponto_id' => (int)$ponto['ponto_id'], 'status_sla' => $status_sla, 'atraso_minutos' => $atraso_minutos]);
+        cm_log('vigilante_leitura_registrada', ['tenant_id' => $tenant_id, 'usuario_id' => $usuario_id, 'ponto_id' => $ponto['ponto_id'], 'rota_id' => $ponto['rota_id'], 'status_sla' => $status_sla]);
+        cm_json(true, $status_sla === 'atrasado' ? 'Leitura registrada com atraso de SLA.' : 'Leitura de ronda registrada no prazo.', ['status_sla' => $status_sla, 'atraso_minutos' => $atraso_minutos, 'ponto' => $ponto['ponto_nome'], 'rota' => $ponto['rota_nome']]);
+        break;
+
+    case 'vigilante_historico_hoje':
+        if ($metodo !== 'GET') cm_json(false, 'Método não permitido.', null, 405);
+        $colaboradores = cm_vigilante_colaboradores_da_sessao($conexao, $tenant_id, (string)$usuario['email']);
+        if (count($colaboradores) !== 1) cm_json(false, 'Seu acesso não está associado de forma única a um colaborador ativo. Procure a administração para regularizar o cadastro.', null, 409);
+        $colaborador_id = (int)$colaboradores[0]['id'];
+        $stmt = $conexao->prepare("SELECT rr.id, rr.registrado_em, rr.status_sla, rr.atraso_minutos, p.nome AS ponto, p.localizacao, r.nome AS rota FROM ronda_registros rr INNER JOIN ronda_pontos p ON p.id = rr.ponto_id AND p.tenant_id = rr.tenant_id INNER JOIN ronda_rotas r ON r.id = rr.rota_id AND r.tenant_id = rr.tenant_id WHERE rr.tenant_id = ? AND rr.colaborador_id = ? AND DATE(rr.registrado_em) = CURDATE() ORDER BY rr.registrado_em DESC LIMIT 20");
+        if (!$stmt) cm_json(false, 'Não foi possível carregar o histórico de rondas.', null, 503);
+        $stmt->bind_param('ii', $tenant_id, $colaborador_id);
+        $stmt->execute();
+        $historico = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        cm_json(true, 'Histórico de rondas carregado.', $historico);
         break;
 
     case 'hidrometros_leiturista':

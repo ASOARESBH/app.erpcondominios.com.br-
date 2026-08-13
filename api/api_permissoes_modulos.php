@@ -359,7 +359,8 @@ function _garantir_tabelas($conexao) {
             ['contas_receber','Contas a Receber','Financeiro','fas fa-arrow-down','Gestão de receitas','gerente',42],
             ['planos_contas','Planos de Contas','Financeiro','fas fa-list-ol','Classificação contábil','gerente',43],
             ['importacao_financeira','Importação Financeira','Financeiro','fas fa-file-import','Importação de extratos','gerente',44],
-            ['logs_financeiro','Logs Financeiros','Financeiro','fas fa-bug','Diagnóstico financeiro','admin',45],
+            ['inadimplencia','Inadimplência','Financeiro','fas fa-user-clock','Análise histórica de inadimplência','gerente',45],
+            ['logs_financeiro','Logs Financeiros','Financeiro','fas fa-bug','Diagnóstico financeiro','admin',46],
             ['manutencao','Manutenção Geral','Manutenção','fas fa-tools','Ordens de serviço','operador',50],
             ['hidrometro','Hidrômetros','Manutenção','fas fa-tint','Cadastro de hidrômetros','operador',51],
             ['leitura','Leituras Hidrômetro','Manutenção','fas fa-tachometer-alt','Leituras mensais','operador',52],
@@ -392,6 +393,7 @@ function _garantir_tabelas($conexao) {
         }
         $stmt->close();
     }
+
 }
 
 function retornar_json($sucesso, $mensagem, $dados = null) {
