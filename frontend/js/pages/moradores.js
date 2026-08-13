@@ -29,6 +29,7 @@ let _paginaAtual = 1;
 let _totalPaginas = 1;
 let _totalMoradores = 0;
 let _termoBusca = '';  // termo em uso na paginação atual
+let _ordenacaoAtual = 'nome_asc'; // critério enviado ao backend paginado
 // Paginação de dependentes
 const DEP_POR_PAGINA = 25;
 let _depPaginaAtual = 1;
@@ -90,6 +91,17 @@ export function init() {
         });
         inputBuscaMor.addEventListener('keydown', e => {
             if (e.key === 'Enter') { clearTimeout(_debounceTimerMor); _buscarMoradores(); }
+        });
+    }
+
+    // A ordenação é aplicada no servidor para permanecer contínua entre páginas.
+    const selectOrdenacao = document.getElementById('ordenarMoradores');
+    if (selectOrdenacao) {
+        selectOrdenacao.value = _ordenacaoAtual;
+        selectOrdenacao.addEventListener('change', () => {
+            _ordenacaoAtual = selectOrdenacao.value || 'nome_asc';
+            log('Ordenação de moradores alterada:', _ordenacaoAtual);
+            _carregarMoradores(1);
         });
     }
 
@@ -211,7 +223,7 @@ function _setupForms() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function _carregarMoradores(pagina = 1) {
-    log('Carregando lista de moradores, página:', pagina);
+    log('Carregando lista de moradores:', { pagina, busca: _termoBusca, ordenacao: _ordenacaoAtual });
     _paginaAtual = pagina;
 
     const loading = document.getElementById('loadingMoradores');
@@ -220,10 +232,11 @@ function _carregarMoradores(pagina = 1) {
     const params = new URLSearchParams({
         pagina,
         por_pagina: POR_PAGINA,
+        ordenacao: _ordenacaoAtual,
     });
     if (_termoBusca) params.set('busca', _termoBusca); // busca em nome, CPF e unidade (OR)
 
-    fetch(`${API_MORADORES}?${params}`)
+    fetch(`${API_MORADORES}?${params}`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
             if (loading) loading.style.display = 'none';

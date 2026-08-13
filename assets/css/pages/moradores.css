@@ -794,3 +794,24 @@
         font-weight: bold;
     }
 }
+
+/* Ordenação da lista principal de Moradores — não afeta a busca de Dependentes. */
+.page-moradores .moradores-search-box #searchMorador {
+    flex: 2 1 260px;
+}
+
+@media (max-width: 640px) {
+    .page-moradores .moradores-search-box {
+        flex-wrap: wrap;
+    }
+
+    .page-moradores .moradores-search-box #searchMorador {
+        flex: 1 1 100%;
+    }
+
+    .page-moradores .moradores-search-box select,
+    .page-moradores .moradores-search-box .btn-primary-modern {
+        flex: 1 1 160px;
+        min-width: 0;
+    }
+}

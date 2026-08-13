@@ -3,7 +3,7 @@
 O ERP é dividido em módulos de negócios independentes, acessíveis pelo `sidebar-controller.js` e `menu-controller.js`.
 
 ## 1. Administrativo & RH
-- **Moradores/Dependentes**: Gestão de residentes, vinculação de veículos, controle de inadimplência.
+- **Moradores/Dependentes**: Gestão de residentes, vinculação de veículos, controle de inadimplência. A lista de Moradores é paginada no servidor e aceita ordenação segura por nome, unidade ou ID; a aba Dependentes permanece independente.
 - **Visitantes**: Controle de acesso temporário, integração com portaria.
 - **RH**: Ponto, escala, cadastro de colaboradores.
 - **Documentos (GED)**: Gestão Eletrônica de Documentos com versionamento e permissões por unidade.
