@@ -17,13 +17,43 @@ ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
+/** Evita páginas HTTP 500 sem diagnóstico em produção. */
+set_exception_handler(function (Throwable $erro): void {
+    error_log('[DiagnosticoNotificacoes] excecao: ' . $erro->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'sucesso' => false,
+        'mensagem' => 'Falha controlada no diagnóstico de notificações.',
+        'codigo' => 'DIAGNOSTICO_EXCEPTION',
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+});
+
+register_shutdown_function(function (): void {
+    $ultimo_erro = error_get_last();
+    if ($ultimo_erro && in_array($ultimo_erro['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        error_log('[DiagnosticoNotificacoes] fatal: ' . $ultimo_erro['message']);
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode([
+            'sucesso' => false,
+            'mensagem' => 'Falha interna controlada no diagnóstico de notificações.',
+            'codigo' => 'DIAGNOSTICO_FATAL',
+        ], JSON_UNESCAPED_UNICODE);
+    }
+});
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
 }
 
-verificarAutenticacao(true, 'admin');
-$tenant_id = exigirTenantId();
+// config.php expõe a fábrica conectar_banco(); nenhuma conexão global é criada.
+$conexao = conectar_banco();
+$auth = verificarAutenticacao(true, 'admin');
+$tenant_id = (int)($auth['tenant_id'] ?? exigirTenantId());
 $metodo = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 $dados = $metodo === 'POST' ? (json_decode(file_get_contents('php://input'), true) ?: []) : [];
