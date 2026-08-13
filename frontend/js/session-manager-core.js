@@ -281,10 +281,14 @@ class SessionManagerCore {
                 this.isFetching = false;
                 return true;
             } else {
-                console.warn('[SessionManager] ?? Sess?o inativa');
-                this.lastCheckUnauthorized = true;
-                this.handleSessionExpired('not_active');
-                return false;
+                // Sessão efetivamente ausente/expirada já chega como HTTP 401/403
+                // no bloco acima. Um JSON negativo com HTTP 200 indica falha
+                // transitória do endpoint e não pode provocar loop de login.
+                console.warn('[SessionManager] ⚠️ Resposta de sessão inconclusiva — mantendo estado atual');
+                this.lastCheckUnauthorized = false;
+                this.isFetching = false;
+                this.emit('error', { type: 'server_payload', message: data?.mensagem || 'Resposta de sessão inválida' });
+                return this.isAuthenticated;
             }
         } catch (error) {
             console.error('[SessionManager] ? Erro ao verificar sess?o:', error.message);
@@ -304,10 +308,14 @@ class SessionManagerCore {
                 this.isFetching = false;
                 return this.isAuthenticated;
             }
-            console.error('[SessionManager] ? Erro desconhecido na verifica??o:', error);
-            this.handleSessionExpired('unknown_error');
+            // SyntaxError (JSON inválido), erro de proxy ou outra exceção do
+            // servidor não prova que a sessão expirou. O logout só é permitido
+            // após HTTP 401/403, evitando o ciclo login → layout → login.
+            console.error('[SessionManager] ⚠️ Falha interna na verificação; mantendo sessão:', error);
+            this.lastCheckUnauthorized = false;
+            this.emit('error', { type: 'session_check_internal', message: error.message || 'Falha interna na verificação de sessão' });
             this.isFetching = false;
-            return false;
+            return this.isAuthenticated;
         }
     }
 

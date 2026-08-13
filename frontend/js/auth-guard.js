@@ -67,11 +67,14 @@
     })
     .then(function(data) {
         if (!data) return; // já tratado acima
-        if (!data.sucesso || !data.sessao_ativa) {
-            _redirectToLogin('sessao_inativa');
-        } else {
+        if (data.sucesso && data.sessao_ativa) {
             console.log('[AuthGuard] ✅ Acesso autorizado —', data.usuario?.nome || 'usuário');
+            return;
         }
+        // A sessão ausente ou expirada deve chegar como HTTP 401/403. Quando a
+        // API devolve HTTP 200 com JSON inválido/negativo, trata-se de falha
+        // interna transitória e redirecionar aqui cria um ciclo login → layout.
+        console.warn('[AuthGuard] ⚠️ Resposta de sessão inconclusiva — mantendo a página sem redirecionar:', data?.mensagem || 'sem detalhes');
     })
     .catch(function(error) {
         clearTimeout(timeout);

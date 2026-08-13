@@ -810,23 +810,34 @@
             // Inicializar logo
             LogoManager.init();
 
-            // Verificar se já está autenticado - URL absoluta
-            fetch(window.location.origin + '/api/verificar_sessao.php', {
+            // Usar exclusivamente a API central de sessão. O endpoint legado
+            // podia redirecionar simultaneamente ao login recém-concluído e
+            // iniciar o ciclo login → layout → login em falhas transitórias.
+            fetch(window.location.origin + '/api/verificar_sessao_completa.php', {
                 method: 'GET',
-                credentials: 'include'
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
             })
             .then(function (response) {
-                if (!response.ok) return Promise.reject('Não autenticado');
+                if (response.status === 401 || response.status === 403) return null;
+                if (!response.ok) {
+                    console.warn('[Login] Verificação automática indisponível:', response.status);
+                    return null;
+                }
                 return response.json();
             })
             .then(function (data) {
-                if (data && data.sucesso) {
-                    // ✅ REDIRECIONAMENTO CORRETO - URL absoluta elimina /frontend/frontend/
-                    window.location.href = window.location.origin + '/frontend/layout-base.html?page=dashboard';
-                }
+                if (!data || !data.sucesso || !data.sessao_ativa || data.tipo !== 'erp_interno') return;
+                var permissao = data.usuario && data.usuario.permissao ? data.usuario.permissao : '';
+                if (permissao) localStorage.setItem('usuario_permissao', permissao);
+                var destino = permissao === 'super_admin'
+                    ? '/frontend/layout-base.html?page=superadmin'
+                    : '/frontend/layout-base.html?page=dashboard';
+                window.location.replace(window.location.origin + destino);
             })
-            .catch(function () {
-                // Não autenticado — mantém na página de login
+            .catch(function (erro) {
+                // Rede, JSON inválido ou erro 5xx: manter a tela de login sem loop.
+                console.warn('[Login] Verificação automática inconclusiva:', erro && erro.message ? erro.message : erro);
             });
         });
     </script>
