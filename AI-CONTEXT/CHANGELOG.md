@@ -22,6 +22,9 @@ Registro de alterações significativas no ERP.
 - **Moradores — Ordenação paginada**: A lista principal recebeu seletor de nome, unidade e ID em ordem crescente/decrescente. A ordenação ocorre no servidor por lista branca SQL, preservando busca, paginação e a aba Dependentes. Validados sintaxe PHP/JS, as seis opções, propagação do parâmetro e fallback seguro para valores inválidos.
 
 ### Corrigido
+- **Moradores — proporção da busca e ordenação**: Corrigido o `width: 100%` herdado pelo seletor de ordenação quando `flex-basis: auto` era aplicado. A regra foi limitada a `#ordenarMoradores`, com largura automática entre 200 e 240 px; a busca retoma o espaço principal da linha e as regras mobile existentes permanecem ativas. A causa foi confirmada visualmente no navegador antes da correção.
+
+### Corrigido
 - **Portal do Morador PWA**: Removida a barra visual fixa de “Nova versão disponível!”. A atualização passou a seguir o ciclo nativo conservador do Service Worker: a nova versão permanece em espera e assume em um ciclo seguro, sem recarregar formulários em uso.
 - Mantidos o registro em `/firebase-messaging-sw.js`, o listener `controllerchange`, Firebase Cloud Messaging, cache offline e o banner de instalação do PWA.
 
