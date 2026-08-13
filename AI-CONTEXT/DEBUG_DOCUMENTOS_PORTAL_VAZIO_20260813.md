@@ -2,40 +2,71 @@
 
 ## Evidências fornecidas
 
-- Prints da tela "Documentos" do aplicativo (Flutter, `aplicativoerpcondominios`) mostram sempre **"Nenhum documento encontrado."**, mesmo com a unidade logada (Casa 133) devendo enxergar documentos do GED.
-- Não há erro visível ao usuário — a tela simplesmente renderiza o estado vazio (`EmptyState`), como se a consulta tivesse retornado uma lista sem itens.
+Os registros da tela **Documentos** do aplicativo Flutter mostravam sempre **"Nenhum documento encontrado."**, mesmo com a unidade logada devendo enxergar documentos publicados no GED. Não havia erro visível ao usuário; a tela renderizava o estado vazio como se a consulta tivesse retornado uma lista legítima sem itens.
 
-## Diagnóstico (leitura de código, sem alteração)
+## Diagnóstico inicial — leitura de código
 
-### Fluxo envolvido
-- Frontend: `lib/presentation/screens/documents/documents_screen.dart` (método `_loadData`).
-- Endpoint: `AppConstants.endpointDocumentos` = `/api/api_portal_documentos.php` (`lib/core/constants/app_constants.dart`).
-- Backend: `api/api_portal_documentos.php`, ação `documentos_listar` (linhas 240-261).
-- HTTP client: `lib/core/network/dio_client.dart` — `validateStatus: (status) => status != null && status < 500`.
+| Camada | Comportamento encontrado | Consequência |
+|---|---|---|
+| Frontend | `lib/presentation/screens/documents/documents_screen.dart`, método `_loadData()` | Chamava a ação incorreta para uma lista plana |
+| Endpoint | `AppConstants.endpointDocumentos` = `/api/api_portal_documentos.php` | API GED usada pelo Portal do Morador |
+| Backend | Ação `documentos_listar` | Exige `pasta_id` para listar uma única pasta |
+| Cliente HTTP | `dio_client.dart` aceita status HTTP menor que 500 | O `400` não era lançado como exceção |
 
-### Causa raiz
-1. `_loadData()` sempre chama a API com `acao=documentos_listar` e **nunca envia `pasta_id`** (só envia `busca` e `tipo` quando preenchidos).
-2. No backend, a ação `documentos_listar` exige `pasta_id` (0 = "sem pasta", ou o ID de uma pasta específica). Sem o parâmetro, `$_GET['pasta_id']` cai no default `-1` e a API responde `{"sucesso": false, "mensagem": "pasta_id inválido."}` com HTTP 400 (`api/api_portal_documentos.php`, linha ~242).
-3. Como `dio_client.dart` trata qualquer status `< 500` como resposta "normal" (não lança exceção), o `try/catch` de `_loadData()` não é acionado. O código apenas verifica `if (data['sucesso'] == true)` — como vem `false`, o bloco é pulado e `_documents` permanece `[]`, sem nenhum log de erro visível ao usuário.
-4. Ou seja: a tela **nunca chega a listar nada de fato**, para nenhum morador, em nenhum tenant — não é um problema de permissão/tenant específico, é um descompasso de contrato entre app e API.
+A tela chamava `acao=documentos_listar` sem enviar `pasta_id`. No backend, a ausência do parâmetro cai no valor `-1` e resulta em `{"sucesso": false, "mensagem": "pasta_id inválido."}` com HTTP 400. Como o Dio considera esse status uma resposta processável e a tela atualizava a lista somente para `sucesso == true`, a falha era ocultada e `_documents` permanecia vazio.
 
-### Causa raiz secundária (busca não funciona mesmo corrigindo o item acima)
-- O campo de busca da tela envia o parâmetro `busca`, mas a ação `documentos_listar` só lê `tipo` — o texto digitado é ignorado. Quem lê o parâmetro de busca por texto (`q`) é a ação **`buscar`** (linhas 267-297), que a tela nunca chama.
-- A ação `buscar` (sem pasta) é, na prática, a que corresponde à UX já implementada na tela (lista única, sem navegação por pastas): ela aceita `q`, `tipo` e `pagina`, **não exige `pasta_id`**, e já retorna `pasta_nome` (usado no `subtitle` do `ListTile`, linha 151 de `documents_screen.dart`). A ação `documentos_listar` não retorna `pasta_nome`.
+A busca textual também estava incompatível: a tela enviava `busca`, enquanto a ação plana `buscar` lê `q`. A ação `buscar` é a que corresponde à UX existente, porque consulta todas as pastas, aceita `q`, `tipo` e `pagina` e devolve `pasta_nome`, campo já usado no subtítulo dos cartões.
 
-### Conclusão
-O endpoint correto para essa tela (lista simples com busca + filtro de tipo, sem navegação por pastas) é `acao=buscar`, não `acao=documentos_listar`. A tela foi implementada para consumir uma listagem plana, mas foi ligada à ação da API que espera navegação por pastas (`pastas_listar` → `documentos_listar&pasta_id=`).
+## Regra de produto confirmada
 
-## Correção recomendada (não aplicada nesta análise)
+O aplicativo usa uma **lista plana com busca e filtros**, não uma navegação hierárquica por pastas. Portanto, o contrato correto para essa tela é:
 
-1. Em `documents_screen.dart`, trocar `acao=documentos_listar` por `acao=buscar`, renomear o parâmetro `busca` para `q` (nome esperado pelo backend) e passar `pagina` (com paginação/scroll infinito se necessário, já que `buscar` limita a 30 registros por página).
-2. Alternativa mais alinhada ao desenho original da API: implementar navegação por pastas na tela, chamando `pastas_listar` e depois `documentos_listar&pasta_id=`. Mais trabalho de UI, mas usa a ação como foi originalmente projetada (ver comentário no topo de `api_portal_documentos.php`).
-3. Independente da opção escolhida, tratar `sucesso: false` mostrando mensagem de erro ao usuário (hoje é engolido silenciosamente) para que falhas futuras de contrato API↔app não fiquem indistinguíveis de "sem documentos".
-4. Validar também a resolução de `unidade_id` em `api_portal_documentos.php` (`JOIN unidades u ON u.nome = m.unidade`, linha ~179): se o nome da unidade do morador não bater exatamente com `unidades.nome`, documentos com `visibilidade = 'unidades_especificas'` não aparecerão mesmo após corrigir a ação. Conferir com dados reais antes de fechar o chamado.
+```text
+GET /api/api_portal_documentos.php?acao=buscar&q=&tipo=&pagina=
+```
+
+A rota `documentos_listar&pasta_id=` continua existente e deve ser usada somente por uma experiência futura de navegação por pastas.
+
+## Validação de unidade e visibilidade — 2026-08-13
+
+A auditoria somente leitura no banco confirmou que a causa não era tenant, token ou unidade. O morador **ANDRE SOARES E SILVA** possui `morador_id=185`, `tenant_id=1`, unidade textual `Gleba 133` e correspondência exata para `unidade_id=139` em `unidades`.
+
+| Verificação | Resultado |
+|---|---|
+| Correspondência `moradores.unidade` → `unidades.nome` | Válida: `Gleba 133` → unidade 139 |
+| Documentos GED ativos | 12 documentos encontrados |
+| Visibilidade `todos` | Há documentos destinados ao morador |
+| Visibilidade `moradores` | Há documentos destinados ao morador |
+| Visibilidade `usuarios` | Permanece corretamente bloqueada ao Portal do Morador |
+
+Não foi necessária alteração da resolução de unidade no backend. A validação de `unidades_especificas` deve continuar sendo executada quando houver documento de teste com `unidades_acesso` preenchido para a unidade 139.
+
+## Correção aplicada — 2026-08-13
+
+O arquivo `lib/presentation/screens/documents/documents_screen.dart` foi atualizado para consultar `acao=buscar`, enviar `q`, `tipo` e `pagina`, e carregar documentos em páginas de 30 itens com rolagem incremental.
+
+A tela agora trata `sucesso: false`, resposta inválida e falhas de rede como estado de erro explícito e `SnackBar`. Assim, `Nenhum documento encontrado.` é exibido apenas quando a API retornar uma lista válida sem documentos acessíveis. A abertura e o download continuam usando o endpoint GED, que revalida a permissão do morador antes de fornecer arquivo ou link externo.
+
+## Validações executadas
+
+A análise estática de `documents_screen.dart` foi concluída sem erros e os testes automatizados do aplicativo foram aprovados. O fluxo operacional que ainda deve ser validado após a instalação da atualização é mostrado abaixo.
+
+| Cenário | Resultado esperado |
+|---|---|
+| Documento `todos` | Aparece para o morador |
+| Documento `moradores` | Aparece para o morador |
+| Documento `usuarios` | Não aparece para o morador |
+| Documento `unidades_especificas` para unidade 139 | Aparece para Gleba 133 |
+| Documento de outra unidade | Não aparece |
+| Busca por texto | Filtra nome, descrição ou tags |
+| Filtro de tipo | Restringe PDF, Word, Excel ou imagem |
+| Download | Revalida a visibilidade no backend |
 
 ## Fontes locais
-- Frontend: `lib/presentation/screens/documents/documents_screen.dart`
-- Constantes: `lib/core/constants/app_constants.dart`
-- HTTP client: `lib/core/network/dio_client.dart`
-- Backend: `api/api_portal_documentos.php`
-- Contexto de armazenamento de arquivos: [TENANT_FILE_STORAGE.md](TENANT_FILE_STORAGE.md)
+
+| Fonte | Papel |
+|---|---|
+| `lib/presentation/screens/documents/documents_screen.dart` | Interface móvel corrigida |
+| `lib/core/network/dio_client.dart` | Cliente que explica o erro silencioso em HTTP 400 |
+| `api/api_portal_documentos.php` | Contrato de busca, visibilidade e download |
+| `AI-CONTEXT/TENANT_FILE_STORAGE.md` | Regras de isolamento de arquivos por tenant |

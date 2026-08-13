@@ -30,3 +30,12 @@ Registro de alterações significativas no ERP.
 ### Corrigido
 - Loop de redirecionamento no `session-manager-core.js`.
 - Correção de layout no CSS do `input-wrapper` na tela de login.
+
+## [2.1.1] - 2026-08-13
+### Corrigido
+- **Portal do Morador — Documentos**: a tela móvel passou a usar a ação GED `buscar` com parâmetros `q`, `tipo` e `pagina`, eliminando a chamada incompatível a `documentos_listar` sem `pasta_id`.
+- **Portal do Morador — Documentos**: respostas `sucesso: false`, erros de rede e formatos inválidos agora são apresentados como erro visível, em vez de lista vazia silenciosa.
+- **Portal do Morador — Documentos**: adicionada paginação incremental de 30 documentos por página, mantendo as regras de visibilidade e download revalidado no backend.
+
+### Documentado
+- Registrado o diagnóstico confirmado de unidade, visibilidade e contrato da API em `AI-CONTEXT/DEBUG_DOCUMENTOS_PORTAL_VAZIO_20260813.md` e `AI-CONTEXT/API.md`.
