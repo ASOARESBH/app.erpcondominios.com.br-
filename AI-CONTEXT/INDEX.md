@@ -43,3 +43,5 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **FAQ Técnico**: [FAQ.md](FAQ.md)
 - **Roadmap de Evolução**: [ROADMAP.md](ROADMAP.md)
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
+
+- **Inadimplência BRCondos**: [INADIMPLENCIA.md](INADIMPLENCIA.md)

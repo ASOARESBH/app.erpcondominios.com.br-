@@ -38,6 +38,7 @@
         contas_receber:         'contas_receber',
         planos_contas:          'planos_contas',
         importacao_financeira:  'importacao_financeira',
+        inadimplencia:          'inadimplencia',
         logs_financeiro:        'logs_financeiro',
 
         // Manutenção
