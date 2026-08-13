@@ -97,59 +97,55 @@
         }
     }
 
-    // ── Verificar via API e atualizar dados ───────────────────────────
+    // ── Sincronizar contexto a partir do SessionManager ────────────────
+    function aplicarContextoSessao(usuario) {
+        if (!usuario) return;
+        try {
+            if (usuario.permissao) localStorage.setItem('usuario_permissao', usuario.permissao);
+            localStorage.setItem('usuario_nome', usuario.nome || '');
+            localStorage.setItem('usuario_id', String(usuario.id || ''));
+        } catch (e) {}
+
+        // Dados de tenant já foram definidos no login e não devem ser
+        // sobrescritos por uma segunda chamada concorrente durante o boot.
+        var tenant = null;
+        try {
+            var tenantId = localStorage.getItem('tenant_id');
+            if (tenantId) tenant = {
+                id: tenantId,
+                slug: localStorage.getItem('tenant_slug') || '',
+                nome: localStorage.getItem('tenant_nome') || '',
+                plano: localStorage.getItem('tenant_plano') || ''
+            };
+        } catch (e) {}
+
+        if (usuario.permissao === 'super_admin') {
+            var emTenant = false;
+            try { emTenant = !!localStorage.getItem('superadmin_tenant_original'); } catch (e) {}
+            if (window.MenuController && typeof window.MenuController.setMode === 'function') {
+                window.MenuController.setMode(emTenant ? 'operacional' : 'superadmin');
+            } else if (!emTenant) {
+                adicionarItemMenu();
+            }
+            log('super_admin confirmado pelo SessionManager; contexto:', emTenant ? 'tenant' : 'global');
+        }
+        _verificarBannerContexto(tenant);
+    }
+
     function verificarViaAPI() {
-        fetch('/api/verificar_sessao.php', {
-            method: 'GET',
-            credentials: 'include',
-            headers: { 'Accept': 'application/json' }
-        })
-        .then(function (r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        })
-        .then(function (res) {
-            if (!res || !res.sucesso || !res.dados) return;
-
-            var usuario = res.dados.usuario;
-            var tenant  = res.dados.tenant;
-
-            // Salvar permissão no localStorage
-            if (usuario && usuario.permissao) {
-                try {
-                    localStorage.setItem('usuario_permissao', usuario.permissao);
-                    localStorage.setItem('usuario_nome', usuario.nome || '');
-                    localStorage.setItem('usuario_id',   String(usuario.id || ''));
-                } catch (e) {}
-            }
-
-            // Salvar dados do tenant no localStorage
-            if (tenant) {
-                try {
-                    localStorage.setItem('tenant_id',    String(tenant.id   || ''));
-                    localStorage.setItem('tenant_slug',  tenant.slug  || '');
-                    localStorage.setItem('tenant_nome',  tenant.nome  || '');
-                    localStorage.setItem('tenant_plano', tenant.plano || '');
-                } catch (e) {}
-            }
-
-            // O Super-Admin possui dois contextos de navegação mutuamente
-            // exclusivos: painel global ou operação dentro de uma unidade.
-            if (usuario && usuario.permissao === 'super_admin') {
-                var emTenant = false;
-                try { emTenant = !!localStorage.getItem('superadmin_tenant_original'); } catch (e) {}
-                if (window.MenuController && typeof window.MenuController.setMode === 'function') {
-                    window.MenuController.setMode(emTenant ? 'operacional' : 'superadmin');
-                } else if (!emTenant) {
-                    adicionarItemMenu();
+        // O SessionManager já faz a única consulta central de sessão no boot.
+        // Reutilizar seu estado evita requisições PHP concorrentes e bloqueios
+        // do cookie PHPSESSID imediatamente após o login.
+        if (window.SessionManagerCore && typeof window.SessionManagerCore.getInstance === 'function') {
+            var manager = window.SessionManagerCore.getInstance();
+            manager.initialize().then(function () {
+                if (manager.isAuthenticated && manager.currentUser) {
+                    aplicarContextoSessao(manager.currentUser);
                 }
-                log('super_admin confirmado via API; contexto:', emTenant ? 'tenant' : 'global');
-            }
-
-            // Verificar e exibir banner de contexto
-            _verificarBannerContexto(tenant);
-        })
-        .catch(function (e) { log('Erro API:', e.message); });
+            }).catch(function (e) { log('Erro SessionManager:', e.message); });
+            return;
+        }
+        log('SessionManager indisponível; menu aguardará próxima atualização de sessão');
     }
 
     // ── Banner de contexto (quando navegando em outro tenant) ─────────

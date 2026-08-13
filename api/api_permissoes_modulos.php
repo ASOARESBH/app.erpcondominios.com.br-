@@ -30,8 +30,17 @@ $usuario_logado = verificarAutenticacao(true);
 $tenant_id = exigirTenantId();
 $conexao = conectar_banco();
 
-// Garantir que as tabelas existem
-_garantir_tabelas($conexao);
+// O carregamento de permissões ocorre em toda abertura do layout. Executar
+// CREATE/INSERT de estrutura nesse caminho gerava lock e instabilidade no
+// pós-login em hospedagem compartilhada. Só instala a estrutura se ela estiver
+// realmente ausente; instalações normais fazem apenas consultas de leitura.
+$tem_modulos = $conexao->query("SHOW TABLES LIKE 'modulos_sistema'");
+$tem_usuario_modulos = $conexao->query("SHOW TABLES LIKE 'usuario_modulos'");
+if (!$tem_modulos || !$tem_usuario_modulos || $tem_modulos->num_rows === 0 || $tem_usuario_modulos->num_rows === 0) {
+    _garantir_tabelas($conexao);
+}
+if ($tem_modulos instanceof mysqli_result) $tem_modulos->free();
+if ($tem_usuario_modulos instanceof mysqli_result) $tem_usuario_modulos->free();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $acao   = $_GET['acao'] ?? $_POST['acao'] ?? (json_decode(file_get_contents('php://input'), true)['acao'] ?? '');

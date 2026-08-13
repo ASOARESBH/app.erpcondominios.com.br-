@@ -301,6 +301,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'permissao'   => $_SESSION['usuario_permissao']   ?? null,
                 'tipo'        => 'erp',
             ],
+            'tenant' => [
+                'id'    => $_SESSION['tenant_id'] ?? null,
+                'slug'  => $_SESSION['tenant_slug'] ?? null,
+                'nome'  => $_SESSION['tenant_nome'] ?? null,
+                'plano' => $_SESSION['tenant_plano'] ?? null,
+            ],
             'sessao' => [
                 'tempo_restante'         => $tr,
                 'tempo_formatado'        => $tr !== null ? sprintf('%02d:%02d', $mm, $ss) : '∞',

@@ -20,8 +20,11 @@ const FIREBASE_CONFIG = (self.PWA_CONFIG && self.PWA_CONFIG.firebase) ? self.PWA
 const CACHE_VERSION = (self.PWA_CONFIG && self.PWA_CONFIG.cacheVersion)
     ? self.PWA_CONFIG.cacheVersion
     : 'portal-morador-v1';
-const CACHE_STATIC  = `${CACHE_VERSION}-static`;
-const CACHE_DYNAMIC = `${CACHE_VERSION}-dynamic`;
+// Incremento técnico independente da configuração administrativa. Ele força a
+// remoção de caches antigos que podiam incluir login/layout do ERP.
+const CACHE_REVISION = 'pwa-portal-isolado-v2';
+const CACHE_STATIC  = `${CACHE_VERSION}-${CACHE_REVISION}-static`;
+const CACHE_DYNAMIC = `${CACHE_VERSION}-${CACHE_REVISION}-dynamic`;
 
 // Recursos que sempre devem estar em cache (shell do app)
 const STATIC_ASSETS = [
@@ -97,6 +100,15 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.startsWith('/api/') || url.pathname.includes('api_')) {
         return; // Deixa o browser lidar normalmente
     }
+
+    // O worker continua com escopo global para notificações, mas o cache é
+    // exclusivo do Portal do Morador. Login, layout-base e scripts do ERP nunca
+    // passam pelo cache PWA, evitando manter hotfixes de autenticação antigos.
+    const recursoPortal = url.pathname === '/frontend/portal_morador.html'
+        || url.pathname.startsWith('/PWA/')
+        || url.pathname.startsWith('/ico/')
+        || url.pathname === '/assets/css/app.css';
+    if (!recursoPortal) return;
 
     // Ignorar requisições não-GET
     if (event.request.method !== 'GET') {
