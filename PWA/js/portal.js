@@ -116,7 +116,11 @@ const PWAPortal = (() => {
                 const newWorker = registration.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        _mostrarBannerAtualizacao(newWorker);
+                        // Atualização silenciosa e conservadora: não forçar
+                        // skipWaiting/reload enquanto o morador usa o portal.
+                        // O worker permanece waiting e assume naturalmente quando
+                        // as abas atuais forem fechadas, preservando formulários.
+                        console.log('[PWA] Nova versão instalada em espera; será aplicada no próximo ciclo seguro.');
                     }
                 });
             });
@@ -450,53 +454,6 @@ const PWAPortal = (() => {
     function _fecharBannerPermissao() {
         const banner = document.getElementById('pwa-permissao-banner');
         if (banner) banner.remove();
-    }
-
-    // ── Mostrar banner de atualização ────────────────────────
-    function _mostrarBannerAtualizacao(newWorker) {
-        // Evita empilhar vários banners caso o evento dispare mais de uma vez
-        if (document.getElementById('pwa-atualizacao-banner')) return;
-
-        const banner = document.createElement('div');
-        banner.id = 'pwa-atualizacao-banner';
-        banner.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 99999;
-            background: #059669;
-            color: #fff;
-            padding: 12px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-        `;
-        banner.innerHTML = `
-            <span>🔄 Nova versão disponível!</span>
-            <button style="padding:6px 14px;border-radius:6px;border:none;background:#fff;color:#059669;cursor:pointer;font-weight:600;font-size:13px">Atualizar</button>
-        `;
-        const btn = banner.querySelector('button');
-        btn.addEventListener('click', () => {
-            btn.disabled = true;
-            btn.style.cursor = 'default';
-            btn.style.opacity = '.7';
-            btn.textContent = 'Atualizando...';
-
-            newWorker.postMessage({ type: 'SKIP_WAITING' });
-
-            // O reload de verdade acontece no listener de 'controllerchange'
-            // (ver _registrarServiceWorker), assim que o novo Service Worker
-            // assumir o controle. Esta rede de segurança só existe para não
-            // deixar o usuário travado caso o evento, por algum motivo, não dispare.
-            setTimeout(() => {
-                if (_recarregandoParaAtualizar) return;
-                _recarregandoParaAtualizar = true;
-                window.location.reload();
-            }, 4000);
-        });
-        document.body.appendChild(banner);
     }
 
     // ── Atualizar UI de permissão ────────────────────────────

@@ -21,7 +21,7 @@ Esta atualização corrige a abertura da aba **Controle de Acesso** no Portal do
 
 Faça backup dos arquivos atuais. Em seguida, envie o conteúdo do pacote ZIP para a raiz de `public_html`, preservando integralmente as pastas `PWA/`, `frontend/` e `api/`. Depois confirme e remova manualmente os arquivos legados `manifest.json`, `portal-morador-manifest.json` e `frontend/js/pwa-portal.js`; eles foram movidos para `PWA/` e não devem permanecer como cópias soltas.
 
-Mantenha `firebase-messaging-sw.js` na raiz: ele é um adaptador técnico obrigatório de escopo e não deve ser removido. Após o envio, abra o Portal do Morador e use `Ctrl+F5`. Caso exista uma instalação PWA anterior, clique em **Atualizar** quando o banner de nova versão aparecer. O Service Worker da raiz carregará automaticamente a implementação em `PWA/` e manterá o escopo do portal em `/frontend/`.
+Mantenha `firebase-messaging-sw.js` na raiz: ele é um adaptador técnico obrigatório de escopo e não deve ser removido. Após o envio, abra o Portal do Morador e use `Ctrl+F5`. A barra “Nova versão disponível” não é mais exibida: quando uma nova versão for detectada, ela permanecerá em espera e assumirá no próximo ciclo seguro do navegador, sem recarregar uma tela com formulário em uso. O Service Worker da raiz carregará automaticamente a implementação em `PWA/` e manterá o escopo do portal em `/frontend/`.
 
 ## Validação
 
@@ -32,7 +32,7 @@ Mantenha `firebase-messaging-sw.js` na raiz: ele é um adaptador técnico obriga
 | Portal do Morador | Carrega `/PWA/portal-morador-manifest.json` e `/PWA/js/portal.js`. |
 | Console de Acesso | Carrega `/PWA/manifest.json`. |
 | Central PWA | Health check confirma a implementação em `PWA/` e o adaptador de escopo. |
-| Push e cache | Service Worker é registrado em `/firebase-messaging-sw.js` com escopo `/`. |
+| Push e cache | Service Worker é registrado em `/firebase-messaging-sw.js` com escopo `/`, sem barra visual de atualização. |
 
 ## Observação de segurança
 
