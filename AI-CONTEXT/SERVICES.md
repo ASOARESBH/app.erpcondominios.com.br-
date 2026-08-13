@@ -19,3 +19,10 @@ O ERP possui serviços que rodam em background ou de forma independente:
 - Implementado com Factory Pattern (`EmailProviderFactory`).
 - Suporta múltiplos gateways: Brevo, Resend, SMTP genérico.
 - Possui fallback automático (se Brevo falhar, tenta SMTP).
+
+
+### Eventos automáticos de Controle de Acesso
+
+Todo acesso liberado pelos modos Online Pro, cartão, QR Code, UHF, Monitor e Push Mode converge em `api/controlid/_helper.php`. Após a gravação bem-sucedida em `registros_acesso`, o helper cria o evento persistente `acesso_entrada` para o morador vinculado ao veículo e tenta FCM pelo mesmo transporte de protocolos.
+
+A notificação não bloqueia a catraca. Falhas de banco secundário, ausência de token ou falha FCM são registradas em `logs/access_notification.log` e `error_log`, preservando a liberação física. A trilha de validação pós-deploy está em `sql/validacao_controlid_notificacao_pos_deploy.sql`.

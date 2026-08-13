@@ -38,3 +38,12 @@ O endpoint `api/api_portal_documentos.php` é o consumidor autenticado das tabel
 | `visualizar` / `download` | `id` | Revalida a visibilidade do documento antes de transmitir arquivo ou link externo |
 
 > A resposta de erro de uma API (`sucesso: false`) deve ser apresentada explicitamente pelo cliente, inclusive se o cliente HTTP optar por não transformar HTTP 400 em exceção.
+
+
+## 6. Controle de Acesso — Eventos automáticos ControlID
+
+Os endpoints do diretório `api/controlid/` não recebem sessão PHP, pois são acionados diretamente pela catraca. Os modos `new_user_identified`, `new_card`, `new_qrcode`, `new_uhf_tag`, `notifications/dao` e `result` convergem para `push_registrar_acesso_erp()` em `api/controlid/_helper.php`.
+
+Depois de inserir um acesso liberado em `registros_acesso`, o helper resolve `tenant_id` e unidade a partir do morador vinculado ao veículo e chama `controle_acesso_criar_notificacao_registro()`. A chamada é complementar, cercada por `try/catch` e não altera a resposta física da catraca. O evento persistido usa `tipo=acesso_entrada`, `registro_acesso_id` e rota `/home/notifications`.
+
+A API nunca aceita `tenant_id` do payload ControlID. Se a inserção não gerar identificador positivo, o helper registra `registro_sem_id_valido` e não cria um evento idempotente com chave insegura.

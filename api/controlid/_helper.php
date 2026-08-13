@@ -9,6 +9,15 @@
 
 require_once __DIR__ . '/../config.php';
 
+// O ControlID não usa sessão PHP, mas os acessos liberados precisam gerar
+// eventos persistentes para o Portal do Morador. O helper compartilha o
+// mesmo transporte FCM já aprovado para protocolos e registros manuais.
+$__controle_acesso_notificacao_helper = __DIR__ . '/../helpers/access_control_notification_helper.php';
+if (is_file($__controle_acesso_notificacao_helper)) {
+    require_once $__controle_acesso_notificacao_helper;
+}
+unset($__controle_acesso_notificacao_helper);
+
 // ============================================================
 // HEADERS — sem autenticação de sessão (requests vêm do equipamento)
 // ============================================================
@@ -96,7 +105,7 @@ function push_processar_tag($conn, $tag_value) {
     $stmt = $conn->prepare(
         "SELECT v.id, v.placa, v.modelo, v.cor, v.tag,
                 v.morador_id, v.controlid_user_id,
-                m.nome AS morador_nome, m.unidade
+                m.nome AS morador_nome, m.unidade, m.tenant_id
          FROM veiculos v
          LEFT JOIN moradores m ON m.id = v.morador_id
          WHERE UPPER(v.tag) = UPPER(?) AND v.ativo = 1
@@ -116,7 +125,7 @@ function push_processar_card($conn, $card_value) {
     $stmt = $conn->prepare(
         "SELECT v.id, v.placa, v.modelo, v.cor, v.tag,
                 v.morador_id, v.controlid_user_id,
-                m.nome AS morador_nome, m.unidade
+                m.nome AS morador_nome, m.unidade, m.tenant_id
          FROM veiculos v
          LEFT JOIN moradores m ON m.id = v.morador_id
          WHERE v.tag = ? AND v.ativo = 1
@@ -137,7 +146,7 @@ function push_processar_user_id($conn, $controlid_user_id) {
     $stmt = $conn->prepare(
         "SELECT v.id, v.placa, v.modelo, v.cor, v.tag,
                 v.morador_id, v.controlid_user_id,
-                m.nome AS morador_nome, m.unidade
+                m.nome AS morador_nome, m.unidade, m.tenant_id
          FROM veiculos v
          LEFT JOIN moradores m ON m.id = v.morador_id
          WHERE v.controlid_user_id = ? AND v.ativo = 1
@@ -219,22 +228,83 @@ function push_registrar_leitura($conn, array $dados) {
 // REGISTRAR ACESSO no ERP (registros_acesso)
 // ============================================================
 function push_registrar_acesso_erp($conn, $veiculo, $disp_id, $fonte = 'push', $extra = '') {
-    if (!$veiculo || !isset($veiculo['id'])) return;
+    if (!$veiculo || !isset($veiculo['id'])) {
+        error_log('[CONTROLID_ACCESS] veiculo_invalido fonte=' . $fonte);
+        return ['sucesso' => false, 'motivo' => 'veiculo_invalido'];
+    }
 
-    $status = 'Acesso liberado via Control ID Push — ' . ($veiculo['morador_nome'] ?? 'Morador');
-    $obs    = "Evento em tempo real via dispositivo #$disp_id ($fonte)" . ($extra ? " | $extra" : '');
+    $morador_id = (int)($veiculo['morador_id'] ?? 0);
+    $tenant_id  = (int)($veiculo['tenant_id'] ?? 0);
+    $unidade    = trim((string)($veiculo['unidade'] ?? ''));
+    $status     = 'Acesso liberado via Control ID Push — ' . ($veiculo['morador_nome'] ?? 'Morador');
+    $obs        = "Evento em tempo real via dispositivo #$disp_id ($fonte)" . ($extra ? " | $extra" : '');
 
     $stmt = $conn->prepare(
         "INSERT INTO registros_acesso
-         (data_hora, placa, modelo, cor, tag, tipo, morador_id, status, liberado, observacao)
-         VALUES (NOW(), ?, ?, ?, ?, 'Morador', ?, ?, 1, ?)"
+         (data_hora, placa, modelo, cor, tag, tipo, morador_id, unidade_destino, status, liberado, observacao)
+         VALUES (NOW(), ?, ?, ?, ?, 'Morador', ?, ?, ?, 1, ?)"
     );
-    $stmt->bind_param(
-        'ssssiiss',
-        $veiculo['placa'], $veiculo['modelo'], $veiculo['cor'], $veiculo['tag'],
-        $veiculo['morador_id'], $status, $obs
-    );
-    $stmt->execute();
+    if (!$stmt) {
+        error_log('[CONTROLID_ACCESS] insert_prepare_falhou fonte=' . $fonte . ' erro=' . $conn->error);
+        return ['sucesso' => false, 'motivo' => 'insert_prepare_falhou'];
+    }
+
+    $placa  = (string)($veiculo['placa'] ?? '');
+    $modelo = (string)($veiculo['modelo'] ?? '');
+    $cor    = (string)($veiculo['cor'] ?? '');
+    $tag    = (string)($veiculo['tag'] ?? '');
+    $stmt->bind_param('ssssisss', $placa, $modelo, $cor, $tag, $morador_id, $unidade, $status, $obs);
+    if (!$stmt->execute()) {
+        $erro = $stmt->error;
+        $stmt->close();
+        error_log('[CONTROLID_ACCESS] insert_execucao_falhou fonte=' . $fonte . ' erro=' . $erro);
+        return ['sucesso' => false, 'motivo' => 'insert_execucao_falhou'];
+    }
+
+    $registro_acesso_id = (int)$conn->insert_id;
+    $stmt->close();
+
+    // O acesso na catraca é prioritário: qualquer problema abaixo é apenas
+    // registrado e jamais interfere na resposta entregue ao equipamento.
+    $notificacao = ['sucesso' => false, 'motivo' => 'nao_processada'];
+    try {
+        if ($registro_acesso_id <= 0) {
+            $notificacao = ['sucesso' => false, 'motivo' => 'registro_sem_id_valido'];
+            error_log('[CONTROLID_ACCESS] registro_sem_id_valido fonte=' . $fonte . ' morador=' . $morador_id);
+        } elseif ($tenant_id <= 0 || $morador_id <= 0) {
+            $notificacao = ['sucesso' => false, 'motivo' => 'destinatario_sem_tenant'];
+            error_log('[CONTROLID_ACCESS] destinatario_sem_tenant registro=' . $registro_acesso_id . ' fonte=' . $fonte);
+        } elseif (function_exists('controle_acesso_criar_notificacao_registro')) {
+            $notificacao = controle_acesso_criar_notificacao_registro(
+                $conn,
+                $tenant_id,
+                $registro_acesso_id,
+                $morador_id,
+                $unidade,
+                'Entrada',
+                'Morador',
+                $placa,
+                $modelo,
+                date('Y-m-d H:i:s')
+            );
+        } else {
+            $notificacao = ['sucesso' => false, 'motivo' => 'helper_notificacao_indisponivel'];
+            error_log('[CONTROLID_ACCESS] helper_notificacao_indisponivel registro=' . $registro_acesso_id);
+        }
+    } catch (Throwable $erro_notificacao) {
+        $notificacao = ['sucesso' => false, 'motivo' => 'excecao_nao_bloqueante'];
+        error_log('[CONTROLID_ACCESS] notificacao_falhou registro=' . $registro_acesso_id . ' erro=' . $erro_notificacao->getMessage());
+    }
+
+    error_log('[CONTROLID_ACCESS] processado registro=' . $registro_acesso_id .
+        ' tenant=' . $tenant_id . ' morador=' . $morador_id .
+        ' fonte=' . $fonte . ' notificacao=' . json_encode($notificacao, JSON_UNESCAPED_UNICODE));
+
+    return [
+        'sucesso' => true,
+        'registro_acesso_id' => $registro_acesso_id,
+        'notificacao_controle_acesso' => $notificacao,
+    ];
 }
 
 // ============================================================
