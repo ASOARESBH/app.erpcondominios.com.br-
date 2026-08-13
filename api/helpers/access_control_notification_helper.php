@@ -22,6 +22,20 @@ if (!function_exists('controle_acesso_notificacao_coluna_existe')) {
     }
 }
 
+if (!function_exists('controle_acesso_notificacao_coluna_permite_nulo')) {
+    function controle_acesso_notificacao_coluna_permite_nulo(mysqli $conexao, string $tabela, string $coluna): bool {
+        $stmt = $conexao->prepare(
+            'SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+        );
+        if (!$stmt) return false;
+        $stmt->bind_param('ss', $tabela, $coluna);
+        $stmt->execute();
+        $linha = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return ($linha['IS_NULLABLE'] ?? 'NO') === 'YES';
+    }
+}
+
 if (!function_exists('controle_acesso_notificacao_auditoria')) {
     /**
      * Auditoria operacional sem senha, token completo ou dados de documento.
@@ -62,7 +76,8 @@ if (!function_exists('controle_acesso_criar_notificacao_veiculo')) {
         string $modelo = ''
     ): array {
         if (!protocolo_notificacao_tabela_existe($conexao, 'notificacoes_morador') ||
-            !controle_acesso_notificacao_coluna_existe($conexao, 'notificacoes_morador', 'veiculo_id')) {
+            !controle_acesso_notificacao_coluna_existe($conexao, 'notificacoes_morador', 'veiculo_id') ||
+            !controle_acesso_notificacao_coluna_permite_nulo($conexao, 'notificacoes_morador', 'protocolo_id')) {
             controle_acesso_notificacao_debug('migracao_pendente', [
                 'tenant_id' => $tenant_id,
                 'morador_id' => $morador_id,
@@ -202,7 +217,8 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
         ?string $data_hora = null
     ): array {
         if (!protocolo_notificacao_tabela_existe($conexao, 'notificacoes_morador') ||
-            !controle_acesso_notificacao_coluna_existe($conexao, 'notificacoes_morador', 'registro_acesso_id')) {
+            !controle_acesso_notificacao_coluna_existe($conexao, 'notificacoes_morador', 'registro_acesso_id') ||
+            !controle_acesso_notificacao_coluna_permite_nulo($conexao, 'notificacoes_morador', 'protocolo_id')) {
             controle_acesso_notificacao_debug('registro_migracao_pendente', [
                 'tenant_id' => $tenant_id,
                 'registro_acesso_id' => $registro_acesso_id,
