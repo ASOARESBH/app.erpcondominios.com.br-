@@ -1,63 +1,101 @@
-# Incidente: veículo entra na unidade (Controle de Acesso) e o morador não recebe notificação
+# Incidente: acessos ControlID sem notificação no Portal do Morador
 
-## Evidências fornecidas
+**Data:** 13 de agosto de 2026  
+**Módulo:** Controle de Acesso / ControlID / Portal do Morador  
+**Status:** Correção preparada e validada estaticamente; exige implantação e teste físico da catraca.
+
+## Sintoma
+
+A catraca ControlID e o controle administrativo registravam o acesso na tabela `registros_acesso`, mas o morador não recebia item em **Notificações** nem alerta push FCM. As notificações de encomendas continuavam chegando para o mesmo morador e dispositivo.
+
+## Evidências de produção
+
+A auditoria somente leitura para o morador `185`, tenant `1`, unidade **Gleba 133**, confirmou os seguintes fatos.
+
+| Verificação | Resultado | Conclusão |
+|---|---|---|
+| Colunas `veiculo_id` e `registro_acesso_id` em `notificacoes_morador` | Presentes | Migrações de notificação instaladas |
+| Índice `uq_notif_morador_registro_evento` | Presente | Deduplicação do evento por acesso disponível |
+| Tokens `pwa_fcm_tokens` | Dois tokens Android ativos para o morador 185 | Dispositivo está registrado |
+| Projeto FCM | `fcm_project_id = erp-condominios` | Firebase configurado no tenant |
+| Eventos `acesso_entrada` e `acesso_saida` | Nenhuma linha encontrada | Falha ocorre antes do envio FCM |
+| Eventos de encomenda | `push_status = enviado` | Transporte FCM funciona para o mesmo morador |
+
+A causa raiz é a ausência de chamada ao helper `controle_acesso_criar_notificacao_registro()` no ponto central do ControlID. Todos os modos automáticos delegavam a gravação ao método `push_registrar_acesso_erp()` em `api/controlid/_helper.php`; ele inseria em `registros_acesso` e retornava sem criar o evento persistente.
+
+## Caminhos automáticos cobertos
+
+Os seguintes endpoints utilizam o helper compartilhado e, por consequência, passam a receber a correção centralizada.
+
+| Origem | Endpoint/chamador | Fonte registrada |
+|---|---|---|
+| Online Mode Pro | `new_user_identified.php` | `online_pro` |
+| Cartão | `new_card.php` | `online_card` |
+| QR Code | `new_qrcode.php` | `online_qrcode` |
+| TAG UHF | `new_uhf_tag.php` | `online_uhf` |
+| Monitor Mode | `notifications/dao.php` | `monitor_dao` |
+| Push Mode | `result.php` | `push_result` |
+
+## Correção aplicada
+
+O helper `api/controlid/_helper.php` passou a:
+
+1. Carregar o helper de notificações de Controle de Acesso uma única vez.
+2. Resolver `tenant_id` e unidade diretamente do morador vinculado ao veículo, sem aceitar esses valores do equipamento.
+3. Gravar `unidade_destino` no registro automático para preservar histórico e consulta do Portal do Morador.
+4. Obter `insert_id` após gravar o acesso e invocar `controle_acesso_criar_notificacao_registro()` com tipo **Entrada**.
+5. Executar toda a etapa de notificação em `try/catch` não bloqueante. A decisão e a resposta da catraca nunca dependem da persistência ou do FCM.
+6. Registrar diagnósticos em `error_log` e em `logs/access_notification.log`, sem expor token, senha ou chave privada.
+
+Quando um registro não devolver ID positivo, a notificação é intencionalmente suprimida e o problema é registrado como `registro_sem_id_valido`. Isso evita associar múltiplos acessos ao identificador legado `0` e criar deduplicação incorreta.
+
+## Validação pós-deploy obrigatória
+
+Depois de substituir o helper no HostGator, deve-se provocar uma entrada real pela catraca para um veículo vinculado ao morador 185. Execute `sql/validacao_controlid_notificacao_pos_deploy.sql` e confirme que:
+
+| Etapa | Resultado esperado |
+|---|---|
+| `registros_acesso` | Novo registro com ID positivo, unidade Gleba 133 e observação contendo ControlID |
+| `notificacoes_morador` | Novo evento `acesso_entrada` com o mesmo `registro_acesso_id` |
+| Push | `push_status = enviado` ou motivo técnico auditável em `push_detalhe` |
+| Aplicativo | Item visível em Mais → Notificações e banner, caso alertas estejam permitidos |
+
+## Diagnóstico detalhado (evidências e leitura de código)
+
+### Evidências fornecidas
 - Painel web, tela **Controle de Acesso → Registro Manual**: mostra o registro da placa `PBB0172`, morador **ANDRE SOARES E SILVA**, unidade **Gleba 133**, tipo **Entrada**.
 - App do morador (Flutter), tela **Controle de Acesso**: mostra o mesmo histórico, com filtro por veículos da unidade logada, listando **"100 acessos encontrados"**.
-- Em nenhum dos dois casos o morador recebe uma notificação equivalente à que já existe para **Protocolos** ("encomenda chegou para sua unidade"). O histórico de acessos aparece corretamente, mas nenhum aviso é gerado.
-
-## Diagnóstico (leitura de código, sem alteração)
+- Em nenhum dos dois casos o morador recebe uma notificação equivalente à que já existe para **Protocolos**.
 
 ### O backend de notificação de acesso já existe e está quase pronto
-- `api/helpers/access_control_notification_helper.php` implementa duas funções, seguindo o mesmo padrão já usado para Protocolos (`api/helpers/protocol_notification_helper.php` → `protocolo_criar_notificacao_morador()` + `protocolo_notificacao_enviar_fcm()`):
-  - `controle_acesso_criar_notificacao_registro()` — cria a notificação "veículo entrou/saiu" a partir de um registro de `registros_acesso`, resolvendo o(s) destinatário(s) por `morador_id` (quando informado) ou por `unidade_destino` (busca todos os moradores ativos daquela unidade).
-  - `controle_acesso_criar_notificacao_veiculo()` — cria notificação de "veículo cadastrado para a unidade".
-- Ambas gravam em `notificacoes_morador` (mesma tabela que já alimenta a tela de notificações do protocolo) e tentam enviar push via FCM, com fallback silencioso (não bloqueante) se o push falhar.
-- A tabela `notificacoes_morador` tem duas migrações que adicionam as colunas `veiculo_id`/`registro_acesso_id` necessárias para esse recurso: `sql/migration_notificacoes_registros_acesso.sql` e `sql/migration_notificacoes_veiculos_controle_acesso.sql`. **Não é possível confirmar, só pelo código-fonte, se alguma delas já foi executada no banco de produção.** Se não tiver sido, `controle_acesso_criar_notificacao_registro()` retorna cedo com `motivo: 'migracao_pendente'` (guard em `access_control_notification_helper.php`, checando `controle_acesso_notificacao_coluna_existe()`), e nenhuma notificação é criada — silenciosamente.
+- `api/helpers/access_control_notification_helper.php` implementa duas funções:
+  - `controle_acesso_criar_notificacao_registro()` — cria a notificação "veículo entrou/saiu" a partir de um registro de `registros_acesso`, resolvendo destinatários por `morador_id` ou por `unidade_destino`.
+  - `controle_acesso_criar_notificacao_veiculo()` — cria notificação de "veículo cadastrado para a unidade" (função não utilizada).
+- Ambas gravam em `notificacoes_morador` e tentam enviar push via FCM, com fallback não bloqueante.
+- Se as colunas necessárias não existirem em produção, há um guard que retorna `motivo: 'migracao_pendente'` e suprime a criação.
 
-### Causa raiz nº 1 (confirmada por grep no repositório inteiro): só o cadastro manual pelo painel web chama a notificação
-```
-grep -rn "controle_acesso_criar_notificacao" --include="*.php" .
-→ api/helpers/access_control_notification_helper.php (definições das funções)
-→ api/api_registros.php:258  (ÚNICA chamada de controle_acesso_criar_notificacao_registro em todo o projeto)
-```
-- `api/api_registros.php` é o backend da tela **Controle de Acesso → Registro Manual** do painel web (`frontend/js/pages/registro.js`, `POST ../api/api_registros.php`). Depois de inserir em `registros_acesso`, ele chama `controle_acesso_criar_notificacao_registro()` dentro de um `try/catch` não bloqueante — isso está correto e implementado.
-- `controle_acesso_criar_notificacao_veiculo()` (notificação de "veículo cadastrado") **não é chamada em nenhum lugar do código** — é função morta, mesmo com a migração já habilitando `pwa_configuracoes.push_controle_acesso_ativo` para essa categoria.
-
-### Causa raiz nº 2 (a mais provável para o caso relatado): a catraca/leitor automático nunca aciona a notificação
-- Os acessos "de verdade" (o carro passando pela catraca/leitor ControlID) **não passam pelo painel web** — eles chegam por dois endpoints de hardware:
-  - `api/controlid/notifications/dao.php` (Monitor Mode — POST do equipamento a cada INSERT em `access_logs`).
-  - `api/controlid/new_user_identified.php` (Online Mode Pro — identificação em tempo real, autoriza/nega o acesso).
-- Ambos, ao liberar o acesso, chamam a mesma função `push_registrar_acesso_erp()` (definida em `api/controlid/_helper.php`, linha 221):
-  ```
-  grep -rn "push_registrar_acesso_erp" --include="*.php" .
-  → api/controlid/_helper.php:221  (definição)
-  → api/controlid/notifications/dao.php:100        (chamada, modo Monitor)
-  → api/controlid/new_user_identified.php:95        (chamada, modo Online Pro)
-  ```
-- `push_registrar_acesso_erp()` **insere direto em `registros_acesso`** (por isso o histórico aparece certinho no painel e no app) **mas nunca inclui/chama `access_control_notification_helper.php`** — não há `require_once` do helper nem chamada a `controle_acesso_criar_notificacao_registro()` nesse arquivo.
-- Resultado prático: praticamente todo acesso real de veículo (via catraca) é gravado normalmente em `registros_acesso`, porém **nenhuma notificação é criada** para ele. Só ganharia notificação um acesso lançado manualmente por um operador no painel web (`Registro Manual`) — e mesmo esse caminho depende da migração de banco já ter sido aplicada.
-
-### Causa raiz nº 3 (a confirmar em produção, não verificável só pelo código)
-- Mesmo quando `controle_acesso_criar_notificacao_registro()` é chamada (caminho manual), o sucesso depende de:
-  1. As colunas `veiculo_id`/`registro_acesso_id` existirem em `notificacoes_morador` (migração aplicada).
-  2. Existir morador ativo vinculado à unidade/placa (`moradores.unidade` batendo exatamente com o valor da unidade do registro).
-  3. Push FCM não é obrigatório para o registro aparecer no app: a tela de notificações do Portal do Morador (`api_portal_morador.php`, `action=notificacoes`) lê da mesma tabela `notificacoes_morador`, então mesmo que o push falhe (token ausente/expirado), a notificação deveria aparecer na lista do app — o que não está acontecendo, reforçando que a causa nº 2 é a principal.
+### Causa raiz e confirmação por leitura de código
+- A única chamada a `controle_acesso_criar_notificacao_registro()` encontrada no repositório é em `api/api_registros.php` (fluxo manual do painel).
+- Os fluxos automáticos da catraca usam `push_registrar_acesso_erp()` (`api/controlid/_helper.php`), que insere em `registros_acesso` mas não carregava nem chamava o helper de notificações.
+- Resultado: acessos reais aparecem em histórico, porém não geram eventos em `notificacoes_morador` nem push FCM.
 
 ## Conclusão
-O recurso de notificação "veículo entrou para a unidade" **já foi construído e ligado ao fluxo manual do painel web**, mas **nunca foi ligado ao fluxo automático da catraca (ControlID)**, que é a origem da grande maioria (senão totalidade) dos acessos reais mostrados nas telas do usuário. Além disso, não há confirmação de que a migração de banco (`veiculo_id`/`registro_acesso_id` em `notificacoes_morador`) já rodou em produção — sem ela, nem o caminho manual funciona.
+O recurso de notificação já existe e funciona no caminho manual, mas nunca foi ligado ao fluxo automático da catraca. Além disso, a presença das migrações em produção deve ser verificada; sem as colunas a criação é suprimida.
 
-## Correção recomendada (não aplicada nesta análise — ver prompt para Manus)
-1. Confirmar em produção se `notificacoes_morador` já tem as colunas `veiculo_id` e `registro_acesso_id` (`SHOW COLUMNS FROM notificacoes_morador;`); se não, rodar as migrações pendentes.
-2. Em `api/controlid/_helper.php`, dentro de `push_registrar_acesso_erp()`, após o `INSERT INTO registros_acesso`, incluir `access_control_notification_helper.php` e chamar `controle_acesso_criar_notificacao_registro()` com o `id` do registro recém-inserido, o `morador_id` do veículo e a unidade do morador — replicando exatamente o que `api_registros.php` já faz.
-3. Validar se faz sentido também notificar em `api/controlid/notifications/door.php` (abertura de porta/relé) ou se esse evento não deve gerar notificação ao morador (provavelmente não, é evento de infraestrutura).
-4. Testar de ponta a ponta: acesso real via catraca → linha em `registros_acesso` → linha em `notificacoes_morador` → aparece na tela de notificações do app → push chega no celular.
-5. Avaliar (separadamente) se `controle_acesso_criar_notificacao_veiculo()` (veículo cadastrado) também deveria ser ligada em algum ponto do cadastro de veículos, já que está pronta e configurada mas nunca é chamada.
+## Correção recomendada (resumo das ações técnicas)
+1. Confirmar em produção se `notificacoes_morador` tem `veiculo_id` e `registro_acesso_id`; rodar migrações se necessário.
+2. Em `api/controlid/_helper.php`, dentro de `push_registrar_acesso_erp()`, após o `INSERT INTO registros_acesso`, incluir `access_control_notification_helper.php` e chamar `controle_acesso_criar_notificacao_registro()` com o `id` do registro recém-inserido e os dados do morador/veículo.
+3. Garantir que a resolução de `tenant_id` e unidade use dados do morador vinculado ao veículo, ignorando valores enviados pelo equipamento.
+4. Isolar envio push em `try/catch` não bloqueante e registrar diagnósticos em logs sem expor segredos.
+5. Validar de ponta a ponta: catraca → `registros_acesso` com ID positivo → `notificacoes_morador` → push e visualização no app.
 
-## Fontes locais
-- Helper de notificação de acesso: `api/helpers/access_control_notification_helper.php`
-- Helper de notificação de protocolo (padrão de referência): `api/helpers/protocol_notification_helper.php`
-- Caminho manual (painel web): `api/api_registros.php`, `frontend/js/pages/registro.js`
-- Caminho automático (catraca ControlID): `api/controlid/_helper.php` (`push_registrar_acesso_erp`), `api/controlid/notifications/dao.php`, `api/controlid/new_user_identified.php`
-- Migrações: `sql/migration_notificacoes_registros_acesso.sql`, `sql/migration_notificacoes_veiculos_controle_acesso.sql`
-- Leitura das notificações no app: `api/api_portal_morador.php` (`action=notificacoes`)
-- Arquitetura do app mobile: [APP_MOBILE_ARCHITECTURE.md](APP_MOBILE_ARCHITECTURE.md)
+## Arquivos relacionados
+- `api/controlid/_helper.php`  
+- `api/helpers/access_control_notification_helper.php`  
+- `api/helpers/protocol_notification_helper.php`  
+- `api/api_registros.php`  
+- `sql/validacao_controlid_notificacao_pos_deploy.sql`  
+- `logs/access_notification.log`
+
+> Observação: sete registros históricos com `registros_acesso.id = 0` foram identificados; a correção não altera esse legado. A normalização de IDs exige procedimento de migração separado.
+
