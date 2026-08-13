@@ -376,7 +376,21 @@ async function salvarVeiculo() {
             return;
         }
 
-        alert(modoEdicao ? 'Veiculo atualizado com sucesso.' : 'Veiculo cadastrado com sucesso.');
+        let mensagemSucesso = modoEdicao ? 'Veiculo atualizado com sucesso.' : 'Veiculo cadastrado com sucesso.';
+        if (!modoEdicao) {
+            const notificacao = data?.dados?.notificacao_veiculo;
+            if (notificacao?.sucesso === true) {
+                mensagemSucesso += '\n\nO morador foi notificado pelo Controle de Acesso.';
+            } else if (notificacao) {
+                const motivo = notificacao.motivo || 'motivo não informado';
+                mensagemSucesso += `\n\nO veículo foi salvo, mas a notificação do morador não foi criada: ${motivo}.`;
+            } else {
+                mensagemSucesso += '\n\nO servidor não retornou a confirmação da notificação. Atualize api_veiculos.php e tente novamente.';
+            }
+            console.info('[Veiculos] Resultado da notificação de veículo:', notificacao || 'resposta ausente');
+        }
+
+        alert(mensagemSucesso);
         resetForm();
         await carregarVeiculos();
     } catch (error) {
