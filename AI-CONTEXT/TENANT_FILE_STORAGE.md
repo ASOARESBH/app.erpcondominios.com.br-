@@ -31,6 +31,14 @@ Os anexos de negócio deixam de depender de arquivos físicos expostos em `publi
 
 O conteúdo binário usa `LONGBLOB`; o tamanho máximo efetivo é limitado por `upload_max_filesize`, `post_max_size` e `max_allowed_packet` do servidor. A API deve validar tamanho, MIME, extensão e SHA-256 antes de inserir o conteúdo.
 
+## Correção de branding — 2026-08-13
+
+A rota de compatibilidade `api_arquivos_tenant.php?acao=legado` deve sempre obter o tenant com `obterTenantId()` antes de ler arquivos privados. Como essa rota executa antes do bloco padrão de autenticação, acessar `$_SESSION` diretamente sem iniciar a sessão transforma logos privadas em consultas públicas e causa 404.
+
+O banco continua armazenando `caminho_legado` em `empresa.logo_url` e `tenants.logo_url` somente para compatibilidade. As interfaces novas devem preferir a URL autenticada `/api/api_arquivos_tenant.php?acao=conteudo&id=...`, retornada como `url_segura` pelo upload e como `logo_url_segura` na API de Empresa. Isso mantém o BLOB como fonte ativa e preserva o isolamento pelo tenant da sessão.
+
+O endpoint `get_logo_empresa.php` atende tanto a sessão administrativa quanto a sessão PHP do Portal do Morador, sempre resolvendo `tenant_id` apenas pela sessão. O Portal exibe a logo retornada com fallback à marca institucional; telas de login permanecem estáticas e institucionais.
+
 ## Compatibilidade
 
 A migração não deve apagar a pasta `uploads` antes de o importador e a auditoria confirmarem que cada arquivo foi incorporado ao banco. A exclusão física é uma etapa manual posterior, com backup preservado.

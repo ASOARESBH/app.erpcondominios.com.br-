@@ -23,7 +23,12 @@ export function destroy() {
 }
 ```
 
-## 4. UI Components
+## 4. Branding por Tenant
+- As telas de login usam somente `assets/img/logos/logo_padrao.png` e não recebem logo do tenant.
+- Em áreas autenticadas, previews e cabeçalhos devem preferir URLs BLOB autenticadas devolvidas pela API, nunca montar caminhos `uploads/...` manualmente.
+- O Portal do Morador consulta `get_logo_empresa.php` com a sessão PHP do morador e deve restaurar a marca institucional ou ícone padrão quando a logo não existir ou falhar.
+
+## 5. UI Components
 - **Modais**: Usar as classes padronizadas `.modal-overlay`, `.modal-content`.
 - **Botões**: `.btn-primary-modern`, `.btn-secondary-modern`.
 - **Tabelas**: `.table-responsive`, `.data-table`.

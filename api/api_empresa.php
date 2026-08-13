@@ -107,6 +107,22 @@ function dados_empresa_consolidados($conexao, $tenant_id) {
         return $tenant[$campoTenant] ?? $padrao;
     };
 
+    // O caminho legado continua no banco para compatibilidade, mas o frontend
+    // administrativo recebe a URL autenticada do BLOB para não depender de
+    // /uploads/. A consulta sempre usa o tenant da sessão recebida pela API.
+    $logoLegada = (string)$valor('logo_url');
+    $logoSegura = null;
+    if ($logoLegada !== '') {
+        $stmtLogo = $conexao->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+        if ($stmtLogo) {
+            $stmtLogo->bind_param('is', $tenant_id, $logoLegada);
+            $stmtLogo->execute();
+            $arquivoLogo = $stmtLogo->get_result()->fetch_assoc();
+            $stmtLogo->close();
+            if ($arquivoLogo) $logoSegura = '/api/api_arquivos_tenant.php?acao=conteudo&id=' . (int)$arquivoLogo['id'];
+        }
+    }
+
     return [
         'id' => (int)($empresa['id'] ?? 0), 'tenant_id' => (int)$tenant_id, 'slug' => $tenant['slug'],
         'cnpj' => $valor('cnpj'), 'razao_social' => $valor('razao_social'), 'nome_fantasia' => $valor('nome_fantasia'),
@@ -115,7 +131,7 @@ function dados_empresa_consolidados($conexao, $tenant_id) {
         'endereco_cidade' => $valor('endereco_cidade', 'cidade'), 'endereco_estado' => $valor('endereco_estado', 'estado'),
         'endereco_cep' => $valor('endereco_cep'), 'email_principal' => $valor('email_principal'),
         'email_cobranca' => $valor('email_cobranca'), 'telefone' => $valor('telefone'),
-        'logo_url' => $valor('logo_url'), 'logo_nome_arquivo' => $empresa['logo_nome_arquivo'] ?? basename((string)($tenant['logo_url'] ?? '')),
+        'logo_url' => $logoLegada, 'logo_url_segura' => $logoSegura, 'logo_nome_arquivo' => $empresa['logo_nome_arquivo'] ?? basename((string)($tenant['logo_url'] ?? '')),
         'situacao' => $empresa['situacao'] ?? (($tenant['status'] ?? 'ativo') === 'ativo' ? 'ativo' : 'inativo'),
         'plano' => $tenant['plano'] ?? 'basico', 'origem_dados' => $empresa ? 'empresa_e_tenant' : 'tenant'
     ];
@@ -248,7 +264,10 @@ if ($action === 'upload_logo' && $metodo === 'POST') {
             false,
             (int)$usuario_id
         );
+        // caminho_legado permanece somente para links antigos; a interface nova
+        // deve usar a URL autenticada do BLOB retornada pelo helper central.
         $url_relativa = $arquivoBanco['caminho_legado'];
+        $url_segura = $arquivoBanco['url'];
 
         // Atualizar somente o registro associado ao tenant atual. Nunca usar id=1,
         // pois o primeiro registro da tabela pode pertencer a outro condomínio.
@@ -268,9 +287,16 @@ if ($action === 'upload_logo' && $metodo === 'POST') {
         $stmt2->close();
         $conexao->commit();
 
-        $_SESSION['tenant_logo_url'] = $url_relativa;
+        // A sessão mantém a URL segura para consumidores novos; o banco retém
+        // caminho_legado como chave de compatibilidade do importador/rewrite.
+        $_SESSION['tenant_logo_url'] = $url_segura;
         error_log("[EMPRESA_MT] logo_atualizada tenant_id={$tenant_id} usuario_id={$usuario_id} arquivo={$nome_arquivo}");
-        retornar_json(true, 'Logo atualizada com sucesso', ['url' => $url_relativa, 'tenant_id' => $tenant_id]);
+        retornar_json(true, 'Logo atualizada com sucesso', [
+            'url' => $url_relativa,
+            'url_segura' => $url_segura,
+            'caminho_legado' => $url_relativa,
+            'tenant_id' => $tenant_id
+        ]);
         
     } catch (Throwable $e) {
         if (isset($conexao) && $conexao instanceof mysqli) {

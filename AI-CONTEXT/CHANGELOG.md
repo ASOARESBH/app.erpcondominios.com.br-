@@ -11,6 +11,7 @@ Registro de alterações significativas no ERP.
 
 ## [2.1.1] - 2026-08-13
 ### Corrigido
+- **Branding Multi-Tenant**: Corrigida a rota legada de arquivos que lia a sessão antes de inicializá-la e retornava 404 para logos privadas no banco. Empresa agora recebe e prioriza URL BLOB autenticada; o Portal do Morador carrega a logo do tenant da sessão com fallback institucional.
 - **Portal do Morador PWA**: Removida a barra visual fixa de “Nova versão disponível!”. A atualização passou a seguir o ciclo nativo conservador do Service Worker: a nova versão permanece em espera e assume em um ciclo seguro, sem recarregar formulários em uso.
 - Mantidos o registro em `/firebase-messaging-sw.js`, o listener `controllerchange`, Firebase Cloud Messaging, cache offline e o banner de instalação do PWA.
 

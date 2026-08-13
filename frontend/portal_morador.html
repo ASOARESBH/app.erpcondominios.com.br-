@@ -1610,7 +1610,7 @@
 <header id="mainHeader">
     <div class="header-inner">
         <div class="header-brand">
-            <div class="header-brand-icon"><i class="fas fa-home"></i></div>
+            <div class="header-brand-icon" id="headerBrandIcon"><i class="fas fa-home"></i></div>
             <div class="header-brand-text">
                 <h1>Portal do Morador</h1>
                 <span id="headerUnidade">Carregando...</span>
@@ -2836,6 +2836,49 @@ function verificarSessao() {
 /* ──────────────────────────────────────────────────────────────────
    INICIALIZAR PORTAL
    ────────────────────────────────────────────────────────────────── */
+function carregarLogoTenantPortal() {
+    const areaLogo = document.getElementById('headerBrandIcon');
+    if (!areaLogo) return;
+
+    const restaurarIcone = () => {
+        areaLogo.replaceChildren();
+        const icone = document.createElement('i');
+        icone.className = 'fas fa-home';
+        icone.setAttribute('aria-hidden', 'true');
+        areaLogo.appendChild(icone);
+    };
+
+    fetch(window.location.origin + '/api/get_logo_empresa.php', {
+        // A API resolve o tenant pela sessão PHP criada no login do morador.
+        // Não enviar tenant nem token de outro contexto pelo navegador.
+        credentials: 'include'
+    })
+    .then(response => response.ok ? response.json() : Promise.reject(new Error('HTTP ' + response.status)))
+    .then(data => {
+        if (!data.sucesso || data.fonte === 'plataforma_fallback' || !data.logo_url) {
+            restaurarIcone();
+            return;
+        }
+        const imagem = document.createElement('img');
+        imagem.src = data.logo_url;
+        imagem.alt = data.nome_empresa ? 'Logo de ' + data.nome_empresa : 'Logo do condomínio';
+        imagem.width = 38;
+        imagem.height = 38;
+        imagem.loading = 'eager';
+        imagem.style.cssText = 'width:38px;height:38px;object-fit:contain;display:block;';
+        imagem.addEventListener('error', () => {
+            console.warn('[Portal] Falha ao carregar logo do tenant; restaurando ícone padrão.');
+            restaurarIcone();
+        }, { once: true });
+        areaLogo.replaceChildren(imagem);
+        console.debug('[Portal] Logo do tenant aplicada ao cabeçalho.', { fonte: data.fonte });
+    })
+    .catch(error => {
+        console.warn('[Portal] Logo do tenant indisponível; usando ícone padrão.', error.message);
+        restaurarIcone();
+    });
+}
+
 function inicializarPortal() {
     const loading = document.getElementById('loadingScreen');
     const header  = document.getElementById('mainHeader');
@@ -2845,6 +2888,7 @@ function inicializarPortal() {
     // Atualizar dados do usuário no header
     document.getElementById('headerNome').textContent    = Portal.moradorNome    || 'Morador';
     document.getElementById('headerUnidade').textContent = Portal.moradorUnidade ? 'Unidade ' + Portal.moradorUnidade : '';
+    carregarLogoTenantPortal();
 
     // Mostrar conteúdo via classe
     header.classList.add('visible');

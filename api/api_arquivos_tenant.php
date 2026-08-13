@@ -103,7 +103,11 @@ try {
     if ($acao === 'legado') {
         $legacy = ltrim(str_replace('\\', '/', $_GET['caminho'] ?? ''), '/');
         if (strpos($legacy, 'uploads/') !== 0 || strpos($legacy, '..') !== false || strpos($legacy, "\0") !== false) tf_json(false, 'Caminho legado inválido', null, 400);
-        $sessionTenant = (int)($_SESSION['tenant_id'] ?? 0);
+        // obterTenantId() inicia a sessão PHP quando necessário. Não leia
+        // $_SESSION diretamente nesta rota: ela é executada antes do bloco
+        // autenticado abaixo e, sem session_start(), toda logo privada cai
+        // incorretamente no fluxo de arquivo público e retorna 404.
+        $sessionTenant = (int)(obterTenantId() ?? 0);
         if ($sessionTenant > 0) {
             $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
             $stmt->bind_param('is', $sessionTenant, $legacy);

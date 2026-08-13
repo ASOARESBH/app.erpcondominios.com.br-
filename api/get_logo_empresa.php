@@ -37,8 +37,16 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_helper.php';
 ob_end_clean();
 
-$auth = verificarAutenticacao(true);
-$tenant_id = (int)$auth['tenant_id'];
+// O Portal do Morador possui sessão PHP própria, sem usuario_logado de
+// backoffice. Ambos os fluxos recebem o tenant exclusivamente da sessão;
+// nunca de GET/POST/header enviado pelo navegador.
+if (session_status() === PHP_SESSION_NONE) session_start();
+if (!empty($_SESSION['morador_logado']) && is_numeric($_SESSION['tenant_id'] ?? null)) {
+    $tenant_id = (int)$_SESSION['tenant_id'];
+} else {
+    $auth = verificarAutenticacao(true);
+    $tenant_id = (int)$auth['tenant_id'];
+}
 $base_dir = dirname(__DIR__);
 
 function responder_logo($sucesso, $mensagem, $dados = [], $status = 200) {

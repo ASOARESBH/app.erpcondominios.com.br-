@@ -63,6 +63,37 @@ function bindEvents() {
     }
 }
 
+function renderizarPreviewLogo(url) {
+    if (!state.dom.logoPreview) return;
+    const fallback = () => {
+        state.dom.logoPreview.replaceChildren();
+        const institucional = document.createElement('img');
+        institucional.src = '/assets/img/logos/logo_padrao.png';
+        institucional.alt = 'ERP Condomínio';
+        institucional.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
+        institucional.addEventListener('error', () => {
+            state.dom.logoPreview.innerHTML = '<i class="fas fa-building" aria-hidden="true"></i><span>ERP Condomínio</span>';
+        }, { once: true });
+        state.dom.logoPreview.appendChild(institucional);
+    };
+    if (!url) {
+        fallback();
+        return;
+    }
+
+    const caminho = url.startsWith('http') || url.startsWith('/') ? url : '/' + url;
+    const separador = caminho.includes('?') ? '&' : '?';
+    const imagem = document.createElement('img');
+    imagem.src = caminho + separador + 'v=' + Date.now();
+    imagem.alt = 'Logo do condomínio';
+    imagem.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
+    imagem.addEventListener('error', () => {
+        console.warn('[Empresa] Logo indisponível; exibindo fallback institucional.');
+        fallback();
+    }, { once: true });
+    state.dom.logoPreview.replaceChildren(imagem);
+}
+
 function mostrarAlerta(mensagem, tipo = 'success') {
     if (!state.dom.alertBox) return;
 
@@ -108,11 +139,9 @@ async function carregarDados() {
             state.dom.telefone.value = empresa.telefone || '';
             state.dom.situacao.value = empresa.situacao || 'ativo';
 
-            if (empresa.logo_url && state.dom.logoPreview) {
-                let logoUrl = empresa.logo_url;
-                if (!logoUrl.startsWith('http') && !logoUrl.startsWith('/')) logoUrl = '/' + logoUrl;
-                state.dom.logoPreview.innerHTML = `<img src="${logoUrl}?v=${Date.now()}" alt="Logo do condomínio" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
-            }
+            // A URL BLOB autenticada é a fonte primária. O caminho legado fica
+            // somente como compatibilidade enquanto a migração é concluída.
+            renderizarPreviewLogo(empresa.logo_url_segura || empresa.logo_url);
             localStorage.setItem('tenant_id', String(empresa.tenant_id || ''));
             localStorage.setItem('tenant_nome', empresa.nome_fantasia || empresa.razao_social || '');
             localStorage.setItem('tenant_slug', empresa.slug || '');
@@ -187,9 +216,9 @@ async function uploadLogo(e) {
         const data = await response.json();
 
         if (data.sucesso && state.dom.logoPreview) {
-            const logoUrl = data.dados.url;
-            console.log('[Empresa] Upload sucesso. URL:', logoUrl);
-            state.dom.logoPreview.innerHTML = `<img src="/${logoUrl.replace(/^\//, '')}?v=${Date.now()}" alt="Logo do condomínio" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
+            const logoUrl = data.dados.url_segura || data.dados.url;
+            console.log('[Empresa] Upload sucesso. URL segura:', logoUrl);
+            renderizarPreviewLogo(logoUrl);
             localStorage.setItem('tenant_logo_url', logoUrl);
             mostrarAlerta('Logo enviada com sucesso! A identidade visual foi atualizada para este condomínio.', 'success');
 
