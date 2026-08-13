@@ -2,6 +2,10 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.5] - 2026-08-13
+### Investigado
+- **Módulo Vigilante/Rondas — mapeamento para o Portal do Colaborador (mobile)**: analisado por completo o módulo administrativo já existente (`api/api_rondas_vigilante.php`, `frontend/pages/rondas_vigilante.html`), incluindo tabelas (`ronda_rotas`, `ronda_pontos`, `ronda_vigilantes`, `ronda_registros`, `ronda_auditoria` — nenhuma documentada antes em `DATABASE.md`), regra de ciclo/SLA e deduplicação por `ciclo_chave`. Confirmado que os endpoints de leitura de QR (`qr_detalhe`, `registrar_leitura`) já existem e funcionam, mas **nenhum cliente os utiliza hoje** — não há tela de "bate-ponto" nem no painel web nem no app. Identificado um gap crítico de identidade: o Portal do Colaborador mobile autentica contra `usuarios`, enquanto `ronda_vigilantes` referencia `rh_colaboradores` — tabelas sem vínculo direto, só ponte possível via e-mail. Nenhuma alteração de código feita nesta tarefa — apenas análise e prompt para o Manus implementar o novo menu "Vigilante" no app. Detalhe completo em `ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md`.
+
 ## [2.1.4] - 2026-08-13
 ### Investigado
 - **Notificação de novo documento (GED/Documentos) para moradores**: diagnosticado que hoje não existe nenhum caminho que avise o morador quando um documento liberado para ele é cadastrado. A função `_notificar_novo_documento()` em `api/api_documentos.php` só envia e-mail para usuários internos do sistema (por `grupo_id` administrativo) e nem roda no caso mais comum (documento sem grupo específico); ela não tem relação com o campo `visibilidade`/`unidades_acesso`, que é o que realmente controla se um morador pode ver o documento (já implementado em `pd_where_visivel()`, `api/api_portal_documentos.php`). Nenhuma alteração de código feita nesta tarefa — apenas diagnóstico e prompt para o Manus implementar, seguindo o padrão já validado de `protocol_notification_helper.php`. Detalhe completo em `DEBUG_NOTIFICACAO_DOCUMENTOS_20260813.md`.
@@ -18,12 +22,6 @@ Registro de alterações significativas no ERP.
   2. `tickets_screen.dart` chama `dioClient.initBaseUrl()`, método removido do `DioClient` na migração para URL fixa multi-tenant — quebra a criação de chamados e a visualização do histórico de interações no Portal do Morador (`NoSuchMethodError` capturado silenciosamente pela tela). Detalhe em `APP_MOBILE_ARCHITECTURE.md`, seção 6.
 
 ## [2.1.1] - 2026-08-13
-### Adicionado
-- **Moradores — Ordenação paginada**: A lista principal recebeu seletor de nome, unidade e ID em ordem crescente/decrescente. A ordenação ocorre no servidor por lista branca SQL, preservando busca, paginação e a aba Dependentes. Validados sintaxe PHP/JS, as seis opções, propagação do parâmetro e fallback seguro para valores inválidos.
-
-### Corrigido
-- **Moradores — proporção da busca e ordenação**: Corrigido o `width: 100%` herdado pelo seletor de ordenação quando `flex-basis: auto` era aplicado. A regra foi limitada a `#ordenarMoradores`, com largura automática entre 200 e 240 px; a busca retoma o espaço principal da linha e as regras mobile existentes permanecem ativas. A causa foi confirmada visualmente no navegador antes da correção.
-
 ### Corrigido
 - **Portal do Morador PWA**: Removida a barra visual fixa de “Nova versão disponível!”. A atualização passou a seguir o ciclo nativo conservador do Service Worker: a nova versão permanece em espera e assume em um ciclo seguro, sem recarregar formulários em uso.
 - Mantidos o registro em `/firebase-messaging-sw.js`, o listener `controllerchange`, Firebase Cloud Messaging, cache offline e o banner de instalação do PWA.
@@ -44,29 +42,3 @@ Registro de alterações significativas no ERP.
 ### Corrigido
 - Loop de redirecionamento no `session-manager-core.js`.
 - Correção de layout no CSS do `input-wrapper` na tela de login.
-## [2.1.1] - 2026-08-13
-### Corrigido
-- **Portal do Morador — Documentos**: a tela móvel passou a usar a ação GED `buscar` com parâmetros `q`, `tipo` e `pagina`, eliminando a chamada incompatível a `documentos_listar` sem `pasta_id`.
-- **Portal do Morador — Documentos**: respostas `sucesso: false`, erros de rede e formatos inválidos agora são apresentados como erro visível, em vez de lista vazia silenciosa.
-- **Portal do Morador — Documentos**: adicionada paginação incremental de 30 documentos por página, mantendo as regras de visibilidade e download revalidado no backend.
-
-### Documentado
-- Registrado o diagnóstico confirmado de unidade, visibilidade e contrato da API em `AI-CONTEXT/DEBUG_DOCUMENTOS_PORTAL_VAZIO_20260813.md` e `AI-CONTEXT/API.md`.
-
-
-## [2.1.3] - 2026-08-13
-### Corrigido
-- **Controle de Acesso / ControlID**: todos os modos automáticos passaram a criar um evento persistente `acesso_entrada` para o morador vinculado ao veículo após gravar o acesso no ERP.
-- **Controle de Acesso / ControlID**: a resolução de `tenant_id` e unidade passou a ser obtida do morador associado ao veículo, sem aceitar contexto de tenant enviado pela catraca.
-- **Controle de Acesso / ControlID**: a tentativa de persistência e push FCM foi isolada em tratamento não bloqueante; uma falha de notificação não interfere na liberação da catraca.
-
-### Documentado
-- Adicionada auditoria de produção e roteiro pós-deploy em `DEBUG_NOTIFICACAO_CONTROLE_ACESSO_20260813.md` e `sql/validacao_controlid_notificacao_pos_deploy.sql`.
-
-## [2.1.4] - 2026-08-13
-### Corrigido
-- **Controle de Acesso — Veículos**: a migração de notificações passou a tornar `notificacoes_morador.protocolo_id` anulável, permitindo eventos `veiculo_cadastrado` e `acesso_entrada` sem protocolo associado.
-- **Controle de Acesso — Veículos**: o helper valida previamente a compatibilidade do esquema e devolve `migracao_pendente` de forma não bloqueante quando a coluna ainda não aceitar `NULL`.
-
-### Documentado
-- Registrada a causa raiz e a validação esperada em `DEBUG_NOTIFICACAO_VEICULO_20260813.md`.
