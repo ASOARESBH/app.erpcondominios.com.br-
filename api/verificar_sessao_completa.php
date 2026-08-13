@@ -222,8 +222,13 @@ $config  = obter_config_timeout($conexao);
 // ── GET ──────────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $token = obter_token_bearer();
+    // Uma sessão ERP válida deve prevalecer sobre portal_token/Bearer residual.
+    // O mesmo navegador pode já ter acessado o Portal do Morador; priorizar o
+    // token nesse caso devolvia 401 ao SessionManager enquanto o AuthGuard,
+    // baseado no cookie PHPSESSID, já havia autorizado o layout.
+    $sessao_erp_valida = verificar_sessao_erp();
 
-    if (!empty($token)) {
+    if (!$sessao_erp_valida && !empty($token)) {
         $sessao = verificar_sessao_portal($conexao, $token, $config);
         if (!$sessao) retornar_erro_sessao('Token inválido ou sessão não encontrada');
         if ($sessao['expirou']) {
@@ -261,7 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ]);
     }
 
-    if (verificar_sessao_erp()) {
+    if ($sessao_erp_valida) {
         $sessao_inativa_flag = !empty($_SESSION['sessao_inativa']);
         $d  = time() - ($_SESSION['login_timestamp'] ?? time());
         $tr = $sessao_inativa_flag ? null : max(0, SESSAO_TIMEOUT_TOTAL_MIN * 60 - $d);

@@ -64,7 +64,8 @@ class SessionManagerCore {
         this.initializationPromise = null;
         this.lastError         = null;
         this.lastSuccessfulCheck = null;
-        this.lastCheckUnauthorized = false; // só 401/403 pode forçar logout
+        this.lastCheckUnauthorized = false; // só 401/403 confirmado pode forçar logout
+        this.unauthorizedChecks = 0;         // protege o boot contra 401 transitório/race de cookie
         this.isOnline          = navigator.onLine;
 
         // Configura??es de timeout (preenchidas pela API)
@@ -122,11 +123,15 @@ class SessionManagerCore {
      * Se houver token do portal, usa Bearer. Caso contr?rio, sem header extra.
      */
     getAuthHeaders() {
-        const token = this.getPortalToken();
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) {
-            headers['Authorization'] = 'Bearer ' + token;
-        }
+        const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+        // Um portal_token antigo não pode acompanhar as chamadas do ERP.
+        // O endpoint central prioriza Bearer para sessão de morador; enviar um
+        // token residual no layout administrativo fazia o guard (cookie) receber
+        // 200 e o SessionManager receber 401 na mesma página.
+        const arquivo = (window.location.pathname.split('/').pop() || '').toLowerCase();
+        const emPortalMorador = arquivo === 'portal_morador.html' || arquivo === 'console_acesso.html';
+        const token = emPortalMorador ? this.getPortalToken() : '';
+        if (token) headers['Authorization'] = 'Bearer ' + token;
         return headers;
     }
 
@@ -221,8 +226,20 @@ class SessionManagerCore {
                 // CORREÇÃO ANTI-LOOP: Só redirecionar em 401/403 (não autorizado)
                 // HTTP 500 = erro do servidor — NÃO é sessão expirada, não redirecionar!
                 if (response.status === 401 || response.status === 403) {
-                    this.lastCheckUnauthorized = true;
-                    this.handleSessionExpired('response_not_ok');
+                    this.unauthorizedChecks += 1;
+                    this.lastCheckUnauthorized = this.unauthorizedChecks >= 2;
+
+                    // Durante o boot, o cookie pode estar sendo gravado ou uma
+                    // chamada legada pode ter chegado antes do contexto final.
+                    // Um único 401 nunca deve contradizer um guard que acabou de
+                    // autorizar o acesso; confirmar uma vez antes de encerrar.
+                    if (!this.lastCheckUnauthorized) {
+                        console.warn('[SessionManager] 401/403 isolado; confirmando sessão antes de redirecionar');
+                        this.isFetching = false;
+                        setTimeout(() => this.checkSession(), 1200);
+                        return this.isAuthenticated;
+                    }
+                    this.handleSessionExpired('response_not_ok_confirmed');
                     return false;
                 }
                 this.lastCheckUnauthorized = false;
@@ -239,6 +256,7 @@ class SessionManagerCore {
 
                 this.isAuthenticated   = true;
                 this.lastCheckUnauthorized = false;
+                this.unauthorizedChecks = 0;
                 this.currentUser       = data.usuario;
                 this.sessionExpireTime = data.sessao?.tempo_restante ?? data.tempo_restante_segundos ?? null;
                 this.countdownSeconds  = this.sessionExpireTime;
