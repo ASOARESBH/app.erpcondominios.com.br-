@@ -14,25 +14,29 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **Segurança & Auth**: [SECURITY.md](SECURITY.md)
 - **Regras de Negócio**: [BUSINESS_RULES.md](BUSINESS_RULES.md)
 
-## 🎨 3. Interface e Estilos
+## 📱 3. App Mobile (Flutter) — `aplicativoerpcondominios`
+- **Arquitetura do App**: [APP_MOBILE_ARCHITECTURE.md](APP_MOBILE_ARCHITECTURE.md)
+- **Regras de Negócio por Tela**: [APP_MOBILE_BUSINESS_RULES.md](APP_MOBILE_BUSINESS_RULES.md)
+
+## 🎨 4. Interface e Estilos
 - **Guia CSS & Temas**: [CSS_GUIDE.md](CSS_GUIDE.md)
 - **Guia JavaScript**: [JS_GUIDE.md](JS_GUIDE.md)
 - **Layout & Responsividade**: [LAYOUT.md](LAYOUT.md)
 - **Componentes Reutilizáveis**: [COMPONENTS.md](COMPONENTS.md)
 
-## 🛠️ 4. Serviços e Infraestrutura
+## 🛠️ 5. Serviços e Infraestrutura
 - **Serviços (ControliD, PWA, Email)**: [SERVICES.md](SERVICES.md)
 - **Helpers PHP/JS**: [HELPERS.md](HELPERS.md)
 - **Dependências Externas**: [DEPENDENCIES.md](DEPENDENCIES.md)
 - **Deploy & HostGator**: [DEPLOY.md](DEPLOY.md)
 
-## 📝 5. IA & Qualidade
+## 📝 6. IA & Qualidade
 - **Skill Principal (Obrigatória)**: [SKILL.md](SKILL.md)
 - **Prompts Especializados**: [PROMPTS.md](PROMPTS.md)
 - **Checklists de Validação**: [CHECKLISTS.md](CHECKLISTS.md)
 - **Testes & QA**: [TESTING.md](TESTING.md)
 
-## 📚 6. Documentação Auxiliar
+## 📚 7. Documentação Auxiliar
 - **Manual do Sistema**: [MANUAL.md](MANUAL.md)
 - **Relatórios & KPIs**: [REPORTS.md](REPORTS.md)
 - **Glossário de Termos**: [GLOSSARY.md](GLOSSARY.md)
