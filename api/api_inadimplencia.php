@@ -16,6 +16,9 @@ require_once __DIR__ . '/tenant_helper.php';
 require_once __DIR__ . '/log_financeiro_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 
+// Descarta qualquer saída acidental dos arquivos incluídos para preservar JSON puro.
+while (ob_get_level() > 0) ob_end_clean();
+header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $conn = conectar_banco();

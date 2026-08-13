@@ -10,9 +10,13 @@ let _dashboard = null;
 
 export function init() {
     _abortController = new AbortController();
+    _importacaoId = 0;
+    _rankingPagina = 1;
+    _dashboard = null;
     _vincularEventos();
-    log('Inicializando módulo financeiro de inadimplência.');
-    _carregarDashboard();
+    _mostrarVazio(true);
+    _limparFlash();
+    log('Módulo inicializado no estado de importação. Nenhuma consulta ao dashboard será feita antes do upload.');
 }
 
 export function destroy() {
@@ -89,7 +93,11 @@ async function _carregarDashboard(id = 0) {
     try {
         _dashboard = await _api('dashboard', { params: id ? { importacao_id: id } : {} });
         log('Dashboard carregado:', { tem_dados: _dashboard.tem_dados, importacao: _dashboard.importacao_atual?.id || null });
-        if (!_dashboard.tem_dados) { _mostrarVazio(true); return; }
+        if (!_dashboard.tem_dados) {
+            _mostrarVazio(true);
+            log('Dashboard sem snapshot concluído; mantendo somente o formulário de importação.');
+            return;
+        }
         _mostrarVazio(false);
         _importacaoId = Number(_dashboard.importacao_atual.id);
         _renderDashboard(_dashboard);
@@ -171,8 +179,14 @@ function _renderRanking(dados) { const body=document.getElementById('inad-rankin
 function _exportarCsv(){ if(!_importacaoId){_flash('Importe ou selecione um snapshot antes de exportar.','info');return;} window.location.href=`${API}?acao=exportar_csv&importacao_id=${encodeURIComponent(_importacaoId)}`; }
 function _abrirMorador(id){ if(!id)return; log('Abrindo ficha do morador vinculado:',id); window.AppRouter?.navigate('moradores'); let tentativas=0; const abrir=()=>{ if(window.MoradoresPage?.editar){window.MoradoresPage.editar(id);return;} if(++tentativas<20)setTimeout(abrir,120); else _flash('A página de Moradores foi aberta, mas a ficha não respondeu a tempo.','info'); }; setTimeout(abrir,180); }
 function _fecharModal(){const m=document.getElementById('inad-modal');m.hidden=true;document.getElementById('inad-modal-body').innerHTML='';}
-function _mostrarVazio(vazio){document.getElementById('inad-empty').hidden=!vazio;document.getElementById('inad-dashboard').hidden=vazio;}
+function _mostrarVazio(vazio){
+    document.getElementById('inad-empty').hidden = true;
+    document.getElementById('inad-dashboard').hidden = vazio;
+    const acoes = document.querySelector('.inad-header-actions');
+    if (acoes) acoes.hidden = vazio;
+}
 function _setLoading(loading){document.querySelector('.page-inadimplencia')?.classList.toggle('is-loading',loading);}
+function _limparFlash(){const el=document.getElementById('inad-flash');if(!el)return;clearTimeout(el._timer);el.hidden=true;el.textContent='';el.className='inad-flash';}
 function _flash(msg,tipo='info'){const el=document.getElementById('inad-flash');if(!el)return;el.hidden=false;el.className=`inad-flash ${tipo}`;el.textContent=msg;clearTimeout(el._timer);el._timer=setTimeout(()=>{el.hidden=true;},6500);}
 function _setText(id,text){const e=document.getElementById(id);if(e)e.textContent=text;}
 function _fmtMoeda(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));}
