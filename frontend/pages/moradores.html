@@ -88,8 +88,17 @@
         <!-- Lista de moradores -->
         <div class="page-card">
             <h2><i class="fas fa-list"></i> Lista de Moradores</h2>
-            <div class="search-box">
+            <div class="search-box moradores-search-box">
                 <input type="text" id="searchMorador" placeholder="Pesquisar por nome, CPF ou unidade...">
+                <label for="ordenarMoradores" class="sr-only">Ordenar moradores por</label>
+                <select id="ordenarMoradores" aria-label="Ordenar moradores por">
+                    <option value="nome_asc" selected>Nome (A→Z)</option>
+                    <option value="nome_desc">Nome (Z→A)</option>
+                    <option value="unidade_asc">Unidade (A→Z)</option>
+                    <option value="unidade_desc">Unidade (Z→A)</option>
+                    <option value="id_asc">ID (crescente)</option>
+                    <option value="id_desc">ID (decrescente)</option>
+                </select>
                 <button class="btn-primary-modern" onclick="window.MoradoresPage?.buscar()">
                     <i class="fas fa-search"></i> Buscar
                 </button>

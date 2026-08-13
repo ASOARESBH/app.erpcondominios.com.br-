@@ -126,6 +126,23 @@ $tenant_id = exigirTenantId();
         $por_pagina = isset($_GET['por_pagina']) ? max(0, intval($_GET['por_pagina'])) : 25;
         $pagina     = isset($_GET['pagina'])     ? max(1, intval($_GET['pagina']))     : 1;
 
+        // Ordenação segura da listagem paginada. O parâmetro nunca entra
+        // diretamente no SQL: cada opção pública aponta para uma cláusula fixa.
+        $mapa_ordenacao = array(
+            'nome_asc'     => 'nome ASC',
+            'nome_desc'    => 'nome DESC',
+            'unidade_asc'  => 'unidade ASC',
+            'unidade_desc' => 'unidade DESC',
+            'id_asc'       => 'id ASC',
+            'id_desc'      => 'id DESC',
+        );
+        $ordenacao_param = trim((string)($_GET['ordenacao'] ?? 'nome_asc'));
+        $order_by = $mapa_ordenacao[$ordenacao_param] ?? $mapa_ordenacao['nome_asc'];
+        if (!isset($mapa_ordenacao[$ordenacao_param])) {
+            error_log('[MORADORES] Ordenação inválida recebida; aplicado fallback nome_asc. tenant_id=' . $tenant_id);
+            $ordenacao_param = 'nome_asc';
+        }
+
         // ── Montar cláusula WHERE ──────────────────────────────────────
         $where       = "WHERE 1=1";
         $tipos_param = "";
@@ -187,7 +204,7 @@ $tenant_id = exigirTenantId();
         // ── Montar query principal com LIMIT/OFFSET ────────────────────
         $sql = "SELECT id, nome, cpf, unidade, email, telefone, celular, ativo,
                 DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') AS data_cadastro
-                FROM moradores $where ORDER BY nome ASC";
+                FROM moradores $where ORDER BY $order_by";
 
         $tipos_pag   = $tipos_param;
         $params_pag  = $params;
@@ -224,6 +241,7 @@ $tenant_id = exigirTenantId();
             'pagina'        => $pagina,
             'por_pagina'    => $por_pagina,
             'total_paginas' => $total_paginas,
+            'ordenacao'    => $ordenacao_param,
         ));
     }
     

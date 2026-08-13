@@ -14,6 +14,9 @@ Registro de alterações significativas no ERP.
   2. `tickets_screen.dart` chama `dioClient.initBaseUrl()`, método removido do `DioClient` na migração para URL fixa multi-tenant — quebra a criação de chamados e a visualização do histórico de interações no Portal do Morador (`NoSuchMethodError` capturado silenciosamente pela tela). Detalhe em `APP_MOBILE_ARCHITECTURE.md`, seção 6.
 
 ## [2.1.1] - 2026-08-13
+### Adicionado
+- **Moradores — Ordenação paginada**: A lista principal recebeu seletor de nome, unidade e ID em ordem crescente/decrescente. A ordenação ocorre no servidor por lista branca SQL, preservando busca, paginação e a aba Dependentes. Validados sintaxe PHP/JS, as seis opções, propagação do parâmetro e fallback seguro para valores inválidos.
+
 ### Corrigido
 - **Portal do Morador PWA**: Removida a barra visual fixa de “Nova versão disponível!”. A atualização passou a seguir o ciclo nativo conservador do Service Worker: a nova versão permanece em espera e assume em um ciclo seguro, sem recarregar formulários em uso.
 - Mantidos o registro em `/firebase-messaging-sw.js`, o listener `controllerchange`, Firebase Cloud Messaging, cache offline e o banner de instalação do PWA.
