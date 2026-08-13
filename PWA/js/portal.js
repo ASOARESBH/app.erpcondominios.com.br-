@@ -7,7 +7,7 @@
  */
 
 // URL base da API
-const API_PWA     = '../api/api_pwa_push.php';
+const API_PWA     = '/api/api_pwa_push.php';
 const API_SW_CFG  = '/api/api_pwa_sw_config.php?format=json';
 
 // Credenciais preenchidas após fetchConfig()
@@ -102,6 +102,8 @@ const PWAPortal = (() => {
         });
 
         try {
+            // O arquivo na raiz é somente um adaptador de escopo que importa
+            // a implementação organizada em /PWA/. Ele mantém /frontend/ sob controle.
             const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
                 scope: '/'
             });

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Portal do Morador — ERP Condomínio</title>
     <!-- PWA Manifest -->
-    <link rel="manifest" href="/portal-morador-manifest.json">
+    <link rel="manifest" href="/PWA/portal-morador-manifest.json">
     <!-- PWA iOS — usa os tamanhos disponíveis no servidor -->
     <link rel="apple-touch-icon" sizes="192x192" href="/ico/icon-192x192.png">
     <link rel="apple-touch-icon" sizes="152x152" href="/ico/icon-152x152.png">
@@ -1837,6 +1837,9 @@
                 </div>
             </div>
             <form id="formSenha" onsubmit="alterarSenha(event)" novalidate>
+                <!-- Campo de identificação para gerenciadores de senha e leitores de acessibilidade. -->
+                <input type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true"
+                       value="" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">
                 <div class="form-group">
                     <label for="senhaAtual">Senha Atual *</label>
                     <input type="password" id="senhaAtual" required autocomplete="current-password">
@@ -5279,6 +5282,11 @@ document.addEventListener('click', function(e) {
 /* ──────────────────────────────────────────────────────────────────
    CONTROLE DE ACESSO — HISTÓRICO DO MORADOR
    ────────────────────────────────────────────────────────────────── */
+// Adaptador de navegação: manter o nome usado pelo roteador de abas.
+function carregarControleAcesso() {
+    caCarregar();
+}
+
 function caCarregar() {
     const lista = document.getElementById('caLista');
     const resumo = document.getElementById('caResumo');
@@ -5366,14 +5374,14 @@ function escHtml(str) {
 
 <!-- ============================================================
      FIREBASE SDK + PWA Portal
-     ATENÇÃO: Substitua as credenciais em /frontend/js/pwa-portal.js
+     Configuração carregada dinamicamente do banco; implementação em /PWA/js/portal.js
      ============================================================ -->
 <!-- Firebase App (obrigatório) -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <!-- Firebase Cloud Messaging -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 <!-- PWA Portal Logic -->
-<script src="js/pwa-portal.js"></script>
+<script src="/PWA/js/portal.js"></script>
 
 </body>
 </html>

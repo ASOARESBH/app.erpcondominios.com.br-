@@ -430,7 +430,7 @@ switch ($acao) {
         $checks = [];
 
         // 1. Manifest
-        $manifest_path = __DIR__ . '/../portal-morador-manifest.json';
+        $manifest_path = __DIR__ . '/../PWA/portal-morador-manifest.json';
         if (file_exists($manifest_path)) {
             $manifest = json_decode(file_get_contents($manifest_path), true);
             $checks[] = ['item' => 'Manifest JSON', 'status' => $manifest ? 'ok' : 'erro',
@@ -455,9 +455,11 @@ switch ($acao) {
         }
 
         // 2. Service Worker
-        $sw_path = __DIR__ . '/../firebase-messaging-sw.js';
-        $checks[] = ['item' => 'Service Worker (arquivo)', 'status' => file_exists($sw_path) ? 'ok' : 'erro',
-            'detalhe' => file_exists($sw_path) ? 'firebase-messaging-sw.js presente' : 'Arquivo ausente'];
+        $sw_path = __DIR__ . '/../PWA/firebase-messaging-sw.js';
+        $sw_adapter_path = __DIR__ . '/../firebase-messaging-sw.js';
+        $sw_ok = file_exists($sw_path) && file_exists($sw_adapter_path);
+        $checks[] = ['item' => 'Service Worker (arquivo)', 'status' => $sw_ok ? 'ok' : 'erro',
+            'detalhe' => $sw_ok ? 'Implementação em /PWA e adaptador de escopo na raiz presentes' : 'Implementação PWA ou adaptador de escopo ausente'];
 
         // 3. Firebase config
         $fcm_campos = ['fcm_api_key','fcm_auth_domain','fcm_project_id','fcm_messaging_sender_id','fcm_app_id'];
