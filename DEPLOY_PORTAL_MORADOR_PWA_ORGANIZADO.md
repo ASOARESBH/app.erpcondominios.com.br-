@@ -19,9 +19,9 @@ Esta atualização corrige a abertura da aba **Controle de Acesso** no Portal do
 
 ## Implantação no HostGator
 
-Faça backup dos arquivos atuais. Em seguida, envie o conteúdo do pacote ZIP para a raiz de `public_html`, preservando integralmente as pastas `PWA/`, `frontend/` e `api/`. A exclusão dos arquivos legados é coberta pelo pacote e deve ser aplicada conforme a estrutura enviada.
+Faça backup dos arquivos atuais. Em seguida, envie o conteúdo do pacote ZIP para a raiz de `public_html`, preservando integralmente as pastas `PWA/`, `frontend/` e `api/`. Depois confirme e remova manualmente os arquivos legados `manifest.json`, `portal-morador-manifest.json` e `frontend/js/pwa-portal.js`; eles foram movidos para `PWA/` e não devem permanecer como cópias soltas.
 
-Após o envio, abra o Portal do Morador e use `Ctrl+F5`. Caso exista uma instalação PWA anterior, clique em **Atualizar** quando o banner de nova versão aparecer. O Service Worker da raiz carregará automaticamente a implementação em `PWA/` e manterá o escopo do portal em `/frontend/`.
+Mantenha `firebase-messaging-sw.js` na raiz: ele é um adaptador técnico obrigatório de escopo e não deve ser removido. Após o envio, abra o Portal do Morador e use `Ctrl+F5`. Caso exista uma instalação PWA anterior, clique em **Atualizar** quando o banner de nova versão aparecer. O Service Worker da raiz carregará automaticamente a implementação em `PWA/` e manterá o escopo do portal em `/frontend/`.
 
 ## Validação
 
