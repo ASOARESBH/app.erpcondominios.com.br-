@@ -47,3 +47,17 @@ Os endpoints do diretório `api/controlid/` não recebem sessão PHP, pois são 
 Depois de inserir um acesso liberado em `registros_acesso`, o helper resolve `tenant_id` e unidade a partir do morador vinculado ao veículo e chama `controle_acesso_criar_notificacao_registro()`. A chamada é complementar, cercada por `try/catch` e não altera a resposta física da catraca. O evento persistido usa `tipo=acesso_entrada`, `registro_acesso_id` e rota `/home/notifications`.
 
 A API nunca aceita `tenant_id` do payload ControlID. Se a inserção não gerar identificador positivo, o helper registra `registro_sem_id_valido` e não cria um evento idempotente com chave insegura.
+
+
+## 7. Portal do Colaborador — Vigilante/Rondas Mobile
+
+As ações abaixo pertencem a `api/api_colaborador_mobile.php` e exigem `Authorization: Bearer <colaborador_token>`. O token determina `tenant_id`, usuário e e-mail; as ações não aceitam `tenant_id` nem `colaborador_id` brutos enviados pelo cliente.
+
+| Ação | Método | Entrada | Regras e retorno |
+|---|---|---|---|
+| `vigilante_qr_detalhe` | GET | `token` QR hexadecimal de 64 caracteres | Localiza ponto e rota ativos, bloqueia QR de outro tenant com HTTP 403 e retorna ponto, rota e instruções sem expor `token_qr`. Resolve o colaborador pelo e-mail; em divergência de cadastro entrega somente opções opacas e temporárias dos vigilantes vinculados à rota. |
+| `vigilante_registrar_leitura` | POST | `token`, `opcao_vigilante` opaca quando solicitada; `latitude`, `longitude`, `precisao_metros` opcionais | Revalida tenant, vínculo à rota, dia ativo, janela/SLA e duplicidade. Grava em `ronda_registros`, audita em `ronda_auditoria` e retorna status do SLA, atraso, ponto e rota. |
+| `vigilante_historico_hoje` | GET | Nenhuma | Resolve unicamente o colaborador pelo e-mail da sessão e retorna até 20 leituras dele no dia corrente. |
+
+A regra compartilhada de dias, ciclo e SLA está em `api/helpers/ronda_helper.php` e é usada também por `api/api_rondas_vigilante.php`. A deduplicação usa o ciclo calculado e o índice único de `ronda_registros`; a segunda leitura do mesmo ponto no ciclo retorna HTTP 409.
+> O cliente móvel deve apresentar `mensagem` do backend quando `sucesso` for `false`, inclusive em HTTP 4xx, pois `EmployeeApiClient` não transforma status abaixo de 500 em exceção.

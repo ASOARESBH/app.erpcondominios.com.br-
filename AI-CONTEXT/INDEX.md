@@ -17,6 +17,7 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 ## 📱 3. App Mobile (Flutter) — `aplicativoerpcondominios`
 - **Arquitetura do App**: [APP_MOBILE_ARCHITECTURE.md](APP_MOBILE_ARCHITECTURE.md)
 - **Regras de Negócio por Tela**: [APP_MOBILE_BUSINESS_RULES.md](APP_MOBILE_BUSINESS_RULES.md)
+- **Análise do Vigilante/Rondas Mobile**: [ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md](ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md)
 
 ## 🎨 4. Interface e Estilos
 - **Guia CSS & Temas**: [CSS_GUIDE.md](CSS_GUIDE.md)

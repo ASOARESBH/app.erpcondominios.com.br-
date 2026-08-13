@@ -76,7 +76,12 @@ Registro de alterações significativas no ERP.
 ### Adicionado
 - **Financeiro — Inadimplência**: criado módulo Multi-Tenant para importação do Relatório de Inadimplência Detalhado BRCondos, preservação do PDF em BLOB, snapshots históricos, conciliação de totais, ranking por Gleba, comparação, CSV e geração de PDF pelo fluxo de impressão.
 - Registrada a permissão `inadimplencia` com nível mínimo `gerente`, o submenu e card no Financeiro e o contrato da API em `AI-CONTEXT/INADIMPLENCIA.md`.
+- **Portal do Colaborador — Vigilante/Rondas Mobile**: adicionadas as ações autenticadas `vigilante_qr_detalhe`, `vigilante_registrar_leitura` e `vigilante_historico_hoje`. O aplicativo consulta QR, confirma ponto/rota/instruções, registra leitura com resultado de SLA e mostra histórico do dia.
+- **Identidade operacional segura**: a sessão Bearer resolve o tenant e associa `usuarios.email` a `rh_colaboradores.email` no mesmo condomínio. Situações de divergência usam somente opção opaca, assinada e temporária para vigilantes vinculados à rota; o cliente nunca fornece `tenant_id` ou `colaborador_id` livre.
+- **Regra compartilhada de rondas**: criado `api/helpers/ronda_helper.php`, reutilizado pela API administrativa e pela móvel para dias ativos, ciclos e SLA sem duplicar cálculo.
 
 ### Validado
 - O PDF BRCondos de referência foi processado com 41 unidades, 1.153 lançamentos, R$ 405.265,52 lançado e R$ 574.363,84 projetado, com totais conciliados e cobertura para Gleba com múltiplos lançamentos, proprietário `E OUTROS` e descrição extra longa.
 - O parser possui fallback para ambientes PHP sem `mbstring`; consultas usam `tenant_id` exclusivamente da sessão e ordenações utilizam lista branca.
+- QR de tenant diferente é recusado com HTTP 403, e a API revalida vínculo do vigilante, agenda, janela de ciclo e índice de duplicidade antes da gravação.
+- Validadas sintaxe PHP, regras de ciclo/SLA, análise direcionada dos arquivos Flutter e testes Flutter. O detalhe técnico e roteiro pós-deploy estão em `ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md`.
