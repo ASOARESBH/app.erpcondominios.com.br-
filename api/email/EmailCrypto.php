@@ -2,17 +2,15 @@
 declare(strict_types=1);
 
 /**
- * EmailCrypto
+ * Criptografia AES-256-CBC para credenciais de provedores de e-mail.
  *
- * Criptografia AES-256-CBC para API Keys de provedores de e-mail.
- * A chave é derivada das credenciais do banco (única por instalação).
- *
- * Compatível com retroatividade: valores em texto puro (instalações
- * antigas) são retornados sem erro — apenas os novos são criptografados.
+ * A chave principal deve vir de ERP_EMAIL_CRYPTO_KEY, definido exclusivamente
+ * no arquivo externo de configuração. A derivação v1 pela senha do banco é
+ * mantida apenas para leitura temporária de valores legados durante a rotação.
  */
 class EmailCrypto
 {
-    private const CIPHER    = 'aes-256-cbc';
+    private const CIPHER = 'aes-256-cbc';
     private const SEPARATOR = '::ENC::';
 
     public static function encrypt(string $plaintext): string
@@ -21,13 +19,13 @@ class EmailCrypto
             return '';
         }
 
-        $key    = self::deriveKey();
-        $ivLen  = openssl_cipher_iv_length(self::CIPHER);
-        $iv     = openssl_random_pseudo_bytes($ivLen);
+        $key = self::activeKey();
+        $ivLen = openssl_cipher_iv_length(self::CIPHER);
+        $iv = openssl_random_pseudo_bytes($ivLen);
         $cipher = openssl_encrypt($plaintext, self::CIPHER, $key, OPENSSL_RAW_DATA, $iv);
 
         if ($cipher === false) {
-            throw new RuntimeException('Falha ao criptografar a API Key. Verifique se OpenSSL está habilitado.');
+            throw new RuntimeException('Falha ao criptografar a credencial do provedor de e-mail.');
         }
 
         return base64_encode($iv . self::SEPARATOR . $cipher);
@@ -40,33 +38,26 @@ class EmailCrypto
         }
 
         $decoded = base64_decode($ciphertext, true);
-
-        // Retrocompatibilidade: valor em texto puro (não criptografado)
         if ($decoded === false || strpos($decoded, self::SEPARATOR) === false) {
+            // Retrocompatibilidade: instalações antigas podem ter texto puro.
             return $ciphertext;
         }
 
-        $key   = self::deriveKey();
         $ivLen = openssl_cipher_iv_length(self::CIPHER);
-        $iv    = substr($decoded, 0, $ivLen);
+        $iv = substr($decoded, 0, $ivLen);
+        $cipher = substr($decoded, $ivLen + strlen(self::SEPARATOR));
 
-        // Posição após IV + SEPARATOR
-        $cipherStart = $ivLen + strlen(self::SEPARATOR);
-        $cipher      = substr($decoded, $cipherStart);
-
-        $plain = openssl_decrypt($cipher, self::CIPHER, $key, OPENSSL_RAW_DATA, $iv);
-
-        if ($plain === false) {
-            // Pode ser uma chave em base64 puro (não nosso formato) — devolve como está
-            return $ciphertext;
+        foreach (self::decryptionKeys() as $key) {
+            $plain = openssl_decrypt($cipher, self::CIPHER, $key, OPENSSL_RAW_DATA, $iv);
+            if ($plain !== false) {
+                return $plain;
+            }
         }
 
-        return $plain;
+        // Mantém o comportamento legado de não devolver detalhes internos.
+        return $ciphertext;
     }
 
-    /**
-     * Verifica se um valor já está no formato criptografado desta classe.
-     */
     public static function isEncrypted(string $value): bool
     {
         if ($value === '') {
@@ -76,9 +67,6 @@ class EmailCrypto
         return $decoded !== false && strpos($decoded, self::SEPARATOR) !== false;
     }
 
-    /**
-     * Mascara uma API Key para exibição no frontend (ex: "sk-••••••••••••abcd").
-     */
     public static function mask(string $plainKey): string
     {
         $len = strlen($plainKey);
@@ -88,13 +76,32 @@ class EmailCrypto
         return str_repeat('•', max(8, $len - 4)) . substr($plainKey, -4);
     }
 
-    // Deriva uma chave AES-256 a partir das credenciais do banco (únicas por instalação)
-    private static function deriveKey(): string
+    private static function activeKey(): string
+    {
+        $secret = defined('ERP_EMAIL_CRYPTO_KEY') ? trim((string) ERP_EMAIL_CRYPTO_KEY) : '';
+        if ($secret !== '') {
+            return hash('sha256', 'erp-email-crypto-v2|' . $secret, true);
+        }
+
+        error_log('[ERP_EMAIL_CRYPTO] ERP_EMAIL_CRYPTO_KEY ausente; usando compatibilidade temporária v1.');
+        return self::legacyDatabaseKey();
+    }
+
+    private static function decryptionKeys(): array
+    {
+        $keys = [self::activeKey(), self::legacyDatabaseKey()];
+        $unique = [];
+        foreach ($keys as $key) {
+            $unique[bin2hex($key)] = $key;
+        }
+        return array_values($unique);
+    }
+
+    private static function legacyDatabaseKey(): string
     {
         $seed = (defined('DB_PASS') ? DB_PASS : '')
-              . (defined('DB_NAME') ? DB_NAME : '')
-              . 'erp-email-crypto-v1';
-
+            . (defined('DB_NAME') ? DB_NAME : '')
+            . 'erp-email-crypto-v1';
         return hash('sha256', $seed, true);
     }
 }

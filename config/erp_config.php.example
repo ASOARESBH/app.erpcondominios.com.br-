@@ -1,0 +1,19 @@
+<?php
+/**
+ * MODELO — NÃO publique este arquivo preenchido.
+ *
+ * Copie-o para fora de public_html, por exemplo:
+ * /home/USUARIO/erpcondominios-private/erp_config.php
+ *
+ * Permissões recomendadas: diretório 0700 e arquivo 0600.
+ */
+
+define('ERP_DB_HOST', 'localhost');
+define('ERP_DB_NAME', 'SUBSTITUA_PELO_BANCO');
+define('ERP_DB_USER', 'SUBSTITUA_PELO_USUARIO');
+define('ERP_DB_PASS', 'SUBSTITUA_PELA_NOVA_SENHA_FORTE');
+define('ERP_DB_CHARSET', 'utf8mb4');
+
+// Gere um valor aleatório de alta entropia fora do Git. Não reutilize a senha do banco.
+define('ERP_EMAIL_CRYPTO_KEY', 'GERE_UM_SEGREDO_ALEATORIO_DE_ALTA_ENTROPIA');
+define('ERP_TIMEZONE', 'America/Sao_Paulo');

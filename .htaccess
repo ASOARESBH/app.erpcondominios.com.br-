@@ -1,76 +1,95 @@
-# Sistema de Controle de Acesso - Configuração Apache
-# SIMPLES E FUNCIONAL PARA SUBDIRETÓRIO
+# ERP Condomínios — regras de publicação e proteção de arquivos
+# Este arquivo fica no document root. O repositório Git e os segredos devem
+# permanecer fora desse diretório; as regras abaixo são defesa adicional.
 
+Options -Indexes
 RewriteEngine On
 
-# Página inicial padrão - Redireciona para login.html
-DirectoryIndex login.html
+# -----------------------------------------------------------------------------
+# BLOQUEIOS DE SEGURANÇA — devem permanecer antes de qualquer regra de arquivo.
+# -----------------------------------------------------------------------------
+# Impede acesso a metadados Git, inclusive quando o diretório existe por erro de
+# deploy. O deploy correto ainda exige remover .git do document root.
+RewriteRule ^(?:\.git|\.git\.(?:old|bak|backup))(?:/|$) - [F,L,NC]
 
-# --- CONTROL ID ONLINE MODE — Endpoints .fcgi → api/controlid/ ---
-# O equipamento chama estas URLs no modo Online (Pro/Enterprise).
-# Devem ficar ANTES das regras de arquivos reais pois .fcgi não existe em disco.
+# Diretórios de testes, logs, backups e armazenamento não são conteúdo público.
+RewriteRule ^(?:api/(?:testeAPI|error)(?:/|$)|(?:backup|backups|logs?|storage|tmp|temp|config|deploy)(?:/|$)) - [F,L,NC]
 
+# Arquivos operacionais/de depuração não podem ser acessados diretamente.
+<FilesMatch "(?i)^(?:(?:config(?:\..*)?)|configuration|database|db|settings)\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<FilesMatch "(?i)^(?:.*[_-])?(?:debug|teste|test|diagnostico|backup|corrigida|final)(?:[_-][a-z0-9]+|_[0-9]+)*\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Segredos, backups, dumps e pacotes nunca devem ser expostos diretamente.
+<FilesMatch "(?i)^(?:\.env(?:\..*)?|.*\.(?:env|ini|log|bak|backup|old|orig|original|save|tmp|sql|dump|sqlite|zip|tar|gz|rar))$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<Files ".htaccess">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</Files>
+
+# -----------------------------------------------------------------------------
+# CONTROL ID ONLINE MODE — endpoints .fcgi mapeados para a API.
+# -----------------------------------------------------------------------------
 RewriteRule ^new_uhf_tag\.fcgi$         api/controlid/new_uhf_tag.php         [QSA,L]
 RewriteRule ^new_user_identified\.fcgi$ api/controlid/new_user_identified.php [QSA,L]
 RewriteRule ^new_card\.fcgi$            api/controlid/new_card.php            [QSA,L]
 RewriteRule ^new_qrcode\.fcgi$          api/controlid/new_qrcode.php          [QSA,L]
 RewriteRule ^device_is_alive\.fcgi$     api/controlid/device_is_alive.php     [QSA,L]
 
-# --- REGRAS PRINCIPAIS DE ROTEAMENTO ---
-
-# 1. PERMITIR: Arquivos reais (imagens, css, js, etc) - não fazer rewrite
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
-
-# 2. PERMITIR: Diretórios reais - não fazer rewrite
+# Arquivos e diretórios reais liberados somente depois dos bloqueios acima.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# 3. IMPORTANTE: Não fazer rewrite de requests para /api/ e /frontend/
-# Deixar que possam acessar diretamente
-RewriteCond %{REQUEST_URI} ^/api/
+# APIs e frontend são atendidos diretamente.
+RewriteCond %{REQUEST_URI} ^/(?:api|frontend)/
 RewriteRule ^ - [L]
 
-RewriteCond %{REQUEST_URI} ^/frontend/
-RewriteRule ^ - [L]
-
-# 4. Se acessar /dashboard redireciona para layout-base
+# Rotas públicas oficiais.
 RewriteRule ^dashboard/?$ frontend/layout-base.html?page=dashboard [L]
-
-# 4b. Página pública de transparência de Projetos (sem login)
-#     /projetos        -> lista/dashboard público
-#     /projetos/123     -> projeto específico (id=123)
-RewriteRule ^projetos/?$      projetos_publico.php [QSA,L]
+RewriteRule ^projetos/?$ projetos_publico.php [QSA,L]
 RewriteRule ^projetos/(\d+)/?$ projetos_publico.php?id=$1 [QSA,L]
 
-# 5. Redirecionar tudo que não existe para login.html (SPA fallback)
-# EXCETO extensões de arquivo estático
+# Fallback da SPA, preservando extensões de conteúdo estático.
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_URI} !\.(gif|jpg|jpeg|png|css|js|svg|ico|woff|woff2|ttf|eot|json|xml)$
+RewriteCond %{REQUEST_URI} !\.(?:gif|jpg|jpeg|png|css|js|svg|ico|woff|woff2|ttf|eot|json|xml)$ [NC]
 RewriteRule ^ login.html [L]
 
-# --- CONFIGURAÇÕES DE SEGURANÇA BÁSICAS ---
-
-# Prevenir listagem de diretórios
-Options -Indexes
-
-# Security headers (se suportado)
+# Cabeçalhos que já eram compatíveis com o ambiente atual.
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set X-Frame-Options "SAMEORIGIN"
 </IfModule>
 
-# Bloquear acesso a arquivos sensíveis
-<FilesMatch "\.(env|log|bak|sql)$">
-    Order deny,allow
-    Deny from all
-</FilesMatch>
-
-<Files ".htaccess">
-    Order deny,allow
-    Deny from all
-</Files>
-
-# Configurar charset
 AddDefaultCharset UTF-8

@@ -35,3 +35,28 @@ logs/*.log
 # Firebase service-account credentials (nunca versionar)
 /config/firebase/service-account.json
 /config/firebase/*.private.json
+
+# Configurações privadas de produção — manter fora do document root e do Git
+/config/erp_config.php
+/config/*.local.php
+/config/*.secret.php
+/erpcondominios-private/
+
+# Chaves e certificados privados
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# Artefatos de backup e exportação local
+*.dump
+*.sqlite
+*.tar
+*.tar.gz
+*.rar
+*.backup
+*.bak
+*.old
+*.orig
+*.save
