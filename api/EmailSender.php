@@ -156,17 +156,21 @@ class EmailSender
             $this->conexao,
             "SELECT * FROM configuracao_smtp WHERE smtp_ativo = 1 ORDER BY id DESC LIMIT 1"
         );
+        $this->config = ($res && mysqli_num_rows($res) > 0)
+            ? mysqli_fetch_assoc($res)
+            : [];
 
-        if (!$res || mysqli_num_rows($res) === 0) {
-            throw new \RuntimeException('Nenhuma configuração de e-mail ativa encontrada no banco de dados');
+        try {
+            // Quando houver mais de um provedor ativo, a fábrica cria uma cadeia
+            // de fallback. Em instalações legadas, usa a configuração SMTP única.
+            $this->provider = EmailProviderFactory::fromDatabaseWithFallback($this->conexao);
+        } catch (\Throwable $e) {
+            email_error_log('ERROR', 'EmailSender: configuração de transporte indisponível', [
+                'has_smtp_config' => !empty($this->config),
+                'error' => $e->getMessage(),
+            ]);
+            throw new \RuntimeException('Não há configuração válida de e-mail ativa.');
         }
-
-        $this->config   = mysqli_fetch_assoc($res);
-        error_log('PASSOU_AQUI_3: EmailSender::carregarConfiguracao email_provider=' . ($this->config['email_provider'] ?? 'NULL')
-            . ' api_key_tem=' . (!empty($this->config['api_key']) ? 'SIM' : 'NAO')
-            . ' smtp_host=' . ($this->config['smtp_host'] ?? ''));
-        $this->provider = EmailProviderFactory::fromConfig($this->config);
-        error_log('PASSOU_AQUI_3B: Provider instanciado: ' . get_class($this->provider));
     }
 
     private function resolverTemplateRecuperacao(string $nome, string $token): array

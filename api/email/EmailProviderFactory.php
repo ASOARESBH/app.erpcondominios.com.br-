@@ -110,8 +110,14 @@ class EmailProviderFactory
         );
 
         if (!$res || mysqli_num_rows($res) === 0) {
-            // Tabela não existe ou vazia — usar provider único padrão
-            return self::fromDatabase($db);
+            // Instalações legadas usam uma única linha em configuracao_smtp.
+            // Quando ela combina API (Brevo/Resend) e SMTP, preserva a API
+            // como primária, mas inclui SMTP como contingência automática.
+            $cfg = mysqli_query($db, "SELECT * FROM configuracao_smtp WHERE smtp_ativo = 1 ORDER BY id DESC LIMIT 1");
+            if (!$cfg || mysqli_num_rows($cfg) === 0) {
+                throw new \RuntimeException('Nenhuma configuração de e-mail ativa encontrada no banco de dados');
+            }
+            return self::fromConfigComFallbackSmtp(mysqli_fetch_assoc($cfg));
         }
 
         $providers = [];
@@ -137,6 +143,34 @@ class EmailProviderFactory
         }
 
         return new FallbackEmailProvider($providers);
+    }
+
+    /**
+     * Mantém um provedor de API como primário e usa SMTP da mesma configuração
+     * somente se todas as credenciais SMTP essenciais estiverem presentes.
+     */
+    private static function fromConfigComFallbackSmtp(array $config): EmailProviderInterface
+    {
+        $primario = self::fromConfig($config);
+        $tipo = strtolower((string)($config['email_provider'] ?? 'smtp'));
+
+        if (!in_array($tipo, ['brevo', 'resend'], true)) {
+            return $primario;
+        }
+
+        $camposSmtp = ['smtp_host', 'smtp_port', 'smtp_usuario', 'smtp_senha', 'smtp_de_email'];
+        foreach ($camposSmtp as $campo) {
+            if (empty($config[$campo])) {
+                return $primario;
+            }
+        }
+
+        email_error_log('INFO', 'EmailProviderFactory: fallback SMTP habilitado para provedor de API', [
+            'primary_provider' => $tipo,
+            'smtp_host' => $config['smtp_host'],
+        ]);
+
+        return new FallbackEmailProvider([$primario, new SmtpProvider($config)]);
     }
 
     private static function decryptKey(string $value): string

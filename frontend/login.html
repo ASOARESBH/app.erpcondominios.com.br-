@@ -461,7 +461,7 @@
         <!-- Painel de recuperação de senha -->
         <div class="recovery-panel" id="painelRecuperacao">
             <h3><i class="fas fa-lock-open"></i> Recuperar Senha</h3>
-            <p>Informe seu CPF ou e-mail cadastrado. Enviaremos uma senha temporária para o seu e-mail.</p>
+            <p>Informe seu CPF ou e-mail cadastrado. Enviaremos um link seguro para redefinir sua senha.</p>
             <form id="formRecuperacao" onsubmit="RecuperacaoSenha.enviar(event)" novalidate>
                 <div class="form-group">
                     <label for="recuperacaoCpfEmail">CPF ou E-mail</label>
@@ -474,7 +474,7 @@
                     </div>
                 </div>
                 <button type="submit" class="btn-recovery" id="btnRecuperar">
-                    <i class="fas fa-paper-plane"></i> Enviar Senha Temporária
+                    <i class="fas fa-paper-plane"></i> Enviar Link de Redefinição
                 </button>
                 <button type="button" class="btn-cancel-recovery" onclick="RecuperacaoSenha.ocultarPainel()">
                     Cancelar
@@ -791,12 +791,12 @@
                 fetch(window.location.origin + '/api/api_recuperar_senha.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cpf_email: cpfEmail })
+                    body: JSON.stringify({ acao: 'solicitar', cpf_email: cpfEmail })
                 })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     // Sempre exibe mensagem genérica (a API nunca informa se encontrou ou não)
-                    mostrarAlerta(data.mensagem || 'Verifique seu e-mail.', 'success');
+                    mostrarAlerta(data.mensagem || 'Se os dados informados estiverem cadastrados, você receberá instruções por e-mail em breve.', 'success');
                     ocultarPainel();
                 })
                 .catch(function () {
@@ -804,7 +804,7 @@
                 })
                 .finally(function () {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Senha Temporária';
+                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Link de Redefinição';
                 });
             }
 

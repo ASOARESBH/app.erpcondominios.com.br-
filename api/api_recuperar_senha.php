@@ -1,297 +1,346 @@
 <?php
 /**
- * API: RECUPERAÇÃO DE SENHA DO MORADOR
+ * Recuperação de senha pública e segura.
  *
- * Gera senha temporária e envia por e-mail.
- * Rate limit: máximo 3 recuperações/hora por morador_id e por IP.
- *
- * POST /api/api_recuperar_senha.php
- * Body: { "cpf_email": "CPF ou e-mail do morador" }
- *
- * Resposta (sempre genérica para não vazar se cadastro existe):
- * { "sucesso": true, "mensagem": "Se os dados informados..." }
+ * Suporta usuários internos do ERP e moradores, sem expor se uma conta existe.
+ * O token é aleatório, armazenado somente em hash e expira em uma hora.
  */
+ob_start();
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/EmailSender.php';
+ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+const RECUPERACAO_MENSAGEM_GENERICA = 'Se os dados informados estiverem cadastrados, você receberá instruções por e-mail em breve.';
+const RECUPERACAO_DURACAO_MINUTOS = 60;
+const RECUPERACAO_LIMITE_HORA = 3;
+
+function recuperacao_json(bool $sucesso, string $mensagem, array $dados = []): void
+{
+    echo json_encode(array_merge(['sucesso' => $sucesso, 'mensagem' => $mensagem], $dados), JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['sucesso' => false, 'mensagem' => 'Método não permitido'], JSON_UNESCAPED_UNICODE);
-    exit;
+function recuperacao_ip(): string
+{
+    $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+    return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
 }
 
-require_once 'config.php';
-
-define('MSG_RECUPERACAO_GENERICA',
-    'Se os dados informados estiverem cadastrados, você receberá instruções por e-mail em breve.'
-);
-
-$ip    = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-$input = json_decode(file_get_contents('php://input'), true);
-$cpf_email = trim($input['cpf_email'] ?? '');
-
-// Entrada vazia → mensagem genérica (não informa erro)
-if (empty($cpf_email)) {
-    echo json_encode(['sucesso' => true, 'mensagem' => MSG_RECUPERACAO_GENERICA], JSON_UNESCAPED_UNICODE);
-    exit;
+function recuperacao_entrada(): array
+{
+    $json = json_decode((string)file_get_contents('php://input'), true);
+    return is_array($json) ? $json : $_POST;
 }
 
-try {
-    $conexao = conectar_banco();
-
-    // Garante que o schema necessário existe antes de qualquer operação
-    _garantir_schema_recuperacao($conexao);
-
-    // ── Detectar se é CPF ou e-mail ─────────────────────────────────────
-    $cpf_numeros = preg_replace('/\D/', '', $cpf_email);
-    $eh_cpf      = strlen($cpf_numeros) === 11;
-
-    // ── Buscar morador ───────────────────────────────────────────────────
-    if ($eh_cpf) {
-        $stmt = $conexao->prepare(
-            "SELECT id, nome, email FROM moradores WHERE cpf = ? AND ativo = 1 LIMIT 1"
-        );
-        $stmt->bind_param('s', $cpf_numeros);
+function recuperacao_registrar(string $tipo, string $descricao, ?string $usuario = null): void
+{
+    if (function_exists('registrar_log')) {
+        registrar_log($tipo, $descricao, $usuario);
     } else {
-        $email_lower = strtolower($cpf_email);
-        if (!filter_var($email_lower, FILTER_VALIDATE_EMAIL)) {
-            // Formato inválido — resposta genérica
-            echo json_encode(['sucesso' => true, 'mensagem' => MSG_RECUPERACAO_GENERICA], JSON_UNESCAPED_UNICODE);
-            exit;
+        error_log('[recuperacao_senha] ' . $tipo . ': ' . $descricao);
+    }
+}
+
+function recuperacao_contas(mysqli $conexao, string $identificador): array
+{
+    $contas = [];
+    $identificador = trim($identificador);
+    $cpf = preg_replace('/\D/', '', $identificador);
+
+    if (filter_var(strtolower($identificador), FILTER_VALIDATE_EMAIL)) {
+        $email = strtolower($identificador);
+
+        $stmt = $conexao->prepare('SELECT id, nome, email FROM usuarios WHERE email = ? AND ativo = 1');
+        $stmt->bind_param('s', $email);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $contas[] = [
+                'tipo' => 'usuario',
+                'id' => (int)$row['id'],
+                'tenant_id' => null,
+                'nome' => (string)$row['nome'],
+                'email' => (string)$row['email'],
+            ];
         }
-        $stmt = $conexao->prepare(
-            "SELECT id, nome, email FROM moradores WHERE email = ? AND ativo = 1 LIMIT 1"
-        );
-        $stmt->bind_param('s', $email_lower);
+        $stmt->close();
+
+        $stmt = $conexao->prepare('SELECT id, tenant_id, nome, email FROM moradores WHERE email = ? AND ativo = 1');
+        $stmt->bind_param('s', $email);
+    } elseif (strlen($cpf) === 11) {
+        $stmt = $conexao->prepare('SELECT id, tenant_id, nome, email FROM moradores WHERE cpf = ? AND ativo = 1');
+        $stmt->bind_param('s', $cpf);
+    } else {
+        return [];
     }
 
     $stmt->execute();
     $res = $stmt->get_result();
-
-    if ($res->num_rows === 0) {
-        $stmt->close();
-        registrar_log('SENHA_RECUPERACAO_SOLICITADA',
-            "Dados não encontrados na base: '{$cpf_email}' | IP: {$ip}"
-        );
-        echo json_encode(['sucesso' => true, 'mensagem' => MSG_RECUPERACAO_GENERICA], JSON_UNESCAPED_UNICODE);
-        exit;
+    while ($row = $res->fetch_assoc()) {
+        if (!empty($row['email']) && filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
+            $contas[] = [
+                'tipo' => 'morador',
+                'id' => (int)$row['id'],
+                'tenant_id' => isset($row['tenant_id']) ? (int)$row['tenant_id'] : null,
+                'nome' => (string)$row['nome'],
+                'email' => (string)$row['email'],
+            ];
+        }
     }
-
-    $morador    = $res->fetch_assoc();
     $stmt->close();
-    $morador_id = (int)$morador['id'];
 
-    // ── Rate limit: máx 3 tentativas/hora por morador_id OU por IP ──────
-    $hora_atras = date('Y-m-d H:i:s', time() - 3600);
+    return $contas;
+}
 
-    $stmt_rate = $conexao->prepare(
-        "SELECT COUNT(*) AS total
-         FROM senha_recuperacao_logs
-         WHERE (morador_id = ? OR ip_solicitacao = ?) AND data_solicitacao >= ?"
+function recuperacao_excedeu_limite(mysqli $conexao, array $conta, string $ip): bool
+{
+    $inicio = date('Y-m-d H:i:s', time() - 3600);
+    $stmt = $conexao->prepare(
+        'SELECT COUNT(*) AS total
+         FROM recuperacao_senha_tokens_v2
+         WHERE solicitado_em >= ?
+           AND (ip_solicitacao = ? OR (tipo_conta = ? AND conta_id = ?))'
     );
-    $stmt_rate->bind_param('iss', $morador_id, $ip, $hora_atras);
-    $stmt_rate->execute();
-    $total_tentativas = (int)$stmt_rate->get_result()->fetch_assoc()['total'];
-    $stmt_rate->close();
+    $stmt->bind_param('sssi', $inicio, $ip, $conta['tipo'], $conta['id']);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return (int)($row['total'] ?? 0) >= RECUPERACAO_LIMITE_HORA;
+}
 
-    if ($total_tentativas >= 3) {
-        registrar_log('SENHA_RECUPERACAO_ABUSO',
-            "Rate limit excedido: morador_id={$morador_id} | IP: {$ip}",
-            $morador['nome']
-        );
-        echo json_encode(['sucesso' => true, 'mensagem' => MSG_RECUPERACAO_GENERICA], JSON_UNESCAPED_UNICODE);
+function recuperacao_gerar_token(mysqli $conexao, array $conta, string $ip): string
+{
+    $token = bin2hex(random_bytes(32));
+    $hash = hash('sha256', $token);
+    $agora = date('Y-m-d H:i:s');
+    $expira = date('Y-m-d H:i:s', time() + (RECUPERACAO_DURACAO_MINUTOS * 60));
+    $ua = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512);
+
+    $stmt = $conexao->prepare(
+        'UPDATE recuperacao_senha_tokens_v2
+         SET usado_em = NOW()
+         WHERE tipo_conta = ? AND conta_id = ? AND usado_em IS NULL'
+    );
+    $stmt->bind_param('si', $conta['tipo'], $conta['id']);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conexao->prepare(
+        'INSERT INTO recuperacao_senha_tokens_v2
+         (tenant_id, tipo_conta, conta_id, email, token_hash, ip_solicitacao, user_agent, solicitado_em, expira_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $tenantId = $conta['tenant_id'];
+    $stmt->bind_param(
+        'isissssss',
+        $tenantId,
+        $conta['tipo'],
+        $conta['id'],
+        $conta['email'],
+        $hash,
+        $ip,
+        $ua,
+        $agora,
+        $expira
+    );
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('Não foi possível registrar o token de recuperação.');
+    }
+    $stmt->close();
+
+    return $token;
+}
+
+function recuperacao_link(string $token): string
+{
+    $host = $_SERVER['HTTP_HOST'] ?? 'app.erpcondominios.com.br';
+    if (!preg_match('/^[a-z0-9.-]+(?::\d+)?$/i', $host)) {
+        $host = 'app.erpcondominios.com.br';
+    }
+    return 'https://' . $host . '/frontend/redefinir_senha.html?token=' . rawurlencode($token);
+}
+
+function recuperacao_email_html(array $conta, string $link): string
+{
+    $nome = htmlspecialchars($conta['nome'], ENT_QUOTES, 'UTF-8');
+    $linkEscapado = htmlspecialchars($link, ENT_QUOTES, 'UTF-8');
+    return '<!doctype html><html lang="pt-BR"><body style="margin:0;padding:24px;background:#f1f5f9;font-family:Arial,sans-serif;color:#1e293b">'
+        . '<div style="max-width:580px;margin:auto;background:#fff;border-radius:12px;overflow:hidden">'
+        . '<div style="background:#2563eb;color:#fff;padding:26px;text-align:center"><h1 style="font-size:20px;margin:0">Recuperação de senha</h1></div>'
+        . '<div style="padding:28px"><p>Olá, <strong>' . $nome . '</strong>.</p>'
+        . '<p>Recebemos uma solicitação para redefinir a senha da sua conta no ERP Condomínio.</p>'
+        . '<p style="text-align:center;margin:28px 0"><a href="' . $linkEscapado . '" style="display:inline-block;padding:13px 24px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-weight:bold">Redefinir senha</a></p>'
+        . '<p style="font-size:13px;color:#64748b">Este link expira em ' . RECUPERACAO_DURACAO_MINUTOS . ' minutos e só pode ser usado uma vez. Se você não fez a solicitação, ignore esta mensagem.</p>'
+        . '</div></div></body></html>';
+}
+
+function recuperacao_solicitar(mysqli $conexao): void
+{
+    $dados = recuperacao_entrada();
+    $identificador = trim((string)($dados['cpf_email'] ?? $dados['email'] ?? $dados['cpf'] ?? ''));
+    $ip = recuperacao_ip();
+
+    if ($identificador === '') {
+        recuperacao_json(true, RECUPERACAO_MENSAGEM_GENERICA);
+    }
+
+    $contas = recuperacao_contas($conexao, $identificador);
+    if (!$contas) {
+        recuperacao_registrar('SENHA_RECUPERACAO_SOLICITADA', 'Solicitação sem conta elegível; IP=' . $ip);
+        recuperacao_json(true, RECUPERACAO_MENSAGEM_GENERICA);
+    }
+
+    $sender = null;
+    foreach ($contas as $conta) {
+        if (recuperacao_excedeu_limite($conexao, $conta, $ip)) {
+            recuperacao_registrar('SENHA_RECUPERACAO_LIMITE', 'Limite atingido; tipo=' . $conta['tipo'] . '; conta=' . $conta['id'] . '; IP=' . $ip);
+            continue;
+        }
+
+        try {
+            $token = recuperacao_gerar_token($conexao, $conta, $ip);
+            if ($sender === null) {
+                $sender = new EmailSender($conexao);
+            }
+            $sender->enviar(
+                $conta['email'],
+                'Redefinição de senha — ERP Condomínio',
+                recuperacao_email_html($conta, recuperacao_link($token)),
+                $conta['nome']
+            );
+            recuperacao_registrar('SENHA_RECUPERACAO_EMAIL_ENVIADO', 'Token enviado; tipo=' . $conta['tipo'] . '; conta=' . $conta['id'] . '; IP=' . $ip, $conta['nome']);
+        } catch (Throwable $e) {
+            error_log('[api_recuperar_senha] envio falhou: ' . $e->getMessage());
+            recuperacao_registrar('SENHA_RECUPERACAO_EMAIL_FALHA', 'Falha de envio; tipo=' . $conta['tipo'] . '; conta=' . $conta['id'] . '; IP=' . $ip, $conta['nome']);
+        }
+    }
+
+    recuperacao_json(true, RECUPERACAO_MENSAGEM_GENERICA);
+}
+
+function recuperacao_localizar_token(mysqli $conexao, string $token): ?array
+{
+    if (!preg_match('/^[a-f0-9]{64}$/i', $token)) {
+        return null;
+    }
+    $hash = hash('sha256', $token);
+    $stmt = $conexao->prepare(
+        'SELECT id, tipo_conta, conta_id, tenant_id
+         FROM recuperacao_senha_tokens_v2
+         WHERE token_hash = ? AND usado_em IS NULL AND expira_em > NOW()
+         LIMIT 1'
+    );
+    $stmt->bind_param('s', $hash);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res->num_rows === 1 ? $res->fetch_assoc() : null;
+    $stmt->close();
+    return $row ?: null;
+}
+
+function recuperacao_validar(mysqli $conexao): void
+{
+    $dados = recuperacao_entrada();
+    $token = (string)($dados['token'] ?? $_GET['token'] ?? '');
+    recuperacao_json(true, 'Consulta concluída.', ['valido' => recuperacao_localizar_token($conexao, $token) !== null]);
+}
+
+function recuperacao_validar_senha(string $senha): ?string
+{
+    if (strlen($senha) < 10) {
+        return 'A nova senha deve ter ao menos 10 caracteres.';
+    }
+    if (!preg_match('/[a-z]/', $senha) || !preg_match('/[A-Z]/', $senha) || !preg_match('/\d/', $senha)) {
+        return 'A nova senha deve conter letras maiúsculas, minúsculas e números.';
+    }
+    return null;
+}
+
+function recuperacao_redefinir(mysqli $conexao): void
+{
+    $dados = recuperacao_entrada();
+    $token = (string)($dados['token'] ?? '');
+    $senha = (string)($dados['senha'] ?? '');
+    $erroSenha = recuperacao_validar_senha($senha);
+    if ($erroSenha !== null) {
+        recuperacao_json(false, $erroSenha);
+    }
+
+    $registro = recuperacao_localizar_token($conexao, $token);
+    if ($registro === null) {
+        recuperacao_json(false, 'O link de recuperação é inválido ou expirou.');
+    }
+
+    $hashSenha = password_hash($senha, PASSWORD_BCRYPT);
+    $conexao->begin_transaction();
+    try {
+        if ($registro['tipo_conta'] === 'usuario') {
+            $stmt = $conexao->prepare('UPDATE usuarios SET senha = ? WHERE id = ? AND ativo = 1');
+        } else {
+            $stmt = $conexao->prepare('UPDATE moradores SET senha = ?, senha_temporaria = 0 WHERE id = ? AND ativo = 1');
+        }
+        $contaId = (int)$registro['conta_id'];
+        $stmt->bind_param('si', $hashSenha, $contaId);
+        $stmt->execute();
+        $afetadas = $stmt->affected_rows;
+        $stmt->close();
+
+        if ($afetadas !== 1) {
+            throw new RuntimeException('A conta não está disponível para redefinição.');
+        }
+
+        $stmt = $conexao->prepare('UPDATE recuperacao_senha_tokens_v2 SET usado_em = NOW() WHERE id = ? AND usado_em IS NULL');
+        $tokenId = (int)$registro['id'];
+        $stmt->bind_param('i', $tokenId);
+        $stmt->execute();
+        if ($stmt->affected_rows !== 1) {
+            $stmt->close();
+            throw new RuntimeException('O token já foi utilizado.');
+        }
+        $stmt->close();
+        $conexao->commit();
+
+        recuperacao_registrar('SENHA_REDEFINIDA', 'Senha redefinida; tipo=' . $registro['tipo_conta'] . '; conta=' . $contaId . '; IP=' . recuperacao_ip());
+        recuperacao_json(true, 'Senha redefinida com sucesso. Faça login com a nova senha.');
+    } catch (Throwable $e) {
+        $conexao->rollback();
+        error_log('[api_recuperar_senha] redefinição falhou: ' . $e->getMessage());
+        recuperacao_json(false, 'Não foi possível redefinir a senha. Solicite um novo link.');
+    }
+}
+
+try {
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        http_response_code(204);
         exit;
     }
-
-    // ── Gerar senha temporária: 3 maiúsculas + 3 dígitos + 1 especial ───
-    $senha_temporaria = _gerar_senha_temporaria();
-    $senha_hash       = password_hash($senha_temporaria, PASSWORD_BCRYPT);
-
-    // ── Atualizar morador: nova senha + flag senha_temporaria = 1 ────────
-    $stmt_upd = $conexao->prepare(
-        "UPDATE moradores SET senha = ?, senha_temporaria = 1, data_atualizacao = NOW() WHERE id = ?"
-    );
-    $stmt_upd->bind_param('si', $senha_hash, $morador_id);
-    $stmt_upd->execute();
-    $stmt_upd->close();
-
-    // ── Registrar na tabela de logs de recuperação ────────────────────────
-    $stmt_log = $conexao->prepare(
-        "INSERT INTO senha_recuperacao_logs
-             (morador_id, senha_temp_hash, ip_solicitacao, data_solicitacao)
-         VALUES (?, ?, ?, NOW())"
-    );
-    $stmt_log->bind_param('iss', $morador_id, $senha_hash, $ip);
-    $stmt_log->execute();
-    $stmt_log->close();
-
-    registrar_log('SENHA_RECUPERACAO_SOLICITADA',
-        "Senha temporária gerada | morador: {$morador['email']} | IP: {$ip}",
-        $morador['nome']
-    );
-
-    // ── Enviar e-mail ─────────────────────────────────────────────────────
-    $email_ok = _enviar_email_recuperacao($conexao, $morador, $senha_temporaria);
-
-    if ($email_ok) {
-        registrar_log('SENHA_RECUPERACAO_EMAIL_ENVIADO',
-            "E-mail de recuperação enviado para: {$morador['email']}",
-            $morador['nome']
-        );
-    } else {
-        registrar_log('SENHA_RECUPERACAO_EMAIL_FALHA',
-            "Falha ao enviar e-mail de recuperação para: {$morador['email']}",
-            $morador['nome']
-        );
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        recuperacao_json(false, 'Método não permitido.');
     }
 
-    fechar_conexao($conexao);
+    $conexao = conectar_banco();
+    $dados = recuperacao_entrada();
+    $acao = (string)($dados['acao'] ?? $_GET['acao'] ?? 'solicitar');
 
-    echo json_encode(['sucesso' => true, 'mensagem' => MSG_RECUPERACAO_GENERICA], JSON_UNESCAPED_UNICODE);
-
-} catch (Exception $e) {
-    error_log('[api_recuperar_senha] Erro: ' . $e->getMessage());
-    // Nunca retornar erro real ao cliente (anti-enumeração)
-    echo json_encode(['sucesso' => true, 'mensagem' => MSG_RECUPERACAO_GENERICA], JSON_UNESCAPED_UNICODE);
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Gera senha no formato: 3 maiúsculas + 3 dígitos + 1 especial
- * Exemplo: QWE789#
- */
-function _gerar_senha_temporaria(): string
-{
-    // Exclui caracteres visualmente ambíguos (I, O, 0, 1)
-    $maiusculas = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-    $digitos    = '23456789';
-    $especiais  = '@#$!';
-
-    $s = '';
-    for ($i = 0; $i < 3; $i++) {
-        $s .= $maiusculas[random_int(0, strlen($maiusculas) - 1)];
+    if ($acao === 'solicitar') {
+        recuperacao_solicitar($conexao);
     }
-    for ($i = 0; $i < 3; $i++) {
-        $s .= $digitos[random_int(0, strlen($digitos) - 1)];
+    if ($acao === 'validar_token') {
+        recuperacao_validar($conexao);
     }
-    $s .= $especiais[random_int(0, strlen($especiais) - 1)];
-
-    return $s;
-}
-
-/**
- * Envia e-mail com a senha temporária via EmailSender (Brevo → Resend → SMTP).
- */
-function _enviar_email_recuperacao($conexao, array $morador, string $senha): bool
-{
-    try {
-        require_once __DIR__ . '/EmailSender.php';
-
-        $sender = new EmailSender($conexao);
-        $nome   = htmlspecialchars($morador['nome'], ENT_QUOTES, 'UTF-8');
-        $proto  = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
-        $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $url    = "{$proto}://{$host}/frontend/login.html";
-
-        $corpo = <<<HTML
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;margin:0;padding:20px;">
-  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);">
-
-    <div style="background:linear-gradient(135deg,#2563eb 0%,#1e40af 100%);padding:30px 32px;text-align:center;">
-      <h1 style="color:#ffffff;margin:0;font-size:1.25rem;font-weight:700;letter-spacing:-.01em;">
-        🔑 Recuperação de Senha
-      </h1>
-    </div>
-
-    <div style="padding:32px;">
-      <p style="color:#1e293b;font-size:1rem;margin-bottom:12px;">Olá, <strong>{$nome}</strong>!</p>
-      <p style="color:#475569;font-size:.93rem;line-height:1.65;margin-bottom:24px;">
-        Recebemos uma solicitação de recuperação de senha para o seu acesso ao
-        <strong>Portal do Morador</strong>. Sua senha temporária está abaixo:
-      </p>
-
-      <div style="background:#f8fafc;border:2px dashed #2563eb;border-radius:12px;text-align:center;padding:22px 16px;margin-bottom:24px;">
-        <code style="font-size:2rem;font-weight:800;color:#1e40af;letter-spacing:.14em;font-family:monospace;">{$senha}</code>
-      </div>
-
-      <div style="background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 16px;margin-bottom:24px;">
-        <p style="margin:0;color:#92400e;font-size:.88rem;line-height:1.5;">
-          ⚠️ <strong>Atenção:</strong> Ao entrar com esta senha temporária, o sistema vai
-          solicitar que você crie uma nova senha imediatamente.
-        </p>
-      </div>
-
-      <div style="text-align:center;margin-bottom:28px;">
-        <a href="{$url}"
-           style="display:inline-block;background:#2563eb;color:#ffffff;padding:13px 32px;
-                  border-radius:9px;text-decoration:none;font-weight:700;font-size:.95rem;">
-          Acessar o Portal do Morador
-        </a>
-      </div>
-
-      <p style="color:#94a3b8;font-size:.8rem;border-top:1px solid #e2e8f0;padding-top:16px;margin:0;line-height:1.55;">
-        Se você <strong>não solicitou</strong> esta recuperação, ignore este e-mail.
-        Sua senha atual permanecerá válida até que alguém utilize a senha temporária acima.
-        Nesse caso, entre em contato com a administração do condomínio.
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-HTML;
-
-        return $sender->enviar(
-            $morador['email'],
-            'Sua senha temporária — Portal do Morador',
-            $corpo,
-            $morador['nome']
-        );
-
-    } catch (Exception $e) {
-        error_log('[api_recuperar_senha] Falha no e-mail: ' . $e->getMessage());
-        return false;
-    }
-}
-
-/**
- * Garante que a coluna senha_temporaria e a tabela senha_recuperacao_logs existem.
- * Executado uma vez por chamada, com overhead mínimo (SHOW COLUMNS é indexado).
- */
-function _garantir_schema_recuperacao($conexao): void
-{
-    // Coluna na tabela moradores
-    $col = $conexao->query("SHOW COLUMNS FROM moradores LIKE 'senha_temporaria'");
-    if ($col && $col->num_rows === 0) {
-        $conexao->query(
-            "ALTER TABLE moradores ADD COLUMN senha_temporaria TINYINT(1) NOT NULL DEFAULT 0"
-        );
+    if ($acao === 'redefinir') {
+        recuperacao_redefinir($conexao);
     }
 
-    // Tabela de logs
-    $conexao->query("
-        CREATE TABLE IF NOT EXISTS senha_recuperacao_logs (
-            id               INT          AUTO_INCREMENT PRIMARY KEY,
-            morador_id       INT          NOT NULL,
-            senha_temp_hash  VARCHAR(255) NOT NULL,
-            ip_solicitacao   VARCHAR(45)  NOT NULL,
-            data_solicitacao DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            utilizada        TINYINT(1)   NOT NULL DEFAULT 0,
-            data_utilizacao  DATETIME     NULL,
-            INDEX idx_morador (morador_id),
-            INDEX idx_ip      (ip_solicitacao),
-            INDEX idx_data    (data_solicitacao)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ");
+    recuperacao_json(false, 'Ação inválida.');
+} catch (Throwable $e) {
+    error_log('[api_recuperar_senha] erro interno: ' . $e->getMessage());
+    // A solicitação é pública: manter resposta neutra e não revelar detalhes internos.
+    recuperacao_json(true, RECUPERACAO_MENSAGEM_GENERICA);
 }

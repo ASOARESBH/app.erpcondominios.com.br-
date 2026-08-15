@@ -51,7 +51,7 @@
                     <label for="senha">Nova Senha</label>
                     <div class="input-wrapper">
                         <i class="fas fa-lock"></i>
-                        <input type="password" id="senha" name="senha" placeholder="Digite a nova senha" required minlength="6">
+                        <input type="password" id="senha" name="senha" placeholder="Digite a nova senha" required minlength="10">
                         <i class="fas fa-eye toggle-password" onclick="togglePassword('senha')"></i>
                     </div>
                     <div class="password-strength">
@@ -64,7 +64,7 @@
                     <label for="senha_confirma">Confirmar Nova Senha</label>
                     <div class="input-wrapper">
                         <i class="fas fa-lock"></i>
-                        <input type="password" id="senha_confirma" name="senha_confirma" placeholder="Digite novamente" required minlength="6">
+                        <input type="password" id="senha_confirma" name="senha_confirma" placeholder="Digite novamente" required minlength="10">
                         <i class="fas fa-eye toggle-password" onclick="togglePassword('senha_confirma')"></i>
                     </div>
                 </div>
@@ -81,8 +81,25 @@
         const token = urlParams.get('token');
         
         if (!token) {
-            mostrarErro('Token inválido ou não fornecido');
-            setTimeout(() => window.location.href = 'login_morador.html', 2000);
+            mostrarErro('Link de redefinição inválido ou não fornecido.');
+            setTimeout(() => window.location.href = 'login.html', 2000);
+        } else {
+            fetch('../api/api_recuperar_senha.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ acao: 'validar_token', token: token })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.sucesso || !data.valido) {
+                    mostrarErro('Este link de redefinição é inválido ou expirou. Solicite um novo link.');
+                    document.getElementById('btnRedefinir').disabled = true;
+                }
+            })
+            .catch(() => {
+                mostrarErro('Não foi possível validar o link agora. Tente novamente mais tarde.');
+                document.getElementById('btnRedefinir').disabled = true;
+            });
         }
 
         // Verificar força da senha
@@ -90,7 +107,7 @@
             const senha = e.target.value;
             let forca = 0;
             
-            if (senha.length >= 6) forca++;
+            if (senha.length >= 10) forca++;
             if (senha.length >= 8) forca++;
             if (/[a-z]/.test(senha) && /[A-Z]/.test(senha)) forca++;
             if (/\d/.test(senha)) forca++;
@@ -130,29 +147,25 @@
                 return;
             }
             
-            if (senha.length < 6) {
-                mostrarErro('A senha deve ter no mínimo 6 caracteres');
+            if (senha.length < 10 || !/[a-z]/.test(senha) || !/[A-Z]/.test(senha) || !/\d/.test(senha)) {
+                mostrarErro('Use ao menos 10 caracteres, com letras maiúsculas, minúsculas e números.');
                 return;
             }
             
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span> Redefinindo...';
             
-            const formData = new FormData();
-            formData.append('acao', 'redefinir');
-            formData.append('token', token);
-            formData.append('senha', senha);
-            
-            fetch('../api/api_recuperacao_senha.php', {
+            fetch('../api/api_recuperar_senha.php', {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ acao: 'redefinir', token: token, senha: senha })
             })
             .then(r => r.json())
             .then(data => {
                 if (data.sucesso) {
                     mostrarSucesso('Senha redefinida com sucesso! Redirecionando...');
                     setTimeout(() => {
-                        window.location.href = 'login_morador.html';
+                        window.location.href = 'login.html';
                     }, 2000);
                 } else {
                     mostrarErro(data.mensagem || 'Erro ao redefinir senha');

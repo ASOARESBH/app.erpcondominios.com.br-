@@ -95,16 +95,20 @@
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span> Enviando...';
             
-            fetch('../api/api_recuperacao_senha.php?acao=solicitar&cpf=' + encodeURIComponent(cpf))
+            fetch('../api/api_recuperar_senha.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ acao: 'solicitar', cpf_email: cpf })
+            })
                 .then(r => r.json())
                 .then(data => {
                     if (data.sucesso) {
-                        mostrarSucesso(data.mensagem || 'Link de recuperação enviado para o e-mail cadastrado!');
+                        mostrarSucesso(data.mensagem || 'Se os dados informados estiverem cadastrados, você receberá instruções por e-mail em breve.');
                         setTimeout(() => {
                             window.location.href = 'login_morador.html';
                         }, 3000);
                     } else {
-                        mostrarErro(data.mensagem || 'Erro ao enviar link de recuperação');
+                        mostrarErro('Não foi possível concluir a solicitação. Tente novamente mais tarde.');
                         btn.disabled = false;
                         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Link de Recuperação';
                     }
