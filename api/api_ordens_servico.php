@@ -487,37 +487,84 @@ _os_garantir_esquema_projetos($conn);
 // Esta função trata apenas o que é exclusivo do acompanhamento da obra:
 // Etapa Atual e Conclusão (%). Auditoria (Parte 9 de uma refatoração
 // anterior) continua registrando usuário/data/hora e valores antes → depois.
-function _os_salvar_campos_projeto($conn, $os_id, $dados) {
-    $temEtapaOuPercentual = array_key_exists('projeto_etapa_id', $dados) || array_key_exists('projeto_percentual', $dados);
-    if (!$temEtapaOuPercentual) return ['ok' => true, 'auditoria' => null];
+function _os_salvar_campos_projeto(mysqli $conn, int $tenant_id, int $os_id, array $dados): array {
+    $temEtapa = array_key_exists('projeto_etapa_id', $dados);
+    $temPercentual = array_key_exists('projeto_percentual', $dados);
+    if (!$temEtapa && !$temPercentual) {
+        // Upload de imagem não deve disparar UPDATE vazio nem alterar dados do projeto.
+        return ['ok' => true, 'auditoria' => null];
+    }
 
-    $projeto_etapa_id  = !empty($dados['projeto_etapa_id']) ? (int)$dados['projeto_etapa_id'] : null;
-    $projeto_percentual = isset($dados['projeto_percentual']) && $dados['projeto_percentual'] !== ''
+    $projeto_etapa_id = !empty($dados['projeto_etapa_id']) ? (int)$dados['projeto_etapa_id'] : null;
+    $projeto_percentual = $temPercentual && $dados['projeto_percentual'] !== ''
         ? max(0, min(100, (int)$dados['projeto_percentual'])) : null;
 
-    $resAntes = $conn->query("SELECT o.projeto_etapa_id, o.projeto_percentual, e.nome AS etapa_nome
-                               FROM os_chamados o LEFT JOIN os_etapas e ON e.id = o.projeto_etapa_id
-                               WHERE o.id = $os_id LIMIT 1");
-    $antes = $resAntes ? $resAntes->fetch_assoc() : null;
+    $stmtAntes = $conn->prepare(
+        'SELECT o.projeto_etapa_id, o.projeto_percentual, e.nome AS etapa_nome
+         FROM os_chamados o
+         LEFT JOIN os_etapas e ON e.id = o.projeto_etapa_id AND e.tenant_id = o.tenant_id
+         WHERE o.tenant_id = ? AND o.id = ?
+         LIMIT 1'
+    );
+    if (!$stmtAntes) {
+        os_log('erro', 'Falha ao preparar consulta de projeto', ['os_id' => $os_id, 'tenant_id' => $tenant_id]);
+        return ['ok' => false, 'auditoria' => null];
+    }
+    $stmtAntes->bind_param('ii', $tenant_id, $os_id);
+    $stmtAntes->execute();
+    $antes = $stmtAntes->get_result()->fetch_assoc() ?: null;
+    $stmtAntes->close();
 
-    $sets = [];
-    if (array_key_exists('projeto_etapa_id', $dados))  $sets[] = "projeto_etapa_id=" . ($projeto_etapa_id ?: 'NULL');
-    if (array_key_exists('projeto_percentual', $dados)) $sets[] = "projeto_percentual=" . ($projeto_percentual !== null ? $projeto_percentual : 0);
-    $ok = true;
-    if ($sets) $ok = (bool)$conn->query("UPDATE os_chamados SET " . implode(',', $sets) . " WHERE tenant_id = $tenant_id AND id=$os_id");
+    if ($temEtapa && $temPercentual) {
+        $stmtUpdate = $conn->prepare(
+            'UPDATE os_chamados
+             SET projeto_etapa_id = ?, projeto_percentual = ?
+             WHERE tenant_id = ? AND id = ?'
+        );
+    } elseif ($temEtapa) {
+        $stmtUpdate = $conn->prepare(
+            'UPDATE os_chamados SET projeto_etapa_id = ? WHERE tenant_id = ? AND id = ?'
+        );
+    } else {
+        $stmtUpdate = $conn->prepare(
+            'UPDATE os_chamados SET projeto_percentual = ? WHERE tenant_id = ? AND id = ?'
+        );
+    }
+
+    if (!$stmtUpdate) {
+        os_log('erro', 'Falha ao preparar atualização de projeto', ['os_id' => $os_id, 'tenant_id' => $tenant_id]);
+        return ['ok' => false, 'auditoria' => null];
+    }
+
+    if ($temEtapa && $temPercentual) {
+        $percentualParaSalvar = $projeto_percentual ?? 0;
+        $stmtUpdate->bind_param('iiii', $projeto_etapa_id, $percentualParaSalvar, $tenant_id, $os_id);
+    } elseif ($temEtapa) {
+        $stmtUpdate->bind_param('iii', $projeto_etapa_id, $tenant_id, $os_id);
+    } else {
+        $percentualParaSalvar = $projeto_percentual ?? 0;
+        $stmtUpdate->bind_param('iii', $percentualParaSalvar, $tenant_id, $os_id);
+    }
+    $ok = $stmtUpdate->execute();
+    $stmtUpdate->close();
 
     $auditoria = null;
-    if ($antes) {
+    if ($ok && $antes) {
         $etapaNovaNome = null;
-        if ($projeto_etapa_id) {
-            $resEtapa = $conn->query("SELECT nome FROM os_etapas WHERE tenant_id = $tenant_id AND id = $projeto_etapa_id");
-            $etapaNovaNome = $resEtapa ? ($resEtapa->fetch_assoc()['nome'] ?? null) : null;
+        if ($temEtapa && $projeto_etapa_id) {
+            $stmtEtapa = $conn->prepare('SELECT nome FROM os_etapas WHERE tenant_id = ? AND id = ? LIMIT 1');
+            if ($stmtEtapa) {
+                $stmtEtapa->bind_param('ii', $tenant_id, $projeto_etapa_id);
+                $stmtEtapa->execute();
+                $etapaNovaNome = $stmtEtapa->get_result()->fetch_assoc()['nome'] ?? null;
+                $stmtEtapa->close();
+            }
         }
         $auditoria = [
             'etapa_anterior'      => $antes['etapa_nome'],
-            'etapa_nova'          => $projeto_etapa_id ? $etapaNovaNome : $antes['etapa_nome'],
+            'etapa_nova'          => $temEtapa ? ($projeto_etapa_id ? $etapaNovaNome : null) : $antes['etapa_nome'],
             'percentual_anterior' => (int)$antes['projeto_percentual'],
-            'percentual_novo'     => $projeto_percentual !== null ? $projeto_percentual : (int)$antes['projeto_percentual'],
+            'percentual_novo'     => $temPercentual ? ($projeto_percentual ?? 0) : (int)$antes['projeto_percentual'],
         ];
     }
 
@@ -1959,7 +2006,7 @@ switch ($acao) {
         $res = $conn->query("SELECT id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
         if (!$res || $res->num_rows === 0) retornar_json(false, 'O.S não encontrada');
 
-        $resultado = _os_salvar_campos_projeto($conn, $os_id, $dados);
+        $resultado = _os_salvar_campos_projeto($conn, $tenant_id, $os_id, $dados);
         if (!$resultado['ok']) {
             retornar_json(false, 'Erro ao salvar informações do projeto: ' . $conn->error);
         }
