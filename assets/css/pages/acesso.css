@@ -468,3 +468,10 @@
         max-height: 92vh;
     }
 }
+
+/* Visão LPR integrada ao controle de acesso */
+.page-acesso .acesso-lpr-card { border-top: 3px solid #2563eb; }
+.page-acesso .acesso-lpr-card h2 i { color:#2563eb; margin-right:.35rem; }
+.page-acesso .lpr-acesso-status { margin:.75rem 0; padding:.55rem .7rem; border-radius:8px; background:var(--color-background-secondary,#f8fafc); color:var(--color-text-secondary,#64748b); font-size:.78rem; }
+.page-acesso #tabelaAcessosLpr { min-width:780px; }
+.page-acesso #tabelaAcessosLpr th { font-size:.72rem; }

@@ -426,6 +426,10 @@
                         onclick="SA.showModalTab('plano')">
                     <i class="fas fa-tags"></i> Plano
                 </button>
+                <button class="sa-modal-tab" data-mtab="monitoramento"
+                        onclick="SA.showModalTab('monitoramento')">
+                    <i class="fas fa-video"></i> Monitoramento
+                </button>
             </div>
 
             <!-- Tab: Informações -->
@@ -460,6 +464,24 @@
                     Selecione o plano para este condomínio:
                 </p>
                 <div id="sa-planos-selecao" class="sa-planos-grid"></div>
+            </div>
+
+            <!-- Tab: Monitoramento -->
+            <div id="mtab-monitoramento" class="sa-modal-tab-content">
+                <div class="monitoring-modal-toolbar">
+                    <div>
+                        <h4><i class="fas fa-shield-alt"></i> Agentes autorizados</h4>
+                        <p>Habilite máquinas Windows para enviar eventos LPR deste tenant.</p>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="SA.carregarMonitoramento()">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                </div>
+                <div id="sa-monitoramento-alert" class="alert"></div>
+                <div id="sa-monitoramento-config" class="monitoring-config-grid"></div>
+                <div id="sa-monitoramento-agentes" class="sa-table-wrapper">
+                    <div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando agentes...</div>
+                </div>
             </div>
         </div>
 
@@ -527,5 +549,6 @@ function _salvarModal() {
     var tab = activeTab ? activeTab.getAttribute('data-mtab') : 'info';
     if (tab === 'modulos') SA.salvarModulos();
     else if (tab === 'plano') SA.salvarPlano();
+    else if (tab === 'monitoramento') SA.salvarConfiguracaoMonitoramento();
 }
 </script>

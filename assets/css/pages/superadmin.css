@@ -1392,3 +1392,28 @@ body > .sa-modal-overlay .btn-sm {
 
 body > .sa-modal-overlay .btn-danger { background: #fee2e2; color: #dc2626; }
 body > .sa-modal-overlay .btn-danger:hover { background: #fecaca; }
+
+/* Monitoramento — agentes Windows e política LPR */
+.page-superadmin .monitoring-modal-toolbar { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
+.page-superadmin .monitoring-modal-toolbar h4 { margin:0; font-size:.95rem; color:var(--color-text-primary); }
+.page-superadmin .monitoring-modal-toolbar p { margin:.35rem 0 0; font-size:.78rem; color:var(--color-text-secondary); }
+.page-superadmin .monitoring-config-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.65rem; margin-bottom:1rem; }
+.page-superadmin .monitoring-config-grid > div { display:flex; flex-direction:column; gap:.25rem; padding:.75rem; border:1px solid var(--border-color); border-radius:.65rem; background:var(--color-background-secondary); }
+.page-superadmin .monitoring-config-grid span { font-size:.72rem; color:var(--color-text-tertiary); }
+.page-superadmin .monitoring-config-grid strong { font-size:.85rem; }
+.page-superadmin .monitoring-config-grid input { width:4.2rem; padding:.25rem .4rem; border:1px solid var(--border-color); border-radius:.35rem; background:var(--color-background-primary); color:var(--color-text-primary); }
+.page-superadmin .monitoring-pairing-form { display:grid; grid-template-columns:1.3fr 1fr 1fr 1fr auto; align-items:center; gap:.5rem; padding:.9rem; margin-bottom:1rem; border:1px dashed var(--color-primary-300); border-radius:.7rem; background:rgba(59,130,246,.05); }
+.page-superadmin .monitoring-pairing-form strong, .page-superadmin .monitoring-pairing-form small { display:block; }
+.page-superadmin .monitoring-pairing-form small { margin-top:.25rem; color:var(--color-text-tertiary); font-size:.7rem; }
+.page-superadmin .monitoring-pairing-form input { min-width:0; padding:.55rem .65rem; border:1px solid var(--border-color); border-radius:.45rem; background:var(--color-background-primary); color:var(--color-text-primary); }
+.page-superadmin .monitoring-agents-table small { color:var(--color-text-tertiary); font-size:.72rem; }
+@media (max-width: 900px) {
+    .page-superadmin .monitoring-config-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .page-superadmin .monitoring-pairing-form { grid-template-columns:1fr 1fr; }
+    .page-superadmin .monitoring-pairing-form > div { grid-column:1/-1; }
+}
+@media (max-width: 560px) {
+    .page-superadmin .monitoring-modal-toolbar { flex-direction:column; }
+    .page-superadmin .monitoring-config-grid { grid-template-columns:1fr; }
+    .page-superadmin .monitoring-pairing-form { grid-template-columns:1fr; }
+}

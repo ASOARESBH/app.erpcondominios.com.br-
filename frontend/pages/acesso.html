@@ -11,6 +11,23 @@
         <i class="fas fa-wifi"></i> Status RFID: aguardando verificacao...
     </div>
 
+    <div class="page-card acesso-lpr-card">
+        <div class="table-header-actions">
+            <div>
+                <h2><i class="fas fa-camera"></i> Últimos acessos LPR</h2>
+                <p class="card-subtitle">Visualização dos dez últimos veículos capturados pelo agente local.</p>
+            </div>
+            <button class="btn-secondary-modern" type="button" id="btnAtualizarLprAcesso"><i class="fas fa-sync-alt"></i> Atualizar</button>
+        </div>
+        <div id="lprAcessoStatus" class="lpr-acesso-status"><i class="fas fa-circle-notch fa-spin"></i> Carregando eventos...</div>
+        <div class="table-container">
+            <table id="tabelaAcessosLpr">
+                <thead><tr><th>Data/hora</th><th>Placa</th><th>Câmera</th><th>Tipo de registro</th><th>Morador / veículo</th><th>Confiança</th><th>Status</th></tr></thead>
+                <tbody><tr><td colspan="7" class="empty-state">Carregando...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="page-card">
         <h2>Verificacao de Acesso</h2>
         <p class="card-subtitle">Digite a TAG RFID (ou identificador recebido no leitor).</p>

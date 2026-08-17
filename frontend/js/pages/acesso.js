@@ -22,6 +22,7 @@ export function init() {
 
     verificarStatusRFID();
     carregarUltimosAcessos();
+    carregarUltimosLpr();
     iniciarAutoRefresh();
     iniciarFocusAssistido();
     prepararAudioContext();
@@ -63,6 +64,8 @@ function setupActions() {
     if (btnAtualizar) {
         btnAtualizar.addEventListener('click', carregarUltimosAcessos);
     }
+    const btnAtualizarLpr = document.getElementById('btnAtualizarLprAcesso');
+    if (btnAtualizarLpr) btnAtualizarLpr.addEventListener('click', carregarUltimosLpr);
 
     const autoRefresh = document.getElementById('autoRefreshAcesso');
     if (autoRefresh) {
@@ -107,6 +110,7 @@ function iniciarAutoRefresh() {
 
     autoRefreshInterval = setInterval(() => {
         carregarUltimosAcessos();
+        carregarUltimosLpr();
     }, 5000);
 }
 
@@ -272,6 +276,42 @@ async function carregarUltimosAcessos() {
         renderMensagemTabela('Erro de conexao ao carregar acessos.');
     } finally {
         loading.style.display = 'none';
+    }
+}
+
+async function carregarUltimosLpr() {
+    const tbody = document.querySelector('#tabelaAcessosLpr tbody');
+    const status = document.getElementById('lprAcessoStatus');
+    if (!tbody) return;
+    try {
+        const response = await fetch('../api/api_monitoramento.php?action=acessos_recentes&limite=10', { credentials: 'include', cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || 'API LPR indisponível');
+        const eventos = data.dados?.eventos || [];
+        if (!eventos.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum veículo capturado no período.</td></tr>';
+        } else {
+            tbody.innerHTML = eventos.slice(0, 10).map(evento => {
+                const confidence = evento.ocr_confidence != null ? `${Math.round(Number(evento.ocr_confidence) * 100)}%` : '—';
+                const statusLabel = evento.match_status === 'veiculo_encontrado' ? 'Cadastrado' : 'Não cadastrado';
+                const statusClass = evento.match_status === 'veiculo_encontrado' ? 'status-ok' : 'status-warn';
+                return `<tr>
+                    <td>${escapeHtml(evento.capturado_em || '—')}</td>
+                    <td><span class="plate-badge">${escapeHtml(evento.placa_normalizada || evento.placa_raw || '—')}</span></td>
+                    <td>${escapeHtml(evento.camera_external_key || '—')}</td>
+                    <td><span class="tag-code">${escapeHtml(evento.tipo_evento || 'LPR')}</span></td>
+                    <td>${evento.veiculo_id ? `Veículo #${Number(evento.veiculo_id)} / morador #${Number(evento.morador_id || 0)}` : 'Sem correlação cadastral'}</td>
+                    <td>${confidence}</td>
+                    <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
+                </tr>`;
+            }).join('');
+        }
+        if (status) status.innerHTML = `<i class="fas fa-circle" style="color:#10b981"></i> ${eventos.length} evento(s) na janela atual · retenção ${Number(data.dados?.retencao_dias || 30)} dias`;
+        console.debug('[Acesso][LPR] Eventos carregados:', eventos.length);
+    } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Não foi possível carregar os eventos LPR.</td></tr>';
+        if (status) status.innerHTML = '<i class="fas fa-exclamation-triangle"></i> API LPR indisponível';
+        console.error('[Acesso][LPR] Erro:', error);
     }
 }
 

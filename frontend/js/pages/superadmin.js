@@ -43,6 +43,26 @@ async function req(params, method = 'GET', body = null) {
     }
 }
 
+async function monitoringReq(action, method = 'GET', body = null) {
+    const query = new URLSearchParams({ action });
+    const opts = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+    if (method === 'GET' && body) Object.entries(body).forEach(([key, value]) => query.set(key, String(value)));
+    if (body && method !== 'GET') opts.body = JSON.stringify(body);
+    try {
+        const response = await fetch('/api/api_monitoramento.php?' + query.toString(), opts);
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : { sucesso: false, mensagem: 'Resposta vazia.' };
+        return response.ok ? data : { sucesso: false, mensagem: data.mensagem || `Erro HTTP ${response.status}`, codigo: data.codigo };
+    } catch (error) {
+        console.error('[SuperAdmin][Monitoramento] Falha de comunicação:', error);
+        return { sucesso: false, mensagem: 'Não foi possível comunicar com o Monitoramento.', codigo: 'NETWORK_ERROR' };
+    }
+}
+
+function monitoringEsc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char]);
+}
+
 function statusBadge(s) {
     const m = { ativo: 'Ativo', inativo: 'Inativo', suspenso: 'Suspenso' };
     const cls = { ativo: 'badge-ativo', inativo: 'badge-inativo', suspenso: 'badge-suspenso' };
@@ -438,6 +458,7 @@ function _showModalTab(tab) {
 
     if (tab === 'modulos' && _modalTenantId) _carregarModulosModal();
     if (tab === 'plano' && _modalTenantData) _renderPlanoModal(_modalTenantData.tenant.plano);
+    if (tab === 'monitoramento' && _modalTenantId) _carregarMonitoramento();
 }
 
 function _renderModalInfo(t, usuarios) {
@@ -575,6 +596,96 @@ function _salvarPlano() {
     req({ action: 'salvar_plano' }, 'POST', { id: _modalTenantId, plano: _planoSelecionado }).then(res => {
         toast(res.sucesso ? res.mensagem : res.mensagem, res.sucesso ? 'success' : 'error');
         if (res.sucesso) _carregarCondominios();
+    });
+}
+
+// ── MONITORAMENTO / AGENTES ────────────────────────────────────────────────
+function _carregarMonitoramento() {
+    const container = document.getElementById('sa-monitoramento-agentes');
+    if (!container || !_modalTenantId) return;
+    container.innerHTML = '<div class="loading-inline"><i class="fas fa-spinner fa-spin"></i> Carregando agentes...</div>';
+    monitoringReq('listar_agentes', 'GET', { tenant_id: _modalTenantId }).then(res => {
+        if (!res.sucesso) {
+            container.innerHTML = `<p style="color:#dc2626">${monitoringEsc(res.mensagem)}</p>`;
+            return;
+        }
+        _renderMonitoramentoConfig(res.dados?.configuracao || {});
+        _renderAgentesMonitoramento(res.dados?.agentes || []);
+    });
+}
+
+function _renderMonitoramentoConfig(config) {
+    _set('sa-monitoramento-config', `
+        <div><span>Retenção</span><strong><input id="sa-monitoramento-retencao" type="number" min="1" max="3650" value="${Number(config.retencao_dias || 30)}"> dias</strong></div>
+        <div><span>Módulo</span><strong>${config.modulo_ativo ? 'Ativo' : 'Inativo'}</strong></div>
+        <div><span>Versão mínima</span><strong>${monitoringEsc(config.versao_minima_agente || '0.1.0')}</strong></div>
+        <button class="btn btn-primary btn-sm" onclick="SA.salvarConfiguracaoMonitoramento()"><i class="fas fa-save"></i> Salvar política</button>`);
+}
+
+function _renderAgentesMonitoramento(agentes) {
+    const container = document.getElementById('sa-monitoramento-agentes');
+    if (!container) return;
+    const header = `
+        <div class="monitoring-pairing-form">
+            <div><strong>Adicionar máquina Windows</strong><small>Gere o código no painel local e informe-o aqui.</small></div>
+            <input id="sa-monitoring-pairing-code" maxlength="9" placeholder="ABCD-EFGH" autocomplete="off">
+            <input id="sa-monitoring-agent-name" maxlength="120" placeholder="Nome da máquina / portaria">
+            <input id="sa-monitoring-agent-local" maxlength="160" placeholder="Local">
+            <button class="btn btn-primary btn-sm" onclick="SA.habilitarAgente()"><i class="fas fa-link"></i> Habilitar</button>
+        </div>`;
+    const table = agentes.length ? `
+        <table class="sa-table monitoring-agents-table">
+            <thead><tr><th>Máquina</th><th>Status</th><th>Motor</th><th>Heartbeat</th><th>Versão</th><th>Ações</th></tr></thead>
+            <tbody>${agentes.map(agent => `
+                <tr>
+                    <td><strong>${monitoringEsc(agent.nome || 'Sem nome')}</strong><br><small>${monitoringEsc(agent.local || '-')} · ID ${Number(agent.id)}</small></td>
+                    <td>${statusBadge(agent.status)}<br><small>${monitoringEsc(agent.agent_secret_last4 ? '••••' + agent.agent_secret_last4 : '')}</small></td>
+                    <td>${monitoringEsc(agent.lpr_engine || '-')}<br><small>${monitoringEsc(agent.onnx_backend || '-')}</small></td>
+                    <td>${monitoringEsc(agent.last_heartbeat_at || 'Nunca')}<br><small>${monitoringEsc(agent.last_error_code || '')}</small></td>
+                    <td>${monitoringEsc(agent.agent_version || '-')}<br><small>Contrato ${monitoringEsc(agent.api_contract_version || '-')}</small></td>
+                    <td>${agent.status === 'ativo' ? `<button class="btn btn-danger btn-sm" onclick="SA.revogarAgente(${Number(agent.id)})"><i class="fas fa-ban"></i> Revogar</button>` : '-'}</td>
+                </tr>`).join('')}</tbody>
+        </table>` : '<p style="color:var(--color-text-tertiary)">Nenhuma máquina habilitada neste tenant.</p>';
+    container.innerHTML = header + table;
+}
+
+function _showMonitoringAlert(message, type = 'success') {
+    const el = document.getElementById('sa-monitoramento-alert');
+    if (!el) return;
+    el.className = 'alert alert-' + type;
+    el.textContent = message;
+    el.style.display = 'block';
+}
+
+function _habilitarAgente() {
+    const pairingCode = (document.getElementById('sa-monitoring-pairing-code')?.value || '').trim().toUpperCase();
+    const nome = document.getElementById('sa-monitoring-agent-name')?.value.trim() || 'Agente Monitoring';
+    const local = document.getElementById('sa-monitoring-agent-local')?.value.trim() || '';
+    if (!/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(pairingCode)) {
+        _showMonitoringAlert('Informe o código no formato ABCD-EFGH.', 'error');
+        return;
+    }
+    monitoringReq('habilitar_agente', 'POST', { tenant_id: _modalTenantId, pairing_code: pairingCode, nome, local }).then(res => {
+        if (!res.sucesso) { _showMonitoringAlert(res.mensagem || 'Não foi possível habilitar.', 'error'); return; }
+        const secret = res.dados?.activation_secret || '';
+        _showMonitoringAlert('Máquina habilitada. Guarde esta credencial agora: ' + secret, 'success');
+        _carregarMonitoramento();
+    });
+}
+
+function _revogarAgente(agentId) {
+    if (!confirm('Revogar esta máquina? Ela perderá a comunicação com o ERP imediatamente.')) return;
+    monitoringReq('revogar_agente', 'POST', { tenant_id: _modalTenantId, agent_id: agentId }).then(res => {
+        _showMonitoringAlert(res.mensagem || 'Operação concluída.', res.sucesso ? 'success' : 'error');
+        if (res.sucesso) _carregarMonitoramento();
+    });
+}
+
+function _salvarConfiguracaoMonitoramento() {
+    const retention = Number(document.getElementById('sa-monitoramento-retencao')?.value || 30);
+    monitoringReq('salvar_configuracao', 'POST', { tenant_id: _modalTenantId, retencao_dias: retention, modulo_ativo: 1, versao_minima_agente: '0.1.0' }).then(res => {
+        _showMonitoringAlert(res.mensagem || 'Configuração concluída.', res.sucesso ? 'success' : 'error');
+        if (res.sucesso) _renderMonitoramentoConfig(res.dados || {});
     });
 }
 
@@ -873,4 +984,8 @@ const _api = {
     onSlugInput:          _onSlugInput,
     mascaraCnpj:          _mascaraCnpj,
     toggleMod:            _toggleMod,
+    carregarMonitoramento: _carregarMonitoramento,
+    habilitarAgente:       _habilitarAgente,
+    revogarAgente:         _revogarAgente,
+    salvarConfiguracaoMonitoramento: _salvarConfiguracaoMonitoramento,
 };
