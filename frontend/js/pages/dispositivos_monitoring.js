@@ -160,12 +160,21 @@ async function habilitarMonitoring() {
             },
         });
         const secret = data.dados?.activation_secret || '';
-        document.getElementById('monitoring-generated-secret').textContent = secret || 'Credencial não retornada';
+        const secretOutput = document.getElementById('monitoring-generated-secret');
+        const pairingField = document.getElementById('monitoring-pairing-code');
+        const agentIdField = document.getElementById('monitoring-agent-id');
+        const pendingSelect = document.getElementById('monitoring-pending-agent');
+
+        if (!secret) {
+            throw new Error('A máquina foi habilitada, mas a credencial única não foi retornada. Não tente habilitar novamente; contate o suporte para regenerar a credencial com segurança.');
+        }
+        if (secretOutput) secretOutput.textContent = secret;
         document.getElementById('monitoring-secret-overlay')?.classList.add('active');
         setMonitoringMessage('monitoring-pairing-message', 'Máquina habilitada. Guarde a credencial exibida.', false);
-        document.getElementById('monitoring-pairing-code').value = '';
-        document.getElementById('monitoring-agent-id').value = '';
-        document.getElementById('monitoring-pending-agent').value = '';
+        if (pairingField) pairingField.value = '';
+        if (agentIdField) agentIdField.value = '';
+        if (pendingSelect) pendingSelect.value = '';
+        monitoringLog('Máquina habilitada com sucesso', { agentId: data.dados?.agent_id || agentId });
         await carregarMonitoring();
     } catch (error) {
         monitoringLog('Falha ao habilitar máquina', { code: error.code || 'UNKNOWN', message: error.message });
