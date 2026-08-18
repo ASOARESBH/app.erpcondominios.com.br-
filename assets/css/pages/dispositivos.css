@@ -991,3 +991,16 @@
 @media (max-width: 720px) {
     .page-dispositivos .monitoring-actions-inline { justify-content: flex-start; }
 }
+
+/* Estado de edição para reativação de máquina Monitoring */
+.page-dispositivos .monitoring-edit-state {
+    margin: .8rem 0 0;
+    padding: .65rem .8rem;
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: .78rem;
+    font-weight: 700;
+    line-height: 1.45;
+}
