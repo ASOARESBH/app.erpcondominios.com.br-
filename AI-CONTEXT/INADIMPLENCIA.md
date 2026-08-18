@@ -20,7 +20,7 @@ A migration explícita é `sql/migration_inadimplencia_mysql57.sql`. A API tamb�
 
 ## Parser BRCondos
 
-A API `api/api_inadimplencia.php` chama `pdftotext -layout`, processando blocos iniciados por `GLEBA, Nº <número>`. O parser preserva status de carteira, proprietário, CPF, identificador após `#`, tipo, mês de referência, vencimento e os cinco valores financeiros do relatório.
+A API `api/api_inadimplencia.php` usa o helper `pdf_text_extractor_helper.php`, com a biblioteca PHP integrada para extrair o texto sem depender de `pdftotext` ou outro binário do HostGator. O parser processa blocos iniciados por `GLEBA, Nº <número>` e preserva status de carteira, proprietário, CPF, identificador após `#`, tipo, mês de referência, vencimento e os cinco valores financeiros do relatório.
 
 A chave principal de comparação é `BRCONDOS|identificador|tipo|vencimento`. Quando não existe identificador, a chave alternativa usa Gleba, descrição normalizada, competência, vencimento e valor. Isso impede que IDs de cobrança repetidos para tipos ou vencimentos diferentes sejam confundidos.
 
@@ -34,7 +34,7 @@ A seção **Tendência baseada em histórico** não executa previsão estatísti
 
 ## Segurança
 
-O tenant é sempre obtido por `exigirTenantId()`. Nenhuma ação recebe `tenant_id` por query string, corpo HTTP ou formulário. A importação aceita exclusivamente PDF de até 20 MB, valida MIME, escapa o caminho em `pdftotext` com `escapeshellarg` e grava o original via `tenant_file_gravar_upload()`.
+O tenant é sempre obtido por `exigirTenantId()`. Nenhuma ação recebe `tenant_id` por query string, corpo HTTP ou formulário. A importação aceita exclusivamente PDF de até 20 MB, valida MIME, extrai texto com biblioteca PHP integrada e grava o original via `tenant_file_gravar_upload()`.
 
 A ordenação do ranking é uma lista branca fixa no backend. A tela escapa conteúdos textuais antes de renderizar tabelas e não envia dados de credencial aos logs financeiros.
 
@@ -55,4 +55,12 @@ A saída PDF usa o fluxo padrão do ERP: o botão **Gerar PDF** abre a visualiza
 ## Validação de referência
 
 O PDF de referência fornecido em 13/08/2026 foi processado com sucesso pelo parser. A validação extraiu 41 unidades, 1.153 lançamentos e conciliou os totais calculados com o Resumo do relatório: R$ 405.265,52 lançado e R$ 574.363,84 projetado. Casos de múltiplos lançamentos em uma Gleba, proprietário `E OUTROS` e descrição extra longa foram preservados pelo parser.
+
+## Comparação persistida e prioridades do gestor
+
+A tabela adicional `inadimplencia_comparacoes` mantém um único resumo para cada `tenant_id` e `importacao_atual_id`. Ela referencia o snapshot anterior do mesmo condomínio e persiste o status (`PRIMEIRO_SNAPSHOT`, `SEM_MUDANCA` ou `ATUALIZADO`), variação de carteira, contagem de novas Glebas, evoluções, correções, quitações, risco alto e prioridades gerenciais.
+
+Na conclusão de uma importação, o resumo é gravado na mesma transação dos lançamentos. Para snapshots históricos já existentes, o dashboard gera esse resumo de forma idempotente na primeira consulta. A tela inicia consultando apenas o histórico: ela recupera o último snapshot `CONCLUIDO` quando há dados persistidos e mantém somente o formulário de PDF para tenants que ainda não têm importações.
+
+O painel **Prioridades do gestor** usa exclusivamente dados armazenados nos snapshots. Ele destaca novas inadimplências, aumentos de dívida, regularizações e risco alto por duas evoluções consecutivas; trata relatórios iguais como **Sem alteração relevante** e não executa previsão automática de cobrança.
 

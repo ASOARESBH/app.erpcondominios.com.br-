@@ -114,7 +114,29 @@ function _garantirTabelas() {
         KEY `idx_inad_morador` (`tenant_id`,`morador_id`),
         KEY `idx_inad_unidade` (`tenant_id`,`unidade_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-    if (!$conn->query($sqlImportacoes) || !$conn->query($sqlLancamentos)) {
+    $sqlComparacoes = "CREATE TABLE IF NOT EXISTS `inadimplencia_comparacoes` (
+        `id` bigint(20) NOT NULL AUTO_INCREMENT,
+        `tenant_id` int(11) NOT NULL,
+        `importacao_atual_id` int(11) NOT NULL,
+        `importacao_anterior_id` int(11) DEFAULT NULL,
+        `status_comparacao` enum('PRIMEIRO_SNAPSHOT','SEM_MUDANCA','ATUALIZADO') NOT NULL DEFAULT 'PRIMEIRO_SNAPSHOT',
+        `delta_total_projetado` decimal(14,2) NOT NULL DEFAULT 0.00,
+        `variacao_pct` decimal(9,4) DEFAULT NULL,
+        `total_novas_glebas` int(11) NOT NULL DEFAULT 0,
+        `total_evoluindo` int(11) NOT NULL DEFAULT 0,
+        `total_corrigidas` int(11) NOT NULL DEFAULT 0,
+        `total_quitadas` int(11) NOT NULL DEFAULT 0,
+        `total_risco_alto` int(11) NOT NULL DEFAULT 0,
+        `resumo_json` longtext DEFAULT NULL,
+        `criado_em` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        `atualizado_em` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `uq_inad_comparacao_atual` (`tenant_id`,`importacao_atual_id`),
+        KEY `idx_inad_comparacao_anterior` (`tenant_id`,`importacao_anterior_id`),
+        KEY `idx_inad_comparacao_status` (`tenant_id`,`status_comparacao`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    if (!$conn->query($sqlImportacoes) || !$conn->query($sqlLancamentos) || !$conn->query($sqlComparacoes)) {
         throw new RuntimeException('Falha ao preparar tabelas de inadimplência: ' . $conn->error);
     }
 }
@@ -163,6 +185,7 @@ function _importar() {
         retornar_json(false, 'Nenhum lançamento foi identificado. Confirme se o PDF é o Relatório de Inadimplência Detalhado BRCondos.');
     }
 
+    $comparacaoPersistida = null;
     $conn->begin_transaction();
     try {
         $sem_vinculo = 0;
@@ -197,6 +220,9 @@ function _importar() {
         $stmt->bind_param('ssssddiddddisiiii', $meta['associacao_nome'], $meta['data_base'], $meta['data_geracao_relatorio'], $meta['correcao'], $meta['juros_pct'], $meta['multa_pct'], $meta['quantidade_unidades'], $tot_lancado, $tot_projetado, $rel_lancado, $rel_projetado, $reconciliam, $alerta, $parse['totais_calculados']['linhas'], $sem_vinculo, $importacao_id, $tenant_id);
         if (!$stmt->execute()) throw new RuntimeException($stmt->error);
         $stmt->close();
+
+        // Persiste o resultado da comparação com o snapshot imediatamente anterior do mesmo tenant.
+        $comparacaoPersistida = _registrarComparacaoSnapshot($importacao_id);
         $conn->commit();
     } catch (Throwable $e) {
         $conn->rollback();
@@ -215,6 +241,7 @@ function _importar() {
         'total_sem_vinculo' => $sem_vinculo,
         'totais_reconciliam' => (bool)$reconciliam,
         'alerta_reconciliacao' => $alerta,
+        'comparacao' => $comparacaoPersistida,
         'avisos' => $parse['avisos']
     ]);
 }
@@ -315,17 +342,19 @@ function _dashboard() {
     $comparacao = _compararDados((int)$atual['id'], $anterior ? (int)$anterior['id'] : 0);
     $ranking = _obterRanking((int)$atual['id'], ['limite' => 50]);
     $historico = [];
-    $stmt = $conn->prepare("SELECT id,data_base,total_projetado,total_lancado,quantidade_unidades,totais_reconciliam FROM inadimplencia_importacoes WHERE tenant_id=? AND status='CONCLUIDO' ORDER BY data_base ASC,id ASC");
+    $stmt = $conn->prepare("SELECT id,nome_arquivo,data_base,total_projetado,total_lancado,quantidade_unidades,totais_reconciliam,status,criado_em FROM inadimplencia_importacoes WHERE tenant_id=? AND status='CONCLUIDO' ORDER BY data_base ASC,id ASC");
     $stmt->bind_param('i', $tenant_id); $stmt->execute(); $res = $stmt->get_result(); while ($r = $res->fetch_assoc()) $historico[] = $r; $stmt->close();
     $carteiras = _distribuicaoCarteira((int)$atual['id']);
     $judicial = 0; foreach ($ranking as $r) if ((int)$r['permite_receber'] === 0 || stripos((string)$r['carteira_status'], 'JUDICIAL') !== false) $judicial++;
     $variacao = $anterior ? ((float)$atual['total_projetado'] - (float)$anterior['total_projetado']) : 0.0;
     $variacao_pct = $anterior && (float)$anterior['total_projetado'] > 0 ? ($variacao / (float)$anterior['total_projetado']) * 100 : null;
     $heuristica = _calcularHeuristica((int)$atual['id'], $anterior ? (int)$anterior['id'] : 0);
+    // Backfill idempotente: snapshots históricos passam a ter comparação persistida na primeira consulta.
+    $visaoGerencial = _obterComparacaoPersistida((int)$atual['id']) ?: _registrarComparacaoSnapshot((int)$atual['id']);
     retornar_json(true, 'Dashboard carregado.', [
         'tem_dados' => true, 'importacao_atual' => $atual, 'importacao_anterior' => $anterior,
         'kpis' => ['total_projetado' => (float)$atual['total_projetado'], 'unidades' => count($ranking), 'judiciais' => $judicial, 'variacao' => $variacao, 'variacao_pct' => $variacao_pct, 'sem_vinculo' => (int)$atual['total_sem_vinculo']],
-        'carteiras' => $carteiras, 'historico' => $historico, 'mudancas' => $comparacao['agregado'], 'ranking' => $ranking, 'heuristica' => $heuristica
+        'carteiras' => $carteiras, 'historico' => $historico, 'mudancas' => $comparacao['agregado'], 'ranking' => $ranking, 'heuristica' => $heuristica, 'visao_gerencial' => $visaoGerencial
     ]);
 }
 
@@ -391,6 +420,80 @@ function _obterImportacaoAnterior($id) {
     $stmt=$conn->prepare("SELECT p.* FROM inadimplencia_importacoes a JOIN inadimplencia_importacoes p ON p.tenant_id=a.tenant_id AND p.status='CONCLUIDO' AND (p.data_base<a.data_base OR (p.data_base=a.data_base AND p.id<a.id)) WHERE a.id=? AND a.tenant_id=? ORDER BY p.data_base DESC,p.id DESC LIMIT 1");
     $stmt->bind_param('ii',$id,$tenant_id); $stmt->execute(); $r=$stmt->get_result()->fetch_assoc(); $stmt->close(); return $r ?: null;
 }
+function _registrarComparacaoSnapshot($importacao_id) {
+    global $conn, $tenant_id;
+    $atual = _obterImportacao((int)$importacao_id);
+    if (!$atual) throw new RuntimeException('Snapshot concluído não encontrado para comparação.');
+
+    $anterior = _obterImportacaoAnterior((int)$atual['id']);
+    $dados = _compararDados((int)$atual['id'], $anterior ? (int)$anterior['id'] : 0);
+    $heuristica = _calcularHeuristica((int)$atual['id'], $anterior ? (int)$anterior['id'] : 0);
+    $visao = _montarVisaoGerencial($atual, $anterior, $dados, $heuristica);
+
+    $resumo = json_encode($visao, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($resumo === false) throw new RuntimeException('Não foi possível serializar a comparação de inadimplência.');
+
+    $anteriorId = $anterior ? (int)$anterior['id'] : null;
+    $stmt = $conn->prepare("INSERT INTO inadimplencia_comparacoes (tenant_id,importacao_atual_id,importacao_anterior_id,status_comparacao,delta_total_projetado,variacao_pct,total_novas_glebas,total_evoluindo,total_corrigidas,total_quitadas,total_risco_alto,resumo_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE importacao_anterior_id=VALUES(importacao_anterior_id),status_comparacao=VALUES(status_comparacao),delta_total_projetado=VALUES(delta_total_projetado),variacao_pct=VALUES(variacao_pct),total_novas_glebas=VALUES(total_novas_glebas),total_evoluindo=VALUES(total_evoluindo),total_corrigidas=VALUES(total_corrigidas),total_quitadas=VALUES(total_quitadas),total_risco_alto=VALUES(total_risco_alto),resumo_json=VALUES(resumo_json)");
+    if (!$stmt) throw new RuntimeException($conn->error);
+    $stmt->bind_param('iiisddiiiiis', $tenant_id, $importacao_id, $anteriorId, $visao['status'], $visao['delta_total_projetado'], $visao['variacao_pct'], $visao['contagens']['novas'], $visao['contagens']['evoluindo'], $visao['contagens']['corrigidas'], $visao['contagens']['quitadas'], $visao['contagens']['risco_alto'], $resumo);
+    if (!$stmt->execute()) throw new RuntimeException('Falha ao gravar comparação: ' . $stmt->error);
+    $stmt->close();
+    log_fin('inadimplencia', 'INFO', 'comparacao_persistida', 'Comparação de snapshots persistida.', json_encode(['status' => $visao['status'], 'anterior_id' => $anteriorId, 'contagens' => $visao['contagens']]), $importacao_id);
+
+    return $visao;
+}
+
+function _obterComparacaoPersistida($importacao_id) {
+    global $conn, $tenant_id;
+    $stmt = $conn->prepare('SELECT * FROM inadimplencia_comparacoes WHERE tenant_id=? AND importacao_atual_id=? LIMIT 1');
+    $stmt->bind_param('ii', $tenant_id, $importacao_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) return null;
+    $resumo = json_decode((string)$row['resumo_json'], true);
+    return is_array($resumo) ? $resumo : null;
+}
+
+function _montarVisaoGerencial($atual, $anterior, $comparacao, $heuristica) {
+    $grupos = $comparacao['agregado'] ?? [];
+    $novas = $grupos['NOVO'] ?? [];
+    $evoluindo = $grupos['EVOLUINDO'] ?? [];
+    $corrigidas = $grupos['CORRIGIDO'] ?? [];
+    $quitadas = $grupos['QUITADO'] ?? [];
+    $delta = $anterior ? (float)$atual['total_projetado'] - (float)$anterior['total_projetado'] : 0.0;
+    $variacaoPct = $anterior && (float)$anterior['total_projetado'] > 0 ? ($delta / (float)$anterior['total_projetado']) * 100 : null;
+    $semMudanca = $anterior && abs($delta) <= 1 && !count($novas) && !count($evoluindo) && !count($corrigidas) && !count($quitadas);
+    $status = !$anterior ? 'PRIMEIRO_SNAPSHOT' : ($semMudanca ? 'SEM_MUDANCA' : 'ATUALIZADO');
+
+    $prioridades = [];
+    foreach (($heuristica['risco_alto'] ?? []) as $item) {
+        $prioridades['risco_' . $item['gleba_numero']] = ['gleba_numero' => $item['gleba_numero'], 'tipo' => 'RISCO_ALTO', 'titulo' => 'Aumento em duas importações consecutivas', 'delta' => (float)$item['delta'], 'total_atual' => (float)$item['atual']];
+    }
+    foreach ($evoluindo as $item) {
+        $chave = 'evol_' . $item['gleba_numero'];
+        if (!isset($prioridades[$chave]) && !isset($prioridades['risco_' . $item['gleba_numero']])) $prioridades[$chave] = ['gleba_numero' => $item['gleba_numero'], 'tipo' => 'EVOLUINDO', 'titulo' => 'Dívida aumentou no período', 'delta' => (float)$item['delta'], 'total_atual' => (float)$item['atual']];
+    }
+    foreach ($novas as $item) {
+        $chave = 'novo_' . $item['gleba_numero'];
+        if (!isset($prioridades[$chave]) && !isset($prioridades['risco_' . $item['gleba_numero']])) $prioridades[$chave] = ['gleba_numero' => $item['gleba_numero'], 'tipo' => 'NOVO', 'titulo' => 'Nova inadimplência', 'delta' => (float)$item['delta'], 'total_atual' => (float)$item['atual']];
+    }
+    $prioridades = array_values($prioridades);
+    usort($prioridades, function ($a, $b) { return abs((float)$b['delta']) <=> abs((float)$a['delta']); });
+
+    return [
+        'status' => $status,
+        'importacao_atual_id' => (int)$atual['id'],
+        'importacao_anterior_id' => $anterior ? (int)$anterior['id'] : null,
+        'delta_total_projetado' => $delta,
+        'variacao_pct' => $variacaoPct,
+        'contagens' => ['novas' => count($novas), 'evoluindo' => count($evoluindo), 'corrigidas' => count($corrigidas), 'quitadas' => count($quitadas), 'risco_alto' => count($heuristica['risco_alto'] ?? [])],
+        'prioridades' => array_slice($prioridades, 0, 8),
+        'mensagem' => !$anterior ? 'Este é o primeiro snapshot. Importe o próximo relatório para obter a comparação automática.' : ($semMudanca ? 'Não foram identificadas alterações financeiras relevantes em relação ao snapshot anterior.' : 'Comparação concluída com o snapshot anterior deste condomínio.')
+    ];
+}
+
 function _compararDados($atual_id, $anterior_id) {
     global $conn, $tenant_id;
     $mapaAtual = _mapaLancamentos((int)$atual_id); $mapaAnterior = $anterior_id ? _mapaLancamentos((int)$anterior_id) : [];
