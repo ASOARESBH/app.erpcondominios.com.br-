@@ -100,19 +100,19 @@ if ($metodo === 'GET') {
     
     switch ($action) {
         case 'listar_veiculos':
-            listarVeiculos($conn);
+            listarVeiculos($conn, $tenant_id);
             break;
             
         case 'listar_abastecimentos':
-            listarAbastecimentos($conn);
+            listarAbastecimentos($conn, $tenant_id);
             break;
             
         case 'listar_recargas':
-            listarRecargas($conn);
+            listarRecargas($conn, $tenant_id);
             break;
             
         case 'listar_usuarios':
-            listarUsuarios($conn);
+            listarUsuarios($conn, $tenant_id);
             break;
             
         case 'obter_saldo':
@@ -142,15 +142,15 @@ if ($metodo === 'POST') {
     
     switch ($action) {
         case 'cadastrar_veiculo':
-            cadastrarVeiculo($conn, $dados);
+            cadastrarVeiculo($conn, $dados, $tenant_id);
             break;
             
         case 'lancar_abastecimento':
-            lancarAbastecimento($conn, $dados);
+            lancarAbastecimento($conn, $dados, $tenant_id);
             break;
             
         case 'registrar_recarga':
-            registrarRecarga($conn, $dados);
+            registrarRecarga($conn, $dados, $tenant_id);
             break;
 
         case 'recalcular_saldo':
@@ -169,36 +169,32 @@ if ($metodo === 'POST') {
 // FUNÇÕES DE VEÍCULOS
 // ============================================
 
-function listarVeiculos($conn) {
+function listarVeiculos($conn, $tenant_id) {
     try {
-        $sql = "SELECT * FROM abastecimento_veiculos WHERE tenant_id = $tenant_id ORDER BY data_cadastro DESC";
-        $result = $conn->query($sql);
-        
+        $stmt = $conn->prepare('SELECT id, placa, modelo, ano, cor, km_inicial, data_cadastro FROM abastecimento_veiculos WHERE tenant_id = ? ORDER BY data_cadastro DESC, id DESC');
+        if (!$stmt) throw new RuntimeException($conn->error);
+        $stmt->bind_param('i', $tenant_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
         $veiculos = [];
-        while ($row = $result->fetch_assoc()) {
-            $veiculos[] = $row;
-        }
-        
-        echo json_encode([
-            'sucesso' => true,
-            'dados' => $veiculos
-        ]);
-    } catch (Exception $e) {
-        echo json_encode([
-            'sucesso' => false,
-            'mensagem' => 'Erro ao listar veículos: ' . $e->getMessage()
-        ]);
+        while ($row = $result->fetch_assoc()) $veiculos[] = $row;
+        $stmt->close();
+        error_log('[ABASTECIMENTO] veiculos_carregados tenant_id=' . $tenant_id . ' total=' . count($veiculos));
+        echo json_encode(['sucesso' => true, 'dados' => $veiculos], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        error_log('[ABASTECIMENTO] erro_listar_veiculos tenant_id=' . (int)$tenant_id . ' erro=' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['sucesso' => false, 'mensagem' => 'Erro ao listar veículos do condomínio.'], JSON_UNESCAPED_UNICODE);
     }
 }
 
-function cadastrarVeiculo($conn, $dados) {
+function cadastrarVeiculo($conn, $dados, $tenant_id) {
     try {
-        // Validar placa
-        $placa = strtoupper(trim($dados['placa']));
-        
-        // Verificar se placa já existe
-        $stmt = $conn->prepare("SELECT id FROM abastecimento_veiculos WHERE tenant_id = $tenant_id AND placa = ?");
-        $stmt->bind_param("s", $placa);
+        $placa = strtoupper(trim((string)($dados['placa'] ?? '')));
+        if ($placa === '') throw new RuntimeException('Placa obrigatória.');
+        $stmt = $conn->prepare('SELECT id FROM abastecimento_veiculos WHERE tenant_id = ? AND placa = ? LIMIT 1');
+        if (!$stmt) throw new RuntimeException($conn->error);
+        $stmt->bind_param('is', $tenant_id, $placa);
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -212,19 +208,16 @@ function cadastrarVeiculo($conn, $dados) {
         
         // Inserir veículo
         $stmt = $conn->prepare("
-            INSERT INTO abastecimento_veiculos 
-            (placa, modelo, ano, cor, km_inicial, data_cadastro) 
-            VALUES (?, ?, ?, ?, ?, NOW())
+            INSERT INTO abastecimento_veiculos
+            (tenant_id, placa, modelo, ano, cor, km_inicial, data_cadastro)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
         ");
-        
-        $stmt->bind_param(
-            "ssisi",
-            $placa,
-            $dados['modelo'],
-            $dados['ano'],
-            $dados['cor'],
-            $dados['km_inicial']
-        );
+        if (!$stmt) throw new RuntimeException($conn->error);
+        $modelo = trim((string)($dados['modelo'] ?? ''));
+        $ano = (int)($dados['ano'] ?? 0);
+        $cor = trim((string)($dados['cor'] ?? ''));
+        $kmInicial = (int)($dados['km_inicial'] ?? 0);
+        $stmt->bind_param('issisi', $tenant_id, $placa, $modelo, $ano, $cor, $kmInicial);
         
         if ($stmt->execute()) {
             echo json_encode([
@@ -247,31 +240,25 @@ function cadastrarVeiculo($conn, $dados) {
 // FUNÇÕES DE ABASTECIMENTO
 // ============================================
 
-function listarAbastecimentos($conn) {
+function listarAbastecimentos($conn, $tenant_id) {
     try {
-        $sql = "
-            SELECT 
-                a.*,
-                v.placa as veiculo_placa,
-                v.modelo as veiculo_modelo,
-                u.nome as operador_nome
-            FROM abastecimento_lancamentos a
-            INNER JOIN abastecimento_veiculos v ON a.veiculo_id = v.id
-            INNER JOIN usuarios u ON a.operador_id = u.id
-            ORDER BY a.data_abastecimento DESC
-        ";
-        
-        $result = $conn->query($sql);
+        $sql = 'SELECT a.*, v.placa AS veiculo_placa, v.modelo AS veiculo_modelo, u.nome AS operador_nome FROM abastecimento_lancamentos a INNER JOIN abastecimento_veiculos v ON a.veiculo_id = v.id AND v.tenant_id = a.tenant_id INNER JOIN usuarios u ON a.operador_id = u.id AND u.tenant_id = a.tenant_id WHERE a.tenant_id = ? ORDER BY a.data_abastecimento DESC, a.id DESC';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) throw new RuntimeException($conn->error);
+        $stmt->bind_param('i', $tenant_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
         
         $abastecimentos = [];
         while ($row = $result->fetch_assoc()) {
             $abastecimentos[] = $row;
         }
         
+        $stmt->close();
         echo json_encode([
             'sucesso' => true,
             'dados' => $abastecimentos
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
     } catch (Exception $e) {
         echo json_encode([
             'sucesso' => false,
@@ -280,16 +267,33 @@ function listarAbastecimentos($conn) {
     }
 }
 
-function lancarAbastecimento($conn, $dados) {
+function lancarAbastecimento($conn, $dados, $tenant_id) {
     // ═══ PROTEÇÃO BACKEND: chave de idempotência ═══
     // Se a mesma requisição chegar duas vezes (duplo clique, retry),
     // a função encerra com sucesso sem gravar novamente no banco.
     verificarIdempotencia('lancar_abastecimento');
 
     try {
+        // Validar que veículo e operador pertencem ao tenant autenticado.
+        $veiculoId = (int)($dados['veiculo_id'] ?? 0);
+        $operadorId = (int)($dados['operador_id'] ?? 0);
+        $validarVeiculo = $conn->prepare('SELECT id FROM abastecimento_veiculos WHERE id=? AND tenant_id=? LIMIT 1');
+        if (!$validarVeiculo) throw new RuntimeException($conn->error);
+        $validarVeiculo->bind_param('ii', $veiculoId, $tenant_id);
+        $validarVeiculo->execute();
+        $veiculoValido = $validarVeiculo->get_result()->num_rows === 1;
+        $validarVeiculo->close();
+        $validarOperador = $conn->prepare('SELECT id FROM usuarios WHERE id=? AND tenant_id=? AND ativo=1 LIMIT 1');
+        if (!$validarOperador) throw new RuntimeException($conn->error);
+        $validarOperador->bind_param('ii', $operadorId, $tenant_id);
+        $validarOperador->execute();
+        $operadorValido = $validarOperador->get_result()->num_rows === 1;
+        $validarOperador->close();
+        if (!$veiculoValido || !$operadorValido) throw new RuntimeException('Veículo ou operador não pertence ao condomínio ativo.');
+
         // Obter saldo atual
         $saldo = obterSaldoAtual($conn);
-        $valor = floatval($dados['valor']);
+        $valor = floatval($dados['valor'] ?? 0);
         
         // Calcular novo saldo
         $novoSaldo = $saldo - $valor;
@@ -299,23 +303,17 @@ function lancarAbastecimento($conn, $dados) {
         
         // Inserir abastecimento
         $stmt = $conn->prepare("
-            INSERT INTO abastecimento_lancamentos 
-            (veiculo_id, data_abastecimento, km_abastecimento, litros, valor, 
-             tipo_combustivel, operador_id, usuario_logado, data_registro) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            INSERT INTO abastecimento_lancamentos
+            (tenant_id, veiculo_id, data_abastecimento, km_abastecimento, litros, valor,
+             tipo_combustivel, operador_id, usuario_logado, data_registro)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
-        
-        $stmt->bind_param(
-            "isiddsss",
-            $dados['veiculo_id'],
-            $dados['data_abastecimento'],
-            $dados['km_abastecimento'],
-            $dados['litros'],
-            $valor,
-            $dados['tipo_combustivel'],
-            $dados['operador_id'],
-            $usuarioLogado
-        );
+        if (!$stmt) throw new RuntimeException($conn->error);
+        $dataAbastecimento = (string)($dados['data_abastecimento'] ?? '');
+        $kmAbastecimento = (int)($dados['km_abastecimento'] ?? 0);
+        $litros = (float)($dados['litros'] ?? 0);
+        $tipoCombustivel = (string)($dados['tipo_combustivel'] ?? '');
+        $stmt->bind_param('iisiddsis', $tenant_id, $veiculoId, $dataAbastecimento, $kmAbastecimento, $litros, $valor, $tipoCombustivel, $operadorId, $usuarioLogado);
         
         if ($stmt->execute()) {
             // Atualizar saldo
@@ -563,25 +561,22 @@ function recalcularSaldo($conn) {
 // FUNÇÕES AUXILIARES
 // ============================================
 
-function listarUsuarios($conn) {
+function listarUsuarios($conn, $tenant_id) {
     try {
-        $sql = "SELECT id, nome, email FROM usuarios WHERE tenant_id = $tenant_id AND ativo = 1 ORDER BY nome";
-        $result = $conn->query($sql);
-        
+        $stmt = $conn->prepare('SELECT id, nome, email FROM usuarios WHERE tenant_id = ? AND ativo = 1 ORDER BY nome, id');
+        if (!$stmt) throw new RuntimeException($conn->error);
+        $stmt->bind_param('i', $tenant_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
         $usuarios = [];
-        while ($row = $result->fetch_assoc()) {
-            $usuarios[] = $row;
-        }
-        
-        echo json_encode([
-            'sucesso' => true,
-            'dados' => $usuarios
-        ]);
-    } catch (Exception $e) {
-        echo json_encode([
-            'sucesso' => false,
-            'mensagem' => 'Erro ao listar usuários: ' . $e->getMessage()
-        ]);
+        while ($row = $result->fetch_assoc()) $usuarios[] = $row;
+        $stmt->close();
+        error_log('[ABASTECIMENTO] operadores_carregados tenant_id=' . $tenant_id . ' total=' . count($usuarios));
+        echo json_encode(['sucesso' => true, 'dados' => $usuarios], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        error_log('[ABASTECIMENTO] erro_listar_usuarios tenant_id=' . (int)$tenant_id . ' erro=' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['sucesso' => false, 'mensagem' => 'Erro ao listar operadores do condomínio.'], JSON_UNESCAPED_UNICODE);
     }
 }
 

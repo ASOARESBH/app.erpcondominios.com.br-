@@ -16,7 +16,9 @@ export function init() {
     _vincularEventos();
     _mostrarVazio(true);
     _limparFlash();
-    log('Módulo inicializado no estado de importação. Nenhuma consulta ao dashboard será feita antes do upload.');
+    // Sem snapshot, a tela permanece apenas no formulário. O dashboard só é aberto após confirmar histórico concluído.
+    void _restaurarUltimoSnapshot();
+    log('Módulo inicializado: verificando silenciosamente o histórico persistido do tenant.');
 }
 
 export function destroy() {
@@ -68,8 +70,9 @@ function _vincularEventos() {
 async function _api(acao, options = {}) {
     log('API solicitada:', acao, options.method || 'GET', options.params || {});
     const url = new URL(API, window.location.href);
+    // A API roteia pela ação. Mantê-la na URL evita perda do campo em uploads multipart.
+    url.searchParams.set('acao', acao);
     if (!options.method || options.method === 'GET') {
-        url.searchParams.set('acao', acao);
         Object.entries(options.params || {}).forEach(([key, value]) => {
             if (value !== '' && value !== null && value !== undefined) url.searchParams.set(key, value);
         });
@@ -88,7 +91,25 @@ async function _api(acao, options = {}) {
     return data.dados;
 }
 
-async function _carregarDashboard(id = 0) {
+async function _restaurarUltimoSnapshot() {
+    try {
+        const historico = await _api('listar_importacoes', { params: { pagina: 1, por_pagina: 1 } });
+        const ultimo = (historico.itens || []).find(item => item.status === 'CONCLUIDO');
+        log('Histórico de snapshots verificado:', { total: historico.total || 0, ultimo_id: ultimo?.id || null });
+        if (ultimo?.id) {
+            await _carregarDashboard(Number(ultimo.id), true);
+        } else {
+            _mostrarVazio(true);
+        }
+    } catch (erro) {
+        if (erro.name !== 'AbortError') {
+            _mostrarVazio(true);
+            log('Histórico indisponível na inicialização:', erro.message);
+        }
+    }
+}
+
+async function _carregarDashboard(id = 0, silencioso = false) {
     _setLoading(true);
     try {
         _dashboard = await _api('dashboard', { params: id ? { importacao_id: id } : {} });
@@ -103,7 +124,14 @@ async function _carregarDashboard(id = 0) {
         _renderDashboard(_dashboard);
         await _carregarRanking();
     } catch (erro) {
-        if (erro.name !== 'AbortError') _flash(erro.message, 'error');
+        if (erro.name !== 'AbortError') {
+            if (silencioso) {
+                _mostrarVazio(true);
+                log('Nenhum snapshot recuperável na inicialização:', erro.message);
+            } else {
+                _flash(erro.message, 'error');
+            }
+        }
     } finally { _setLoading(false); }
 }
 
@@ -120,7 +148,9 @@ async function _importar(event) {
         input.value = ''; document.getElementById('inad-arquivo-nome').textContent = 'Nenhum arquivo selecionado';
         const feedback = document.getElementById('inad-import-feedback');
         feedback.hidden = false;
-        feedback.innerHTML = `<strong>Importação concluída.</strong> Data base: ${_esc(_fmtData(dados.data_base))} · ${_fmtNumero(dados.quantidade_unidades)} unidades · ${_fmtMoeda(dados.total_projetado)} projetados · ${_fmtNumero(dados.total_lancamentos)} lançamentos.${dados.totais_reconciliam ? ' Totais conciliados.' : ' Atenção: os totais do Resumo divergiram e foram sinalizados.'}`;
+        const comparacao = dados.comparacao || {};
+        const textoComparacao = comparacao.status === 'ATUALIZADO' ? ' Comparação com o snapshot anterior gravada.' : (comparacao.status === 'SEM_MUDANCA' ? ' Nenhuma alteração financeira relevante foi identificada em relação ao snapshot anterior.' : ' Este é o primeiro snapshot para comparação histórica.');
+        feedback.innerHTML = `<strong>Importação concluída.</strong> Data base: ${_esc(_fmtData(dados.data_base))} · ${_fmtNumero(dados.quantidade_unidades)} unidades · ${_fmtMoeda(dados.total_projetado)} projetados · ${_fmtNumero(dados.total_lancamentos)} lançamentos.${dados.totais_reconciliam ? ' Totais conciliados.' : ' Atenção: os totais do Resumo divergiram e foram sinalizados.'}${_esc(textoComparacao)}`;
         _flash('Relatório processado e salvo como novo snapshot.', 'success');
         _importacaoId = Number(dados.importacao_id); _rankingPagina = 1;
         await _carregarDashboard(_importacaoId);
@@ -139,6 +169,7 @@ function _renderDashboard(dados) {
     _setText('inad-kpi-variacao-desc', pct === null ? 'Primeiro snapshot importado' : `${variacao >= 0 ? 'Aumento' : 'Redução'} de ${Math.abs(Number(pct)).toFixed(1).replace('.', ',')}%`);
     document.getElementById('inad-kpi-variacao-icone').className = variacao > 1 ? 'fas fa-arrow-trend-up' : variacao < -1 ? 'fas fa-arrow-trend-down' : 'fas fa-minus';
     _renderAlertas(atual, dados.kpis.sem_vinculo);
+    _renderGestao(dados.visao_gerencial || {});
     _renderCarteiras(dados.carteiras || []); _renderHistoricoGrafico(dados.historico || []); _renderMudancas(dados.mudancas || {});
     _renderHeuristica(dados.heuristica || {}); _renderSelectImportacoes(dados.historico || [], atual.id); _renderHistorico(dados.historico || [], atual.id);
     _setText('inad-comparacao-data', dados.importacao_anterior ? `Comparado a ${_fmtData(dados.importacao_anterior.data_base)}` : 'Aguardando o próximo snapshot');
@@ -150,6 +181,28 @@ function _renderAlertas(atual, semVinculo) {
     _setText('inad-alerta-reconciliacao-texto', atual.alerta_reconciliacao || 'Revise os lançamentos antes de usar estes indicadores.');
     vin.hidden = !Number(semVinculo); _setText('inad-alerta-vinculos-texto', `${_fmtNumero(semVinculo)} lançamento(s) ainda não foram associados a morador ou unidade.`);
 }
+function _renderGestao(visao) {
+    log('Visão gerencial renderizada:', { status: visao.status || null, contagens: visao.contagens || {}, prioridades: (visao.prioridades || []).length });
+    const statusMap = { PRIMEIRO_SNAPSHOT: 'Baseline criado', SEM_MUDANCA: 'Sem alteração relevante', ATUALIZADO: 'Comparação atualizada' };
+    _setText('inad-gestao-mensagem', visao.mensagem || 'Importe relatórios em períodos diferentes para comparar a evolução.');
+    _setText('inad-gestao-status', statusMap[visao.status] || 'Histórico em análise');
+    const c = visao.contagens || {};
+    const resumo = document.getElementById('inad-gestao-resumo');
+    resumo.innerHTML = [
+        ['Novas', c.novas || 0, 'blue'],
+        ['Em aumento', c.evoluindo || 0, 'red'],
+        ['Regularizadas', (c.corrigidas || 0) + (c.quitadas || 0), 'green'],
+        ['Risco alto', c.risco_alto || 0, 'amber']
+    ].map(([rotulo, valor, cor]) => `<div class="inad-gestao-metrica ${cor}"><strong>${_fmtNumero(valor)}</strong><span>${_esc(rotulo)}</span></div>`).join('');
+
+    const prioridades = (visao.prioridades || []).slice(0, 8);
+    const destino = document.getElementById('inad-prioridades');
+    destino.innerHTML = prioridades.length ? prioridades.map(item => {
+        const tipo = String(item.tipo || 'NOVO').toLowerCase();
+        return `<article class="inad-prioridade ${_esc(tipo)}"><div><strong>Gleba ${_esc(item.gleba_numero)}</strong><span>${_esc(item.titulo || 'Revisar situação')}</span></div><div><b>${_fmtMoeda(item.total_atual)}</b><small>${Number(item.delta) >= 0 ? '+' : ''}${_fmtMoeda(item.delta)} no período</small></div></article>`;
+    }).join('') : '<p class="inad-prioridades-vazio">Nenhuma prioridade crítica identificada para este comparativo.</p>';
+}
+
 function _renderCarteiras(items) {
     const el = document.getElementById('inad-carteiras'); const max = Math.max(...items.map(i => Number(i.total)), 1);
     el.innerHTML = items.length ? items.map(i => `<div class="inad-bar-row"><span class="inad-bar-label" title="${_esc(i.carteira)}">${_esc(i.carteira)}</span><span class="inad-bar-track"><span class="inad-bar-fill" style="width:${Math.max(2,(Number(i.total)/max)*100)}%"></span></span><span class="inad-bar-value">${_fmtMoeda(i.total)}</span></div>`).join('') : '<p class="inad-chart-empty">Sem dados de carteira.</p>';
