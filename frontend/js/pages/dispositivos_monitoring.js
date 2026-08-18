@@ -274,11 +274,11 @@ function exibirCredencialMonitoring(secret) {
     const secretOutput = document.getElementById('monitoring-generated-secret');
     if (!secretOutput) throw new Error('Não foi possível abrir o modal de credencial.');
     secretOutput.textContent = secret;
-    document.getElementById('monitoring-secret-overlay')?.classList.add('active');
+    document.getElementById('monitoring-secret-overlay')?.classList.add('open');
 }
 
 function fecharModalMonitoringSecret() {
-    document.getElementById('monitoring-secret-overlay')?.classList.remove('active');
+    document.getElementById('monitoring-secret-overlay')?.classList.remove('open');
 }
 
 async function copiarCredencialMonitoring() {
