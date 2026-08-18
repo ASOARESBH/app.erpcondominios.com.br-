@@ -6,6 +6,8 @@
  * ES Module com export init/destroy para AppRouter
  */
 
+import * as MonitoringModule from './dispositivos_monitoring.js';
+
 // ── Constantes ────────────────────────────────────────────────────────────────
 const API = window.location.origin + '/api/api_dispositivos.php';
 
@@ -56,6 +58,7 @@ export function init() {
     _setupFilaTab();
     _setupModais();
     _carregarDispositivos();
+    MonitoringModule.init();
 
     window.DispModule = {
         editarDispositivo:  _editarDispositivo,
@@ -74,6 +77,7 @@ export function destroy() {
     _state.dispositivoEditandoId = null;
     _state.tokenDispositivoId    = null;
     _state.evPagina              = 1;
+    MonitoringModule.destroy();
     delete window.DispModule;
 }
 

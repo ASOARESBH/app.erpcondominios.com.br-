@@ -65,6 +65,58 @@
       </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         ERP CONDOMÍNIOS MONITORING — ATIVAÇÃO E CONFIGURAÇÃO
+    ════════════════════════════════════════════════════════════════ -->
+    <section class="monitoring-integration" id="monitoring-integration">
+      <div class="monitoring-integration-header">
+        <div>
+          <span class="monitoring-eyebrow">ERP CONDOMÍNIOS MONITORING</span>
+          <h2><i class="fas fa-video"></i> Monitoramento local e LPR</h2>
+          <p>Configure as máquinas Windows do tenant, emita a credencial de cada instalação e envie a política do FastALPR ao agente.</p>
+        </div>
+        <button type="button" class="monitoring-refresh" id="monitoring-refresh"><i class="fas fa-sync-alt"></i> Atualizar</button>
+      </div>
+
+      <div class="monitoring-integration-grid">
+        <article class="monitoring-integration-card monitoring-pairing-card">
+          <div class="monitoring-card-title"><span class="monitoring-icon"><i class="fas fa-desktop"></i></span><div><span class="monitoring-eyebrow">ATIVAÇÃO</span><h3>Habilitar esta máquina</h3></div><span class="monitoring-badge monitoring-badge-new">Novo</span></div>
+          <p class="monitoring-help">Copie o código exibido no painel local do Windows e cole abaixo. O código de pareamento <strong>não é a credencial operacional</strong>.</p>
+          <div class="monitoring-form-grid">
+            <div class="monitoring-field monitoring-field-wide"><label for="monitoring-pairing-code">Código de pareamento</label><input id="monitoring-pairing-code" type="text" maxlength="32" placeholder="Ex.: FLLY-4CQQ" autocomplete="off"></div>
+            <div class="monitoring-field"><label for="monitoring-agent-name">Nome da máquina</label><input id="monitoring-agent-name" type="text" maxlength="120" placeholder="PC Portaria Principal"></div>
+            <div class="monitoring-field"><label for="monitoring-agent-local">Local</label><input id="monitoring-agent-local" type="text" maxlength="160" placeholder="Portaria principal"></div>
+            <div class="monitoring-field"><label for="monitoring-agent-responsible">Responsável</label><input id="monitoring-agent-responsible" type="text" maxlength="160" placeholder="Equipe de segurança"></div>
+            <div class="monitoring-field monitoring-field-wide"><label for="monitoring-agent-note">Observação</label><input id="monitoring-agent-note" type="text" maxlength="500" placeholder="Instalação local para câmeras LPR"></div>
+          </div>
+          <input type="hidden" id="monitoring-agent-id" value="">
+          <div class="monitoring-action-row"><button type="button" class="btn-monitoring-primary" id="monitoring-enable"><i class="fas fa-link"></i> Habilitar esta máquina</button><span id="monitoring-pairing-message" class="monitoring-inline-message"></span></div>
+          <p class="monitoring-note"><i class="fas fa-shield-alt"></i> A credencial da máquina será gerada pelo ERP e exibida uma única vez após a habilitação.</p>
+        </article>
+
+        <article class="monitoring-integration-card monitoring-config-card">
+          <div class="monitoring-card-title"><span class="monitoring-icon monitoring-icon-blue"><i class="fas fa-sliders-h"></i></span><div><span class="monitoring-eyebrow">CONFIGURAÇÃO DO TENANT</span><h3>Motor e política LPR</h3></div><span class="monitoring-badge">Tenant</span></div>
+          <form id="monitoring-config-form">
+            <label class="monitoring-switch-row"><input type="checkbox" id="monitoring-module-active"><span><strong>Monitoring ativo</strong><small>Permitir sincronização de agentes neste tenant</small></span></label>
+            <div class="monitoring-form-grid monitoring-config-grid">
+              <div class="monitoring-field"><label for="monitoring-retention">Retenção (dias)</label><input id="monitoring-retention" type="number" min="1" max="3650" value="30"></div>
+              <div class="monitoring-field"><label for="monitoring-engine">Motor LPR</label><select id="monitoring-engine"><option value="fastalpr">FastALPR</option><option value="frigate">Frigate (fallback)</option></select></div>
+              <div class="monitoring-field"><label for="monitoring-backend">Backend ONNX</label><select id="monitoring-backend"><option value="cpu">CPU</option><option value="openvino">OpenVINO</option><option value="directml">DirectML</option></select></div>
+              <div class="monitoring-field"><label for="monitoring-confidence">Confiança mínima</label><input id="monitoring-confidence" type="number" min="0" max="1" step="0.01" value="0.80"></div>
+              <div class="monitoring-field"><label for="monitoring-dedup">Deduplicação (seg.)</label><input id="monitoring-dedup" type="number" min="1" max="300" value="20"></div>
+            </div>
+            <div class="monitoring-action-row"><button type="submit" class="btn-monitoring-secondary"><i class="fas fa-save"></i> Salvar configuração</button><span id="monitoring-config-message" class="monitoring-inline-message"></span></div>
+          </form>
+          <p class="monitoring-note"><i class="fas fa-info-circle"></i> A política é aplicada no próximo heartbeat. URLs RTSP permanecem somente no computador local.</p>
+        </article>
+      </div>
+
+      <article class="monitoring-integration-card monitoring-agents-card">
+        <div class="monitoring-card-title"><span class="monitoring-icon monitoring-icon-green"><i class="fas fa-network-wired"></i></span><div><span class="monitoring-eyebrow">MÁQUINAS DO TENANT</span><h3>Agentes Windows e câmeras reportadas</h3></div><span class="monitoring-badge" id="monitoring-agent-count">0 agentes</span></div>
+        <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th>Máquina</th><th>Instalação</th><th>Status</th><th>Versão</th><th>Heartbeat</th><th>Ação</th></tr></thead><tbody id="monitoring-agents-body"><tr><td colspan="6" class="monitoring-empty">Carregando agentes…</td></tr></tbody></table></div>
+      </article>
+    </section>
+
     <!-- Formulário de cadastro/edição -->
     <div class="page-card" id="disp-form-card">
       <div class="card-header-row">
@@ -562,3 +614,28 @@
     </div>
   </div>
 </div>
+
+
+<!-- MODAL: CREDENCIAL ÚNICA DA MÁQUINA MONITORING -->
+<div id="monitoring-secret-overlay" class="modal-overlay">
+  <div class="modal-box monitoring-secret-modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-key"></i> Credencial da máquina</h3>
+      <button class="modal-close" id="monitoring-secret-close" type="button"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="monitoring-secret-box">
+        <span class="monitoring-eyebrow">GUARDE AGORA</span>
+        <h3>Credencial emitida com sucesso</h3>
+        <p>Copie esta credencial para o painel local do Windows. Por segurança, ela será exibida somente nesta etapa.</p>
+        <code id="monitoring-generated-secret">—</code>
+        <button type="button" class="btn-primary-modern" id="monitoring-copy-secret"><i class="fas fa-copy"></i> Copiar credencial</button>
+      </div>
+      <div class="modal-footer-actions">
+        <button type="button" class="btn-primary-modern" id="monitoring-secret-done"><i class="fas fa-check"></i> Entendi e guardei</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fim do módulo ERP CONDOMÍNIOS MONITORING -->

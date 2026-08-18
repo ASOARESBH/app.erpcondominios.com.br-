@@ -911,3 +911,68 @@
     .page-dispositivos .kpi-card { padding: 1rem; }
     .page-dispositivos .kpi-content .value { font-size: 1.5rem; }
 }
+
+
+/* ============================================================
+   ERP CONDOMÍNIOS MONITORING — AGENTE LOCAL E LPR
+   ============================================================ */
+.page-dispositivos .monitoring-integration { margin: 1.25rem 0 1.5rem; }
+.page-dispositivos .monitoring-integration-header { display:flex; align-items:flex-start; justify-content:space-between; gap:1.5rem; padding:1.6rem 1.8rem; margin-bottom:1rem; border-radius:16px; background:linear-gradient(135deg,#071a32,#123a5b); color:#fff; box-shadow:0 10px 26px rgba(15,51,86,.16); }
+.page-dispositivos .monitoring-integration-header h2 { margin:.35rem 0 .4rem; color:#fff; font-size:1.35rem; }
+.page-dispositivos .monitoring-integration-header p { margin:0; color:#bad1e5; font-size:.9rem; }
+.page-dispositivos .monitoring-eyebrow { display:block; color:#0e7490; font-size:.68rem; font-weight:800; letter-spacing:.14em; }
+.page-dispositivos .monitoring-integration-header .monitoring-eyebrow { color:#58d9ef; }
+.page-dispositivos .monitoring-refresh { border:1px solid rgba(255,255,255,.24); border-radius:9px; padding:.65rem .9rem; color:#e7f8ff; background:rgba(255,255,255,.1); cursor:pointer; font-weight:700; white-space:nowrap; }
+.page-dispositivos .monitoring-refresh:hover { background:rgba(255,255,255,.18); }
+.page-dispositivos .monitoring-integration-grid { display:grid; grid-template-columns:1.15fr .85fr; gap:1rem; }
+.page-dispositivos .monitoring-integration-card { padding:1.35rem; margin-bottom:1rem; border:1px solid #dbe6f0; border-radius:16px; background:#fff; box-shadow:0 5px 18px rgba(15,23,42,.06); }
+.page-dispositivos .monitoring-card-title { display:flex; align-items:flex-start; gap:.75rem; margin-bottom:1rem; }
+.page-dispositivos .monitoring-card-title h3 { margin:.25rem 0 0; color:#172b45; font-size:1.05rem; }
+.page-dispositivos .monitoring-icon { width:36px; height:36px; display:grid; place-items:center; flex:0 0 auto; border-radius:10px; color:#fff; background:linear-gradient(135deg,#1c9bc2,#1d4ed8); }
+.page-dispositivos .monitoring-icon-blue { background:linear-gradient(135deg,#2563eb,#4f46e5); }
+.page-dispositivos .monitoring-icon-green { background:linear-gradient(135deg,#16a34a,#0f766e); }
+.page-dispositivos .monitoring-badge { margin-left:auto; padding:.35rem .6rem; border-radius:999px; color:#1d4ed8; background:#e0edff; font-size:.7rem; font-weight:800; white-space:nowrap; }
+.page-dispositivos .monitoring-badge-new { color:#047857; background:#d1fae5; }
+.page-dispositivos .monitoring-help { margin:0 0 1rem; color:#64748b; font-size:.84rem; line-height:1.55; }
+.page-dispositivos .monitoring-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; }
+.page-dispositivos .monitoring-field-wide { grid-column:1/-1; }
+.page-dispositivos .monitoring-field label { margin-bottom:.35rem; color:#34465c; font-size:.78rem; }
+.page-dispositivos .monitoring-field input,.page-dispositivos .monitoring-field select { width:100%; padding:.65rem .7rem; border:1px solid #d6e0eb; border-radius:8px; color:#1e293b; background:#fbfdff; font-size:.86rem; }
+.page-dispositivos .monitoring-field input:focus,.page-dispositivos .monitoring-field select:focus { outline:none; border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+.page-dispositivos .monitoring-action-row { display:flex; align-items:center; flex-wrap:wrap; gap:.8rem; margin-top:1rem; }
+.page-dispositivos .btn-monitoring-primary,.page-dispositivos .btn-monitoring-secondary { border:0; border-radius:8px; padding:.7rem 1rem; cursor:pointer; font-weight:800; }
+.page-dispositivos .btn-monitoring-primary { color:#fff; background:linear-gradient(135deg,#0ea5e9,#2563eb); }
+.page-dispositivos .btn-monitoring-secondary { color:#fff; background:linear-gradient(135deg,#334155,#1d4ed8); }
+.page-dispositivos .btn-monitoring-primary:disabled,.page-dispositivos .btn-monitoring-secondary:disabled,.page-dispositivos .monitoring-refresh:disabled { opacity:.55; cursor:wait; }
+.page-dispositivos .monitoring-inline-message { min-height:1.1em; color:#047857; font-size:.76rem; }
+.page-dispositivos .monitoring-message-error { color:#b91c1c; }
+.page-dispositivos .monitoring-message-success { color:#047857; }
+.page-dispositivos .monitoring-note { display:flex; gap:.45rem; margin:1rem 0 0; color:#7a8b9f; font-size:.72rem; line-height:1.4; }
+.page-dispositivos .monitoring-note i { color:#3b82f6; margin-top:.1rem; }
+.page-dispositivos .monitoring-switch-row { display:flex; align-items:center; gap:.7rem; margin-bottom:1rem; padding:.7rem .8rem; border:1px solid #dbe6f0; border-radius:10px; background:#f8fbff; cursor:pointer; }
+.page-dispositivos .monitoring-switch-row input { width:18px; height:18px; accent-color:#2563eb; }
+.page-dispositivos .monitoring-switch-row strong,.page-dispositivos .monitoring-switch-row small { display:block; }
+.page-dispositivos .monitoring-switch-row strong { color:#1e3a5f; font-size:.82rem; }
+.page-dispositivos .monitoring-switch-row small { margin-top:.15rem; color:#718096; font-size:.72rem; font-weight:400; }
+.page-dispositivos .monitoring-table-wrap { overflow-x:auto; }
+.page-dispositivos .monitoring-table { min-width:760px; width:100%; border-collapse:collapse; }
+.page-dispositivos .monitoring-table th,.page-dispositivos .monitoring-table td { padding:.7rem .55rem; border-bottom:1px solid #edf2f7; text-align:left; font-size:.78rem; }
+.page-dispositivos .monitoring-table th { color:#64748b; background:#f8fafc; font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; }
+.page-dispositivos .monitoring-table td strong,.page-dispositivos .monitoring-table td small { display:block; }
+.page-dispositivos .monitoring-table td small { margin-top:.2rem; color:#94a3b8; }
+.page-dispositivos .monitoring-table code { color:#475569; font-size:.72rem; }
+.page-dispositivos .monitoring-status { display:inline-block; padding:.25rem .5rem; border-radius:999px; font-size:.68rem; font-weight:800; }
+.page-dispositivos .monitoring-status-ativo { color:#166534; background:#dcfce7; }
+.page-dispositivos .monitoring-status-pendente_ativacao,.page-dispositivos .monitoring-status-solicitado { color:#92400e; background:#fef3c7; }
+.page-dispositivos .monitoring-status-revogado,.page-dispositivos .monitoring-status-bloqueado { color:#991b1b; background:#fee2e2; }
+.page-dispositivos .monitoring-table-action { border:0; border-radius:6px; padding:.35rem .55rem; color:#fff; cursor:pointer; font-size:.7rem; font-weight:800; }
+.page-dispositivos .monitoring-action-enable { background:#2563eb; }
+.page-dispositivos .monitoring-action-revoke { background:#dc2626; }
+.page-dispositivos .monitoring-empty { padding:1.3rem!important; color:#94a3b8; text-align:center!important; }
+.page-dispositivos .monitoring-secret-modal { max-width:620px; }
+.page-dispositivos .monitoring-secret-box { padding:1.4rem; border:2px dashed #3b82f6; border-radius:12px; background:#f0f9ff; text-align:center; }
+.page-dispositivos .monitoring-secret-box h3 { margin:.4rem 0; color:#1e40af; }
+.page-dispositivos .monitoring-secret-box p { color:#64748b; font-size:.86rem; line-height:1.5; }
+.page-dispositivos .monitoring-secret-box code { display:block; margin:1rem 0; padding:.9rem; overflow-wrap:anywhere; border-radius:8px; color:#0f3b72; background:#fff; font:700 .9rem ui-monospace,Consolas,monospace; }
+@media (max-width: 1050px) { .page-dispositivos .monitoring-integration-grid { grid-template-columns:1fr; } }
+@media (max-width: 620px) { .page-dispositivos .monitoring-integration-header { flex-direction:column; } .page-dispositivos .monitoring-form-grid { grid-template-columns:1fr; } .page-dispositivos .monitoring-field-wide { grid-column:auto; } .page-dispositivos .monitoring-integration-card { padding:1rem; } }
