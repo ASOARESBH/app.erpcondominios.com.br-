@@ -15,6 +15,7 @@ require_once __DIR__ . '/auth_helper.php';
 require_once __DIR__ . '/tenant_helper.php';
 require_once __DIR__ . '/log_financeiro_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
+require_once __DIR__ . '/helpers/pdf_text_extractor_helper.php';
 
 // Descarta qualquer saída acidental dos arquivos incluídos para preservar JSON puro.
 while (ob_get_level() > 0) ob_end_clean();
@@ -135,11 +136,6 @@ function _importar() {
     if (!in_array($mime, ['application/pdf', 'application/x-pdf', 'application/octet-stream'], true)) {
         retornar_json(false, 'O arquivo enviado não foi reconhecido como PDF.');
     }
-    if (empty(trim((string)shell_exec('command -v pdftotext 2>/dev/null')))) {
-        log_fin('inadimplencia', 'ERRO', 'importar', 'pdftotext indisponível no servidor', null);
-        retornar_json(false, 'O utilitário de leitura de PDF não está disponível no servidor.');
-    }
-
     $inicio_importacao = log_fin_inicio('inadimplencia', 'importar', 'Iniciando importação do relatório ' . $nome);
     $stmt = $conn->prepare('INSERT INTO inadimplencia_importacoes (tenant_id,nome_arquivo,status,usuario) VALUES (?,?,\'PROCESSANDO\',?)');
     $stmt->bind_param('iss', $tenant_id, $nome, $usuario_nome);
@@ -224,8 +220,7 @@ function _importar() {
 }
 
 function _parsePDFInadimplencia($path) {
-    $texto = shell_exec('pdftotext -layout ' . escapeshellarg($path) . ' - 2>/dev/null');
-    if (!is_string($texto) || trim($texto) === '') throw new RuntimeException('Não foi possível extrair texto do PDF.');
+    $texto = pdf_extrair_texto($path);
     $linhas = preg_split('/\R/u', $texto);
     $meta = ['associacao_nome' => null, 'data_base' => null, 'data_geracao_relatorio' => null, 'correcao' => null, 'juros_pct' => null, 'multa_pct' => null, 'quantidade_unidades' => 0];
     $resumo = ['total_lancado' => null, 'total_projetado' => null];
