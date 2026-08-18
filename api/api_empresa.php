@@ -137,6 +137,39 @@ function dados_empresa_consolidados($conexao, $tenant_id) {
     ];
 }
 
+function estrutura_layout_administradora_disponivel($conexao) {
+    foreach (['administradoras_importacao', 'administradoras_layouts', 'empresa_administradora', 'empresa_administradora_layout'] as $tabela) {
+        $stmt = $conexao->prepare('SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
+        if (!$stmt) return false;
+        $stmt->bind_param('s', $tabela);
+        $stmt->execute();
+        $linha = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ((int)($linha['total'] ?? 0) === 0) return false;
+    }
+    return true;
+}
+
+function obter_configuracao_administradora($conexao, $tenant_id) {
+    $stmt = $conexao->prepare('SELECT ea.administradora_id, a.slug, a.nome FROM empresa_administradora ea INNER JOIN administradoras_importacao a ON a.id=ea.administradora_id WHERE ea.tenant_id=? AND ea.ativo=1 LIMIT 1');
+    $stmt->bind_param('i', $tenant_id);
+    $stmt->execute();
+    $config = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $config ?: null;
+}
+
+function listar_layouts_administradora($conexao, $tenant_id) {
+    $stmt = $conexao->prepare('SELECT al.id, al.administradora_id, a.slug AS administradora_slug, a.nome AS administradora_nome, al.codigo, al.modulo, al.nome, al.descricao, al.formato_aceito, al.status_implantacao, al.ordem, CASE WHEN eal.ativo=1 THEN 1 ELSE 0 END AS selecionado FROM administradoras_layouts al INNER JOIN administradoras_importacao a ON a.id=al.administradora_id LEFT JOIN empresa_administradora_layout eal ON eal.administradora_layout_id=al.id AND eal.tenant_id=? WHERE al.ativo=1 AND a.ativo=1 ORDER BY a.ordem, al.ordem, al.nome');
+    $stmt->bind_param('i', $tenant_id);
+    $stmt->execute();
+    $resultado = $stmt->get_result();
+    $layouts = [];
+    while ($linha = $resultado->fetch_assoc()) $layouts[] = $linha;
+    $stmt->close();
+    return $layouts;
+}
+
 // OBTER DADOS DO TENANT ATIVO — consolida tabela tenants + detalhes da tabela empresa.
 if ($action === 'obter' && $metodo === 'GET') {
     try {
@@ -211,6 +244,98 @@ if ($action === 'atualizar' && $metodo === 'POST') {
     } catch (Throwable $e) {
         error_log("[EMPRESA_MT] erro_atualizar tenant_id={$tenant_id}: " . $e->getMessage());
         retornar_json(false, 'Erro ao atualizar dados do condomínio');
+    }
+}
+
+// LAYOUT ADMINISTRADORA — cadastro de preferência de importação do tenant autenticado.
+if ($action === 'administradoras_layouts' && $metodo === 'GET') {
+    try {
+        if (!estrutura_layout_administradora_disponivel($conexao)) {
+            retornar_json(false, 'Estrutura de Layout Administradora não instalada. Execute a migration_layout_administradora_mysql57.sql.', null);
+        }
+        $administradoras = [];
+        $res = $conexao->query('SELECT id,slug,nome,descricao FROM administradoras_importacao WHERE ativo=1 ORDER BY ordem,nome');
+        while ($linha = $res->fetch_assoc()) $administradoras[] = $linha;
+        $config = obter_configuracao_administradora($conexao, $tenant_id);
+        $layouts = listar_layouts_administradora($conexao, $tenant_id);
+        error_log("[EMPRESA_MT] administradora_layouts_carregado tenant_id={$tenant_id} usuario_id={$usuario_id} layouts=" . count($layouts));
+        retornar_json(true, 'Configuração de administradora carregada.', ['administradoras'=>$administradoras, 'configuracao'=>$config, 'layouts'=>$layouts]);
+    } catch (Throwable $e) {
+        error_log("[EMPRESA_MT] erro_administradora_layouts tenant_id={$tenant_id}: " . $e->getMessage());
+        retornar_json(false, 'Erro ao carregar Layout Administradora.', null);
+    }
+}
+
+if ($action === 'salvar_layout_administradora' && $metodo === 'POST') {
+    try {
+        if (!estrutura_layout_administradora_disponivel($conexao)) {
+            retornar_json(false, 'Estrutura de Layout Administradora não instalada. Execute a migration_layout_administradora_mysql57.sql.', null);
+        }
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input)) retornar_json(false, 'Dados de Layout Administradora inválidos.', null);
+        $administradoraId = (int)($input['administradora_id'] ?? 0);
+        $layoutIds = array_values(array_unique(array_filter(array_map('intval', (array)($input['layout_ids'] ?? [])), static function($id) { return $id > 0; })));
+        if ($administradoraId <= 0) retornar_json(false, 'Selecione a administradora do empreendimento.', null);
+        if (!$layoutIds) retornar_json(false, 'Selecione pelo menos um layout analítico para importação.', null);
+
+        $stmtAdministradora = $conexao->prepare('SELECT id,nome FROM administradoras_importacao WHERE id=? AND ativo=1 LIMIT 1');
+        $stmtAdministradora->bind_param('i', $administradoraId);
+        $stmtAdministradora->execute();
+        $administradora = $stmtAdministradora->get_result()->fetch_assoc();
+        $stmtAdministradora->close();
+        if (!$administradora) retornar_json(false, 'Administradora selecionada não está disponível.', null);
+
+        $marcadores = implode(',', array_fill(0, count($layoutIds), '?'));
+        $tipos = 'i' . str_repeat('i', count($layoutIds));
+        $parametros = array_merge([$administradoraId], $layoutIds);
+        $stmtLayouts = $conexao->prepare("SELECT id,modulo,nome FROM administradoras_layouts WHERE administradora_id=? AND ativo=1 AND id IN ({$marcadores}) ORDER BY ordem,id");
+        if (!$stmtLayouts) throw new RuntimeException($conexao->error);
+        $referencias = [];
+        $referencias[] = $tipos;
+        foreach ($parametros as $indice => $valor) $referencias[] = &$parametros[$indice];
+        call_user_func_array([$stmtLayouts, 'bind_param'], $referencias);
+        $stmtLayouts->execute();
+        $layoutsValidos = [];
+        $modulos = [];
+        $resultadoLayouts = $stmtLayouts->get_result();
+        while ($layout = $resultadoLayouts->fetch_assoc()) {
+            if (isset($modulos[$layout['modulo']])) retornar_json(false, 'Selecione somente um layout por módulo analítico.', null);
+            $layoutsValidos[] = $layout;
+            $modulos[$layout['modulo']] = true;
+        }
+        $stmtLayouts->close();
+        if (count($layoutsValidos) !== count($layoutIds)) retornar_json(false, 'Um ou mais layouts não pertencem à administradora selecionada.', null);
+
+        $conexao->begin_transaction();
+        try {
+            $stmtConfig = $conexao->prepare('INSERT INTO empresa_administradora (tenant_id,administradora_id,ativo,usuario_atualizacao_id) VALUES (?,?,1,?) ON DUPLICATE KEY UPDATE administradora_id=VALUES(administradora_id),ativo=1,usuario_atualizacao_id=VALUES(usuario_atualizacao_id)');
+            $stmtConfig->bind_param('iii', $tenant_id, $administradoraId, $usuario_id);
+            if (!$stmtConfig->execute()) throw new RuntimeException($stmtConfig->error);
+            $stmtConfig->close();
+
+            $stmtDesativar = $conexao->prepare('UPDATE empresa_administradora_layout SET ativo=0, usuario_atualizacao_id=? WHERE tenant_id=?');
+            $stmtDesativar->bind_param('ii', $usuario_id, $tenant_id);
+            if (!$stmtDesativar->execute()) throw new RuntimeException($stmtDesativar->error);
+            $stmtDesativar->close();
+
+            $stmtSalvar = $conexao->prepare('INSERT INTO empresa_administradora_layout (tenant_id,administradora_layout_id,modulo,ativo,usuario_atualizacao_id) VALUES (?,?,?,1,?) ON DUPLICATE KEY UPDATE administradora_layout_id=VALUES(administradora_layout_id),ativo=1,usuario_atualizacao_id=VALUES(usuario_atualizacao_id)');
+            foreach ($layoutsValidos as $layout) {
+                $layoutId = (int)$layout['id'];
+                $modulo = (string)$layout['modulo'];
+                $stmtSalvar->bind_param('iisi', $tenant_id, $layoutId, $modulo, $usuario_id);
+                if (!$stmtSalvar->execute()) throw new RuntimeException($stmtSalvar->error);
+            }
+            $stmtSalvar->close();
+            $conexao->commit();
+            error_log("[EMPRESA_MT] administradora_layouts_salvos tenant_id={$tenant_id} administradora_id={$administradoraId} usuario_id={$usuario_id} layouts=" . count($layoutsValidos));
+            retornar_json(true, 'Administradora e layouts de importação salvos.', ['administradora'=>$administradora, 'layout_ids'=>array_map(static function($item) { return (int)$item['id']; }, $layoutsValidos)]);
+        } catch (Throwable $e) {
+            $conexao->rollback();
+            throw $e;
+        }
+    } catch (Throwable $e) {
+        error_log("[EMPRESA_MT] erro_salvar_administradora_layouts tenant_id={$tenant_id}: " . $e->getMessage());
+        retornar_json(false, 'Erro ao salvar Layout Administradora.', null);
     }
 }
 

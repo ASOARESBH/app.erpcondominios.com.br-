@@ -4,7 +4,11 @@
 
 const state = {
     apiBase: '/api/',
-    dom: {}
+    dom: {},
+    administradoras: [],
+    layouts: [],
+    layoutIdsConfigurados: new Set(),
+    administradoraConfiguradaId: 0
 };
 
 export function init() {
@@ -12,6 +16,7 @@ export function init() {
     bindDOM();
     bindEvents();
     carregarDados();
+    carregarLayoutAdministradora();
 }
 
 export function destroy() {
@@ -41,7 +46,15 @@ function bindDOM() {
         email_principal: document.getElementById('email_principal'),
         email_cobranca: document.getElementById('email_cobranca'),
         telefone: document.getElementById('telefone'),
-        situacao: document.getElementById('situacao')
+        situacao: document.getElementById('situacao'),
+        tabs: Array.from(document.querySelectorAll('[data-empresa-tab]')),
+        dadosPane: document.getElementById('empresa-dados-pane'),
+        administradoraPane: document.getElementById('empresa-administradora-pane'),
+        administradoraSelect: document.getElementById('administradora_id'),
+        layoutsLista: document.getElementById('empresa-layouts-lista'),
+        layoutsCount: document.getElementById('empresa-layouts-count'),
+        administradoraStatus: document.getElementById('empresa-administradora-status'),
+        btnSalvarLayoutAdministradora: document.getElementById('btnSalvarLayoutAdministradora')
     };
 }
 
@@ -61,6 +74,9 @@ function bindEvents() {
     if (state.dom.btnLimpar) {
         state.dom.btnLimpar.addEventListener('click', limparFormulario);
     }
+    state.dom.tabs.forEach((tab) => tab.addEventListener('click', () => alternarAbaEmpresa(tab.dataset.empresaTab)));
+    if (state.dom.administradoraSelect) state.dom.administradoraSelect.addEventListener('change', renderizarLayoutsAdministradora);
+    if (state.dom.btnSalvarLayoutAdministradora) state.dom.btnSalvarLayoutAdministradora.addEventListener('click', salvarLayoutAdministradora);
 }
 
 function renderizarPreviewLogo(url) {
@@ -153,7 +169,121 @@ async function carregarDados() {
     }
 }
 
-async function buscarCNPJ() {
+async function alternarAbaEmpresa(aba) {
+    const mostrarDados = aba !== 'administradora';
+    if (state.dom.dadosPane) state.dom.dadosPane.hidden = !mostrarDados;
+    if (state.dom.administradoraPane) state.dom.administradoraPane.hidden = mostrarDados;
+    state.dom.tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.empresaTab === (mostrarDados ? 'dados' : 'administradora')));
+    console.debug('[Empresa] Aba alterada.', { aba: mostrarDados ? 'dados' : 'administradora' });
+}
+
+function escaparHtml(valor) {
+    return String(valor ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+}
+
+function statusLayout(status) {
+    const mapa = { PRONTO: 'Pronto para importação', CONFIGURADO: 'Layout configurado', PLANEJADO: 'Em homologação' };
+    return mapa[status] || 'Layout configurado';
+}
+
+function renderizarStatusAdministradora(mensagem, tipo = 'info') {
+    const destino = state.dom.administradoraStatus;
+    if (!destino) return;
+    destino.hidden = !mensagem;
+    destino.className = `empresa-administradora-status ${tipo}`;
+    destino.textContent = mensagem || '';
+}
+
+function atualizarContagemLayouts() {
+    const marcados = state.dom.layoutsLista ? state.dom.layoutsLista.querySelectorAll('input[data-layout-id]:checked').length : 0;
+    if (state.dom.layoutsCount) state.dom.layoutsCount.textContent = `${marcados} layout(s) habilitado(s)`;
+}
+
+function renderizarLayoutsAdministradora() {
+    const administradoraId = Number(state.dom.administradoraSelect?.value || 0);
+    const layouts = state.layouts.filter((layout) => Number(layout.administradora_id) === administradoraId);
+    const destino = state.dom.layoutsLista;
+    if (!destino) return;
+    if (!administradoraId) {
+        destino.innerHTML = '<p class="empresa-layouts-vazio">Selecione uma administradora para visualizar os layouts de importação disponíveis.</p>';
+        atualizarContagemLayouts();
+        return;
+    }
+    if (!layouts.length) {
+        destino.innerHTML = '<p class="empresa-layouts-vazio">Nenhum layout ativo foi cadastrado para esta administradora.</p>';
+        atualizarContagemLayouts();
+        return;
+    }
+    destino.innerHTML = layouts.map((layout) => {
+        const selecionado = state.layoutIdsConfigurados.has(Number(layout.id)) || (administradoraId !== state.administradoraConfiguradaId && state.layoutIdsConfigurados.size === 0);
+        return `<label class="empresa-layout-card">
+            <input type="checkbox" data-layout-id="${Number(layout.id)}" data-modulo="${escaparHtml(layout.modulo)}" ${selecionado ? 'checked' : ''}>
+            <span class="empresa-layout-card-icon"><i class="fas fa-file-alt"></i></span>
+            <span class="empresa-layout-card-content"><strong>${escaparHtml(layout.nome)}</strong><small>${escaparHtml(layout.descricao || 'Layout analítico para importação.')}</small><em>${escaparHtml(layout.modulo.replace(/_/g, ' '))} · ${escaparHtml(layout.formato_aceito)}</em></span>
+            <span class="empresa-layout-status ${String(layout.status_implantacao || '').toLowerCase()}">${escaparHtml(statusLayout(layout.status_implantacao))}</span>
+        </label>`;
+    }).join('');
+    destino.querySelectorAll('input[data-layout-id]').forEach((input) => {
+        input.addEventListener('change', () => {
+            if (input.checked) {
+                destino.querySelectorAll(`input[data-modulo="${CSS.escape(input.dataset.modulo)}"]`).forEach((outro) => {
+                    if (outro !== input) outro.checked = false;
+                });
+            }
+            atualizarContagemLayouts();
+        });
+    });
+    atualizarContagemLayouts();
+    console.debug('[Empresa] Layouts renderizados.', { administradora_id: administradoraId, total: layouts.length });
+}
+
+async function carregarLayoutAdministradora() {
+    try {
+        const response = await fetch(`${state.apiBase}api_empresa.php?action=administradoras_layouts`, { credentials: 'include' });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || `Erro HTTP ${response.status}`);
+        state.administradoras = data.dados.administradoras || [];
+        state.layouts = data.dados.layouts || [];
+        state.layoutIdsConfigurados = new Set(state.layouts.filter((layout) => Number(layout.selecionado) === 1).map((layout) => Number(layout.id)));
+        const select = state.dom.administradoraSelect;
+        if (!select) return;
+        const configurada = Number(data.dados.configuracao?.administradora_id || 0);
+        state.administradoraConfiguradaId = configurada;
+        select.innerHTML = '<option value="">Selecione a administradora</option>' + state.administradoras.map((adm) => `<option value="${Number(adm.id)}">${escaparHtml(adm.nome)}</option>`).join('');
+        select.value = configurada ? String(configurada) : '';
+        renderizarLayoutsAdministradora();
+        renderizarStatusAdministradora(configurada ? `Administradora atual: ${data.dados.configuracao.nome}. Ajuste os layouts conforme os relatórios recebidos.` : 'Nenhuma administradora foi selecionada para este condomínio. Ao selecionar uma administradora, os layouts padrão serão sugeridos.');
+        console.debug('[Empresa] Layout Administradora carregado.', { administradoras: state.administradoras.length, layouts: state.layouts.length, configurada });
+    } catch (error) {
+        console.error('[Empresa] Erro ao carregar Layout Administradora:', error);
+        renderizarStatusAdministradora(error.message, 'error');
+    }
+}
+
+async function salvarLayoutAdministradora() {
+    const administradoraId = Number(state.dom.administradoraSelect?.value || 0);
+    const layoutIds = Array.from(state.dom.layoutsLista?.querySelectorAll('input[data-layout-id]:checked') || []).map((input) => Number(input.dataset.layoutId));
+    if (!administradoraId) { mostrarAlerta('Selecione a administradora do empreendimento.', 'error'); return; }
+    if (!layoutIds.length) { mostrarAlerta('Selecione pelo menos um layout analítico.', 'error'); return; }
+    try {
+        const response = await fetch(`${state.apiBase}api_empresa.php?action=salvar_layout_administradora`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ administradora_id: administradoraId, layout_ids: layoutIds })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || `Erro HTTP ${response.status}`);
+        state.layoutIdsConfigurados = new Set(data.dados.layout_ids || layoutIds);
+        state.administradoraConfiguradaId = administradoraId;
+        renderizarStatusAdministradora(`Configuração salva para ${data.dados.administradora?.nome || 'a administradora selecionada'}.`, 'success');
+        mostrarAlerta('Layout Administradora salvo com sucesso.', 'success');
+        console.debug('[Empresa] Layout Administradora salvo.', { administradora_id: administradoraId, layout_ids: layoutIds });
+    } catch (error) {
+        console.error('[Empresa] Erro ao salvar Layout Administradora:', error);
+        renderizarStatusAdministradora(error.message, 'error');
+        mostrarAlerta(`Erro ao salvar Layout Administradora: ${error.message}`, 'error');
+    }
+}
+
+function buscarCNPJ() {
     const cnpj = state.dom.cnpj.value;
     if (!cnpj) {
         mostrarAlerta('Por favor, informe um CNPJ', 'error');
