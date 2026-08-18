@@ -285,7 +285,8 @@ function _monitoring_heartbeat($conexao, $input) {
                         ultimo_frame_at = NULLIF(?, ''), atualizado_em = NOW()
                   WHERE id = ? AND tenant_id = ?"
             );
-            $last_frame = substr(trim((string)($camera['last_frame_at'] ?? '')), 0, 30);
+            $raw_last_frame = trim((string)($camera['last_frame_at'] ?? ''));
+            $last_frame = $raw_last_frame !== '' ? _monitoring_datetime($raw_last_frame) : '';
             $stmt->bind_param('sissii', $status, $frames_dropped, $last_error, $last_frame, $camera_id, $tenant_id);
         } else {
             $name = $external_key;
@@ -306,6 +307,10 @@ function _monitoring_heartbeat($conexao, $input) {
         'server_time' => gmdate('c'),
         'config_version' => (int)$config['config_version'],
         'retencao_dias' => (int)$config['retencao_dias'],
+        'lpr_engine' => $config['lpr_engine'] ?? 'fastalpr',
+        'onnx_backend' => $config['onnx_backend'] ?? 'cpu',
+        'confidence_min' => (float)($config['confidence_min'] ?? 0.8),
+        'dedup_seconds' => (int)($config['dedup_seconds'] ?? 20),
         'commands' => [],
         'update' => ['required' => false, 'minimum_agent_version' => $config['versao_minima_agente']],
     ]);

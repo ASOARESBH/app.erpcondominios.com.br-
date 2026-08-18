@@ -104,10 +104,10 @@ function monitoring_agent_context($conexao, $required = true) {
                 a.install_id, a.nome, a.local, a.status, a.agent_version,
                 a.api_contract_version, a.lpr_engine, a.lpr_engine_version,
                 a.hardware_fingerprint_hash, a.last_ip
-         FROM monitoramento_sessoes s
+           FROM monitoramento_sessoes s
          INNER JOIN monitoramento_agentes a ON a.id = s.agente_id
          WHERE s.token_hash = ? AND s.revoked_at IS NULL
-           AND s.expires_at > NOW() AND a.status = 'ativo'
+           AND s.expires_at > NOW()
          LIMIT 1"
     );
     if (!$stmt) {
@@ -121,6 +121,11 @@ function monitoring_agent_context($conexao, $required = true) {
 
     if (!$context || empty($context['tenant_id'])) {
         if ($required) monitoring_json(false, 'Credencial do agente inválida ou expirada.', null, 401, 'AGENT_AUTH_INVALID');
+        return null;
+    }
+    if ($context['status'] !== 'ativo') {
+        $code = $context['status'] === 'revogado' ? 'AGENT_REVOKED' : 'AGENT_BLOCKED';
+        if ($required) monitoring_json(false, 'Agente não autorizado para comunicação.', null, 401, $code);
         return null;
     }
 
