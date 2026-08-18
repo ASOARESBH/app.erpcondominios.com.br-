@@ -5,6 +5,7 @@ const monitoringLog = (...args) => console.debug('[DispositivosMonitoring]', ...
 
 let monitoringAgents = [];
 let monitoringRefreshTimer = null;
+const PAIRING_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
 
 export function init() {
     monitoringLog('Inicializando módulo de dispositivos Monitoring');
@@ -13,6 +14,9 @@ export function init() {
     document.getElementById('monitoring-config-form')?.addEventListener('submit', salvarConfiguracaoMonitoring);
     document.getElementById('monitoring-pending-agent')?.addEventListener('change', selecionarAgentePendente);
     document.getElementById('monitoring-agents-body')?.addEventListener('click', tratarAcaoAgente);
+    document.getElementById('monitoring-secret-close')?.addEventListener('click', fecharModalMonitoringSecret);
+    document.getElementById('monitoring-secret-done')?.addEventListener('click', fecharModalMonitoringSecret);
+    document.getElementById('monitoring-copy-secret')?.addEventListener('click', copiarCredencialMonitoring);
     carregarMonitoring();
     monitoringRefreshTimer = window.setInterval(carregarMonitoring, 30000);
 }
@@ -131,10 +135,15 @@ function renderizarAgentes(agentes) {
 
 async function habilitarMonitoring() {
     const button = document.getElementById('monitoring-enable');
-    const code = document.getElementById('monitoring-pairing-code')?.value.trim().toUpperCase() || '';
+    const rawCode = document.getElementById('monitoring-pairing-code')?.value || '';
+    const code = rawCode.trim().toUpperCase().replace(/\s+/g, '');
     const agentId = Number(document.getElementById('monitoring-agent-id')?.value || 0);
     if (!code) {
         setMonitoringMessage('monitoring-pairing-message', 'Cole o código completo exibido no painel local.', true);
+        return;
+    }
+    if (!PAIRING_CODE_PATTERN.test(code)) {
+        setMonitoringMessage('monitoring-pairing-message', 'Código inválido. Use o formato exibido no painel local, por exemplo FLLY-4CQQ.', true);
         return;
     }
     if (button) button.disabled = true;
@@ -152,15 +161,18 @@ async function habilitarMonitoring() {
         });
         const secret = data.dados?.activation_secret || '';
         document.getElementById('monitoring-generated-secret').textContent = secret || 'Credencial não retornada';
-        document.getElementById('modal-monitoring-secret')?.classList.add('active');
+        document.getElementById('monitoring-secret-overlay')?.classList.add('active');
         setMonitoringMessage('monitoring-pairing-message', 'Máquina habilitada. Guarde a credencial exibida.', false);
         document.getElementById('monitoring-pairing-code').value = '';
         document.getElementById('monitoring-agent-id').value = '';
         document.getElementById('monitoring-pending-agent').value = '';
         await carregarMonitoring();
     } catch (error) {
-        monitoringLog('Falha ao habilitar máquina', error);
-        setMonitoringMessage('monitoring-pairing-message', error.message, true);
+        monitoringLog('Falha ao habilitar máquina', { code: error.code || 'UNKNOWN', message: error.message });
+        const message = error.code === 'PAIRING_REQUEST_NOT_FOUND'
+            ? 'Não há solicitação pendente para este código. No computador Windows, abra o painel local do Monitoring e gere ou envie um novo código antes de tentar novamente.'
+            : error.message;
+        setMonitoringMessage('monitoring-pairing-message', message, true);
     } finally {
         if (button) button.disabled = false;
     }
@@ -228,8 +240,11 @@ function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 }
 
-window.fecharModalMonitoringSecret = () => document.getElementById('modal-monitoring-secret')?.classList.remove('active');
-window.copiarCredencialMonitoring = async () => {
+function fecharModalMonitoringSecret() {
+    document.getElementById('monitoring-secret-overlay')?.classList.remove('active');
+}
+
+async function copiarCredencialMonitoring() {
     const secret = document.getElementById('monitoring-generated-secret')?.textContent || '';
     if (!secret || secret === 'Credencial não retornada') return;
     try {
@@ -238,5 +253,7 @@ window.copiarCredencialMonitoring = async () => {
     } catch (error) {
         monitoringLog('Clipboard indisponível', error);
     }
-};
+}
 
+window.fecharModalMonitoringSecret = fecharModalMonitoringSecret;
+window.copiarCredencialMonitoring = copiarCredencialMonitoring;

@@ -309,16 +309,23 @@ class SessionManagerCore {
                 return this.isAuthenticated;
             }
         } catch (error) {
-            console.error('[SessionManager] ? Erro ao verificar sess?o:', error.message);
-            this.lastError = { message: error.message, type: error.name || 'unknown', timestamp: Date.now() };
+            const errorMessage = String(error?.message || 'Falha desconhecida');
+            const isAbort = error?.name === 'AbortError' || /signal is aborted without reason/i.test(errorMessage);
             this.lastCheckUnauthorized = false;
 
-            if (error.name === 'AbortError') {
-                console.warn('[SessionManager] ?? Timeout na verifica??o (15s)');
-                this.emit('error', { type: 'timeout', message: 'Servidor n?o respondeu em 15s' });
+            // Alguns navegadores retornam um Error genérico ao abortar a requisição
+            // por timeout. Isto não prova expiração de sessão e não deve poluir o
+            // console como falha crítica nem disparar um ciclo de autenticação.
+            if (isAbort) {
+                console.info('[SessionManager] Verificação de sessão cancelada ou expirada por timeout; mantendo sessão atual.');
+                this.lastError = { message: errorMessage, type: 'timeout', timestamp: Date.now() };
+                this.emit('error', { type: 'timeout', message: 'Servidor não respondeu a tempo; a sessão atual foi mantida.' });
                 this.isFetching = false;
                 return this.isAuthenticated;
             }
+
+            console.error('[SessionManager] ? Erro ao verificar sess?o:', errorMessage);
+            this.lastError = { message: errorMessage, type: error.name || 'unknown', timestamp: Date.now() };
             if (error instanceof TypeError) {
                 console.warn('[SessionManager] ?? Erro de rede durante verifica??o');
                 this.isOnline = false;

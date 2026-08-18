@@ -419,11 +419,10 @@ function _monitoring_acessos_recentes($conexao) {
 function _monitoring_admin_tenant($conexao, $input = []) {
     $user = obterUsuarioAutenticado();
     if (!$user) monitoring_json(false, 'Autenticação necessária.', null, 401, 'AUTH_REQUIRED');
-    $requested = (int)($input['tenant_id'] ?? $_GET['tenant_id'] ?? 0);
-    $permissao = strtolower((string)($user['permissao'] ?? 'operador'));
-    if ($permissao === 'super_admin' && $requested > 0) {
-        return ['user' => $user, 'tenant_id' => $requested];
-    }
+
+    // O tenant operacional é sempre o tenant ativo da sessão. Mesmo o
+    // super-admin deve primeiro entrar no contexto operacional da unidade;
+    // parâmetros GET/POST nunca podem escolher o tenant de uma máquina.
     $context = monitoring_web_context('gerente');
     return ['user' => $user, 'tenant_id' => (int)$context['tenant_id']];
 }
@@ -469,14 +468,28 @@ function _monitoring_habilitar_agente($conexao, $input) {
     $pairing_code = strtoupper(trim((string)($input['pairing_code'] ?? '')));
     if (!monitoring_valid_pairing_code($pairing_code)) monitoring_json(false, 'Código de pareamento obrigatório.', null, 422, 'PAIRING_CODE_REQUIRED');
     if ($agent_id <= 0) {
+        // A instalação ainda não possui tenant antes da habilitação e, por isso,
+        // não aparece em listar_agentes. O código completo é a prova de posse
+        // usada para localizar exclusivamente a solicitação pendente.
         $pairing_preview = monitoring_preview($pairing_code, 4, 4);
-        $stmt = $conexao->prepare("SELECT id FROM monitoramento_agentes WHERE pairing_code_preview = ? AND status = 'pendente_ativacao' AND pairing_expires_at > NOW() LIMIT 1");
+        $stmt = $conexao->prepare(
+            "SELECT id FROM monitoramento_agentes
+              WHERE pairing_code_preview = ?
+                AND status IN ('pendente_ativacao', 'solicitado')
+                AND pairing_expires_at > NOW()
+              ORDER BY id DESC LIMIT 1"
+        );
+        if (!$stmt) monitoring_json(false, 'Serviço de pareamento indisponível.', null, 500, 'PAIRING_DB_ERROR');
         $stmt->bind_param('s', $pairing_preview);
         $stmt->execute();
-        $agent_id = (int)($stmt->get_result()->fetch_assoc()['id'] ?? 0);
+        $candidate = $stmt->get_result()->fetch_assoc();
         $stmt->close();
+        $agent_id = (int)($candidate['id'] ?? 0);
+        if ($agent_id <= 0) {
+            monitoring_log('MONITORING_PAIRING_NOT_FOUND', 'Código de pareamento sem solicitação pendente.', $admin['user']['email'] ?? null);
+            monitoring_json(false, 'Nenhuma solicitação pendente foi encontrada para este código. No computador Windows, abra o painel local do Monitoring e gere ou envie um novo código de pareamento.', null, 422, 'PAIRING_REQUEST_NOT_FOUND');
+        }
     }
-    if ($agent_id <= 0) monitoring_json(false, 'Agente obrigatório.', null, 422, 'AGENT_REQUIRED');
 
     $stmt = $conexao->prepare("SELECT id, tenant_id, install_id, hardware_fingerprint_hash, pairing_code_hash, pairing_expires_at, status FROM monitoramento_agentes WHERE id = ? LIMIT 1");
     $stmt->bind_param('i', $agent_id);
