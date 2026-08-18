@@ -65,6 +65,10 @@ try {
             monitoring_require_method('POST');
             _monitoring_revogar_agente($conexao, $input);
             break;
+        case 'regenerar_credencial':
+            monitoring_require_method('POST');
+            _monitoring_regenerar_credencial($conexao, $input);
+            break;
         case 'salvar_configuracao':
             monitoring_require_method('POST');
             _monitoring_salvar_configuracao($conexao, $input);
@@ -522,6 +526,61 @@ function _monitoring_habilitar_agente($conexao, $input) {
         'activation_secret' => $secret,
         'secret_last4' => $last4,
         'status' => 'ativo',
+    ]);
+}
+
+function _monitoring_regenerar_credencial($conexao, $input) {
+    $admin = _monitoring_admin_tenant($conexao, $input);
+    $tenant_id = (int)$admin['tenant_id'];
+    $agent_id = (int)($input['agent_id'] ?? 0);
+    if ($agent_id <= 0) monitoring_json(false, 'Máquina obrigatória.', null, 422, 'AGENT_REQUIRED');
+
+    $stmt = $conexao->prepare("SELECT id, nome, status FROM monitoramento_agentes WHERE id = ? AND tenant_id = ? LIMIT 1");
+    if (!$stmt) monitoring_json(false, 'Serviço de credencial indisponível.', null, 500, 'CREDENTIAL_DB_ERROR');
+    $stmt->bind_param('ii', $agent_id, $tenant_id);
+    $stmt->execute();
+    $agent = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$agent) monitoring_json(false, 'Máquina não encontrada neste condomínio.', null, 404, 'AGENT_NOT_FOUND');
+    if ($agent['status'] !== 'ativo') monitoring_json(false, 'A credencial só pode ser regenerada para máquina ativa.', null, 409, 'AGENT_NOT_ACTIVE');
+
+    $secret = bin2hex(random_bytes(32));
+    $secret_hash = password_hash($secret, PASSWORD_DEFAULT);
+    $last4 = substr($secret, -4);
+
+    $conexao->begin_transaction();
+    try {
+        $stmt = $conexao->prepare("UPDATE monitoramento_agentes
+            SET agent_secret_hash = ?, agent_secret_last4 = ?, atualizado_em = NOW(), last_error_code = NULL
+            WHERE id = ? AND tenant_id = ? AND status = 'ativo'");
+        if (!$stmt) throw new RuntimeException('Não foi possível preparar a nova credencial.');
+        $stmt->bind_param('ssii', $secret_hash, $last4, $agent_id, $tenant_id);
+        $stmt->execute();
+        $changed = $stmt->affected_rows;
+        $stmt->close();
+        if ($changed !== 1) throw new RuntimeException('A máquina não pôde receber a nova credencial.');
+
+        $stmt = $conexao->prepare("UPDATE monitoramento_sessoes SET revoked_at = NOW()
+            WHERE agente_id = ? AND revoked_at IS NULL");
+        if (!$stmt) throw new RuntimeException('Não foi possível invalidar as sessões anteriores.');
+        $stmt->bind_param('i', $agent_id);
+        $stmt->execute();
+        $stmt->close();
+        $conexao->commit();
+    } catch (Throwable $e) {
+        $conexao->rollback();
+        error_log('[MONITORING][CREDENTIAL_ROTATE] agent_id=' . $agent_id . ' erro=' . $e->getMessage());
+        monitoring_json(false, 'Não foi possível regenerar a credencial da máquina.', null, 500, 'CREDENTIAL_ROTATE_ERROR');
+    }
+
+    monitoring_log('MONITORING_CREDENTIAL_ROTATED', 'Credencial operacional regenerada. agent_id=' . $agent_id, $admin['user']['email'] ?? null);
+    monitoring_json(true, 'Nova credencial gerada. Copie-a agora; as sessões anteriores foram encerradas.', [
+        'agent_id' => $agent_id,
+        'activation_secret' => $secret,
+        'secret_last4' => $last4,
+        'status' => 'ativo',
+        'sessions_revoked' => true,
     ]);
 }
 

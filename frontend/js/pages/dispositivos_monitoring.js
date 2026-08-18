@@ -120,7 +120,10 @@ function renderizarAgentes(agentes) {
     body.innerHTML = agentes.map((agent) => {
         const status = String(agent.status || 'novo');
         const action = status === 'ativo'
-            ? `<button type="button" class="monitoring-table-action monitoring-action-revoke" data-agent-action="revogar" data-agent-id="${escapeHtml(agent.id)}">Revogar</button>`
+            ? `<div class="monitoring-actions-inline">
+                <button type="button" class="monitoring-table-action monitoring-action-credential" data-agent-action="regenerar_credencial" data-agent-id="${escapeHtml(agent.id)}">Nova credencial</button>
+                <button type="button" class="monitoring-table-action monitoring-action-revoke" data-agent-action="revogar" data-agent-id="${escapeHtml(agent.id)}">Revogar</button>
+               </div>`
             : `<button type="button" class="monitoring-table-action monitoring-action-enable" data-agent-action="selecionar" data-agent-id="${escapeHtml(agent.id)}">Selecionar</button>`;
         return `<tr>
             <td><strong>${escapeHtml(agent.nome || 'Máquina Monitoring')}</strong><small>${escapeHtml(agent.local || 'Local não informado')}</small></td>
@@ -160,7 +163,6 @@ async function habilitarMonitoring() {
             },
         });
         const secret = data.dados?.activation_secret || '';
-        const secretOutput = document.getElementById('monitoring-generated-secret');
         const pairingField = document.getElementById('monitoring-pairing-code');
         const agentIdField = document.getElementById('monitoring-agent-id');
         const pendingSelect = document.getElementById('monitoring-pending-agent');
@@ -168,8 +170,7 @@ async function habilitarMonitoring() {
         if (!secret) {
             throw new Error('A máquina foi habilitada, mas a credencial única não foi retornada. Não tente habilitar novamente; contate o suporte para regenerar a credencial com segurança.');
         }
-        if (secretOutput) secretOutput.textContent = secret;
-        document.getElementById('monitoring-secret-overlay')?.classList.add('active');
+        exibirCredencialMonitoring(secret);
         setMonitoringMessage('monitoring-pairing-message', 'Máquina habilitada. Guarde a credencial exibida.', false);
         if (pairingField) pairingField.value = '';
         if (agentIdField) agentIdField.value = '';
@@ -212,6 +213,25 @@ async function salvarConfiguracaoMonitoring(event) {
     }
 }
 
+async function regenerarCredencialMonitoring(agentId) {
+    if (!window.confirm('Gerar uma nova credencial para esta máquina? As sessões locais existentes serão encerradas e o painel Windows deverá usar a nova credencial.')) return;
+    try {
+        const data = await monitoringApi('regenerar_credencial', {
+            method: 'POST',
+            body: { agent_id: Number(agentId) },
+        });
+        const secret = data.dados?.activation_secret || '';
+        if (!secret) throw new Error('A nova credencial não foi retornada. Nenhuma nova tentativa foi realizada.');
+        exibirCredencialMonitoring(secret);
+        setMonitoringMessage('monitoring-pairing-message', 'Nova credencial gerada. Copie-a agora e atualize o painel local Windows.', false);
+        monitoringLog('Credencial regenerada', { agentId: Number(agentId), sessionsRevoked: Boolean(data.dados?.sessions_revoked) });
+        await carregarMonitoring();
+    } catch (error) {
+        monitoringLog('Falha ao regenerar credencial', { code: error.code || 'UNKNOWN', message: error.message });
+        setMonitoringMessage('monitoring-pairing-message', error.message, true);
+    }
+}
+
 async function revogarAgente(agentId) {
     if (!window.confirm('Revogar esta máquina? A sincronização será bloqueada no próximo heartbeat.')) return;
     try {
@@ -227,6 +247,7 @@ function tratarAcaoAgente(event) {
     if (!button) return;
     const id = button.dataset.agentId;
     if (button.dataset.agentAction === 'revogar') revogarAgente(id);
+    if (button.dataset.agentAction === 'regenerar_credencial') regenerarCredencialMonitoring(id);
     if (button.dataset.agentAction === 'selecionar') {
         const select = document.getElementById('monitoring-pending-agent');
         if (select) {
@@ -247,6 +268,13 @@ function setMonitoringMessage(id, message, isError) {
 
 function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+}
+
+function exibirCredencialMonitoring(secret) {
+    const secretOutput = document.getElementById('monitoring-generated-secret');
+    if (!secretOutput) throw new Error('Não foi possível abrir o modal de credencial.');
+    secretOutput.textContent = secret;
+    document.getElementById('monitoring-secret-overlay')?.classList.add('active');
 }
 
 function fecharModalMonitoringSecret() {

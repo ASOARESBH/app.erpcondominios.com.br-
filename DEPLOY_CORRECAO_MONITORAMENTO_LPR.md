@@ -40,3 +40,11 @@ Se o painel Windows ainda não enviou a solicitação, o ERP exibirá: **“Não
 ## Segurança e isolamento
 
 O tenant da máquina é obtido somente do contexto operacional autenticado. Nenhum parâmetro de navegador pode definir o tenant da ativação. A lista do gestor mostra apenas agentes já vinculados ao condomínio ativo; solicitações ainda não vinculadas são localizadas unicamente após a validação do código temporário.
+
+## Recuperação de credencial de máquina já ativa
+
+Caso a máquina tenha sido habilitada antes da exibição correta do modal, não é necessário revogar ou cadastrar outra instalação. Na tabela **Máquinas do Tenant**, use a ação **Nova credencial** da máquina ativa.
+
+A confirmação da ação gera um novo segredo operacional, exibe-o uma única vez no modal e encerra as sessões locais anteriores daquela máquina. Copie o novo valor para o campo **Credencial da máquina** do painel local Windows e execute novamente **Entrar e ativar sincronização**.
+
+> A rotação não altera o `install_id`, o vínculo ao tenant, as câmeras ou o histórico de eventos. Ela invalida somente a credencial anterior e as sessões emitidas com ela.
