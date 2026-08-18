@@ -29,7 +29,8 @@ $usuario_id = (int)($usuario['id'] ?? $_SESSION['usuario_id'] ?? 0);
 if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
 
 _garantirTabelas();
-$acao = strtolower(trim((string)($_REQUEST['acao'] ?? '')));
+// Aceita a ação explicitamente em GET ou POST; evita ambiguidade de $_REQUEST em uploads multipart.
+$acao = strtolower(trim((string)($_GET['acao'] ?? $_POST['acao'] ?? '')));
 
 try {
     switch ($acao) {

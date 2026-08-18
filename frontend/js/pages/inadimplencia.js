@@ -68,8 +68,9 @@ function _vincularEventos() {
 async function _api(acao, options = {}) {
     log('API solicitada:', acao, options.method || 'GET', options.params || {});
     const url = new URL(API, window.location.href);
+    // A API roteia pela ação. Mantê-la na URL evita perda do campo em uploads multipart.
+    url.searchParams.set('acao', acao);
     if (!options.method || options.method === 'GET') {
-        url.searchParams.set('acao', acao);
         Object.entries(options.params || {}).forEach(([key, value]) => {
             if (value !== '' && value !== null && value !== undefined) url.searchParams.set(key, value);
         });
