@@ -77,10 +77,11 @@
 
             <!-- BLOCO 4: Foto e Documento -->
             <div class="form-section-title">Foto e Documento</div>
+            <div class="upload-requirement-note"><i class="fas fa-paperclip"></i> <strong>Anexo obrigatório:</strong> envie uma foto do visitante, um documento digitalizado ou ambos.</div>
             <div class="form-grid form-grid-2">
                 <!-- Foto do visitante -->
                 <div class="form-group upload-group">
-                    <label>Foto do Visitante <span class="field-required" aria-label="obrigatório">*</span></label>
+                    <label>Foto do Visitante</label>
                     <div class="upload-preview-box" id="fotoPreviewBox">
                         <img id="fotoPreview" src="" alt="Foto do visitante" style="display:none; max-width:120px; max-height:120px; border-radius:8px; object-fit:cover;">
                         <div id="fotoPlaceholder" class="upload-placeholder">
@@ -100,12 +101,12 @@
                             <i class="fas fa-times"></i> Remover
                         </button>
                     </div>
-                    <small class="upload-hint"><strong>Obrigatória.</strong> Webcam ou arquivo JPG/PNG/WEBP — máx. 500KB comprimido</small>
+                    <small class="upload-hint">Opcional quando houver documento. Webcam ou arquivo JPG/PNG/WEBP — máx. 500KB comprimido</small>
                 </div>
 
                 <!-- Documento digitalizado -->
                 <div class="form-group upload-group">
-                    <label>Documento Digitalizado <span class="field-required" aria-label="obrigatório">*</span></label>
+                    <label>Documento Digitalizado</label>
                     <div class="upload-preview-box" id="docPreviewBox">
                         <div id="docPreview" style="display:none; padding:10px; text-align:center;">
                             <i class="fas fa-file-alt fa-3x" style="color:#4a90d9;"></i>
@@ -125,7 +126,7 @@
                             <i class="fas fa-times"></i> Remover
                         </button>
                     </div>
-                    <small class="upload-hint"><strong>Obrigatório.</strong> JPG, PNG, WEBP ou PDF — máx. 5MB</small>
+                    <small class="upload-hint">Opcional quando houver foto. JPG, PNG, WEBP ou PDF — máx. 5MB</small>
                 </div>
             </div>
 
@@ -196,7 +197,8 @@
 </div>
 <style>
 /* ===== ESTILOS DO MÓDULO VISITANTES v2 ===== */
-	.field-required { color:#dc2626; font-weight:800; }
+	.upload-requirement-note { margin:-2px 0 14px; padding:9px 12px; border:1px solid #bfdbfe; border-radius:7px; background:#eff6ff; color:#1e40af; font-size:12px; }
+	.upload-requirement-note i { margin-right:5px; }
 	.form-section-title {
 
     font-size: 13px;

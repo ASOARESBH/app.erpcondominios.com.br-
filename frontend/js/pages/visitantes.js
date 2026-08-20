@@ -499,14 +499,10 @@ async function _salvarVisitante() {
         if (!nome)            { _mostrarAlerta('error', 'Nome completo é obrigatório.'); return; }
         if (!documento)       { _mostrarAlerta('error', 'Documento é obrigatório.'); return; }
         if (!telefoneContato) { _mostrarAlerta('error', 'Telefone de contato é obrigatório.'); return; }
-        if (!(fotoArquivo || fotoExistente)) {
-            _mostrarAlerta('error', 'A foto do visitante é obrigatória para concluir o cadastro.');
+        // É obrigatório anexar pelo menos uma evidência: foto ou documento.
+        if (!(fotoArquivo || fotoExistente || docArquivo || documentoExistente)) {
+            _mostrarAlerta('error', 'Anexe ao menos uma foto ou um documento digitalizado para concluir o cadastro.');
             document.getElementById('btnSelecionarFoto')?.focus();
-            return;
-        }
-        if (!(docArquivo || documentoExistente)) {
-            _mostrarAlerta('error', 'O documento digitalizado é obrigatório para concluir o cadastro.');
-            document.getElementById('btnSelecionarDoc')?.focus();
             return;
         }
 
@@ -536,7 +532,7 @@ async function _salvarVisitante() {
         const method = modoEdicao ? 'PUT' : 'POST';
         if (modoEdicao) payload.id = visitanteIdEdicao;
 
-        // Cadastro inicial é multipart: os dois anexos obrigatórios seguem com os dados.
+        // Cadastro inicial é multipart: a foto, o documento ou ambos seguem com os dados.
         // Edições continuam enviando JSON e só carregam novos arquivos quando necessário.
         let resp;
         if (modoEdicao) {
@@ -548,8 +544,8 @@ async function _salvarVisitante() {
         } else {
             const formularioComAnexos = new FormData();
             formularioComAnexos.append('dados', JSON.stringify(payload));
-            formularioComAnexos.append('foto', fotoArquivo);
-            formularioComAnexos.append('documento', docArquivo);
+            if (fotoArquivo) formularioComAnexos.append('foto', fotoArquivo);
+            if (docArquivo) formularioComAnexos.append('documento', docArquivo);
             resp = await fetch(API_VISITANTES, {
                 method: 'POST',
                 body: formularioComAnexos

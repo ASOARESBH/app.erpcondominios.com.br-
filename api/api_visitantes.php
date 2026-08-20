@@ -42,15 +42,16 @@ $conexao = conectar_banco();
 // Os campos da tabela mantêm URLs legadas apenas como chave de compatibilidade.
 
 /**
- * Valida e persiste um anexo obrigatório do cadastro inicial de visitante.
- * A operação usa o mesmo banco e pode participar da transação do cadastro.
+ * Valida e persiste um anexo opcional do cadastro inicial de visitante.
+ * O cadastro exige ao menos um anexo, verificado após o processamento de foto e documento.
  */
-function gravar_anexo_obrigatorio_visitante($conexao, $tenant_id, $campo, $tipo_upload, $visitante_id) {
+function gravar_anexo_visitante_se_enviado($conexao, $tenant_id, $campo, $tipo_upload, $visitante_id) {
     $arquivo = $_FILES[$campo] ?? null;
-    if (!$arquivo || (int)($arquivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        throw new RuntimeException($tipo_upload === 'foto'
-            ? 'A foto do visitante é obrigatória.'
-            : 'O documento digitalizado do visitante é obrigatório.');
+    if (!$arquivo || (int)($arquivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if ((int)($arquivo['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Falha no envio do arquivo de ' . $tipo_upload . '.');
     }
 
     $extensoesPermitidas = $tipo_upload === 'foto'
@@ -269,21 +270,36 @@ if ($metodo === 'POST') {
         $id = (int)$conexao->insert_id;
         $stmt->close();
 
-        // Foto e documento são requisitos do cadastro. Os dois BLOBs precisam
-        // ser gravados antes de confirmar o visitante para evitar cadastro incompleto.
-        $urlFoto = gravar_anexo_obrigatorio_visitante($conexao, (int)$tenant_id, 'foto', 'foto', $id);
-        $urlDocumento = gravar_anexo_obrigatorio_visitante($conexao, (int)$tenant_id, 'documento', 'documento', $id);
-
-        $stmtArquivos = $conexao->prepare(
-            'UPDATE visitantes SET foto = ?, documento_arquivo = ? WHERE tenant_id = ? AND id = ?'
-        );
-        if (!$stmtArquivos) {
-            throw new RuntimeException('Não foi possível associar os anexos ao visitante.');
+        // Foto ou documento são aceitos como evidência obrigatória. O cadastro
+        // só é confirmado quando pelo menos um BLOB for gravado para este tenant.
+        $urlFoto = gravar_anexo_visitante_se_enviado($conexao, (int)$tenant_id, 'foto', 'foto', $id);
+        $urlDocumento = gravar_anexo_visitante_se_enviado($conexao, (int)$tenant_id, 'documento', 'documento', $id);
+        if (!$urlFoto && !$urlDocumento) {
+            throw new RuntimeException('Anexe ao menos uma foto ou um documento digitalizado para concluir o cadastro.');
         }
-        $stmtArquivos->bind_param('ssii', $urlFoto, $urlDocumento, $tenant_id, $id);
+
+        if ($urlFoto && $urlDocumento) {
+            $stmtArquivos = $conexao->prepare(
+                'UPDATE visitantes SET foto = ?, documento_arquivo = ? WHERE tenant_id = ? AND id = ?'
+            );
+            if (!$stmtArquivos) throw new RuntimeException('Não foi possível associar os anexos ao visitante.');
+            $stmtArquivos->bind_param('ssii', $urlFoto, $urlDocumento, $tenant_id, $id);
+        } elseif ($urlFoto) {
+            $stmtArquivos = $conexao->prepare(
+                'UPDATE visitantes SET foto = ? WHERE tenant_id = ? AND id = ?'
+            );
+            if (!$stmtArquivos) throw new RuntimeException('Não foi possível associar a foto ao visitante.');
+            $stmtArquivos->bind_param('sii', $urlFoto, $tenant_id, $id);
+        } else {
+            $stmtArquivos = $conexao->prepare(
+                'UPDATE visitantes SET documento_arquivo = ? WHERE tenant_id = ? AND id = ?'
+            );
+            if (!$stmtArquivos) throw new RuntimeException('Não foi possível associar o documento ao visitante.');
+            $stmtArquivos->bind_param('sii', $urlDocumento, $tenant_id, $id);
+        }
         if (!$stmtArquivos->execute()) {
             $stmtArquivos->close();
-            throw new RuntimeException('Não foi possível associar os anexos ao visitante.');
+            throw new RuntimeException('Não foi possível associar o anexo ao visitante.');
         }
         $stmtArquivos->close();
 
