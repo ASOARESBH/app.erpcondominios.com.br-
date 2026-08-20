@@ -44,11 +44,18 @@ if ($tem_usuario_modulos instanceof mysqli_result) $tem_usuario_modulos->free();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $acao   = $_GET['acao'] ?? $_POST['acao'] ?? (json_decode(file_get_contents('php://input'), true)['acao'] ?? '');
+$rbac_ativo = rbacTabelasDisponiveis($conexao);
+if ($rbac_ativo) require_once __DIR__ . '/rbac_api_controller.php';
 
 // ─────────────────────────────────────────────────────────────────────
 // GET: Listar todos os módulos do sistema
 // ─────────────────────────────────────────────────────────────────────
 if ($metodo === 'GET' && $acao === 'listar_modulos') {
+    if ($rbac_ativo) {
+        rbacExigir($conexao, 'usuarios', 'visualizar');
+        $catalogo = rbacCatalogoApi($conexao);
+        retornar_json(true, 'Catálogo RBAC carregado', ['modulos' => array_values($catalogo), 'grupos' => []]);
+    }
     $sql = "SELECT id, chave, nome, grupo, icone, descricao, permissao_minima, ativo, ordem
             FROM modulos_sistema ORDER BY ordem ASC";
     $res = $conexao->query($sql);
@@ -68,8 +75,15 @@ if ($metodo === 'GET' && $acao === 'listar_modulos') {
 // GET: Permissões de um usuário específico (admin/gerente)
 // ─────────────────────────────────────────────────────────────────────
 if ($metodo === 'GET' && $acao === 'permissoes_usuario') {
-    verificarPermissao('gerente');
+    if ($rbac_ativo) rbacExigir($conexao, 'usuarios', 'visualizar');
+    else verificarPermissao('gerente');
     $usuario_id = intval($_GET['id'] ?? 0);
+    if ($rbac_ativo) {
+        $usuario_rbac = rbacUsuarioMesmoTenant($conexao, $usuario_id, $tenant_id);
+        if (!$usuario_rbac) retornar_json(false, 'Usuário não encontrado no condomínio atual');
+        $dados_rbac = rbacFormatoPermissoesApi($conexao, $usuario_id, $tenant_id, true);
+        retornar_json(true, 'Permissões efetivas carregadas', ['usuario'=>$usuario_rbac, 'permissoes'=>$dados_rbac['modulos'], 'grupos'=>$dados_rbac['grupos'], 'revisao'=>$dados_rbac['revisao']]);
+    }
     if ($usuario_id <= 0) {
         retornar_json(false, 'ID de usuário inválido');
     }
@@ -173,6 +187,10 @@ if ($metodo === 'GET' && $acao === 'minhas_permissoes') {
 }
 if ($metodo === 'GET' && $acao === 'meus_modulos') {
     $uid = $usuario_logado['id'];
+    if ($rbac_ativo) {
+        $dados_rbac = rbacFormatoPermissoesApi($conexao, (int)$uid, $tenant_id, false);
+        retornar_json(true, 'Permissões efetivas carregadas', ['modulos'=>$dados_rbac['modulos'], 'is_admin'=>$dados_rbac['is_admin'], 'revisao'=>$dados_rbac['revisao'], 'grupos'=>$dados_rbac['grupos']]);
+    }
     $permissao = $usuario_logado['permissao'] ?? 'operador';
 
     // Admin e Super-Admin têm acesso total aos módulos. O Super-Admin
@@ -234,9 +252,21 @@ if ($metodo === 'GET' && $acao === 'meus_modulos') {
 // POST: Salvar permissões de um usuário (somente admin)
 // ─────────────────────────────────────────────────────────────────────
 if ($metodo === 'POST') {
-    verificarPermissao('admin');
     $dados = json_decode(file_get_contents('php://input'), true);
     $acao_post = $dados['acao'] ?? $acao;
+    if ($rbac_ativo) {
+        rbacExigir($conexao, 'usuarios', 'configurar');
+        if ($acao_post === 'salvar_permissoes') {
+            $resultado_rbac = rbacSalvarExcecoesLegadas($conexao, $tenant_id, intval($dados['usuario_id'] ?? 0), $dados['permissoes'] ?? []);
+            retornar_json((bool)$resultado_rbac['ok'], $resultado_rbac['ok'] ? 'Permissões efetivas salvas com sucesso' : ($resultado_rbac['mensagem'] ?? 'Não foi possível salvar as permissões'), $resultado_rbac);
+        }
+        if ($acao_post === 'resetar_para_perfil') {
+            $resultado_rbac = rbacResetarExcecoesUsuario($conexao, $tenant_id, intval($dados['usuario_id'] ?? 0));
+            retornar_json((bool)$resultado_rbac['ok'], $resultado_rbac['ok'] ? 'Exceções removidas; permissões de grupo restabelecidas' : ($resultado_rbac['mensagem'] ?? 'Não foi possível redefinir as permissões'), $resultado_rbac);
+        }
+        retornar_json(false, 'Ação RBAC não reconhecida');
+    }
+    verificarPermissao('admin');
 
     if ($acao_post === 'salvar_permissoes') {
         $usuario_id  = intval($dados['usuario_id'] ?? 0);

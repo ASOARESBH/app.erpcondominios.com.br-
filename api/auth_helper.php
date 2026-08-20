@@ -18,6 +18,7 @@
  */
 
 require_once __DIR__ . '/tenant_helper.php';
+require_once __DIR__ . '/rbac_helper.php';
 
 function verificarAutenticacao($exigir_autenticacao = true, $permissao_minima = null) {
     if (session_status() === PHP_SESSION_NONE) {
@@ -71,6 +72,30 @@ function verificarAutenticacao($exigir_autenticacao = true, $permissao_minima = 
                 'codigo'   => 'TENANT_REQUIRED'
             ], JSON_UNESCAPED_UNICODE);
             exit;
+        }
+    }
+
+    // Sessões RBAC são registradas e verificadas após existir um tenant confiável.
+    // A falha de banco não derruba a compatibilidade antes da migration; já uma sessão
+    // explicitamente revogada é encerrada imediatamente.
+    if (!empty($tenant_id)) {
+        try {
+            require_once __DIR__ . '/config.php';
+            $conexao_rbac_sessao = conectar_banco();
+            if (rbacTabelasDisponiveis($conexao_rbac_sessao) && !rbacValidarSessaoAtual($conexao_rbac_sessao, (int)$usuario_id, (int)$tenant_id)) {
+                $_SESSION = [];
+                if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
+                fechar_conexao($conexao_rbac_sessao);
+                if ($exigir_autenticacao) {
+                    http_response_code(401);
+                    echo json_encode(['sucesso'=>false,'mensagem'=>'Esta sessão foi encerrada por um administrador. Faça login novamente.','codigo'=>'SESSION_REVOKED'], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+                return false;
+            }
+            fechar_conexao($conexao_rbac_sessao);
+        } catch (Throwable $e) {
+            error_log('[auth_helper] Falha não bloqueante ao verificar sessão RBAC: ' . $e->getMessage());
         }
     }
 
@@ -163,6 +188,38 @@ function verificarPermissao($permissao_necessaria) {
         exit;
     }
     return true;
+}
+
+/**
+ * Exige uma permissão granular depois de validar a sessão e o tenant atual.
+ * Deve ser usada em toda operação sensível de API, independentemente do botão
+ * ou menu exibido pelo frontend.
+ */
+function exigirPermissaoRbac($modulo_chave, $acao, array $contexto = []) {
+    $auth = verificarAutenticacao(true);
+    require_once __DIR__ . '/config.php';
+    $conexao = conectar_banco();
+    rbacExigir($conexao, $modulo_chave, $acao, $contexto);
+    fechar_conexao($conexao);
+    return $auth;
+}
+
+function usuarioPodeRbac($modulo_chave, $acao) {
+    $auth = verificarAutenticacao(true);
+    require_once __DIR__ . '/config.php';
+    $conexao = conectar_banco();
+    $pode = rbacPode($conexao, $modulo_chave, $acao, (int)$auth['id'], (int)$auth['tenant_id']);
+    fechar_conexao($conexao);
+    return $pode;
+}
+
+function obterPermissoesRbacEfetivas($forcar_atualizacao = false) {
+    $auth = verificarAutenticacao(true);
+    require_once __DIR__ . '/config.php';
+    $conexao = conectar_banco();
+    $permissoes = rbacObterPermissoesEfetivas($conexao, (int)$auth['id'], (int)$auth['tenant_id'], $forcar_atualizacao);
+    fechar_conexao($conexao);
+    return $permissoes;
 }
 
 function obterUsuarioAutenticado() {

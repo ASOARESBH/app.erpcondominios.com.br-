@@ -58,6 +58,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once 'config.php';
+require_once __DIR__ . '/rbac_helper.php';
 
 // Padrões: 60 min total, 0 = sem timeout de inatividade
 define('SESSAO_TIMEOUT_TOTAL_MIN',       60);
@@ -227,6 +228,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // token nesse caso devolvia 401 ao SessionManager enquanto o AuthGuard,
     // baseado no cookie PHPSESSID, já havia autorizado o layout.
     $sessao_erp_valida = verificar_sessao_erp();
+    if ($sessao_erp_valida && !empty($_SESSION['tenant_id']) && rbacTabelasDisponiveis($conexao)) {
+        $uid_rbac = (int)($_SESSION['usuario_id'] ?? 0);
+        if ($uid_rbac > 0 && !rbacValidarSessaoAtual($conexao, $uid_rbac, (int)$_SESSION['tenant_id'])) {
+            $_SESSION = [];
+            session_destroy();
+            $sessao_erp_valida = false;
+        }
+    }
 
     if (!$sessao_erp_valida && !empty($token)) {
         $sessao = verificar_sessao_portal($conexao, $token, $config);
@@ -363,6 +372,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param('s', $token); $stmt->execute(); $stmt->close();
             log_sessao("Logout — token: " . substr($token,0,8), 'INFO');
         }
+        if (rbacTabelasDisponiveis($conexao)) rbacEncerrarSessaoAtual($conexao, 'LOGOUT_USUARIO');
         if (session_status() === PHP_SESSION_ACTIVE) { $_SESSION=[]; session_destroy(); }
         retornar_sucesso_sessao(['mensagem'=>'Logout realizado com sucesso']);
     }

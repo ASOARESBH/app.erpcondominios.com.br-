@@ -30,6 +30,8 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once 'config.php';
+require_once 'auth_helper.php';
+require_once 'tenant_helper.php';
 
 // ─── LOG ─────────────────────────────────────────────────────────────────────
 function log_admin($msg, $nivel = 'INFO') {
@@ -103,11 +105,20 @@ function garantir_tabelas($conexao) {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 $admin   = verificar_admin();
+$tenant_id = exigirTenantId();
 $conexao = conectar_banco();
 $metodo  = $_SERVER['REQUEST_METHOD'];
-$action  = $_GET['action'] ?? '';
+$payload_rbac = json_decode(file_get_contents('php://input'), true) ?? [];
+$action  = $_GET['action'] ?? ($payload_rbac['action'] ?? '');
+$rbac_ativo = rbacTabelasDisponiveis($conexao);
+if ($rbac_ativo) {
+    $acao_rbac = $metodo === 'GET' ? 'visualizar' : (in_array($action, ['salvar_config_global','configurar_morador','remover_personalizacao'], true) ? 'configurar' : 'executar');
+    rbacExigir($conexao, 'admin_sessoes', $acao_rbac);
+}
 
-garantir_tabelas($conexao);
+// A estrutura deve ser criada exclusivamente pelas migrations. Executar DDL
+// em toda requisição provocava lock e contém sintaxe incompatível com MariaDB 5.7.
+// garantir_tabelas($conexao);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // GET: Listar dados
@@ -121,15 +132,15 @@ if ($metodo === 'GET') {
         $por_pag = min(50, max(10, (int)($_GET['por_pagina'] ?? 20)));
         $offset = ($pagina - 1) * $por_pag;
 
-        $where = 'WHERE m.ativo = 1';
-        $params = [];
-        $tipos  = '';
+        $where = 'WHERE m.ativo = 1 AND m.tenant_id = ?';
+        $params = [$tenant_id];
+        $tipos  = 'i';
 
         if (!empty($busca)) {
             $where   .= ' AND (m.nome LIKE ? OR m.unidade LIKE ? OR m.email LIKE ?)';
             $like     = '%' . $busca . '%';
-            $params   = [$like, $like, $like];
-            $tipos    = 'sss';
+            $params   = [$tenant_id, $like, $like, $like];
+            $tipos    = 'isss';
         }
 
         // Total
@@ -189,10 +200,11 @@ if ($metodo === 'GET') {
                 TIMESTAMPDIFF(MINUTE, sp.data_login, NOW()) AS minutos_logado,
                 TIMESTAMPDIFF(MINUTE, sp.ultimo_ativo, NOW()) AS minutos_inativo
             FROM sessoes_portal sp
-            INNER JOIN moradores m ON m.id = sp.morador_id
+            INNER JOIN moradores m ON m.id = sp.morador_id AND m.tenant_id = ?
             WHERE sp.ativo = 1 AND sp.data_expiracao > NOW()
             ORDER BY sp.data_login DESC
         ");
+        $stmt->bind_param('i', $tenant_id);
         $stmt->execute();
         $res = $stmt->get_result();
         $sessoes = [];
@@ -223,11 +235,12 @@ if ($metodo === 'GET') {
                    sp.ip_address, sp.ativo,
                    TIMESTAMPDIFF(MINUTE, sp.data_login, COALESCE(sp.ultimo_ativo, sp.data_login)) AS duracao_min
             FROM sessoes_portal sp
+            INNER JOIN moradores m ON m.id=sp.morador_id AND m.tenant_id=?
             WHERE sp.morador_id = ?
             ORDER BY sp.data_login DESC
             LIMIT 30
         ");
-        $stmt->bind_param('i', $morador_id);
+        $stmt->bind_param('ii', $tenant_id, $morador_id);
         $stmt->execute();
         $res = $stmt->get_result();
         $hist = [];
@@ -244,7 +257,7 @@ if ($metodo === 'GET') {
 // POST: Ações de escrita
 // ══════════════════════════════════════════════════════════════════════════════
 if ($metodo === 'POST') {
-    $dados = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $dados = $payload_rbac ?: $_POST;
     $action = $dados['action'] ?? $_GET['action'] ?? '';
 
     // ── Configurar timeout de um morador ─────────────────────────────────────
@@ -272,9 +285,9 @@ if ($metodo === 'POST') {
                 sessao_personalizada    = ?,
                 timeout_total_min       = ?,
                 timeout_inatividade_min = ?
-            WHERE id = ?
+            WHERE id = ? AND tenant_id = ?
         ");
-        $stmt->bind_param('iiii', $sessao_personalizada, $timeout_total, $timeout_inatividade, $morador_id);
+        $stmt->bind_param('iiiii', $sessao_personalizada, $timeout_total, $timeout_inatividade, $morador_id, $tenant_id);
         $stmt->execute();
         $stmt->close();
 
@@ -288,15 +301,15 @@ if ($metodo === 'POST') {
         $morador_id = (int)($dados['morador_id'] ?? 0);
 
         if ($sessao_id) {
-            $stmt = $conexao->prepare("UPDATE sessoes_portal SET ativo = 0 WHERE id = ?");
-            $stmt->bind_param('i', $sessao_id);
+            $stmt = $conexao->prepare("UPDATE sessoes_portal sp INNER JOIN moradores m ON m.id=sp.morador_id SET sp.ativo=0 WHERE sp.id=? AND m.tenant_id=?");
+            $stmt->bind_param('ii', $sessao_id, $tenant_id);
             $stmt->execute();
             $stmt->close();
             log_admin("Admin {$admin['nome']} encerrou sessão ID {$sessao_id}");
             retornar(true, 'Sessão encerrada com sucesso');
         } elseif ($morador_id) {
-            $stmt = $conexao->prepare("UPDATE sessoes_portal SET ativo = 0 WHERE morador_id = ? AND ativo = 1");
-            $stmt->bind_param('i', $morador_id);
+            $stmt = $conexao->prepare("UPDATE sessoes_portal sp INNER JOIN moradores m ON m.id=sp.morador_id SET sp.ativo=0 WHERE sp.morador_id=? AND m.tenant_id=? AND sp.ativo=1");
+            $stmt->bind_param('ii', $morador_id, $tenant_id);
             $stmt->execute();
             $af = $stmt->affected_rows;
             $stmt->close();
@@ -309,9 +322,12 @@ if ($metodo === 'POST') {
 
     // ── Encerrar TODAS as sessões ativas ──────────────────────────────────────
     if ($action === 'encerrar_todas') {
-        $conexao->query("UPDATE sessoes_portal SET ativo = 0 WHERE ativo = 1");
-        $af = $conexao->affected_rows;
-        log_admin("Admin {$admin['nome']} encerrou TODAS as sessões ativas ({$af} sessões)", 'WARN');
+        $stmt_todas = $conexao->prepare("UPDATE sessoes_portal sp INNER JOIN moradores m ON m.id=sp.morador_id SET sp.ativo=0 WHERE sp.ativo=1 AND m.tenant_id=?");
+        $stmt_todas->bind_param('i', $tenant_id);
+        $stmt_todas->execute();
+        $af = $stmt_todas->affected_rows;
+        $stmt_todas->close();
+        log_admin("Admin {$admin['nome']} encerrou TODAS as sessões ativas do tenant {$tenant_id} ({$af} sessões)", 'WARN');
         retornar(true, "Todas as {$af} sessões foram encerradas");
     }
 
@@ -345,8 +361,8 @@ if ($metodo === 'POST') {
         $morador_id = (int)($dados['morador_id'] ?? 0);
         if (!$morador_id) retornar(false, 'morador_id obrigatório', null, 400);
 
-        $stmt = $conexao->prepare("UPDATE moradores SET sessao_personalizada=0, timeout_total_min=NULL, timeout_inatividade_min=NULL WHERE id=?");
-        $stmt->bind_param('i', $morador_id);
+        $stmt = $conexao->prepare("UPDATE moradores SET sessao_personalizada=0, timeout_total_min=NULL, timeout_inatividade_min=NULL WHERE id=? AND tenant_id=?");
+        $stmt->bind_param('ii', $morador_id, $tenant_id);
         $stmt->execute();
         $stmt->close();
 
