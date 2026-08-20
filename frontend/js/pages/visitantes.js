@@ -18,6 +18,7 @@ let docArquivo        = null;
 let fotoExistente     = false;
 let documentoExistente = false;
 let salvando          = false;
+let relatorioAnaliticoCache = null;
 
 export function init() {
     console.log('[Visitantes] Inicializando v3...');
@@ -27,6 +28,7 @@ export function init() {
     _setupBusca();
     _setupActions();
     _setupUploads();
+    _setupRelatorios();
     _resetForm();
     _carregarVisitantes();
 
@@ -39,7 +41,8 @@ export function init() {
         verDoc:         _verDoc,
         relExportarCSV: relExportarCSV,
         relGerarPDF:    relGerarPDF,
-        relAtualizar:   _relAtualizar
+        relAtualizar:   _relAtualizar,
+        relAlternarTipo: _relAlternarTipo
     };
     console.log('[Visitantes] Módulo pronto.');
 }
@@ -89,7 +92,12 @@ function _atualizarKpis(lista) {
     set('kpiComDoc', comDoc);
 }
 
-function _relAtualizar() {
+async function _relAtualizar() {
+    if (_tipoRelatorioAtual() === 'analitico') {
+        await _relCarregarAnalitico();
+        return;
+    }
+
     const filtros = _relColetarFiltros();
     const dados   = _relFiltrarCache(filtros);
     const preview = document.getElementById('relPreviewVisitantes');
@@ -118,7 +126,8 @@ export function destroy() {
     visitanteIdEdicao = null;
     fotoArquivo       = null;
     docArquivo        = null;
-    salvando          = false;
+    relatorioAnaliticoCache = null;
+    salvando = false;
 }
 
 // ===== MÁSCARAS =====
@@ -817,6 +826,135 @@ function _esc(value) {
 
 // ===== RELATORIOS =====
 
+function _setupRelatorios() {
+    const tipo = document.getElementById('relTipoRelatorio');
+    const inicio = document.getElementById('relDataInicio');
+    const fim = document.getElementById('relDataFim');
+    const hoje = new Date();
+    const trintaDias = new Date();
+    trintaDias.setDate(hoje.getDate() - 29);
+    const formatarData = (data) => {
+        const ano = data.getFullYear();
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const dia = String(data.getDate()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}`;
+    };
+    if (inicio && !inicio.value) inicio.value = formatarData(trintaDias);
+    if (fim && !fim.value) fim.value = formatarData(hoje);
+    tipo?.addEventListener('change', () => _relAlternarTipo(true));
+    _relAlternarTipo(false);
+}
+
+function _tipoRelatorioAtual() {
+    return document.getElementById('relTipoRelatorio')?.value === 'analitico' ? 'analitico' : 'padrao';
+}
+
+function _relAlternarTipo(atualizar = true) {
+    const analitico = _tipoRelatorioAtual() === 'analitico';
+    const filtrosCadastro = document.getElementById('relFiltrosCadastro');
+    const filtrosAnalitico = document.getElementById('relAnaliticoFiltros');
+    const kpisCadastro = document.getElementById('relKpisVisitantes');
+    const preview = document.getElementById('relPreviewVisitantes');
+    // O seletor de tipo permanece visível; somente os filtros próprios de cadastros
+    // são ocultados quando o administrador escolhe a visão analítica de acessos.
+    ['relNome', 'relCpf', 'relEmail', 'relTemFoto', 'relTemDoc', 'relOrigemCadastro', 'relAtivo'].forEach((id) => {
+        const grupo = document.getElementById(id)?.closest('.form-group');
+        if (grupo) grupo.style.display = analitico ? 'none' : '';
+    });
+    if (filtrosCadastro) filtrosCadastro.style.display = 'grid';
+    if (filtrosAnalitico) filtrosAnalitico.style.display = analitico ? 'grid' : 'none';
+    if (kpisCadastro && analitico) kpisCadastro.style.display = 'none';
+    if (preview) preview.innerHTML = analitico
+        ? '<p style="padding:12px;color:#64748b"><i class="fas fa-chart-line"></i> Atualize para carregar os indicadores analíticos de acesso.</p>'
+        : '';
+    console.debug('[Visitantes][Relatórios] tipo alterado', { tipo: analitico ? 'analitico' : 'padrao' });
+    if (atualizar) _relAtualizar();
+}
+
+async function _relCarregarAnalitico() {
+    const preview = document.getElementById('relPreviewVisitantes');
+    const dataInicio = document.getElementById('relDataInicio')?.value || '';
+    const dataFim = document.getElementById('relDataFim')?.value || '';
+    if (!dataInicio || !dataFim) {
+        if (preview) preview.innerHTML = '<p style="color:#b91c1c;padding:10px"><i class="fas fa-exclamation-circle"></i> Informe as datas inicial e final do relatório analítico.</p>';
+        return;
+    }
+    if (dataInicio > dataFim) {
+        if (preview) preview.innerHTML = '<p style="color:#b91c1c;padding:10px"><i class="fas fa-exclamation-circle"></i> A data inicial não pode ser posterior à data final.</p>';
+        return;
+    }
+
+    if (preview) preview.innerHTML = '<p style="padding:18px;color:#2563eb"><i class="fas fa-spinner fa-spin"></i> Consolidando acessos do condomínio...</p>';
+    const params = new URLSearchParams({ acao: 'analitico_acessos', data_inicio: dataInicio, data_fim: dataFim });
+    try {
+        const response = await fetch(`${API_VISITANTES}?${params.toString()}`, { credentials: 'include' });
+        const texto = await response.text();
+        let data = null;
+        try { data = texto ? JSON.parse(texto) : null; } catch (_) {}
+        if (!response.ok || !data?.sucesso) {
+            throw new Error(data?.mensagem || `Erro HTTP ${response.status} ao carregar o relatório analítico.`);
+        }
+        relatorioAnaliticoCache = data.dados;
+        _relMostrarAnalitico(data.dados, preview);
+        console.debug('[Visitantes][Relatórios] análise carregada', { periodo: data.dados?.periodo, resumo: data.dados?.resumo });
+    } catch (erro) {
+        relatorioAnaliticoCache = null;
+        console.error('[Visitantes][Relatórios] falha no analítico', erro);
+        if (preview) preview.innerHTML = `<p style="color:#b91c1c;padding:12px"><i class="fas fa-exclamation-circle"></i> ${_esc(erro.message || 'Não foi possível gerar a análise.')}</p>`;
+    }
+}
+
+function _relMostrarAnalitico(analise, container) {
+    if (!container) return;
+    const resumo = analise?.resumo || {};
+    const total = Number(resumo.total_acessos || 0);
+    const visitantes = Number(resumo.visitantes || 0);
+    const prestadores = Number(resumo.prestadores || 0);
+    const liberados = Number(resumo.liberados || 0);
+    const taxaLiberacao = total ? Math.round((liberados / total) * 100) : 0;
+    const pico = analise?.horario_pico_24h || { rotulo: 'Sem registros', total: 0 };
+    const periodo = analise?.periodo || {};
+    const rankingUnidades = Array.isArray(analise?.ranking_unidades) ? analise.ranking_unidades : [];
+    const rankingPessoas = Array.isArray(analise?.ranking_pessoas) ? analise.ranking_pessoas : [];
+    const histograma = Array.isArray(analise?.histograma_24h) ? analise.histograma_24h : [];
+    const tendencia = Array.isArray(analise?.tendencia_diaria) ? analise.tendencia_diaria : [];
+    const maxUnidade = Math.max(1, ...rankingUnidades.map(item => Number(item.total || 0)));
+    const maxHora = Math.max(1, ...histograma.map(item => Number(item.total || 0)));
+    const mapaHora = new Map(histograma.map(item => [Number(item.hora), Number(item.total || 0)]));
+
+    const cards = `
+        <div class="vis-analytics-grid">
+            <div class="vis-analytics-card"><div class="valor">${total}</div><div class="rotulo">Acessos no período</div></div>
+            <div class="vis-analytics-card visitor"><div class="valor">${visitantes}</div><div class="rotulo">Visitantes</div></div>
+            <div class="vis-analytics-card provider"><div class="valor">${prestadores}</div><div class="rotulo">Prestadores de serviço</div></div>
+            <div class="vis-analytics-card peak"><div class="valor">${_esc(pico.rotulo)}</div><div class="rotulo">Pico nas últimas 24h (${Number(pico.total || 0)} acesso(s))</div></div>
+            <div class="vis-analytics-card success"><div class="valor">${taxaLiberacao}%</div><div class="rotulo">Taxa de liberação (${liberados}/${total})</div></div>
+        </div>`;
+
+    const rankingGlebas = rankingUnidades.length ? rankingUnidades.map((item, indice) => {
+        const percentual = Math.round((Number(item.total || 0) / maxUnidade) * 100);
+        return `<div class="vis-ranking-row"><span class="vis-ranking-pos">${indice + 1}º</span><span>${_esc(item.unidade)}</span><span class="vis-bar"><span style="width:${percentual}%"></span></span><span class="vis-ranking-total">${Number(item.total || 0)}</span></div>`;
+    }).join('') : '<p style="color:#64748b;font-size:12px">Não há acessos de visitantes ou prestadores no período selecionado.</p>';
+
+    const horas = Array.from({ length: 24 }, (_, hora) => {
+        const quantidade = mapaHora.get(hora) || 0;
+        const altura = Math.max(2, Math.round((quantidade / maxHora) * 100));
+        return `<div class="vis-hour-item" title="${String(hora).padStart(2, '0')}:00 — ${quantidade} acesso(s)"><span class="vis-hour-total">${quantidade || ''}</span><span class="vis-hour-bar" style="height:${altura}%"></span><span class="vis-hour-label">${String(hora).padStart(2, '0')}</span></div>`;
+    }).join('');
+
+    const pessoas = rankingPessoas.length ? rankingPessoas.map((item, indice) => `<div class="vis-ranking-row"><span class="vis-ranking-pos">${indice + 1}º</span><span>${_esc(item.nome)}</span><span class="cadastro-tipo ${item.tipo === 'Prestador' ? 'funcionario' : 'morador'}">${_esc(item.tipo)}</span><span class="vis-ranking-total">${Number(item.total || 0)}</span></div>`).join('') : '<p style="color:#64748b;font-size:12px">Sem recorrências no período.</p>';
+
+    const tendenciaLinhas = tendencia.length ? tendencia.map(item => `<tr><td>${_esc(item.data)}</td><td>${Number(item.total || 0)}</td><td>${Number(item.visitantes || 0)}</td><td>${Number(item.prestadores || 0)}</td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:#64748b">Sem movimentos no período.</td></tr>';
+
+    container.innerHTML = `<p style="font-size:12px;color:#64748b;margin:0 0 12px"><i class="fas fa-calendar-alt"></i> Período analisado: <strong>${_esc(periodo.data_inicio || '')}</strong> até <strong>${_esc(periodo.data_fim || '')}</strong>. Dados consolidados exclusivamente para o condomínio atual.</p>${cards}
+        <div class="vis-analytics-sections">
+            <section class="vis-analytics-section"><h3><i class="fas fa-trophy"></i> Ranking de Glebas / Unidades</h3>${rankingGlebas}</section>
+            <section class="vis-analytics-section"><h3><i class="fas fa-clock"></i> Distribuição de horários — últimas 24h</h3><div class="vis-hour-bars">${horas}</div></section>
+            <section class="vis-analytics-section"><h3><i class="fas fa-user-clock"></i> Pessoas mais registradas</h3>${pessoas}</section>
+            <section class="vis-analytics-section"><h3><i class="fas fa-chart-area"></i> Tendência diária</h3><table class="vis-tendencia-table"><thead><tr><th>Data</th><th>Total</th><th>Visitantes</th><th>Prestadores</th></tr></thead><tbody>${tendenciaLinhas}</tbody></table></section>
+        </div>`;
+}
+
 function _relColetarFiltros() {
     return {
         nome:     (document.getElementById('relNome')?.value     || '').trim(),
@@ -853,7 +991,12 @@ function _relFiltrarCache(filtros) {
     });
 }
 
-function relExportarCSV() {
+async function relExportarCSV() {
+    if (_tipoRelatorioAtual() === 'analitico') {
+        if (!relatorioAnaliticoCache) await _relCarregarAnalitico();
+        if (relatorioAnaliticoCache) _relExportarCSVAnalitico(relatorioAnaliticoCache);
+        return;
+    }
     const filtros    = _relColetarFiltros();
     const dados      = _relFiltrarCache(filtros);
     const preview    = document.getElementById('relPreviewVisitantes');
@@ -898,10 +1041,56 @@ function relExportarCSV() {
     _relMostrarPreview(dados, preview);
 }
 
+function _relExportarCSVAnalitico(analise) {
+    const resumo = analise?.resumo || {};
+    const periodo = analise?.periodo || {};
+    const pico = analise?.horario_pico_24h || {};
+    const linhas = [
+        ['RELATÓRIO ANALÍTICO DE ACESSOS — VISITANTES'],
+        ['Período', `${periodo.data_inicio || ''} até ${periodo.data_fim || ''}`],
+        [],
+        ['INDICADOR', 'VALOR'],
+        ['Total de acessos', resumo.total_acessos || 0],
+        ['Visitantes', resumo.visitantes || 0],
+        ['Prestadores de serviço', resumo.prestadores || 0],
+        ['Entradas', resumo.entradas || 0],
+        ['Saídas', resumo.saidas || 0],
+        ['Acessos liberados', resumo.liberados || 0],
+        ['Registros pendentes', resumo.pendentes || 0],
+        ['Horário de pico — últimas 24h', `${pico.rotulo || 'Sem registros'} (${pico.total || 0})`],
+        [],
+        ['RANKING GLEBAS / UNIDADES', 'TOTAL', 'VISITANTES', 'PRESTADORES'],
+        ...(analise?.ranking_unidades || []).map(item => [item.unidade || 'Não informado', item.total || 0, item.visitantes || 0, item.prestadores || 0]),
+        [],
+        ['PESSOAS MAIS REGISTRADAS', 'TIPO', 'TOTAL'],
+        ...(analise?.ranking_pessoas || []).map(item => [item.nome || 'Não identificado', item.tipo || '', item.total || 0]),
+        [],
+        ['TENDÊNCIA DIÁRIA', 'TOTAL', 'VISITANTES', 'PRESTADORES'],
+        ...(analise?.tendencia_diaria || []).map(item => [item.data || '', item.total || 0, item.visitantes || 0, item.prestadores || 0]),
+    ];
+    const csv = linhas.map(linha => linha.map(campo => `"${String(campo ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio_analitico_acessos_${periodo.data_inicio || 'periodo'}_${periodo.data_fim || 'periodo'}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
 function relGerarPDF() {
     const filtros = _relColetarFiltros();
     const base    = window.location.origin + '/api/api_relatorio_visitantes_pdf.php';
     const params  = new URLSearchParams();
+    if (_tipoRelatorioAtual() === 'analitico') {
+        params.set('tipo_relatorio', 'analitico');
+        params.set('data_inicio', document.getElementById('relDataInicio')?.value || '');
+        params.set('data_fim', document.getElementById('relDataFim')?.value || '');
+        window.open(base + '?' + params.toString(), '_blank');
+        return;
+    }
     if (filtros.nome)     params.set('nome',     filtros.nome);
     if (filtros.cpf)      params.set('cpf',      filtros.cpf);
     if (filtros.email)    params.set('email',    filtros.email);

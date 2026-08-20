@@ -180,7 +180,7 @@
         </div>
         <div class="page-card" id="cardRelatoriosVisitantes">
             <h2><i class="fas fa-chart-bar"></i> Relat&#243;rios de Visitantes</h2>
-            <div class="rel-filtros-grid">
+            <div class="rel-filtros-grid" id="relFiltrosCadastro">
                 <div class="form-group"><label for="relNome">Nome do Visitante</label><input type="text" id="relNome" placeholder="Filtrar por nome..."></div>
                 <div class="form-group"><label for="relCpf">CPF / RG</label><input type="text" id="relCpf" placeholder="000.000.000-00"></div>
                 <div class="form-group"><label for="relEmail">E-mail</label><input type="email" id="relEmail" placeholder="email@exemplo.com"></div>
@@ -188,6 +188,12 @@
                 <div class="form-group"><label for="relTemDoc">Possui Documento</label><select id="relTemDoc"><option value="">Todos</option><option value="sim">Com documento</option><option value="nao">Sem documento</option></select></div>
                 <div class="form-group"><label for="relOrigemCadastro">Tipo de Cadastro</label><select id="relOrigemCadastro"><option value="">Todos</option><option value="FUNCIONARIO">Funcionário / Usuário</option><option value="MORADOR">Morador</option><option value="LEGADO">Cadastro legado</option></select></div>
                 <div class="form-group"><label for="relAtivo">Status</label><select id="relAtivo"><option value="">Todos</option><option value="1">Somente ativos</option><option value="0">Somente inativos</option></select></div>
+                <div class="form-group"><label for="relTipoRelatorio">Tipo de Relatório</label><select id="relTipoRelatorio"><option value="padrao">Padrão — Cadastros</option><option value="analitico">Analítico — Acessos</option></select></div>
+            </div>
+            <div class="rel-analitico-filtros" id="relAnaliticoFiltros" style="display:none;">
+                <div class="form-group"><label for="relDataInicio"><i class="fas fa-calendar-alt"></i> Data inicial</label><input type="date" id="relDataInicio"></div>
+                <div class="form-group"><label for="relDataFim"><i class="fas fa-calendar-check"></i> Data final</label><input type="date" id="relDataFim"></div>
+                <div class="rel-analitico-ajuda"><i class="fas fa-chart-line"></i><span>Analisa acessos registrados de visitantes e prestadores. O horário de pico considera sempre as últimas 24 horas.</span></div>
             </div>
             <div class="rel-acoes">
                 <button class="btn-primary-modern" type="button" onclick="window.VisitantesPage?.relAtualizar()"><i class="fas fa-sync-alt"></i> Atualizar</button>
@@ -383,8 +389,19 @@
 .page-visitantes .vis-rel-kpi.green .vis-rel-kpi-valor{color:#166534}
 .page-visitantes .vis-rel-kpi.amber .vis-rel-kpi-valor{color:#92400e}
 .page-visitantes .vis-rel-kpi.purple .vis-rel-kpi-valor{color:#5b21b6}
-.page-visitantes .vis-rel-kpi-label{font-size:10px;text-transform:uppercase;color:#64748b;margin-top:3px;letter-spacing:.4px}
-.rel-acoes{display:flex;gap:10px;flex-wrap:wrap;padding:14px 0 4px;border-top:1px solid #e2e8f0}
+	.page-visitantes .vis-rel-kpi-label{font-size:10px;text-transform:uppercase;color:#64748b;margin-top:3px;letter-spacing:.4px}
+	.rel-analitico-filtros{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:-2px 0 16px;padding:14px;border:1px solid #bfdbfe;border-radius:10px;background:#f8fbff}
+	.rel-analitico-ajuda{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:8px;background:#eff6ff;color:#1e40af;font-size:12px;line-height:1.45}
+	.vis-analytics-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:12px;margin-bottom:16px}
+	.vis-analytics-card{padding:14px 16px;border-radius:10px;border:1px solid #dbeafe;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+	.vis-analytics-card .valor{font-size:24px;font-weight:800;color:#1e3a8a;line-height:1.1}.vis-analytics-card .rotulo{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.45px;margin-top:4px}
+	.vis-analytics-card.visitor{border-left:4px solid #2563eb}.vis-analytics-card.provider{border-left:4px solid #7c3aed}.vis-analytics-card.peak{border-left:4px solid #d97706}.vis-analytics-card.success{border-left:4px solid #16a34a}
+	.vis-analytics-sections{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;margin-top:12px}.vis-analytics-section{border:1px solid #e2e8f0;border-radius:10px;padding:14px;background:#fff}.vis-analytics-section h3{font-size:14px;color:#1e3a8a;margin:0 0 12px;display:flex;align-items:center;gap:7px}
+	.vis-ranking-row{display:grid;grid-template-columns:30px minmax(100px,1fr) 1.4fr 52px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px}.vis-ranking-row:last-child{border-bottom:0}.vis-ranking-pos{font-weight:800;color:#2563eb}.vis-bar{height:8px;border-radius:8px;background:#dbeafe;overflow:hidden}.vis-bar>span{display:block;height:100%;background:linear-gradient(90deg,#2563eb,#60a5fa);border-radius:inherit}.vis-ranking-total{text-align:right;font-weight:700;color:#1e293b}
+	.vis-hour-bars{height:130px;display:flex;align-items:flex-end;gap:4px;padding-top:8px}.vis-hour-item{flex:1;min-width:12px;display:flex;flex-direction:column;align-items:center;gap:4px}.vis-hour-bar{width:100%;min-height:2px;background:linear-gradient(180deg,#8b5cf6,#4f46e5);border-radius:4px 4px 0 0}.vis-hour-label{font-size:9px;color:#64748b}.vis-hour-total{font-size:9px;font-weight:700;color:#334155}
+	.vis-tendencia-table{width:100%;border-collapse:collapse;font-size:11px}.vis-tendencia-table th{padding:7px;text-align:left;background:#eff6ff;color:#1e3a8a}.vis-tendencia-table td{padding:7px;border-bottom:1px solid #f1f5f9}
+	@media(max-width:900px){.rel-analitico-filtros{grid-template-columns:1fr 1fr}.vis-analytics-grid{grid-template-columns:repeat(2,1fr)}.vis-analytics-sections{grid-template-columns:1fr}}@media(max-width:560px){.rel-analitico-filtros,.vis-analytics-grid{grid-template-columns:1fr}.vis-ranking-row{grid-template-columns:25px minmax(75px,1fr) 1fr 42px}}
+	.rel-acoes{display:flex;gap:10px;flex-wrap:wrap;padding:14px 0 4px;border-top:1px solid #e2e8f0}
 .btn-rel-csv{background:#16a34a;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .15s}
 .btn-rel-csv:hover{background:#15803d}
 .btn-rel-pdf{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 2px 8px rgba(37,99,235,.3);transition:transform .15s}
