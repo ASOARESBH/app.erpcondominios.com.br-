@@ -70,10 +70,31 @@ $visitantes = [];
 
 $sql = "SELECT v.id, v.nome_completo, v.documento, v.tipo_documento,
                v.telefone_contato, v.celular, v.email,
-               v.placa_veiculo, v.foto, v.documento_arquivo,
-               v.ativo, v.cadastrado_por_nome, v.cadastrado_por_tipo,
+               v.placa_veiculo, v.foto, v.documento_arquivo, v.ativo,
+               CASE
+                   WHEN v.cadastrado_por_tipo = 'FUNCIONARIO' OR v.cadastrado_por_usuario_id IS NOT NULL
+                       THEN 'FUNCIONARIO'
+                   WHEN v.cadastrado_por_tipo = 'MORADOR' OR v.cadastrado_por_morador_id IS NOT NULL OR v.morador_id IS NOT NULL
+                       THEN 'MORADOR'
+                   ELSE 'LEGADO'
+               END AS cadastrado_por_tipo,
+               CASE
+                   WHEN v.cadastrado_por_tipo = 'FUNCIONARIO' OR v.cadastrado_por_usuario_id IS NOT NULL
+                       THEN COALESCE(NULLIF(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado'), NULLIF(u.nome, ''), 'Usuário não identificado')
+                   WHEN v.cadastrado_por_tipo = 'MORADOR' OR v.cadastrado_por_morador_id IS NOT NULL OR v.morador_id IS NOT NULL
+                       THEN COALESCE(NULLIF(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado'), NULLIF(m_autor.nome, ''), NULLIF(m_legado.nome, ''), 'Morador não identificado')
+                   ELSE COALESCE(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado')
+               END AS cadastrado_por_nome,
                DATE_FORMAT(v.data_cadastro, '%d/%m/%Y') as data_cadastro
         FROM visitantes v
+        LEFT JOIN usuarios u
+               ON u.id = v.cadastrado_por_usuario_id
+        LEFT JOIN moradores m_autor
+               ON m_autor.id = v.cadastrado_por_morador_id
+              AND m_autor.tenant_id = v.tenant_id
+        LEFT JOIN moradores m_legado
+               ON m_legado.id = v.morador_id
+              AND m_legado.tenant_id = v.tenant_id
         WHERE v.tenant_id = ?";
 
 $params = [$tenant_id];

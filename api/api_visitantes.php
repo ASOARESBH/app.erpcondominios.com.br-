@@ -46,8 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-verificarAutenticacao(true, 'operador');
-$tenant_id = exigirTenantId();
+$usuarioAutenticado = verificarAutenticacao(true, 'operador');
+$tenant_id = (int)$usuarioAutenticado['tenant_id'];
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
@@ -183,32 +183,65 @@ if ($metodo === 'GET' && isset($_GET['documento'])) {
 if ($metodo === 'GET') {
     $busca = isset($_GET['busca']) ? sanitizar($conexao, $_GET['busca']) : '';
 
-    $sql = "SELECT id, nome_completo, documento, tipo_documento,
-                   telefone, celular, telefone_contato, email,
-                   placa_veiculo, foto, documento_arquivo,
-                   cep, endereco, numero, complemento, bairro, cidade, estado,
-                   observacao, ativo,
-                   cadastrado_por_nome, cadastrado_por_tipo, cadastrado_por_usuario_id, cadastrado_por_morador_id,
-                   DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro_formatada
-            FROM visitantes WHERE tenant_id = $tenant_id ";
+    // O nome exibido prioriza a autoria gravada no momento do cadastro e, para
+    // registros migrados, resolve o autor pelos IDs persistidos. Sem evidência
+    // verificável, o registro continua corretamente identificado como legado.
+    $sql = "SELECT v.id, v.nome_completo, v.documento, v.tipo_documento,
+                   v.telefone, v.celular, v.telefone_contato, v.email,
+                   v.placa_veiculo, v.foto, v.documento_arquivo,
+                   v.cep, v.endereco, v.numero, v.complemento, v.bairro, v.cidade, v.estado,
+                   v.observacao, v.ativo,
+                   CASE
+                       WHEN v.cadastrado_por_tipo = 'FUNCIONARIO' OR v.cadastrado_por_usuario_id IS NOT NULL
+                           THEN 'FUNCIONARIO'
+                       WHEN v.cadastrado_por_tipo = 'MORADOR' OR v.cadastrado_por_morador_id IS NOT NULL OR v.morador_id IS NOT NULL
+                           THEN 'MORADOR'
+                       ELSE 'LEGADO'
+                   END AS cadastrado_por_tipo,
+                   CASE
+                       WHEN v.cadastrado_por_tipo = 'FUNCIONARIO' OR v.cadastrado_por_usuario_id IS NOT NULL
+                           THEN COALESCE(NULLIF(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado'), NULLIF(u.nome, ''), 'Usuário não identificado')
+                       WHEN v.cadastrado_por_tipo = 'MORADOR' OR v.cadastrado_por_morador_id IS NOT NULL OR v.morador_id IS NOT NULL
+                           THEN COALESCE(NULLIF(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado'), NULLIF(m_autor.nome, ''), NULLIF(m_legado.nome, ''), 'Morador não identificado')
+                       ELSE COALESCE(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado')
+                   END AS cadastrado_por_nome,
+                   v.cadastrado_por_usuario_id,
+                   COALESCE(v.cadastrado_por_morador_id, v.morador_id) AS cadastrado_por_morador_id,
+                   DATE_FORMAT(v.data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro_formatada
+            FROM visitantes v
+            LEFT JOIN usuarios u
+                   ON u.id = v.cadastrado_por_usuario_id
+            LEFT JOIN moradores m_autor
+                   ON m_autor.id = v.cadastrado_por_morador_id
+                  AND m_autor.tenant_id = v.tenant_id
+            LEFT JOIN moradores m_legado
+                   ON m_legado.id = v.morador_id
+                  AND m_legado.tenant_id = v.tenant_id
+            WHERE v.tenant_id = ?";
 
-    if (!empty($busca)) {
-        $sql .= "AND (nome_completo LIKE '%$busca%'
-                    OR documento LIKE '%$busca%'
-                    OR telefone_contato LIKE '%$busca%'
-                    OR placa_veiculo LIKE '%$busca%') ";
+    $tipos = 'i';
+    $parametros = [$tenant_id];
+    if ($busca !== '') {
+        $buscaLike = '%' . $busca . '%';
+        $sql .= " AND (v.nome_completo LIKE ? OR v.documento LIKE ? OR v.telefone_contato LIKE ? OR v.placa_veiculo LIKE ?)";
+        $tipos .= 'ssss';
+        $parametros[] = $buscaLike;
+        $parametros[] = $buscaLike;
+        $parametros[] = $buscaLike;
+        $parametros[] = $buscaLike;
     }
+    $sql .= " ORDER BY v.nome_completo ASC";
 
-    $sql .= "ORDER BY nome_completo ASC";
-
-    $resultado = $conexao->query($sql);
+    $stmt = $conexao->prepare($sql);
+    if (!$stmt) retornar_json(false, 'Não foi possível preparar a listagem de visitantes.');
+    $stmt->bind_param($tipos, ...$parametros);
+    $stmt->execute();
+    $resultado = $stmt->get_result();
     $visitantes = [];
-
-    if ($resultado && $resultado->num_rows > 0) {
-        while ($row = $resultado->fetch_assoc()) {
-            $visitantes[] = $row;
-        }
+    while ($resultado && ($row = $resultado->fetch_assoc())) {
+        $visitantes[] = $row;
     }
+    $stmt->close();
 
     retornar_json(true, "Visitantes listados com sucesso", $visitantes);
 }
@@ -274,14 +307,27 @@ if ($metodo === 'POST') {
     }
     $stmt->close();
 
-    // A autoria é sempre derivada da sessão autenticada; nunca do payload do navegador.
-    $autorSessao = obterUsuarioAutenticado();
+    // A autoria é sempre derivada do usuário autenticado e confirmada no banco
+    // dentro do tenant da sessão; nunca é aceita do payload do navegador.
     $autorTipo = 'FUNCIONARIO';
-    $autorUsuarioId = (int)($autorSessao['id'] ?? 0);
+    $autorUsuarioId = (int)($usuarioAutenticado['id'] ?? 0);
     $autorMoradorId = null;
-    $autorNome = sanitizar($conexao, trim((string)($autorSessao['nome'] ?? '')));
-    if ($autorUsuarioId <= 0 || $autorNome === '') {
+    if ($autorUsuarioId <= 0) {
         retornar_json(false, 'Não foi possível identificar o usuário responsável pelo cadastro. Faça login novamente.');
+    }
+    $stmtAutor = $conexao->prepare(
+        'SELECT u.nome FROM usuarios u
+         INNER JOIN usuario_tenant ut ON ut.usuario_id = u.id AND ut.tenant_id = ?
+         WHERE u.id = ? LIMIT 1'
+    );
+    if (!$stmtAutor) retornar_json(false, 'Não foi possível validar o responsável pelo cadastro.');
+    $stmtAutor->bind_param('ii', $tenant_id, $autorUsuarioId);
+    $stmtAutor->execute();
+    $autorRegistro = $stmtAutor->get_result()->fetch_assoc();
+    $stmtAutor->close();
+    $autorNome = sanitizar($conexao, trim((string)($autorRegistro['nome'] ?? '')));
+    if ($autorNome === '') {
+        retornar_json(false, 'Usuário responsável não está vinculado ao condomínio atual. Faça login novamente.');
     }
 
     // Inserir visitante
@@ -342,7 +388,7 @@ if ($metodo === 'POST') {
         $stmtArquivos->close();
 
         $conexao->commit();
-        registrar_log('INFO', "Visitante cadastrado por $autorNome [$autorTipo] com anexo: $nome_completo ($tipo_documento: $documento) ID: $id");
+        registrar_log('INFO', "Visitante cadastrado por $autorNome [$autorTipo] com anexo: $nome_completo ($tipo_documento: $documento) ID: $id", $autorNome);
         retornar_json(true, 'Visitante cadastrado com sucesso', ['id' => $id]);
     } catch (Throwable $erroCadastro) {
         $conexao->rollback();
