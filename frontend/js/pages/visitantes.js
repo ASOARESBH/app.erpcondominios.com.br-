@@ -44,19 +44,35 @@ export function init() {
 
 // ===== CONTROLE DE ABAS =====
 function _setupAbas() {
-    const tabBtns = document.querySelectorAll('.page-visitantes .vis-tab-btn');
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tab = btn.dataset.tab;
-            tabBtns.forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.page-visitantes .vis-tab-content').forEach(c => c.classList.remove('active'));
-            btn.classList.add('active');
-            const content = document.getElementById('vis-tab-' + tab);
-            if (content) content.classList.add('active');
-            if (tab === 'listagem') _carregarVisitantes();
-            if (tab === 'relatorios') _relAtualizar();
-        });
+    document.querySelectorAll('.page-visitantes .vis-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => _ativarAba(btn.dataset.tab));
     });
+}
+
+/**
+ * Centraliza a troca de abas. A edição também usa este fluxo para que o
+ * formulário preenchido nunca permaneça invisível atrás da aba Listagem.
+ */
+function _ativarAba(tab, { atualizarDados = true } = {}) {
+    const tabBtns = document.querySelectorAll('.page-visitantes .vis-tab-btn');
+    const content = document.getElementById('vis-tab-' + tab);
+    const botaoAtivo = Array.from(tabBtns).find(btn => btn.dataset.tab === tab);
+
+    if (!content || !botaoAtivo) {
+        console.error('[Visitantes][Abas] Aba não encontrada:', { tab, content: !!content, botao: !!botaoAtivo });
+        return false;
+    }
+
+    tabBtns.forEach(btn => btn.classList.toggle('active', btn === botaoAtivo));
+    document.querySelectorAll('.page-visitantes .vis-tab-content').forEach(item => {
+        item.classList.toggle('active', item === content);
+    });
+
+    if (atualizarDados && tab === 'listagem') _carregarVisitantes();
+    if (atualizarDados && tab === 'relatorios') _relAtualizar();
+
+    console.debug('[Visitantes][Abas] Aba ativada:', { tab, atualizarDados });
+    return true;
 }
 
 function _atualizarKpis(lista) {
@@ -529,40 +545,68 @@ async function _salvarVisitante() {
 
 // ===== EDITAR =====
 function _editarVisitante(id) {
-    const v = visitantesCache.find(x => Number(x.id) === Number(id));
-    if (!v) return;
+    const idNormalizado = Number(id);
+    const visitante = visitantesCache.find(item => Number(item.id) === idNormalizado);
+
+    if (!Number.isInteger(idNormalizado) || idNormalizado <= 0 || !visitante) {
+        console.warn('[Visitantes][Edição] Registro não localizado no cache:', {
+            idRecebido: id,
+            totalEmCache: visitantesCache.length
+        });
+        _mostrarAlerta('warning', 'Não foi possível localizar o visitante para edição. Atualize a listagem e tente novamente.');
+        return;
+    }
+
+    const camposObrigatorios = [
+        'visitanteId', 'nomeVisitante', 'tipoDocumento', 'documento',
+        'telefoneContato', 'celularVisitante', 'emailVisitante',
+        'observacaoVisitante', 'visitanteForm'
+    ];
+    const camposAusentes = camposObrigatorios.filter(campo => !document.getElementById(campo));
+    if (camposAusentes.length) {
+        console.error('[Visitantes][Edição] Formulário incompleto:', { id: idNormalizado, camposAusentes });
+        _mostrarAlerta('error', 'O formulário de edição não está disponível. Recarregue a página e tente novamente.');
+        return;
+    }
+
+    // A aba Cadastro ficava oculta após o clique na listagem. Ativá-la antes
+    // de preencher os campos torna a edição imediatamente visível ao usuário.
+    if (!_ativarAba('cadastro', { atualizarDados: false })) {
+        _mostrarAlerta('error', 'Não foi possível abrir o formulário de edição.');
+        return;
+    }
 
     modoEdicao        = true;
-    visitanteIdEdicao = Number(id);
+    visitanteIdEdicao = idNormalizado;
 
-    document.getElementById('visitanteId').value         = String(id);
-    document.getElementById('nomeVisitante').value        = v.nome_completo || '';
-    document.getElementById('tipoDocumento').value        = v.tipo_documento || 'CPF';
-    document.getElementById('documento').value            = v.documento || '';
-    document.getElementById('telefoneContato').value      = v.telefone_contato || v.telefone || '';
-    document.getElementById('celularVisitante').value     = v.celular || '';
-    document.getElementById('emailVisitante').value       = v.email || '';
-    document.getElementById('observacaoVisitante').value  = v.observacao || '';
+    document.getElementById('visitanteId').value        = String(idNormalizado);
+    document.getElementById('nomeVisitante').value       = visitante.nome_completo || '';
+    document.getElementById('tipoDocumento').value       = visitante.tipo_documento || 'CPF';
+    document.getElementById('documento').value           = visitante.documento || '';
+    document.getElementById('telefoneContato').value     = visitante.telefone_contato || visitante.telefone || '';
+    document.getElementById('celularVisitante').value    = visitante.celular || '';
+    document.getElementById('emailVisitante').value      = visitante.email || '';
+    document.getElementById('observacaoVisitante').value = visitante.observacao || '';
 
     // Foto existente
-    if (v.foto) {
+    if (visitante.foto) {
         const img    = document.getElementById('fotoPreview');
         const ph     = document.getElementById('fotoPlaceholder');
         const btnRem = document.getElementById('btnRemoverFoto');
-        if (img) { img.src = v.foto; img.style.display = 'block'; }
+        if (img) { img.src = visitante.foto; img.style.display = 'block'; }
         if (ph)  ph.style.display = 'none';
         if (btnRem) btnRem.style.display = 'inline-flex';
     }
 
     // Documento existente
-    if (v.documento_arquivo) {
+    if (visitante.documento_arquivo) {
         const preview = document.getElementById('docPreview');
         const ph      = document.getElementById('docPlaceholder');
         const nome    = document.getElementById('docNomeArquivo');
         const btnRem  = document.getElementById('btnRemoverDoc');
         if (preview) preview.style.display = 'block';
         if (ph)      ph.style.display = 'none';
-        if (nome)    nome.textContent = v.documento_arquivo.split('/').pop();
+        if (nome)    nome.textContent = visitante.documento_arquivo.split('/').pop();
         if (btnRem)  btnRem.style.display = 'inline-flex';
     }
 
@@ -574,7 +618,12 @@ function _editarVisitante(id) {
     if (btnSalvar)   btnSalvar.innerHTML = '<i class="fas fa-sync"></i> Atualizar Visitante';
     if (btnCancelar) btnCancelar.style.display = 'inline-flex';
 
-    document.getElementById('visitanteForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    console.info('[Visitantes][Edição] Formulário carregado:', { id: idNormalizado, nome: visitante.nome_completo || '' });
+    requestAnimationFrame(() => {
+        const form = document.getElementById('visitanteForm');
+        form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('nomeVisitante')?.focus({ preventScroll: true });
+    });
 }
 
 // ===== EXCLUIR =====
