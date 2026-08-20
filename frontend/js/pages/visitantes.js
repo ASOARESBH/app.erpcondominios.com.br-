@@ -411,6 +411,31 @@ async function _requisitarJsonComRetry(url, options = {}, tentativa = 1) {
     return dados;
 }
 
+async function _lerRespostaJson(response, operacao) {
+    const corpo = await response.text();
+    let dados = null;
+    try {
+        dados = corpo ? JSON.parse(corpo) : null;
+    } catch (_) {
+        dados = null;
+    }
+
+    if (!dados || typeof dados !== 'object') {
+        console.error('[Visitantes][API] Resposta JSON inválida:', {
+            operacao,
+            status: response.status,
+            corpo: corpo.slice(0, 500)
+        });
+        throw new Error(`A API não retornou uma resposta válida ao ${operacao}.`);
+    }
+
+    if (response.ok === false && dados.sucesso !== false) {
+        throw new Error(dados.mensagem || `Falha HTTP ${response.status} ao ${operacao}.`);
+    }
+
+    return dados;
+}
+
 function _buscarVisitantes() {
     const termo = document.getElementById('searchVisitante')?.value || '';
     _filtrarVisitantes(termo);
@@ -551,7 +576,7 @@ async function _salvarVisitante() {
                 body: formularioComAnexos
             });
         }
-        const data = await resp.json();
+        const data = await _lerRespostaJson(resp, modoEdicao ? 'atualizar o visitante' : 'cadastrar o visitante');
         console.log('[Visitantes] Resposta salvar:', data);
 
         // Um documento já existente não cria novo cadastro nem substitui anexos.
@@ -573,7 +598,7 @@ async function _salvarVisitante() {
             const r = await fetch(`${API_VISITANTES}?acao=upload&tipo=foto&visitante_id=${visitanteId}`, {
                 method: 'POST', body: fd
             });
-            const d = await r.json();
+            const d = await _lerRespostaJson(r, 'enviar a foto do visitante');
             if (!d.sucesso) console.warn('[Visitantes] Aviso upload foto:', d.mensagem);
         }
 
@@ -584,7 +609,7 @@ async function _salvarVisitante() {
             const r = await fetch(`${API_VISITANTES}?acao=upload&tipo=documento&visitante_id=${visitanteId}`, {
                 method: 'POST', body: fd
             });
-            const d = await r.json();
+            const d = await _lerRespostaJson(r, 'enviar o documento do visitante');
             if (!d.sucesso) console.warn('[Visitantes] Aviso upload doc:', d.mensagem);
         }
 

@@ -26,6 +26,20 @@ ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
 
+// Nenhuma exceção deve encerrar a conexão com corpo vazio. O frontend sempre
+// recebe JSON, inclusive em uma falha inesperada de banco ou arquivo.
+set_exception_handler(function (Throwable $erro) {
+    while (ob_get_level() > 0) { @ob_end_clean(); }
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    error_log('[Visitantes][Fatal] ' . $erro->getMessage());
+    echo json_encode([
+        'sucesso' => false,
+        'mensagem' => 'Não foi possível concluir a operação de visitantes. Tente novamente ou contate o administrador.'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+});
+
 // Tratar OPTIONS (preflight)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -89,6 +103,15 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'upload') {
 
     if ($visitante_id <= 0) retornar_json(false, "ID do visitante inválido");
 
+    // Impede BLOBs órfãos e garante que o anexo pertença ao visitante deste tenant.
+    $stmtVisitante = $conexao->prepare('SELECT id FROM visitantes WHERE tenant_id = ? AND id = ? LIMIT 1');
+    if (!$stmtVisitante) retornar_json(false, 'Erro ao validar o visitante para receber o anexo.');
+    $stmtVisitante->bind_param('ii', $tenant_id, $visitante_id);
+    $stmtVisitante->execute();
+    $visitanteExiste = $stmtVisitante->get_result()->fetch_assoc();
+    $stmtVisitante->close();
+    if (!$visitanteExiste) retornar_json(false, 'Visitante não encontrado no condomínio atual.');
+
     $campo_arquivo = ($tipo_upload === 'foto') ? $_FILES['foto'] ?? null : $_FILES['documento'] ?? null;
     if (!$campo_arquivo || $campo_arquivo['error'] !== UPLOAD_ERR_OK) {
         retornar_json(false, "Nenhum arquivo enviado ou erro no upload");
@@ -127,7 +150,7 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'upload') {
     }
     $stmt->close();
 
-    registrar_log($conexao, 'INFO', "Upload $tipo_upload visitante ID $visitante_id: $nome_arquivo");
+    registrar_log('INFO', "Upload $tipo_upload visitante ID $visitante_id: $nome_arquivo");
     retornar_json(true, "Arquivo enviado com sucesso", ['url' => $url_relativa, 'nome' => $nome_arquivo]);
 }
 
@@ -304,7 +327,7 @@ if ($metodo === 'POST') {
         $stmtArquivos->close();
 
         $conexao->commit();
-        registrar_log($conexao, 'INFO', "Visitante cadastrado com foto e documento: $nome_completo ($tipo_documento: $documento) ID: $id");
+        registrar_log('INFO', "Visitante cadastrado com anexo: $nome_completo ($tipo_documento: $documento) ID: $id");
         retornar_json(true, 'Visitante cadastrado com sucesso', ['id' => $id]);
     } catch (Throwable $erroCadastro) {
         $conexao->rollback();
@@ -356,6 +379,7 @@ if ($metodo === 'PUT') {
         "SELECT id, nome_completo FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
            AND id != ?"
     );
+    if (!$stmt) retornar_json(false, 'Erro ao validar documento do visitante.');
     $stmt->bind_param("si", $doc_limpo_busca, $id);
     $stmt->execute();
     $stmt->store_result();
@@ -376,6 +400,7 @@ if ($metodo === 'PUT') {
             cep = ?, endereco = ?, numero = ?, complemento = ?,
             bairro = ?, cidade = ?, estado = ?, observacao = ? WHERE tenant_id = $tenant_id AND id = ?"
     );
+    if (!$stmt) retornar_json(false, 'Erro ao preparar a atualização do visitante.');
     $stmt->bind_param(
         "ssssssssssssssssi",
         $nome_completo, $documento, $tipo_documento,
@@ -386,7 +411,7 @@ if ($metodo === 'PUT') {
     );
 
     if ($stmt->execute()) {
-        registrar_log($conexao, 'INFO', "Visitante atualizado: $nome_completo (ID: $id)");
+        registrar_log('INFO', "Visitante atualizado: $nome_completo (ID: $id)");
         retornar_json(true, "Visitante atualizado com sucesso");
     } else {
         retornar_json(false, "Erro ao atualizar visitante: " . $stmt->error);
@@ -420,7 +445,7 @@ if ($metodo === 'DELETE') {
             try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, ltrim($caminho, './')); } catch (Throwable $e) { error_log('[Visitantes][Arquivo] ' . $e->getMessage()); }
         }
 
-        registrar_log($conexao, 'INFO', "Visitante excluído: " . $row['nome_completo'] . " (ID: $id)");
+        registrar_log('INFO', "Visitante excluído: " . $row['nome_completo'] . " (ID: $id)");
         retornar_json(true, "Visitante excluído com sucesso");
     } else {
         retornar_json(false, "Erro ao excluir visitante: " . $stmt->error);
