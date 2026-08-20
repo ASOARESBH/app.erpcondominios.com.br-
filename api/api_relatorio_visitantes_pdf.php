@@ -13,6 +13,7 @@
  *   tem_foto   — "" | "sim" | "nao"
  *   tem_doc    — "" | "sim" | "nao"
  *   ativo      — "" | "1" | "0"
+ *   origem     — "" | "FUNCIONARIO" | "MORADOR" | "LEGADO"
  *   print      — Se "true", dispara window.print() automaticamente
  *
  * @version 1.0.0
@@ -59,6 +60,7 @@ $f_email    = trim($_GET['email']    ?? '');
 $f_tem_foto = trim($_GET['tem_foto'] ?? '');
 $f_tem_doc  = trim($_GET['tem_doc']  ?? '');
 $f_ativo    = trim($_GET['ativo']    ?? '');
+$f_origem   = strtoupper(trim($_GET['origem'] ?? ''));
 $auto_print = ($_GET['print'] ?? '') === 'true';
 
 $titulo_relatorio = 'Relatorio de Visitantes';
@@ -66,51 +68,56 @@ $titulo_relatorio = 'Relatorio de Visitantes';
 // ── 5. Buscar dados ───────────────────────────────────────────
 $visitantes = [];
 
-$sql = "SELECT id, nome_completo, documento, tipo_documento,
-               telefone_contato, celular, email,
-               placa_veiculo, foto, documento_arquivo,
-               ativo,
-               DATE_FORMAT(data_cadastro, '%d/%m/%Y') as data_cadastro
-        FROM visitantes
-        WHERE 1=1";
+$sql = "SELECT v.id, v.nome_completo, v.documento, v.tipo_documento,
+               v.telefone_contato, v.celular, v.email,
+               v.placa_veiculo, v.foto, v.documento_arquivo,
+               v.ativo, v.cadastrado_por_nome, v.cadastrado_por_tipo,
+               DATE_FORMAT(v.data_cadastro, '%d/%m/%Y') as data_cadastro
+        FROM visitantes v
+        WHERE v.tenant_id = ?";
 
-$params = [];
-$tipos  = '';
+$params = [$tenant_id];
+$tipos  = 'i';
 
 if ($f_nome !== '') {
-    $sql .= " AND nome_completo LIKE ?";
+    $sql .= " AND v.nome_completo LIKE ?";
     $params[] = '%' . $f_nome . '%';
     $tipos .= 's';
 }
 if ($f_cpf !== '') {
     $cpf_limpo = preg_replace('/[^0-9A-Za-z]/', '', $f_cpf);
-    $sql .= " AND (documento LIKE ? OR REPLACE(REPLACE(REPLACE(documento,'.',''),'-',''),'/','') LIKE ?)";
+    $sql .= " AND (v.documento LIKE ? OR REPLACE(REPLACE(REPLACE(v.documento,'.',''),'-',''),'/','') LIKE ?)";
     $params[] = '%' . $f_cpf . '%';
     $params[] = '%' . $cpf_limpo . '%';
     $tipos .= 'ss';
 }
 if ($f_email !== '') {
-    $sql .= " AND email LIKE ?";
+    $sql .= " AND v.email LIKE ?";
     $params[] = '%' . $f_email . '%';
     $tipos .= 's';
 }
 if ($f_tem_foto === 'sim') {
-    $sql .= " AND foto IS NOT NULL AND foto != ''";
+    $sql .= " AND v.foto IS NOT NULL AND v.foto != ''";
 } elseif ($f_tem_foto === 'nao') {
-    $sql .= " AND (foto IS NULL OR foto = '')";
+    $sql .= " AND (v.foto IS NULL OR v.foto = '')";
 }
 if ($f_tem_doc === 'sim') {
-    $sql .= " AND documento_arquivo IS NOT NULL AND documento_arquivo != ''";
+    $sql .= " AND v.documento_arquivo IS NOT NULL AND v.documento_arquivo != ''";
 } elseif ($f_tem_doc === 'nao') {
-    $sql .= " AND (documento_arquivo IS NULL OR documento_arquivo = '')";
+    $sql .= " AND (v.documento_arquivo IS NULL OR v.documento_arquivo = '')";
 }
 if ($f_ativo === '1') {
-    $sql .= " AND ativo = 1";
+    $sql .= " AND v.ativo = 1";
 } elseif ($f_ativo === '0') {
-    $sql .= " AND ativo = 0";
+    $sql .= " AND v.ativo = 0";
+}
+if (in_array($f_origem, ['FUNCIONARIO', 'MORADOR', 'LEGADO'], true)) {
+    $sql .= " AND v.cadastrado_por_tipo = ?";
+    $params[] = $f_origem;
+    $tipos .= 's';
 }
 
-$sql .= " ORDER BY nome_completo ASC";
+$sql .= " ORDER BY v.nome_completo ASC";
 
 if (!empty($params)) {
     $stmt = $conn->prepare($sql);
@@ -147,6 +154,7 @@ if ($f_tem_doc  === 'sim') $filtros_aplicados[] = 'Com documento';
 if ($f_tem_doc  === 'nao') $filtros_aplicados[] = 'Sem documento';
 if ($f_ativo === '1') $filtros_aplicados[] = 'Somente ativos';
 if ($f_ativo === '0') $filtros_aplicados[] = 'Somente inativos';
+if (in_array($f_origem, ['FUNCIONARIO', 'MORADOR', 'LEGADO'], true)) $filtros_aplicados[] = 'Origem: ' . $f_origem;
 $resumo_filtros = implode(' | ', $filtros_aplicados);
 
 // Data/hora
@@ -354,12 +362,14 @@ tbody td { padding: 7px 8px; vertical-align: middle; }
                     <th>Foto</th>
                     <th>Documento</th>
                     <th>Status</th>
+                    <th>Cadastrado por</th>
+                    <th>Tipo</th>
                     <th>Cadastro</th>
                 </tr>
             </thead>
             <tbody>
             <?php if (empty($visitantes)): ?>
-                <tr><td colspan="11" class="sem-dados">Nenhum visitante encontrado com os filtros aplicados</td></tr>
+                <tr><td colspan="13" class="sem-dados">Nenhum visitante encontrado com os filtros aplicados</td></tr>
             <?php else: ?>
                 <?php foreach ($visitantes as $v): ?>
                 <tr>
@@ -394,6 +404,8 @@ tbody td { padding: 7px 8px; vertical-align: middle; }
                         <span class="badge badge-inativo">Inativo</span>
                         <?php endif; ?>
                     </td>
+                    <td><?= esc($v['cadastrado_por_nome'] ?? 'Cadastro legado') ?></td>
+                    <td><?= esc($v['cadastrado_por_tipo'] ?? 'LEGADO') ?></td>
                     <td style="white-space:nowrap"><?= esc($v['data_cadastro'] ?? '—') ?></td>
                 </tr>
                 <?php endforeach; ?>

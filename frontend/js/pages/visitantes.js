@@ -468,6 +468,7 @@ function _renderVisitantes(visitantes) {
         const telefone  = _esc(v.telefone_contato || v.telefone || '-');
         const fotoUrl   = v.foto || '';
         const docUrl    = v.documento_arquivo || '';
+        const autoria   = _obterAutoriaCadastro(v);
         const ativo     = v.ativo == 1 ? '<span style="color:#27ae60;font-weight:600;">Ativo</span>' : '<span style="color:#e74c3c;">Inativo</span>';
 
         const fotoHtml = fotoUrl
@@ -487,6 +488,8 @@ function _renderVisitantes(visitantes) {
                 <td>${doc}</td>
                 <td>${telefone}</td>
                 <td style="text-align:center">${docHtml}</td>
+                <td><span class="cadastro-autor" title="${_esc(autoria.nome)}">${_esc(autoria.nome)}</span></td>
+                <td style="text-align:center"><span class="cadastro-tipo ${autoria.classe}">${_esc(autoria.rotulo)}</span></td>
                 <td style="text-align:center">${ativo}</td>
                 <td>
                     <button class="action-btn edit" type="button" onclick="window.VisitantesPage.editar(${id})" title="Editar">
@@ -501,7 +504,7 @@ function _renderVisitantes(visitantes) {
 }
 
 function _renderMensagemTabela(tbody, msg) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_esc(msg)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${_esc(msg)}</td></tr>`;
 }
 
 // ===== SALVAR =====
@@ -792,6 +795,17 @@ function _mostrarAlerta(tipo, mensagem) {
     setTimeout(() => { box.innerHTML = ''; }, 6000);
 }
 
+function _obterAutoriaCadastro(visitante) {
+    const tipo = String(visitante?.cadastrado_por_tipo || 'LEGADO').toUpperCase();
+    if (tipo === 'FUNCIONARIO') {
+        return { nome: visitante?.cadastrado_por_nome || 'Usuário não identificado', rotulo: 'Funcionário', classe: 'funcionario', tipo };
+    }
+    if (tipo === 'MORADOR') {
+        return { nome: visitante?.cadastrado_por_nome || 'Morador não identificado', rotulo: 'Morador', classe: 'morador', tipo };
+    }
+    return { nome: visitante?.cadastrado_por_nome || 'Cadastro legado', rotulo: 'Legado', classe: 'legado', tipo: 'LEGADO' };
+}
+
 function _esc(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -810,6 +824,7 @@ function _relColetarFiltros() {
         email:    (document.getElementById('relEmail')?.value    || '').trim(),
         tem_foto: (document.getElementById('relTemFoto')?.value  || ''),
         tem_doc:  (document.getElementById('relTemDoc')?.value   || ''),
+        origem:   (document.getElementById('relOrigemCadastro')?.value || ''),
         ativo:    (document.getElementById('relAtivo')?.value    || '')
     };
 }
@@ -822,6 +837,7 @@ function _relFiltrarCache(filtros) {
         const foto  = !!(v.foto);
         const docA  = !!(v.documento_arquivo);
         const ativo = String(v.ativo ?? '1');
+        const origem = _obterAutoriaCadastro(v).tipo;
 
         if (filtros.nome    && !nome.includes(filtros.nome.toLowerCase()))  return false;
         if (filtros.cpf     && !doc.includes(filtros.cpf.replace(/\D/g, ''))) return false;
@@ -830,6 +846,7 @@ function _relFiltrarCache(filtros) {
         if (filtros.tem_foto === 'nao' &&  foto)  return false;
         if (filtros.tem_doc  === 'sim' && !docA)  return false;
         if (filtros.tem_doc  === 'nao' &&  docA)  return false;
+        if (filtros.origem && origem !== filtros.origem) return false;
         if (filtros.ativo === '1' && ativo !== '1') return false;
         if (filtros.ativo === '0' && ativo !== '0') return false;
         return true;
@@ -847,7 +864,7 @@ function relExportarCSV() {
     }
 
     // Cabecalho CSV
-    const cabecalho = ['ID','Nome Completo','Tipo Documento','Documento','E-mail','Telefone','Celular','Placa Veiculo','Possui Foto','Possui Documento','Status','Data Cadastro'];
+    const cabecalho = ['ID','Nome Completo','Tipo Documento','Documento','E-mail','Telefone','Celular','Placa Veiculo','Possui Foto','Possui Documento','Cadastrado Por','Tipo de Cadastro','Status','Data Cadastro'];
     const linhas    = dados.map(v => [
         v.id || '',
         v.nome_completo || '',
@@ -859,6 +876,8 @@ function relExportarCSV() {
         v.placa_veiculo || '',
         v.foto ? 'Sim' : 'Nao',
         v.documento_arquivo ? 'Sim' : 'Nao',
+        _obterAutoriaCadastro(v).nome,
+        _obterAutoriaCadastro(v).rotulo,
         (v.ativo == 1) ? 'Ativo' : 'Inativo',
         v.data_cadastro_formatada || ''
     ].map(c => '"' + String(c).replace(/"/g, '""') + '"'));
@@ -888,6 +907,7 @@ function relGerarPDF() {
     if (filtros.email)    params.set('email',    filtros.email);
     if (filtros.tem_foto) params.set('tem_foto', filtros.tem_foto);
     if (filtros.tem_doc)  params.set('tem_doc',  filtros.tem_doc);
+    if (filtros.origem)   params.set('origem',   filtros.origem);
     if (filtros.ativo)    params.set('ativo',    filtros.ativo);
     window.open(base + '?' + params.toString(), '_blank');
 }
@@ -906,7 +926,9 @@ function _relMostrarPreview(dados, container) {
         <div class="rel-kpi"><div class="rel-kpi-valor">${comDoc}</div><div class="rel-kpi-label">Com Documento</div></div>
     </div>`;
 
-    const linhas = dados.slice(0, 50).map(v => `
+    const linhas = dados.slice(0, 50).map(v => {
+        const autoria = _obterAutoriaCadastro(v);
+        return `
         <tr>
             <td>${_esc(v.nome_completo || '—')}</td>
             <td>${_esc(v.tipo_documento || 'CPF')}</td>
@@ -915,8 +937,11 @@ function _relMostrarPreview(dados, container) {
             <td>${_esc(v.telefone_contato || v.celular || '—')}</td>
             <td style="text-align:center"><span class="rel-badge ${v.foto ? 'rel-badge-sim' : 'rel-badge-nao'}">${v.foto ? 'Sim' : 'Nao'}</span></td>
             <td style="text-align:center"><span class="rel-badge ${v.documento_arquivo ? 'rel-badge-sim' : 'rel-badge-nao'}">${v.documento_arquivo ? 'Sim' : 'Nao'}</span></td>
+            <td>${_esc(autoria.nome)}</td>
+            <td><span class="cadastro-tipo ${autoria.classe}">${_esc(autoria.rotulo)}</span></td>
             <td style="text-align:center"><span class="rel-badge ${(v.ativo==1) ? 'rel-badge-ativo' : 'rel-badge-inativo'}">${(v.ativo==1) ? 'Ativo' : 'Inativo'}</span></td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
 
     const aviso = total > 50 ? `<p style="font-size:11px;color:#64748b;margin-top:6px;">Exibindo 50 de ${total} registros. O CSV/PDF contera todos.</p>` : '';
 
@@ -924,7 +949,7 @@ function _relMostrarPreview(dados, container) {
         <table>
             <thead><tr>
                 <th>Nome</th><th>Tipo</th><th>Documento</th><th>E-mail</th>
-                <th>Telefone</th><th>Foto</th><th>Doc.</th><th>Status</th>
+                <th>Telefone</th><th>Foto</th><th>Doc.</th><th>Cadastrado por</th><th>Tipo</th><th>Status</th>
             </tr></thead>
             <tbody>${linhas}</tbody>
         </table>` + aviso;

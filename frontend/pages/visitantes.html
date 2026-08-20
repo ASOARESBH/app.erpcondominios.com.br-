@@ -160,6 +160,8 @@
                         <th>Documento</th>
                         <th>Telefone</th>
                         <th>Doc. Digitalizado</th>
+                        <th>Cadastrado por</th>
+                        <th>Tipo</th>
                         <th>Ativo</th>
                         <th>Ações</th>
                     </tr>
@@ -184,6 +186,7 @@
                 <div class="form-group"><label for="relEmail">E-mail</label><input type="email" id="relEmail" placeholder="email@exemplo.com"></div>
                 <div class="form-group"><label for="relTemFoto">Possui Foto</label><select id="relTemFoto"><option value="">Todos</option><option value="sim">Com foto</option><option value="nao">Sem foto</option></select></div>
                 <div class="form-group"><label for="relTemDoc">Possui Documento</label><select id="relTemDoc"><option value="">Todos</option><option value="sim">Com documento</option><option value="nao">Sem documento</option></select></div>
+                <div class="form-group"><label for="relOrigemCadastro">Tipo de Cadastro</label><select id="relOrigemCadastro"><option value="">Todos</option><option value="FUNCIONARIO">Funcionário / Usuário</option><option value="MORADOR">Morador</option><option value="LEGADO">Cadastro legado</option></select></div>
                 <div class="form-group"><label for="relAtivo">Status</label><select id="relAtivo"><option value="">Todos</option><option value="1">Somente ativos</option><option value="0">Somente inativos</option></select></div>
             </div>
             <div class="rel-acoes">
@@ -271,6 +274,11 @@
     border: 2px solid #e0e8f5;
 }
 .doc-link { color: #4a90d9; font-size: 12px; }
+.cadastro-autor { display:block; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:#334155; }
+.cadastro-tipo { display:inline-block; padding:3px 7px; border-radius:12px; font-size:10px; font-weight:700; white-space:nowrap; }
+.cadastro-tipo.funcionario { background:#dbeafe; color:#1d4ed8; }
+.cadastro-tipo.morador { background:#dcfce7; color:#166534; }
+.cadastro-tipo.legado { background:#f1f5f9; color:#64748b; }
 
 /* ===== ESTILOS DA SECAO DE RELATORIOS ===== */
 .rel-filtros-grid {

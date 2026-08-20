@@ -161,7 +161,8 @@ if ($metodo === 'GET' && isset($_GET['documento'])) {
 
     $stmt = $conexao->prepare(
         "SELECT id, nome_completo, documento, tipo_documento, telefone, celular, telefone_contato,
-                placa_veiculo, foto, documento_arquivo, observacao, ativo
+                placa_veiculo, foto, documento_arquivo, observacao, ativo,
+                cadastrado_por_nome, cadastrado_por_tipo, cadastrado_por_usuario_id, cadastrado_por_morador_id
          FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
             OR documento = ?
          LIMIT 1"
@@ -187,6 +188,7 @@ if ($metodo === 'GET') {
                    placa_veiculo, foto, documento_arquivo,
                    cep, endereco, numero, complemento, bairro, cidade, estado,
                    observacao, ativo,
+                   cadastrado_por_nome, cadastrado_por_tipo, cadastrado_por_usuario_id, cadastrado_por_morador_id,
                    DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro_formatada
             FROM visitantes WHERE tenant_id = $tenant_id ";
 
@@ -272,16 +274,29 @@ if ($metodo === 'POST') {
     }
     $stmt->close();
 
+    // A autoria é sempre derivada da sessão autenticada; nunca do payload do navegador.
+    $autorSessao = obterUsuarioAutenticado();
+    $autorTipo = 'FUNCIONARIO';
+    $autorUsuarioId = (int)($autorSessao['id'] ?? 0);
+    $autorMoradorId = null;
+    $autorNome = sanitizar($conexao, trim((string)($autorSessao['nome'] ?? '')));
+    if ($autorUsuarioId <= 0 || $autorNome === '') {
+        retornar_json(false, 'Não foi possível identificar o usuário responsável pelo cadastro. Faça login novamente.');
+    }
+
     // Inserir visitante
     $stmt = $conexao->prepare(
         "INSERT INTO visitantes
-            (tenant_id, nome_completo, documento, tipo_documento, telefone_contato, telefone, celular,
+            (tenant_id, cadastrado_por_tipo, cadastrado_por_usuario_id, cadastrado_por_morador_id, cadastrado_por_nome,
+             nome_completo, documento, tipo_documento, telefone_contato, telefone, celular,
              placa_veiculo, email, cep, endereco, numero, complemento, bairro, cidade, estado, observacao)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
+    if (!$stmt) retornar_json(false, 'Erro ao preparar o cadastro do visitante.');
     $stmt->bind_param(
-        "issssssssssssssss",
-        $tenant_id, $nome_completo, $documento, $tipo_documento, $telefone_contato, $telefone, $celular,
+        "isiisssssssssssssssss",
+        $tenant_id, $autorTipo, $autorUsuarioId, $autorMoradorId, $autorNome,
+        $nome_completo, $documento, $tipo_documento, $telefone_contato, $telefone, $celular,
         $placa_veiculo, $email, $cep, $endereco, $numero, $complemento, $bairro, $cidade, $estado, $observacao
     );
 
@@ -327,7 +342,7 @@ if ($metodo === 'POST') {
         $stmtArquivos->close();
 
         $conexao->commit();
-        registrar_log('INFO', "Visitante cadastrado com anexo: $nome_completo ($tipo_documento: $documento) ID: $id");
+        registrar_log('INFO', "Visitante cadastrado por $autorNome [$autorTipo] com anexo: $nome_completo ($tipo_documento: $documento) ID: $id");
         retornar_json(true, 'Visitante cadastrado com sucesso', ['id' => $id]);
     } catch (Throwable $erroCadastro) {
         $conexao->rollback();
