@@ -61,7 +61,7 @@ if (!function_exists('retornar_json')) {
 try {
     // Verificar autenticação
     verificarAutenticacao(true, 'operador');
-$tenant_id = exigirTenantId();
+    $tenant_id = (int)exigirTenantId();
     
     $metodo = $_SERVER['REQUEST_METHOD'];
     $conexao = conectar_banco();
@@ -85,11 +85,11 @@ $tenant_id = exigirTenantId();
         }
         
         try {
-            $stmt = $conexao->prepare("SELECT d.id, d.morador_id, d.nome_completo, d.cpf, d.email, d.telefone, d.celular, d.parentesco, d.observacao, d.ativo, m.nome as morador_nome FROM dependentes d LEFT JOIN moradores m ON d.morador_id = m.id WHERE d.id = ?");
+            $stmt = $conexao->prepare("SELECT d.id, d.morador_id, d.nome_completo, d.cpf, d.email, d.telefone, d.celular, d.parentesco, d.observacao, d.ativo, m.nome as morador_nome FROM dependentes d LEFT JOIN moradores m ON d.morador_id = m.id AND m.tenant_id = d.tenant_id WHERE d.id = ? AND d.tenant_id = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
-            $stmt->bind_param("i", $id);
+            $stmt->bind_param("ii", $id, $tenant_id);
             
             if (!$stmt->execute()) {
                 throw new Exception("Erro ao executar query: " . $stmt->error);
@@ -130,11 +130,11 @@ $tenant_id = exigirTenantId();
 
         // Base da query de filtros (reutilizada para COUNT e SELECT)
         $sql_where = " FROM dependentes d
-                LEFT JOIN moradores m ON d.morador_id = m.id
-                WHERE 1=1";
+                LEFT JOIN moradores m ON d.morador_id = m.id AND m.tenant_id = d.tenant_id
+                WHERE d.tenant_id = ?";
 
-        $tipos_param = "";
-        $params = array();
+        $tipos_param = "i";
+        $params = array($tenant_id);
 
         // Busca unificada: nome, CPF, morador ou unidade
         if ($filtro_busca !== '') {
@@ -244,12 +244,12 @@ $tenant_id = exigirTenantId();
             retornar_json(false, "Morador, nome completo e CPF são obrigatórios");
         }
         
-        // Verificar se morador existe
-        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
+        // Verificar se o morador pertence ao mesmo tenant da sessão.
+        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = ? AND id = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
-        $stmt->bind_param("i", $morador_id);
+        $stmt->bind_param("ii", $tenant_id, $morador_id);
         $stmt->execute();
         $stmt->store_result();
         
@@ -259,12 +259,12 @@ $tenant_id = exigirTenantId();
         }
         $stmt->close();
         
-        // Verificar se CPF já existe
-        $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE tenant_id = $tenant_id AND cpf = ?");
+        // Verificar se CPF já existe no tenant atual.
+        $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE tenant_id = ? AND cpf = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
-        $stmt->bind_param("s", $cpf);
+        $stmt->bind_param("is", $tenant_id, $cpf);
         $stmt->execute();
         $stmt->store_result();
         
@@ -274,12 +274,12 @@ $tenant_id = exigirTenantId();
         }
         $stmt->close();
         
-        // Inserir dependente
-        $stmt = $conexao->prepare("INSERT INTO dependentes (morador_id, nome_completo, cpf, email, telefone, celular, data_nascimento, parentesco, observacao, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
+        // Inserir dependente já vinculado ao tenant e ao morador validados.
+        $stmt = $conexao->prepare("INSERT INTO dependentes (tenant_id, morador_id, nome_completo, cpf, email, telefone, celular, data_nascimento, parentesco, observacao, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
         if (!$stmt) {
             throw new Exception("Erro ao preparar insert: " . $conexao->error);
         }
-        $stmt->bind_param("issssssss", $morador_id, $nome_completo, $cpf, $email, $telefone, $celular, $data_nascimento, $parentesco, $observacao);
+        $stmt->bind_param("iissssssss", $tenant_id, $morador_id, $nome_completo, $cpf, $email, $telefone, $celular, $data_nascimento, $parentesco, $observacao);
         
         if ($stmt->execute()) {
             $id_inserido = $conexao->insert_id;
