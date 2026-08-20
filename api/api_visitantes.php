@@ -10,6 +10,7 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
+require_once __DIR__ . '/helpers/cpf_helper.php';
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -176,12 +177,12 @@ if ($metodo === 'POST') {
 
     $tipo_documento = in_array(strtoupper($tipo_documento), ['RG', 'CPF']) ? strtoupper($tipo_documento) : 'CPF';
 
-    // Validar CPF
+    // CPF deve ser matematicamente válido e é sempre persistido com máscara.
     if ($tipo_documento === 'CPF') {
-        $doc_limpo = preg_replace('/[^0-9]/', '', $documento);
-        if (strlen($doc_limpo) !== 11) {
-            retornar_json(false, "CPF inválido — deve ter 11 dígitos");
+        if (!cpf_valido($documento)) {
+            retornar_json(false, 'CPF inválido. Informe um CPF válido.');
         }
+        $documento = cpf_formatar($documento);
     }
 
     // Verificar duplicidade por documento (ignorando pontuação)
@@ -256,6 +257,14 @@ if ($metodo === 'PUT') {
     if (empty($documento))     retornar_json(false, "Documento é obrigatório");
 
     $tipo_documento = in_array(strtoupper($tipo_documento), ['RG', 'CPF']) ? strtoupper($tipo_documento) : 'CPF';
+
+    // Mantém a mesma regra do cadastro também durante uma edição.
+    if ($tipo_documento === 'CPF') {
+        if (!cpf_valido($documento)) {
+            retornar_json(false, 'CPF inválido. Informe um CPF válido.');
+        }
+        $documento = cpf_formatar($documento);
+    }
 
     // Verificar duplicidade em outro visitante
     $doc_limpo_busca = preg_replace('/[^0-9A-Za-z]/', '', $documento);

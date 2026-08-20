@@ -143,18 +143,44 @@ function _setupMascaras() {
 function _aplicarMascaraDoc(input, tipo) {
     let v = input.value.replace(/\D/g, '');
     if (tipo === 'CPF') {
-        v = v.slice(0, 11);
-        if (v.length > 9)      v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
-        else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
-        else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
-    } else {
-        // RG: XX.XXX.XXX-X
-        v = v.slice(0, 9);
-        if (v.length > 8)      v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4');
-        else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
-        else if (v.length > 2) v = v.replace(/(\d{2})(\d{1,3})/, '$1.$2');
+        input.value = _formatarCPF(v);
+        return;
     }
+
+    // RG: XX.XXX.XXX-X
+    v = v.slice(0, 9);
+    if (v.length > 8)      v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4');
+    else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+    else if (v.length > 2) v = v.replace(/(\d{2})(\d{1,3})/, '$1.$2');
     input.value = v;
+}
+
+function _formatarCPF(valor) {
+    const digitos = String(valor || '').replace(/\D/g, '').slice(0, 11);
+    if (digitos.length <= 3) return digitos;
+    if (digitos.length <= 6) return digitos.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+    if (digitos.length <= 9) return digitos.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+    return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+}
+
+function _cpfValido(valor) {
+    const cpf = String(valor || '').replace(/\D/g, '');
+    if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+    for (let posicao = 9; posicao < 11; posicao += 1) {
+        let soma = 0;
+        for (let indice = 0; indice < posicao; indice += 1) {
+            soma += Number(cpf[indice]) * ((posicao + 1) - indice);
+        }
+        const digito = (soma % 11) < 2 ? 0 : 11 - (soma % 11);
+        if (Number(cpf[posicao]) !== digito) return false;
+    }
+    return true;
+}
+
+function _formatarDocumentoParaExibicao(documento, tipo) {
+    if (String(tipo || '').toUpperCase() !== 'CPF') return String(documento || '');
+    return _formatarCPF(documento);
 }
 
 function _mascaraTelefone(input) {
@@ -407,7 +433,7 @@ function _renderVisitantes(visitantes) {
         const id        = v.id || '-';
         const nome      = _esc(v.nome_completo || '-');
         const tipoDoc   = _esc(v.tipo_documento || 'CPF');
-        const doc       = _esc(v.documento || '-');
+        const doc       = _esc(_formatarDocumentoParaExibicao(v.documento, v.tipo_documento) || '-');
         const telefone  = _esc(v.telefone_contato || v.telefone || '-');
         const fotoUrl   = v.foto || '';
         const docUrl    = v.documento_arquivo || '';
@@ -457,7 +483,7 @@ async function _salvarVisitante() {
     try {
         const nome            = document.getElementById('nomeVisitante')?.value.trim() || '';
         const tipoDoc         = document.getElementById('tipoDocumento')?.value || 'CPF';
-        const documento       = document.getElementById('documento')?.value.trim() || '';
+        let documento         = document.getElementById('documento')?.value.trim() || '';
         const telefoneContato = document.getElementById('telefoneContato')?.value.trim() || '';
         const celular         = document.getElementById('celularVisitante')?.value.trim() || '';
         const email           = document.getElementById('emailVisitante')?.value.trim() || '';
@@ -468,10 +494,16 @@ async function _salvarVisitante() {
         if (!documento)       { _mostrarAlerta('error', 'Documento é obrigatório.'); return; }
         if (!telefoneContato) { _mostrarAlerta('error', 'Telefone de contato é obrigatório.'); return; }
 
-        // Validar CPF
+        // CPF deve passar pela validação completa, não apenas ter 11 dígitos.
         if (tipoDoc === 'CPF') {
-            const cpfLimpo = documento.replace(/\D/g, '');
-            if (cpfLimpo.length !== 11) { _mostrarAlerta('error', 'CPF inválido — deve ter 11 dígitos.'); return; }
+            documento = _formatarCPF(documento);
+            document.getElementById('documento').value = documento;
+            if (!_cpfValido(documento)) {
+                console.warn('[Visitantes][CPF] Cadastro bloqueado: CPF inválido.');
+                _mostrarAlerta('error', 'CPF inválido. Confira os dígitos informados.');
+                document.getElementById('documento')?.focus();
+                return;
+            }
         }
 
         const payload = {
@@ -582,7 +614,7 @@ function _editarVisitante(id) {
     document.getElementById('visitanteId').value        = String(idNormalizado);
     document.getElementById('nomeVisitante').value       = visitante.nome_completo || '';
     document.getElementById('tipoDocumento').value       = visitante.tipo_documento || 'CPF';
-    document.getElementById('documento').value           = visitante.documento || '';
+    document.getElementById('documento').value           = _formatarDocumentoParaExibicao(visitante.documento, visitante.tipo_documento);
     document.getElementById('telefoneContato').value     = visitante.telefone_contato || visitante.telefone || '';
     document.getElementById('celularVisitante').value    = visitante.celular || '';
     document.getElementById('emailVisitante').value      = visitante.email || '';
