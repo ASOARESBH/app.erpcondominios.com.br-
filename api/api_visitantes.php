@@ -179,6 +179,161 @@ if ($metodo === 'GET' && isset($_GET['documento'])) {
     }
 }
 
+// ========== RELATÓRIO ANALÍTICO DE ACESSOS ==========
+// Fonte: registros_acesso. O relatório usa somente eventos do tenant autenticado,
+// com Visitante e Prestador registrados pelo controle de acesso manual.
+if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
+    $dataInicio = trim((string)($_GET['data_inicio'] ?? date('Y-m-01')));
+    $dataFim = trim((string)($_GET['data_fim'] ?? date('Y-m-d')));
+    if (!preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $dataInicio)) $dataInicio = date('Y-m-01');
+    if (!preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $dataFim)) $dataFim = date('Y-m-d');
+    if ($dataInicio > $dataFim) retornar_json(false, 'A data inicial não pode ser posterior à data final.');
+
+    $wherePeriodo = "tenant_id = ? AND data_hora >= ? AND data_hora < DATE_ADD(?, INTERVAL 1 DAY) AND tipo IN ('Visitante', 'Prestador')";
+    $tiposPeriodo = 'iss';
+    $paramsPeriodo = [$tenant_id, $dataInicio, $dataFim];
+
+    // Consolidado estratégico do período selecionado.
+    $sqlResumo = "SELECT
+        COUNT(*) AS total_acessos,
+        SUM(tipo = 'Visitante') AS visitantes,
+        SUM(tipo = 'Prestador') AS prestadores,
+        SUM(tipo_acesso = 'Entrada') AS entradas,
+        SUM(tipo_acesso = 'Saída') AS saidas,
+        SUM(liberado = 1) AS liberados,
+        SUM(liberado = 0) AS pendentes
+        FROM registros_acesso WHERE $wherePeriodo";
+    $stmtResumo = $conexao->prepare($sqlResumo);
+    if (!$stmtResumo) retornar_json(false, 'Não foi possível preparar o resumo analítico.');
+    $stmtResumo->bind_param($tiposPeriodo, ...$paramsPeriodo);
+    $stmtResumo->execute();
+    $resumo = $stmtResumo->get_result()->fetch_assoc() ?: [];
+    $stmtResumo->close();
+    foreach (['total_acessos', 'visitantes', 'prestadores', 'entradas', 'saidas', 'liberados', 'pendentes'] as $campo) {
+        $resumo[$campo] = (int)($resumo[$campo] ?? 0);
+    }
+
+    // Horário de pico das últimas 24 horas, independentemente do período selecionado.
+    $sqlPico = "SELECT HOUR(data_hora) AS hora, COUNT(*) AS total
+                FROM registros_acesso
+                WHERE tenant_id = ?
+                  AND data_hora >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                  AND tipo IN ('Visitante', 'Prestador')
+                GROUP BY HOUR(data_hora)
+                ORDER BY total DESC, hora ASC
+                LIMIT 1";
+    $stmtPico = $conexao->prepare($sqlPico);
+    if (!$stmtPico) retornar_json(false, 'Não foi possível preparar o horário de pico.');
+    $stmtPico->bind_param('i', $tenant_id);
+    $stmtPico->execute();
+    $pico24h = $stmtPico->get_result()->fetch_assoc();
+    $stmtPico->close();
+    $horarioPico = $pico24h ? [
+        'hora' => (int)$pico24h['hora'],
+        'rotulo' => str_pad((string)$pico24h['hora'], 2, '0', STR_PAD_LEFT) . ':00',
+        'total' => (int)$pico24h['total'],
+    ] : ['hora' => null, 'rotulo' => 'Sem registros', 'total' => 0];
+
+    $histograma24h = [];
+    $sqlHistograma = "SELECT HOUR(data_hora) AS hora, COUNT(*) AS total
+                      FROM registros_acesso
+                      WHERE tenant_id = ?
+                        AND data_hora >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                        AND tipo IN ('Visitante', 'Prestador')
+                      GROUP BY HOUR(data_hora)
+                      ORDER BY hora ASC";
+    $stmtHistograma = $conexao->prepare($sqlHistograma);
+    if (!$stmtHistograma) retornar_json(false, 'Não foi possível preparar a distribuição horária.');
+    $stmtHistograma->bind_param('i', $tenant_id);
+    $stmtHistograma->execute();
+    $resHistograma = $stmtHistograma->get_result();
+    while ($linha = $resHistograma->fetch_assoc()) {
+        $histograma24h[] = ['hora' => (int)$linha['hora'], 'total' => (int)$linha['total']];
+    }
+    $stmtHistograma->close();
+
+    // Ranking das glebas/unidades mais acessadas no período.
+    $rankingUnidades = [];
+    $sqlUnidades = "SELECT COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado') AS unidade,
+                           COUNT(*) AS total,
+                           SUM(tipo = 'Visitante') AS visitantes,
+                           SUM(tipo = 'Prestador') AS prestadores
+                    FROM registros_acesso
+                    WHERE $wherePeriodo
+                    GROUP BY COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado')
+                    ORDER BY total DESC, unidade ASC
+                    LIMIT 10";
+    $stmtUnidades = $conexao->prepare($sqlUnidades);
+    if (!$stmtUnidades) retornar_json(false, 'Não foi possível preparar o ranking de unidades.');
+    $stmtUnidades->bind_param($tiposPeriodo, ...$paramsPeriodo);
+    $stmtUnidades->execute();
+    $resUnidades = $stmtUnidades->get_result();
+    while ($linha = $resUnidades->fetch_assoc()) {
+        $rankingUnidades[] = [
+            'unidade' => $linha['unidade'],
+            'total' => (int)$linha['total'],
+            'visitantes' => (int)$linha['visitantes'],
+            'prestadores' => (int)$linha['prestadores'],
+        ];
+    }
+    $stmtUnidades->close();
+
+    // Pessoas mais registradas, útil para identificar recorrência de prestadores e visitantes.
+    $rankingPessoas = [];
+    $sqlPessoas = "SELECT COALESCE(NULLIF(TRIM(nome_visitante), ''), 'Não identificado') AS nome,
+                           tipo, COUNT(*) AS total
+                    FROM registros_acesso
+                    WHERE $wherePeriodo
+                    GROUP BY COALESCE(NULLIF(TRIM(nome_visitante), ''), 'Não identificado'), tipo
+                    ORDER BY total DESC, nome ASC
+                    LIMIT 10";
+    $stmtPessoas = $conexao->prepare($sqlPessoas);
+    if (!$stmtPessoas) retornar_json(false, 'Não foi possível preparar o ranking de acessos.');
+    $stmtPessoas->bind_param($tiposPeriodo, ...$paramsPeriodo);
+    $stmtPessoas->execute();
+    $resPessoas = $stmtPessoas->get_result();
+    while ($linha = $resPessoas->fetch_assoc()) {
+        $rankingPessoas[] = ['nome' => $linha['nome'], 'tipo' => $linha['tipo'], 'total' => (int)$linha['total']];
+    }
+    $stmtPessoas->close();
+
+    // Tendência diária estratégica, limitada a 31 dias mais recentes do período.
+    $tendenciaDiaria = [];
+    $sqlTendencia = "SELECT DATE(data_hora) AS data_ordem, DATE_FORMAT(data_hora, '%d/%m') AS data,
+                            COUNT(*) AS total,
+                            SUM(tipo = 'Visitante') AS visitantes,
+                            SUM(tipo = 'Prestador') AS prestadores
+                     FROM registros_acesso
+                     WHERE $wherePeriodo
+                     GROUP BY DATE(data_hora), DATE_FORMAT(data_hora, '%d/%m')
+                     ORDER BY data_ordem DESC
+                     LIMIT 31";
+    $stmtTendencia = $conexao->prepare($sqlTendencia);
+    if (!$stmtTendencia) retornar_json(false, 'Não foi possível preparar a tendência de acessos.');
+    $stmtTendencia->bind_param($tiposPeriodo, ...$paramsPeriodo);
+    $stmtTendencia->execute();
+    $resTendencia = $stmtTendencia->get_result();
+    while ($linha = $resTendencia->fetch_assoc()) {
+        $tendenciaDiaria[] = [
+            'data' => $linha['data'],
+            'total' => (int)$linha['total'],
+            'visitantes' => (int)$linha['visitantes'],
+            'prestadores' => (int)$linha['prestadores'],
+        ];
+    }
+    $stmtTendencia->close();
+
+    retornar_json(true, 'Relatório analítico de acessos gerado.', [
+        'periodo' => ['data_inicio' => $dataInicio, 'data_fim' => $dataFim],
+        'resumo' => $resumo,
+        'horario_pico_24h' => $horarioPico,
+        'histograma_24h' => $histograma24h,
+        'ranking_unidades' => $rankingUnidades,
+        'ranking_pessoas' => $rankingPessoas,
+        'tendencia_diaria' => $tendenciaDiaria,
+    ]);
+}
+
 // ========== LISTAR VISITANTES ==========
 if ($metodo === 'GET') {
     $busca = isset($_GET['busca']) ? sanitizar($conexao, $_GET['busca']) : '';
