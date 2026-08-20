@@ -80,7 +80,7 @@
             <div class="form-grid form-grid-2">
                 <!-- Foto do visitante -->
                 <div class="form-group upload-group">
-                    <label>Foto do Visitante</label>
+                    <label>Foto do Visitante <span class="field-required" aria-label="obrigatório">*</span></label>
                     <div class="upload-preview-box" id="fotoPreviewBox">
                         <img id="fotoPreview" src="" alt="Foto do visitante" style="display:none; max-width:120px; max-height:120px; border-radius:8px; object-fit:cover;">
                         <div id="fotoPlaceholder" class="upload-placeholder">
@@ -100,12 +100,12 @@
                             <i class="fas fa-times"></i> Remover
                         </button>
                     </div>
-                    <small class="upload-hint">📷 Webcam ou arquivo JPG/PNG/WEBP — máx. 500KB comprimido</small>
+                    <small class="upload-hint"><strong>Obrigatória.</strong> Webcam ou arquivo JPG/PNG/WEBP — máx. 500KB comprimido</small>
                 </div>
 
                 <!-- Documento digitalizado -->
                 <div class="form-group upload-group">
-                    <label>Documento Digitalizado</label>
+                    <label>Documento Digitalizado <span class="field-required" aria-label="obrigatório">*</span></label>
                     <div class="upload-preview-box" id="docPreviewBox">
                         <div id="docPreview" style="display:none; padding:10px; text-align:center;">
                             <i class="fas fa-file-alt fa-3x" style="color:#4a90d9;"></i>
@@ -125,7 +125,7 @@
                             <i class="fas fa-times"></i> Remover
                         </button>
                     </div>
-                    <small class="upload-hint">JPG, PNG, WEBP ou PDF — máx. 5MB</small>
+                    <small class="upload-hint"><strong>Obrigatório.</strong> JPG, PNG, WEBP ou PDF — máx. 5MB</small>
                 </div>
             </div>
 
@@ -196,7 +196,9 @@
 </div>
 <style>
 /* ===== ESTILOS DO MÓDULO VISITANTES v2 ===== */
-.form-section-title {
+	.field-required { color:#dc2626; font-weight:800; }
+	.form-section-title {
+
     font-size: 13px;
     font-weight: 700;
     text-transform: uppercase;

@@ -15,6 +15,8 @@ let modoEdicao        = false;
 let visitanteIdEdicao = null;
 let fotoArquivo       = null;
 let docArquivo        = null;
+let fotoExistente     = false;
+let documentoExistente = false;
 let salvando          = false;
 
 export function init() {
@@ -202,6 +204,7 @@ function _setupUploads() {
     // Função auxiliar: aplica preview de foto
     function _aplicarPreviewFoto(file, dataUrl) {
         fotoArquivo = file;
+        fotoExistente = false;
         const img = document.getElementById('fotoPreview');
         const ph  = document.getElementById('fotoPlaceholder');
         if (img) { img.src = dataUrl; img.style.display = 'block'; }
@@ -249,6 +252,7 @@ function _setupUploads() {
     if (btnRemFoto) {
         btnRemFoto.addEventListener('click', () => {
             fotoArquivo = null;
+            fotoExistente = false;
             if (fotoInput) fotoInput.value = '';
             const img = document.getElementById('fotoPreview');
             const ph  = document.getElementById('fotoPlaceholder');
@@ -274,6 +278,7 @@ function _setupUploads() {
                 return;
             }
             docArquivo = file;
+            documentoExistente = false;
             const preview = document.getElementById('docPreview');
             const ph      = document.getElementById('docPlaceholder');
             const nome    = document.getElementById('docNomeArquivo');
@@ -286,6 +291,7 @@ function _setupUploads() {
     if (btnRemDoc) {
         btnRemDoc.addEventListener('click', () => {
             docArquivo = null;
+            documentoExistente = false;
             if (docInput) docInput.value = '';
             const preview = document.getElementById('docPreview');
             const ph      = document.getElementById('docPlaceholder');
@@ -493,6 +499,16 @@ async function _salvarVisitante() {
         if (!nome)            { _mostrarAlerta('error', 'Nome completo é obrigatório.'); return; }
         if (!documento)       { _mostrarAlerta('error', 'Documento é obrigatório.'); return; }
         if (!telefoneContato) { _mostrarAlerta('error', 'Telefone de contato é obrigatório.'); return; }
+        if (!(fotoArquivo || fotoExistente)) {
+            _mostrarAlerta('error', 'A foto do visitante é obrigatória para concluir o cadastro.');
+            document.getElementById('btnSelecionarFoto')?.focus();
+            return;
+        }
+        if (!(docArquivo || documentoExistente)) {
+            _mostrarAlerta('error', 'O documento digitalizado é obrigatório para concluir o cadastro.');
+            document.getElementById('btnSelecionarDoc')?.focus();
+            return;
+        }
 
         // CPF deve passar pela validação completa, não apenas ter 11 dígitos.
         if (tipoDoc === 'CPF') {
@@ -520,19 +536,33 @@ async function _salvarVisitante() {
         const method = modoEdicao ? 'PUT' : 'POST';
         if (modoEdicao) payload.id = visitanteIdEdicao;
 
-        // Salvar/atualizar visitante
-        const resp = await fetch(API_VISITANTES, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        // Cadastro inicial é multipart: os dois anexos obrigatórios seguem com os dados.
+        // Edições continuam enviando JSON e só carregam novos arquivos quando necessário.
+        let resp;
+        if (modoEdicao) {
+            resp = await fetch(API_VISITANTES, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            const formularioComAnexos = new FormData();
+            formularioComAnexos.append('dados', JSON.stringify(payload));
+            formularioComAnexos.append('foto', fotoArquivo);
+            formularioComAnexos.append('documento', docArquivo);
+            resp = await fetch(API_VISITANTES, {
+                method: 'POST',
+                body: formularioComAnexos
+            });
+        }
         const data = await resp.json();
         console.log('[Visitantes] Resposta salvar:', data);
 
-        // Se duplicado no POST, usar o ID existente
+        // Um documento já existente não cria novo cadastro nem substitui anexos.
         if (!data.sucesso && data.dados?.duplicado) {
-            visitanteId = data.dados.id;
-            console.log(`[Visitantes] Visitante já existe (ID ${visitanteId}), usando cadastro existente.`);
+            console.warn('[Visitantes] Cadastro bloqueado: documento já vinculado a outro visitante.', data.dados);
+            _mostrarAlerta('warning', 'Já existe um visitante cadastrado com este documento. Abra-o pela listagem para revisar os anexos.');
+            return;
         } else if (!data.sucesso) {
             _mostrarAlerta('error', data.mensagem || 'Erro ao salvar visitante.');
             return;
@@ -541,7 +571,7 @@ async function _salvarVisitante() {
         }
 
         // Upload de foto (se selecionada)
-        if (fotoArquivo && visitanteId) {
+        if (modoEdicao && fotoArquivo && visitanteId) {
             const fd = new FormData();
             fd.append('foto', fotoArquivo);
             const r = await fetch(`${API_VISITANTES}?acao=upload&tipo=foto&visitante_id=${visitanteId}`, {
@@ -552,7 +582,7 @@ async function _salvarVisitante() {
         }
 
         // Upload de documento (se selecionado)
-        if (docArquivo && visitanteId) {
+        if (modoEdicao && docArquivo && visitanteId) {
             const fd = new FormData();
             fd.append('documento', docArquivo);
             const r = await fetch(`${API_VISITANTES}?acao=upload&tipo=documento&visitante_id=${visitanteId}`, {
@@ -621,6 +651,9 @@ function _editarVisitante(id) {
     document.getElementById('observacaoVisitante').value = visitante.observacao || '';
 
     // Foto existente
+    fotoExistente = Boolean(visitante.foto);
+    documentoExistente = Boolean(visitante.documento_arquivo);
+
     if (visitante.foto) {
         const img    = document.getElementById('fotoPreview');
         const ph     = document.getElementById('fotoPlaceholder');
@@ -690,9 +723,11 @@ function _resetForm() {
     if (form) form.reset();
 
     document.getElementById('visitanteId').value = '';
-    fotoArquivo       = null;
-    docArquivo        = null;
-    modoEdicao        = false;
+    fotoArquivo        = null;
+    docArquivo         = null;
+    fotoExistente      = false;
+    documentoExistente = false;
+    modoEdicao         = false;
     visitanteIdEdicao = null;
 
     // Reset foto preview

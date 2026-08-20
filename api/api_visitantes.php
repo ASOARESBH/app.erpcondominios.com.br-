@@ -41,6 +41,44 @@ $conexao = conectar_banco();
 // Armazenamento físico removido: fotos e documentos são persistidos em tenant_arquivos.
 // Os campos da tabela mantêm URLs legadas apenas como chave de compatibilidade.
 
+/**
+ * Valida e persiste um anexo obrigatório do cadastro inicial de visitante.
+ * A operação usa o mesmo banco e pode participar da transação do cadastro.
+ */
+function gravar_anexo_obrigatorio_visitante($conexao, $tenant_id, $campo, $tipo_upload, $visitante_id) {
+    $arquivo = $_FILES[$campo] ?? null;
+    if (!$arquivo || (int)($arquivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException($tipo_upload === 'foto'
+            ? 'A foto do visitante é obrigatória.'
+            : 'O documento digitalizado do visitante é obrigatório.');
+    }
+
+    $extensoesPermitidas = $tipo_upload === 'foto'
+        ? ['jpg', 'jpeg', 'png', 'webp']
+        : ['jpg', 'jpeg', 'png', 'pdf', 'webp'];
+    $extensao = strtolower(pathinfo((string)$arquivo['name'], PATHINFO_EXTENSION));
+    if (!in_array($extensao, $extensoesPermitidas, true)) {
+        throw new RuntimeException('Formato de ' . $tipo_upload . ' não permitido.');
+    }
+    if ((int)$arquivo['size'] <= 0 || (int)$arquivo['size'] > 5 * 1024 * 1024) {
+        throw new RuntimeException('O arquivo de ' . $tipo_upload . ' deve ter até 5MB.');
+    }
+
+    $prefixo = $tipo_upload === 'foto' ? 'foto' : 'doc';
+    $caminhoLegado = 'uploads/visitantes/' . ($tipo_upload === 'foto' ? 'fotos' : 'documentos')
+        . '/' . $prefixo . '_' . (int)$visitante_id . '_' . time() . '.' . $extensao;
+    $arquivoBanco = tenant_file_gravar_upload(
+        $conexao,
+        (int)$tenant_id,
+        $arquivo,
+        $tipo_upload === 'foto' ? 'visitante_foto' : 'visitante_documento',
+        $caminhoLegado,
+        false
+    );
+
+    return '../' . $arquivoBanco['caminho_legado'];
+}
+
 // ========== UPLOAD DE FOTO / DOCUMENTO ==========
 if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'upload') {
     verificarPermissao('operador');
@@ -99,7 +137,7 @@ if ($metodo === 'GET' && isset($_GET['documento'])) {
 
     $stmt = $conexao->prepare(
         "SELECT id, nome_completo, documento, tipo_documento, telefone, celular, telefone_contato,
-                placa_veiculo, foto, observacao, ativo
+                placa_veiculo, foto, documento_arquivo, observacao, ativo
          FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
             OR documento = ?
          LIMIT 1"
@@ -152,7 +190,11 @@ if ($metodo === 'GET') {
 // ========== CRIAR VISITANTE ==========
 if ($metodo === 'POST') {
     verificarPermissao('operador');
-    $dados = json_decode(file_get_contents('php://input'), true);
+    $entradaDados = isset($_POST['dados']) ? $_POST['dados'] : file_get_contents('php://input');
+    $dados = json_decode($entradaDados, true);
+    if (!is_array($dados)) {
+        retornar_json(false, 'Dados do visitante inválidos.');
+    }
 
     $nome_completo    = sanitizar($conexao, trim($dados['nome_completo']    ?? ''));
     $documento        = sanitizar($conexao, trim($dados['documento']        ?? ''));
@@ -219,14 +261,40 @@ if ($metodo === 'POST') {
         $placa_veiculo, $email, $cep, $endereco, $numero, $complemento, $bairro, $cidade, $estado, $observacao
     );
 
-    if ($stmt->execute()) {
-        $id = $conexao->insert_id;
-        registrar_log($conexao, 'INFO', "Visitante cadastrado: $nome_completo ($tipo_documento: $documento) ID: $id");
-        retornar_json(true, "Visitante cadastrado com sucesso", ['id' => $id]);
-    } else {
-        retornar_json(false, "Erro ao cadastrar visitante: " . $stmt->error);
+    $conexao->begin_transaction();
+    try {
+        if (!$stmt->execute()) {
+            throw new RuntimeException('Não foi possível gravar os dados do visitante.');
+        }
+        $id = (int)$conexao->insert_id;
+        $stmt->close();
+
+        // Foto e documento são requisitos do cadastro. Os dois BLOBs precisam
+        // ser gravados antes de confirmar o visitante para evitar cadastro incompleto.
+        $urlFoto = gravar_anexo_obrigatorio_visitante($conexao, (int)$tenant_id, 'foto', 'foto', $id);
+        $urlDocumento = gravar_anexo_obrigatorio_visitante($conexao, (int)$tenant_id, 'documento', 'documento', $id);
+
+        $stmtArquivos = $conexao->prepare(
+            'UPDATE visitantes SET foto = ?, documento_arquivo = ? WHERE tenant_id = ? AND id = ?'
+        );
+        if (!$stmtArquivos) {
+            throw new RuntimeException('Não foi possível associar os anexos ao visitante.');
+        }
+        $stmtArquivos->bind_param('ssii', $urlFoto, $urlDocumento, $tenant_id, $id);
+        if (!$stmtArquivos->execute()) {
+            $stmtArquivos->close();
+            throw new RuntimeException('Não foi possível associar os anexos ao visitante.');
+        }
+        $stmtArquivos->close();
+
+        $conexao->commit();
+        registrar_log($conexao, 'INFO', "Visitante cadastrado com foto e documento: $nome_completo ($tipo_documento: $documento) ID: $id");
+        retornar_json(true, 'Visitante cadastrado com sucesso', ['id' => $id]);
+    } catch (Throwable $erroCadastro) {
+        $conexao->rollback();
+        error_log('[Visitantes][Cadastro] tenant=' . $tenant_id . ' erro=' . $erroCadastro->getMessage());
+        retornar_json(false, $erroCadastro->getMessage());
     }
-    $stmt->close();
 }
 
 // ========== ATUALIZAR VISITANTE ==========

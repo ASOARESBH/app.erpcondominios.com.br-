@@ -15,7 +15,7 @@
         <div class="info-box">
             <i class="fas fa-info-circle"></i>
             <strong>Registro Manual:</strong> use para visitantes, prestadores ou morador sem leitura automática.
-            Para <strong>Visitante</strong> ou <strong>Prestador</strong>, informe o RG ou CPF para buscar o cadastro automaticamente.
+            Para <strong>Visitante</strong> ou <strong>Prestador</strong>, informe o RG ou CPF para buscar o cadastro automaticamente. O acesso só será registrado quando o cadastro possuir <strong>documento digitalizado anexado</strong>.
         </div>
 
         <!-- Box de veículo encontrado (morador) -->
@@ -275,7 +275,9 @@
     margin-bottom:14px; font-size:13px;
     display:flex; align-items:center; gap:8px;
 }
-.visitante-encontrado { background:#e8f5e9; border:1px solid #81c784; color:#2e7d32; }
+	.visitante-encontrado { background:#e8f5e9; border:1px solid #81c784; color:#2e7d32; }
+	.visitante-encontrado.visitante-documento-pendente { background:#fff7ed; border-color:#fb923c; color:#9a3412; }
+
 .veiculo-encontrado   { background:#e3f2fd; border:1px solid #90caf9; color:#1565c0; }
 
 /* ── Morador info box ─────────────────────────────────────── */
