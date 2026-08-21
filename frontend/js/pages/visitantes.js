@@ -15,7 +15,10 @@ let modoEdicao        = false;
 let visitanteIdEdicao = null;
 let fotoArquivo       = null;
 let docArquivo        = null;
+let fotoExistente     = false;
+let documentoExistente = false;
 let salvando          = false;
+let relatorioAnaliticoCache = null;
 
 export function init() {
     console.log('[Visitantes] Inicializando v3...');
@@ -25,6 +28,7 @@ export function init() {
     _setupBusca();
     _setupActions();
     _setupUploads();
+    _setupRelatorios();
     _resetForm();
     _carregarVisitantes();
 
@@ -37,26 +41,43 @@ export function init() {
         verDoc:         _verDoc,
         relExportarCSV: relExportarCSV,
         relGerarPDF:    relGerarPDF,
-        relAtualizar:   _relAtualizar
+        relAtualizar:   _relAtualizar,
+        relAlternarTipo: _relAlternarTipo
     };
     console.log('[Visitantes] Módulo pronto.');
 }
 
 // ===== CONTROLE DE ABAS =====
 function _setupAbas() {
-    const tabBtns = document.querySelectorAll('.page-visitantes .vis-tab-btn');
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tab = btn.dataset.tab;
-            tabBtns.forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.page-visitantes .vis-tab-content').forEach(c => c.classList.remove('active'));
-            btn.classList.add('active');
-            const content = document.getElementById('vis-tab-' + tab);
-            if (content) content.classList.add('active');
-            if (tab === 'listagem') _carregarVisitantes();
-            if (tab === 'relatorios') _relAtualizar();
-        });
+    document.querySelectorAll('.page-visitantes .vis-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => _ativarAba(btn.dataset.tab));
     });
+}
+
+/**
+ * Centraliza a troca de abas. A edição também usa este fluxo para que o
+ * formulário preenchido nunca permaneça invisível atrás da aba Listagem.
+ */
+function _ativarAba(tab, { atualizarDados = true } = {}) {
+    const tabBtns = document.querySelectorAll('.page-visitantes .vis-tab-btn');
+    const content = document.getElementById('vis-tab-' + tab);
+    const botaoAtivo = Array.from(tabBtns).find(btn => btn.dataset.tab === tab);
+
+    if (!content || !botaoAtivo) {
+        console.error('[Visitantes][Abas] Aba não encontrada:', { tab, content: !!content, botao: !!botaoAtivo });
+        return false;
+    }
+
+    tabBtns.forEach(btn => btn.classList.toggle('active', btn === botaoAtivo));
+    document.querySelectorAll('.page-visitantes .vis-tab-content').forEach(item => {
+        item.classList.toggle('active', item === content);
+    });
+
+    if (atualizarDados && tab === 'listagem') _carregarVisitantes();
+    if (atualizarDados && tab === 'relatorios') _relAtualizar();
+
+    console.debug('[Visitantes][Abas] Aba ativada:', { tab, atualizarDados });
+    return true;
 }
 
 function _atualizarKpis(lista) {
@@ -71,7 +92,12 @@ function _atualizarKpis(lista) {
     set('kpiComDoc', comDoc);
 }
 
-function _relAtualizar() {
+async function _relAtualizar() {
+    if (_tipoRelatorioAtual() === 'analitico') {
+        await _relCarregarAnalitico();
+        return;
+    }
+
     const filtros = _relColetarFiltros();
     const dados   = _relFiltrarCache(filtros);
     const preview = document.getElementById('relPreviewVisitantes');
@@ -100,7 +126,8 @@ export function destroy() {
     visitanteIdEdicao = null;
     fotoArquivo       = null;
     docArquivo        = null;
-    salvando          = false;
+    relatorioAnaliticoCache = null;
+    salvando = false;
 }
 
 // ===== MÁSCARAS =====
@@ -127,18 +154,44 @@ function _setupMascaras() {
 function _aplicarMascaraDoc(input, tipo) {
     let v = input.value.replace(/\D/g, '');
     if (tipo === 'CPF') {
-        v = v.slice(0, 11);
-        if (v.length > 9)      v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
-        else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
-        else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
-    } else {
-        // RG: XX.XXX.XXX-X
-        v = v.slice(0, 9);
-        if (v.length > 8)      v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4');
-        else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
-        else if (v.length > 2) v = v.replace(/(\d{2})(\d{1,3})/, '$1.$2');
+        input.value = _formatarCPF(v);
+        return;
     }
+
+    // RG: XX.XXX.XXX-X
+    v = v.slice(0, 9);
+    if (v.length > 8)      v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4');
+    else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+    else if (v.length > 2) v = v.replace(/(\d{2})(\d{1,3})/, '$1.$2');
     input.value = v;
+}
+
+function _formatarCPF(valor) {
+    const digitos = String(valor || '').replace(/\D/g, '').slice(0, 11);
+    if (digitos.length <= 3) return digitos;
+    if (digitos.length <= 6) return digitos.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+    if (digitos.length <= 9) return digitos.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+    return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+}
+
+function _cpfValido(valor) {
+    const cpf = String(valor || '').replace(/\D/g, '');
+    if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+    for (let posicao = 9; posicao < 11; posicao += 1) {
+        let soma = 0;
+        for (let indice = 0; indice < posicao; indice += 1) {
+            soma += Number(cpf[indice]) * ((posicao + 1) - indice);
+        }
+        const digito = (soma % 11) < 2 ? 0 : 11 - (soma % 11);
+        if (Number(cpf[posicao]) !== digito) return false;
+    }
+    return true;
+}
+
+function _formatarDocumentoParaExibicao(documento, tipo) {
+    if (String(tipo || '').toUpperCase() !== 'CPF') return String(documento || '');
+    return _formatarCPF(documento);
 }
 
 function _mascaraTelefone(input) {
@@ -160,6 +213,7 @@ function _setupUploads() {
     // Função auxiliar: aplica preview de foto
     function _aplicarPreviewFoto(file, dataUrl) {
         fotoArquivo = file;
+        fotoExistente = false;
         const img = document.getElementById('fotoPreview');
         const ph  = document.getElementById('fotoPlaceholder');
         if (img) { img.src = dataUrl; img.style.display = 'block'; }
@@ -207,6 +261,7 @@ function _setupUploads() {
     if (btnRemFoto) {
         btnRemFoto.addEventListener('click', () => {
             fotoArquivo = null;
+            fotoExistente = false;
             if (fotoInput) fotoInput.value = '';
             const img = document.getElementById('fotoPreview');
             const ph  = document.getElementById('fotoPlaceholder');
@@ -232,6 +287,7 @@ function _setupUploads() {
                 return;
             }
             docArquivo = file;
+            documentoExistente = false;
             const preview = document.getElementById('docPreview');
             const ph      = document.getElementById('docPlaceholder');
             const nome    = document.getElementById('docNomeArquivo');
@@ -244,6 +300,7 @@ function _setupUploads() {
     if (btnRemDoc) {
         btnRemDoc.addEventListener('click', () => {
             docArquivo = null;
+            documentoExistente = false;
             if (docInput) docInput.value = '';
             const preview = document.getElementById('docPreview');
             const ph      = document.getElementById('docPlaceholder');
@@ -363,6 +420,31 @@ async function _requisitarJsonComRetry(url, options = {}, tentativa = 1) {
     return dados;
 }
 
+async function _lerRespostaJson(response, operacao) {
+    const corpo = await response.text();
+    let dados = null;
+    try {
+        dados = corpo ? JSON.parse(corpo) : null;
+    } catch (_) {
+        dados = null;
+    }
+
+    if (!dados || typeof dados !== 'object') {
+        console.error('[Visitantes][API] Resposta JSON inválida:', {
+            operacao,
+            status: response.status,
+            corpo: corpo.slice(0, 500)
+        });
+        throw new Error(`A API não retornou uma resposta válida ao ${operacao}.`);
+    }
+
+    if (response.ok === false && dados.sucesso !== false) {
+        throw new Error(dados.mensagem || `Falha HTTP ${response.status} ao ${operacao}.`);
+    }
+
+    return dados;
+}
+
 function _buscarVisitantes() {
     const termo = document.getElementById('searchVisitante')?.value || '';
     _filtrarVisitantes(termo);
@@ -391,10 +473,11 @@ function _renderVisitantes(visitantes) {
         const id        = v.id || '-';
         const nome      = _esc(v.nome_completo || '-');
         const tipoDoc   = _esc(v.tipo_documento || 'CPF');
-        const doc       = _esc(v.documento || '-');
+        const doc       = _esc(_formatarDocumentoParaExibicao(v.documento, v.tipo_documento) || '-');
         const telefone  = _esc(v.telefone_contato || v.telefone || '-');
         const fotoUrl   = v.foto || '';
         const docUrl    = v.documento_arquivo || '';
+        const autoria   = _obterAutoriaCadastro(v);
         const ativo     = v.ativo == 1 ? '<span style="color:#27ae60;font-weight:600;">Ativo</span>' : '<span style="color:#e74c3c;">Inativo</span>';
 
         const fotoHtml = fotoUrl
@@ -414,6 +497,8 @@ function _renderVisitantes(visitantes) {
                 <td>${doc}</td>
                 <td>${telefone}</td>
                 <td style="text-align:center">${docHtml}</td>
+                <td><span class="cadastro-autor" title="${_esc(autoria.nome)}">${_esc(autoria.nome)}</span></td>
+                <td style="text-align:center"><span class="cadastro-tipo ${autoria.classe}">${_esc(autoria.rotulo)}</span></td>
                 <td style="text-align:center">${ativo}</td>
                 <td>
                     <button class="action-btn edit" type="button" onclick="window.VisitantesPage.editar(${id})" title="Editar">
@@ -428,7 +513,7 @@ function _renderVisitantes(visitantes) {
 }
 
 function _renderMensagemTabela(tbody, msg) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_esc(msg)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${_esc(msg)}</td></tr>`;
 }
 
 // ===== SALVAR =====
@@ -441,7 +526,7 @@ async function _salvarVisitante() {
     try {
         const nome            = document.getElementById('nomeVisitante')?.value.trim() || '';
         const tipoDoc         = document.getElementById('tipoDocumento')?.value || 'CPF';
-        const documento       = document.getElementById('documento')?.value.trim() || '';
+        let documento         = document.getElementById('documento')?.value.trim() || '';
         const telefoneContato = document.getElementById('telefoneContato')?.value.trim() || '';
         const celular         = document.getElementById('celularVisitante')?.value.trim() || '';
         const email           = document.getElementById('emailVisitante')?.value.trim() || '';
@@ -451,11 +536,23 @@ async function _salvarVisitante() {
         if (!nome)            { _mostrarAlerta('error', 'Nome completo é obrigatório.'); return; }
         if (!documento)       { _mostrarAlerta('error', 'Documento é obrigatório.'); return; }
         if (!telefoneContato) { _mostrarAlerta('error', 'Telefone de contato é obrigatório.'); return; }
+        // É obrigatório anexar pelo menos uma evidência: foto ou documento.
+        if (!(fotoArquivo || fotoExistente || docArquivo || documentoExistente)) {
+            _mostrarAlerta('error', 'Anexe ao menos uma foto ou um documento digitalizado para concluir o cadastro.');
+            document.getElementById('btnSelecionarFoto')?.focus();
+            return;
+        }
 
-        // Validar CPF
+        // CPF deve passar pela validação completa, não apenas ter 11 dígitos.
         if (tipoDoc === 'CPF') {
-            const cpfLimpo = documento.replace(/\D/g, '');
-            if (cpfLimpo.length !== 11) { _mostrarAlerta('error', 'CPF inválido — deve ter 11 dígitos.'); return; }
+            documento = _formatarCPF(documento);
+            document.getElementById('documento').value = documento;
+            if (!_cpfValido(documento)) {
+                console.warn('[Visitantes][CPF] Cadastro bloqueado: CPF inválido.');
+                _mostrarAlerta('error', 'CPF inválido. Confira os dígitos informados.');
+                document.getElementById('documento')?.focus();
+                return;
+            }
         }
 
         const payload = {
@@ -472,19 +569,33 @@ async function _salvarVisitante() {
         const method = modoEdicao ? 'PUT' : 'POST';
         if (modoEdicao) payload.id = visitanteIdEdicao;
 
-        // Salvar/atualizar visitante
-        const resp = await fetch(API_VISITANTES, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await resp.json();
+        // Cadastro inicial é multipart: a foto, o documento ou ambos seguem com os dados.
+        // Edições continuam enviando JSON e só carregam novos arquivos quando necessário.
+        let resp;
+        if (modoEdicao) {
+            resp = await fetch(API_VISITANTES, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            const formularioComAnexos = new FormData();
+            formularioComAnexos.append('dados', JSON.stringify(payload));
+            if (fotoArquivo) formularioComAnexos.append('foto', fotoArquivo);
+            if (docArquivo) formularioComAnexos.append('documento', docArquivo);
+            resp = await fetch(API_VISITANTES, {
+                method: 'POST',
+                body: formularioComAnexos
+            });
+        }
+        const data = await _lerRespostaJson(resp, modoEdicao ? 'atualizar o visitante' : 'cadastrar o visitante');
         console.log('[Visitantes] Resposta salvar:', data);
 
-        // Se duplicado no POST, usar o ID existente
+        // Um documento já existente não cria novo cadastro nem substitui anexos.
         if (!data.sucesso && data.dados?.duplicado) {
-            visitanteId = data.dados.id;
-            console.log(`[Visitantes] Visitante já existe (ID ${visitanteId}), usando cadastro existente.`);
+            console.warn('[Visitantes] Cadastro bloqueado: documento já vinculado a outro visitante.', data.dados);
+            _mostrarAlerta('warning', 'Já existe um visitante cadastrado com este documento. Abra-o pela listagem para revisar os anexos.');
+            return;
         } else if (!data.sucesso) {
             _mostrarAlerta('error', data.mensagem || 'Erro ao salvar visitante.');
             return;
@@ -493,24 +604,24 @@ async function _salvarVisitante() {
         }
 
         // Upload de foto (se selecionada)
-        if (fotoArquivo && visitanteId) {
+        if (modoEdicao && fotoArquivo && visitanteId) {
             const fd = new FormData();
             fd.append('foto', fotoArquivo);
             const r = await fetch(`${API_VISITANTES}?acao=upload&tipo=foto&visitante_id=${visitanteId}`, {
                 method: 'POST', body: fd
             });
-            const d = await r.json();
+            const d = await _lerRespostaJson(r, 'enviar a foto do visitante');
             if (!d.sucesso) console.warn('[Visitantes] Aviso upload foto:', d.mensagem);
         }
 
         // Upload de documento (se selecionado)
-        if (docArquivo && visitanteId) {
+        if (modoEdicao && docArquivo && visitanteId) {
             const fd = new FormData();
             fd.append('documento', docArquivo);
             const r = await fetch(`${API_VISITANTES}?acao=upload&tipo=documento&visitante_id=${visitanteId}`, {
                 method: 'POST', body: fd
             });
-            const d = await r.json();
+            const d = await _lerRespostaJson(r, 'enviar o documento do visitante');
             if (!d.sucesso) console.warn('[Visitantes] Aviso upload doc:', d.mensagem);
         }
 
@@ -529,40 +640,71 @@ async function _salvarVisitante() {
 
 // ===== EDITAR =====
 function _editarVisitante(id) {
-    const v = visitantesCache.find(x => Number(x.id) === Number(id));
-    if (!v) return;
+    const idNormalizado = Number(id);
+    const visitante = visitantesCache.find(item => Number(item.id) === idNormalizado);
+
+    if (!Number.isInteger(idNormalizado) || idNormalizado <= 0 || !visitante) {
+        console.warn('[Visitantes][Edição] Registro não localizado no cache:', {
+            idRecebido: id,
+            totalEmCache: visitantesCache.length
+        });
+        _mostrarAlerta('warning', 'Não foi possível localizar o visitante para edição. Atualize a listagem e tente novamente.');
+        return;
+    }
+
+    const camposObrigatorios = [
+        'visitanteId', 'nomeVisitante', 'tipoDocumento', 'documento',
+        'telefoneContato', 'celularVisitante', 'emailVisitante',
+        'observacaoVisitante', 'visitanteForm'
+    ];
+    const camposAusentes = camposObrigatorios.filter(campo => !document.getElementById(campo));
+    if (camposAusentes.length) {
+        console.error('[Visitantes][Edição] Formulário incompleto:', { id: idNormalizado, camposAusentes });
+        _mostrarAlerta('error', 'O formulário de edição não está disponível. Recarregue a página e tente novamente.');
+        return;
+    }
+
+    // A aba Cadastro ficava oculta após o clique na listagem. Ativá-la antes
+    // de preencher os campos torna a edição imediatamente visível ao usuário.
+    if (!_ativarAba('cadastro', { atualizarDados: false })) {
+        _mostrarAlerta('error', 'Não foi possível abrir o formulário de edição.');
+        return;
+    }
 
     modoEdicao        = true;
-    visitanteIdEdicao = Number(id);
+    visitanteIdEdicao = idNormalizado;
 
-    document.getElementById('visitanteId').value         = String(id);
-    document.getElementById('nomeVisitante').value        = v.nome_completo || '';
-    document.getElementById('tipoDocumento').value        = v.tipo_documento || 'CPF';
-    document.getElementById('documento').value            = v.documento || '';
-    document.getElementById('telefoneContato').value      = v.telefone_contato || v.telefone || '';
-    document.getElementById('celularVisitante').value     = v.celular || '';
-    document.getElementById('emailVisitante').value       = v.email || '';
-    document.getElementById('observacaoVisitante').value  = v.observacao || '';
+    document.getElementById('visitanteId').value        = String(idNormalizado);
+    document.getElementById('nomeVisitante').value       = visitante.nome_completo || '';
+    document.getElementById('tipoDocumento').value       = visitante.tipo_documento || 'CPF';
+    document.getElementById('documento').value           = _formatarDocumentoParaExibicao(visitante.documento, visitante.tipo_documento);
+    document.getElementById('telefoneContato').value     = visitante.telefone_contato || visitante.telefone || '';
+    document.getElementById('celularVisitante').value    = visitante.celular || '';
+    document.getElementById('emailVisitante').value      = visitante.email || '';
+    document.getElementById('observacaoVisitante').value = visitante.observacao || '';
 
     // Foto existente
-    if (v.foto) {
+    fotoExistente = Boolean(visitante.foto);
+    documentoExistente = Boolean(visitante.documento_arquivo);
+
+    if (visitante.foto) {
         const img    = document.getElementById('fotoPreview');
         const ph     = document.getElementById('fotoPlaceholder');
         const btnRem = document.getElementById('btnRemoverFoto');
-        if (img) { img.src = v.foto; img.style.display = 'block'; }
+        if (img) { img.src = visitante.foto; img.style.display = 'block'; }
         if (ph)  ph.style.display = 'none';
         if (btnRem) btnRem.style.display = 'inline-flex';
     }
 
     // Documento existente
-    if (v.documento_arquivo) {
+    if (visitante.documento_arquivo) {
         const preview = document.getElementById('docPreview');
         const ph      = document.getElementById('docPlaceholder');
         const nome    = document.getElementById('docNomeArquivo');
         const btnRem  = document.getElementById('btnRemoverDoc');
         if (preview) preview.style.display = 'block';
         if (ph)      ph.style.display = 'none';
-        if (nome)    nome.textContent = v.documento_arquivo.split('/').pop();
+        if (nome)    nome.textContent = visitante.documento_arquivo.split('/').pop();
         if (btnRem)  btnRem.style.display = 'inline-flex';
     }
 
@@ -574,7 +716,12 @@ function _editarVisitante(id) {
     if (btnSalvar)   btnSalvar.innerHTML = '<i class="fas fa-sync"></i> Atualizar Visitante';
     if (btnCancelar) btnCancelar.style.display = 'inline-flex';
 
-    document.getElementById('visitanteForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    console.info('[Visitantes][Edição] Formulário carregado:', { id: idNormalizado, nome: visitante.nome_completo || '' });
+    requestAnimationFrame(() => {
+        const form = document.getElementById('visitanteForm');
+        form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('nomeVisitante')?.focus({ preventScroll: true });
+    });
 }
 
 // ===== EXCLUIR =====
@@ -609,9 +756,11 @@ function _resetForm() {
     if (form) form.reset();
 
     document.getElementById('visitanteId').value = '';
-    fotoArquivo       = null;
-    docArquivo        = null;
-    modoEdicao        = false;
+    fotoArquivo        = null;
+    docArquivo         = null;
+    fotoExistente      = false;
+    documentoExistente = false;
+    modoEdicao         = false;
     visitanteIdEdicao = null;
 
     // Reset foto preview
@@ -655,6 +804,17 @@ function _mostrarAlerta(tipo, mensagem) {
     setTimeout(() => { box.innerHTML = ''; }, 6000);
 }
 
+function _obterAutoriaCadastro(visitante) {
+    const tipo = String(visitante?.cadastrado_por_tipo || 'LEGADO').toUpperCase();
+    if (tipo === 'FUNCIONARIO') {
+        return { nome: visitante?.cadastrado_por_nome || 'Usuário não identificado', rotulo: 'Funcionário', classe: 'funcionario', tipo };
+    }
+    if (tipo === 'MORADOR') {
+        return { nome: visitante?.cadastrado_por_nome || 'Morador não identificado', rotulo: 'Morador', classe: 'morador', tipo };
+    }
+    return { nome: visitante?.cadastrado_por_nome || 'Cadastro legado', rotulo: 'Legado', classe: 'legado', tipo: 'LEGADO' };
+}
+
 function _esc(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -666,6 +826,135 @@ function _esc(value) {
 
 // ===== RELATORIOS =====
 
+function _setupRelatorios() {
+    const tipo = document.getElementById('relTipoRelatorio');
+    const inicio = document.getElementById('relDataInicio');
+    const fim = document.getElementById('relDataFim');
+    const hoje = new Date();
+    const trintaDias = new Date();
+    trintaDias.setDate(hoje.getDate() - 29);
+    const formatarData = (data) => {
+        const ano = data.getFullYear();
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const dia = String(data.getDate()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}`;
+    };
+    if (inicio && !inicio.value) inicio.value = formatarData(trintaDias);
+    if (fim && !fim.value) fim.value = formatarData(hoje);
+    tipo?.addEventListener('change', () => _relAlternarTipo(true));
+    _relAlternarTipo(false);
+}
+
+function _tipoRelatorioAtual() {
+    return document.getElementById('relTipoRelatorio')?.value === 'analitico' ? 'analitico' : 'padrao';
+}
+
+function _relAlternarTipo(atualizar = true) {
+    const analitico = _tipoRelatorioAtual() === 'analitico';
+    const filtrosCadastro = document.getElementById('relFiltrosCadastro');
+    const filtrosAnalitico = document.getElementById('relAnaliticoFiltros');
+    const kpisCadastro = document.getElementById('relKpisVisitantes');
+    const preview = document.getElementById('relPreviewVisitantes');
+    // O seletor de tipo permanece visível; somente os filtros próprios de cadastros
+    // são ocultados quando o administrador escolhe a visão analítica de acessos.
+    ['relNome', 'relCpf', 'relEmail', 'relTemFoto', 'relTemDoc', 'relOrigemCadastro', 'relAtivo'].forEach((id) => {
+        const grupo = document.getElementById(id)?.closest('.form-group');
+        if (grupo) grupo.style.display = analitico ? 'none' : '';
+    });
+    if (filtrosCadastro) filtrosCadastro.style.display = 'grid';
+    if (filtrosAnalitico) filtrosAnalitico.style.display = analitico ? 'grid' : 'none';
+    if (kpisCadastro && analitico) kpisCadastro.style.display = 'none';
+    if (preview) preview.innerHTML = analitico
+        ? '<p style="padding:12px;color:#64748b"><i class="fas fa-chart-line"></i> Atualize para carregar os indicadores analíticos de acesso.</p>'
+        : '';
+    console.debug('[Visitantes][Relatórios] tipo alterado', { tipo: analitico ? 'analitico' : 'padrao' });
+    if (atualizar) _relAtualizar();
+}
+
+async function _relCarregarAnalitico() {
+    const preview = document.getElementById('relPreviewVisitantes');
+    const dataInicio = document.getElementById('relDataInicio')?.value || '';
+    const dataFim = document.getElementById('relDataFim')?.value || '';
+    if (!dataInicio || !dataFim) {
+        if (preview) preview.innerHTML = '<p style="color:#b91c1c;padding:10px"><i class="fas fa-exclamation-circle"></i> Informe as datas inicial e final do relatório analítico.</p>';
+        return;
+    }
+    if (dataInicio > dataFim) {
+        if (preview) preview.innerHTML = '<p style="color:#b91c1c;padding:10px"><i class="fas fa-exclamation-circle"></i> A data inicial não pode ser posterior à data final.</p>';
+        return;
+    }
+
+    if (preview) preview.innerHTML = '<p style="padding:18px;color:#2563eb"><i class="fas fa-spinner fa-spin"></i> Consolidando acessos do condomínio...</p>';
+    const params = new URLSearchParams({ acao: 'analitico_acessos', data_inicio: dataInicio, data_fim: dataFim });
+    try {
+        const response = await fetch(`${API_VISITANTES}?${params.toString()}`, { credentials: 'include' });
+        const texto = await response.text();
+        let data = null;
+        try { data = texto ? JSON.parse(texto) : null; } catch (_) {}
+        if (!response.ok || !data?.sucesso) {
+            throw new Error(data?.mensagem || `Erro HTTP ${response.status} ao carregar o relatório analítico.`);
+        }
+        relatorioAnaliticoCache = data.dados;
+        _relMostrarAnalitico(data.dados, preview);
+        console.debug('[Visitantes][Relatórios] análise carregada', { periodo: data.dados?.periodo, resumo: data.dados?.resumo });
+    } catch (erro) {
+        relatorioAnaliticoCache = null;
+        console.error('[Visitantes][Relatórios] falha no analítico', erro);
+        if (preview) preview.innerHTML = `<p style="color:#b91c1c;padding:12px"><i class="fas fa-exclamation-circle"></i> ${_esc(erro.message || 'Não foi possível gerar a análise.')}</p>`;
+    }
+}
+
+function _relMostrarAnalitico(analise, container) {
+    if (!container) return;
+    const resumo = analise?.resumo || {};
+    const total = Number(resumo.total_acessos || 0);
+    const visitantes = Number(resumo.visitantes || 0);
+    const prestadores = Number(resumo.prestadores || 0);
+    const liberados = Number(resumo.liberados || 0);
+    const taxaLiberacao = total ? Math.round((liberados / total) * 100) : 0;
+    const pico = analise?.horario_pico_24h || { rotulo: 'Sem registros', total: 0 };
+    const periodo = analise?.periodo || {};
+    const rankingUnidades = Array.isArray(analise?.ranking_unidades) ? analise.ranking_unidades : [];
+    const rankingPessoas = Array.isArray(analise?.ranking_pessoas) ? analise.ranking_pessoas : [];
+    const histograma = Array.isArray(analise?.histograma_24h) ? analise.histograma_24h : [];
+    const tendencia = Array.isArray(analise?.tendencia_diaria) ? analise.tendencia_diaria : [];
+    const maxUnidade = Math.max(1, ...rankingUnidades.map(item => Number(item.total || 0)));
+    const maxHora = Math.max(1, ...histograma.map(item => Number(item.total || 0)));
+    const mapaHora = new Map(histograma.map(item => [Number(item.hora), Number(item.total || 0)]));
+
+    const cards = `
+        <div class="vis-analytics-grid">
+            <div class="vis-analytics-card"><div class="valor">${total}</div><div class="rotulo">Acessos no período</div></div>
+            <div class="vis-analytics-card visitor"><div class="valor">${visitantes}</div><div class="rotulo">Visitantes</div></div>
+            <div class="vis-analytics-card provider"><div class="valor">${prestadores}</div><div class="rotulo">Prestadores de serviço</div></div>
+            <div class="vis-analytics-card peak"><div class="valor">${_esc(pico.rotulo)}</div><div class="rotulo">Pico nas últimas 24h (${Number(pico.total || 0)} acesso(s))</div></div>
+            <div class="vis-analytics-card success"><div class="valor">${taxaLiberacao}%</div><div class="rotulo">Taxa de liberação (${liberados}/${total})</div></div>
+        </div>`;
+
+    const rankingGlebas = rankingUnidades.length ? rankingUnidades.map((item, indice) => {
+        const percentual = Math.round((Number(item.total || 0) / maxUnidade) * 100);
+        return `<div class="vis-ranking-row"><span class="vis-ranking-pos">${indice + 1}º</span><span>${_esc(item.unidade)}</span><span class="vis-bar"><span style="width:${percentual}%"></span></span><span class="vis-ranking-total">${Number(item.total || 0)}</span></div>`;
+    }).join('') : '<p style="color:#64748b;font-size:12px">Não há acessos de visitantes ou prestadores no período selecionado.</p>';
+
+    const horas = Array.from({ length: 24 }, (_, hora) => {
+        const quantidade = mapaHora.get(hora) || 0;
+        const altura = Math.max(2, Math.round((quantidade / maxHora) * 100));
+        return `<div class="vis-hour-item" title="${String(hora).padStart(2, '0')}:00 — ${quantidade} acesso(s)"><span class="vis-hour-total">${quantidade || ''}</span><span class="vis-hour-bar" style="height:${altura}%"></span><span class="vis-hour-label">${String(hora).padStart(2, '0')}</span></div>`;
+    }).join('');
+
+    const pessoas = rankingPessoas.length ? rankingPessoas.map((item, indice) => `<div class="vis-ranking-row"><span class="vis-ranking-pos">${indice + 1}º</span><span>${_esc(item.nome)}</span><span class="cadastro-tipo ${item.tipo === 'Prestador' ? 'funcionario' : 'morador'}">${_esc(item.tipo)}</span><span class="vis-ranking-total">${Number(item.total || 0)}</span></div>`).join('') : '<p style="color:#64748b;font-size:12px">Sem recorrências no período.</p>';
+
+    const tendenciaLinhas = tendencia.length ? tendencia.map(item => `<tr><td>${_esc(item.data)}</td><td>${Number(item.total || 0)}</td><td>${Number(item.visitantes || 0)}</td><td>${Number(item.prestadores || 0)}</td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:#64748b">Sem movimentos no período.</td></tr>';
+
+    container.innerHTML = `<p style="font-size:12px;color:#64748b;margin:0 0 12px"><i class="fas fa-calendar-alt"></i> Período analisado: <strong>${_esc(periodo.data_inicio || '')}</strong> até <strong>${_esc(periodo.data_fim || '')}</strong>. Dados consolidados exclusivamente para o condomínio atual.</p>${cards}
+        <div class="vis-analytics-sections">
+            <section class="vis-analytics-section"><h3><i class="fas fa-trophy"></i> Ranking de Glebas / Unidades</h3>${rankingGlebas}</section>
+            <section class="vis-analytics-section"><h3><i class="fas fa-clock"></i> Distribuição de horários — últimas 24h</h3><div class="vis-hour-bars">${horas}</div></section>
+            <section class="vis-analytics-section"><h3><i class="fas fa-user-clock"></i> Pessoas mais registradas</h3>${pessoas}</section>
+            <section class="vis-analytics-section"><h3><i class="fas fa-chart-area"></i> Tendência diária</h3><table class="vis-tendencia-table"><thead><tr><th>Data</th><th>Total</th><th>Visitantes</th><th>Prestadores</th></tr></thead><tbody>${tendenciaLinhas}</tbody></table></section>
+        </div>`;
+}
+
 function _relColetarFiltros() {
     return {
         nome:     (document.getElementById('relNome')?.value     || '').trim(),
@@ -673,6 +962,7 @@ function _relColetarFiltros() {
         email:    (document.getElementById('relEmail')?.value    || '').trim(),
         tem_foto: (document.getElementById('relTemFoto')?.value  || ''),
         tem_doc:  (document.getElementById('relTemDoc')?.value   || ''),
+        origem:   (document.getElementById('relOrigemCadastro')?.value || ''),
         ativo:    (document.getElementById('relAtivo')?.value    || '')
     };
 }
@@ -685,6 +975,7 @@ function _relFiltrarCache(filtros) {
         const foto  = !!(v.foto);
         const docA  = !!(v.documento_arquivo);
         const ativo = String(v.ativo ?? '1');
+        const origem = _obterAutoriaCadastro(v).tipo;
 
         if (filtros.nome    && !nome.includes(filtros.nome.toLowerCase()))  return false;
         if (filtros.cpf     && !doc.includes(filtros.cpf.replace(/\D/g, ''))) return false;
@@ -693,13 +984,19 @@ function _relFiltrarCache(filtros) {
         if (filtros.tem_foto === 'nao' &&  foto)  return false;
         if (filtros.tem_doc  === 'sim' && !docA)  return false;
         if (filtros.tem_doc  === 'nao' &&  docA)  return false;
+        if (filtros.origem && origem !== filtros.origem) return false;
         if (filtros.ativo === '1' && ativo !== '1') return false;
         if (filtros.ativo === '0' && ativo !== '0') return false;
         return true;
     });
 }
 
-function relExportarCSV() {
+async function relExportarCSV() {
+    if (_tipoRelatorioAtual() === 'analitico') {
+        if (!relatorioAnaliticoCache) await _relCarregarAnalitico();
+        if (relatorioAnaliticoCache) _relExportarCSVAnalitico(relatorioAnaliticoCache);
+        return;
+    }
     const filtros    = _relColetarFiltros();
     const dados      = _relFiltrarCache(filtros);
     const preview    = document.getElementById('relPreviewVisitantes');
@@ -710,7 +1007,7 @@ function relExportarCSV() {
     }
 
     // Cabecalho CSV
-    const cabecalho = ['ID','Nome Completo','Tipo Documento','Documento','E-mail','Telefone','Celular','Placa Veiculo','Possui Foto','Possui Documento','Status','Data Cadastro'];
+    const cabecalho = ['ID','Nome Completo','Tipo Documento','Documento','E-mail','Telefone','Celular','Placa Veiculo','Possui Foto','Possui Documento','Cadastrado Por','Tipo de Cadastro','Status','Data Cadastro'];
     const linhas    = dados.map(v => [
         v.id || '',
         v.nome_completo || '',
@@ -722,6 +1019,8 @@ function relExportarCSV() {
         v.placa_veiculo || '',
         v.foto ? 'Sim' : 'Nao',
         v.documento_arquivo ? 'Sim' : 'Nao',
+        _obterAutoriaCadastro(v).nome,
+        _obterAutoriaCadastro(v).rotulo,
         (v.ativo == 1) ? 'Ativo' : 'Inativo',
         v.data_cadastro_formatada || ''
     ].map(c => '"' + String(c).replace(/"/g, '""') + '"'));
@@ -742,15 +1041,62 @@ function relExportarCSV() {
     _relMostrarPreview(dados, preview);
 }
 
+function _relExportarCSVAnalitico(analise) {
+    const resumo = analise?.resumo || {};
+    const periodo = analise?.periodo || {};
+    const pico = analise?.horario_pico_24h || {};
+    const linhas = [
+        ['RELATÓRIO ANALÍTICO DE ACESSOS — VISITANTES'],
+        ['Período', `${periodo.data_inicio || ''} até ${periodo.data_fim || ''}`],
+        [],
+        ['INDICADOR', 'VALOR'],
+        ['Total de acessos', resumo.total_acessos || 0],
+        ['Visitantes', resumo.visitantes || 0],
+        ['Prestadores de serviço', resumo.prestadores || 0],
+        ['Entradas', resumo.entradas || 0],
+        ['Saídas', resumo.saidas || 0],
+        ['Acessos liberados', resumo.liberados || 0],
+        ['Registros pendentes', resumo.pendentes || 0],
+        ['Horário de pico — últimas 24h', `${pico.rotulo || 'Sem registros'} (${pico.total || 0})`],
+        [],
+        ['RANKING GLEBAS / UNIDADES', 'TOTAL', 'VISITANTES', 'PRESTADORES'],
+        ...(analise?.ranking_unidades || []).map(item => [item.unidade || 'Não informado', item.total || 0, item.visitantes || 0, item.prestadores || 0]),
+        [],
+        ['PESSOAS MAIS REGISTRADAS', 'TIPO', 'TOTAL'],
+        ...(analise?.ranking_pessoas || []).map(item => [item.nome || 'Não identificado', item.tipo || '', item.total || 0]),
+        [],
+        ['TENDÊNCIA DIÁRIA', 'TOTAL', 'VISITANTES', 'PRESTADORES'],
+        ...(analise?.tendencia_diaria || []).map(item => [item.data || '', item.total || 0, item.visitantes || 0, item.prestadores || 0]),
+    ];
+    const csv = linhas.map(linha => linha.map(campo => `"${String(campo ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio_analitico_acessos_${periodo.data_inicio || 'periodo'}_${periodo.data_fim || 'periodo'}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
 function relGerarPDF() {
     const filtros = _relColetarFiltros();
     const base    = window.location.origin + '/api/api_relatorio_visitantes_pdf.php';
     const params  = new URLSearchParams();
+    if (_tipoRelatorioAtual() === 'analitico') {
+        params.set('tipo_relatorio', 'analitico');
+        params.set('data_inicio', document.getElementById('relDataInicio')?.value || '');
+        params.set('data_fim', document.getElementById('relDataFim')?.value || '');
+        window.open(base + '?' + params.toString(), '_blank');
+        return;
+    }
     if (filtros.nome)     params.set('nome',     filtros.nome);
     if (filtros.cpf)      params.set('cpf',      filtros.cpf);
     if (filtros.email)    params.set('email',    filtros.email);
     if (filtros.tem_foto) params.set('tem_foto', filtros.tem_foto);
     if (filtros.tem_doc)  params.set('tem_doc',  filtros.tem_doc);
+    if (filtros.origem)   params.set('origem',   filtros.origem);
     if (filtros.ativo)    params.set('ativo',    filtros.ativo);
     window.open(base + '?' + params.toString(), '_blank');
 }
@@ -769,7 +1115,9 @@ function _relMostrarPreview(dados, container) {
         <div class="rel-kpi"><div class="rel-kpi-valor">${comDoc}</div><div class="rel-kpi-label">Com Documento</div></div>
     </div>`;
 
-    const linhas = dados.slice(0, 50).map(v => `
+    const linhas = dados.slice(0, 50).map(v => {
+        const autoria = _obterAutoriaCadastro(v);
+        return `
         <tr>
             <td>${_esc(v.nome_completo || '—')}</td>
             <td>${_esc(v.tipo_documento || 'CPF')}</td>
@@ -778,8 +1126,11 @@ function _relMostrarPreview(dados, container) {
             <td>${_esc(v.telefone_contato || v.celular || '—')}</td>
             <td style="text-align:center"><span class="rel-badge ${v.foto ? 'rel-badge-sim' : 'rel-badge-nao'}">${v.foto ? 'Sim' : 'Nao'}</span></td>
             <td style="text-align:center"><span class="rel-badge ${v.documento_arquivo ? 'rel-badge-sim' : 'rel-badge-nao'}">${v.documento_arquivo ? 'Sim' : 'Nao'}</span></td>
+            <td>${_esc(autoria.nome)}</td>
+            <td><span class="cadastro-tipo ${autoria.classe}">${_esc(autoria.rotulo)}</span></td>
             <td style="text-align:center"><span class="rel-badge ${(v.ativo==1) ? 'rel-badge-ativo' : 'rel-badge-inativo'}">${(v.ativo==1) ? 'Ativo' : 'Inativo'}</span></td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
 
     const aviso = total > 50 ? `<p style="font-size:11px;color:#64748b;margin-top:6px;">Exibindo 50 de ${total} registros. O CSV/PDF contera todos.</p>` : '';
 
@@ -787,7 +1138,7 @@ function _relMostrarPreview(dados, container) {
         <table>
             <thead><tr>
                 <th>Nome</th><th>Tipo</th><th>Documento</th><th>E-mail</th>
-                <th>Telefone</th><th>Foto</th><th>Doc.</th><th>Status</th>
+                <th>Telefone</th><th>Foto</th><th>Doc.</th><th>Cadastrado por</th><th>Tipo</th><th>Status</th>
             </tr></thead>
             <tbody>${linhas}</tbody>
         </table>` + aviso;

@@ -429,10 +429,10 @@ if ($action === 'visitantes' && $metodo === 'GET') {
             SELECT id, nome_completo, documento, tipo_documento, telefone, celular, 
                    email, observacao, ativo, data_cadastro
             FROM visitantes 
-            WHERE morador_id = ?
+            WHERE tenant_id = ? AND morador_id = ?
             ORDER BY data_cadastro DESC
         ");
-        $stmt->bind_param("i", $morador_id);
+        $stmt->bind_param("ii", $tenant_id, $morador_id);
     } else {
         // Tabela não tem campo morador_id (retornar vazio)
         retornar_json(true, "Nenhum visitante cadastrado", []);
@@ -470,12 +470,26 @@ if ($action === 'visitantes' && $metodo === 'POST') {
     $colunas = $conexao->query("SHOW COLUMNS FROM visitantes LIKE 'morador_id'");
     
     if ($colunas->num_rows > 0) {
-        // Tabela tem campo morador_id
+        // A autoria do portal vem somente da sessão residente autenticada.
+        $stmtAutor = $conexao->prepare('SELECT nome FROM moradores WHERE tenant_id = ? AND id = ? LIMIT 1');
+        if (!$stmtAutor) retornar_json(false, 'Erro ao identificar o morador responsável pelo cadastro.');
+        $stmtAutor->bind_param('ii', $tenant_id, $morador_id);
+        $stmtAutor->execute();
+        $autor = $stmtAutor->get_result()->fetch_assoc();
+        $stmtAutor->close();
+        if (!$autor || empty($autor['nome'])) retornar_json(false, 'Morador responsável não encontrado no condomínio atual.');
+
+        $autorTipo = 'MORADOR';
+        $autorNome = $autor['nome'];
         $stmt = $conexao->prepare("
-            INSERT INTO visitantes (morador_id, nome_completo, documento, tipo_documento, telefone, celular, email, observacao)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO visitantes
+                (tenant_id, morador_id, cadastrado_por_tipo, cadastrado_por_morador_id, cadastrado_por_nome,
+                 nome_completo, documento, tipo_documento, telefone, celular, email, observacao)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        $stmt->bind_param("isssssss", $morador_id, $nome_completo, $documento, $tipo_documento, $telefone, $celular, $email, $observacao);
+        if (!$stmt) retornar_json(false, 'Erro ao preparar o cadastro do visitante.');
+        $stmt->bind_param("iisissssssss", $tenant_id, $morador_id, $autorTipo, $morador_id, $autorNome,
+            $nome_completo, $documento, $tipo_documento, $telefone, $celular, $email, $observacao);
     } else {
         // Tabela não tem campo morador_id (adicionar coluna primeiro)
         retornar_json(false, "Tabela visitantes precisa ser atualizada. Contate o administrador.");
@@ -500,8 +514,8 @@ if ($action === 'visitantes' && $metodo === 'DELETE') {
     }
     
     // Verificar se o visitante pertence ao morador
-    $stmt = $conexao->prepare("SELECT nome_completo FROM visitantes WHERE id = ? AND morador_id = ?");
-    $stmt->bind_param("ii", $visitante_id, $morador_id);
+    $stmt = $conexao->prepare("SELECT nome_completo FROM visitantes WHERE tenant_id = ? AND id = ? AND morador_id = ?");
+    $stmt->bind_param("iii", $tenant_id, $visitante_id, $morador_id);
     $stmt->execute();
     $resultado = $stmt->get_result();
     
@@ -512,8 +526,8 @@ if ($action === 'visitantes' && $metodo === 'DELETE') {
     $visitante = $resultado->fetch_assoc();
     
     // Excluir visitante
-    $stmt = $conexao->prepare("DELETE FROM visitantes WHERE id = ? AND morador_id = ?");
-    $stmt->bind_param("ii", $visitante_id, $morador_id);
+    $stmt = $conexao->prepare("DELETE FROM visitantes WHERE tenant_id = ? AND id = ? AND morador_id = ?");
+    $stmt->bind_param("iii", $tenant_id, $visitante_id, $morador_id);
     
     if ($stmt->execute()) {
         registrar_log('VISITANTE_EXCLUIDO', "Morador excluiu visitante: {$visitante['nome_completo']}", "Morador ID: {$morador_id}");

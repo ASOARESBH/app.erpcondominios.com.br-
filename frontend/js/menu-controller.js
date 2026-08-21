@@ -36,9 +36,17 @@
     ];
 
     const LEGACY_GROUP_BY_PAGE = {
-        contas_pagar: 'financeiro',
-        contas_receber: 'financeiro',
-        planos_contas: 'financeiro'
+        contas_pagar: 'financeiro', contas_receber: 'financeiro', planos_contas: 'financeiro'
+    };
+
+    // Rotas SPA reais para chaves do catálogo RBAC. Rotas externas e legadas
+    // sem módulo próprio permanecem visíveis até serem catalogadas explicitamente.
+    const PAGE_TO_PERMISSION = {
+        dashboard:'dashboard', moradores:'moradores', veiculos:'veiculos', visitantes:'visitantes', registro:'registro',
+        acesso:'acesso', lpr:'lpr', relatorios:'relatorios_acesso', financeiro:'financeiro', configuracao:'configuracao',
+        unidades:'unidades', manutencao:'manutencao', administrativa:'administrativa', recursos_humanos:'recursos_humanos',
+        usuarios:'usuarios', empresa:'empresa', dispositivos:'dispositivos', seguranca:'seguranca', sistema:'sistema',
+        meu_perfil:'meu_perfil', inadimplencia:'inadimplencia', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin'
     };
 
     function emContextoGlobalSuperAdmin() {
@@ -63,6 +71,8 @@
         logEnabled: false,
         initialized: false,
         mode: emContextoGlobalSuperAdmin() ? 'superadmin' : 'operacional',
+        permissoes: null,
+        carregamentoPermissoes: null,
         items: MENU_ITEMS.map((item) => ({ ...item })),
         superadminItems: SUPERADMIN_MENU_ITEMS.map((item) => ({ ...item }))
     };
@@ -199,6 +209,52 @@
         ].join('');
     }
 
+    function chavePermissaoDaPagina(page) {
+        return PAGE_TO_PERMISSION[page] || LEGACY_GROUP_BY_PAGE[page] || null;
+    }
+
+    function temAcessoPagina(page) {
+        if (state.mode === 'superadmin' || state.permissoes === null) return true;
+        const chave = chavePermissaoDaPagina(page);
+        if (!chave) return true;
+        return !!state.permissoes[chave]?.pode_acessar;
+    }
+
+    function itensPermitidos() {
+        const origem = sortItems();
+        return origem.reduce((permitidos, item) => {
+            const filhos = (item.children || []).filter((filho) => temAcessoPagina(filho.page));
+            const permiteItem = temAcessoPagina(item.page);
+            if (!permiteItem && filhos.length === 0) return permitidos;
+            const copia = { ...item, children: filhos };
+            if (!permiteItem && filhos.length) { copia.href = filhos[0].href; copia.page = filhos[0].page; }
+            permitidos.push(copia);
+            return permitidos;
+        }, []);
+    }
+
+    async function carregarPermissoesEfetivas() {
+        if (state.mode === 'superadmin') return true;
+        if (state.permissoes !== null) return true;
+        if (state.carregamentoPermissoes) return state.carregamentoPermissoes;
+        state.carregamentoPermissoes = fetch('/api/api_rbac.php?acao=minhas_permissoes', { credentials:'include' })
+            .then(async (resposta) => {
+                const texto = await resposta.text();
+                let dados = null; try { dados = JSON.parse(texto); } catch (_) { return true; }
+                // Enquanto a migration não estiver instalada, preserva o menu legado.
+                if (resposta.ok && dados.sucesso) state.permissoes = dados.dados?.modulos || {};
+                return true;
+            })
+            .catch(() => true)
+            .finally(() => { state.carregamentoPermissoes = null; renderMenu(); markActive(); });
+        return state.carregamentoPermissoes;
+    }
+
+    async function autorizarPagina(page) {
+        await carregarPermissoesEfetivas();
+        return temAcessoPagina(page);
+    }
+
     function renderMenu(options = {}) {
         const container = getContainer(options);
         if (!container) {
@@ -208,7 +264,7 @@
 
         try {
             const activePage = detectCurrentPage();
-            const menuHtml = sortItems().map((item) => renderItem(item, activePage)).join('') + renderRetornoSuperAdmin() + renderLogout();
+            const menuHtml = itensPermitidos().map((item) => renderItem(item, activePage)).join('') + renderRetornoSuperAdmin() + renderLogout();
             container.innerHTML = menuHtml;
             const retorno = container.querySelector('[data-superadmin-retorno="1"]');
             if (retorno) {
@@ -329,6 +385,7 @@
 
         renderMenu();
         markActive();
+        carregarPermissoesEfetivas();
 
         document.addEventListener('sidebarLoaded', function (event) {
             const sidebar = event && event.detail ? event.detail.sidebar : null;
@@ -352,6 +409,9 @@
         },
         getMode: function () { return state.mode; },
         setMode,
+        autorizarPagina,
+        carregarPermissoesEfetivas,
+        temAcessoPagina,
         addItem,
         addSuperAdminItem,
         removeItem,

@@ -13,6 +13,7 @@
  *   tem_foto   — "" | "sim" | "nao"
  *   tem_doc    — "" | "sim" | "nao"
  *   ativo      — "" | "1" | "0"
+ *   origem     — "" | "FUNCIONARIO" | "MORADOR" | "LEGADO"
  *   print      — Se "true", dispara window.print() automaticamente
  *
  * @version 1.0.0
@@ -31,7 +32,7 @@ date_default_timezone_set('America/Sao_Paulo');
 
 // ── 3. Dados da empresa ───────────────────────────────────────
 $empresa = [];
-$_tenant_id_rel = $_SESSION['tenant_id'] ?? 1;
+$_tenant_id_rel = (int)$tenant_id;
 $res_emp = $conn->prepare("SELECT COALESCE(NULLIF(t.razao_social, ''), e.razao_social) AS razao_social, COALESCE(NULLIF(t.nome_fantasia, ''), e.nome_fantasia) AS nome_fantasia, COALESCE(NULLIF(t.cnpj, ''), e.cnpj) AS cnpj, COALESCE(NULLIF(t.logo_url, ''), e.logo_url) AS logo_url FROM tenants t LEFT JOIN empresa e ON e.tenant_id = t.id WHERE t.id = ? AND t.status = 'ativo' LIMIT 1");
 $res_emp->bind_param('i', $_tenant_id_rel);
 $res_emp->execute();
@@ -59,58 +60,91 @@ $f_email    = trim($_GET['email']    ?? '');
 $f_tem_foto = trim($_GET['tem_foto'] ?? '');
 $f_tem_doc  = trim($_GET['tem_doc']  ?? '');
 $f_ativo    = trim($_GET['ativo']    ?? '');
+$f_origem   = strtoupper(trim($_GET['origem'] ?? ''));
 $auto_print = ($_GET['print'] ?? '') === 'true';
+$tipo_relatorio = ($_GET['tipo_relatorio'] ?? '') === 'analitico' ? 'analitico' : 'padrao';
+$data_inicio_analitico = trim($_GET['data_inicio'] ?? date('Y-m-01'));
+$data_fim_analitico = trim($_GET['data_fim'] ?? date('Y-m-d'));
+if (!preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $data_inicio_analitico)) $data_inicio_analitico = date('Y-m-01');
+if (!preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $data_fim_analitico)) $data_fim_analitico = date('Y-m-d');
+if ($data_inicio_analitico > $data_fim_analitico) $data_inicio_analitico = $data_fim_analitico;
 
-$titulo_relatorio = 'Relatorio de Visitantes';
+$titulo_relatorio = $tipo_relatorio === 'analitico' ? 'Relatorio Analitico de Acessos' : 'Relatorio de Visitantes';
 
 // ── 5. Buscar dados ───────────────────────────────────────────
 $visitantes = [];
 
-$sql = "SELECT id, nome_completo, documento, tipo_documento,
-               telefone_contato, celular, email,
-               placa_veiculo, foto, documento_arquivo,
-               ativo,
-               DATE_FORMAT(data_cadastro, '%d/%m/%Y') as data_cadastro
-        FROM visitantes
-        WHERE 1=1";
+$sql = "SELECT v.id, v.nome_completo, v.documento, v.tipo_documento,
+               v.telefone_contato, v.celular, v.email,
+               v.placa_veiculo, v.foto, v.documento_arquivo, v.ativo,
+               CASE
+                   WHEN v.cadastrado_por_tipo = 'FUNCIONARIO' OR v.cadastrado_por_usuario_id IS NOT NULL
+                       THEN 'FUNCIONARIO'
+                   WHEN v.cadastrado_por_tipo = 'MORADOR' OR v.cadastrado_por_morador_id IS NOT NULL OR v.morador_id IS NOT NULL
+                       THEN 'MORADOR'
+                   ELSE 'LEGADO'
+               END AS cadastrado_por_tipo,
+               CASE
+                   WHEN v.cadastrado_por_tipo = 'FUNCIONARIO' OR v.cadastrado_por_usuario_id IS NOT NULL
+                       THEN COALESCE(NULLIF(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado'), NULLIF(u.nome, ''), 'Usuário não identificado')
+                   WHEN v.cadastrado_por_tipo = 'MORADOR' OR v.cadastrado_por_morador_id IS NOT NULL OR v.morador_id IS NOT NULL
+                       THEN COALESCE(NULLIF(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado'), NULLIF(m_autor.nome, ''), NULLIF(m_legado.nome, ''), 'Morador não identificado')
+                   ELSE COALESCE(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado')
+               END AS cadastrado_por_nome,
+               DATE_FORMAT(v.data_cadastro, '%d/%m/%Y') as data_cadastro
+        FROM visitantes v
+        LEFT JOIN usuarios u
+               ON u.id = v.cadastrado_por_usuario_id
+        LEFT JOIN moradores m_autor
+               ON m_autor.id = v.cadastrado_por_morador_id
+              AND m_autor.tenant_id = v.tenant_id
+        LEFT JOIN moradores m_legado
+               ON m_legado.id = v.morador_id
+              AND m_legado.tenant_id = v.tenant_id
+        WHERE v.tenant_id = ?";
 
-$params = [];
-$tipos  = '';
+$params = [$tenant_id];
+$tipos  = 'i';
 
 if ($f_nome !== '') {
-    $sql .= " AND nome_completo LIKE ?";
+    $sql .= " AND v.nome_completo LIKE ?";
     $params[] = '%' . $f_nome . '%';
     $tipos .= 's';
 }
 if ($f_cpf !== '') {
     $cpf_limpo = preg_replace('/[^0-9A-Za-z]/', '', $f_cpf);
-    $sql .= " AND (documento LIKE ? OR REPLACE(REPLACE(REPLACE(documento,'.',''),'-',''),'/','') LIKE ?)";
+    $sql .= " AND (v.documento LIKE ? OR REPLACE(REPLACE(REPLACE(v.documento,'.',''),'-',''),'/','') LIKE ?)";
     $params[] = '%' . $f_cpf . '%';
     $params[] = '%' . $cpf_limpo . '%';
     $tipos .= 'ss';
 }
 if ($f_email !== '') {
-    $sql .= " AND email LIKE ?";
+    $sql .= " AND v.email LIKE ?";
     $params[] = '%' . $f_email . '%';
     $tipos .= 's';
 }
 if ($f_tem_foto === 'sim') {
-    $sql .= " AND foto IS NOT NULL AND foto != ''";
+    $sql .= " AND v.foto IS NOT NULL AND v.foto != ''";
 } elseif ($f_tem_foto === 'nao') {
-    $sql .= " AND (foto IS NULL OR foto = '')";
+    $sql .= " AND (v.foto IS NULL OR v.foto = '')";
 }
 if ($f_tem_doc === 'sim') {
-    $sql .= " AND documento_arquivo IS NOT NULL AND documento_arquivo != ''";
+    $sql .= " AND v.documento_arquivo IS NOT NULL AND v.documento_arquivo != ''";
 } elseif ($f_tem_doc === 'nao') {
-    $sql .= " AND (documento_arquivo IS NULL OR documento_arquivo = '')";
+    $sql .= " AND (v.documento_arquivo IS NULL OR v.documento_arquivo = '')";
 }
 if ($f_ativo === '1') {
-    $sql .= " AND ativo = 1";
+    $sql .= " AND v.ativo = 1";
 } elseif ($f_ativo === '0') {
-    $sql .= " AND ativo = 0";
+    $sql .= " AND v.ativo = 0";
+}
+if (in_array($f_origem, ['FUNCIONARIO', 'MORADOR', 'LEGADO'], true)) {
+    $sql .= " AND v.cadastrado_por_tipo = ?";
+    $params[] = $f_origem;
+    $tipos .= 's';
 }
 
-$sql .= " ORDER BY nome_completo ASC";
+$sql .= " ORDER BY v.nome_completo ASC";
 
 if (!empty($params)) {
     $stmt = $conn->prepare($sql);
@@ -147,7 +181,35 @@ if ($f_tem_doc  === 'sim') $filtros_aplicados[] = 'Com documento';
 if ($f_tem_doc  === 'nao') $filtros_aplicados[] = 'Sem documento';
 if ($f_ativo === '1') $filtros_aplicados[] = 'Somente ativos';
 if ($f_ativo === '0') $filtros_aplicados[] = 'Somente inativos';
+if (in_array($f_origem, ['FUNCIONARIO', 'MORADOR', 'LEGADO'], true)) $filtros_aplicados[] = 'Origem: ' . $f_origem;
 $resumo_filtros = implode(' | ', $filtros_aplicados);
+
+// ── Indicadores analíticos de acessos (Visitante e Prestador) ─────────────
+$analitico = [
+    'resumo' => ['total' => 0, 'visitantes' => 0, 'prestadores' => 0, 'entradas' => 0, 'saidas' => 0, 'liberados' => 0, 'pendentes' => 0],
+    'pico' => ['rotulo' => 'Sem registros', 'total' => 0],
+    'unidades' => [], 'pessoas' => [], 'tendencia' => []
+];
+if ($tipo_relatorio === 'analitico') {
+    $where = "tenant_id = ? AND data_hora >= ? AND data_hora < DATE_ADD(?, INTERVAL 1 DAY) AND tipo IN ('Visitante','Prestador')";
+    $paramsAnalitico = [$tenant_id, $data_inicio_analitico, $data_fim_analitico];
+    $sqlResumoAnalitico = "SELECT COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores, SUM(tipo_acesso='Entrada') entradas, SUM(tipo_acesso='Saída') saidas, SUM(liberado=1) liberados, SUM(liberado=0) pendentes FROM registros_acesso WHERE $where";
+    $st = $conn->prepare($sqlResumoAnalitico);
+    if ($st) { $st->bind_param('iss', ...$paramsAnalitico); $st->execute(); $linha = $st->get_result()->fetch_assoc() ?: []; $st->close(); foreach ($analitico['resumo'] as $campo => $_) $analitico['resumo'][$campo] = (int)($linha[$campo] ?? 0); }
+
+    $st = $conn->prepare("SELECT HOUR(data_hora) hora, COUNT(*) total FROM registros_acesso WHERE tenant_id = ? AND data_hora >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND tipo IN ('Visitante','Prestador') GROUP BY HOUR(data_hora) ORDER BY total DESC, hora ASC LIMIT 1");
+    if ($st) { $st->bind_param('i', $tenant_id); $st->execute(); $linha = $st->get_result()->fetch_assoc(); $st->close(); if ($linha) $analitico['pico'] = ['rotulo' => str_pad((string)$linha['hora'], 2, '0', STR_PAD_LEFT) . ':00', 'total' => (int)$linha['total']]; }
+
+    $st = $conn->prepare("SELECT COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado') unidade, COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores FROM registros_acesso WHERE $where GROUP BY COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado') ORDER BY total DESC, unidade ASC LIMIT 10");
+    if ($st) { $st->bind_param('iss', ...$paramsAnalitico); $st->execute(); $rs = $st->get_result(); while ($linha = $rs->fetch_assoc()) $analitico['unidades'][] = $linha; $st->close(); }
+
+    $st = $conn->prepare("SELECT COALESCE(NULLIF(TRIM(nome_visitante), ''), 'Não identificado') nome, tipo, COUNT(*) total FROM registros_acesso WHERE $where GROUP BY COALESCE(NULLIF(TRIM(nome_visitante), ''), 'Não identificado'), tipo ORDER BY total DESC, nome ASC LIMIT 10");
+    if ($st) { $st->bind_param('iss', ...$paramsAnalitico); $st->execute(); $rs = $st->get_result(); while ($linha = $rs->fetch_assoc()) $analitico['pessoas'][] = $linha; $st->close(); }
+
+    $st = $conn->prepare("SELECT DATE_FORMAT(data_hora, '%d/%m') data, COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores FROM registros_acesso WHERE $where GROUP BY DATE(data_hora), DATE_FORMAT(data_hora, '%d/%m') ORDER BY DATE(data_hora) DESC LIMIT 31");
+    if ($st) { $st->bind_param('iss', ...$paramsAnalitico); $st->execute(); $rs = $st->get_result(); while ($linha = $rs->fetch_assoc()) $analitico['tendencia'][] = $linha; $st->close(); }
+    $resumo_filtros = 'Período: ' . $data_inicio_analitico . ' até ' . $data_fim_analitico;
+}
 
 // Data/hora
 $data_geracao  = date('d/m/Y \a\s H:i');
@@ -318,6 +380,51 @@ tbody td { padding: 7px 8px; vertical-align: middle; }
         <?php endif; ?>
     </div>
 
+    <?php if ($tipo_relatorio === 'analitico'): ?>
+    <?php $r = $analitico['resumo']; $taxa = $r['total'] ? round(($r['liberados'] / $r['total']) * 100) : 0; ?>
+    <div class="kpis">
+        <div class="kpi"><div class="kpi-valor"><?= $r['total'] ?></div><div class="kpi-label">Acessos no Período</div></div>
+        <div class="kpi"><div class="kpi-valor"><?= $r['visitantes'] ?></div><div class="kpi-label">Visitantes</div></div>
+        <div class="kpi"><div class="kpi-valor"><?= $r['prestadores'] ?></div><div class="kpi-label">Prestadores</div></div>
+        <div class="kpi"><div class="kpi-valor"><?= esc($analitico['pico']['rotulo']) ?></div><div class="kpi-label">Pico 24h (<?= $analitico['pico']['total'] ?>)</div></div>
+        <div class="kpi"><div class="kpi-valor"><?= $taxa ?>%</div><div class="kpi-label">Taxa de Liberação</div></div>
+    </div>
+
+    <div class="secao">
+        <div class="secao-titulo">Ranking de Glebas / Unidades por Acessos</div>
+        <table><thead><tr><th>#</th><th>Gleba / Unidade</th><th>Total</th><th>Visitantes</th><th>Prestadores</th></tr></thead><tbody>
+        <?php if (empty($analitico['unidades'])): ?>
+            <tr><td colspan="5" class="sem-dados">Não há acessos de visitantes ou prestadores no período selecionado</td></tr>
+        <?php else: foreach ($analitico['unidades'] as $pos => $linha): ?>
+            <tr><td><?= $pos + 1 ?></td><td><strong><?= esc($linha['unidade']) ?></strong></td><td><?= (int)$linha['total'] ?></td><td><?= (int)$linha['visitantes'] ?></td><td><?= (int)$linha['prestadores'] ?></td></tr>
+        <?php endforeach; endif; ?>
+        </tbody></table>
+    </div>
+
+    <div class="secao">
+        <div class="secao-titulo">Pessoas Mais Registradas</div>
+        <table><thead><tr><th>#</th><th>Nome</th><th>Tipo</th><th>Total de Acessos</th></tr></thead><tbody>
+        <?php if (empty($analitico['pessoas'])): ?>
+            <tr><td colspan="4" class="sem-dados">Sem recorrências no período selecionado</td></tr>
+        <?php else: foreach ($analitico['pessoas'] as $pos => $linha): ?>
+            <tr><td><?= $pos + 1 ?></td><td><?= esc($linha['nome']) ?></td><td><?= esc($linha['tipo']) ?></td><td><?= (int)$linha['total'] ?></td></tr>
+        <?php endforeach; endif; ?>
+        </tbody></table>
+    </div>
+
+    <div class="secao">
+        <div class="secao-titulo">Tendência Diária de Acessos</div>
+        <table><thead><tr><th>Data</th><th>Total</th><th>Visitantes</th><th>Prestadores</th></tr></thead><tbody>
+        <?php if (empty($analitico['tendencia'])): ?>
+            <tr><td colspan="4" class="sem-dados">Sem movimentos no período selecionado</td></tr>
+        <?php else: foreach ($analitico['tendencia'] as $linha): ?>
+            <tr><td><?= esc($linha['data']) ?></td><td><?= (int)$linha['total'] ?></td><td><?= (int)$linha['visitantes'] ?></td><td><?= (int)$linha['prestadores'] ?></td></tr>
+        <?php endforeach; endif; ?>
+        </tbody></table>
+        <p style="margin-top:10px;font-size:9px;color:#64748b;">Entradas: <?= $r['entradas'] ?> &nbsp;|&nbsp; Saídas: <?= $r['saidas'] ?> &nbsp;|&nbsp; Liberados: <?= $r['liberados'] ?> &nbsp;|&nbsp; Pendentes: <?= $r['pendentes'] ?></p>
+    </div>
+
+    <?php else: ?>
     <!-- KPIs -->
     <div class="kpis">
         <div class="kpi">
@@ -354,12 +461,14 @@ tbody td { padding: 7px 8px; vertical-align: middle; }
                     <th>Foto</th>
                     <th>Documento</th>
                     <th>Status</th>
+                    <th>Cadastrado por</th>
+                    <th>Tipo</th>
                     <th>Cadastro</th>
                 </tr>
             </thead>
             <tbody>
             <?php if (empty($visitantes)): ?>
-                <tr><td colspan="11" class="sem-dados">Nenhum visitante encontrado com os filtros aplicados</td></tr>
+                <tr><td colspan="13" class="sem-dados">Nenhum visitante encontrado com os filtros aplicados</td></tr>
             <?php else: ?>
                 <?php foreach ($visitantes as $v): ?>
                 <tr>
@@ -394,6 +503,8 @@ tbody td { padding: 7px 8px; vertical-align: middle; }
                         <span class="badge badge-inativo">Inativo</span>
                         <?php endif; ?>
                     </td>
+                    <td><?= esc($v['cadastrado_por_nome'] ?? 'Cadastro legado') ?></td>
+                    <td><?= esc($v['cadastrado_por_tipo'] ?? 'LEGADO') ?></td>
                     <td style="white-space:nowrap"><?= esc($v['data_cadastro'] ?? '—') ?></td>
                 </tr>
                 <?php endforeach; ?>
@@ -404,6 +515,8 @@ tbody td { padding: 7px 8px; vertical-align: middle; }
             Total: <?= count($visitantes) ?> visitante(s) encontrado(s)
         </p>
     </div>
+
+    <?php endif; ?>
 
     <!-- RODAPE -->
     <div class="rodape">

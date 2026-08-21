@@ -80,6 +80,7 @@ if ($metodo === 'GET') {
             FROM registros_acesso r
             LEFT JOIN moradores m ON r.morador_id = m.id
             LEFT JOIN dependentes d ON r.dependente_id = d.id
+            WHERE r.tenant_id = ?
             ORDER BY r.data_hora DESC
             LIMIT ?";
 
@@ -88,7 +89,7 @@ if ($metodo === 'GET') {
         log_registro('ERRO prepare GET', ['erro' => $conexao->error]);
         retornar_json(false, 'Erro ao preparar consulta: ' . $conexao->error);
     }
-    $stmt->bind_param('i', $limite);
+    $stmt->bind_param('ii', $tenant_id, $limite);
     $stmt->execute();
     $resultado = $stmt->get_result();
 
@@ -205,22 +206,64 @@ if ($metodo === 'POST') {
         }
 
     } else {
-        // Visitante ou Prestador
+        // Visitante e Prestador compartilham o cadastro-base. O registro só
+        // é permitido quando o documento digitalizado está ativo neste tenant.
+        if (!$visitante_id) {
+            retornar_json(false, 'Localize um visitante/prestador cadastrado pelo documento. O registro manual exige documento digitalizado anexado.');
+        }
+
+        $stmtVisitante = $conexao->prepare(
+            'SELECT id, nome_completo, documento, documento_arquivo FROM visitantes WHERE tenant_id = ? AND id = ? LIMIT 1'
+        );
+        if (!$stmtVisitante) {
+            retornar_json(false, 'Erro ao validar o cadastro do visitante.');
+        }
+        $stmtVisitante->bind_param('ii', $tenant_id, $visitante_id);
+        $stmtVisitante->execute();
+        $visitante = $stmtVisitante->get_result()->fetch_assoc();
+        $stmtVisitante->close();
+
+        if (!$visitante) {
+            retornar_json(false, 'O visitante/prestador selecionado não pertence ao condomínio atual.');
+        }
+        if (empty($visitante['documento_arquivo'])) {
+            retornar_json(false, 'Cadastro encontrado, mas falta o documento digitalizado anexado. Cadastre o documento antes de registrar o acesso.');
+        }
+
+        $caminhoDocumento = ltrim((string)$visitante['documento_arquivo'], './');
+        $stmtDocumento = $conexao->prepare(
+            'SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1'
+        );
+        if (!$stmtDocumento) {
+            retornar_json(false, 'Erro ao validar o documento digitalizado do visitante.');
+        }
+        $stmtDocumento->bind_param('is', $tenant_id, $caminhoDocumento);
+        $stmtDocumento->execute();
+        $documentoAtivo = $stmtDocumento->get_result()->fetch_assoc();
+        $stmtDocumento->close();
+
+        if (!$documentoAtivo) {
+            retornar_json(false, 'Cadastro encontrado, mas o documento digitalizado não está disponível no sistema. Anexe-o novamente antes de registrar o acesso.');
+        }
+
+        // Usa somente os dados confirmados no cadastro do tenant.
+        $nome_visitante = $visitante['nome_completo'];
+        $documento = $visitante['documento'];
         $status   = '🟨 Registro manual - ' . $tipo;
         $liberado = 1;
     }
 
     // ── Montar INSERT dinamicamente ──────────────────────────────────────────
-    $cols   = 'data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante';
-    $marks  = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
-    // s=data_hora(1) s=placa(2) s=modelo(3) s=cor(4) s=tag(5) s=tipo(6)
-    // i=morador_id(7) s=nome_visitante(8) s=unidade_destino(9)
-    // i=dias_permanencia(10) s=status(11) i=liberado(12) s=observacao(13)
-    // s=tipo_acesso(14) i=dependente_id(15) i=visitante_id(16) s=documento_visitante(17)
-    $types = 'ssssssissisissiis';
+    $cols   = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante';
+    $marks  = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    // i=tenant_id(1) s=data_hora(2) s=placa(3) s=modelo(4) s=cor(5) s=tag(6) s=tipo(7)
+    // i=morador_id(8) s=nome_visitante(9) s=unidade_destino(10)
+    // i=dias_permanencia(11) s=status(12) i=liberado(13) s=observacao(14)
+    // s=tipo_acesso(15) i=dependente_id(16) i=visitante_id(17) s=documento_visitante(18)
+    $types = 'issssssissisissiis';
 
     $params = [
-        &$data_hora, &$placa, &$modelo, &$cor, &$tag, &$tipo,
+        &$tenant_id, &$data_hora, &$placa, &$modelo, &$cor, &$tag, &$tipo,
         &$morador_id, &$nome_visitante, &$unidade_destino,
         &$dias_permanencia, &$status, &$liberado, &$observacao,
         &$tipo_acesso, &$dependente_id, &$visitante_id, &$documento

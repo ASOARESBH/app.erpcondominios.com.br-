@@ -90,7 +90,13 @@
             <div class="monitoring-field monitoring-field-wide"><label for="monitoring-agent-note">Observação</label><input id="monitoring-agent-note" type="text" maxlength="500" placeholder="Instalação local para câmeras LPR"></div>
           </div>
           <input type="hidden" id="monitoring-agent-id" value="">
-          <div class="monitoring-action-row"><button type="button" class="btn-monitoring-primary" id="monitoring-enable"><i class="fas fa-link"></i> Habilitar esta máquina</button><button type="button" class="btn-monitoring-secondary" id="monitoring-cancel-pairing"><i class="fas fa-eraser"></i> Limpar solicitação</button><span id="monitoring-pairing-message" class="monitoring-inline-message"></span></div>
+          <div class="monitoring-edit-state" id="monitoring-edit-state" hidden></div>
+          <div class="monitoring-action-row">
+            <button type="button" class="btn-monitoring-primary" id="monitoring-enable"><i class="fas fa-link"></i> Habilitar esta máquina</button>
+            <button type="button" class="btn-monitoring-secondary" id="monitoring-clear-selection" hidden><i class="fas fa-undo"></i> Nova máquina</button>
+            <button type="button" class="btn-monitoring-secondary" id="monitoring-cancel-pairing"><i class="fas fa-eraser"></i> Limpar solicitação</button>
+            <span id="monitoring-pairing-message" class="monitoring-inline-message"></span>
+          </div>
           <p class="monitoring-note"><i class="fas fa-shield-alt"></i> A credencial da máquina será gerada pelo ERP e exibida uma única vez após a habilitação.</p>
         </article>
 
@@ -250,12 +256,12 @@
           </div>
           <div>
             <label>Usuário da API Control iD</label>
-            <input type="text" id="disp-usuario" placeholder="admin" value="admin">
+            <input type="text" id="disp-usuario" placeholder="admin" value="admin" autocomplete="username">
           </div>
           <div>
             <label>Senha da API Control iD</label>
             <div class="senha-wrap">
-              <input type="password" id="disp-senha" placeholder="Senha do equipamento">
+              <input type="password" id="disp-senha" placeholder="Senha do equipamento" autocomplete="new-password">
               <button type="button" class="btn-toggle-senha" id="btnToggleSenha" title="Mostrar/ocultar senha">
                 <i class="fas fa-eye" id="disp-senha-icon"></i>
               </button>
@@ -292,12 +298,12 @@
           </div>
           <div>
             <label>Usuário</label>
-            <input type="text" id="intelbras-usuario" placeholder="admin" value="admin">
+            <input type="text" id="intelbras-usuario" placeholder="admin" value="admin" autocomplete="username">
           </div>
           <div>
             <label>Senha</label>
             <div class="senha-wrap">
-              <input type="password" id="intelbras-senha" placeholder="Senha do equipamento">
+              <input type="password" id="intelbras-senha" placeholder="Senha do equipamento" autocomplete="new-password">
               <button type="button" class="btn-toggle-senha" id="btnToggleSenhaIntelbras" title="Mostrar/ocultar senha">
                 <i class="fas fa-eye" id="intelbras-senha-icon"></i>
               </button>
@@ -328,12 +334,12 @@
           </div>
           <div>
             <label>Usuário</label>
-            <input type="text" id="hikvision-usuario" placeholder="admin" value="admin">
+            <input type="text" id="hikvision-usuario" placeholder="admin" value="admin" autocomplete="username">
           </div>
           <div>
             <label>Senha</label>
             <div class="senha-wrap">
-              <input type="password" id="hikvision-senha" placeholder="Senha do equipamento">
+              <input type="password" id="hikvision-senha" placeholder="Senha do equipamento" autocomplete="new-password">
               <button type="button" class="btn-toggle-senha" id="btnToggleSenhaHikvision" title="Mostrar/ocultar senha">
                 <i class="fas fa-eye" id="hikvision-senha-icon"></i>
               </button>
@@ -371,12 +377,12 @@
           </div>
           <div>
             <label>Usuário</label>
-            <input type="text" id="generico-usuario" placeholder="admin">
+            <input type="text" id="generico-usuario" placeholder="admin" autocomplete="username">
           </div>
           <div>
             <label>Senha</label>
             <div class="senha-wrap">
-              <input type="password" id="generico-senha" placeholder="Senha do equipamento">
+              <input type="password" id="generico-senha" placeholder="Senha do equipamento" autocomplete="new-password">
               <button type="button" class="btn-toggle-senha" id="btnToggleSenhaGenerico" title="Mostrar/ocultar senha">
                 <i class="fas fa-eye" id="generico-senha-icon"></i>
               </button>

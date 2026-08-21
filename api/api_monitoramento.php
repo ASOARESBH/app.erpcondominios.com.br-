@@ -69,6 +69,10 @@ try {
             monitoring_require_method('POST');
             _monitoring_cancelar_pareamento($conexao, $input);
             break;
+        case 'regenerar_credencial':
+            monitoring_require_method('POST');
+            _monitoring_regenerar_credencial($conexao, $input);
+            break;
         case 'salvar_configuracao':
             monitoring_require_method('POST');
             _monitoring_salvar_configuracao($conexao, $input);
@@ -423,11 +427,10 @@ function _monitoring_acessos_recentes($conexao) {
 function _monitoring_admin_tenant($conexao, $input = []) {
     $user = obterUsuarioAutenticado();
     if (!$user) monitoring_json(false, 'Autenticação necessária.', null, 401, 'AUTH_REQUIRED');
-    $requested = (int)($input['tenant_id'] ?? $_GET['tenant_id'] ?? 0);
-    $permissao = strtolower((string)($user['permissao'] ?? 'operador'));
-    if ($permissao === 'super_admin' && $requested > 0) {
-        return ['user' => $user, 'tenant_id' => $requested];
-    }
+
+    // O tenant operacional é sempre o tenant ativo da sessão. Mesmo o
+    // super-admin deve primeiro entrar no contexto operacional da unidade;
+    // parâmetros GET/POST nunca podem escolher o tenant de uma máquina.
     $context = monitoring_web_context('gerente');
     return ['user' => $user, 'tenant_id' => (int)$context['tenant_id']];
 }
@@ -473,14 +476,28 @@ function _monitoring_habilitar_agente($conexao, $input) {
     $pairing_code = strtoupper(trim((string)($input['pairing_code'] ?? '')));
     if (!monitoring_valid_pairing_code($pairing_code)) monitoring_json(false, 'Código de pareamento obrigatório.', null, 422, 'PAIRING_CODE_REQUIRED');
     if ($agent_id <= 0) {
+        // A instalação ainda não possui tenant antes da habilitação e, por isso,
+        // não aparece em listar_agentes. O código completo é a prova de posse
+        // usada para localizar exclusivamente a solicitação pendente.
         $pairing_preview = monitoring_preview($pairing_code, 4, 4);
-        $stmt = $conexao->prepare("SELECT id FROM monitoramento_agentes WHERE pairing_code_preview = ? AND status = 'pendente_ativacao' AND pairing_expires_at > NOW() LIMIT 1");
+        $stmt = $conexao->prepare(
+            "SELECT id FROM monitoramento_agentes
+              WHERE pairing_code_preview = ?
+                AND status IN ('pendente_ativacao', 'solicitado')
+                AND pairing_expires_at > NOW()
+              ORDER BY id DESC LIMIT 1"
+        );
+        if (!$stmt) monitoring_json(false, 'Serviço de pareamento indisponível.', null, 500, 'PAIRING_DB_ERROR');
         $stmt->bind_param('s', $pairing_preview);
         $stmt->execute();
-        $agent_id = (int)($stmt->get_result()->fetch_assoc()['id'] ?? 0);
+        $candidate = $stmt->get_result()->fetch_assoc();
         $stmt->close();
+        $agent_id = (int)($candidate['id'] ?? 0);
+        if ($agent_id <= 0) {
+            monitoring_log('MONITORING_PAIRING_NOT_FOUND', 'Código de pareamento sem solicitação pendente.', $admin['user']['email'] ?? null);
+            monitoring_json(false, 'Nenhuma solicitação pendente foi encontrada para este código. No computador Windows, abra o painel local do Monitoring e gere ou envie um novo código de pareamento.', null, 422, 'PAIRING_REQUEST_NOT_FOUND');
+        }
     }
-    if ($agent_id <= 0) monitoring_json(false, 'Agente obrigatório.', null, 422, 'AGENT_REQUIRED');
 
     $stmt = $conexao->prepare("SELECT id, tenant_id, install_id, hardware_fingerprint_hash, pairing_code_hash, pairing_expires_at, status FROM monitoramento_agentes WHERE id = ? LIMIT 1");
     $stmt->bind_param('i', $agent_id);
@@ -513,6 +530,61 @@ function _monitoring_habilitar_agente($conexao, $input) {
         'activation_secret' => $secret,
         'secret_last4' => $last4,
         'status' => 'ativo',
+    ]);
+}
+
+function _monitoring_regenerar_credencial($conexao, $input) {
+    $admin = _monitoring_admin_tenant($conexao, $input);
+    $tenant_id = (int)$admin['tenant_id'];
+    $agent_id = (int)($input['agent_id'] ?? 0);
+    if ($agent_id <= 0) monitoring_json(false, 'Máquina obrigatória.', null, 422, 'AGENT_REQUIRED');
+
+    $stmt = $conexao->prepare("SELECT id, nome, status FROM monitoramento_agentes WHERE id = ? AND tenant_id = ? LIMIT 1");
+    if (!$stmt) monitoring_json(false, 'Serviço de credencial indisponível.', null, 500, 'CREDENTIAL_DB_ERROR');
+    $stmt->bind_param('ii', $agent_id, $tenant_id);
+    $stmt->execute();
+    $agent = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$agent) monitoring_json(false, 'Máquina não encontrada neste condomínio.', null, 404, 'AGENT_NOT_FOUND');
+    if ($agent['status'] !== 'ativo') monitoring_json(false, 'A credencial só pode ser regenerada para máquina ativa.', null, 409, 'AGENT_NOT_ACTIVE');
+
+    $secret = bin2hex(random_bytes(32));
+    $secret_hash = password_hash($secret, PASSWORD_DEFAULT);
+    $last4 = substr($secret, -4);
+
+    $conexao->begin_transaction();
+    try {
+        $stmt = $conexao->prepare("UPDATE monitoramento_agentes
+            SET agent_secret_hash = ?, agent_secret_last4 = ?, atualizado_em = NOW(), last_error_code = NULL
+            WHERE id = ? AND tenant_id = ? AND status = 'ativo'");
+        if (!$stmt) throw new RuntimeException('Não foi possível preparar a nova credencial.');
+        $stmt->bind_param('ssii', $secret_hash, $last4, $agent_id, $tenant_id);
+        $stmt->execute();
+        $changed = $stmt->affected_rows;
+        $stmt->close();
+        if ($changed !== 1) throw new RuntimeException('A máquina não pôde receber a nova credencial.');
+
+        $stmt = $conexao->prepare("UPDATE monitoramento_sessoes SET revoked_at = NOW()
+            WHERE agente_id = ? AND revoked_at IS NULL");
+        if (!$stmt) throw new RuntimeException('Não foi possível invalidar as sessões anteriores.');
+        $stmt->bind_param('i', $agent_id);
+        $stmt->execute();
+        $stmt->close();
+        $conexao->commit();
+    } catch (Throwable $e) {
+        $conexao->rollback();
+        error_log('[MONITORING][CREDENTIAL_ROTATE] agent_id=' . $agent_id . ' erro=' . $e->getMessage());
+        monitoring_json(false, 'Não foi possível regenerar a credencial da máquina.', null, 500, 'CREDENTIAL_ROTATE_ERROR');
+    }
+
+    monitoring_log('MONITORING_CREDENTIAL_ROTATED', 'Credencial operacional regenerada. agent_id=' . $agent_id, $admin['user']['email'] ?? null);
+    monitoring_json(true, 'Nova credencial gerada. Copie-a agora; as sessões anteriores foram encerradas.', [
+        'agent_id' => $agent_id,
+        'activation_secret' => $secret,
+        'secret_last4' => $last4,
+        'status' => 'ativo',
+        'sessions_revoked' => true,
     ]);
 }
 

@@ -5,18 +5,20 @@ const monitoringLog = (...args) => console.debug('[DispositivosMonitoring]', ...
 
 let monitoringAgents = [];
 let monitoringRefreshTimer = null;
+const PAIRING_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
 
 export function init() {
     monitoringLog('Inicializando módulo de dispositivos Monitoring');
     document.getElementById('monitoring-refresh')?.addEventListener('click', carregarMonitoring);
     document.getElementById('monitoring-enable')?.addEventListener('click', habilitarMonitoring);
     document.getElementById('monitoring-cancel-pairing')?.addEventListener('click', cancelarPareamentoInformado);
+    document.getElementById('monitoring-clear-selection')?.addEventListener('click', () => limparSelecaoMonitoring());
     document.getElementById('monitoring-config-form')?.addEventListener('submit', salvarConfiguracaoMonitoring);
     document.getElementById('monitoring-pending-agent')?.addEventListener('change', selecionarAgentePendente);
     document.getElementById('monitoring-agents-body')?.addEventListener('click', tratarAcaoAgente);
-    document.getElementById('monitoring-secret-close')?.addEventListener('click', fecharCredencial);
-    document.getElementById('monitoring-secret-done')?.addEventListener('click', fecharCredencial);
-    document.getElementById('monitoring-copy-secret')?.addEventListener('click', copiacredencial);
+    document.getElementById('monitoring-secret-close')?.addEventListener('click', fecharModalMonitoringSecret);
+    document.getElementById('monitoring-secret-done')?.addEventListener('click', fecharModalMonitoringSecret);
+    document.getElementById('monitoring-copy-secret')?.addEventListener('click', copiarCredencialMonitoring);
     carregarMonitoring();
     monitoringRefreshTimer = window.setInterval(carregarMonitoring, 30000);
 }
@@ -92,14 +94,63 @@ function renderizarPendentes(agentes) {
 }
 
 function selecionarAgentePendente(event) {
-    const agent = monitoringAgents.find((item) => String(item.id) === String(event.target.value));
+    selecionarAgenteParaEdicao(event.target.value);
+}
+
+function selecionarAgenteParaEdicao(agentId) {
+    const agent = monitoringAgents.find((item) => String(item.id) === String(agentId));
     if (!agent) return;
-    document.getElementById('monitoring-agent-id').value = agent.id || '';
-    document.getElementById('monitoring-agent-name').value = agent.nome || '';
-    document.getElementById('monitoring-agent-local').value = agent.local || '';
-    document.getElementById('monitoring-agent-responsible').value = agent.responsavel || '';
-    document.getElementById('monitoring-agent-note').value = agent.observacao || '';
-    setMonitoringMessage('monitoring-pairing-message', `Máquina selecionada. Cole o código completo exibido no painel local.`, false);
+
+    const setValue = (id, value) => {
+        const field = document.getElementById(id);
+        if (field) field.value = value || '';
+    };
+    setValue('monitoring-agent-id', agent.id);
+    setValue('monitoring-agent-name', agent.nome || '');
+    setValue('monitoring-agent-local', agent.local || '');
+    setValue('monitoring-agent-responsible', agent.responsavel || '');
+    setValue('monitoring-agent-note', agent.observacao || '');
+
+    const status = String(agent.status || 'novo');
+    const state = document.getElementById('monitoring-edit-state');
+    const clearButton = document.getElementById('monitoring-clear-selection');
+    const enableButton = document.getElementById('monitoring-enable');
+    if (state) {
+        state.hidden = false;
+        state.textContent = `Editando ${agent.nome || 'máquina'} (${status}). Gere um novo código no painel Windows e cole-o abaixo para validar a instalação.`;
+    }
+    if (clearButton) clearButton.hidden = false;
+    if (enableButton) enableButton.innerHTML = '<i class="fas fa-sync-alt"></i> Salvar e habilitar novamente';
+
+    setMonitoringMessage('monitoring-pairing-message', 'Dados carregados para edição. O código antigo não é reutilizável; gere um novo código no painel local Windows.', false);
+    document.getElementById('monitoring-pairing-code')?.focus();
+    document.getElementById('monitoring-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    monitoringLog('Máquina selecionada para edição', { agentId: agent.id, status });
+}
+
+function limparSelecaoMonitoring(preserveMessage = false) {
+    const fields = [
+        'monitoring-agent-id',
+        'monitoring-pairing-code',
+        'monitoring-agent-name',
+        'monitoring-agent-local',
+        'monitoring-agent-responsible',
+        'monitoring-agent-note',
+    ];
+    fields.forEach((id) => {
+        const field = document.getElementById(id);
+        if (field) field.value = '';
+    });
+    const state = document.getElementById('monitoring-edit-state');
+    const clearButton = document.getElementById('monitoring-clear-selection');
+    const enableButton = document.getElementById('monitoring-enable');
+    if (state) {
+        state.hidden = true;
+        state.textContent = '';
+    }
+    if (clearButton) clearButton.hidden = true;
+    if (enableButton) enableButton.innerHTML = '<i class="fas fa-link"></i> Habilitar esta máquina';
+    if (!preserveMessage) setMonitoringMessage('monitoring-pairing-message', 'Formulário preparado para uma nova máquina.', false);
 }
 
 function renderizarConfiguracao(config) {
@@ -128,10 +179,13 @@ function renderizarAgentes(agentes) {
     body.innerHTML = agentes.map((agent) => {
         const status = String(agent.status || 'novo');
         const action = status === 'ativo'
-            ? `<button type="button" class="monitoring-table-action monitoring-action-revoke" data-agent-action="revogar" data-agent-id="${escapeHtml(agent.id)}">Revogar</button>`
+            ? `<div class="monitoring-actions-inline">
+                <button type="button" class="monitoring-table-action monitoring-action-credential" data-agent-action="regenerar_credencial" data-agent-id="${escapeHtml(agent.id)}">Nova credencial</button>
+                <button type="button" class="monitoring-table-action monitoring-action-revoke" data-agent-action="revogar" data-agent-id="${escapeHtml(agent.id)}">Revogar</button>
+               </div>`
             : ['pendente_ativacao', 'solicitado'].includes(status)
                 ? `<button type="button" class="monitoring-table-action monitoring-action-revoke" data-agent-action="limpar" data-agent-id="${escapeHtml(agent.id)}">Limpar pendente</button>`
-                : `<button type="button" class="monitoring-table-action monitoring-action-enable" data-agent-action="selecionar" data-agent-id="${escapeHtml(agent.id)}">Selecionar</button>`;
+                : `<button type="button" class="monitoring-table-action monitoring-action-enable" data-agent-action="selecionar" data-agent-id="${escapeHtml(agent.id)}">${status === 'revogado' ? 'Editar e reativar' : 'Selecionar e editar'}</button>`;
         return `<tr>
             <td><strong>${escapeHtml(agent.nome || 'Máquina Monitoring')}</strong><small>${escapeHtml(agent.local || 'Local não informado')}</small></td>
             <td><code>${escapeHtml(agent.install_id || '—').slice(0, 14)}…</code></td>
@@ -145,10 +199,15 @@ function renderizarAgentes(agentes) {
 
 async function habilitarMonitoring() {
     const button = document.getElementById('monitoring-enable');
-    const code = document.getElementById('monitoring-pairing-code')?.value.trim().toUpperCase() || '';
+    const rawCode = document.getElementById('monitoring-pairing-code')?.value || '';
+    const code = rawCode.trim().toUpperCase().replace(/\s+/g, '');
     const agentId = Number(document.getElementById('monitoring-agent-id')?.value || 0);
     if (!code) {
         setMonitoringMessage('monitoring-pairing-message', 'Cole o código completo exibido no painel local.', true);
+        return;
+    }
+    if (!PAIRING_CODE_PATTERN.test(code)) {
+        setMonitoringMessage('monitoring-pairing-message', 'Código inválido. Use o formato exibido no painel local, por exemplo FLLY-4CQQ.', true);
         return;
     }
     if (button) button.disabled = true;
@@ -165,17 +224,26 @@ async function habilitarMonitoring() {
             },
         });
         const secret = data.dados?.activation_secret || '';
-        document.getElementById('monitoring-generated-secret').textContent = secret || 'Credencial não retornada';
-        document.getElementById('monitoring-secret-overlay')?.classList.add('open');
+        const pairingField = document.getElementById('monitoring-pairing-code');
+        const agentIdField = document.getElementById('monitoring-agent-id');
+        const pendingSelect = document.getElementById('monitoring-pending-agent');
+        if (!secret) {
+            throw new Error('A máquina foi habilitada, mas a credencial única não foi retornada. Não tente habilitar novamente; use Nova credencial com segurança.');
+        }
+        exibirCredencialMonitoring(secret);
         setMonitoringMessage('monitoring-pairing-message', 'Máquina habilitada. Guarde a credencial exibida.', false);
-        document.getElementById('monitoring-pairing-code').value = '';
-        document.getElementById('monitoring-agent-id').value = '';
-        const pendingAgent = document.getElementById('monitoring-pending-agent');
-        if (pendingAgent) pendingAgent.value = '';
+        if (pairingField) pairingField.value = '';
+        if (agentIdField) agentIdField.value = '';
+        if (pendingSelect) pendingSelect.value = '';
+        limparSelecaoMonitoring(true);
+        monitoringLog('Máquina habilitada com sucesso', { agentId: data.dados?.agent_id || agentId });
         await carregarMonitoring();
     } catch (error) {
-        monitoringLog('Falha ao habilitar máquina', error);
-        setMonitoringMessage('monitoring-pairing-message', error.message, true);
+        monitoringLog('Falha ao habilitar máquina', { code: error.code || 'UNKNOWN', message: error.message });
+        const message = error.code === 'PAIRING_REQUEST_NOT_FOUND'
+            ? 'Não há solicitação pendente para este código. No computador Windows, abra o painel local do Monitoring e gere ou envie um novo código antes de tentar novamente.'
+            : error.message;
+        setMonitoringMessage('monitoring-pairing-message', message, true);
     } finally {
         if (button) button.disabled = false;
     }
@@ -203,6 +271,25 @@ async function salvarConfiguracaoMonitoring(event) {
         setMonitoringMessage('monitoring-config-message', error.message, true);
     } finally {
         if (button) button.disabled = false;
+    }
+}
+
+async function regenerarCredencialMonitoring(agentId) {
+    if (!window.confirm('Gerar uma nova credencial para esta máquina? As sessões locais existentes serão encerradas e o painel Windows deverá usar a nova credencial.')) return;
+    try {
+        const data = await monitoringApi('regenerar_credencial', {
+            method: 'POST',
+            body: { agent_id: Number(agentId) },
+        });
+        const secret = data.dados?.activation_secret || '';
+        if (!secret) throw new Error('A nova credencial não foi retornada. Nenhuma nova tentativa foi realizada.');
+        exibirCredencialMonitoring(secret);
+        setMonitoringMessage('monitoring-pairing-message', 'Nova credencial gerada. Copie-a agora e atualize o painel local Windows.', false);
+        monitoringLog('Credencial regenerada', { agentId: Number(agentId), sessionsRevoked: Boolean(data.dados?.sessions_revoked) });
+        await carregarMonitoring();
+    } catch (error) {
+        monitoringLog('Falha ao regenerar credencial', { code: error.code || 'UNKNOWN', message: error.message });
+        setMonitoringMessage('monitoring-pairing-message', error.message, true);
     }
 }
 
@@ -250,14 +337,8 @@ function tratarAcaoAgente(event) {
     const id = button.dataset.agentId;
     if (button.dataset.agentAction === 'revogar') revogarAgente(id);
     if (button.dataset.agentAction === 'limpar') limparPareamento(id);
-    if (button.dataset.agentAction === 'selecionar') {
-        const select = document.getElementById('monitoring-pending-agent');
-        if (select) {
-            select.value = id;
-            select.dispatchEvent(new Event('change'));
-            document.getElementById('monitoring-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    }
+    if (button.dataset.agentAction === 'regenerar_credencial') regenerarCredencialMonitoring(id);
+    if (button.dataset.agentAction === 'selecionar') selecionarAgenteParaEdicao(id);
 }
 
 function setMonitoringMessage(id, message, isError) {
@@ -272,11 +353,18 @@ function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 }
 
-function fecharCredencial() {
+function exibirCredencialMonitoring(secret) {
+    const secretOutput = document.getElementById('monitoring-generated-secret');
+    if (!secretOutput) throw new Error('Não foi possível abrir o modal de credencial.');
+    secretOutput.textContent = secret;
+    document.getElementById('monitoring-secret-overlay')?.classList.add('open');
+}
+
+function fecharModalMonitoringSecret() {
     document.getElementById('monitoring-secret-overlay')?.classList.remove('open');
 }
 
-async function copiacredencial() {
+async function copiarCredencialMonitoring() {
     const secret = document.getElementById('monitoring-generated-secret')?.textContent || '';
     if (!secret || secret === 'Credencial não retornada') return;
     try {
@@ -287,3 +375,6 @@ async function copiacredencial() {
         setMonitoringMessage('monitoring-pairing-message', 'Selecione a credencial no modal e copie manualmente.', true);
     }
 }
+
+window.fecharModalMonitoringSecret = fecharModalMonitoringSecret;
+window.copiarCredencialMonitoring = copiarCredencialMonitoring;

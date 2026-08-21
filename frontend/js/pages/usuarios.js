@@ -12,6 +12,9 @@ const state = {
     usuarioModuloAtual: null,
     permissoesEditadas: {},   // { chave: { pode_acessar, pode_criar, pode_editar, pode_excluir, pode_exportar } }
     todosModulos: [],
+    rbacGrupos: [],
+    rbacCatalogo: [],
+    usuarioGruposSelecionado: null,
     abaAtual: 'usuarios'
 };
 
@@ -32,7 +35,16 @@ export function init() {
         salvarPermissoes:         salvarPermissoes,
         abrirModulosUsuario:      abrirModulosUsuario,
         _onToggleModulo:          _onToggleModulo,
-        _onTogglePerm:            _onTogglePerm
+        _onTogglePerm:            _onTogglePerm,
+        novoGrupoRbac:            novoGrupoRbac,
+        editarGrupoRbac:          editarGrupoRbac,
+        cancelarGrupoRbac:        cancelarGrupoRbac,
+        salvarGrupoRbac:          salvarGrupoRbac,
+        excluirGrupoRbac:         excluirGrupoRbac,
+        carregarGruposUsuario:    carregarGruposUsuario,
+        salvarGruposUsuario:      salvarGruposUsuario,
+        carregarSegurancaRbac:     carregarSegurancaRbac,
+        revogarSessaoRbac:         revogarSessaoRbac
     };
 }
 
@@ -66,6 +78,21 @@ function bindDOM() {
         painelModulos:   document.getElementById('painelModulos'),
         tabUsuarios:     document.getElementById('tabUsuarios'),
         tabModulos:      document.getElementById('tabModulos'),
+        tabGrupos:       document.getElementById('tabGrupos'),
+        painelGrupos:    document.getElementById('painelGrupos'),
+        painelSeguranca: document.getElementById('painelSeguranca'),
+        tabSeguranca: document.getElementById('tabSeguranca'),
+        tabelaSessoesRbac: document.getElementById('tabelaSessoesRbac'),
+        tabelaAuditoriaRbac: document.getElementById('tabelaAuditoriaRbac'),
+        tabelaGruposRbac: document.getElementById('tabelaGruposRbac'),
+        grupoEditor: document.getElementById('grupoEditor'),
+        grupoId: document.getElementById('grupoId'),
+        grupoNome: document.getElementById('grupoNome'),
+        grupoSlug: document.getElementById('grupoSlug'),
+        grupoDescricao: document.getElementById('grupoDescricao'),
+        grupoPermissoesCatalog: document.getElementById('grupoPermissoesCatalog'),
+        grupoUsuarioSelect: document.getElementById('grupoUsuarioSelect'),
+        grupoUsuarioVinculos: document.getElementById('grupoUsuarioVinculos'),
         modGruposContainer: document.getElementById('modGruposContainer'),
         modLoading:      document.getElementById('modLoading'),
         modHeader:       document.getElementById('modHeader'),
@@ -135,28 +162,28 @@ function mostrarTab(aba) {
     state.abaAtual = aba;
     state.dom.tabUsuarios?.classList.toggle('active', aba === 'usuarios');
     state.dom.tabModulos?.classList.toggle('active',  aba === 'modulos');
-    if (aba === 'usuarios') {
-        state.dom.painelUsuarios?.classList.remove('hidden');
-        state.dom.painelUsuarios?.removeAttribute('style');
-        state.dom.painelModulos?.classList.remove('show');
-        state.dom.painelModulos?.setAttribute('style','display:none');
-    } else {
-        state.dom.painelUsuarios?.setAttribute('style','display:none');
-        state.dom.painelModulos?.classList.add('show');
-        state.dom.painelModulos?.removeAttribute('style');
-        // Popular select de usuários
-        _popularSelectUsuarios();
-    }
+    state.dom.tabGrupos?.classList.toggle('active', aba === 'grupos');
+    state.dom.tabSeguranca?.classList.toggle('active', aba === 'seguranca');
+    state.dom.painelUsuarios?.setAttribute('style', aba === 'usuarios' ? '' : 'display:none');
+    state.dom.painelModulos?.classList.toggle('show', aba === 'modulos');
+    state.dom.painelModulos?.setAttribute('style', aba === 'modulos' ? '' : 'display:none');
+    state.dom.painelGrupos?.setAttribute('style', aba === 'grupos' ? '' : 'display:none');
+    state.dom.painelSeguranca?.setAttribute('style', aba === 'seguranca' ? '' : 'display:none');
+    if (aba === 'modulos') _popularSelectUsuarios();
+    if (aba === 'grupos') carregarCentralGrupos();
+    if (aba === 'seguranca') carregarSegurancaRbac();
 }
 
 function _popularSelectUsuarios() {
     const sel = state.dom.modSelectUsuario;
     if (!sel || state.todosUsuarios.length === 0) return;
     const valorAtual = sel.value;
-    sel.innerHTML = '<option value="">— Selecione um usuário —</option>' +
-        state.todosUsuarios.map(u =>
-            `<option value="${u.id}" ${u.id == valorAtual ? 'selected' : ''}>${u.nome} (${_textoPermissao(u.permissao)})</option>`
-        ).join('');
+    const opcoes = '<option value="">— Selecione um usuário —</option>' + state.todosUsuarios.map(u => `<option value="${u.id}" ${u.id == valorAtual ? 'selected' : ''}>${_escHtml(u.nome)} (${_textoPermissao(u.permissao)})</option>`).join('');
+    sel.innerHTML = opcoes;
+    if (state.dom.grupoUsuarioSelect) {
+        const atualGrupo = state.dom.grupoUsuarioSelect.value;
+        state.dom.grupoUsuarioSelect.innerHTML = '<option value="">— Selecione um usuário —</option>' + state.todosUsuarios.map(u => `<option value="${u.id}" ${u.id == atualGrupo ? 'selected' : ''}>${_escHtml(u.nome)}</option>`).join('');
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -347,16 +374,13 @@ function selecionarUsuarioModulos(userId) {
             if (state.dom.modLoading) state.dom.modLoading.style.display = 'none';
             if (!data.sucesso) { mostrarAlerta('Erro ao carregar módulos: ' + data.mensagem, 'error'); return; }
             const permissoes = data.dados.permissoes || {};
-            state.todosModulos = Object.values(permissoes);
-            // Inicializar estado editado
+            state.todosModulos = Object.entries(permissoes).map(([chave, m]) => {
+                const meta = m.modulo || m;
+                return { ...m, modulo_chave: meta.chave || m.modulo_chave || chave, nome: meta.nome || m.nome || chave, grupo: meta.grupo || m.grupo || 'Sistema', icone: meta.icone || m.icone || 'fas fa-shield-alt', descricao: meta.descricao || m.descricao || '', permissao_minima: meta.perfil_compatibilidade || m.permissao_minima || 'visualizador', perfil_permite: true };
+            });
+            // Inicializar exceções editáveis a partir da decisão efetiva.
             state.todosModulos.forEach(m => {
-                state.permissoesEditadas[m.modulo_chave] = {
-                    pode_acessar:  m.pode_acessar,
-                    pode_criar:    m.pode_criar,
-                    pode_editar:   m.pode_editar,
-                    pode_excluir:  m.pode_excluir,
-                    pode_exportar: m.pode_exportar
-                };
+                state.permissoesEditadas[m.modulo_chave] = { pode_acessar:!!m.pode_acessar, pode_criar:!!m.pode_criar, pode_editar:!!m.pode_editar, pode_excluir:!!m.pode_excluir, pode_exportar:!!m.pode_exportar };
             });
             // Exibir rastreabilidade de auditoria
             _exibirAuditoria(permissoes);
@@ -846,4 +870,189 @@ if (typeof window !== 'undefined') {
     window.UsuariosPage = window.UsuariosPage || {};
     window.UsuariosPage._onToggleModulo = _onToggleModulo;
     window.UsuariosPage._onTogglePerm   = _onTogglePerm;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CENTRAL RBAC — GRUPOS, VÍNCULOS E CATÁLOGO DE PERMISSÕES
+// ─────────────────────────────────────────────────────────────────────
+function _rbacEsc(valor) {
+    return String(valor ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+async function _rbacRequest(acao, options = {}) {
+    const method = options.method || 'GET';
+    const url = method === 'GET'
+        ? `${state.apiBase}api_rbac.php?acao=${encodeURIComponent(acao)}${options.query || ''}`
+        : `${state.apiBase}api_rbac.php`;
+    const response = await fetch(url, method === 'GET' ? { credentials:'include' } : {
+        method, credentials:'include', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ acao, ...(options.body || {}) })
+    });
+    const texto = await response.text();
+    let data;
+    try { data = JSON.parse(texto); } catch (_) { throw new Error('A Central RBAC retornou uma resposta inválida.'); }
+    if (!response.ok || !data.sucesso) throw new Error(data.mensagem || 'Não foi possível concluir a operação RBAC.');
+    return data.dados || {};
+}
+
+async function carregarCentralGrupos() {
+    try {
+        _popularSelectUsuarios();
+        const [dadosGrupos, dadosCatalogo] = await Promise.all([
+            _rbacRequest('grupos'), _rbacRequest('catalogo')
+        ]);
+        state.rbacGrupos = dadosGrupos.grupos || [];
+        state.rbacCatalogo = dadosCatalogo.modulos || [];
+        _renderizarTabelaGrupos();
+    } catch (erro) {
+        console.error('[RBAC] Falha ao carregar grupos:', erro);
+        if (state.dom.tabelaGruposRbac) state.dom.tabelaGruposRbac.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#b91c1c;">${_rbacEsc(erro.message)}</td></tr>`;
+        mostrarAlerta(erro.message, 'error');
+    }
+}
+
+function _renderizarTabelaGrupos() {
+    const tabela = state.dom.tabelaGruposRbac;
+    if (!tabela) return;
+    if (!state.rbacGrupos.length) {
+        tabela.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhum grupo cadastrado.</td></tr>';
+        return;
+    }
+    tabela.innerHTML = state.rbacGrupos.map(g => `
+        <tr>
+            <td><strong>${_rbacEsc(g.nome)}</strong><br><small style="color:#64748b;">${_rbacEsc(g.slug)}</small></td>
+            <td>${_rbacEsc(g.descricao || '—')}</td>
+            <td style="text-align:center;">${Number(g.total_usuarios || 0)}</td>
+            <td style="text-align:center;">${Number(g.total_permissoes || 0)}</td>
+            <td><span class="badge badge-${g.ativo == 1 ? 'success':'danger'}">${g.protegido == 1 ? 'Protegido' : (g.ativo == 1 ? 'Ativo' : 'Inativo')}</span></td>
+            <td style="white-space:nowrap;">
+                ${g.protegido == 1 ? '<span style="color:#64748b;font-size:.8rem;"><i class="fas fa-lock"></i> Sistema</span>' : `
+                <button class="mod-grupo-btn" onclick="UsuariosPage.editarGrupoRbac(${Number(g.id)})"><i class="fas fa-edit"></i> Editar</button>
+                <button class="mod-grupo-btn" style="color:#b91c1c;" onclick="UsuariosPage.excluirGrupoRbac(${Number(g.id)},'${_rbacEsc(g.nome).replace(/'/g,'&#039;')}')"><i class="fas fa-trash"></i></button>`}
+            </td>
+        </tr>`).join('');
+}
+
+function novoGrupoRbac() {
+    if (!state.dom.grupoEditor) return;
+    state.dom.grupoEditor.style.display = 'block';
+    state.dom.grupoId.value = '';
+    state.dom.grupoNome.value = '';
+    state.dom.grupoSlug.value = '';
+    state.dom.grupoDescricao.value = '';
+    _renderizarPermissoesGrupo([]);
+    state.dom.grupoNome.focus();
+}
+
+async function editarGrupoRbac(id) {
+    try {
+        const dados = await _rbacRequest('grupo', { query:`&id=${encodeURIComponent(id)}` });
+        state.dom.grupoEditor.style.display = 'block';
+        state.dom.grupoId.value = dados.grupo.id;
+        state.dom.grupoNome.value = dados.grupo.nome || '';
+        state.dom.grupoSlug.value = dados.grupo.slug || '';
+        state.dom.grupoDescricao.value = dados.grupo.descricao || '';
+        _renderizarPermissoesGrupo(dados.permissoes || []);
+        state.dom.grupoEditor.scrollIntoView({ behavior:'smooth', block:'start' });
+    } catch (erro) { mostrarAlerta(erro.message, 'error'); }
+}
+
+function cancelarGrupoRbac() {
+    if (state.dom.grupoEditor) state.dom.grupoEditor.style.display = 'none';
+}
+
+function _renderizarPermissoesGrupo(selecionadas) {
+    const destino = state.dom.grupoPermissoesCatalog;
+    if (!destino) return;
+    const selecionado = new Set(selecionadas);
+    destino.innerHTML = state.rbacCatalogo.map(m => {
+        const acoes = (m.acoes || []).map(acao => {
+            const chave = `${m.chave}.${acao}`;
+            return `<label class="mod-perm-chip ${selecionado.has(chave) ? 'on':'off'}" style="cursor:pointer;">
+                <input type="checkbox" class="rbac-grupo-permissao" value="${_rbacEsc(chave)}" ${selecionado.has(chave) ? 'checked':''} style="accent-color:#2563eb;"> ${_rbacEsc(acao)}
+            </label>`;
+        }).join('');
+        return `<div class="mod-card"><div class="mod-card-top"><div class="mod-card-icon"><i class="${_rbacEsc(m.icone || 'fas fa-shield-alt')}"></i></div><div class="mod-card-info"><div class="mod-card-nome">${_rbacEsc(m.nome)}</div><div class="mod-card-desc">${_rbacEsc(m.descricao || m.chave)}</div></div></div><div class="mod-card-perms">${acoes || '<span style="color:#94a3b8;font-size:.75rem;">Sem ações cadastradas</span>'}</div></div>`;
+    }).join('');
+}
+
+async function salvarGrupoRbac() {
+    const nome = state.dom.grupoNome?.value.trim();
+    const slug = state.dom.grupoSlug?.value.trim();
+    if (!nome || !slug) { mostrarAlerta('Informe nome e identificador do grupo.', 'warning'); return; }
+    const permissoes = [...document.querySelectorAll('.rbac-grupo-permissao:checked')].map(el => el.value);
+    try {
+        await _rbacRequest('salvar_grupo', { method:'POST', body:{ id:Number(state.dom.grupoId?.value || 0), nome, slug, descricao:state.dom.grupoDescricao?.value.trim() || '', permissoes } });
+        mostrarAlerta('Grupo salvo com sucesso. As permissões foram recalculadas.', 'success');
+        cancelarGrupoRbac();
+        await carregarCentralGrupos();
+    } catch (erro) { mostrarAlerta(erro.message, 'error'); }
+}
+
+async function excluirGrupoRbac(id, nome) {
+    if (!confirm(`Excluir o grupo "${nome}"? O histórico de auditoria será preservado.`)) return;
+    try {
+        await _rbacRequest('excluir_grupo', { method:'DELETE', body:{id:Number(id)} });
+        mostrarAlerta('Grupo excluído com segurança.', 'success');
+        await carregarCentralGrupos();
+    } catch (erro) { mostrarAlerta(erro.message, 'error'); }
+}
+
+async function carregarGruposUsuario(usuarioId) {
+    if (!usuarioId) { if (state.dom.grupoUsuarioVinculos) state.dom.grupoUsuarioVinculos.style.display='none'; return; }
+    state.usuarioGruposSelecionado = Number(usuarioId);
+    try {
+        const dados = await _rbacRequest('usuario_grupos',{query:`&usuario_id=${encodeURIComponent(usuarioId)}`});
+        const vinculados = new Set((dados.grupos || []).map(g => Number(g.id)));
+        const destino = state.dom.grupoUsuarioVinculos;
+        destino.style.display = 'block';
+        destino.innerHTML = `<strong style="display:block;margin-bottom:.6rem;color:#334155;"><i class="fas fa-link"></i> Grupos do usuário</strong>` + state.rbacGrupos.map(g => `<label style="display:inline-flex;align-items:center;gap:.45rem;margin:.3rem .9rem .3rem 0;padding:.38rem .6rem;background:#fff;border:1px solid #e2e8f0;border-radius:6px;cursor:${g.protegido == 1 ? 'not-allowed':'pointer'};opacity:${g.protegido == 1 ? '.75':'1'};"><input type="checkbox" class="rbac-usuario-grupo" value="${Number(g.id)}" ${vinculados.has(Number(g.id)) ? 'checked':''} ${g.protegido == 1 ? 'disabled':''}> ${_rbacEsc(g.nome)}${g.protegido == 1 ? ' <small>(compat.)</small>':''}</label>`).join('');
+    } catch (erro) { mostrarAlerta(erro.message, 'error'); }
+}
+
+async function salvarGruposUsuario() {
+    if (!state.usuarioGruposSelecionado) { mostrarAlerta('Selecione um usuário.', 'warning'); return; }
+    const grupos_ids = [...document.querySelectorAll('.rbac-usuario-grupo:checked')].map(el => Number(el.value));
+    try {
+        await _rbacRequest('atribuir_grupos',{method:'POST',body:{usuario_id:state.usuarioGruposSelecionado,grupos_ids}});
+        mostrarAlerta('Vínculos de grupos atualizados. A nova política será aplicada na próxima requisição do usuário.', 'success');
+    } catch (erro) { mostrarAlerta(erro.message, 'error'); }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
+// CENTRAL RBAC — SESSÕES E AUDITORIA
+// ─────────────────────────────────────────────────────────────────────
+async function carregarSegurancaRbac() {
+    const tabelaSessoes = state.dom.tabelaSessoesRbac;
+    const tabelaAuditoria = state.dom.tabelaAuditoriaRbac;
+    if (tabelaSessoes) tabelaSessoes.innerHTML = '<tr><td colspan="7" style="text-align:center;">Carregando sessões...</td></tr>';
+    if (tabelaAuditoria) tabelaAuditoria.innerHTML = '<tr><td colspan="7" style="text-align:center;">Carregando auditoria...</td></tr>';
+    try {
+        const [sessoes, auditoria] = await Promise.all([_rbacRequest('sessoes'), _rbacRequest('auditoria', { query:'&limite=30' })]);
+        const itensSessoes = sessoes.itens || [];
+        if (tabelaSessoes) tabelaSessoes.innerHTML = itensSessoes.length ? itensSessoes.map(s => `
+            <tr><td><strong>${_rbacEsc(s.usuario_nome || 'Usuário removido')}</strong><br><small>${_rbacEsc(s.usuario_email || '')}</small></td>
+            <td>${_rbacEsc([s.dispositivo,s.navegador,s.sistema_operacional].filter(Boolean).join(' · ') || '—')}</td><td>${_rbacEsc(s.ip || '—')}</td>
+            <td>${_rbacEsc(s.iniciada_em || '—')}</td><td>${_rbacEsc(s.ultima_atividade_em || '—')}</td>
+            <td><span class="badge badge-${s.status === 'ATIVA' ? 'success':'danger'}">${_rbacEsc(s.status)}</span></td>
+            <td>${s.status === 'ATIVA' ? `<button class="mod-grupo-btn" style="color:#b91c1c;" onclick="UsuariosPage.revogarSessaoRbac(${Number(s.id)})"><i class="fas fa-ban"></i> Revogar</button>` : _rbacEsc(s.motivo_encerramento || '—')}</td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;">Nenhuma sessão RBAC registrada.</td></tr>';
+        const itensAuditoria = auditoria.itens || [];
+        if (tabelaAuditoria) tabelaAuditoria.innerHTML = itensAuditoria.length ? itensAuditoria.map(a => `
+            <tr><td>${_rbacEsc(a.ocorrido_em)}</td><td>${_rbacEsc(a.usuario_nome || 'Sistema')}</td><td>${_rbacEsc([a.modulo_chave,a.submodulo_chave].filter(Boolean).join(' / ') || '—')}</td><td>${_rbacEsc(a.acao)}</td>
+            <td><span class="badge badge-${a.resultado === 'SUCESSO' ? 'success' : 'danger'}">${_rbacEsc(a.resultado)}</span></td><td>${_rbacEsc([a.registro_tipo,a.registro_id].filter(Boolean).join(' #') || '—')}</td><td title="${_rbacEsc(a.hash_evento)}"><i class="fas fa-link" style="color:#16a34a;"></i> Íntegro</td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;">Nenhum evento de auditoria.</td></tr>';
+    } catch (erro) {
+        const mensagem = _rbacEsc(erro.message);
+        if (tabelaSessoes) tabelaSessoes.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#b91c1c;">${mensagem}</td></tr>`;
+        if (tabelaAuditoria) tabelaAuditoria.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#b91c1c;">${mensagem}</td></tr>`;
+    }
+}
+
+async function revogarSessaoRbac(sessaoId) {
+    if (!confirm('Revogar esta sessão? O usuário será desconectado na próxima validação.')) return;
+    try {
+        await _rbacRequest('revogar_sessao', { method:'POST', body:{ sessao_id:Number(sessaoId), motivo:'REVOGADA_PELA_CENTRAL_RBAC' } });
+        mostrarAlerta('Sessão revogada com segurança.', 'success');
+        await carregarSegurancaRbac();
+    } catch (erro) { mostrarAlerta(erro.message, 'error'); }
 }

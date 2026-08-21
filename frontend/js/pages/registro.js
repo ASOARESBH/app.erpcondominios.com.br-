@@ -335,11 +335,19 @@ async function _buscarVisitantePorDocumento() {
             const placaInput = document.getElementById('placaRegistro');
             if (placaInput && !placaInput.value && v.placa_veiculo) placaInput.value = v.placa_veiculo;
             if (box) {
+                const documentoAnexado = Boolean(v.documento_arquivo);
                 box.style.display = 'flex';
-                box.innerHTML = `<i class="fas fa-check-circle"></i>
-                    <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
-                    — ${_esc(v.tipo_documento)}: ${_esc(v.documento)}
-                    ${v.telefone_contato ? '— Tel: ' + _esc(v.telefone_contato) : ''}</span>`;
+                box.classList.toggle('visitante-documento-pendente', !documentoAnexado);
+                box.innerHTML = documentoAnexado
+                    ? `<i class="fas fa-check-circle"></i>
+                        <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
+                        — ${_esc(v.tipo_documento)}: ${_esc(v.documento)}
+                        ${v.telefone_contato ? '— Tel: ' + _esc(v.telefone_contato) : ''}
+                        <strong>— Documento digitalizado confirmado.</strong></span>`
+                    : `<i class="fas fa-exclamation-triangle"></i>
+                        <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
+                        — <strong>falta o documento digitalizado anexado.</strong>
+                        Cadastre o documento no módulo Visitantes antes de registrar o acesso.</span>`;
             }
         } else {
             document.getElementById('nomeVisitanteRegistro').value = '';
@@ -585,6 +593,11 @@ async function salvarRegistro() {
             if (!nomeVisitante)  { mostrarAlerta('error', 'Informe o nome do visitante/prestador.'); return; }
             if (!unidadeDestino) { mostrarAlerta('error', 'Selecione a unidade de destino.'); return; }
             if (!moradorDestino) { mostrarAlerta('error', 'Selecione o morador que será visitado.'); return; }
+            if (!visitanteId) {
+                mostrarAlerta('error', 'Localize um visitante/prestador cadastrado pelo documento. O registro manual exige documento digitalizado anexado.');
+                document.getElementById('documentoRegistro')?.focus();
+                return;
+            }
 
             payload.nome_visitante   = nomeVisitante;
             payload.unidade_destino  = unidadeDestino;
@@ -652,7 +665,7 @@ function limparFormulario() {
     const boxV = document.getElementById('veiculoEncontrado');
     if (boxV) { boxV.style.display = 'none'; boxV.innerHTML = ''; }
     const boxVis = document.getElementById('visitanteEncontrado');
-    if (boxVis) { boxVis.style.display = 'none'; boxVis.innerHTML = ''; }
+    if (boxVis) { boxVis.style.display = 'none'; boxVis.classList.remove('visitante-documento-pendente'); boxVis.innerHTML = ''; }
 
     const selMorDest = document.getElementById('moradorDestinoRegistro');
     if (selMorDest) { selMorDest.innerHTML = '<option value="">Selecione a unidade primeiro</option>'; selMorDest.disabled = true; }

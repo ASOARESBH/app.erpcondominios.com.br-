@@ -99,6 +99,17 @@ const AppRouter = {
         const container = document.getElementById(this.config.contentContainerId);
         if (!container) return;
 
+        // Guard visual: o backend continua sendo a fonte de verdade, mas o router
+        // evita carregar uma página que o usuário não pode sequer visualizar.
+        if (window.MenuController && typeof window.MenuController.autorizarPagina === 'function') {
+            const autorizado = await window.MenuController.autorizarPagina(pageName);
+            if (!autorizado) {
+                container.innerHTML = `<div class="error-state" style="text-align:center;padding:3rem;"><i class="fas fa-lock" style="font-size:2.5rem;color:#dc2626;"></i><h3>Acesso negado</h3><p>Você não possui permissão para acessar este módulo.</p><button class="btn-retry" onclick="AppRouter.loadPage('dashboard')">Voltar ao painel</button></div>`;
+                document.dispatchEvent(new CustomEvent('accessDenied', { detail:{ page:pageName }, bubbles:false }));
+                return;
+            }
+        }
+
         // 1. Mostrar Loading
         container.innerHTML = `
             <div class="loading" style="display:block; text-align:center; padding: 3rem;">

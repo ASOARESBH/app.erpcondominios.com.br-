@@ -976,3 +976,31 @@
 .page-dispositivos .monitoring-secret-box code { display:block; margin:1rem 0; padding:.9rem; overflow-wrap:anywhere; border-radius:8px; color:#0f3b72; background:#fff; font:700 .9rem ui-monospace,Consolas,monospace; }
 @media (max-width: 1050px) { .page-dispositivos .monitoring-integration-grid { grid-template-columns:1fr; } }
 @media (max-width: 620px) { .page-dispositivos .monitoring-integration-header { flex-direction:column; } .page-dispositivos .monitoring-form-grid { grid-template-columns:1fr; } .page-dispositivos .monitoring-field-wide { grid-column:auto; } .page-dispositivos .monitoring-integration-card { padding:1rem; } }
+
+/* Ações de segurança da máquina Monitoring */
+.page-dispositivos .monitoring-actions-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+.page-dispositivos .monitoring-action-credential { background: #0f766e; }
+.page-dispositivos .monitoring-action-credential:hover { background: #115e59; }
+
+@media (max-width: 720px) {
+    .page-dispositivos .monitoring-actions-inline { justify-content: flex-start; }
+}
+
+/* Estado de edição para reativação de máquina Monitoring */
+.page-dispositivos .monitoring-edit-state {
+    margin: .8rem 0 0;
+    padding: .65rem .8rem;
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: .78rem;
+    font-weight: 700;
+    line-height: 1.45;
+}

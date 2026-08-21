@@ -326,6 +326,12 @@ input:disabled + .toggle-slider { cursor:not-allowed; opacity:0.5; }
         <span id="modBadgeUsuario" style="display:none;background:#2563eb;color:#fff;font-size:0.7rem;padding:1px 7px;border-radius:10px;margin-left:4px;"></span>
         <span class="mod-pending-badge" id="modPendingBadge">● não salvo</span>
       </div>
+      <div class="usr-tab" id="tabGrupos" onclick="UsuariosPage.mostrarTab('grupos')">
+        <i class="fas fa-users-gear"></i> Grupos &amp; Perfis
+      </div>
+      <div class="usr-tab" id="tabSeguranca" onclick="UsuariosPage.mostrarTab('seguranca')">
+        <i class="fas fa-shield-halved"></i> Sessões &amp; Auditoria
+      </div>
     </div>
 
     <!-- ── Painel: Lista de Usuários ── -->
@@ -453,5 +459,47 @@ input:disabled + .toggle-slider { cursor:not-allowed; opacity:0.5; }
       </div>
 
     </div><!-- /painelModulos -->
+
+    <!-- ── Painel: Grupos e Perfis RBAC ── -->
+    <div id="painelGrupos" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+        <div>
+          <h3 style="margin:0;color:#1e293b;"><i class="fas fa-users-gear" style="color:#2563eb;"></i> Grupos e Perfis de Acesso</h3>
+          <p style="margin:.35rem 0 0;color:#64748b;font-size:.86rem;">Crie grupos por função e vincule permissões reais do sistema. Grupos de compatibilidade são protegidos.</p>
+        </div>
+        <button type="button" class="mod-btn mod-btn-primary" onclick="UsuariosPage.novoGrupoRbac()"><i class="fas fa-plus"></i> Novo Grupo</button>
+      </div>
+      <div class="mod-user-selector" style="margin-bottom:1rem;">
+        <label for="grupoUsuarioSelect"><i class="fas fa-user-tag" style="color:#2563eb;"></i> Vincular grupos ao usuário:</label>
+        <select id="grupoUsuarioSelect" onchange="UsuariosPage.carregarGruposUsuario(this.value)"><option value="">— Selecione um usuário —</option></select>
+        <button type="button" class="mod-btn mod-btn-success" onclick="UsuariosPage.salvarGruposUsuario()"><i class="fas fa-link"></i> Salvar vínculos</button>
+      </div>
+      <div id="grupoUsuarioVinculos" style="display:none;margin:-.4rem 0 1.2rem;padding:1rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;"></div>
+      <div id="grupoEditor" style="display:none;background:#f8fafc;border:1.5px solid #93c5fd;border-radius:10px;padding:1.25rem;margin-bottom:1.25rem;">
+        <input type="hidden" id="grupoId">
+        <div class="form-grid">
+          <div class="form-group"><label>Nome do Grupo *</label><input id="grupoNome" maxlength="120" placeholder="Ex.: Portaria"></div>
+          <div class="form-group"><label>Identificador *</label><input id="grupoSlug" maxlength="80" placeholder="Ex.: portaria"></div>
+          <div class="form-group" style="grid-column:1/-1;"><label>Descrição</label><input id="grupoDescricao" maxlength="255" placeholder="Objetivo e responsabilidade do grupo"></div>
+        </div>
+        <p style="font-size:.82rem;color:#64748b;margin:1rem 0 .5rem;"><i class="fas fa-shield-halved"></i> Selecione somente permissões que você também possui.</p>
+        <div id="grupoPermissoesCatalog" class="mod-grid" style="border-top:1px solid #e2e8f0;border-radius:8px;max-height:360px;overflow:auto;"></div>
+        <div class="mod-actions" style="margin-top:1rem;"><button type="button" class="mod-btn mod-btn-primary" onclick="UsuariosPage.salvarGrupoRbac()"><i class="fas fa-save"></i> Salvar Grupo</button><button type="button" class="mod-btn mod-btn-outline" onclick="UsuariosPage.cancelarGrupoRbac()">Cancelar</button></div>
+      </div>
+      <div class="table-container" style="overflow-x:auto;"><table><thead><tr><th>Grupo</th><th>Descrição</th><th>Usuários</th><th>Permissões</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tabelaGruposRbac"><tr><td colspan="6" style="text-align:center;">Carregando grupos...</td></tr></tbody></table></div>
+    </div><!-- /painelGrupos -->
+
+    <!-- ── Painel: Sessões e Auditoria RBAC ── -->
+    <div id="painelSeguranca" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+        <div><h3 style="margin:0;color:#1e293b;"><i class="fas fa-shield-halved" style="color:#2563eb;"></i> Sessões e Auditoria</h3><p style="margin:.35rem 0 0;color:#64748b;font-size:.86rem;">Acompanhe sessões por dispositivo e operações de segurança do condomínio atual.</p></div>
+        <button type="button" class="mod-btn mod-btn-outline" onclick="UsuariosPage.carregarSegurancaRbac()"><i class="fas fa-rotate"></i> Atualizar</button>
+      </div>
+      <div class="mod-legenda" style="display:flex;"><div class="mod-legenda-item"><div class="mod-legenda-dot" style="background:#16a34a;"></div> Sessão ativa</div><div class="mod-legenda-item"><div class="mod-legenda-dot" style="background:#dc2626;"></div> Revogada ou encerrada</div><div class="mod-legenda-item"><i class="fas fa-lock" style="color:#2563eb;"></i> Registro encadeado por hash</div></div>
+      <h4 style="margin:1rem 0 .5rem;color:#334155;">Sessões registradas</h4>
+      <div class="table-container" style="overflow-x:auto;"><table><thead><tr><th>Usuário</th><th>Dispositivo</th><th>IP</th><th>Início</th><th>Última atividade</th><th>Status</th><th>Ação</th></tr></thead><tbody id="tabelaSessoesRbac"><tr><td colspan="7" style="text-align:center;">Carregando...</td></tr></tbody></table></div>
+      <h4 style="margin:1.5rem 0 .5rem;color:#334155;">Auditoria recente</h4>
+      <div class="table-container" style="overflow-x:auto;"><table><thead><tr><th>Data</th><th>Usuário</th><th>Módulo</th><th>Ação</th><th>Resultado</th><th>Registro</th><th>Integridade</th></tr></thead><tbody id="tabelaAuditoriaRbac"><tr><td colspan="7" style="text-align:center;">Carregando...</td></tr></tbody></table></div>
+    </div><!-- /painelSeguranca -->
   </div><!-- /page-card -->
 </div><!-- /page-wrapper -->

@@ -521,18 +521,30 @@ async function carregarDependentesDoMorador(moradorId) {
     }
 
     try {
-        const response = await fetch(`${API_DEPENDENTES}?morador_id=${moradorId}`);
-        const data = await response.json();
+        // A API de dependentes devolve dados paginados em dados.dados. Aceitar o
+        // formato antigo em array mantém compatibilidade com instalações legadas.
+        const response = await fetch(`${API_DEPENDENTES}?morador_id=${encodeURIComponent(moradorId)}&por_pagina=100`, {
+            credentials: 'include'
+        });
+        const texto = await response.text();
+        let data = null;
+        try { data = texto ? JSON.parse(texto) : null; } catch (_) {}
+        const listaDependentes = Array.isArray(data?.dados?.dados)
+            ? data.dados.dados
+            : (Array.isArray(data?.dados) ? data.dados : []);
 
-        if (!data.sucesso || !Array.isArray(data.dados) || data.dados.length === 0) {
-            if (status) status.textContent = 'Este morador nao possui dependentes cadastrados';
+        if (!response.ok || !data?.sucesso || listaDependentes.length === 0) {
+            const mensagem = data?.mensagem || 'Este morador nao possui dependentes cadastrados';
+            if (status) status.textContent = mensagem;
             if (btnDependentes) btnDependentes.disabled = true;
             esconderPainelDependentes();
+            console.debug('[Veiculos][Dependentes] consulta sem resultados', { moradorId, httpStatus: response.status, mensagem });
             return;
         }
 
-        dependentesCache = data.dados;
+        dependentesCache = listaDependentes;
         if (status) status.textContent = `${dependentesCache.length} dependente(s) encontrado(s)`;
+        console.debug('[Veiculos][Dependentes] consulta concluída', { moradorId, total: dependentesCache.length });
         if (btnDependentes) btnDependentes.disabled = false;
 
         dependentesCache.forEach((dep) => {
