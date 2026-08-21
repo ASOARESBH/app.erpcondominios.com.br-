@@ -65,6 +65,10 @@ try {
             monitoring_require_method('POST');
             _monitoring_revogar_agente($conexao, $input);
             break;
+        case 'cancelar_pareamento':
+            monitoring_require_method('POST');
+            _monitoring_cancelar_pareamento($conexao, $input);
+            break;
         case 'salvar_configuracao':
             monitoring_require_method('POST');
             _monitoring_salvar_configuracao($conexao, $input);
@@ -107,11 +111,11 @@ function _monitoring_solicitar_pareamento($conexao, $input) {
     $engine_version = substr(trim((string)($input['lpr_engine_version'] ?? '')), 0, 40);
 
     if ($existing && in_array($existing['status'], ['ativo', 'bloqueado'], true)) {
-        monitoring_json(true, 'Esta instalação já possui um registro.', [
+        monitoring_json(false, 'Esta instalação já está cadastrada. Revogue a máquina no ERP e gere um novo pareamento.', [
             'agent_id' => (int)$existing['id'],
             'status' => $existing['status'],
             'tenant_id' => $existing['tenant_id'] ? (int)$existing['tenant_id'] : null,
-        ]);
+        ], 409, 'AGENT_ALREADY_REGISTERED');
     }
 
     if ($existing) {
@@ -517,7 +521,12 @@ function _monitoring_revogar_agente($conexao, $input) {
     $tenant_id = (int)$admin['tenant_id'];
     $agent_id = (int)($input['agent_id'] ?? 0);
     if ($agent_id <= 0) monitoring_json(false, 'Agente obrigatório.', null, 422, 'AGENT_REQUIRED');
-    $stmt = $conexao->prepare("UPDATE monitoramento_agentes SET status = 'revogado', revoked_at = NOW(), atualizado_em = NOW() WHERE id = ? AND tenant_id = ?");
+    $stmt = $conexao->prepare(
+        "UPDATE monitoramento_agentes
+            SET status = 'revogado', revoked_at = NOW(), pairing_code_hash = NULL,
+                pairing_expires_at = NULL, atualizado_em = NOW()
+          WHERE id = ? AND (tenant_id = ? OR (tenant_id IS NULL AND status IN ('pendente_ativacao', 'solicitado')))"
+    );
     $stmt->bind_param('ii', $agent_id, $tenant_id);
     $stmt->execute();
     $changed = $stmt->affected_rows;
@@ -526,9 +535,49 @@ function _monitoring_revogar_agente($conexao, $input) {
     $stmt->bind_param('i', $agent_id);
     $stmt->execute();
     $stmt->close();
-    if (!$changed) monitoring_json(false, 'Agente não encontrado neste tenant.', null, 404, 'AGENT_NOT_FOUND');
-    monitoring_log('MONITORING_AGENT_REVOKED', 'Agente revogado. agent_id=' . $agent_id, $admin['user']['email'] ?? null);
-    monitoring_json(true, 'Agente revogado.', ['agent_id' => $agent_id, 'status' => 'revogado']);
+    if (!$changed) monitoring_json(false, 'Agente não encontrado neste tenant ou já foi revogado.', null, 404, 'AGENT_NOT_FOUND');
+    monitoring_log('MONITORING_AGENT_REVOKED', 'Agente revogado ou pareamento limpo. agent_id=' . $agent_id, $admin['user']['email'] ?? null);
+    monitoring_json(true, 'Agente revogado e pareamento limpo.', ['agent_id' => $agent_id, 'status' => 'revogado']);
+}
+
+function _monitoring_cancelar_pareamento($conexao, $input) {
+    $admin = _monitoring_admin_tenant($conexao, $input);
+    $tenant_id = (int)$admin['tenant_id'];
+    $agent_id = (int)($input['agent_id'] ?? 0);
+    $pairing_code = strtoupper(trim((string)($input['pairing_code'] ?? '')));
+    if ($agent_id <= 0 && !monitoring_valid_pairing_code($pairing_code)) {
+        monitoring_json(false, 'Informe o agente ou o código de pareamento.', null, 422, 'PAIRING_REQUIRED');
+    }
+    $permission = strtolower((string)($admin['user']['permissao'] ?? 'operador'));
+    if ($agent_id <= 0 && $permission !== 'super_admin') {
+        monitoring_json(false, 'Para limpar uma solicitação sem tenant, use a conta Super-Admin ou selecione o agente já vinculado.', null, 403, 'PAIRING_ADMIN_REQUIRED');
+    }
+    if ($agent_id <= 0) {
+        $preview = monitoring_preview($pairing_code, 4, 4);
+        $stmt = $conexao->prepare(
+            "SELECT id FROM monitoramento_agentes
+              WHERE pairing_code_preview = ? AND status IN ('pendente_ativacao', 'solicitado')
+                AND pairing_expires_at > NOW() LIMIT 1"
+        );
+        $stmt->bind_param('s', $preview);
+        $stmt->execute();
+        $agent_id = (int)($stmt->get_result()->fetch_assoc()['id'] ?? 0);
+        $stmt->close();
+    }
+    if ($agent_id <= 0) monitoring_json(false, 'Não há solicitação pendente para este código.', null, 404, 'PAIRING_NOT_FOUND');
+    $stmt = $conexao->prepare(
+        "UPDATE monitoramento_agentes
+            SET status = 'revogado', revoked_at = NOW(), pairing_code_hash = NULL,
+                pairing_expires_at = NULL, atualizado_em = NOW()
+          WHERE id = ? AND (tenant_id = ? OR (tenant_id IS NULL AND status IN ('pendente_ativacao', 'solicitado')))"
+    );
+    $stmt->bind_param('ii', $agent_id, $tenant_id);
+    $stmt->execute();
+    $changed = $stmt->affected_rows;
+    $stmt->close();
+    if (!$changed) monitoring_json(false, 'Solicitação não pertence ao tenant atual.', null, 403, 'TENANT_SCOPE_INVALID');
+    monitoring_log('MONITORING_PAIRING_CANCELLED', 'Pareamento cancelado. agent_id=' . $agent_id, $admin['user']['email'] ?? null);
+    monitoring_json(true, 'Pareamento cancelado. Gere um novo código no painel local.', ['agent_id' => $agent_id, 'status' => 'revogado']);
 }
 
 function _monitoring_configuracao($conexao) {
