@@ -6,6 +6,7 @@
  */
 
 const API_VISITANTES = '../api/api_visitantes.php';
+const API_CONFIG_VISITANTES = '../api/api_config_visitantes.php';
 
 // Import do componente de webcam (ES Module)
 import { WebcamCapture } from '../components/webcam-capture.js';
@@ -19,8 +20,9 @@ let fotoExistente     = false;
 let documentoExistente = false;
 let salvando          = false;
 let relatorioAnaliticoCache = null;
+let configuracaoCampos = {};
 
-export function init() {
+export async function init() {
     console.log('[Visitantes] Inicializando v3...');
     _setupAbas();
     _setupMascaras();
@@ -30,6 +32,7 @@ export function init() {
     _setupUploads();
     _setupRelatorios();
     _resetForm();
+    await _carregarConfiguracaoCampos();
     _carregarVisitantes();
 
     window.VisitantesPage = {
@@ -45,6 +48,73 @@ export function init() {
         relAlternarTipo: _relAlternarTipo
     };
     console.log('[Visitantes] Módulo pronto.');
+}
+
+async function _carregarConfiguracaoCampos() {
+    try {
+        const resposta = await fetch(API_CONFIG_VISITANTES, { credentials: 'include' });
+        const dados = await resposta.json();
+        if (!resposta.ok || !dados?.sucesso) throw new Error(dados?.mensagem || 'Configuração indisponível');
+        configuracaoCampos = Object.fromEntries((dados.dados?.campos || []).map(campo => [campo.campo, campo]));
+        _aplicarConfiguracaoCampos();
+        console.debug('[Visitantes][ConfigCampos] Configuração aplicada', configuracaoCampos);
+    } catch (erro) {
+        console.warn('[Visitantes][ConfigCampos] Mantendo a regra padrão por indisponibilidade da configuração:', erro.message);
+        configuracaoCampos = {
+            nome_completo: { obrigatorio: true, rotulo: 'Nome completo' },
+            tipo_documento: { obrigatorio: true, rotulo: 'Tipo de documento' },
+            documento: { obrigatorio: true, rotulo: 'Número do documento' },
+            telefone_contato: { obrigatorio: true, rotulo: 'Telefone de contato' },
+            anexo_evidencia: { obrigatorio: true, rotulo: 'Foto ou documento digitalizado' },
+            foto: { obrigatorio: false, rotulo: 'Foto do visitante' },
+            documento_digitalizado: { obrigatorio: false, rotulo: 'Documento digitalizado' },
+        };
+        _aplicarConfiguracaoCampos();
+    }
+}
+
+function _campoObrigatorio(campo) {
+    return Boolean(configuracaoCampos[campo]?.obrigatorio);
+}
+
+function _aplicarConfiguracaoCampos() {
+    const campos = [
+        ['nome_completo', 'nomeVisitante'],
+        ['tipo_documento', 'tipoDocumento'],
+        ['documento', 'documento'],
+        ['telefone_contato', 'telefoneContato'],
+        ['celular', 'celularVisitante'],
+        ['email', 'emailVisitante'],
+        ['observacao', 'observacaoVisitante'],
+    ];
+    campos.forEach(([campo, id]) => {
+        const input = document.getElementById(id);
+        const label = document.querySelector(`[for="${id}"]`);
+        const obrigatorio = _campoObrigatorio(campo);
+        if (input) input.required = obrigatorio;
+        if (label) label.innerHTML = `${_esc(configuracaoCampos[campo]?.rotulo || label.textContent.replace(/\s*\*$/, ''))}${obrigatorio ? ' <span class="campo-obrigatorio-indicador">*</span>' : ''}`;
+    });
+
+    [['foto', 'fotoPreviewBox', 'Foto do Visitante'], ['documento_digitalizado', 'docPreviewBox', 'Documento Digitalizado']].forEach(([campo, id, rotulo]) => {
+        const container = document.getElementById(id)?.closest('.upload-group');
+        const label = container?.querySelector('label');
+        const obrigatorio = _campoObrigatorio(campo);
+        if (container) container.dataset.obrigatorio = obrigatorio ? '1' : '0';
+        if (label) label.innerHTML = `${rotulo}${obrigatorio ? ' <span class="campo-obrigatorio-indicador">*</span>' : ''}`;
+    });
+
+    const nota = document.querySelector('.upload-requirement-note');
+    if (nota) {
+        const foto = _campoObrigatorio('foto');
+        const documento = _campoObrigatorio('documento_digitalizado');
+        const evidencia = _campoObrigatorio('anexo_evidencia');
+        const texto = foto && documento ? 'Envie obrigatoriamente a foto e o documento digitalizado.'
+            : foto ? 'Envie obrigatoriamente a foto do visitante.'
+            : documento ? 'Envie obrigatoriamente o documento digitalizado.'
+            : evidencia ? 'Envie uma foto do visitante, um documento digitalizado ou ambos.'
+            : 'Os anexos são opcionais conforme a configuração deste condomínio.';
+        nota.innerHTML = `<i class="fas fa-paperclip"></i> <strong>Regra de anexos:</strong> ${_esc(texto)}`;
+    }
 }
 
 // ===== CONTROLE DE ABAS =====
@@ -532,19 +602,50 @@ async function _salvarVisitante() {
         const email           = document.getElementById('emailVisitante')?.value.trim() || '';
         const observacao      = document.getElementById('observacaoVisitante')?.value.trim() || '';
 
-        // Validações
-        if (!nome)            { _mostrarAlerta('error', 'Nome completo é obrigatório.'); return; }
-        if (!documento)       { _mostrarAlerta('error', 'Documento é obrigatório.'); return; }
-        if (!telefoneContato) { _mostrarAlerta('error', 'Telefone de contato é obrigatório.'); return; }
-        // É obrigatório anexar pelo menos uma evidência: foto ou documento.
-        if (!(fotoArquivo || fotoExistente || docArquivo || documentoExistente)) {
+        // A mesma regra configurada em Sistema > Visitantes é antecipada na tela;
+        // o backend a confirma usando o tenant da sessão antes de gravar qualquer dado.
+        const valores = {
+            nome_completo: nome,
+            tipo_documento: tipoDoc,
+            documento,
+            telefone_contato: telefoneContato,
+            celular,
+            email,
+            observacao,
+        };
+        for (const [campo, valor] of Object.entries(valores)) {
+            if (_campoObrigatorio(campo) && !String(valor || '').trim()) {
+                _mostrarAlerta('error', `O campo "${configuracaoCampos[campo]?.rotulo || campo}" é obrigatório para este condomínio.`);
+                document.querySelector(`[data-config-campo="${campo}"] input, [data-config-campo="${campo}"] select`)?.focus();
+                return;
+            }
+        }
+        const temFoto = Boolean(fotoArquivo || fotoExistente);
+        const temDocumentoDigitalizado = Boolean(docArquivo || documentoExistente);
+        if (_campoObrigatorio('foto') && !temFoto) {
+            _mostrarAlerta('error', 'A foto do visitante é obrigatória para este condomínio.');
+            document.getElementById('btnSelecionarFoto')?.focus();
+            return;
+        }
+        if (_campoObrigatorio('documento_digitalizado') && !temDocumentoDigitalizado) {
+            _mostrarAlerta('error', 'O documento digitalizado é obrigatório para este condomínio.');
+            document.getElementById('btnSelecionarDoc')?.focus();
+            return;
+        }
+        if (_campoObrigatorio('anexo_evidencia') && !temFoto && !temDocumentoDigitalizado) {
             _mostrarAlerta('error', 'Anexe ao menos uma foto ou um documento digitalizado para concluir o cadastro.');
             document.getElementById('btnSelecionarFoto')?.focus();
             return;
         }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            _mostrarAlerta('error', 'Informe um e-mail válido.');
+            document.getElementById('emailVisitante')?.focus();
+            return;
+        }
 
-        // CPF deve passar pela validação completa, não apenas ter 11 dígitos.
-        if (tipoDoc === 'CPF') {
+        // CPF é validado apenas quando foi informado, respeitando a configuração
+        // que pode tornar o número de documento opcional.
+        if (tipoDoc === 'CPF' && documento) {
             documento = _formatarCPF(documento);
             document.getElementById('documento').value = documento;
             if (!_cpfValido(documento)) {

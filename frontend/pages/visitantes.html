@@ -26,13 +26,13 @@
             <!-- BLOCO 1: Identificação -->
             <div class="form-section-title">Identificação</div>
             <div class="form-grid form-grid-3">
-                <div class="form-group">
+                <div class="form-group" data-config-campo="nome_completo">
                     <label for="nomeVisitante">Nome Completo *</label>
                     <input type="text" id="nomeVisitante" required placeholder="Ex: Maria da Silva"
                            autocomplete="off" autocapitalize="words">
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" data-config-campo="tipo_documento">
                     <label for="tipoDocumento">Tipo de Documento *</label>
                     <select id="tipoDocumento" required>
                         <option value="CPF">CPF</option>
@@ -40,7 +40,7 @@
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" data-config-campo="documento">
                     <label for="documento">Número do Documento *</label>
                     <input type="text" id="documento" required placeholder="000.000.000-00"
                            autocomplete="off" inputmode="numeric">
@@ -50,17 +50,17 @@
             <!-- BLOCO 2: Contato -->
             <div class="form-section-title">Contato</div>
             <div class="form-grid form-grid-3">
-                <div class="form-group">
+                <div class="form-group" data-config-campo="telefone_contato">
                     <label for="telefoneContato">Telefone de Contato *</label>
                     <input type="tel" id="telefoneContato" required placeholder="(00) 00000-0000"
                            inputmode="numeric" maxlength="15">
                 </div>
-                <div class="form-group">
+                <div class="form-group" data-config-campo="celular">
                     <label for="celularVisitante">Celular</label>
                     <input type="tel" id="celularVisitante" placeholder="(00) 00000-0000"
                            inputmode="numeric" maxlength="15">
                 </div>
-                <div class="form-group">
+                <div class="form-group" data-config-campo="email">
                     <label for="emailVisitante">E-mail</label>
                     <input type="email" id="emailVisitante" placeholder="email@exemplo.com"
                            autocapitalize="none" autocorrect="off">
@@ -69,7 +69,7 @@
 
             <!-- Observação -->
             <div class="form-grid form-grid-3">
-                <div class="form-group" style="grid-column: 1 / -1;">
+                <div class="form-group" data-config-campo="observacao" style="grid-column: 1 / -1;">
                     <label for="observacaoVisitante">Observação</label>
                     <input type="text" id="observacaoVisitante" placeholder="Informações adicionais">
                 </div>
@@ -80,7 +80,7 @@
             <div class="upload-requirement-note"><i class="fas fa-paperclip"></i> <strong>Anexo obrigatório:</strong> envie uma foto do visitante, um documento digitalizado ou ambos.</div>
             <div class="form-grid form-grid-2">
                 <!-- Foto do visitante -->
-                <div class="form-group upload-group">
+                <div class="form-group upload-group" data-config-campo="foto">
                     <label>Foto do Visitante</label>
                     <div class="upload-preview-box" id="fotoPreviewBox">
                         <img id="fotoPreview" src="" alt="Foto do visitante" style="display:none; max-width:120px; max-height:120px; border-radius:8px; object-fit:cover;">
@@ -105,7 +105,7 @@
                 </div>
 
                 <!-- Documento digitalizado -->
-                <div class="form-group upload-group">
+                <div class="form-group upload-group" data-config-campo="documento_digitalizado">
                     <label>Documento Digitalizado</label>
                     <div class="upload-preview-box" id="docPreviewBox">
                         <div id="docPreview" style="display:none; padding:10px; text-align:center;">
@@ -208,6 +208,7 @@
 /* ===== ESTILOS DO MÓDULO VISITANTES v2 ===== */
 	.upload-requirement-note { margin:-2px 0 14px; padding:9px 12px; border:1px solid #bfdbfe; border-radius:7px; background:#eff6ff; color:#1e40af; font-size:12px; }
 	.upload-requirement-note i { margin-right:5px; }
+		.campo-obrigatorio-indicador { color:#dc2626; font-weight:800; }
 	.form-section-title {
 
     font-size: 13px;

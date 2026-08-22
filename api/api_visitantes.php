@@ -11,6 +11,7 @@ require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 require_once __DIR__ . '/helpers/cpf_helper.php';
+require_once __DIR__ . '/helpers/visitantes_config_helper.php';
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -427,40 +428,56 @@ if ($metodo === 'POST') {
     $estado           = sanitizar($conexao, trim($dados['estado']           ?? ''));
     $observacao       = sanitizar($conexao, trim($dados['observacao']       ?? ''));
 
-    // Validações
-    if (empty($nome_completo)) retornar_json(false, "Nome completo é obrigatório");
-    if (empty($documento))     retornar_json(false, "Documento (RG ou CPF) é obrigatório");
+    // A obrigatoriedade vem da configuração exclusiva do tenant autenticado.
+    // Enquanto a migration não é aplicada, o helper preserva a regra histórica.
+    $configCampos = visitantes_obter_config_campos($conexao, $tenant_id);
+    $temFotoInicial = isset($_FILES['foto']) && (int)($_FILES['foto']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+    $temDocumentoInicial = isset($_FILES['documento']) && (int)($_FILES['documento']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+    $erroCampos = visitantes_validar_campos_configurados($configCampos, [
+        'nome_completo' => $nome_completo,
+        'tipo_documento' => $tipo_documento,
+        'documento' => $documento,
+        'telefone_contato' => $telefone_contato,
+        'celular' => $celular,
+        'email' => $email,
+        'observacao' => $observacao,
+    ], $temFotoInicial, $temDocumentoInicial);
+    if ($erroCampos !== null) retornar_json(false, $erroCampos);
 
     $tipo_documento = in_array(strtoupper($tipo_documento), ['RG', 'CPF']) ? strtoupper($tipo_documento) : 'CPF';
 
-    // CPF deve ser matematicamente válido e é sempre persistido com máscara.
-    if ($tipo_documento === 'CPF') {
+    // CPF só é validado quando foi informado. Isso permite que a obrigatoriedade
+    // do documento seja configurada por tenant, sem aceitar CPF inválido.
+    if ($tipo_documento === 'CPF' && $documento !== '') {
         if (!cpf_valido($documento)) {
             retornar_json(false, 'CPF inválido. Informe um CPF válido.');
         }
         $documento = cpf_formatar($documento);
     }
 
-    // Verificar duplicidade por documento (ignorando pontuação)
-    $doc_limpo_busca = preg_replace('/[^0-9A-Za-z]/', '', $documento);
-    $stmt = $conexao->prepare(
-        "SELECT id, nome_completo FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?"
-    );
-    $stmt->bind_param("s", $doc_limpo_busca);
-    $stmt->execute();
-    $stmt->store_result();
+    // A unicidade é conferida apenas quando há documento informado.
+    if ($documento !== '') {
+        $doc_limpo_busca = preg_replace('/[^0-9A-Za-z]/', '', $documento);
+        $stmt = $conexao->prepare(
+            "SELECT id, nome_completo FROM visitantes WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?"
+        );
+        if (!$stmt) retornar_json(false, 'Não foi possível validar o documento do visitante.');
+        $stmt->bind_param("is", $tenant_id, $doc_limpo_busca);
+        $stmt->execute();
+        $stmt->store_result();
 
-    if ($stmt->num_rows > 0) {
-        $stmt->bind_result($id_existente, $nome_existente);
-        $stmt->fetch();
+        if ($stmt->num_rows > 0) {
+            $stmt->bind_result($id_existente, $nome_existente);
+            $stmt->fetch();
+            $stmt->close();
+            retornar_json(false, "Documento já cadastrado para: $nome_existente (ID: $id_existente)", [
+                'id' => $id_existente,
+                'nome' => $nome_existente,
+                'duplicado' => true
+            ]);
+        }
         $stmt->close();
-        retornar_json(false, "Documento já cadastrado para: $nome_existente (ID: $id_existente)", [
-            'id' => $id_existente,
-            'nome' => $nome_existente,
-            'duplicado' => true
-        ]);
     }
-    $stmt->close();
 
     // A autoria é sempre derivada do usuário autenticado e confirmada no banco
     // dentro do tenant da sessão; nunca é aceita do payload do navegador.
@@ -509,13 +526,10 @@ if ($metodo === 'POST') {
         $id = (int)$conexao->insert_id;
         $stmt->close();
 
-        // Foto ou documento são aceitos como evidência obrigatória. O cadastro
-        // só é confirmado quando pelo menos um BLOB for gravado para este tenant.
+        // Cada anexo é BLOB do tenant. A obrigatoriedade já foi validada contra
+        // a configuração do condomínio antes de iniciar a transação.
         $urlFoto = gravar_anexo_visitante_se_enviado($conexao, (int)$tenant_id, 'foto', 'foto', $id);
         $urlDocumento = gravar_anexo_visitante_se_enviado($conexao, (int)$tenant_id, 'documento', 'documento', $id);
-        if (!$urlFoto && !$urlDocumento) {
-            throw new RuntimeException('Anexe ao menos uma foto ou um documento digitalizado para concluir o cadastro.');
-        }
 
         if ($urlFoto && $urlDocumento) {
             $stmtArquivos = $conexao->prepare(
@@ -575,38 +589,58 @@ if ($metodo === 'PUT') {
     $estado           = sanitizar($conexao, trim($dados['estado']           ?? ''));
     $observacao       = sanitizar($conexao, trim($dados['observacao']       ?? ''));
 
-    if ($id <= 0)          retornar_json(false, "ID inválido");
-    if (empty($nome_completo)) retornar_json(false, "Nome completo é obrigatório");
-    if (empty($documento))     retornar_json(false, "Documento é obrigatório");
+    if ($id <= 0) retornar_json(false, "ID inválido");
+
+    // A edição considera anexos já persistidos como evidência válida. Novos
+    // arquivos continuam sendo enviados pelo endpoint de upload após o PUT.
+    $stmtExistente = $conexao->prepare('SELECT foto, documento_arquivo FROM visitantes WHERE tenant_id = ? AND id = ? LIMIT 1');
+    if (!$stmtExistente) retornar_json(false, 'Não foi possível validar o visitante para edição.');
+    $stmtExistente->bind_param('ii', $tenant_id, $id);
+    $stmtExistente->execute();
+    $existente = $stmtExistente->get_result()->fetch_assoc();
+    $stmtExistente->close();
+    if (!$existente) retornar_json(false, 'Visitante não encontrado no condomínio atual.');
+
+    $configCampos = visitantes_obter_config_campos($conexao, $tenant_id);
+    $erroCampos = visitantes_validar_campos_configurados($configCampos, [
+        'nome_completo' => $nome_completo,
+        'tipo_documento' => $tipo_documento,
+        'documento' => $documento,
+        'telefone_contato' => $telefone_contato,
+        'celular' => $celular,
+        'email' => $email,
+        'observacao' => $observacao,
+    ], !empty($existente['foto']), !empty($existente['documento_arquivo']));
+    if ($erroCampos !== null) retornar_json(false, $erroCampos);
 
     $tipo_documento = in_array(strtoupper($tipo_documento), ['RG', 'CPF']) ? strtoupper($tipo_documento) : 'CPF';
-
-    // Mantém a mesma regra do cadastro também durante uma edição.
-    if ($tipo_documento === 'CPF') {
+    if ($tipo_documento === 'CPF' && $documento !== '') {
         if (!cpf_valido($documento)) {
             retornar_json(false, 'CPF inválido. Informe um CPF válido.');
         }
         $documento = cpf_formatar($documento);
     }
 
-    // Verificar duplicidade em outro visitante
-    $doc_limpo_busca = preg_replace('/[^0-9A-Za-z]/', '', $documento);
-    $stmt = $conexao->prepare(
-        "SELECT id, nome_completo FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
-           AND id != ?"
-    );
-    if (!$stmt) retornar_json(false, 'Erro ao validar documento do visitante.');
-    $stmt->bind_param("si", $doc_limpo_busca, $id);
-    $stmt->execute();
-    $stmt->store_result();
+    // Verificar duplicidade somente quando há um documento informado.
+    if ($documento !== '') {
+        $doc_limpo_busca = preg_replace('/[^0-9A-Za-z]/', '', $documento);
+        $stmt = $conexao->prepare(
+            "SELECT id, nome_completo FROM visitantes WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
+               AND id != ?"
+        );
+        if (!$stmt) retornar_json(false, 'Erro ao validar documento do visitante.');
+        $stmt->bind_param("isi", $tenant_id, $doc_limpo_busca, $id);
+        $stmt->execute();
+        $stmt->store_result();
 
-    if ($stmt->num_rows > 0) {
-        $stmt->bind_result($id_dup, $nome_dup);
-        $stmt->fetch();
+        if ($stmt->num_rows > 0) {
+            $stmt->bind_result($id_dup, $nome_dup);
+            $stmt->fetch();
+            $stmt->close();
+            retornar_json(false, "Documento já cadastrado para outro visitante: $nome_dup (ID: $id_dup)");
+        }
         $stmt->close();
-        retornar_json(false, "Documento já cadastrado para outro visitante: $nome_dup (ID: $id_dup)");
     }
-    $stmt->close();
 
     $stmt = $conexao->prepare(
         "UPDATE visitantes SET

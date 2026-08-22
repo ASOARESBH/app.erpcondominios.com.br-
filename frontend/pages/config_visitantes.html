@@ -1,0 +1,48 @@
+<div id="page-metadata" data-title="Campos de Visitantes" data-icon="fa-user-cog" style="display:none"></div>
+
+<div class="page-wrapper page-config-visitantes">
+    <nav class="stub-breadcrumb">
+        <span data-page="configuracao"><i class="fas fa-cog"></i> Configurações</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span data-page="sistema">Sistema</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span>Visitantes</span>
+    </nav>
+
+    <div class="page-header">
+        <h1><i class="fas fa-user-cog"></i> Cadastro de Visitantes</h1>
+        <p>Defina quais dados devem ser obrigatórios para os visitantes deste condomínio.</p>
+    </div>
+
+    <div id="configVisitantesAlerta" aria-live="polite"></div>
+
+    <div class="page-card config-visitantes-card">
+        <div class="config-visitantes-intro">
+            <div class="config-visitantes-intro-icon"><i class="fas fa-sliders-h"></i></div>
+            <div>
+                <h2>Campos obrigatórios</h2>
+                <p>Ative a obrigatoriedade apenas dos campos exigidos pela política do condomínio. A regra é aplicada no formulário e confirmada no servidor antes de salvar.</p>
+            </div>
+        </div>
+
+        <div class="config-visitantes-note">
+            <i class="fas fa-shield-alt"></i>
+            <span>Somente usuários com permissão de <strong>Sistema &gt; Configurar</strong> podem alterar estas regras.</span>
+        </div>
+
+        <div id="configVisitantesLoading" class="loading config-visitantes-loading">
+            <i class="fas fa-spinner fa-spin"></i><span>Carregando parâmetros do condomínio...</span>
+        </div>
+
+        <div id="configVisitantesLista" class="config-visitantes-lista" style="display:none"></div>
+
+        <div class="form-actions config-visitantes-actions">
+            <button type="button" id="btnSalvarConfigVisitantes" class="btn-primary-modern">
+                <i class="fas fa-save"></i> Salvar configurações
+            </button>
+            <button type="button" id="btnVoltarSistemaVisitantes" class="btn-secondary-modern">
+                <i class="fas fa-arrow-left"></i> Voltar ao Sistema
+            </button>
+        </div>
+    </div>
+</div>
