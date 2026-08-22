@@ -98,9 +98,12 @@ try {
             monitoring_json(false, 'Ação inválida.', null, 400, 'INVALID_ACTION');
     }
 } catch (Throwable $e) {
-    error_log('[MONITORING][API] erro=' . $e->getMessage());
-    monitoring_json(false, 'Não foi possível processar o Monitoramento.', null, 500, 'MONITORING_INTERNAL_ERROR');
-} finally {
+    $debug_id = bin2hex(random_bytes(6));
+    $safe_message = function_exists('monitoring_sanitize_error') ? monitoring_sanitize_error($e->getMessage()) : 'erro interno';
+    error_log('[MONITORING][API] debug_id=' . $debug_id . ' action=' . $action . ' file=' . $e->getFile() . ' line=' . $e->getLine() . ' erro=' . $safe_message);
+    monitoring_json(false, 'Não foi possível processar o Monitoramento.', ['debug_id' => $debug_id], 500, 'MONITORING_INTERNAL_ERROR');
+}
+ finally {
     fechar_conexao($conexao);
 }
 
@@ -354,7 +357,7 @@ function _monitoring_heartbeat($conexao, $input) {
                         ultimo_evento_at = ?, ultimo_erro_code = ?, atualizado_em = NOW()
                   WHERE id = ? AND tenant_id = ?"
             );
-            $stmt->bind_param('sssiiisissii', $name, $device_type, $protocol, $host_configured, $port, $direction, $active, $status, $last_event, $error_code, $local_device_id, $tenant_id);
+            $stmt->bind_param('sssiisisssii', $name, $device_type, $protocol, $host_configured, $port, $direction, $active, $status, $last_event, $error_code, $local_device_id, $tenant_id);
         } else {
             $stmt = $conexao->prepare(
                 "INSERT INTO monitoramento_dispositivos_local
@@ -362,7 +365,7 @@ function _monitoring_heartbeat($conexao, $input) {
                      sentido, ativo, ultimo_status, ultimo_heartbeat_at, ultimo_evento_at, ultimo_erro_code)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)"
             );
-            $stmt->bind_param('iissssiisiss', $tenant_id, $agent_id, $external_key, $name, $device_type, $protocol, $host_configured, $port, $direction, $active, $status, $last_event, $error_code);
+            $stmt->bind_param('iissssiisisss', $tenant_id, $agent_id, $external_key, $name, $device_type, $protocol, $host_configured, $port, $direction, $active, $status, $last_event, $error_code);
         }
         $stmt->execute();
         $stmt->close();
