@@ -76,7 +76,7 @@ if ($metodo === 'PATCH') {
     }
 
     // Buscar dados atuais sempre no tenant da sessão.
-    $stmt = $conexao->prepare('SELECT nome, ativo, permissao FROM usuarios WHERE tenant_id = ? AND id = ? LIMIT 1');
+    $stmt = $conexao->prepare("SELECT nome, ativo, permissao FROM usuarios WHERE tenant_id = ? AND id = ? AND LOWER(COALESCE(permissao, '')) <> 'super_admin' LIMIT 1");
     $stmt->bind_param('ii', $tenant_id, $id);
     $stmt->execute();
     $usuario = $stmt->get_result()->fetch_assoc();
@@ -94,7 +94,7 @@ if ($metodo === 'PATCH') {
     }
 
     // Aplicar alteração somente no tenant da sessão.
-    $stmt = $conexao->prepare('UPDATE usuarios SET ativo = ? WHERE tenant_id = ? AND id = ?');
+    $stmt = $conexao->prepare("UPDATE usuarios SET ativo = ? WHERE tenant_id = ? AND id = ? AND LOWER(COALESCE(permissao, '')) <> 'super_admin'");
     $stmt->bind_param('iii', $novo_ativo, $tenant_id, $id);
 
     if ($stmt->execute()) {
@@ -136,8 +136,8 @@ if ($metodo === 'GET') {
     if (isset($_GET['id'])) {
         // Buscar usuário específico
         $id = intval($_GET['id']);
-        $stmt = $conexao->prepare("SELECT id, nome, email, funcao, departamento, permissao, ativo, COALESCE(sessao_inativa,0) AS sessao_inativa, DATE_FORMAT(data_criacao, '%d/%m/%Y %H:%i') as data_criacao FROM usuarios WHERE tenant_id = $tenant_id AND id = ?");
-        $stmt->bind_param("i", $id);
+        $stmt = $conexao->prepare("SELECT id, nome, email, funcao, departamento, permissao, ativo, COALESCE(sessao_inativa,0) AS sessao_inativa, DATE_FORMAT(data_criacao, '%d/%m/%Y %H:%i') as data_criacao FROM usuarios WHERE tenant_id = ? AND id = ? AND LOWER(COALESCE(permissao, '')) <> 'super_admin' LIMIT 1");
+        $stmt->bind_param("ii", $tenant_id, $id);
         $stmt->execute();
         $resultado = $stmt->get_result();
         
@@ -151,7 +151,7 @@ if ($metodo === 'GET') {
         $sql = "SELECT id, nome, email, funcao, departamento, permissao, ativo,
                 COALESCE(sessao_inativa,0) AS sessao_inativa,
                 DATE_FORMAT(data_criacao, '%d/%m/%Y %H:%i') as data_criacao
-                FROM usuarios WHERE tenant_id = $tenant_id ORDER BY nome ASC";
+                FROM usuarios WHERE tenant_id = $tenant_id AND LOWER(COALESCE(permissao, '')) <> 'super_admin' ORDER BY nome ASC";
         
         $resultado = $conexao->query($sql);
         $usuarios = array();
@@ -258,7 +258,7 @@ if ($metodo === 'PUT') {
     
     // Carregar estado anterior somente no tenant da sessão, para auditoria e
     // bloqueio de alteração de privilégio sem a permissão administrativa.
-    $estado = $conexao->prepare('SELECT nome,email,funcao,departamento,permissao,ativo,sessao_inativa FROM usuarios WHERE tenant_id=? AND id=? LIMIT 1');
+    $estado = $conexao->prepare("SELECT nome,email,funcao,departamento,permissao,ativo,sessao_inativa FROM usuarios WHERE tenant_id=? AND id=? AND LOWER(COALESCE(permissao, '')) <> 'super_admin' LIMIT 1");
     $estado->bind_param('ii', $tenant_id, $id);
     $estado->execute();
     $antes = $estado->get_result()->fetch_assoc();
@@ -287,10 +287,10 @@ if ($metodo === 'PUT') {
     // Atualizar com ou sem senha
     if (isset($dados['senha']) && !empty($dados['senha']) && $dados['senha'] !== '********') {
         $senha_hash = password_hash($dados['senha'], PASSWORD_DEFAULT);
-        $stmt = $conexao->prepare('UPDATE usuarios SET nome=?, email=?, senha=?, funcao=?, departamento=?, permissao=?, ativo=?, sessao_inativa=? WHERE tenant_id=? AND id=?');
+        $stmt = $conexao->prepare("UPDATE usuarios SET nome=?, email=?, senha=?, funcao=?, departamento=?, permissao=?, ativo=?, sessao_inativa=? WHERE tenant_id=? AND id=? AND LOWER(COALESCE(permissao, '')) <> 'super_admin'");
         $stmt->bind_param("sssssssiii", $nome, $email, $senha_hash, $funcao, $departamento, $permissao, $ativo, $sessao_inativa, $tenant_id, $id);
     } else {
-        $stmt = $conexao->prepare('UPDATE usuarios SET nome=?, email=?, funcao=?, departamento=?, permissao=?, ativo=?, sessao_inativa=? WHERE tenant_id=? AND id=?');
+        $stmt = $conexao->prepare("UPDATE usuarios SET nome=?, email=?, funcao=?, departamento=?, permissao=?, ativo=?, sessao_inativa=? WHERE tenant_id=? AND id=? AND LOWER(COALESCE(permissao, '')) <> 'super_admin'");
         $stmt->bind_param("ssssssiii", $nome, $email, $funcao, $departamento, $permissao, $ativo, $sessao_inativa, $tenant_id, $id);
     }
     
@@ -323,7 +323,7 @@ if ($metodo === 'DELETE') {
     }
     
     // Buscar estado anterior no tenant atual para auditoria.
-    $stmt = $conexao->prepare('SELECT id,nome,email,funcao,departamento,permissao,ativo FROM usuarios WHERE tenant_id = ? AND id = ?');
+    $stmt = $conexao->prepare("SELECT id,nome,email,funcao,departamento,permissao,ativo FROM usuarios WHERE tenant_id = ? AND id = ? AND LOWER(COALESCE(permissao, '')) <> 'super_admin'");
     $stmt->bind_param("ii", $tenant_id, $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -332,7 +332,7 @@ if ($metodo === 'DELETE') {
     $stmt->close();
     
     // Excluir usuário somente no tenant atual.
-    $stmt = $conexao->prepare('DELETE FROM usuarios WHERE tenant_id = ? AND id = ?');
+    $stmt = $conexao->prepare("DELETE FROM usuarios WHERE tenant_id = ? AND id = ? AND LOWER(COALESCE(permissao, '')) <> 'super_admin'");
     $stmt->bind_param("ii", $tenant_id, $id);
     
     if ($stmt->execute()) {
