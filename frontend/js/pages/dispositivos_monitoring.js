@@ -19,7 +19,9 @@ export function init() {
     document.getElementById('monitoring-secret-close')?.addEventListener('click', fecharModalMonitoringSecret);
     document.getElementById('monitoring-secret-done')?.addEventListener('click', fecharModalMonitoringSecret);
     document.getElementById('monitoring-copy-secret')?.addEventListener('click', copiarCredencialMonitoring);
+    document.getElementById('monitoring-hub-events-refresh')?.addEventListener('click', carregarEventosHub);
     carregarMonitoring();
+    carregarEventosHub();
     monitoringRefreshTimer = window.setInterval(carregarMonitoring, 30000);
 }
 
@@ -68,6 +70,8 @@ async function carregarMonitoring() {
         renderizarAgentes(monitoringAgents);
         renderizarPendentes(monitoringAgents);
         renderizarConfiguracao(data.dados?.configuracao || {});
+        renderizarDispositivosHub(data.dados?.dispositivos_hub || []);
+        await carregarHubDispositivos();
         monitoringLog('Agentes Monitoring carregados', { total: monitoringAgents.length });
     } catch (error) {
         monitoringLog('Falha ao carregar Monitoring', error);
@@ -151,6 +155,73 @@ function limparSelecaoMonitoring(preserveMessage = false) {
     if (clearButton) clearButton.hidden = true;
     if (enableButton) enableButton.innerHTML = '<i class="fas fa-link"></i> Habilitar esta máquina';
     if (!preserveMessage) setMonitoringMessage('monitoring-pairing-message', 'Formulário preparado para uma nova máquina.', false);
+}
+
+async function carregarHubDispositivos() {
+    try {
+        const data = await monitoringApi('dispositivos_hub');
+        renderizarDispositivosHub(data.dados?.dispositivos || []);
+    } catch (error) {
+        monitoringLog('Falha ao carregar dispositivos do hub', { code: error.code, message: error.message });
+        renderizarDispositivosHub([], error.code === 'HUB_SCHEMA_NOT_READY' ? 'A migration multimodal ainda não foi aplicada.' : error.message);
+    }
+}
+
+function rotuloTipoHub(type) {
+    return ({
+        controlid_uhf: 'Control iD / TAG-UHF',
+        controlid_face_id: 'Control iD / Face ID',
+        face_id_http: 'Face ID via HTTP',
+        camera_lpr: 'Câmera / LPR',
+        frigate: 'Frigate / MQTT',
+        outro: 'Outro',
+    })[type] || type || 'Outro';
+}
+
+function renderizarDispositivosHub(dispositivos, mensagem = '') {
+    const body = document.getElementById('monitoring-hub-devices-body');
+    const count = document.getElementById('monitoring-hub-device-count');
+    if (!body) return;
+    if (count) count.textContent = `${dispositivos.length} dispositivo${dispositivos.length === 1 ? '' : 's'}`;
+    if (!dispositivos.length) {
+        body.innerHTML = `<tr><td colspan="6" class="monitoring-empty">${escapeHtml(mensagem || 'Nenhum dispositivo foi reportado pelo hub local.')}</td></tr>`;
+        return;
+    }
+    body.innerHTML = dispositivos.map((device) => `<tr>
+        <td><strong>${escapeHtml(device.nome || device.external_key)}</strong><small>${escapeHtml(device.external_key || '')}</small></td>
+        <td>${escapeHtml(rotuloTipoHub(device.tipo_dispositivo))}</td>
+        <td>${escapeHtml(device.protocolo || 'local')}</td>
+        <td><span class="monitoring-status monitoring-status-${escapeHtml(device.ultimo_status || 'aguardando')}">${escapeHtml(device.ultimo_status || 'aguardando')}</span></td>
+        <td>${escapeHtml(device.ultimo_heartbeat_at ? new Date(device.ultimo_heartbeat_at).toLocaleString('pt-BR') : 'Aguardando')}</td>
+        <td>${escapeHtml(device.ultimo_evento_at ? new Date(device.ultimo_evento_at).toLocaleString('pt-BR') : 'Nenhum')}</td>
+    </tr>`).join('');
+}
+
+async function carregarEventosHub() {
+    try {
+        const data = await monitoringApi('acessos_hub_recentes');
+        renderizarEventosHub(data.dados?.eventos || []);
+    } catch (error) {
+        monitoringLog('Falha ao carregar eventos do hub', { code: error.code, message: error.message });
+        renderizarEventosHub([], error.code === 'HUB_SCHEMA_NOT_READY' ? 'A migration multimodal ainda não foi aplicada.' : error.message);
+    }
+}
+
+function renderizarEventosHub(eventos, mensagem = '') {
+    const body = document.getElementById('monitoring-hub-events-body');
+    if (!body) return;
+    if (!eventos.length) {
+        body.innerHTML = `<tr><td colspan="6" class="empty-cell">${escapeHtml(mensagem || 'Nenhum evento multimodal registrado nos últimos 30 dias.')}</td></tr>`;
+        return;
+    }
+    body.innerHTML = eventos.map((event) => `<tr>
+        <td>${escapeHtml(event.capturado_em ? new Date(event.capturado_em).toLocaleString('pt-BR') : '—')}</td>
+        <td>${escapeHtml(event.dispositivo_nome || event.device_external_key || '—')}</td>
+        <td>${escapeHtml(rotuloTipoHub(event.source_type))}</td>
+        <td><strong>${escapeHtml(event.identifier_value || event.placa_normalizada || 'Não identificado')}</strong></td>
+        <td>${escapeHtml(event.direcao || 'indeterminado')}</td>
+        <td>${escapeHtml(event.decisao || 'unknown')}</td>
+    </tr>`).join('');
 }
 
 function renderizarConfiguracao(config) {

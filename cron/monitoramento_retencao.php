@@ -36,8 +36,24 @@ try {
                 AND TIMESTAMPDIFF(DAY, e.capturado_em, UTC_TIMESTAMP()) >= c.retencao_dias";
     $conexao->query($sql);
     $removed = $conexao->affected_rows;
+
+    $hub_removed = 0;
+    $hub_tables = $conexao->query("SHOW TABLES LIKE 'monitoramento_eventos_hub'");
+    if ($hub_tables && $hub_tables->num_rows > 0) {
+        $hub_tables->free();
+        $sql = "DELETE e
+                   FROM monitoramento_eventos_hub e
+                   INNER JOIN monitoramento_configuracoes c ON c.tenant_id = e.tenant_id
+                  WHERE e.status_evento IN ('confirmado', 'arquivado')
+                    AND TIMESTAMPDIFF(DAY, e.capturado_em, UTC_TIMESTAMP()) >= c.retencao_dias";
+        $conexao->query($sql);
+        $hub_removed = $conexao->affected_rows;
+    } elseif ($hub_tables) {
+        $hub_tables->free();
+    }
+
     $conexao->commit();
-    echo json_encode(['sucesso' => true, 'eventos_removidos' => (int)$removed], JSON_UNESCAPED_UNICODE) . PHP_EOL;
+    echo json_encode(['sucesso' => true, 'eventos_removidos' => (int)$removed, 'eventos_hub_removidos' => (int)$hub_removed], JSON_UNESCAPED_UNICODE) . PHP_EOL;
 } catch (Throwable $e) {
     $conexao->rollback();
     error_log('[MONITORING][RETENCAO] ' . $e->getMessage());

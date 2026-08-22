@@ -121,6 +121,12 @@
         <div class="monitoring-card-title"><span class="monitoring-icon monitoring-icon-green"><i class="fas fa-network-wired"></i></span><div><span class="monitoring-eyebrow">MÁQUINAS DO TENANT</span><h3>Agentes Windows e câmeras reportadas</h3></div><span class="monitoring-badge" id="monitoring-agent-count">0 agentes</span></div>
         <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th>Máquina</th><th>Instalação</th><th>Status</th><th>Versão</th><th>Heartbeat</th><th>Ação</th></tr></thead><tbody id="monitoring-agents-body"><tr><td colspan="6" class="monitoring-empty">Carregando agentes…</td></tr></tbody></table></div>
       </article>
+
+      <article class="monitoring-integration-card monitoring-hub-card" id="monitoring-hub-card">
+        <div class="monitoring-card-title"><span class="monitoring-icon monitoring-icon-blue"><i class="fas fa-project-diagram"></i></span><div><span class="monitoring-eyebrow">HUB LOCAL MULTIMODAL</span><h3>Dispositivos conectados à portaria</h3></div><span class="monitoring-badge" id="monitoring-hub-device-count">0 dispositivos</span></div>
+        <p class="monitoring-help">Uma única instalação Windows pode reportar câmeras LPR, leitores Control iD TAG/UHF, Face ID e conectores futuros pela mesma API do Monitoring. Credenciais técnicas permanecem no computador local.</p>
+        <div class="monitoring-table-wrap"><table class="monitoring-table"><thead><tr><th>Dispositivo</th><th>Tipo</th><th>Protocolo</th><th>Status</th><th>Heartbeat</th><th>Último evento</th></tr></thead><tbody id="monitoring-hub-devices-body"><tr><td colspan="6" class="monitoring-empty">Carregando dispositivos do hub…</td></tr></tbody></table></div>
+      </article>
     </section>
 
     <!-- Formulário de cadastro/edição -->
@@ -483,6 +489,17 @@
       </div>
 
       <div id="ev-paginacao" class="paginacao-container"></div>
+    </div>
+
+    <div class="page-card monitoring-hub-events-card">
+      <div class="card-header-row">
+        <h2><i class="fas fa-stream"></i> Eventos do hub local</h2>
+        <button class="btn-secondary-modern" id="monitoring-hub-events-refresh" type="button"><i class="fas fa-sync-alt"></i> Atualizar</button>
+      </div>
+      <div class="table-container"><table>
+        <thead><tr><th>Data/Hora</th><th>Dispositivo</th><th>Origem</th><th>Identificador</th><th>Sentido</th><th>Decisão</th></tr></thead>
+        <tbody id="monitoring-hub-events-body"><tr><td colspan="6" class="empty-cell">Carregando eventos do hub…</td></tr></tbody>
+      </table></div>
     </div>
 
   </div><!-- /tab-eventos -->

@@ -11,11 +11,28 @@
         <i class="fas fa-wifi"></i> Status RFID: aguardando verificacao...
     </div>
 
+    <div class="page-card hub-acesso-card">
+        <div class="table-header-actions">
+            <div>
+                <h2><i class="fas fa-project-diagram"></i> Acessos do Hub Local</h2>
+                <p class="card-subtitle">Linha do tempo única para LPR, TAG/UHF, Face ID e outros dispositivos conectados à portaria.</p>
+            </div>
+            <button class="btn-secondary-modern" type="button" id="btnAtualizarHubAcesso"><i class="fas fa-sync-alt"></i> Atualizar</button>
+        </div>
+        <div id="hubAcessoStatus" class="hub-acesso-status"><i class="fas fa-circle-notch fa-spin"></i> Carregando eventos do hub...</div>
+        <div class="table-container">
+            <table id="tabelaAcessosHub">
+                <thead><tr><th>Data/hora</th><th>Dispositivo</th><th>Origem</th><th>Identificador</th><th>Sentido</th><th>Decisão</th><th>Confiança</th></tr></thead>
+                <tbody><tr><td colspan="7" class="empty-state">Carregando...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="page-card acesso-lpr-card">
         <div class="table-header-actions">
             <div>
                 <h2><i class="fas fa-camera"></i> Últimos acessos LPR</h2>
-                <p class="card-subtitle">Visualização dos dez últimos veículos capturados pelo agente local.</p>
+                <p class="card-subtitle">Visão de compatibilidade para leituras LPR; a linha do tempo unificada do hub aparece acima.</p>
             </div>
             <button class="btn-secondary-modern" type="button" id="btnAtualizarLprAcesso"><i class="fas fa-sync-alt"></i> Atualizar</button>
         </div>

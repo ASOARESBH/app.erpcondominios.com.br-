@@ -49,13 +49,26 @@ try {
             monitoring_require_method('POST');
             _monitoring_ingestir_lote($conexao, $input);
             break;
+        case 'ingestir_hub_lote':
+        case 'eventos_hub_lote':
+            monitoring_require_method('POST');
+            _monitoring_ingestir_hub_lote($conexao, $input);
+            break;
         case 'acessos_recentes':
             monitoring_require_method('GET');
             _monitoring_acessos_recentes($conexao);
             break;
+        case 'acessos_hub_recentes':
+            monitoring_require_method('GET');
+            _monitoring_acessos_hub_recentes($conexao);
+            break;
         case 'listar_agentes':
             monitoring_require_method('GET');
             _monitoring_listar_agentes($conexao);
+            break;
+        case 'dispositivos_hub':
+            monitoring_require_method('GET');
+            _monitoring_dispositivos_hub($conexao);
             break;
         case 'habilitar_agente':
             monitoring_require_method('POST');
@@ -310,6 +323,51 @@ function _monitoring_heartbeat($conexao, $input) {
         $stmt->close();
     }
 
+    $devices = is_array($input['devices'] ?? null) ? $input['devices'] : [];
+    if (_monitoring_hub_schema_ready($conexao)) foreach (array_slice($devices, 0, 100) as $device) {
+        if (!is_array($device)) continue;
+        $external_key = substr(trim((string)($device['device_id'] ?? '')), 0, 80);
+        if ($external_key === '') continue;
+        $name = substr(trim((string)($device['name'] ?? $external_key)), 0, 120);
+        $device_type = substr(trim((string)($device['device_type'] ?? 'outro')), 0, 40);
+        $protocol = substr(trim((string)($device['protocol'] ?? 'unknown')), 0, 40);
+        $host_configured = !empty($device['host_configured']) ? 1 : 0;
+        $port = (int)($device['port'] ?? 0);
+        $port = ($port >= 1 && $port <= 65535) ? $port : null;
+        $direction = substr(trim((string)($device['direction'] ?? 'indeterminado')), 0, 20);
+        $active = !empty($device['enabled']) ? 1 : 0;
+        $status = substr(trim((string)($device['status'] ?? 'aguardando')), 0, 30);
+        $error_code = substr(trim((string)($device['last_error_code'] ?? '')), 0, 80);
+        $last_event = trim((string)($device['last_event_at'] ?? ''));
+        $last_event = $last_event !== '' ? _monitoring_datetime($last_event) : null;
+        $stmt = $conexao->prepare("SELECT id FROM monitoramento_dispositivos_local WHERE tenant_id = ? AND agente_id = ? AND external_key = ? LIMIT 1");
+        $stmt->bind_param('iis', $tenant_id, $agent_id, $external_key);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($row) {
+            $local_device_id = (int)$row['id'];
+            $stmt = $conexao->prepare(
+                "UPDATE monitoramento_dispositivos_local
+                    SET nome = ?, tipo_dispositivo = ?, protocolo = ?, host_configurado = ?, porta = ?,
+                        sentido = ?, ativo = ?, ultimo_status = ?, ultimo_heartbeat_at = NOW(),
+                        ultimo_evento_at = ?, ultimo_erro_code = ?, atualizado_em = NOW()
+                  WHERE id = ? AND tenant_id = ?"
+            );
+            $stmt->bind_param('sssiiisissii', $name, $device_type, $protocol, $host_configured, $port, $direction, $active, $status, $last_event, $error_code, $local_device_id, $tenant_id);
+        } else {
+            $stmt = $conexao->prepare(
+                "INSERT INTO monitoramento_dispositivos_local
+                    (tenant_id, agente_id, external_key, nome, tipo_dispositivo, protocolo, host_configurado, porta,
+                     sentido, ativo, ultimo_status, ultimo_heartbeat_at, ultimo_evento_at, ultimo_erro_code)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)"
+            );
+            $stmt->bind_param('iissssiisiss', $tenant_id, $agent_id, $external_key, $name, $device_type, $protocol, $host_configured, $port, $direction, $active, $status, $last_event, $error_code);
+        }
+        $stmt->execute();
+        $stmt->close();
+    }
+
     $config = monitoring_config($conexao, $tenant_id);
     monitoring_json(true, 'Heartbeat registrado.', [
         'server_time' => gmdate('c'),
@@ -395,6 +453,142 @@ function _monitoring_ingestir_lote($conexao, $input) {
         $stmt->close();
     }
     monitoring_json(true, 'Lote processado.', ['accepted' => $accepted, 'duplicates' => $duplicates, 'rejected' => $rejected, 'results' => $results]);
+}
+
+function _monitoring_ingestir_hub_lote($conexao, $input) {
+    if (!_monitoring_hub_schema_ready($conexao)) monitoring_json(false, 'A migration do hub multimodal ainda não foi aplicada.', null, 503, 'HUB_SCHEMA_NOT_READY');
+    $agent = monitoring_agent_context($conexao, true);
+    $agent_id = (int)($input['agent_id'] ?? 0);
+    if ($agent_id !== (int)$agent['agente_id']) monitoring_json(false, 'Agente divergente.', null, 403, 'AGENT_SCOPE_INVALID');
+    $events = is_array($input['events'] ?? null) ? $input['events'] : [];
+    if (!$events || count($events) > 200) monitoring_json(false, 'Lote multimodal inválido.', null, 422, 'HUB_EVENT_BATCH_INVALID');
+
+    $tenant_id = (int)$agent['tenant_id'];
+    $accepted = [];
+    $duplicates = [];
+    $rejected = [];
+    $results = [];
+    foreach ($events as $event) {
+        if (!is_array($event)) continue;
+        $event_uuid = trim((string)($event['event_uuid'] ?? ''));
+        $device_key = substr(trim((string)($event['device_id'] ?? '')), 0, 80);
+        if (!monitoring_valid_uuid($event_uuid) || $device_key === '') {
+            if ($event_uuid !== '') $rejected[] = $event_uuid;
+            continue;
+        }
+        $captured_at = _monitoring_datetime($event['captured_at'] ?? null);
+        $source_type = substr(trim((string)($event['source_type'] ?? 'outro')), 0, 30);
+        $source_protocol = substr(trim((string)($event['source_protocol'] ?? 'unknown')), 0, 50);
+        $direction = substr(trim((string)($event['direction'] ?? 'indeterminado')), 0, 20);
+        $decision = substr(trim((string)($event['decision'] ?? 'unknown')), 0, 30);
+        $identifier_type = substr(trim((string)($event['identifier_type'] ?? '')), 0, 30);
+        $identifier_value = substr(trim((string)($event['identifier_value'] ?? '')), 0, 128);
+        $identifier_hash = substr(trim((string)($event['identifier_hash'] ?? '')), 0, 64);
+        if ($identifier_hash === '' && $identifier_value !== '') $identifier_hash = hash('sha256', $identifier_value);
+        $subject_external_id = substr(trim((string)($event['subject_external_id'] ?? '')), 0, 128);
+        $confidence = _monitoring_decimal($event['confidence'] ?? null);
+        $metadata = $event['metadata'] ?? [];
+        $metadata_json = json_encode(is_array($metadata) ? $metadata : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($metadata_json === false) $metadata_json = '{}';
+        $plate_raw = substr(trim((string)($event['plate_raw'] ?? '')), 0, 32);
+        $plate = monitoring_normalize_plate($event['plate_normalized'] ?? $plate_raw);
+        $engine = substr(trim((string)($event['engine'] ?? '')), 0, 50);
+        $engine_version = substr(trim((string)($event['engine_version'] ?? '')), 0, 50);
+        $snapshot_sha = substr(trim((string)($event['snapshot_sha256'] ?? '')), 0, 64);
+
+        $stmt = $conexao->prepare("SELECT id FROM monitoramento_dispositivos_local WHERE tenant_id = ? AND agente_id = ? AND external_key = ? LIMIT 1");
+        $stmt->bind_param('iis', $tenant_id, $agent_id, $device_key);
+        $stmt->execute();
+        $device_id = ($stmt->get_result()->fetch_assoc()['id'] ?? null);
+        $stmt->close();
+        $device_id = $device_id ? (int)$device_id : null;
+
+        $stmt = $conexao->prepare(
+            "INSERT INTO monitoramento_eventos_hub
+                (tenant_id, agente_id, dispositivo_id, device_external_key, event_uuid, capturado_em,
+                 source_type, source_protocol, direcao, decisao, identifier_type, identifier_value,
+                 identifier_hash, subject_external_id, confianca, metadata_json, placa_raw,
+                 placa_normalizada, engine, engine_version, snapshot_sha256, status_evento)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmado')"
+        );
+        $types = 'iii' . str_repeat('s', 11) . 'd' . str_repeat('s', 6);
+        $stmt->bind_param($types, $tenant_id, $agent_id, $device_id, $device_key, $event_uuid, $captured_at, $source_type, $source_protocol, $direction, $decision, $identifier_type, $identifier_value, $identifier_hash, $subject_external_id, $confidence, $metadata_json, $plate_raw, $plate, $engine, $engine_version, $snapshot_sha);
+        if ($stmt->execute()) {
+            $server_id = (int)$stmt->insert_id;
+            $accepted[] = $event_uuid;
+            $results[] = ['event_uuid' => $event_uuid, 'server_event_id' => $server_id, 'source_type' => $source_type, 'identifier_type' => $identifier_type ?: null, 'identifier_value' => $identifier_value ?: null];
+        } elseif ((int)$conexao->errno === 1062) {
+            $duplicates[] = $event_uuid;
+            $lookup = $conexao->prepare("SELECT id, source_type, identifier_type, identifier_value FROM monitoramento_eventos_hub WHERE tenant_id = ? AND agente_id = ? AND event_uuid = ? LIMIT 1");
+            $lookup->bind_param('iis', $tenant_id, $agent_id, $event_uuid);
+            $lookup->execute();
+            $old = $lookup->get_result()->fetch_assoc();
+            $lookup->close();
+            $results[] = ['event_uuid' => $event_uuid, 'server_event_id' => $old ? (int)$old['id'] : null, 'source_type' => $old['source_type'] ?? $source_type, 'identifier_type' => $old['identifier_type'] ?? null, 'identifier_value' => $old['identifier_value'] ?? null];
+        } else {
+            $rejected[] = $event_uuid;
+        }
+        $stmt->close();
+    }
+    monitoring_json(true, 'Lote multimodal processado.', ['accepted' => $accepted, 'duplicates' => $duplicates, 'rejected' => $rejected, 'results' => $results]);
+}
+
+function _monitoring_dispositivos_hub($conexao) {
+    if (!_monitoring_hub_schema_ready($conexao)) monitoring_json(false, 'A migration do hub multimodal ainda não foi aplicada.', null, 503, 'HUB_SCHEMA_NOT_READY');
+    $context = monitoring_web_context('visualizador');
+    $tenant_id = (int)$context['tenant_id'];
+    $stmt = $conexao->prepare(
+        "SELECT d.id, d.agente_id, d.external_key, d.nome, d.tipo_dispositivo, d.protocolo,
+                d.fabricante, d.modelo, d.host_configurado, d.porta, d.sentido, d.ativo,
+                d.ultimo_status, d.ultimo_heartbeat_at, d.ultimo_evento_at, d.ultimo_erro_code,
+                a.nome AS agente_nome
+           FROM monitoramento_dispositivos_local d
+           LEFT JOIN monitoramento_agentes a ON a.id = d.agente_id
+          WHERE d.tenant_id = ? ORDER BY d.nome ASC"
+    );
+    $stmt->bind_param('i', $tenant_id);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    monitoring_json(true, 'Dispositivos do hub carregados.', ['dispositivos' => $rows]);
+}
+
+function _monitoring_acessos_hub_recentes($conexao) {
+    if (!_monitoring_hub_schema_ready($conexao)) monitoring_json(false, 'A migration do hub multimodal ainda não foi aplicada.', null, 503, 'HUB_SCHEMA_NOT_READY');
+    $bearer = monitoring_read_bearer();
+    if ($bearer) {
+        $context = monitoring_agent_context($conexao, true);
+        $tenant_id = (int)$context['tenant_id'];
+    } else {
+        $context = monitoring_web_context('visualizador');
+        $tenant_id = (int)$context['tenant_id'];
+    }
+    $limit = max(1, min((int)($_GET['limite'] ?? 20), 100));
+    $stmt = $conexao->prepare(
+        "SELECT e.id, e.event_uuid, e.capturado_em, e.source_type, e.source_protocol,
+                e.direcao, e.decisao, e.identifier_type, e.identifier_value, e.confianca,
+                e.placa_normalizada, e.status_evento, e.device_external_key,
+                a.nome AS agente_nome, d.nome AS dispositivo_nome
+           FROM monitoramento_eventos_hub e
+           LEFT JOIN monitoramento_agentes a ON a.id = e.agente_id
+           LEFT JOIN monitoramento_dispositivos_local d ON d.id = e.dispositivo_id
+          WHERE e.tenant_id = ? AND e.capturado_em >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)
+          ORDER BY e.capturado_em DESC LIMIT ?"
+    );
+    $stmt->bind_param('ii', $tenant_id, $limit);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    monitoring_json(true, 'Acessos multimodais carregados.', ['eventos' => $rows, 'retencao_dias' => (int)monitoring_config($conexao, $tenant_id)['retencao_dias']]);
+}
+
+function _monitoring_hub_schema_ready($conexao) {
+    static $ready = null;
+    if ($ready !== null) return $ready;
+    $result = $conexao->query("SHOW TABLES LIKE 'monitoramento_eventos_hub'");
+    $ready = (bool)($result && $result->num_rows > 0);
+    if ($result) $result->free();
+    return $ready;
 }
 
 function _monitoring_acessos_recentes($conexao) {

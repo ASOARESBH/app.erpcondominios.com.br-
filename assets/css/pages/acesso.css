@@ -475,3 +475,10 @@
 .page-acesso .lpr-acesso-status { margin:.75rem 0; padding:.55rem .7rem; border-radius:8px; background:var(--color-background-secondary,#f8fafc); color:var(--color-text-secondary,#64748b); font-size:.78rem; }
 .page-acesso #tabelaAcessosLpr { min-width:780px; }
 .page-acesso #tabelaAcessosLpr th { font-size:.72rem; }
+
+/* ERP CONDOMÍNIOS MONITORING — timeline única do hub local */
+.page-acesso .hub-acesso-card { border-top: 3px solid #16a3e8; }
+.page-acesso .hub-acesso-status { display:flex; align-items:center; gap:8px; min-height:24px; color:#64748b; font-size:.88rem; margin:10px 0 14px; }
+.page-acesso #tabelaAcessosHub { min-width:820px; }
+.page-acesso #tabelaAcessosHub td strong { color:#0f172a; letter-spacing:.02em; }
+.page-acesso #tabelaAcessosHub .tag-code { background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; }

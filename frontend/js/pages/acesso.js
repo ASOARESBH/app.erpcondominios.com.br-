@@ -23,6 +23,7 @@ export function init() {
     verificarStatusRFID();
     carregarUltimosAcessos();
     carregarUltimosLpr();
+    carregarUltimosHub();
     iniciarAutoRefresh();
     iniciarFocusAssistido();
     prepararAudioContext();
@@ -66,6 +67,8 @@ function setupActions() {
     }
     const btnAtualizarLpr = document.getElementById('btnAtualizarLprAcesso');
     if (btnAtualizarLpr) btnAtualizarLpr.addEventListener('click', carregarUltimosLpr);
+    const btnAtualizarHub = document.getElementById('btnAtualizarHubAcesso');
+    if (btnAtualizarHub) btnAtualizarHub.addEventListener('click', carregarUltimosHub);
 
     const autoRefresh = document.getElementById('autoRefreshAcesso');
     if (autoRefresh) {
@@ -111,6 +114,7 @@ function iniciarAutoRefresh() {
     autoRefreshInterval = setInterval(() => {
         carregarUltimosAcessos();
         carregarUltimosLpr();
+        carregarUltimosHub();
     }, 5000);
 }
 
@@ -315,7 +319,42 @@ async function carregarUltimosLpr() {
     }
 }
 
+async function carregarUltimosHub() {
+    const tbody = document.querySelector('#tabelaAcessosHub tbody');
+    const status = document.getElementById('hubAcessoStatus');
+    if (!tbody) return;
+    try {
+        const response = await fetch('../api/api_monitoramento.php?action=acessos_hub_recentes&limite=20', { credentials: 'include', cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || 'Hub multimodal indisponível');
+        const eventos = data.dados?.eventos || [];
+        if (!eventos.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum evento do hub nos últimos 30 dias.</td></tr>';
+        } else {
+            tbody.innerHTML = eventos.map(evento => {
+                const confidence = evento.confianca != null ? `${Math.round(Number(evento.confianca) * 100)}%` : '—';
+                const origem = ({ uhf: 'TAG/UHF', rfid: 'RFID', face_id: 'Face ID', lpr: 'LPR', frigate: 'Frigate' })[evento.source_type] || evento.source_type || 'Outro';
+                return `<tr>
+                    <td>${escapeHtml(evento.capturado_em || '—')}</td>
+                    <td>${escapeHtml(evento.dispositivo_nome || evento.device_external_key || '—')}</td>
+                    <td><span class="tag-code">${escapeHtml(origem)}</span></td>
+                    <td><strong>${escapeHtml(evento.identifier_value || evento.placa_normalizada || 'Não identificado')}</strong></td>
+                    <td>${escapeHtml(evento.direcao || 'indeterminado')}</td>
+                    <td><span class="status-pill ${evento.decisao === 'denied' ? 'status-warn' : 'status-ok'}">${escapeHtml(evento.decisao || 'unknown')}</span></td>
+                    <td>${confidence}</td>
+                </tr>`;
+            }).join('');
+        }
+        if (status) status.innerHTML = `<i class="fas fa-circle" style="color:#10b981"></i> ${eventos.length} evento(s) multimodal(is) · retenção ${Number(data.dados?.retencao_dias || 30)} dias`;
+    } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Não foi possível carregar os eventos do hub.</td></tr>';
+        if (status) status.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${escapeHtml(error.message)}`;
+        console.error('[Acesso][Hub] Erro:', error);
+    }
+}
+
 function aplicarFiltroTabela() {
+
     const termo = String(termoFiltroLocal || '').toLowerCase().trim();
 
     if (!termo) {
