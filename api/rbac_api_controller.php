@@ -54,7 +54,7 @@ function rbacFormatoPermissoesApi($conexao, $usuarioId, $tenantId, $forcar = fal
 }
 
 function rbacUsuarioMesmoTenant($conexao, $usuarioId, $tenantId) {
-    $st = $conexao->prepare('SELECT id,nome,email,permissao,ativo FROM usuarios WHERE id=? AND tenant_id=? LIMIT 1');
+    $st = $conexao->prepare("SELECT id,nome,email,permissao,ativo FROM usuarios WHERE id=? AND tenant_id=? AND LOWER(COALESCE(permissao, '')) <> 'super_admin' LIMIT 1");
     if (!$st) return null;
     $st->bind_param('ii',$usuarioId,$tenantId);
     $st->execute();

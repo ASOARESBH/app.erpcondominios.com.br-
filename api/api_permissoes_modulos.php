@@ -89,7 +89,7 @@ if ($metodo === 'GET' && $acao === 'permissoes_usuario') {
     }
 
     // Buscar dados do usuário
-    $stmt = $conexao->prepare("SELECT id, nome, email, permissao FROM usuarios WHERE tenant_id = $tenant_id AND id = ? LIMIT 1");
+    $stmt = $conexao->prepare("SELECT id, nome, email, permissao FROM usuarios WHERE tenant_id = $tenant_id AND id = ? AND LOWER(COALESCE(permissao, '')) <> 'super_admin' LIMIT 1");
     $stmt->bind_param('i', $usuario_id);
     $stmt->execute();
     $usuario = $stmt->get_result()->fetch_assoc();
@@ -277,7 +277,7 @@ if ($metodo === 'POST') {
         }
 
         // Verificar se usuário existe
-        $stmt = $conexao->prepare("SELECT id, permissao FROM usuarios WHERE tenant_id = $tenant_id AND id = ? LIMIT 1");
+        $stmt = $conexao->prepare("SELECT id, permissao FROM usuarios WHERE tenant_id = $tenant_id AND id = ? AND LOWER(COALESCE(permissao, '')) <> 'super_admin' LIMIT 1");
         $stmt->bind_param('i', $usuario_id);
         $stmt->execute();
         $usuario = $stmt->get_result()->fetch_assoc();

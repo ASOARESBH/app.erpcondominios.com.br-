@@ -1056,3 +1056,17 @@ async function revogarSessaoRbac(sessaoId) {
         await carregarSegurancaRbac();
     } catch (erro) { mostrarAlerta(erro.message, 'error'); }
 }
+
+
+/**
+ * Escapa conteúdo dinâmico antes da renderização em HTML.
+ * Mantém a Central de Usuários resiliente a nomes, grupos e dados de auditoria.
+ */
+function _escHtml(valor) {
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
