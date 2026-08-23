@@ -238,17 +238,44 @@ function _alternarCampoEstadoRg(tipo) {
     if (!ehRg && select) select.value = 'MG';
 }
 
-// Valida o CPF assim que o usuário sai do campo, sem esperar o envio do formulário.
-function _validarDocumentoNoBlur(input, tipo) {
+// Valida o documento assim que o usuário sai do campo, sem esperar o envio do
+// formulário: primeiro o formato do CPF, depois se já existe cadastro com o
+// mesmo número (evita descobrir a duplicidade só depois de preencher tudo).
+async function _validarDocumentoNoBlur(input, tipo) {
     const valor = input.value.trim();
-    if (tipo !== 'CPF' || !valor) {
+    if (!valor) {
         _limparErroDocumento();
         return;
     }
-    if (!_cpfValido(valor)) {
+    if (tipo === 'CPF' && !_cpfValido(valor)) {
         _marcarErroDocumento('CPF inválido. Confira os dígitos informados.');
-    } else {
-        _limparErroDocumento();
+        return;
+    }
+    _limparErroDocumento();
+    await _verificarDocumentoDuplicado(valor, tipo, input);
+}
+
+// Consulta se já existe visitante cadastrado com este documento neste
+// condomínio. Em modo de edição, o próprio registro não conta como duplicado.
+async function _verificarDocumentoDuplicado(documentoConsultado, tipo, input) {
+    try {
+        const resp = await fetch(`${API_VISITANTES}?documento=${encodeURIComponent(documentoConsultado)}`, { credentials: 'include' });
+        const data = await resp.json();
+
+        // Resposta atrasada: se o campo já mudou desde a consulta, ignora o resultado.
+        if (input.value.trim() !== documentoConsultado) return;
+
+        if (data.sucesso && data.dados) {
+            const idEncontrado = Number(data.dados.id);
+            const ehOProprioRegistro = modoEdicao && Number(visitanteIdEdicao) === idEncontrado;
+            if (!ehOProprioRegistro) {
+                _marcarErroDocumento(`${tipo} já cadastrado — pertence a ${data.dados.nome_completo}.`);
+            }
+        }
+    } catch (erro) {
+        console.warn('[Visitantes][Documento] Não foi possível verificar duplicidade agora:', erro);
+        // Falha de rede não bloqueia o preenchimento; o servidor confirma a
+        // unicidade novamente ao salvar o cadastro.
     }
 }
 

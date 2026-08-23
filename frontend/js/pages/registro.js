@@ -426,7 +426,7 @@ async function _buscarOcupantePorDocumento() {
             document.getElementById('ocupanteVisitanteIdTemp').value = '';
             if (btnAdd) btnAdd.disabled = true;
             if (box) { box.style.display = 'none'; box.innerHTML = ''; }
-            mostrarAlerta('warning', 'Ocupante não encontrado no cadastro de Visitantes. Cadastre-o no módulo Visitantes antes de adicioná-lo aqui.');
+            mostrarAlerta('error', 'Ocupante não encontrado no cadastro de Visitantes. Cadastre-o no módulo Visitantes antes de adicioná-lo aqui.');
         }
     } catch (error) {
         console.error('[Registro] Erro ao buscar ocupante:', error);
@@ -542,7 +542,7 @@ async function _buscarVisitantePorDocumento() {
             document.getElementById('nomeVisitanteRegistro').value = '';
             document.getElementById('visitanteIdRegistro').value   = '';
             if (box) { box.style.display = 'none'; box.innerHTML = ''; }
-            mostrarAlerta('warning', 'Visitante não encontrado. Preencha o nome manualmente ou cadastre-o no módulo Visitantes.');
+            mostrarAlerta('error', 'Visitante não encontrado. Preencha o nome manualmente ou cadastre-o no módulo Visitantes.');
         }
     } catch (error) {
         console.error('[Registro] Erro ao buscar visitante:', error);
@@ -978,9 +978,17 @@ function formatDateTime(dateTimeRaw) {
 function mostrarAlerta(tipo, mensagem) {
     const box = document.getElementById('alertBox');
     if (!box) { alert(mensagem); return; }
+    const cores = {
+        success: { bg: '#ecfdf5', cor: '#166534', borda: '#86efac', icone: 'fa-check-circle' },
+        warning: { bg: '#fffbeb', cor: '#92400e', borda: '#fbbf24', icone: 'fa-exclamation-triangle' },
+        error:   { bg: '#fef2f2', cor: '#991b1b', borda: '#fecaca', icone: 'fa-exclamation-circle' }
+    };
+    const c = cores[tipo] || cores.error;
     const classe = tipo === 'success' ? 'alert-success' : tipo === 'warning' ? 'alert-warning' : 'alert-error';
-    const icone  = tipo === 'success' ? 'fa-check-circle' : tipo === 'warning' ? 'fa-exclamation-triangle' : 'fa-exclamation-circle';
-    box.innerHTML = `<div class="alert ${classe}"><i class="fas ${icone}"></i> ${_esc(mensagem)}</div>`;
+    // Cores aplicadas também inline (não só via classe CSS) para o aviso não
+    // ficar sem cor caso o CSS da página esteja com cache desatualizado.
+    box.innerHTML = `<div class="alert ${classe}" style="background:${c.bg};color:${c.cor};border:1px solid ${c.borda};">
+        <i class="fas ${c.icone}" style="color:${c.cor};"></i> ${_esc(mensagem)}</div>`;
     setTimeout(() => { box.innerHTML = ''; }, 6000);
 }
 

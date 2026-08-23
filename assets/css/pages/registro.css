@@ -281,6 +281,12 @@
     border: 1px solid #fecaca;
 }
 
+.page-registro .alert-warning {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fbbf24;
+}
+
 @media (max-width: 768px) {
     .page-registro .search-box {
         flex-direction: column;
