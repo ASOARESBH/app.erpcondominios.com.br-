@@ -384,18 +384,24 @@ async function _buscarOcupantePorDocumento() {
 
         if (data.sucesso && data.dados) {
             const v = data.dados;
-            const idTitular    = document.getElementById('visitanteIdRegistro')?.value || '';
-            const ehTitular     = idTitular && String(v.id) === String(idTitular);
-            const jaAdicionado  = ocupantesAdicionados.some(o => String(o.visitante_id) === String(v.id));
+            const idTitular      = document.getElementById('visitanteIdRegistro')?.value || '';
+            const docTitular      = _normalizarDocumentoComparacao(document.getElementById('documentoRegistro')?.value || '');
+            const docEncontrado   = _normalizarDocumentoComparacao(v.documento || '');
+            const ehTitular       = (idTitular && String(v.id) === String(idTitular)) || (docTitular && docTitular === docEncontrado);
+            const jaAdicionado    = ocupantesAdicionados.some(o => String(o.visitante_id) === String(v.id) || _normalizarDocumentoComparacao(o.documento) === docEncontrado);
             const documentoAnexado = Boolean(v.documento_arquivo);
-            const podeAdicionar = documentoAnexado && !ehTitular && !jaAdicionado;
+            // A exigência de documento digitalizado é configurável por condomínio
+            // (Configurações > Sistema > Visitantes) e é confirmada pelo servidor
+            // ao salvar — aqui só bloqueamos conflitos de identidade (titular
+            // repetido / ocupante duplicado), nunca a falta do anexo.
+            const podeAdicionar = !ehTitular && !jaAdicionado;
 
             document.getElementById('nomeOcupante').value = v.nome_completo || '';
             document.getElementById('ocupanteVisitanteIdTemp').value = podeAdicionar ? (v.id || '') : '';
 
             if (box) {
                 box.style.display = 'flex';
-                box.classList.toggle('visitante-documento-pendente', !podeAdicionar);
+                box.classList.toggle('visitante-documento-pendente', !podeAdicionar || !documentoAnexado);
                 if (ehTitular) {
                     box.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
                         <span>Esta pessoa já é a <strong>titular</strong> deste acesso — selecione outro documento.</span>`;
@@ -403,10 +409,10 @@ async function _buscarOcupantePorDocumento() {
                     box.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
                         <span><strong>${_esc(v.nome_completo)}</strong> já foi adicionado à lista de ocupantes.</span>`;
                 } else if (!documentoAnexado) {
-                    box.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
+                    box.innerHTML = `<i class="fas fa-info-circle"></i>
                         <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
-                        — <strong>falta o documento digitalizado anexado.</strong>
-                        Cadastre o documento no módulo Visitantes antes de adicionar como ocupante.</span>`;
+                        — sem documento digitalizado anexado. Se este condomínio exigir o anexo,
+                        o servidor recusará ao salvar; caso contrário, pode adicionar normalmente.</span>`;
                 } else {
                     box.innerHTML = `<i class="fas fa-check-circle"></i>
                         <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
@@ -430,6 +436,10 @@ async function _buscarOcupantePorDocumento() {
     }
 }
 
+function _normalizarDocumentoComparacao(documento) {
+    return String(documento || '').replace(/[^A-Za-z0-9]/g, '');
+}
+
 function _adicionarOcupante() {
     const visitanteId = document.getElementById('ocupanteVisitanteIdTemp')?.value || '';
     const nome         = document.getElementById('nomeOcupante')?.value.trim() || '';
@@ -438,6 +448,19 @@ function _adicionarOcupante() {
 
     if (!visitanteId || !nome) {
         mostrarAlerta('error', 'Busque um cadastro válido antes de adicionar o ocupante.');
+        return;
+    }
+
+    // Última barreira antes de gravar na lista: nenhum documento duplicado
+    // (nem repetindo o titular, nem repetindo outro ocupante já adicionado).
+    const docNormalizado = _normalizarDocumentoComparacao(documento);
+    const docTitular = _normalizarDocumentoComparacao(document.getElementById('documentoRegistro')?.value || '');
+    if (docNormalizado && docNormalizado === docTitular) {
+        mostrarAlerta('error', 'Este documento já é o titular deste acesso — não é permitido lançá-lo também como ocupante.');
+        return;
+    }
+    if (ocupantesAdicionados.some(o => _normalizarDocumentoComparacao(o.documento) === docNormalizado)) {
+        mostrarAlerta('error', 'Este documento já foi adicionado à lista de ocupantes.');
         return;
     }
 
@@ -510,10 +533,10 @@ async function _buscarVisitantePorDocumento() {
                         — ${_esc(v.tipo_documento)}: ${_esc(v.documento)}
                         ${v.telefone_contato ? '— Tel: ' + _esc(v.telefone_contato) : ''}
                         <strong>— Documento digitalizado confirmado.</strong></span>`
-                    : `<i class="fas fa-exclamation-triangle"></i>
+                    : `<i class="fas fa-info-circle"></i>
                         <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
-                        — <strong>falta o documento digitalizado anexado.</strong>
-                        Cadastre o documento no módulo Visitantes antes de registrar o acesso.</span>`;
+                        — sem documento digitalizado anexado. Se este condomínio exigir o anexo,
+                        o servidor recusará ao salvar; caso contrário, o acesso pode ser registrado normalmente.</span>`;
             }
         } else {
             document.getElementById('nomeVisitanteRegistro').value = '';

@@ -13,6 +13,7 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 require_once __DIR__ . '/helpers/access_control_notification_helper.php';
+require_once __DIR__ . '/helpers/visitantes_config_helper.php';
 
 ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
@@ -72,12 +73,17 @@ $tem_visitante_id    = true;
 $tem_documento_visit = true;
 
 // ===== VALIDAR CADASTRO DE VISITANTE/PRESTADOR (titular ou ocupante) =====
-// Confirma que o visitante pertence ao tenant e possui documento digitalizado
-// ativo antes de liberar o registro de acesso — mesma regra para titular e ocupantes.
-function _validar_visitante_para_registro($conexao, $tenant_id, $visitante_id) {
+// Confirma que o visitante pertence ao tenant. O documento digitalizado só é
+// exigido quando ESTE condomínio marcou "Documento digitalizado" como
+// obrigatório em Configurações > Sistema > Visitantes — a mesma regra usada
+// no cadastro do visitante (visitantes_obter_config_campos). Antes, o Registro
+// Manual exigia o anexo sempre, mesmo para tenants que configuraram o anexo
+// como opcional no cadastro — bloqueando o acesso de gente que o próprio
+// condomínio decidiu não exigir identificação digitalizada.
+function _validar_visitante_para_registro($conexao, $tenant_id, $visitante_id, $anexoObrigatorio) {
     $visitante_id = (int)$visitante_id;
     if ($visitante_id <= 0) {
-        return ['ok' => false, 'mensagem' => 'Localize um visitante/prestador cadastrado pelo documento. O registro manual exige documento digitalizado anexado.'];
+        return ['ok' => false, 'mensagem' => 'Localize um visitante/prestador cadastrado pelo documento.'];
     }
 
     $stmtVisitante = $conexao->prepare(
@@ -94,27 +100,35 @@ function _validar_visitante_para_registro($conexao, $tenant_id, $visitante_id) {
     if (!$visitante) {
         return ['ok' => false, 'mensagem' => 'O visitante/prestador selecionado não pertence ao condomínio atual.'];
     }
-    if (empty($visitante['documento_arquivo'])) {
-        return ['ok' => false, 'mensagem' => 'Cadastro de ' . $visitante['nome_completo'] . ' encontrado, mas falta o documento digitalizado anexado. Cadastre o documento antes de registrar o acesso.'];
-    }
 
-    $caminhoDocumento = ltrim((string)$visitante['documento_arquivo'], './');
-    $stmtDocumento = $conexao->prepare(
-        'SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1'
-    );
-    if (!$stmtDocumento) {
-        return ['ok' => false, 'mensagem' => 'Erro ao validar o documento digitalizado do visitante.'];
-    }
-    $stmtDocumento->bind_param('is', $tenant_id, $caminhoDocumento);
-    $stmtDocumento->execute();
-    $documentoAtivo = $stmtDocumento->get_result()->fetch_assoc();
-    $stmtDocumento->close();
+    if ($anexoObrigatorio) {
+        if (empty($visitante['documento_arquivo'])) {
+            return ['ok' => false, 'mensagem' => 'Cadastro de ' . $visitante['nome_completo'] . ' encontrado, mas falta o documento digitalizado anexado (exigido pela configuração deste condomínio). Cadastre o documento antes de registrar o acesso.'];
+        }
 
-    if (!$documentoAtivo) {
-        return ['ok' => false, 'mensagem' => 'Cadastro de ' . $visitante['nome_completo'] . ' encontrado, mas o documento digitalizado não está disponível no sistema. Anexe-o novamente antes de registrar o acesso.'];
+        $caminhoDocumento = ltrim((string)$visitante['documento_arquivo'], './');
+        $stmtDocumento = $conexao->prepare(
+            'SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1'
+        );
+        if (!$stmtDocumento) {
+            return ['ok' => false, 'mensagem' => 'Erro ao validar o documento digitalizado do visitante.'];
+        }
+        $stmtDocumento->bind_param('is', $tenant_id, $caminhoDocumento);
+        $stmtDocumento->execute();
+        $documentoAtivo = $stmtDocumento->get_result()->fetch_assoc();
+        $stmtDocumento->close();
+
+        if (!$documentoAtivo) {
+            return ['ok' => false, 'mensagem' => 'Cadastro de ' . $visitante['nome_completo'] . ' encontrado, mas o documento digitalizado não está disponível no sistema. Anexe-o novamente antes de registrar o acesso.'];
+        }
     }
 
     return ['ok' => true, 'visitante' => $visitante];
+}
+
+// Normaliza um documento (CPF/RG) para comparação — remove pontuação/espaços.
+function _normalizar_documento_comparacao($documento) {
+    return preg_replace('/[^A-Za-z0-9]/', '', (string)$documento);
 }
 
 // ========== LISTAR REGISTROS ==========
@@ -259,9 +273,15 @@ if ($metodo === 'POST') {
         }
 
     } else {
-        // Visitante e Prestador compartilham o cadastro-base. O registro só
-        // é permitido quando o documento digitalizado está ativo neste tenant.
-        $validacaoTitular = _validar_visitante_para_registro($conexao, $tenant_id, $visitante_id);
+        // Visitante e Prestador compartilham o cadastro-base. O documento
+        // digitalizado só é exigido se este condomínio configurou isso como
+        // obrigatório (Configurações > Sistema > Visitantes) — a mesma regra
+        // aplicada no cadastro do visitante, para não haver exigência
+        // contraditória entre "cadastrar" e "liberar o acesso".
+        $configVisitantesCampos = visitantes_obter_config_campos($conexao, $tenant_id);
+        $anexoObrigatorio = !empty($configVisitantesCampos['documento_digitalizado']['obrigatorio']);
+
+        $validacaoTitular = _validar_visitante_para_registro($conexao, $tenant_id, $visitante_id, $anexoObrigatorio);
         if (!$validacaoTitular['ok']) {
             retornar_json(false, $validacaoTitular['mensagem']);
         }
@@ -275,22 +295,31 @@ if ($metodo === 'POST') {
     }
 
     // ── Ocupantes do veículo (apenas Visitante/Prestador) ─────────────────────
-    // Cada ocupante é validado com a MESMA regra do titular (cadastro no tenant +
-    // documento digitalizado ativo) antes de qualquer gravação, para que a falha
-    // de um ocupante não deixe o titular salvo sem os ocupantes informados.
+    // Cada ocupante é validado com a MESMA regra do titular (cadastro no tenant
+    // + configuração de anexo) antes de qualquer gravação, para que a falha de
+    // um ocupante não deixe o titular salvo sem os ocupantes informados. Também
+    // impede duas entradas com o mesmo documento no mesmo lançamento — nem por
+    // ID de cadastro nem pelo número do documento — para que um operador não
+    // consiga "forçar" a liberação repetindo a mesma pessoa na lista.
     $ocupantesValidados = [];
     if (($tipo === 'Visitante' || $tipo === 'Prestador') && !empty($dados['ocupantes']) && is_array($dados['ocupantes'])) {
         $idsJaUsados = [(int)$visitante_id];
+        $documentosJaUsados = [_normalizar_documento_comparacao($documento)];
         foreach ($dados['ocupantes'] as $ocupanteRaw) {
             $ocupanteVisitanteId = (int)($ocupanteRaw['visitante_id'] ?? 0);
             if ($ocupanteVisitanteId > 0 && in_array($ocupanteVisitanteId, $idsJaUsados, true)) {
                 retornar_json(false, 'Um dos ocupantes informados já é o titular deste acesso ou está repetido na lista de ocupantes.');
             }
-            $validacaoOcupante = _validar_visitante_para_registro($conexao, $tenant_id, $ocupanteVisitanteId);
+            $validacaoOcupante = _validar_visitante_para_registro($conexao, $tenant_id, $ocupanteVisitanteId, $anexoObrigatorio);
             if (!$validacaoOcupante['ok']) {
                 retornar_json(false, $validacaoOcupante['mensagem']);
             }
+            $documentoOcupanteNormalizado = _normalizar_documento_comparacao($validacaoOcupante['visitante']['documento']);
+            if ($documentoOcupanteNormalizado !== '' && in_array($documentoOcupanteNormalizado, $documentosJaUsados, true)) {
+                retornar_json(false, 'O documento de ' . $validacaoOcupante['visitante']['nome_completo'] . ' já está registrado neste lançamento (como titular ou outro ocupante). Não é permitido lançar o mesmo documento duas vezes.');
+            }
             $idsJaUsados[] = $ocupanteVisitanteId;
+            $documentosJaUsados[] = $documentoOcupanteNormalizado;
             $ocupantesValidados[] = $validacaoOcupante['visitante'];
         }
     }

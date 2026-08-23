@@ -255,14 +255,27 @@ function _validarDocumentoNoBlur(input, tipo) {
 function _marcarErroDocumento(mensagem) {
     const input = document.getElementById('documento');
     const erro  = document.getElementById('documentoErro');
-    if (input) input.classList.add('campo-invalido');
-    if (erro) { erro.textContent = mensagem; erro.style.display = 'block'; }
+    if (input) {
+        input.classList.add('campo-invalido');
+        input.style.borderColor = '#dc2626';
+        input.style.background  = '#fef2f2';
+    }
+    if (erro) {
+        erro.textContent = mensagem;
+        erro.style.display    = 'block';
+        erro.style.color      = '#dc2626';
+        erro.style.fontWeight = '600';
+    }
 }
 
 function _limparErroDocumento() {
     const input = document.getElementById('documento');
     const erro  = document.getElementById('documentoErro');
-    if (input) input.classList.remove('campo-invalido');
+    if (input) {
+        input.classList.remove('campo-invalido');
+        input.style.borderColor = '';
+        input.style.background  = '';
+    }
     if (erro) { erro.textContent = ''; erro.style.display = 'none'; }
 }
 
