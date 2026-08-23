@@ -169,6 +169,54 @@
                     </div>
                 </div>
 
+                <!-- Ocupantes do veículo -->
+                <div class="ocupantes-toggle-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="checkOcupantes">
+                        <span class="checkbox-custom"></span>
+                        Veículo com <strong>Ocupantes</strong> (outros visitantes/prestadores no mesmo veículo)
+                    </label>
+                </div>
+
+                <div id="ocupantesWrap" style="display:none;">
+                    <div class="form-section-title-reg">
+                        <i class="fas fa-users"></i> Ocupantes do Veículo
+                    </div>
+                    <div class="form-grid reg-grid-3">
+                        <div>
+                            <label>Tipo de Documento</label>
+                            <select id="tipoDocOcupante">
+                                <option value="CPF">CPF</option>
+                                <option value="RG">RG</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Número do Documento</label>
+                            <div style="display:flex; gap:6px; align-items:flex-end;">
+                                <input type="text" id="documentoOcupante" placeholder="000.000.000-00"
+                                       inputmode="numeric" autocomplete="off" style="flex:1">
+                                <button type="button" class="btn-buscar-doc" id="btnBuscarDocOcupante" title="Buscar cadastro">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label>Nome</label>
+                            <div style="display:flex; gap:6px; align-items:flex-end;">
+                                <input type="text" id="nomeOcupante" placeholder="Busque o documento..." readonly style="flex:1">
+                                <button type="button" class="btn-add-ocupante" id="btnAdicionarOcupante" title="Adicionar ocupante à lista" disabled>
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="ocupanteEncontrado" class="visitante-encontrado" style="display:none;"></div>
+
+                    <div id="listaOcupantes" class="lista-ocupantes"></div>
+                    <input type="hidden" id="ocupanteVisitanteIdTemp" value="">
+                </div>
+
                 <!-- Unidade e Morador destino -->
                 <div class="form-section-title-reg">
                     <i class="fas fa-map-marker-alt"></i> Destino
@@ -339,4 +387,41 @@
 /* ── Badge entrada/saída na tabela ────────────────────────── */
 .badge-entrada { background:#dcfce7; color:#16a34a; padding:2px 10px; border-radius:20px; font-size:12px; font-weight:600; }
 .badge-saida   { background:#fee2e2; color:#dc2626; padding:2px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+.badge-ocupante { background:#ede9fe; color:#6d28d9; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; margin-left:6px; white-space:nowrap; }
+
+/* ── Ocupantes do veículo ─────────────────────────────────── */
+.ocupantes-toggle-row {
+    margin:14px 0 10px;
+    padding:10px 14px;
+    background:#fafafa;
+    border:1px solid #e2e8f0;
+    border-radius:8px;
+}
+
+.btn-add-ocupante {
+    background:#16a34a; color:#fff; border:none;
+    border-radius:6px; padding:8px 14px;
+    cursor:pointer; white-space:nowrap;
+}
+.btn-add-ocupante:hover:not(:disabled) { background:#15803d; }
+.btn-add-ocupante:disabled { background:#a7b0bd; cursor:not-allowed; }
+
+.lista-ocupantes {
+    display:flex; flex-wrap:wrap; gap:8px;
+    margin:4px 0 18px;
+}
+.ocupante-chip {
+    display:flex; align-items:center; gap:8px;
+    background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3;
+    border-radius:20px; padding:6px 8px 6px 14px;
+    font-size:13px; font-weight:500;
+}
+.ocupante-chip small { color:#6366f1; font-weight:600; }
+.ocupante-chip .btn-remover-ocupante {
+    background:#4338ca; color:#fff; border:none;
+    width:20px; height:20px; border-radius:50%;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    font-size:11px; line-height:1; padding:0;
+}
+.ocupante-chip .btn-remover-ocupante:hover { background:#312e81; }
 </style>

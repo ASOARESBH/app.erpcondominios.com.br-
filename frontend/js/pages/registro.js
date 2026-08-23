@@ -16,6 +16,7 @@ const API_UNIDADES    = '../api/api_unidades.php';
 let registrosCache = [];
 let veiculosCache  = [];
 let salvandoReg    = false;
+let ocupantesAdicionados = []; // [{ visitante_id, nome, documento, tipo_documento }]
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 export function init() {
@@ -29,6 +30,7 @@ export function init() {
     _setupCascataVisitante();
     _setupCascataMorador();
     _setupCheckDependente();
+    _setupOcupantes();
     _carregarUnidades();
 
     atualizarDataHoraAtual();
@@ -38,7 +40,8 @@ export function init() {
     window.RegistroPage = {
         buscar:  buscarRegistros,
         excluir: excluirRegistro,
-        limpar:  limparFormulario
+        limpar:  limparFormulario,
+        removerOcupante: removerOcupante
     };
     console.log('[Registro] Módulo pronto.');
 }
@@ -49,6 +52,7 @@ export function destroy() {
     registrosCache = [];
     veiculosCache  = [];
     salvandoReg    = false;
+    ocupantesAdicionados = [];
 }
 
 // ── Toggle Entrada / Saída ────────────────────────────────────────────────────
@@ -280,6 +284,22 @@ function _setupCascataVisitante() {
 }
 
 // ── Máscara Documento ─────────────────────────────────────────────────────────
+function _aplicarMascaraDocumentoValor(tipo, valor) {
+    let v = valor.replace(/\D/g, '');
+    if (tipo === 'CPF') {
+        v = v.slice(0, 11);
+        if (v.length > 9)      v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+        else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+        else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+    } else {
+        v = v.slice(0, 9);
+        if (v.length > 8)      v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4');
+        else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+        else if (v.length > 2) v = v.replace(/(\d{2})(\d{1,3})/, '$1.$2');
+    }
+    return v;
+}
+
 function _setupMascaraDocumento() {
     const tipoDoc  = document.getElementById('tipoDocRegistro');
     const docInput = document.getElementById('documentoRegistro');
@@ -291,19 +311,7 @@ function _setupMascaraDocumento() {
     });
 
     docInput.addEventListener('input', () => {
-        let v = docInput.value.replace(/\D/g, '');
-        if (tipoDoc.value === 'CPF') {
-            v = v.slice(0, 11);
-            if (v.length > 9)      v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
-            else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
-            else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
-        } else {
-            v = v.slice(0, 9);
-            if (v.length > 8)      v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4');
-            else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
-            else if (v.length > 2) v = v.replace(/(\d{2})(\d{1,3})/, '$1.$2');
-        }
-        docInput.value = v;
+        docInput.value = _aplicarMascaraDocumentoValor(tipoDoc.value, docInput.value);
     });
 
     docInput.addEventListener('keydown', e => {
@@ -312,6 +320,164 @@ function _setupMascaraDocumento() {
 
     const btnBuscar = document.getElementById('btnBuscarDocRegistro');
     if (btnBuscar) btnBuscar.addEventListener('click', _buscarVisitantePorDocumento);
+}
+
+// ── Ocupantes do Veículo (Visitante/Prestador) ────────────────────────────────
+function _setupOcupantes() {
+    const check = document.getElementById('checkOcupantes');
+    const wrap  = document.getElementById('ocupantesWrap');
+    if (check) {
+        check.addEventListener('change', () => {
+            if (wrap) wrap.style.display = check.checked ? 'block' : 'none';
+            if (!check.checked) _limparOcupantes();
+        });
+    }
+
+    const tipoDoc  = document.getElementById('tipoDocOcupante');
+    const docInput = document.getElementById('documentoOcupante');
+    if (tipoDoc && docInput) {
+        tipoDoc.addEventListener('change', () => {
+            docInput.value = '';
+            docInput.placeholder = tipoDoc.value === 'CPF' ? '000.000.000-00' : 'XX.XXX.XXX-X';
+            _resetBuscaOcupante();
+        });
+        docInput.addEventListener('input', () => {
+            docInput.value = _aplicarMascaraDocumentoValor(tipoDoc.value, docInput.value);
+            _resetBuscaOcupante();
+        });
+        docInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); _buscarOcupantePorDocumento(); }
+        });
+    }
+
+    const btnBuscar = document.getElementById('btnBuscarDocOcupante');
+    if (btnBuscar) btnBuscar.addEventListener('click', _buscarOcupantePorDocumento);
+
+    const btnAdd = document.getElementById('btnAdicionarOcupante');
+    if (btnAdd) btnAdd.addEventListener('click', _adicionarOcupante);
+}
+
+function _resetBuscaOcupante() {
+    const nomeEl = document.getElementById('nomeOcupante');
+    if (nomeEl) nomeEl.value = '';
+    const idEl = document.getElementById('ocupanteVisitanteIdTemp');
+    if (idEl) idEl.value = '';
+    const btnAdd = document.getElementById('btnAdicionarOcupante');
+    if (btnAdd) btnAdd.disabled = true;
+    const box = document.getElementById('ocupanteEncontrado');
+    if (box) { box.style.display = 'none'; box.classList.remove('visitante-documento-pendente'); box.innerHTML = ''; }
+}
+
+async function _buscarOcupantePorDocumento() {
+    const docInput = document.getElementById('documentoOcupante');
+    const doc = docInput?.value.trim() || '';
+    if (!doc) { mostrarAlerta('error', 'Informe o documento do ocupante para buscar.'); return; }
+
+    const btnBuscar = document.getElementById('btnBuscarDocOcupante');
+    if (btnBuscar) { btnBuscar.disabled = true; btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+
+    try {
+        const resp = await fetch(`${API_VISITANTES}?documento=${encodeURIComponent(doc)}`);
+        const data = await resp.json();
+        const box    = document.getElementById('ocupanteEncontrado');
+        const btnAdd = document.getElementById('btnAdicionarOcupante');
+
+        if (data.sucesso && data.dados) {
+            const v = data.dados;
+            const idTitular    = document.getElementById('visitanteIdRegistro')?.value || '';
+            const ehTitular     = idTitular && String(v.id) === String(idTitular);
+            const jaAdicionado  = ocupantesAdicionados.some(o => String(o.visitante_id) === String(v.id));
+            const documentoAnexado = Boolean(v.documento_arquivo);
+            const podeAdicionar = documentoAnexado && !ehTitular && !jaAdicionado;
+
+            document.getElementById('nomeOcupante').value = v.nome_completo || '';
+            document.getElementById('ocupanteVisitanteIdTemp').value = podeAdicionar ? (v.id || '') : '';
+
+            if (box) {
+                box.style.display = 'flex';
+                box.classList.toggle('visitante-documento-pendente', !podeAdicionar);
+                if (ehTitular) {
+                    box.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
+                        <span>Esta pessoa já é a <strong>titular</strong> deste acesso — selecione outro documento.</span>`;
+                } else if (jaAdicionado) {
+                    box.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
+                        <span><strong>${_esc(v.nome_completo)}</strong> já foi adicionado à lista de ocupantes.</span>`;
+                } else if (!documentoAnexado) {
+                    box.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
+                        <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
+                        — <strong>falta o documento digitalizado anexado.</strong>
+                        Cadastre o documento no módulo Visitantes antes de adicionar como ocupante.</span>`;
+                } else {
+                    box.innerHTML = `<i class="fas fa-check-circle"></i>
+                        <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
+                        — ${_esc(v.tipo_documento)}: ${_esc(v.documento)}
+                        <strong>— pronto para adicionar.</strong></span>`;
+                }
+            }
+            if (btnAdd) btnAdd.disabled = !podeAdicionar;
+        } else {
+            document.getElementById('nomeOcupante').value = '';
+            document.getElementById('ocupanteVisitanteIdTemp').value = '';
+            if (btnAdd) btnAdd.disabled = true;
+            if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+            mostrarAlerta('warning', 'Ocupante não encontrado no cadastro de Visitantes. Cadastre-o no módulo Visitantes antes de adicioná-lo aqui.');
+        }
+    } catch (error) {
+        console.error('[Registro] Erro ao buscar ocupante:', error);
+        mostrarAlerta('error', 'Erro ao buscar cadastro do ocupante.');
+    } finally {
+        if (btnBuscar) { btnBuscar.disabled = false; btnBuscar.innerHTML = '<i class="fas fa-search"></i>'; }
+    }
+}
+
+function _adicionarOcupante() {
+    const visitanteId = document.getElementById('ocupanteVisitanteIdTemp')?.value || '';
+    const nome         = document.getElementById('nomeOcupante')?.value.trim() || '';
+    const documento    = document.getElementById('documentoOcupante')?.value.trim() || '';
+    const tipoDoc      = document.getElementById('tipoDocOcupante')?.value || 'CPF';
+
+    if (!visitanteId || !nome) {
+        mostrarAlerta('error', 'Busque um cadastro válido antes de adicionar o ocupante.');
+        return;
+    }
+
+    ocupantesAdicionados.push({ visitante_id: visitanteId, nome, documento, tipo_documento: tipoDoc });
+    _renderizarListaOcupantes();
+
+    // Limpa a busca para permitir adicionar o próximo ocupante em seguida.
+    const docInput = document.getElementById('documentoOcupante');
+    if (docInput) docInput.value = '';
+    _resetBuscaOcupante();
+    docInput?.focus();
+}
+
+function removerOcupante(visitanteId) {
+    ocupantesAdicionados = ocupantesAdicionados.filter(o => String(o.visitante_id) !== String(visitanteId));
+    _renderizarListaOcupantes();
+}
+
+function _renderizarListaOcupantes() {
+    const lista = document.getElementById('listaOcupantes');
+    if (!lista) return;
+    lista.innerHTML = ocupantesAdicionados.map(o => `
+        <span class="ocupante-chip">
+            <i class="fas fa-user"></i> ${_esc(o.nome)} <small>(${_esc(o.tipo_documento)}: ${_esc(o.documento)})</small>
+            <button type="button" class="btn-remover-ocupante" title="Remover ocupante" onclick="window.RegistroPage.removerOcupante('${_esc(o.visitante_id)}')">
+                <i class="fas fa-times"></i>
+            </button>
+        </span>`).join('');
+}
+
+function _limparOcupantes() {
+    ocupantesAdicionados = [];
+    _renderizarListaOcupantes();
+    _resetBuscaOcupante();
+    const docInput = document.getElementById('documentoOcupante');
+    if (docInput) docInput.value = '';
+    const check = document.getElementById('checkOcupantes');
+    if (check) check.checked = false;
+    const wrap = document.getElementById('ocupantesWrap');
+    if (wrap) wrap.style.display = 'none';
 }
 
 // ── Buscar Visitante por Documento ────────────────────────────────────────────
@@ -412,6 +578,7 @@ function onTipoChange() {
         document.getElementById('visitanteIdRegistro').value = '';
         const boxV = document.getElementById('visitanteEncontrado');
         if (boxV) { boxV.style.display = 'none'; boxV.innerHTML = ''; }
+        _limparOcupantes();
     }
 
     if (tipo !== 'Morador') {
@@ -494,7 +661,8 @@ function renderRegistros(registros) {
         const modelo    = _esc(r.modelo || '-');
         const cor       = _esc(r.cor || '-');
         const tipo      = _esc(r.tipo || '-');
-        const nome      = _esc(r.morador_nome || r.nome_visitante || r.tipo || '-');
+        const nome      = _esc(r.morador_nome || r.nome_visitante || r.tipo || '-')
+            + (r.papel_veiculo === 'OCUPANTE' ? '<span class="badge-ocupante"><i class="fas fa-user-friends"></i> Ocupante</span>' : '');
         const unidade   = _esc(r.morador_unidade || r.unidade_destino || '-');
         const status    = _esc(r.status || '-');
         const statusClass = classificarStatus(r.status, r.liberado);
@@ -605,6 +773,18 @@ async function salvarRegistro() {
             payload.dias_permanencia = diasPermanencia;
             if (visitanteId) payload.visitante_id = visitanteId;
             if (documento)   payload.documento     = documento;
+
+            // Ocupantes: cada um vira um registro de acesso próprio (papel_veiculo=OCUPANTE),
+            // vinculado ao registro titular, para que o mesmo veículo/horário fique
+            // rastreável mesmo que algum ocupante já tenha registro como titular em outro veículo.
+            const checkOcup = document.getElementById('checkOcupantes');
+            if (checkOcup?.checked && ocupantesAdicionados.length > 0) {
+                payload.ocupantes = ocupantesAdicionados.map(o => ({
+                    visitante_id:   o.visitante_id,
+                    documento:      o.documento,
+                    tipo_documento: o.tipo_documento
+                }));
+            }
         }
 
         console.log('[Registro] Payload:', payload);
@@ -618,7 +798,11 @@ async function salvarRegistro() {
 
         if (!data.sucesso) { mostrarAlerta('error', data.mensagem || 'Falha ao registrar acesso.'); return; }
 
-        mostrarAlerta('success', data.mensagem || 'Registro salvo com sucesso.');
+        const qtdOcupantes = Number(data.dados?.ocupantes_registrados?.length || 0);
+        const mensagemSucesso = qtdOcupantes > 0
+            ? `${data.mensagem || 'Registro salvo com sucesso.'} + ${qtdOcupantes} ocupante${qtdOcupantes > 1 ? 's' : ''} registrado${qtdOcupantes > 1 ? 's' : ''}.`
+            : (data.mensagem || 'Registro salvo com sucesso.');
+        mostrarAlerta('success', mensagemSucesso);
         limparFormulario();
         await carregarRegistros();
 
@@ -666,6 +850,7 @@ function limparFormulario() {
     if (boxV) { boxV.style.display = 'none'; boxV.innerHTML = ''; }
     const boxVis = document.getElementById('visitanteEncontrado');
     if (boxVis) { boxVis.style.display = 'none'; boxVis.classList.remove('visitante-documento-pendente'); boxVis.innerHTML = ''; }
+    _limparOcupantes();
 
     const selMorDest = document.getElementById('moradorDestinoRegistro');
     if (selMorDest) { selMorDest.innerHTML = '<option value="">Selecione a unidade primeiro</option>'; selMorDest.disabled = true; }

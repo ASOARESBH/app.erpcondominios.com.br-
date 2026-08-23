@@ -59,11 +59,63 @@ _garantir_coluna($conexao, 'registros_acesso', 'tipo_acesso',    "ENUM('Entrada'
 _garantir_coluna($conexao, 'registros_acesso', 'dependente_id',  "INT NULL DEFAULT NULL");
 _garantir_coluna($conexao, 'registros_acesso', 'visitante_id',   "INT NULL DEFAULT NULL");
 _garantir_coluna($conexao, 'registros_acesso', 'documento_visitante', "VARCHAR(30) NULL DEFAULT NULL");
+// Ocupantes de veículo: cada ocupante vira seu próprio registro_acesso, marcado
+// como OCUPANTE e apontando para o registro TITULAR do mesmo veículo/horário.
+// Isso permite que a mesma pessoa seja titular em um veículo e ocupante em outro
+// sem que os dois papéis se confundam no histórico.
+_garantir_coluna($conexao, 'registros_acesso', 'papel_veiculo',  "ENUM('TITULAR','OCUPANTE') NOT NULL DEFAULT 'TITULAR'");
+_garantir_coluna($conexao, 'registros_acesso', 'registro_titular_id', "INT NULL DEFAULT NULL");
 
 $tem_tipo_acesso     = true; // acabou de garantir
 $tem_dependente_id   = true;
 $tem_visitante_id    = true;
 $tem_documento_visit = true;
+
+// ===== VALIDAR CADASTRO DE VISITANTE/PRESTADOR (titular ou ocupante) =====
+// Confirma que o visitante pertence ao tenant e possui documento digitalizado
+// ativo antes de liberar o registro de acesso — mesma regra para titular e ocupantes.
+function _validar_visitante_para_registro($conexao, $tenant_id, $visitante_id) {
+    $visitante_id = (int)$visitante_id;
+    if ($visitante_id <= 0) {
+        return ['ok' => false, 'mensagem' => 'Localize um visitante/prestador cadastrado pelo documento. O registro manual exige documento digitalizado anexado.'];
+    }
+
+    $stmtVisitante = $conexao->prepare(
+        'SELECT id, nome_completo, documento, tipo_documento, documento_arquivo FROM visitantes WHERE tenant_id = ? AND id = ? LIMIT 1'
+    );
+    if (!$stmtVisitante) {
+        return ['ok' => false, 'mensagem' => 'Erro ao validar o cadastro do visitante.'];
+    }
+    $stmtVisitante->bind_param('ii', $tenant_id, $visitante_id);
+    $stmtVisitante->execute();
+    $visitante = $stmtVisitante->get_result()->fetch_assoc();
+    $stmtVisitante->close();
+
+    if (!$visitante) {
+        return ['ok' => false, 'mensagem' => 'O visitante/prestador selecionado não pertence ao condomínio atual.'];
+    }
+    if (empty($visitante['documento_arquivo'])) {
+        return ['ok' => false, 'mensagem' => 'Cadastro de ' . $visitante['nome_completo'] . ' encontrado, mas falta o documento digitalizado anexado. Cadastre o documento antes de registrar o acesso.'];
+    }
+
+    $caminhoDocumento = ltrim((string)$visitante['documento_arquivo'], './');
+    $stmtDocumento = $conexao->prepare(
+        'SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1'
+    );
+    if (!$stmtDocumento) {
+        return ['ok' => false, 'mensagem' => 'Erro ao validar o documento digitalizado do visitante.'];
+    }
+    $stmtDocumento->bind_param('is', $tenant_id, $caminhoDocumento);
+    $stmtDocumento->execute();
+    $documentoAtivo = $stmtDocumento->get_result()->fetch_assoc();
+    $stmtDocumento->close();
+
+    if (!$documentoAtivo) {
+        return ['ok' => false, 'mensagem' => 'Cadastro de ' . $visitante['nome_completo'] . ' encontrado, mas o documento digitalizado não está disponível no sistema. Anexe-o novamente antes de registrar o acesso.'];
+    }
+
+    return ['ok' => true, 'visitante' => $visitante];
+}
 
 // ========== LISTAR REGISTROS ==========
 if ($metodo === 'GET') {
@@ -75,6 +127,7 @@ if ($metodo === 'GET') {
             r.nome_visitante, r.unidade_destino, r.dias_permanencia,
             r.status, r.liberado, r.observacao,
             r.tipo_acesso, r.dependente_id,
+            r.papel_veiculo, r.registro_titular_id,
             m.nome AS morador_nome, m.unidade AS morador_unidade,
             d.nome_completo AS dependente_nome
             FROM registros_acesso r
@@ -208,43 +261,11 @@ if ($metodo === 'POST') {
     } else {
         // Visitante e Prestador compartilham o cadastro-base. O registro só
         // é permitido quando o documento digitalizado está ativo neste tenant.
-        if (!$visitante_id) {
-            retornar_json(false, 'Localize um visitante/prestador cadastrado pelo documento. O registro manual exige documento digitalizado anexado.');
+        $validacaoTitular = _validar_visitante_para_registro($conexao, $tenant_id, $visitante_id);
+        if (!$validacaoTitular['ok']) {
+            retornar_json(false, $validacaoTitular['mensagem']);
         }
-
-        $stmtVisitante = $conexao->prepare(
-            'SELECT id, nome_completo, documento, documento_arquivo FROM visitantes WHERE tenant_id = ? AND id = ? LIMIT 1'
-        );
-        if (!$stmtVisitante) {
-            retornar_json(false, 'Erro ao validar o cadastro do visitante.');
-        }
-        $stmtVisitante->bind_param('ii', $tenant_id, $visitante_id);
-        $stmtVisitante->execute();
-        $visitante = $stmtVisitante->get_result()->fetch_assoc();
-        $stmtVisitante->close();
-
-        if (!$visitante) {
-            retornar_json(false, 'O visitante/prestador selecionado não pertence ao condomínio atual.');
-        }
-        if (empty($visitante['documento_arquivo'])) {
-            retornar_json(false, 'Cadastro encontrado, mas falta o documento digitalizado anexado. Cadastre o documento antes de registrar o acesso.');
-        }
-
-        $caminhoDocumento = ltrim((string)$visitante['documento_arquivo'], './');
-        $stmtDocumento = $conexao->prepare(
-            'SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1'
-        );
-        if (!$stmtDocumento) {
-            retornar_json(false, 'Erro ao validar o documento digitalizado do visitante.');
-        }
-        $stmtDocumento->bind_param('is', $tenant_id, $caminhoDocumento);
-        $stmtDocumento->execute();
-        $documentoAtivo = $stmtDocumento->get_result()->fetch_assoc();
-        $stmtDocumento->close();
-
-        if (!$documentoAtivo) {
-            retornar_json(false, 'Cadastro encontrado, mas o documento digitalizado não está disponível no sistema. Anexe-o novamente antes de registrar o acesso.');
-        }
+        $visitante = $validacaoTitular['visitante'];
 
         // Usa somente os dados confirmados no cadastro do tenant.
         $nome_visitante = $visitante['nome_completo'];
@@ -253,88 +274,150 @@ if ($metodo === 'POST') {
         $liberado = 1;
     }
 
-    // ── Montar INSERT dinamicamente ──────────────────────────────────────────
-    $cols   = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante';
-    $marks  = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    // ── Ocupantes do veículo (apenas Visitante/Prestador) ─────────────────────
+    // Cada ocupante é validado com a MESMA regra do titular (cadastro no tenant +
+    // documento digitalizado ativo) antes de qualquer gravação, para que a falha
+    // de um ocupante não deixe o titular salvo sem os ocupantes informados.
+    $ocupantesValidados = [];
+    if (($tipo === 'Visitante' || $tipo === 'Prestador') && !empty($dados['ocupantes']) && is_array($dados['ocupantes'])) {
+        $idsJaUsados = [(int)$visitante_id];
+        foreach ($dados['ocupantes'] as $ocupanteRaw) {
+            $ocupanteVisitanteId = (int)($ocupanteRaw['visitante_id'] ?? 0);
+            if ($ocupanteVisitanteId > 0 && in_array($ocupanteVisitanteId, $idsJaUsados, true)) {
+                retornar_json(false, 'Um dos ocupantes informados já é o titular deste acesso ou está repetido na lista de ocupantes.');
+            }
+            $validacaoOcupante = _validar_visitante_para_registro($conexao, $tenant_id, $ocupanteVisitanteId);
+            if (!$validacaoOcupante['ok']) {
+                retornar_json(false, $validacaoOcupante['mensagem']);
+            }
+            $idsJaUsados[] = $ocupanteVisitanteId;
+            $ocupantesValidados[] = $validacaoOcupante['visitante'];
+        }
+    }
+
+    // ── Montar INSERT dinamicamente (registro titular + ocupantes) ────────────
+    // papel_veiculo/registro_titular_id distinguem o condutor/visitante principal
+    // dos ocupantes do mesmo veículo, mesmo que um ocupante já seja titular em
+    // outro registro (outro veículo) — cada linha é um evento de acesso próprio.
+    $cols  = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante, papel_veiculo, registro_titular_id';
+    $marks = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
     // i=tenant_id(1) s=data_hora(2) s=placa(3) s=modelo(4) s=cor(5) s=tag(6) s=tipo(7)
     // i=morador_id(8) s=nome_visitante(9) s=unidade_destino(10)
     // i=dias_permanencia(11) s=status(12) i=liberado(13) s=observacao(14)
     // s=tipo_acesso(15) i=dependente_id(16) i=visitante_id(17) s=documento_visitante(18)
-    $types = 'issssssissisissiis';
+    // s=papel_veiculo(19) i=registro_titular_id(20)
+    $types = 'issssssissisissiis' . 'si';
+    $sql   = "INSERT INTO registros_acesso ($cols) VALUES ($marks)";
 
-    $params = [
-        &$tenant_id, &$data_hora, &$placa, &$modelo, &$cor, &$tag, &$tipo,
-        &$morador_id, &$nome_visitante, &$unidade_destino,
-        &$dias_permanencia, &$status, &$liberado, &$observacao,
-        &$tipo_acesso, &$dependente_id, &$visitante_id, &$documento
-    ];
+    $conexao->begin_transaction();
+    $id_inserido = 0;
+    $ocupantesRegistrados = [];
+    try {
+        // Registro titular
+        $papel_veiculo_titular = 'TITULAR';
+        $registro_titular_id_nulo = null;
+        $params = [
+            &$tenant_id, &$data_hora, &$placa, &$modelo, &$cor, &$tag, &$tipo,
+            &$morador_id, &$nome_visitante, &$unidade_destino,
+            &$dias_permanencia, &$status, &$liberado, &$observacao,
+            &$tipo_acesso, &$dependente_id, &$visitante_id, &$documento,
+            &$papel_veiculo_titular, &$registro_titular_id_nulo
+        ];
 
-    $sql  = "INSERT INTO registros_acesso ($cols) VALUES ($marks)";
-    $stmt = $conexao->prepare($sql);
+        $stmt = $conexao->prepare($sql);
+        if (!$stmt) throw new RuntimeException('Erro ao preparar inserção: ' . $conexao->error);
+        call_user_func_array([$stmt, 'bind_param'], array_merge([&$types], $params));
 
-    if (!$stmt) {
-        log_registro('ERRO prepare INSERT', ['sql' => $sql, 'erro' => $conexao->error]);
-        retornar_json(false, 'Erro ao preparar inserção: ' . $conexao->error);
+        log_registro('INSERT executando (titular)', [
+            'placa' => $placa, 'tipo' => $tipo, 'tipo_acesso' => $tipo_acesso,
+            'morador_id' => $morador_id, 'dependente_id' => $dependente_id, 'visitante_id' => $visitante_id,
+        ]);
+
+        if (!$stmt->execute()) {
+            $erro = $stmt->error;
+            $stmt->close();
+            throw new RuntimeException('Erro ao criar registro: ' . $erro);
+        }
+        $id_inserido = $conexao->insert_id;
+        $stmt->close();
+
+        // Registros dos ocupantes — mesmo veículo/horário, cada um com seu próprio visitante_id.
+        foreach ($ocupantesValidados as $ocupante) {
+            $ocNome        = $ocupante['nome_completo'];
+            $ocDocumento   = $ocupante['documento'];
+            $ocVisitanteId = (int)$ocupante['id'];
+            $ocStatus      = '🟨 Ocupante do veículo (' . $tipo . ') — titular: ' . $nome_visitante;
+            $ocLiberado    = 1;
+            $ocDependente  = null;
+            $ocPapel       = 'OCUPANTE';
+
+            $paramsOc = [
+                &$tenant_id, &$data_hora, &$placa, &$modelo, &$cor, &$tag, &$tipo,
+                &$morador_id, &$ocNome, &$unidade_destino,
+                &$dias_permanencia, &$ocStatus, &$ocLiberado, &$observacao,
+                &$tipo_acesso, &$ocDependente, &$ocVisitanteId, &$ocDocumento,
+                &$ocPapel, &$id_inserido
+            ];
+
+            $stmtOc = $conexao->prepare($sql);
+            if (!$stmtOc) throw new RuntimeException('Erro ao preparar inserção de ocupante: ' . $conexao->error);
+            call_user_func_array([$stmtOc, 'bind_param'], array_merge([&$types], $paramsOc));
+
+            if (!$stmtOc->execute()) {
+                $erroOc = $stmtOc->error;
+                $stmtOc->close();
+                throw new RuntimeException('Erro ao registrar o ocupante ' . $ocNome . ': ' . $erroOc);
+            }
+            $ocupantesRegistrados[] = ['id' => $conexao->insert_id, 'nome' => $ocNome, 'visitante_id' => $ocVisitanteId];
+            $stmtOc->close();
+        }
+
+        $conexao->commit();
+    } catch (Throwable $erroTransacao) {
+        $conexao->rollback();
+        log_registro('ERRO transacao registro+ocupantes', ['erro' => $erroTransacao->getMessage()]);
+        retornar_json(false, $erroTransacao->getMessage());
     }
 
-    $bind_args = array_merge([&$types], $params);
-    call_user_func_array([$stmt, 'bind_param'], $bind_args);
+    log_registro('INSERT OK', ['id' => $id_inserido, 'status' => $status, 'tipo_acesso' => $tipo_acesso, 'ocupantes' => count($ocupantesRegistrados)]);
+    registrar_log('REGISTRO_CRIADO', "Registro manual criado: $placa ($tipo) - $tipo_acesso" . (count($ocupantesRegistrados) ? ' + ' . count($ocupantesRegistrados) . ' ocupante(s)' : ''));
 
-    log_registro('INSERT executando', [
-        'placa'        => $placa,
-        'tipo'         => $tipo,
-        'tipo_acesso'  => $tipo_acesso,
-        'morador_id'   => $morador_id,
-        'dependente_id'=> $dependente_id,
-        'visitante_id' => $visitante_id,
+    // O acesso é a operação prioritária. A notificação é complementar e
+    // jamais pode desfazer uma entrada/saída registrada com sucesso.
+    $notificacao = ['sucesso' => false, 'motivo' => 'nao_processada'];
+    try {
+        $notificacao = controle_acesso_criar_notificacao_registro(
+            $conexao,
+            (int)$tenant_id,
+            (int)$id_inserido,
+            $morador_id ? (int)$morador_id : null,
+            $unidade_destino,
+            $tipo_acesso,
+            $tipo,
+            $placa,
+            $modelo,
+            $data_hora
+        );
+    } catch (Throwable $erro_notificacao) {
+        log_registro('NOTIFICACAO ACESSO FALHOU (não bloqueante)', [
+            'registro_id' => $id_inserido,
+            'erro' => $erro_notificacao->getMessage(),
+        ]);
+        $notificacao = ['sucesso' => false, 'motivo' => 'excecao_nao_bloqueante'];
+    }
+    log_registro('NOTIFICACAO ACESSO PROCESSADA', [
+        'registro_id' => $id_inserido,
+        'resultado' => $notificacao,
     ]);
 
-    if ($stmt->execute()) {
-        $id_inserido = $conexao->insert_id;
-        log_registro('INSERT OK', ['id' => $id_inserido, 'status' => $status, 'tipo_acesso' => $tipo_acesso]);
-        registrar_log('REGISTRO_CRIADO', "Registro manual criado: $placa ($tipo) - $tipo_acesso");
-
-        // O acesso é a operação prioritária. A notificação é complementar e
-        // jamais pode desfazer uma entrada/saída registrada com sucesso.
-        $notificacao = ['sucesso' => false, 'motivo' => 'nao_processada'];
-        try {
-            $notificacao = controle_acesso_criar_notificacao_registro(
-                $conexao,
-                (int)$tenant_id,
-                (int)$id_inserido,
-                $morador_id ? (int)$morador_id : null,
-                $unidade_destino,
-                $tipo_acesso,
-                $tipo,
-                $placa,
-                $modelo,
-                $data_hora
-            );
-        } catch (Throwable $erro_notificacao) {
-            log_registro('NOTIFICACAO ACESSO FALHOU (não bloqueante)', [
-                'registro_id' => $id_inserido,
-                'erro' => $erro_notificacao->getMessage(),
-            ]);
-            $notificacao = ['sucesso' => false, 'motivo' => 'excecao_nao_bloqueante'];
-        }
-        log_registro('NOTIFICACAO ACESSO PROCESSADA', [
-            'registro_id' => $id_inserido,
-            'resultado' => $notificacao,
-        ]);
-
-        retornar_json(true, $status, [
-            'id' => $id_inserido,
-            'liberado' => $liberado,
-            'status' => $status,
-            'tipo_acesso' => $tipo_acesso,
-            'notificacao_controle_acesso' => $notificacao,
-        ]);
-    } else {
-        log_registro('ERRO execute INSERT', ['erro' => $stmt->error, 'errno' => $stmt->errno]);
-        retornar_json(false, 'Erro ao criar registro: ' . $stmt->error);
-    }
-
-    $stmt->close();
+    retornar_json(true, $status, [
+        'id' => $id_inserido,
+        'liberado' => $liberado,
+        'status' => $status,
+        'tipo_acesso' => $tipo_acesso,
+        'notificacao_controle_acesso' => $notificacao,
+        'ocupantes_registrados' => $ocupantesRegistrados,
+    ]);
 }
 
 // ========== ATUALIZAR REGISTRO ==========
