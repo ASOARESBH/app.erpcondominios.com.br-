@@ -485,6 +485,19 @@ function _renderCardModulo(m, usuario) {
         { key:'pode_exportar', label:'Exportar', icon:'fa-download' }
     ];
 
+    // No modo RBAC nem todo módulo tem as 5 ações "legadas" cadastradas em
+    // rbac_permissoes (ex.: um módulo pai pode só ter "visualizar"). Antes,
+    // o card sempre desenhava os 5 chips mesmo quando a ação não existia no
+    // catálogo — o operador marcava "Criar"/"Editar" e o servidor descartava
+    // a mudança em silêncio (rbacSalvarExcecoesLegadas pula ações sem
+    // permissao_id correspondente), dando a falsa impressão de que "não salva".
+    // Aqui só mostramos os chips das ações que realmente existem para o módulo.
+    const acoesDoModulo = Array.isArray(m.modulo?.acoes) ? m.modulo.acoes : null;
+    const campoPorAcao = { visualizar:'pode_acessar', criar:'pode_criar', editar:'pode_editar', excluir:'pode_excluir', exportar:'pode_exportar' };
+    const permsDisponiveis = acoesDoModulo
+        ? perms.filter(p => p.key === 'pode_acessar' || acoesDoModulo.some(acao => campoPorAcao[acao] === p.key))
+        : perms;
+
     return `
     <div class="mod-card ${classeCard}" id="card_${m.modulo_chave}" data-chave="${m.modulo_chave}" data-grupo="${m.grupo}">
         <div class="mod-card-top">
@@ -499,7 +512,7 @@ function _renderCardModulo(m, usuario) {
             ${!perfilPermite ? `<div title="Perfil não tem permissão mínima" style="color:#94a3b8;font-size:0.85rem;"><i class="fas fa-lock"></i></div>` : ''}
         </div>
         <div class="mod-card-perms" id="perms_${m.modulo_chave}">
-            ${perms.map(p => {
+            ${permsDisponiveis.map(p => {
                 const ativo = !!perm[p.key];
                 const desabilitado = !perfilPermite || (p.key !== 'pode_acessar' && !perm.pode_acessar);
                 return `<div class="mod-perm-chip ${ativo ? 'on' : 'off'} ${desabilitado ? 'disabled' : ''}"

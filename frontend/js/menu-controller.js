@@ -18,9 +18,9 @@
         { id: 'configuracao', label: 'Configuracoes', icon: 'fas fa-cog', page: 'configuracao', href: 'configuracao.html', order: 9 },
         { id: 'unidades', label: 'Unidades', icon: 'fas fa-home', page: 'unidades', href: 'layout-base.html?page=unidades', order: 10 },
         { id: 'manutencao', label: 'Manutencao', icon: 'fas fa-tools', page: 'manutencao', href: 'manutencao.html', order: 11 },
-        { id: 'administrativa', label: 'Administrativo', icon: 'fas fa-briefcase', page: 'administrativa', href: 'administrativa.html', order: 11 },
-        { id: 'recursos_humanos', label: 'Recursos Humanos', icon: 'fas fa-users-cog', page: 'recursos_humanos', href: 'layout-base.html?page=recursos_humanos', order: 12 },
-        { id: 'manual', label: 'Manual do Sistema', icon: 'fas fa-book-open', page: 'manual', href: 'layout-base.html?page=manual', order: 13, style: 'color: #60a5fa; font-weight: 600;', separator: true }
+        { id: 'administrativa', label: 'Administrativo', icon: 'fas fa-briefcase', page: 'administrativa', href: 'administrativa.html', order: 12 },
+        { id: 'recursos_humanos', label: 'Recursos Humanos', icon: 'fas fa-users-cog', page: 'recursos_humanos', href: 'layout-base.html?page=recursos_humanos', order: 13 },
+        { id: 'manual', label: 'Manual do Sistema', icon: 'fas fa-book-open', page: 'manual', href: 'layout-base.html?page=manual', order: 14, style: 'color: #60a5fa; font-weight: 600;', separator: true }
     ];
 
     // No contexto global, o Super-Admin não deve receber o menu operacional
@@ -44,7 +44,7 @@
     const PAGE_TO_PERMISSION = {
         dashboard:'dashboard', moradores:'moradores', veiculos:'veiculos', visitantes:'visitantes', registro:'registro',
         acesso:'acesso', lpr:'lpr', relatorios:'relatorios_acesso', financeiro:'financeiro', configuracao:'configuracao',
-        unidades:'unidades', manutencao:'manutencao', administrativa:'administrativa', recursos_humanos:'recursos_humanos',
+        unidades:'unidades', manutencao:'manutencao', administrativa:'administrativo', recursos_humanos:'recursos_humanos',
         usuarios:'usuarios', empresa:'empresa', dispositivos:'dispositivos', seguranca:'seguranca', sistema:'sistema', config_visitantes:'sistema',
         meu_perfil:'meu_perfil', inadimplencia:'inadimplencia', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin'
     };
