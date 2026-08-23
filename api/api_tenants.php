@@ -22,6 +22,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once 'rbac_helper.php';
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -192,6 +193,11 @@ switch ($action) {
         $stmt->execute();
         $novo_id = $conexao->insert_id;
         $stmt->close();
+
+        if (function_exists('rbacSeedGruposCompatibilidade')) {
+            rbacSeedGruposCompatibilidade($conexao, $novo_id);
+        }
+
         fechar_conexao($conexao);
 
         registrar_log('TENANT_CRIADO', "Novo condomínio: {$slug} (ID={$novo_id})", $_SESSION['usuario_nome'] ?? '');

@@ -38,7 +38,7 @@ function rbacFormatoPermissoesApi($conexao, $usuarioId, $tenantId, $forcar = fal
         $saida = ['pode_acessar'=>false,'pode_criar'=>false,'pode_editar'=>false,'pode_excluir'=>false,'pode_exportar'=>false,'pode_imprimir'=>false,'pode_importar'=>false,'pode_aprovar'=>false,'pode_executar'=>false,'pode_configurar'=>false,'pode_bloquear'=>false,'pode_desbloquear'=>false,'escopos'=>[],'origens'=>[]];
         foreach ($modulo['acoes'] as $acao) {
             $registro = $efetivas['permitidas'][$chave . '.' . $acao] ?? null;
-            $permitido = $efetivas['is_super_admin'] ? true : (!empty($registro['permitido']));
+            $permitido = $efetivas['is_admin_total'] ? true : (!empty($registro['permitido']));
             $mapa = ['visualizar'=>'acessar','criar'=>'criar','editar'=>'editar','excluir'=>'excluir','exportar'=>'exportar','imprimir'=>'imprimir','importar'=>'importar','aprovar'=>'aprovar','executar'=>'executar','configurar'=>'configurar','bloquear'=>'bloquear','desbloquear'=>'desbloquear'];
             $campo = 'pode_' . ($mapa[$acao] ?? $acao);
             $saida[$campo] = $permitido;
@@ -50,7 +50,7 @@ function rbacFormatoPermissoesApi($conexao, $usuarioId, $tenantId, $forcar = fal
         $saida['modulo'] = $modulo;
         $modulos[$chave] = $saida;
     }
-    return ['is_admin' => $efetivas['is_super_admin'], 'modo_compatibilidade'=>$efetivas['modo_compatibilidade'], 'revisao'=>$efetivas['revisao'] ?? 0, 'grupos'=>$efetivas['grupos'] ?? [], 'modulos'=>$modulos];
+    return ['is_admin' => $efetivas['is_admin_total'], 'modo_compatibilidade'=>$efetivas['modo_compatibilidade'], 'revisao'=>$efetivas['revisao'] ?? 0, 'grupos'=>$efetivas['grupos'] ?? [], 'modulos'=>$modulos];
 }
 
 function rbacUsuarioMesmoTenant($conexao, $usuarioId, $tenantId) {
@@ -64,7 +64,7 @@ function rbacUsuarioMesmoTenant($conexao, $usuarioId, $tenantId) {
 }
 
 function rbacPodeConceder($conexao, $modulo, $acao) {
-    return rbacUsuarioEhSuperAdmin() || rbacPode($conexao, $modulo, $acao);
+    return rbacUsuarioTemAcessoTotal() || rbacPode($conexao, $modulo, $acao);
 }
 
 function rbacSalvarExcecoesLegadas($conexao, $tenantId, $alvoId, array $permissoes) {

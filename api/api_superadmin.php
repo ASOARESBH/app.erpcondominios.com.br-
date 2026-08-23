@@ -50,6 +50,7 @@ ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
+require_once 'rbac_helper.php';
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -343,6 +344,10 @@ if ($action === 'criar_tenant') {
     $stmt->execute();
     $novo_id = $conexao->insert_id;
     $stmt->close();
+
+    if (function_exists('rbacSeedGruposCompatibilidade')) {
+        rbacSeedGruposCompatibilidade($conexao, $novo_id);
+    }
 
     sa_log($conexao, 'TENANT_CRIADO', "Novo tenant: {$slug} (ID={$novo_id})", $novo_id);
     fechar_conexao($conexao);
@@ -723,6 +728,10 @@ if ($action === 'onboarding') {
         $novo_tenant_id = $conexao->insert_id;
         $stmt->close();
 
+        if (function_exists('rbacSeedGruposCompatibilidade')) {
+            rbacSeedGruposCompatibilidade($conexao, $novo_tenant_id);
+        }
+
         if ($admin_row) {
             $novo_admin_id = (int)$admin_row['id'];
         } else {
@@ -745,6 +754,21 @@ if ($action === 'onboarding') {
         $stmt3->bind_param('iis', $novo_admin_id, $novo_tenant_id, $perm_admin);
         $stmt3->execute();
         $stmt3->close();
+
+        if (rbacTabelasDisponiveis($conexao)) {
+            $grupoAdmin = $conexao->prepare("SELECT id FROM rbac_grupos WHERE tenant_id=? AND slug='compat-admin' AND ativo=1 LIMIT 1");
+            $grupoAdmin->bind_param('i', $novo_tenant_id);
+            $grupoAdmin->execute();
+            $linhaGrupo = $grupoAdmin->get_result()->fetch_assoc();
+            $grupoAdmin->close();
+            if ($linhaGrupo) {
+                $grupoId = (int)$linhaGrupo['id'];
+                $vinculo = $conexao->prepare('INSERT IGNORE INTO rbac_usuario_grupos (usuario_id,tenant_id,grupo_id,ativo) VALUES (?,?,?,1)');
+                $vinculo->bind_param('iii', $novo_admin_id, $novo_tenant_id, $grupoId);
+                $vinculo->execute();
+                $vinculo->close();
+            }
+        }
 
         $conexao->commit();
         sa_log($conexao, 'ONBOARDING', "Onboarding: {$slug} (tenant={$novo_tenant_id}, admin={$admin_email})", $novo_tenant_id);

@@ -129,8 +129,20 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         return strtolower((string)($_SESSION['usuario_permissao'] ?? '')) === 'super_admin';
     }
 
+    /**
+     * Administradores de tenant (permissao='admin') têm acesso total automático,
+     * igual ao super_admin — mesma regra já aplicada no modo de compatibilidade
+     * (api_permissoes_modulos.php) e comunicada ao usuário na Central de Usuários.
+     * Sem isto, um admin criado num tenant sem grupos RBAC herdados fica sem
+     * nenhuma permissão efetiva, pois o RBAC não concede nada por padrão.
+     */
+    function rbacUsuarioTemAcessoTotal() {
+        $permissao = strtolower((string)($_SESSION['usuario_permissao'] ?? ''));
+        return in_array($permissao, ['admin', 'super_admin'], true);
+    }
+
     function rbacObterPermissoesEfetivas($conexao, $usuarioId, $tenantId, $forcarAtualizacao = false) {
-        if (!rbacTabelasDisponiveis($conexao)) return ['modo_compatibilidade' => true, 'is_super_admin' => rbacUsuarioEhSuperAdmin(), 'permitidas' => [], 'detalhes' => []];
+        if (!rbacTabelasDisponiveis($conexao)) return ['modo_compatibilidade' => true, 'is_super_admin' => rbacUsuarioEhSuperAdmin(), 'is_admin_total' => rbacUsuarioTemAcessoTotal(), 'permitidas' => [], 'detalhes' => []];
         $revisao = rbacObterRevisao($conexao, $tenantId);
         $cache = $_SESSION['_rbac_cache'] ?? null;
         if (!$forcarAtualizacao && is_array($cache) && (int)($cache['usuario_id'] ?? 0) === (int)$usuarioId && (int)($cache['tenant_id'] ?? 0) === (int)$tenantId && (int)($cache['revisao'] ?? -1) === $revisao) return $cache;
@@ -177,7 +189,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
             }
             $efetivas[$chave] = ['permitido' => !$negado && $permitido, 'escopo' => $escopo, 'origens' => $origens];
         }
-        $resultado = ['modo_compatibilidade' => false, 'is_super_admin' => rbacUsuarioEhSuperAdmin(), 'usuario_id' => (int)$usuarioId, 'tenant_id' => (int)$tenantId, 'revisao' => $revisao, 'grupos' => $grupos, 'permitidas' => $efetivas, 'detalhes' => $detalhes];
+        $resultado = ['modo_compatibilidade' => false, 'is_super_admin' => rbacUsuarioEhSuperAdmin(), 'is_admin_total' => rbacUsuarioTemAcessoTotal(), 'usuario_id' => (int)$usuarioId, 'tenant_id' => (int)$tenantId, 'revisao' => $revisao, 'grupos' => $grupos, 'permitidas' => $efetivas, 'detalhes' => $detalhes];
         $_SESSION['_rbac_cache'] = $resultado;
         return $resultado;
     }
@@ -186,7 +198,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         $usuarioId = $usuarioId ?: (int)($_SESSION['usuario_id'] ?? 0);
         $tenantId = $tenantId ?: (int)($_SESSION['tenant_id'] ?? 0);
         if ($usuarioId <= 0 || $tenantId <= 0) return false;
-        if (rbacUsuarioEhSuperAdmin()) return true;
+        if (rbacUsuarioTemAcessoTotal()) return true;
         $efetivas = rbacObterPermissoesEfetivas($conexao, $usuarioId, $tenantId);
         if ($efetivas['modo_compatibilidade']) return true;
         $registro = $efetivas['permitidas'][$moduloChave . '.' . $acao] ?? null;
@@ -300,5 +312,75 @@ if (!function_exists('rbacSessaoDisponivel')) {
         $st->bind_param('siiii',$motivo,$usuarioId,$id,$usuarioId,$tenantId); $ok=$st->execute(); $st->close();
         if ($ok) rbacAuditar($conexao,['tenant_id'=>$tenantId,'usuario_id'=>$usuarioId,'sessao_id'=>$id,'modulo_chave'=>'seguranca','submodulo_chave'=>'sessoes','acao'=>'LOGOUT','resultado'=>'SUCESSO','status_http'=>200,'motivo'=>$motivo]);
         return $ok;
+    }
+}
+
+if (!function_exists('rbacSeedGruposCompatibilidade')) {
+    /**
+     * Garante que um tenant possua os 4 grupos RBAC de compatibilidade
+     * (compat-visualizador/operador/gerente/admin) usados como vínculo padrão
+     * ao criar usuários (ver api_usuarios.php). A migração original só criou
+     * estes grupos para os tenants existentes na época; tenants criados depois
+     * ficavam sem nenhum grupo, e um usuário 'admin' sem grupo nem permissão
+     * individual não tinha nenhum acesso efetivo sob RBAC. Chamar isto ao
+     * criar um tenant (api_tenants.php) evita repetir o problema.
+     */
+    function rbacSeedGruposCompatibilidade($conexao, $tenantId) {
+        if (!rbacTabelasDisponiveis($conexao)) return;
+        $tenantId = (int)$tenantId;
+        if ($tenantId <= 0) return;
+
+        $grupos = [
+            'compat-visualizador' => 'Visualizador (compatibilidade)',
+            'compat-operador'     => 'Operador (compatibilidade)',
+            'compat-gerente'      => 'Gerente (compatibilidade)',
+            'compat-admin'        => 'Administrador (compatibilidade)',
+        ];
+        foreach ($grupos as $slug => $nome) {
+            $descricao = 'Grupo criado a partir do perfil legado ' . substr($slug, 7);
+            $st = $conexao->prepare('INSERT IGNORE INTO rbac_grupos (tenant_id,slug,nome,descricao,ativo,protegido) VALUES (?,?,?,?,1,1)');
+            if (!$st) continue;
+            $st->bind_param('isss', $tenantId, $slug, $nome, $descricao);
+            $st->execute();
+            $st->close();
+        }
+
+        // compat-admin recebe todas as permissões do catálogo (acesso total).
+        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+            SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
+            FROM rbac_grupos g CROSS JOIN rbac_permissoes p
+            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-admin' AND g.ativo = 1");
+
+        // compat-gerente: ações operacionais em módulos até o nível gerente.
+        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+            SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
+            FROM rbac_grupos g
+            INNER JOIN rbac_permissoes p ON p.acao IN ('visualizar','criar','editar','exportar','imprimir')
+            INNER JOIN rbac_modulos m ON m.id = p.modulo_id
+            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-gerente' AND m.perfil_compatibilidade IN ('visualizador','operador','gerente')");
+        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+            SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
+            FROM rbac_grupos g
+            INNER JOIN rbac_modulos m ON m.chave = 'usuarios'
+            INNER JOIN rbac_permissoes p ON p.modulo_id = m.id AND p.acao = 'visualizar'
+            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-gerente'");
+
+        // compat-operador: ações básicas em módulos até o nível operador.
+        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+            SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
+            FROM rbac_grupos g
+            INNER JOIN rbac_permissoes p ON p.acao IN ('visualizar','criar','editar','exportar','imprimir')
+            INNER JOIN rbac_modulos m ON m.id = p.modulo_id
+            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-operador' AND m.perfil_compatibilidade IN ('visualizador','operador')");
+
+        // compat-visualizador: apenas leitura em módulos de nível visualizador.
+        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+            SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
+            FROM rbac_grupos g
+            INNER JOIN rbac_permissoes p ON p.acao = 'visualizar'
+            INNER JOIN rbac_modulos m ON m.id = p.modulo_id
+            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-visualizador' AND m.perfil_compatibilidade = 'visualizador'");
+
+        $conexao->query("INSERT IGNORE INTO rbac_configuracoes (tenant_id, revisao_permissoes) VALUES ($tenantId, 1)");
     }
 }
