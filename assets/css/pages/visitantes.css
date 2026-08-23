@@ -55,6 +55,25 @@
     box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
+/* Validação inline (ex: CPF inválido ao sair do campo) */
+.page-visitantes input.campo-invalido {
+    border-color: #dc2626;
+    background: #fef2f2;
+}
+
+.page-visitantes input.campo-invalido:focus {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1);
+}
+
+.page-visitantes .campo-erro-msg {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #dc2626;
+}
+
 .page-visitantes .form-actions {
     display: flex;
     gap: 12px;

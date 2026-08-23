@@ -209,16 +209,61 @@ function _setupMascaras() {
             docInput.value = '';
             docInput.placeholder = tipoDoc.value === 'CPF' ? '000.000.000-00' : 'XX.XXX.XXX-X';
             _aplicarMascaraDoc(docInput, tipoDoc.value);
+            _limparErroDocumento();
+            _alternarCampoEstadoRg(tipoDoc.value);
         });
         docInput.addEventListener('input', () => {
             _aplicarMascaraDoc(docInput, tipoDoc?.value || 'CPF');
+            _limparErroDocumento();
         });
+        docInput.addEventListener('blur', () => {
+            _validarDocumentoNoBlur(docInput, tipoDoc.value);
+        });
+        _alternarCampoEstadoRg(tipoDoc.value);
     }
 
     ['telefoneContato', 'celularVisitante'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', () => _mascaraTelefone(el));
     });
+}
+
+// Mostra/esconde o campo Estado (UF), exigido apenas quando o documento é RG.
+function _alternarCampoEstadoRg(tipo) {
+    const grupo = document.getElementById('grupoEstadoRg');
+    const select = document.getElementById('estadoRg');
+    const ehRg = tipo === 'RG';
+    if (grupo) grupo.style.display = ehRg ? 'block' : 'none';
+    if (select) select.required = ehRg;
+    if (!ehRg && select) select.value = 'MG';
+}
+
+// Valida o CPF assim que o usuário sai do campo, sem esperar o envio do formulário.
+function _validarDocumentoNoBlur(input, tipo) {
+    const valor = input.value.trim();
+    if (tipo !== 'CPF' || !valor) {
+        _limparErroDocumento();
+        return;
+    }
+    if (!_cpfValido(valor)) {
+        _marcarErroDocumento('CPF inválido. Confira os dígitos informados.');
+    } else {
+        _limparErroDocumento();
+    }
+}
+
+function _marcarErroDocumento(mensagem) {
+    const input = document.getElementById('documento');
+    const erro  = document.getElementById('documentoErro');
+    if (input) input.classList.add('campo-invalido');
+    if (erro) { erro.textContent = mensagem; erro.style.display = 'block'; }
+}
+
+function _limparErroDocumento() {
+    const input = document.getElementById('documento');
+    const erro  = document.getElementById('documentoErro');
+    if (input) input.classList.remove('campo-invalido');
+    if (erro) { erro.textContent = ''; erro.style.display = 'none'; }
 }
 
 function _aplicarMascaraDoc(input, tipo) {
@@ -601,6 +646,7 @@ async function _salvarVisitante() {
         const celular         = document.getElementById('celularVisitante')?.value.trim() || '';
         const email           = document.getElementById('emailVisitante')?.value.trim() || '';
         const observacao      = document.getElementById('observacaoVisitante')?.value.trim() || '';
+        const estadoRg        = document.getElementById('estadoRg')?.value || '';
 
         // A mesma regra configurada em Sistema > Visitantes é antecipada na tela;
         // o backend a confirma usando o tenant da sessão antes de gravar qualquer dado.
@@ -650,10 +696,17 @@ async function _salvarVisitante() {
             document.getElementById('documento').value = documento;
             if (!_cpfValido(documento)) {
                 console.warn('[Visitantes][CPF] Cadastro bloqueado: CPF inválido.');
+                _marcarErroDocumento('CPF inválido. Confira os dígitos informados.');
                 _mostrarAlerta('error', 'CPF inválido. Confira os dígitos informados.');
                 document.getElementById('documento')?.focus();
                 return;
             }
+        }
+
+        if (tipoDoc === 'RG' && !estadoRg) {
+            _mostrarAlerta('error', 'Selecione o estado (UF) do documento RG.');
+            document.getElementById('estadoRg')?.focus();
+            return;
         }
 
         const payload = {
@@ -663,7 +716,8 @@ async function _salvarVisitante() {
             telefone_contato: telefoneContato,
             celular,
             email,
-            observacao
+            observacao,
+            estado: tipoDoc === 'RG' ? estadoRg : ''
         };
 
         let visitanteId = visitanteIdEdicao;
@@ -783,6 +837,10 @@ function _editarVisitante(id) {
     document.getElementById('celularVisitante').value    = visitante.celular || '';
     document.getElementById('emailVisitante').value      = visitante.email || '';
     document.getElementById('observacaoVisitante').value = visitante.observacao || '';
+    _limparErroDocumento();
+    _alternarCampoEstadoRg(visitante.tipo_documento || 'CPF');
+    const estadoSel = document.getElementById('estadoRg');
+    if (estadoSel) estadoSel.value = visitante.estado || 'MG';
 
     // Foto existente
     fotoExistente = Boolean(visitante.foto);
@@ -879,6 +937,9 @@ function _resetForm() {
     if (docPrev) docPrev.style.display = 'none';
     if (dph)     dph.style.display = 'flex';
     if (btnRemDoc) btnRemDoc.style.display = 'none';
+
+    _limparErroDocumento();
+    _alternarCampoEstadoRg(document.getElementById('tipoDocumento')?.value || 'CPF');
 
     const titulo = document.getElementById('tituloFormVisitante');
     if (titulo) titulo.innerHTML = '<i class="fas fa-user-plus"></i> Cadastro de Visitante';
