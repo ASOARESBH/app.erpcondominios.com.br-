@@ -1,0 +1,40 @@
+<section class="monitoring-page">
+    <div id="page-metadata" data-title="Monitoring" data-icon="fa-tower-broadcast"></div>
+    <header class="monitoring-header">
+        <div>
+            <span class="monitoring-kicker"><i class="fas fa-shield-halved"></i> Super-Admin</span>
+            <h1><i class="fas fa-tower-broadcast"></i> Monitoring</h1>
+            <p>Controle centralizado de versões, releases e atualização do agente Windows.</p>
+        </div>
+        <button type="button" class="monitoring-btn primary" id="monitoring-nova-release"><i class="fas fa-plus"></i> Nova release</button>
+    </header>
+
+    <div class="monitoring-alert info"><i class="fas fa-circle-info"></i><div><strong>Atualização controlada.</strong> Cadastre uma URL HTTPS pública, o SHA-256 do pacote e o código incremental antes de publicar. O agente autenticado consulta o manifesto e só instala um pacote com hash válido.</div></div>
+
+    <div class="monitoring-kpis">
+        <article><span class="blue"><i class="fas fa-box-open"></i></span><div><strong id="monitoring-total">—</strong><small>Releases cadastradas</small></div></article>
+        <article><span class="green"><i class="fas fa-rocket"></i></span><div><strong id="monitoring-publicadas">—</strong><small>Publicadas</small></div></article>
+        <article><span class="orange"><i class="fas fa-triangle-exclamation"></i></span><div><strong id="monitoring-obrigatorias">—</strong><small>Obrigatórias</small></div></article>
+    </div>
+
+    <section class="monitoring-panel" id="monitoring-form-panel" hidden>
+        <div class="monitoring-panel-title"><h2 id="monitoring-form-title">Nova release</h2><button type="button" class="monitoring-close" id="monitoring-fechar">&times;</button></div>
+        <form id="monitoring-form" class="monitoring-form">
+            <input type="hidden" id="monitoring-id">
+            <label>Versão exibida<input id="monitoring-version-name" required maxlength="40" placeholder="0.2.2"></label>
+            <label>Version code<input id="monitoring-version-code" required type="number" min="1" step="1" placeholder="202"></label>
+            <label>Canal<select id="monitoring-channel"><option value="interno">Interno</option><option value="teste">Teste</option><option value="producao">Produção</option></select></label>
+            <label>Status<select id="monitoring-status"><option value="rascunho">Rascunho</option><option value="publicado">Publicado</option><option value="arquivado">Arquivado</option></select></label>
+            <label class="span-2">URL HTTPS do pacote ZIP ou Setup EXE<input id="monitoring-download-url" required type="url" maxlength="700" placeholder="https://downloads.erpcondominios.com.br/ERPCondominiosMonitoring-Setup.exe"></label>
+            <label>SHA-256 do arquivo<input id="monitoring-sha256" required maxlength="64" pattern="[A-Fa-f0-9]{64}" placeholder="64 caracteres hexadecimais"></label>
+            <label>Tamanho em bytes<input id="monitoring-size" type="number" min="0" step="1" placeholder="62836435"></label>
+            <label>Versão mínima obrigatória<input id="monitoring-minimum" type="number" min="0" step="1" value="0" placeholder="201"></label>
+            <label class="monitoring-check"><input id="monitoring-mandatory" type="checkbox"> Bloquear agente abaixo da versão mínima</label>
+            <label class="span-2">Notas da release<textarea id="monitoring-notes" rows="4" placeholder="Correções, requisitos e instruções de atualização."></textarea></label>
+            <div class="monitoring-actions span-2"><button type="button" class="monitoring-btn light" id="monitoring-cancelar">Cancelar</button><button type="submit" class="monitoring-btn primary"><i class="fas fa-save"></i> Salvar release</button></div>
+        </form>
+    </section>
+
+    <section class="monitoring-panel"><div class="monitoring-list-title"><div><h2>Histórico de releases</h2><p>O agente só recebe releases com status publicado.</p></div><button type="button" class="monitoring-btn outline" id="monitoring-atualizar"><i class="fas fa-rotate"></i> Atualizar</button></div><div id="monitoring-lista"><div class="monitoring-loading"><i class="fas fa-spinner fa-spin"></i> Carregando releases...</div></div></section>
+    <div id="monitoring-toast" class="monitoring-toast" role="status" aria-live="polite"></div>
+</section>

@@ -25,7 +25,8 @@
         {
             id: 'aplicativos', label: 'Aplicativos', icon: 'fas fa-mobile-screen-button', page: 'aplicativos', href: 'layout-base.html?page=aplicativos', order: 2, style: 'color: #93c5fd; font-weight: 700;',
             children: [
-                { id: 'pwa_central', label: 'Central PWA', icon: 'fas fa-mobile-alt', page: 'pwa_central', href: 'layout-base.html?page=pwa_central' }
+                { id: 'pwa_central', label: 'Central PWA', icon: 'fas fa-mobile-alt', page: 'pwa_central', href: 'layout-base.html?page=pwa_central' },
+                { id: 'monitoring', label: 'Monitoring', icon: 'fas fa-tower-broadcast', page: 'monitoring', href: 'layout-base.html?page=monitoring' }
             ]
         }
     ];
