@@ -11,6 +11,13 @@ Options -Indexes
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set X-Frame-Options "SAMEORIGIN"
+    # O layout-base carrega módulos da SPA e não pode permanecer uma hora em cache;
+    # caso contrário, o navegador pode reutilizar referências antigas do AppRouter.
+    <FilesMatch "^layout-base\\.html$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
 </IfModule>
 
 # Cache para arquivos estáticos
