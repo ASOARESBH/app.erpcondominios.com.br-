@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/protocol_notification_helper.php';
+require_once __DIR__ . '/email_alertas_dispatcher.php';
 
 if (!function_exists('controle_acesso_notificacao_coluna_existe')) {
     function controle_acesso_notificacao_coluna_existe(mysqli $conexao, string $tabela, string $coluna): bool {
@@ -214,7 +215,10 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
         string $tipo_pessoa,
         string $placa = '',
         string $modelo = '',
-        ?string $data_hora = null
+        ?string $data_hora = null,
+        string $nome_pessoa = '',
+        string $documento_pessoa = '',
+        string $operador = ''
     ): array {
         if (!protocolo_notificacao_tabela_existe($conexao, 'notificacoes_morador') ||
             !controle_acesso_notificacao_coluna_existe($conexao, 'notificacoes_morador', 'registro_acesso_id') ||
@@ -228,7 +232,7 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
 
         $destinatarios = [];
         if ($morador_id !== null && $morador_id > 0) {
-            $stmt_morador = $conexao->prepare('SELECT id, unidade FROM moradores WHERE tenant_id = ? AND id = ? AND ativo = 1 LIMIT 1');
+            $stmt_morador = $conexao->prepare('SELECT id, unidade, nome, email FROM moradores WHERE tenant_id = ? AND id = ? AND ativo = 1 LIMIT 1');
             if ($stmt_morador) {
                 $stmt_morador->bind_param('ii', $tenant_id, $morador_id);
                 $stmt_morador->execute();
@@ -237,7 +241,7 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
                 if ($resultado) $destinatarios[] = $resultado;
             }
         } elseif (trim($unidade_destino) !== '') {
-            $stmt_unidade = $conexao->prepare('SELECT id, unidade FROM moradores WHERE tenant_id = ? AND unidade = ? AND ativo = 1');
+            $stmt_unidade = $conexao->prepare('SELECT id, unidade, nome, email FROM moradores WHERE tenant_id = ? AND unidade = ? AND ativo = 1');
             if ($stmt_unidade) {
                 $unidade_destino = trim($unidade_destino);
                 $stmt_unidade->bind_param('is', $tenant_id, $unidade_destino);
@@ -280,6 +284,28 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
         $project_id = trim((string)($configuracoes['fcm_project_id'] ?? ''));
         $permitir_push = ($configuracoes['push_controle_acesso_ativo'] ?? '1') !== '0';
         $resumo = ['sucesso' => true, 'destinatarios' => count($destinatarios), 'persistidas' => 0, 'push_enviados' => 0];
+
+        // acesso.visitante_registrado: só faz sentido para Visitante/Prestador
+        // entrando (não para Morador nem para saída) — cada morador destinatário
+        // vira um e-mail próprio, reaproveitando a mesma resolução de unidade
+        // acima em vez de duplicar a query em api_registros.php.
+        if ($entrada && trim($tipo_pessoa) !== 'Morador' && trim($nome_pessoa) !== '') {
+            foreach ($destinatarios as $destinatario) {
+                if (empty($destinatario['email'])) continue;
+                try {
+                    alerta_email_disparar($conexao, $tenant_id, 'acesso.visitante_registrado', [
+                        'nome_morador'         => $destinatario['nome'] ?? '',
+                        'unidade'              => $destinatario['unidade'] ?? $unidade,
+                        'nome_visitante'       => $nome_pessoa,
+                        'documento_visitante'  => $documento_pessoa,
+                        'data_hora'            => $data_hora ? date('d/m/Y H:i', strtotime($data_hora)) : date('d/m/Y H:i'),
+                        'operador'             => $operador,
+                    ], [['email' => $destinatario['email'], 'nome' => $destinatario['nome'] ?? '']]);
+                } catch (Throwable $e) {
+                    error_log('[ControleAcesso][EmailVisitante] ' . $e->getMessage());
+                }
+            }
+        }
 
         foreach ($destinatarios as $destinatario) {
             $id_morador = (int)$destinatario['id'];

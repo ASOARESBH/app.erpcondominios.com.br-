@@ -17,6 +17,7 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
+require_once __DIR__ . '/helpers/email_alertas_dispatcher.php';
 
 // Limpar buffer e definir headers
 ob_end_clean();
@@ -287,16 +288,31 @@ $tenant_id = exigirTenantId();
         $senha_hash = password_hash($senha, PASSWORD_DEFAULT);
         
         // Inserir morador
-        $stmt = $conexao->prepare("INSERT INTO moradores (nome, cpf, unidade, email, senha, telefone, celular, observacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        // tenant_id gravado explicitamente: sem isso, a coluna (adicionada via
+        // migração com DEFAULT 1) fazia todo morador novo cair silenciosamente
+        // no tenant 1, não importa de qual condomínio o operador é.
+        $stmt = $conexao->prepare("INSERT INTO moradores (tenant_id, nome, cpf, unidade, email, senha, telefone, celular, observacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         if (!$stmt) {
             throw new Exception("Erro ao preparar insert: " . $conexao->error);
         }
-        $stmt->bind_param("ssssssss", $nome, $cpf, $unidade, $email, $senha_hash, $telefone, $celular, $observacao);
-        
+        $stmt->bind_param("isssssss", $tenant_id, $nome, $cpf, $unidade, $email, $senha_hash, $telefone, $celular, $observacao);
+
         if ($stmt->execute()) {
             $id_inserido = $conexao->insert_id;
             registrar_log('MORADOR_CRIADO', "Morador criado: $nome (ID: $id_inserido)", $nome);
             $errorLogger->registrarInfo('Morador criado com sucesso', array('id' => $id_inserido, 'nome' => $nome, 'cpf' => $cpf));
+
+            // E-mail de boas-vindas (não bloqueia o cadastro se falhar).
+            try {
+                alerta_email_disparar($conexao, (int)$tenant_id, 'moradores.cadastro_novo', [
+                    'nome_morador' => $nome,
+                    'unidade'      => $unidade,
+                    'cpf'          => $cpf,
+                ], [['email' => $email, 'nome' => $nome]]);
+            } catch (Throwable $e) {
+                error_log('[Moradores][EmailBoasVindas] ' . $e->getMessage());
+            }
+
             retornar_json(true, "Morador cadastrado com sucesso", array('id' => $id_inserido));
         } else {
             $errorLogger->registrarErroAPI('criar', "Erro ao cadastrar morador: " . $stmt->error, array('nome' => $nome, 'cpf' => $cpf));

@@ -31,6 +31,7 @@ ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
+require_once __DIR__ . '/helpers/email_alertas_dispatcher.php';
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -255,6 +256,21 @@ function calcularValor($consumo) {
     } else {
         return $consumo * VALOR_METRO_CUBICO;
     }
+}
+
+// ========== LIMITE DE CONSUMO PARA ALERTA (hidrometro.consumo_alto) ==========
+// Sem limite configurado, o alerta fica desligado (nunca existiu essa
+// configuração antes — não dá para presumir um valor "seguro" por conta própria).
+function _limite_consumo_alerta($conexao, $tenantId) {
+    mysqli_query($conexao, "CREATE TABLE IF NOT EXISTS `hidrometro_config` (
+        `tenant_id` INT(11) NOT NULL,
+        `limite_consumo_m3` DECIMAL(10,2) NULL DEFAULT NULL,
+        `atualizado_em` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (`tenant_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $res = mysqli_query($conexao, "SELECT limite_consumo_m3 FROM hidrometro_config WHERE tenant_id=" . (int) $tenantId . " LIMIT 1");
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    return ($row && $row['limite_consumo_m3'] !== null) ? (float) $row['limite_consumo_m3'] : null;
 }
 
 // ========== CRIAR LEITURA (INDIVIDUAL OU COLETIVA) ==========
@@ -519,6 +535,45 @@ if ($metodo === 'POST') {
             }
 
             registrar_log('LEITURA_REGISTRADA', "Leitura registrada: Hidrômetro {$hidrometro['numero_hidrometro']} - Consumo: {$consumo}m³ - Valor: R$ {$valor_total}" . ($foto_vinculada ? ' - com evidência fotográfica' : ''), $lancado_por_nome);
+
+            // Alertas por e-mail (não bloqueiam a leitura já gravada se falharem).
+            try {
+                $morador = null;
+                if (!empty($hidrometro['morador_id'])) {
+                    $stmtMor = $conexao->prepare("SELECT nome, email FROM moradores WHERE id = ?");
+                    $stmtMor->bind_param("i", $hidrometro['morador_id']);
+                    $stmtMor->execute();
+                    $morador = $stmtMor->get_result()->fetch_assoc();
+                    $stmtMor->close();
+                }
+
+                if ($morador && !empty($morador['email'])) {
+                    alerta_email_disparar($conexao, (int) $tenant_id, 'hidrometro.leitura_realizada', [
+                        'nome_morador'      => $morador['nome'],
+                        'unidade'           => $hidrometro['unidade'],
+                        'numero_hidrometro' => $hidrometro['numero_hidrometro'],
+                        'leitura_anterior'  => $leitura_anterior,
+                        'leitura_atual'     => $leitura_atual,
+                        'consumo'           => $consumo,
+                        'valor_total'       => number_format((float) $valor_total, 2, ',', '.'),
+                        'data_leitura'      => date('d/m/Y', strtotime($data_leitura)),
+                        'mes_referencia'    => date('m/Y', strtotime($data_leitura)),
+                    ], [['email' => $morador['email'], 'nome' => $morador['nome']]]);
+                }
+
+                $limite = _limite_consumo_alerta($conexao, $tenant_id);
+                if ($limite !== null && $consumo > $limite) {
+                    alerta_email_disparar($conexao, (int) $tenant_id, 'hidrometro.consumo_alto', [
+                        'nome_morador' => $morador['nome'] ?? '—',
+                        'unidade'      => $hidrometro['unidade'],
+                        'consumo'      => $consumo,
+                        'limite'       => $limite,
+                    ], admins_do_tenant($conexao, (int) $tenant_id));
+                }
+            } catch (Throwable $e) {
+                error_log('[Leituras][EmailAlertas] ' . $e->getMessage());
+            }
+
             retornar_json(true, "Leitura registrada com sucesso", array(
                 'id' => $id,
                 'consumo' => $consumo,

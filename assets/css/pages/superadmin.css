@@ -530,6 +530,21 @@
     border-left: 4px solid #f59e0b;
 }
 
+/* Banner informativo estático (sempre visível, ao contrário de .alert) */
+.page-superadmin .sa-info-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.875rem 1rem;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    border-left: 4px solid #3b82f6;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+.page-superadmin .sa-info-banner i { margin-top: 0.15rem; }
+
 /* ============================================================
    MODAIS
    ============================================================ */

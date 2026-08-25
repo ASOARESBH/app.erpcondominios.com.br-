@@ -42,6 +42,15 @@
  * ONBOARDING
  *   POST ?action=onboarding         — Cria tenant + admin em uma chamada
  *
+ * INTEGRAÇÃO > E-MAIL (configuração global de remetente)
+ *   GET  ?action=email_config_carregar — Config atual (sem credenciais em texto puro)
+ *   POST ?action=email_config_salvar   — Salva a config global
+ *   POST ?action=email_config_testar   — Envia e-mail de teste
+ *   GET  ?action=email_config_catalogo — Lista os 9 alertas automáticos da plataforma
+ *   GET  ?action=email_logs            — Histórico de envios de todos os tenants
+ *   POST ?action=rodar_cron_vencimentos     — Roda manualmente o cron financeiro
+ *   POST ?action=rodar_cron_aniversariantes — Roda manualmente o cron de RH
+ *
  * @version 2.0.0 (Fase 5 — Multi-Tenant)
  * @date 2026-07-22
  */
@@ -51,6 +60,9 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
 require_once 'rbac_helper.php';
+require_once __DIR__ . '/helpers/email_config_schema.php';
+require_once __DIR__ . '/helpers/email_alertas_dispatcher.php';
+require_once __DIR__ . '/email/EmailCrypto.php';
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -553,6 +565,17 @@ if ($action === 'criar_usuario') {
     $stmt2->execute();
     $stmt2->close();
 
+    try {
+        alerta_email_disparar($conexao, $tenant_id_novo, 'sistema.novo_usuario', [
+            'nome_usuario'   => $nome,
+            'email_usuario'  => $email,
+            'perfil_usuario' => $funcao,
+            'link_sistema'   => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . '/frontend/login.html',
+        ], [['email' => $email, 'nome' => $nome]]);
+    } catch (Throwable $e) {
+        error_log('[SuperAdmin][EmailBoasVindas] ' . $e->getMessage());
+    }
+
     sa_log($conexao, 'USUARIO_CRIADO', "Usuário {$email} criado no tenant {$tenant_id_novo}", $tenant_id_novo);
     fechar_conexao($conexao);
     sa_ok(['id' => $novo_id], 'Usuário criado com sucesso!');
@@ -744,6 +767,17 @@ if ($action === 'onboarding') {
             $stmt2->execute();
             $novo_admin_id = $conexao->insert_id;
             $stmt2->close();
+
+            try {
+                alerta_email_disparar($conexao, $novo_tenant_id, 'sistema.novo_usuario', [
+                    'nome_usuario'   => $admin_nome,
+                    'email_usuario'  => $admin_email,
+                    'perfil_usuario' => $funcao_a,
+                    'link_sistema'   => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . '/frontend/login.html',
+                ], [['email' => $admin_email, 'nome' => $admin_nome]]);
+            } catch (Throwable $e) {
+                error_log('[SuperAdmin][Onboarding][EmailBoasVindas] ' . $e->getMessage());
+            }
         }
 
         $perm_admin = 'admin';
@@ -851,6 +885,172 @@ if ($action === 'sair_tenant') {
     fechar_conexao($conexao);
 
     sa_ok(['redirect' => '/frontend/layout-base.html?page=superadmin'], 'Retornado ao painel principal.');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INTEGRAÇÃO > E-MAIL — configuração global de remetente/servidor
+// (única fonte de configuração de e-mail da plataforma; substitui as
+// telas antigas por tenant, que ficaram sem permissão de escrita)
+// ═══════════════════════════════════════════════════════════════════════
+
+if ($action === 'email_config_carregar') {
+    email_config_garantir_tabelas($conexao);
+    $res = mysqli_query($conexao, "SELECT * FROM configuracao_smtp ORDER BY id DESC LIMIT 1");
+    $cfg = $res ? mysqli_fetch_assoc($res) : null;
+    if (!$cfg) sa_ok(['senha_configurada' => false], 'Nenhuma configuração ainda.');
+
+    $senhaConfigurada = !empty($cfg['smtp_senha']) || !empty($cfg['api_key']);
+
+    sa_ok([
+        'email_provider'     => $cfg['email_provider'] ?? 'brevo',
+        'sender_name'        => $cfg['sender_name'] ?? $cfg['smtp_de_nome'] ?? '',
+        'sender_email'       => $cfg['sender_email'] ?? $cfg['smtp_de_email'] ?? '',
+        'smtp_host'          => $cfg['smtp_host'] ?? '',
+        'smtp_port'          => (int) ($cfg['smtp_port'] ?? 587),
+        'smtp_usuario'       => $cfg['smtp_usuario'] ?? '',
+        'smtp_seguranca'     => $cfg['smtp_seguranca'] ?? 'tls',
+        'timeout'            => (int) ($cfg['timeout'] ?? 30),
+        'senha_configurada'  => $senhaConfigurada,
+    ], 'Configuração carregada.');
+}
+
+if ($action === 'email_config_salvar') {
+    email_config_garantir_tabelas($conexao);
+
+    $emailProvider = $input['email_provider'] ?? 'smtp';
+    if (!in_array($emailProvider, ['brevo', 'resend', 'smtp'], true)) $emailProvider = 'smtp';
+
+    $senderName  = trim((string) ($input['sender_name']  ?? ''));
+    $senderEmail = trim((string) ($input['sender_email'] ?? ''));
+    $smtpHost    = trim((string) ($input['smtp_host']    ?? ''));
+    $smtpUsuario = trim((string) ($input['smtp_usuario'] ?? ''));
+    $smtpSenha   = (string) ($input['smtp_senha'] ?? '');
+    $smtpPort    = (int) ($input['smtp_port'] ?? 587);
+    $smtpSeguranca = in_array($input['smtp_seguranca'] ?? 'tls', ['tls', 'ssl', 'none'], true) ? $input['smtp_seguranca'] : 'tls';
+    $timeout     = (int) ($input['smtp_timeout'] ?? 30);
+    $novaApiKey  = (string) ($input['api_key'] ?? '');
+
+    if ($senderEmail !== '' && !filter_var($senderEmail, FILTER_VALIDATE_EMAIL)) {
+        sa_err('E-mail do remetente inválido.');
+    }
+
+    if ($emailProvider === 'brevo' || $emailProvider === 'resend') {
+        if ($senderEmail === '' || $senderName === '') sa_err('Informe nome e e-mail do remetente.');
+    } else {
+        if ($smtpHost === '' || $smtpUsuario === '' || $senderEmail === '') {
+            sa_err('Preencha Host, Usuário e E-mail do Remetente.');
+        }
+    }
+
+    $res = mysqli_query($conexao, "SELECT id, smtp_senha, api_key FROM configuracao_smtp ORDER BY id DESC LIMIT 1");
+    $existente = $res ? mysqli_fetch_assoc($res) : null;
+
+    $senhaFinal = $smtpSenha !== '' ? $smtpSenha : (string) ($existente['smtp_senha'] ?? '');
+
+    $apiKeyFinal = '';
+    if ($novaApiKey !== '') {
+        try { $apiKeyFinal = EmailCrypto::encrypt($novaApiKey); }
+        catch (Throwable $e) { $apiKeyFinal = $novaApiKey; }
+    } elseif ($existente && !empty($existente['api_key'])) {
+        $apiKeyFinal = $existente['api_key'];
+    }
+
+    $ep  = mysqli_real_escape_string($conexao, $emailProvider);
+    $sn  = mysqli_real_escape_string($conexao, $senderName);
+    $se  = mysqli_real_escape_string($conexao, $senderEmail);
+    $sh  = mysqli_real_escape_string($conexao, $smtpHost);
+    $su  = mysqli_real_escape_string($conexao, $smtpUsuario);
+    $sp  = mysqli_real_escape_string($conexao, $senhaFinal);
+    $seg = mysqli_real_escape_string($conexao, $smtpSeguranca);
+    $ak  = $apiKeyFinal !== '' ? "'" . mysqli_real_escape_string($conexao, $apiKeyFinal) . "'" : 'NULL';
+
+    if ($existente) {
+        $id = (int) $existente['id'];
+        $sql = "UPDATE configuracao_smtp SET
+            email_provider='$ep', sender_name='$sn', sender_email='$se',
+            api_key=$ak, smtp_host='$sh', smtp_port=$smtpPort, smtp_usuario='$su',
+            smtp_senha='$sp', smtp_de_email='$se', smtp_de_nome='$sn',
+            smtp_seguranca='$seg', timeout=$timeout, smtp_ativo=1
+            WHERE id=$id";
+    } else {
+        $sql = "INSERT INTO configuracao_smtp
+            (email_provider,sender_name,sender_email,api_key,smtp_host,smtp_port,smtp_usuario,
+             smtp_senha,smtp_de_email,smtp_de_nome,smtp_seguranca,timeout,smtp_ativo)
+            VALUES ('$ep','$sn','$se',$ak,'$sh',$smtpPort,'$su',
+             '$sp','$se','$sn','$seg',$timeout,1)";
+    }
+
+    if (!mysqli_query($conexao, $sql)) sa_err('Erro ao salvar: ' . mysqli_error($conexao));
+
+    sa_log($conexao, 'EMAIL_CONFIG_SALVA', "Configuração global de e-mail atualizada (provider={$emailProvider})");
+    sa_ok(null, 'Configuração de e-mail salva com sucesso!');
+}
+
+if ($action === 'email_config_testar') {
+    $destino = trim((string) ($input['destino'] ?? ''));
+    if ($destino === '' || !filter_var($destino, FILTER_VALIDATE_EMAIL)) {
+        sa_err('Informe um e-mail de destino válido.');
+    }
+
+    try {
+        require_once __DIR__ . '/EmailSender.php';
+        $sender = new EmailSender($conexao, true);
+        $sender->enviarTeste($destino);
+        sa_log($conexao, 'EMAIL_CONFIG_TESTE', "Teste de e-mail enviado para {$destino}");
+        sa_ok(['destinatario' => $destino], 'E-mail de teste enviado com sucesso!');
+    } catch (Throwable $e) {
+        sa_err('Falha no envio: ' . $e->getMessage());
+    }
+}
+
+if ($action === 'email_config_catalogo') {
+    $catalogo = email_config_catalogo_alertas_padrao();
+    $alertas = array_map(function ($a) {
+        return [
+            'codigo' => $a[0], 'modulo' => $a[1], 'evento' => $a[2],
+            'nome' => $a[3], 'descricao' => $a[4], 'destinatario_tipo' => $a[7],
+        ];
+    }, $catalogo);
+    sa_ok(['alertas' => $alertas], 'Catálogo carregado.');
+}
+
+if ($action === 'email_logs') {
+    email_config_garantir_tabelas($conexao);
+    $pagina = max(1, (int) ($_GET['pagina'] ?? 1));
+    $limite = 50;
+    $offset = ($pagina - 1) * $limite;
+
+    $totalRow = mysqli_fetch_assoc(mysqli_query($conexao, "SELECT COUNT(*) AS t FROM email_log"));
+    $total = (int) ($totalRow['t'] ?? 0);
+
+    $res = mysqli_query($conexao, "
+        SELECT l.*, COALESCE(t.nome_fantasia, t.razao_social) AS tenant_nome
+        FROM email_log l
+        LEFT JOIN tenants t ON t.id = l.tenant_id
+        ORDER BY l.id DESC LIMIT $limite OFFSET $offset");
+    $logs = [];
+    if ($res) while ($r = mysqli_fetch_assoc($res)) $logs[] = $r;
+
+    sa_ok([
+        'logs' => $logs,
+        'total' => $total,
+        'pagina_atual' => $pagina,
+        'total_paginas' => max(1, (int) ceil($total / $limite)),
+    ], 'Logs carregados.');
+}
+
+if ($action === 'rodar_cron_vencimentos') {
+    require_once __DIR__ . '/helpers/cron_financeiro_vencimentos.php';
+    $resultado = cron_financeiro_processar_todos($conexao);
+    sa_log($conexao, 'CRON_MANUAL_VENCIMENTOS', 'Cron de vencimentos financeiros disparado manualmente pelo Super-Admin');
+    sa_ok($resultado, 'Cron de vencimentos executado.');
+}
+
+if ($action === 'rodar_cron_aniversariantes') {
+    require_once __DIR__ . '/helpers/cron_rh_aniversariantes.php';
+    $resultado = cron_rh_processar_todos($conexao);
+    sa_log($conexao, 'CRON_MANUAL_ANIVERSARIANTES', 'Cron de aniversariantes disparado manualmente pelo Super-Admin');
+    sa_ok($resultado, 'Cron de aniversariantes executado.');
 }
 
 fechar_conexao($conexao);

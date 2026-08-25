@@ -857,7 +857,7 @@ function _documento_salvar($db, $sessao) {
         _log($db, $sessao, $novoId, 'criacao', "Documento criado: $nome");
 
         // Notificação por e-mail (opcional — integra ao sistema existente)
-         _notificar_novo_documento($db, $novoId, $nome, $grupoId, $uid);
+        _notificar_novo_documento($db, $novoId, $nome, $grupoId, $uid, $tenant_id);
         _sincronizar_usuarios_acesso($db, $novoId, $visib, $usuariosIds);
         retornar_json(true, 'Documento cadastrado com sucesso.', ['id' => $novoId]);
     }
@@ -1137,14 +1137,14 @@ function _logs_listar($db) {
 // ============================================================
 // NOTIFICAÇÃO DE NOVO DOCUMENTO (integra ao EmailSender)
 // ============================================================
-function _notificar_novo_documento($db, int $docId, string $nomeDoc, int $grupoId, int $criadoPor): void {
+function _notificar_novo_documento($db, int $docId, string $nomeDoc, int $grupoId, int $criadoPor, int $tenantId): void {
     // Somente disparar se o grupo NÃO for "Todos" (grupo 1) — grupos específicos são notificados
     if (!$grupoId || $grupoId === 1) return;
 
     try {
         require_once __DIR__ . '/EmailSender.php';
 
-        $rGrupo = $db->query("SELECT nome FROM documentos_grupos WHERE tenant_id = $tenant_id AND id=$grupoId LIMIT 1");
+        $rGrupo = $db->query("SELECT nome FROM documentos_grupos WHERE tenant_id = $tenantId AND id=$grupoId LIMIT 1");
         $grupo  = $rGrupo ? ($rGrupo->fetch_assoc()['nome'] ?? 'Todos') : 'Todos';
 
         $rDep = $db->query("SELECT dep.nome FROM documentos d
@@ -1185,7 +1185,7 @@ function _notificar_novo_documento($db, int $docId, string $nomeDoc, int $grupoI
             $sender = new EmailSender($db, false);
             while ($u = $rUsuarios->fetch_assoc()) {
                 try {
-                    $sender->enviar($u['email'], "Novo documento disponível: $nomeDoc", $corpo, $u['nome']);
+                    $sender->enviar($u['email'], "Novo documento disponível: $nomeDoc", $corpo, $u['nome'], [], null, $tenantId);
                 } catch (\Throwable $e) {
                     error_log('[DocumentosGED] Erro ao notificar ' . $u['email'] . ': ' . $e->getMessage());
                 }

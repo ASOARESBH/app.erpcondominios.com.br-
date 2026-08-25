@@ -425,7 +425,10 @@ if ($metodo === 'POST') {
             $tipo,
             $placa,
             $modelo,
-            $data_hora
+            $data_hora,
+            $nome_visitante,
+            $documento,
+            (string) ($_SESSION['usuario_nome'] ?? '')
         );
     } catch (Throwable $erro_notificacao) {
         log_registro('NOTIFICACAO ACESSO FALHOU (não bloqueante)', [

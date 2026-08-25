@@ -9,6 +9,7 @@ ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
+require_once __DIR__ . '/helpers/email_alertas_dispatcher.php';
 
 // Limpar buffer e definir headers
 // Função para retornar JSON
@@ -229,6 +230,19 @@ if ($metodo === 'POST') {
             rbacInvalidarCache($conexao, $tenant_id);
             rbacAuditar($conexao, ['modulo_chave'=>'usuarios','acao'=>'CRIAR','registro_tipo'=>'usuarios','registro_id'=>$id_inserido,'dados_depois'=>['nome'=>$nome,'email'=>$email,'perfil'=>$permissao],'resultado'=>'SUCESSO','status_http'=>201]);
         }
+
+        // E-mail de boas-vindas (não bloqueia o cadastro se falhar).
+        try {
+            alerta_email_disparar($conexao, (int)$tenant_id, 'sistema.novo_usuario', [
+                'nome_usuario'    => $nome,
+                'email_usuario'   => $email,
+                'perfil_usuario'  => $funcao,
+                'link_sistema'    => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . '/frontend/login.html',
+            ], [['email' => $email, 'nome' => $nome]]);
+        } catch (Throwable $e) {
+            error_log('[Usuarios][EmailBoasVindas] ' . $e->getMessage());
+        }
+
         registrar_log('USUARIO_CRIADO', "Usuário criado: $nome (ID: $id_inserido)", $nome);
         retornar_json(true, "Usuário cadastrado com sucesso", array('id' => $id_inserido));
     } else {

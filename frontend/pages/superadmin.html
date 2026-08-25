@@ -32,6 +32,9 @@
         <button class="tab-button" data-tab="auditoria" onclick="SA.showTab('auditoria')">
             <i class="fas fa-shield-alt"></i> Auditoria
         </button>
+        <button class="tab-button" data-tab="integracao" onclick="SA.showTab('integracao')">
+            <i class="fas fa-plug"></i> Integração
+        </button>
     </div>
 
     <!-- ══════════════════════════════════════════════════════
@@ -385,6 +388,196 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB: INTEGRAÇÃO > E-MAIL
+    ══════════════════════════════════════════════════════ -->
+    <div id="tab-integracao" class="tab-content">
+
+        <!-- Submenu: Integração > E-mail -->
+        <div class="page-card" style="padding:0;margin-bottom:1rem;overflow:hidden;">
+            <div class="sa-modal-tabs" style="margin:0;padding:0 1rem;">
+                <button class="sa-modal-tab active" data-subtab="email" onclick="SA.showIntegracaoSubTab('email')">
+                    <i class="fas fa-envelope"></i> E-mail
+                </button>
+            </div>
+        </div>
+
+        <div id="integracao-subtab-email" class="sa-modal-tab-content active">
+
+            <div class="sa-info-banner" style="margin-bottom:1rem;">
+                <i class="fas fa-info-circle"></i>
+                <span>Esta é a <strong>única</strong> configuração de remetente/servidor de e-mail da plataforma —
+                vale para todos os condomínios. Cada condomínio continua decidindo, na própria tela de
+                "E-mail e Alertas", quais avisos automáticos quer receber.</span>
+            </div>
+
+            <!-- Card: Configuração do remetente -->
+            <div class="page-card" style="margin-bottom:1rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem;">
+                    <h3 style="font-size:.9rem;font-weight:700;margin:0;display:flex;align-items:center;gap:.4rem;">
+                        <i class="fas fa-paper-plane"></i> Configuração do Remetente
+                    </h3>
+                    <span id="sa-email-status-badge" class="badge badge-inativo">—</span>
+                </div>
+
+                <div class="form-grid cols-3" style="margin-bottom:1rem;">
+                    <div>
+                        <label>Provedor</label>
+                        <select id="sa-email-provider" onchange="SA.alternarCamposEmailProvider()">
+                            <option value="brevo">Brevo (API)</option>
+                            <option value="resend">Resend (API)</option>
+                            <option value="smtp">SMTP</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Nome do Remetente</label>
+                        <input type="text" id="sa-email-sender-name" placeholder="ERP Condomínios">
+                    </div>
+                    <div>
+                        <label>E-mail do Remetente</label>
+                        <input type="email" id="sa-email-sender-email" placeholder="notificacoes@erpcondominios.com.br">
+                    </div>
+                </div>
+
+                <!-- Campos API (Brevo/Resend) -->
+                <div id="sa-email-campos-api" style="display:none;margin-bottom:1rem;">
+                    <label>API Key</label>
+                    <input type="password" id="sa-email-api-key" placeholder="Cole aqui a API Key">
+                    <small id="sa-email-api-key-hint" style="display:block;color:var(--color-text-secondary);margin-top:.25rem;">
+                        Deixe em branco para manter a chave atual.
+                    </small>
+                </div>
+
+                <!-- Campos SMTP -->
+                <div id="sa-email-campos-smtp" style="display:none;">
+                    <div class="form-grid cols-3" style="margin-bottom:1rem;">
+                        <div>
+                            <label>Host SMTP</label>
+                            <input type="text" id="sa-email-smtp-host" placeholder="smtp.seudominio.com.br">
+                        </div>
+                        <div>
+                            <label>Porta</label>
+                            <input type="number" id="sa-email-smtp-port" value="587">
+                        </div>
+                        <div>
+                            <label>Segurança</label>
+                            <select id="sa-email-smtp-seguranca">
+                                <option value="tls">TLS (587)</option>
+                                <option value="ssl">SSL (465)</option>
+                                <option value="none">Nenhuma</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-grid cols-3">
+                        <div>
+                            <label>Usuário SMTP</label>
+                            <input type="text" id="sa-email-smtp-usuario" placeholder="usuario@seudominio.com.br">
+                        </div>
+                        <div>
+                            <label>Senha SMTP</label>
+                            <input type="password" id="sa-email-smtp-senha" placeholder="Deixe em branco para manter">
+                        </div>
+                        <div>
+                            <label>Timeout (s)</label>
+                            <input type="number" id="sa-email-smtp-timeout" value="30">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.25rem;">
+                    <button class="btn btn-primary" onclick="SA.salvarEmailConfig()">
+                        <i class="fas fa-save"></i> Salvar Configuração
+                    </button>
+                    <button class="btn btn-secondary" onclick="SA.carregarEmailConfig()">
+                        <i class="fas fa-sync-alt"></i> Recarregar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Card: Enviar teste -->
+            <div class="page-card" style="margin-bottom:1rem;">
+                <h3 style="font-size:.9rem;font-weight:700;margin:0 0 1rem;display:flex;align-items:center;gap:.4rem;">
+                    <i class="fas fa-flask"></i> Enviar E-mail de Teste
+                </h3>
+                <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;">
+                    <div style="flex:1;min-width:220px;">
+                        <label>E-mail de destino</label>
+                        <input type="email" id="sa-email-teste-destino" placeholder="seu@email.com">
+                    </div>
+                    <button class="btn btn-primary" id="sa-btn-email-testar" onclick="SA.testarEmailConfig()">
+                        <i class="fas fa-paper-plane"></i> Enviar Teste
+                    </button>
+                </div>
+                <div id="sa-email-teste-resultado" style="display:none;margin-top:1rem;"></div>
+            </div>
+
+            <!-- Card: Alertas automáticos da plataforma -->
+            <div class="page-card" style="margin-bottom:1rem;">
+                <h3 style="font-size:.9rem;font-weight:700;margin:0 0 .5rem;display:flex;align-items:center;gap:.4rem;">
+                    <i class="fas fa-bell"></i> Alertas Automáticos da Plataforma
+                </h3>
+                <p style="font-size:.8rem;color:var(--color-text-secondary);margin:0 0 1rem;">
+                    Lista dos avisos automáticos que o sistema sabe disparar. O liga/desliga de cada um é feito
+                    por condomínio, na tela "E-mail e Alertas" de cada tenant — aqui é só a referência de quais
+                    existem na plataforma.
+                </p>
+                <div id="sa-email-alertas-catalogo" class="sa-table-wrapper">
+                    <div class="loading-inline"><i class="fas fa-spinner fa-spin"></i></div>
+                </div>
+
+                <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border-color,#e2e8f0);">
+                    <p style="font-size:.8rem;color:var(--color-text-secondary);margin:0 0 .75rem;">
+                        Dois destes alertas dependem de uma checagem diária (cron) em vez de um evento —
+                        contas a vencer/vencidas e aniversariantes do dia. Rode manualmente aqui para testar:
+                    </p>
+                    <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+                        <button class="btn btn-secondary btn-sm" onclick="SA.rodarCronVencimentos()">
+                            <i class="fas fa-play-circle"></i> Rodar agora: Vencimentos Financeiros
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="SA.rodarCronAniversariantes()">
+                            <i class="fas fa-play-circle"></i> Rodar agora: Aniversariantes
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Histórico de envios (todos os tenants) -->
+            <div class="page-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem;">
+                    <h3 style="font-size:.9rem;font-weight:700;margin:0;display:flex;align-items:center;gap:.4rem;">
+                        <i class="fas fa-list-alt"></i> Histórico de Envios (todos os condomínios)
+                    </h3>
+                    <button class="btn btn-secondary btn-sm" onclick="SA.carregarEmailLogs()">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                </div>
+                <div class="sa-table-wrapper">
+                    <table class="sa-table">
+                        <thead>
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>Condomínio</th>
+                                <th>Alerta</th>
+                                <th>Destinatário</th>
+                                <th>Assunto</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sa-tbody-email-logs">
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="sa-email-logs-paginacao" style="margin-top:.75rem;display:flex;gap:.4rem;flex-wrap:wrap;"></div>
+            </div>
+
         </div>
     </div>
 

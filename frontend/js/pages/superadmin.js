@@ -204,6 +204,23 @@ function _showTab(tab) {
     if (tab === 'usuarios')    _carregarUsuariosGlobais();
     if (tab === 'onboarding')  _iniciarWizard();
     if (tab === 'auditoria')   _carregarAuditoria();
+    if (tab === 'integracao')  _showIntegracaoSubTab('email');
+}
+
+function _showIntegracaoSubTab(sub) {
+    document.querySelectorAll('.page-superadmin #tab-integracao .sa-modal-tab').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.page-superadmin #tab-integracao .sa-modal-tab-content').forEach(el => el.classList.remove('active'));
+
+    const btn     = document.querySelector(`.page-superadmin #tab-integracao .sa-modal-tab[data-subtab="${sub}"]`);
+    const content = document.getElementById('integracao-subtab-' + sub);
+    if (btn)     btn.classList.add('active');
+    if (content) content.classList.add('active');
+
+    if (sub === 'email') {
+        _carregarEmailConfig();
+        _carregarEmailAlertasCatalogo();
+        _carregarEmailLogs();
+    }
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────────────────
@@ -951,6 +968,197 @@ function _mascaraCnpj(input) {
     input.value = v;
 }
 
+// ── INTEGRAÇÃO > E-MAIL (configuração global de remetente) ─────────────────
+let _emailLogPagina = 1;
+
+function _emailVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+function _emailSetVal(id, v) { const el = document.getElementById(id); if (el) el.value = v ?? ''; }
+function _esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _alternarCamposEmailProvider() {
+    const provider = _emailVal('sa-email-provider');
+    const isApi = provider === 'brevo' || provider === 'resend';
+    const camposApi  = document.getElementById('sa-email-campos-api');
+    const camposSmtp = document.getElementById('sa-email-campos-smtp');
+    if (camposApi)  camposApi.style.display  = isApi ? 'block' : 'none';
+    if (camposSmtp) camposSmtp.style.display = isApi ? 'none'  : 'block';
+}
+
+function _carregarEmailConfig() {
+    req({ action: 'email_config_carregar' }).then(res => {
+        if (!res.sucesso) { toast(res.mensagem || 'Erro ao carregar configuração de e-mail.', 'error'); return; }
+        const c = res.dados || {};
+
+        _emailSetVal('sa-email-provider', c.email_provider || 'brevo');
+        _alternarCamposEmailProvider();
+
+        _emailSetVal('sa-email-sender-name',  c.sender_name  || 'ERP Condomínios');
+        _emailSetVal('sa-email-sender-email', c.sender_email || '');
+
+        const hint = document.getElementById('sa-email-api-key-hint');
+        if (hint) {
+            hint.textContent = c.senha_configurada
+                ? 'Já existe uma chave configurada — deixe em branco para mantê-la.'
+                : 'Nenhuma chave configurada ainda.';
+        }
+
+        _emailSetVal('sa-email-smtp-host',      c.smtp_host      || '');
+        _emailSetVal('sa-email-smtp-port',      c.smtp_port      || 587);
+        _emailSetVal('sa-email-smtp-usuario',   c.smtp_usuario   || '');
+        _emailSetVal('sa-email-smtp-timeout',   c.timeout        || 30);
+        const seg = document.getElementById('sa-email-smtp-seguranca');
+        if (seg) seg.value = c.smtp_seguranca || 'tls';
+
+        const badge = document.getElementById('sa-email-status-badge');
+        if (badge) {
+            const configurado = c.senha_configurada || c.smtp_host || c.sender_email;
+            badge.textContent = configurado ? 'Configurado' : 'Não configurado';
+            badge.className = 'badge ' + (configurado ? 'badge-ativo' : 'badge-inativo');
+        }
+    });
+}
+
+function _salvarEmailConfig() {
+    const provider = _emailVal('sa-email-provider');
+    const isApi = provider === 'brevo' || provider === 'resend';
+
+    if (isApi) {
+        if (!_emailVal('sa-email-sender-email') || !_emailVal('sa-email-sender-name')) {
+            toast('Informe nome e e-mail do remetente.', 'error');
+            return;
+        }
+    } else {
+        if (!_emailVal('sa-email-smtp-host') || !_emailVal('sa-email-smtp-usuario') || !_emailVal('sa-email-sender-email')) {
+            toast('Preencha Host, Usuário e E-mail do Remetente.', 'error');
+            return;
+        }
+    }
+
+    const payload = {
+        email_provider: provider,
+        sender_name:    _emailVal('sa-email-sender-name'),
+        sender_email:   _emailVal('sa-email-sender-email'),
+        api_key:        _emailVal('sa-email-api-key'),
+        smtp_host:      _emailVal('sa-email-smtp-host'),
+        smtp_port:      _emailVal('sa-email-smtp-port'),
+        smtp_usuario:   _emailVal('sa-email-smtp-usuario'),
+        smtp_senha:     _emailVal('sa-email-smtp-senha'),
+        smtp_seguranca: document.getElementById('sa-email-smtp-seguranca')?.value || 'tls',
+        smtp_timeout:   _emailVal('sa-email-smtp-timeout'),
+    };
+
+    req({ action: 'email_config_salvar' }, 'POST', payload).then(res => {
+        toast(res.mensagem || (res.sucesso ? 'Configuração salva.' : 'Erro ao salvar.'), res.sucesso ? 'success' : 'error');
+        if (res.sucesso) {
+            _emailSetVal('sa-email-api-key', '');
+            _emailSetVal('sa-email-smtp-senha', '');
+            _carregarEmailConfig();
+        }
+    });
+}
+
+function _testarEmailConfig() {
+    const destino = _emailVal('sa-email-teste-destino').trim();
+    if (!destino) { toast('Informe um e-mail de destino para o teste.', 'error'); return; }
+
+    const btn = document.getElementById('sa-btn-email-testar');
+    const resultado = document.getElementById('sa-email-teste-resultado');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...'; }
+    if (resultado) resultado.style.display = 'none';
+
+    req({ action: 'email_config_testar' }, 'POST', { destino }).then(res => {
+        if (resultado) {
+            resultado.style.display = 'block';
+            resultado.innerHTML = res.sucesso
+                ? `<div class="alert alert-success" style="display:block;"><i class="fas fa-check-circle"></i> ${_esc(res.mensagem || 'E-mail de teste enviado com sucesso!')}</div>`
+                : `<div class="alert alert-error" style="display:block;"><i class="fas fa-times-circle"></i> ${_esc(res.mensagem || 'Falha ao enviar o e-mail de teste.')}</div>`;
+        }
+    }).finally(() => {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Teste'; }
+    });
+}
+
+function _carregarEmailAlertasCatalogo() {
+    const el = document.getElementById('sa-email-alertas-catalogo');
+    if (!el) return;
+    req({ action: 'email_config_catalogo' }).then(res => {
+        if (!res.sucesso) { el.innerHTML = `<div style="color:#dc2626;">${_esc(res.mensagem)}</div>`; return; }
+        const itens = res.dados?.alertas || [];
+        if (!itens.length) { el.innerHTML = '<div class="text-center" style="padding:1rem;color:var(--color-text-tertiary);">Nenhum alerta cadastrado.</div>'; return; }
+        el.innerHTML = `<table class="sa-table"><thead><tr>
+            <th>Código</th><th>Nome</th><th>Módulo</th><th>Destinatário padrão</th>
+        </tr></thead><tbody>${itens.map(a => `
+            <tr>
+                <td><code style="font-size:.75rem;">${_esc(a.codigo)}</code></td>
+                <td>${_esc(a.nome)}</td>
+                <td>${_esc(a.modulo)}</td>
+                <td>${_esc(a.destinatario_tipo)}</td>
+            </tr>`).join('')}</tbody></table>`;
+    });
+}
+
+function _carregarEmailLogs(pagina) {
+    if (typeof pagina === 'number') _emailLogPagina = pagina;
+    const tbody = document.getElementById('sa-tbody-email-logs');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+
+    req({ action: 'email_logs', pagina: _emailLogPagina }).then(res => {
+        if (!res.sucesso) { tbody.innerHTML = `<tr><td colspan="6" style="color:#dc2626;">${_esc(res.mensagem)}</td></tr>`; return; }
+        const logs = res.dados?.logs || [];
+        if (!logs.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum envio registrado.</td></tr>'; return; }
+
+        tbody.innerHTML = logs.map(l => {
+            const statusCor = l.status === 'enviado' ? 'badge-ativo' : (l.status === 'erro' ? 'badge-suspenso' : 'badge-inativo');
+            return `<tr>
+                <td style="font-size:.8rem;white-space:nowrap;">${fmtDate(l.data_envio)}</td>
+                <td style="font-size:.8rem;">${_esc(l.tenant_nome || ('#' + l.tenant_id))}</td>
+                <td style="font-size:.75rem;color:var(--color-text-tertiary);">${_esc(l.alerta_codigo || '—')}</td>
+                <td style="font-size:.8rem;">${_esc(l.destinatario)}</td>
+                <td style="font-size:.8rem;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${_esc(l.assunto)}">${_esc(l.assunto)}</td>
+                <td><span class="badge ${statusCor}">${_esc(l.status)}</span></td>
+            </tr>`;
+        }).join('');
+
+        const pagWrap = document.getElementById('sa-email-logs-paginacao');
+        if (pagWrap) {
+            const totalPaginas = res.dados?.total_paginas || 1;
+            if (totalPaginas > 1) {
+                let btns = '';
+                for (let i = 1; i <= totalPaginas; i++) {
+                    btns += `<button class="btn btn-secondary btn-sm ${i === _emailLogPagina ? 'active' : ''}" onclick="SA.carregarEmailLogs(${i})">${i}</button>`;
+                }
+                pagWrap.innerHTML = btns;
+            } else {
+                pagWrap.innerHTML = '';
+            }
+        }
+    });
+}
+
+function _rodarCronVencimentos() {
+    if (!confirm('Rodar agora a checagem de contas a vencer/vencidas para todos os condomínios?')) return;
+    req({ action: 'rodar_cron_vencimentos' }, 'POST', {}).then(res => {
+        if (!res.sucesso) { toast(res.mensagem || 'Erro ao rodar o cron.', 'error'); return; }
+        const d = res.dados || {};
+        toast(`Processado: ${d.tenants_processados ?? 0} condomínio(s) — ${d.vencendo ?? 0} aviso(s) de vencimento, ${d.vencida ?? 0} de conta vencida.`, 'success');
+        _carregarEmailLogs();
+    });
+}
+
+function _rodarCronAniversariantes() {
+    if (!confirm('Rodar agora a checagem de aniversariantes do dia para todos os condomínios?')) return;
+    req({ action: 'rodar_cron_aniversariantes' }, 'POST', {}).then(res => {
+        if (!res.sucesso) { toast(res.mensagem || 'Erro ao rodar o cron.', 'error'); return; }
+        const d = res.dados || {};
+        toast(`Processado: ${d.tenants_processados ?? 0} condomínio(s) — ${d.tenants_com_aniversariante ?? 0} com aniversariante hoje (${d.total_aniversariantes ?? 0} pessoa(s)).`, 'success');
+        _carregarEmailLogs();
+    });
+}
+
 // ── HELPER ────────────────────────────────────────────────────────────────
 function _set(id, html) {
     const el = document.getElementById(id);
@@ -988,4 +1196,12 @@ const _api = {
     habilitarAgente:       _habilitarAgente,
     revogarAgente:         _revogarAgente,
     salvarConfiguracaoMonitoramento: _salvarConfiguracaoMonitoramento,
+    showIntegracaoSubTab:  _showIntegracaoSubTab,
+    alternarCamposEmailProvider: _alternarCamposEmailProvider,
+    carregarEmailConfig:   _carregarEmailConfig,
+    salvarEmailConfig:     _salvarEmailConfig,
+    testarEmailConfig:     _testarEmailConfig,
+    carregarEmailLogs:     _carregarEmailLogs,
+    rodarCronVencimentos:      _rodarCronVencimentos,
+    rodarCronAniversariantes:  _rodarCronAniversariantes,
 };

@@ -54,7 +54,9 @@ class EmailSender
         string $assunto,
         string $corpo,
         string $nomeDestinatario = '',
-        array  $anexos = []
+        array  $anexos = [],
+        ?string $alertaCodigo = null,
+        ?int    $tenantId = null
     ): bool {
         $result = $this->provider->send($destinatario, $nomeDestinatario, $assunto, $corpo, $anexos);
 
@@ -64,7 +66,9 @@ class EmailSender
             $result['success'] ? 'enviado' : 'erro',
             $result['error'],
             $result['message_id']    ?? null,
-            $result['response_code'] ?? null
+            $result['response_code'] ?? null,
+            $alertaCodigo,
+            $tenantId
         );
 
         if (!$result['success']) {
@@ -213,7 +217,9 @@ class EmailSender
         string  $status,
         ?string $erro        = null,
         ?string $messageId   = null,
-        ?int    $responseCode = null
+        ?int    $responseCode = null,
+        ?string $alertaCodigo = null,
+        ?int    $tenantId     = null
     ): void {
         $provider  = $this->config['email_provider'] ?? 'smtp';
         $d  = mysqli_real_escape_string($this->conexao, $destinatario);
@@ -223,10 +229,12 @@ class EmailSender
         $e  = $erro       !== null ? "'" . mysqli_real_escape_string($this->conexao, $erro)      . "'" : 'NULL';
         $m  = $messageId  !== null ? "'" . mysqli_real_escape_string($this->conexao, $messageId) . "'" : 'NULL';
         $rc = $responseCode !== null ? (int) $responseCode : 'NULL';
+        $ac = $alertaCodigo !== null ? "'" . mysqli_real_escape_string($this->conexao, $alertaCodigo) . "'" : 'NULL';
+        $tid = $tenantId !== null ? (int) $tenantId : 1;
 
         // Tenta gravar com colunas novas; faz fallback para colunas básicas se a migração ainda não rodou
-        $sql = "INSERT INTO email_log (destinatario, assunto, tipo, status, erro_mensagem, provider, message_id, response_code)
-                VALUES ('$d', '$a', 'outro', '$s', $e, '$p', $m, $rc)";
+        $sql = "INSERT INTO email_log (alerta_codigo, tenant_id, destinatario, assunto, tipo, status, erro_mensagem, provider, message_id, response_code)
+                VALUES ($ac, $tid, '$d', '$a', 'outro', '$s', $e, '$p', $m, $rc)";
 
         if (!mysqli_query($this->conexao, $sql)) {
             mysqli_query(

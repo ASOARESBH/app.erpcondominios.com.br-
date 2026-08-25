@@ -211,7 +211,10 @@ function recuperacao_solicitar(mysqli $conexao): void
                 $conta['email'],
                 'Redefinição de senha — ERP Condomínio',
                 recuperacao_email_html($conta, recuperacao_link($token)),
-                $conta['nome']
+                $conta['nome'],
+                [],
+                'sistema.reset_senha',
+                $conta['tenant_id'] !== null ? (int)$conta['tenant_id'] : null
             );
             recuperacao_registrar('SENHA_RECUPERACAO_EMAIL_ENVIADO', 'Token enviado; tipo=' . $conta['tipo'] . '; conta=' . $conta['id'] . '; IP=' . $ip, $conta['nome']);
         } catch (Throwable $e) {
