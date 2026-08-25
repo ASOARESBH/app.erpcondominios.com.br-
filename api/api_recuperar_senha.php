@@ -30,6 +30,40 @@ function recuperacao_ip(): string
     return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
 }
 
+/**
+ * Garante a estrutura usada pelo fluxo v2 antes de consultar ou gravar tokens.
+ * A migração continua sendo recomendada no deploy; esta proteção evita que uma
+ * instalação legada falhe silenciosamente quando a migração foi esquecida.
+ */
+function recuperacao_garantir_schema(mysqli $conexao): void
+{
+    $sql = <<<'SQL'
+CREATE TABLE IF NOT EXISTS `recuperacao_senha_tokens_v2` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id` INT(11) NULL DEFAULT NULL,
+    `tipo_conta` ENUM('usuario','morador') NOT NULL,
+    `conta_id` INT(11) NOT NULL,
+    `email` VARCHAR(255) NOT NULL,
+    `token_hash` CHAR(64) NOT NULL,
+    `ip_solicitacao` VARCHAR(45) NOT NULL,
+    `user_agent` VARCHAR(512) NULL DEFAULT NULL,
+    `solicitado_em` DATETIME NOT NULL,
+    `expira_em` DATETIME NOT NULL,
+    `usado_em` DATETIME NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_recuperacao_token_hash` (`token_hash`),
+    KEY `idx_recuperacao_conta` (`tipo_conta`, `conta_id`, `usado_em`),
+    KEY `idx_recuperacao_ip_data` (`ip_solicitacao`, `solicitado_em`),
+    KEY `idx_recuperacao_expira` (`expira_em`),
+    KEY `idx_recuperacao_tenant` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL;
+
+    if (!mysqli_query($conexao, $sql)) {
+        throw new RuntimeException('Não foi possível preparar o armazenamento de recuperação.');
+    }
+}
+
 function recuperacao_entrada(): array
 {
     $json = json_decode((string)file_get_contents('php://input'), true);
@@ -189,6 +223,7 @@ function recuperacao_solicitar(mysqli $conexao): void
         recuperacao_json(true, RECUPERACAO_MENSAGEM_GENERICA);
     }
 
+    recuperacao_garantir_schema($conexao);
     $contas = recuperacao_contas($conexao, $identificador);
     if (!$contas) {
         recuperacao_registrar('SENHA_RECUPERACAO_SOLICITADA', 'Solicitação sem conta elegível; IP=' . $ip);
@@ -344,6 +379,8 @@ try {
     recuperacao_json(false, 'Ação inválida.');
 } catch (Throwable $e) {
     error_log('[api_recuperar_senha] erro interno: ' . $e->getMessage());
-    // A solicitação é pública: manter resposta neutra e não revelar detalhes internos.
-    recuperacao_json(true, RECUPERACAO_MENSAGEM_GENERICA);
+    // A solicitação é pública: manter a mensagem neutra, mas sinalizar erro
+    // para que a interface não confirme sucesso quando o envio não ocorreu.
+    http_response_code(500);
+    recuperacao_json(false, 'Não foi possível processar a solicitação neste momento. Tente novamente mais tarde.');
 }

@@ -793,14 +793,21 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ acao: 'solicitar', cpf_email: cpfEmail })
                 })
-                .then(function (r) { return r.json(); })
+                .then(function (r) {
+                    return r.json().then(function (data) {
+                        if (!r.ok || data.sucesso === false) {
+                            throw new Error(data.mensagem || 'Não foi possível processar a solicitação.');
+                        }
+                        return data;
+                    });
+                })
                 .then(function (data) {
-                    // Sempre exibe mensagem genérica (a API nunca informa se encontrou ou não)
+                    // A mensagem continua genérica para não revelar se a conta existe.
                     mostrarAlerta(data.mensagem || 'Se os dados informados estiverem cadastrados, você receberá instruções por e-mail em breve.', 'success');
                     ocultarPainel();
                 })
-                .catch(function () {
-                    mostrarAlerta('Erro ao processar. Tente novamente.', 'error');
+                .catch(function (erro) {
+                    mostrarAlerta(erro && erro.message ? erro.message : 'Erro ao processar. Tente novamente.', 'error');
                 })
                 .finally(function () {
                     btn.disabled = false;
