@@ -229,3 +229,24 @@
 .page-empresa .empresa-layouts-lista { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }.page-empresa .empresa-layout-card { display:flex; position:relative; gap:10px; min-height:122px; padding:13px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; cursor:pointer; transition:border-color .2s,box-shadow .2s,background .2s; }.page-empresa .empresa-layout-card:hover { border-color:#a5b4fc; box-shadow:0 3px 10px rgba(15,23,42,.06); }.page-empresa .empresa-layout-card:has(input:checked) { border-color:#6366f1; background:#f5f3ff; box-shadow:0 0 0 2px rgba(99,102,241,.1); }.page-empresa .empresa-layout-card input { position:absolute; top:12px; right:12px; width:16px; height:16px; accent-color:#4f46e5; }.page-empresa .empresa-layout-card-icon { flex:0 0 31px; width:31px; height:31px; display:grid; place-items:center; border-radius:8px; color:#4f46e5; background:#eef2ff; }.page-empresa .empresa-layout-card-content { min-width:0; display:flex; flex-direction:column; gap:4px; padding-right:12px; }.page-empresa .empresa-layout-card-content strong { color:#1e293b; font-size:.82rem; line-height:1.25; }.page-empresa .empresa-layout-card-content small { color:#64748b; font-size:.74rem; line-height:1.35; }.page-empresa .empresa-layout-card-content em { margin-top:auto; color:#475569; font-size:.68rem; font-style:normal; font-weight:650; text-transform:uppercase; letter-spacing:.02em; }.page-empresa .empresa-layout-status { position:absolute; left:13px; bottom:10px; padding:3px 6px; border-radius:5px; background:#f1f5f9; color:#475569; font-size:.65rem; font-weight:700; }.page-empresa .empresa-layout-status.pronto { color:#166534; background:#dcfce7; }.page-empresa .empresa-layout-status.configurado { color:#1d4ed8; background:#dbeafe; }.page-empresa .empresa-layout-status.planejado { color:#92400e; background:#fef3c7; }.page-empresa .empresa-layouts-vazio { grid-column:1/-1; margin:0; padding:18px; text-align:center; color:#64748b; border:1px dashed #cbd5e1; border-radius:9px; font-size:.86rem; }.page-empresa .empresa-administradora-actions { margin-top:18px; }
 @media (max-width: 1060px) { .page-empresa .empresa-layouts-lista { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width: 680px) { .page-empresa .empresa-tabs { width:100%; }.page-empresa .empresa-tab { flex:1; justify-content:center; font-size:.77rem; padding:9px 7px; }.page-empresa .empresa-administradora-card { padding:15px; }.page-empresa .empresa-administradora-head,.page-empresa .empresa-layouts-head { flex-direction:column; }.page-empresa .empresa-tenant-badge { white-space:normal; }.page-empresa .empresa-layouts-lista { grid-template-columns:1fr; } }
+
+/* Formulário sem overflow horizontal: o CNPJ e o botão permanecem dentro do card. */
+.page-empresa,
+.page-empresa * { box-sizing: border-box; }
+.page-empresa { width:100%; max-width:100%; min-width:0; overflow-x:hidden; }
+.page-empresa .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; min-width:0; }
+.page-empresa .form-grid > div,
+.page-empresa form,
+.page-empresa input,
+.page-empresa select,
+.page-empresa textarea { min-width:0; max-width:100%; }
+.page-empresa .cnpj-search-row { display:grid !important; grid-template-columns:minmax(0,1fr) auto; align-items:stretch; gap:.75rem; width:100%; min-width:0; }
+.page-empresa .cnpj-search-row input { width:100%; min-width:0; }
+.page-empresa .cnpj-search-row button { width:auto; max-width:100%; white-space:nowrap; }
+.page-empresa .form-actions { max-width:100%; flex-wrap:wrap; }
+@media (max-width:700px) {
+    .page-empresa .form-grid { grid-template-columns:minmax(0,1fr); }
+    .page-empresa .cnpj-search-row { grid-template-columns:minmax(0,1fr); }
+    .page-empresa .cnpj-search-row button { width:100%; }
+    .page-empresa .logo-section { flex-wrap:wrap; gap:1rem !important; }
+}
