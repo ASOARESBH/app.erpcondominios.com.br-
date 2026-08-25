@@ -9,7 +9,10 @@ const AppRouter = {
     // Configurações
     config: {
         pagesPath: 'pages/',
-        scriptsPath: './pages/', // Relativo ao local deste arquivo (js/)
+        // O router é carregado em /frontend/layout-base.html; import() resolve
+        // caminhos relativos à página, não ao arquivo /frontend/js/app-router.js.
+        // Os módulos vivem em /frontend/js/pages/.
+        scriptsPath: '/frontend/js/pages/',
         contentContainerId: 'appContent',
         titleElementId: 'pageTitle'
     },
