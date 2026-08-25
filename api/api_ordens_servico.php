@@ -1483,12 +1483,14 @@ switch ($acao) {
     // ─────────────────────────────────────────────────
     case 'listar_interacoes':
         $os_id = (int)($_GET['os_id'] ?? $body['os_id'] ?? 0);
+        $publico = ($_GET['publico'] ?? $body['publico'] ?? '') === '1';
         if (!$os_id) retornar_json(false, 'os_id inválido');
 
+        $filtro_publico = $publico ? " AND i.tipo <> 'nota_interna'" : '';
         $stmt = $conn->prepare(
             "SELECT i.*, e.nome AS etapa_nome FROM os_interacoes i
              LEFT JOIN os_etapas e ON e.id = i.etapa_id AND e.tenant_id = i.tenant_id
-             WHERE i.tenant_id = ? AND i.os_id = ? ORDER BY i.criado_em ASC, i.id ASC"
+             WHERE i.tenant_id = ? AND i.os_id = ?$filtro_publico ORDER BY i.criado_em ASC, i.id ASC"
         );
         $stmt->bind_param('ii', $tenant_id, $os_id);
         $stmt->execute();

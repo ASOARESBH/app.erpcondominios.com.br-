@@ -454,6 +454,16 @@
         .modo-resumo .aviso-modo { display: block; }
         .aviso-modo { display: none; }
 
+        /* ── Histórico público da O.S. ── */
+        .historico-publico-item { display:grid; grid-template-columns:24px 1fr; gap:8px; margin:0 0 10px; padding:9px 10px; border:1px solid #e2e8f0; border-left:3px solid #2563eb; border-radius:5px; background:#fff; page-break-inside:avoid; }
+        .historico-publico-icone { color:#2563eb; text-align:center; }
+        .historico-publico-meta { font-size:8.5pt; color:#64748b; margin-bottom:4px; }
+        .historico-publico-tipo { display:inline-block; margin-right:6px; padding:2px 6px; border-radius:10px; background:#dbeafe; color:#1e40af; font-size:7.5pt; font-weight:700; }
+        .historico-publico-mensagem { font-size:9.5pt; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; }
+        .historico-publico-fotos { display:flex; flex-wrap:wrap; gap:7px; margin-top:7px; }
+        .historico-publico-fotos img { width:120px; height:85px; object-fit:cover; border:1px solid #cbd5e1; border-radius:4px; }
+        .historico-publico-vazio { color:#64748b; font-style:italic; font-size:9pt; }
+
         /* ── Impressão ── */
         @media print {
             body { background: #fff; }
@@ -690,6 +700,12 @@
         </div>
     </div>
 
+    <!-- SEÇÃO: HISTÓRICO PÚBLICO -->
+    <div class="secao" id="secao-historico-publico">
+        <div class="secao-titulo">📚 Histórico público do atendimento</div>
+        <div id="historico-publico-lista"><div class="historico-publico-vazio">Nenhuma interação pública registrada.</div></div>
+    </div>
+
     <!-- SEÇÃO: Assinaturas -->
     <div class="secao">
         <div class="secao-titulo">✍️ Assinaturas</div>
@@ -760,6 +776,37 @@
         if (el) el.innerHTML = val || '—';
     }
 
+    function escaparHtml(valor) {
+        return String(valor ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    }
+
+    function formatarMensagem(valor) {
+        return escaparHtml(valor).replace(/\n/g, '<br>');
+    }
+
+    function renderizarHistoricoPublico(lista) {
+        const el = document.getElementById('historico-publico-lista');
+        if (!lista.length) {
+            el.innerHTML = '<div class="historico-publico-vazio">Nenhuma interação pública registrada.</div>';
+            return;
+        }
+        const icones = { comentario: 'fa-comment', andamento: 'fa-spinner', solucao: 'fa-check-circle' };
+        const tipos = { comentario: 'Comentário', andamento: 'Andamento', solucao: 'Solução' };
+        el.innerHTML = lista.filter(item => item.tipo !== 'nota_interna').map(item => {
+            let fotos = [];
+            if (Array.isArray(item.fotos)) fotos = item.fotos;
+            const fotosHtml = fotos.length ? '<div class="historico-publico-fotos">' + fotos.map(f => {
+                const url = `${window.location.origin}/api/api_imagem_projeto.php?tipo=foto&id=${encodeURIComponent(f.id)}`;
+                return `<img src="${url}" alt="${escaparHtml(f.arquivo_nome_original || 'Foto da interação')}" loading="lazy">`;
+            }).join('') + '</div>' : '';
+            return `<div class="historico-publico-item">
+                <div class="historico-publico-icone"><i class="fas ${icones[item.tipo] || 'fa-comment'}"></i></div>
+                <div><div class="historico-publico-meta"><span class="historico-publico-tipo">${tipos[item.tipo] || 'Interação'}</span>${escaparHtml(item.usuario_nome || 'Sistema')} — ${formatarData(item.criado_em)}</div>
+                <div class="historico-publico-mensagem">${formatarMensagem(item.mensagem)}</div>${fotosHtml}</div>
+            </div>`;
+        }).join('');
+    }
+
     // ── Carregar dados ──
     async function carregar() {
         const params = new URLSearchParams(window.location.search);
@@ -772,9 +819,10 @@
 
         try {
             // Buscar dados da empresa e da OS em paralelo
-            const [resEmpresa, resOS] = await Promise.all([
+            const [resEmpresa, resOS, resInteracoes] = await Promise.all([
                 fetch(API_EMPRESA + '?action=obter').then(r => r.json()),
-                fetch(API_OS + '?acao=buscar&id=' + osId).then(r => r.json())
+                fetch(API_OS + '?acao=buscar&id=' + osId).then(r => r.json()),
+                fetch(API_OS + '?acao=listar_interacoes&os_id=' + encodeURIComponent(osId) + '&publico=1').then(r => r.json())
             ]);
 
             // ── Empresa ──
@@ -817,6 +865,7 @@
             }
 
             const os = resOS.dados;
+            renderizarHistoricoPublico(resInteracoes && resInteracoes.sucesso ? (resInteracoes.dados || []) : []);
 
             // Cabeçalho
             set('os-numero', os.numero);
