@@ -80,6 +80,18 @@ if (!function_exists('email_config_catalogo_alertas_padrao')) {
              'Enviado ao morador quando seu cadastro é criado no sistema.', 0,
              'Bem-vindo ao {{sistema_nome}}!',
              'morador', '["nome_morador","unidade","cpf","sistema_nome","logo_url","data_envio"]'],
+
+            ['os.abertura', 'ordens_servico', 'abertura', 'Abertura de O.S. — Morador',
+             'Enviado ao morador quando uma O.S. é aberta e vinculada à sua unidade.', 1,
+             'Abertura de O.S. {{numero_os}} — {{sistema_nome}}',
+             'morador', '["nome_morador","numero_os","titulo_os","unidade","link_login","sistema_nome","logo_url","data_envio"]',
+             '<div style="font-family:Arial,sans-serif;background:#f1f5f9;padding:24px"><div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden"><div style="background:#2563eb;color:#fff;padding:24px;text-align:center"><h2 style="margin:0">Abertura de O.S. de serviço</h2></div><div style="padding:24px"><p>Olá, <strong>{{nome_morador}}</strong>.</p><p>Foi aberta a O.S. <strong>{{numero_os}}</strong> para sua unidade <strong>{{unidade}}</strong>.</p><p><strong>Título:</strong> {{titulo_os}}</p><p>Para consultar os detalhes, acesse o sistema:</p><p style="text-align:center"><a href="{{link_login}}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none">Acessar o sistema</a></p></div><div style="text-align:center;padding:16px;font-size:12px;color:#64748b">{{sistema_nome}} — E-mail automático, não responda.</div></div></div>'],
+
+            ['os.fechamento', 'ordens_servico', 'fechamento', 'Fechamento de O.S. — Morador',
+             'Enviado ao morador quando uma O.S. vinculada à sua unidade é finalizada.', 1,
+             'Fechamento de O.S. {{numero_os}} — {{sistema_nome}}',
+             'morador', '["nome_morador","numero_os","titulo_os","unidade","observacao","link_login","sistema_nome","logo_url","data_envio"]',
+             '<div style="font-family:Arial,sans-serif;background:#f1f5f9;padding:24px"><div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden"><div style="background:#16a34a;color:#fff;padding:24px;text-align:center"><h2 style="margin:0">Fechamento de O.S. de serviço</h2></div><div style="padding:24px"><p>Olá, <strong>{{nome_morador}}</strong>.</p><p>A O.S. <strong>{{numero_os}}</strong>, vinculada à sua unidade <strong>{{unidade}}</strong>, foi fechada.</p><p><strong>Título:</strong> {{titulo_os}}</p><p><strong>Observação de fechamento:</strong> {{observacao}}</p><p>Para consultar os detalhes, acesse o sistema:</p><p style="text-align:center"><a href="{{link_login}}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none">Consultar O.S.</a></p></div><div style="text-align:center;padding:16px;font-size:12px;color:#64748b">{{sistema_nome}} — E-mail automático, não responda.</div></div></div>'],
         ];
     }
 }
@@ -97,9 +109,10 @@ if (!function_exists('email_config_seed_alertas_padrao')) {
             $assunto = mysqli_real_escape_string($conexao, $a[6]);
             $dest    = mysqli_real_escape_string($conexao, $a[7]);
             $vars    = mysqli_real_escape_string($conexao, $a[8]);
+            $corpo   = mysqli_real_escape_string($conexao, $a[9] ?? '');
             mysqli_query($conexao, "INSERT IGNORE INTO email_alertas
-                (tenant_id,codigo,modulo,evento,nome,descricao,ativo,assunto,variaveis,destinatario_tipo)
-                VALUES ($tenantId,'$codigo','$modulo','$evento','$nome','$desc',$ativo,'$assunto','$vars','$dest')");
+                (tenant_id,codigo,modulo,evento,nome,descricao,ativo,assunto,corpo_html,variaveis,destinatario_tipo)
+                VALUES ($tenantId,'$codigo','$modulo','$evento','$nome','$desc',$ativo,'$assunto','$corpo','$vars','$dest')");
         }
     }
 }

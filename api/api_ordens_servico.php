@@ -69,6 +69,7 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
+require_once __DIR__ . '/helpers/os_email_notification_helper.php';
 ob_end_clean();
 
 // ─── Headers ─────────────────────────────────────────
@@ -1288,6 +1289,15 @@ switch ($acao) {
 
         os_log('info', 'O.S criada', ['os_id' => $os_id, 'numero' => $numero]);
 
+        try {
+            os_email_notificar_evento($conn, $tenant_id, 'abertura', $os_id, $numero, $titulo,
+                $morador_id, $morador_unidade);
+        } catch (Throwable $e_email_os) {
+            os_log('aviso', 'Falha ao notificar abertura da O.S. por e-mail', [
+                'os_id' => $os_id, 'erro' => $e_email_os->getMessage()
+            ]);
+        }
+
         // ── Gerar notificações para esta O.S ──────────────────────────────
         try {
             $api_notif = __DIR__ . '/api_notificacoes_os.php';
@@ -1638,7 +1648,7 @@ switch ($acao) {
         if (!$os_id) retornar_json(false, 'os_id inválido');
         if ($horas_totais !== null && $horas_totais < 0) retornar_json(false, 'Horas totais não podem ser negativas');
 
-        $res = $conn->query("SELECT id, status, numero FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
+        $res = $conn->query("SELECT id, status, numero, titulo, morador_id, morador_unidade FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
         $os  = $res ? $res->fetch_assoc() : null;
         if (!$os) retornar_json(false, 'O.S não encontrada');
         if ($os['status'] === 'finalizado') retornar_json(false, 'O.S já está finalizada');
@@ -1688,6 +1698,17 @@ switch ($acao) {
         }
 
         os_log('info', 'O.S finalizada', ['os_id' => $os_id, 'numero' => $os['numero'], 'horas' => $horas_totais]);
+
+        try {
+            os_email_notificar_evento($conn, $tenant_id, 'fechamento', $os_id, $os['numero'], $os['titulo'],
+                !empty($os['morador_id']) ? (int)$os['morador_id'] : null,
+                (string)($os['morador_unidade'] ?? ''), $observacao);
+        } catch (Throwable $e_email_os) {
+            os_log('aviso', 'Falha ao notificar fechamento da O.S. por e-mail', [
+                'os_id' => $os_id, 'erro' => $e_email_os->getMessage()
+            ]);
+        }
+
         retornar_json(true, 'O.S finalizada com sucesso', ['erros_estoque' => $erros_estoque]);
         break;
 
