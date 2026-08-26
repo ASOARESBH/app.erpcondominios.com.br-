@@ -784,6 +784,20 @@
         return escaparHtml(valor).replace(/\n/g, '<br>');
     }
 
+    function resolverUrlLogo(empresa) {
+        const original = String(empresa?.logo_url_segura || empresa?.logo_url || '').trim();
+        if (!original) return '';
+        try {
+            if (/^https?:\/\//i.test(original)) return original;
+            const url = new URL(original.startsWith('/') ? original : `/${original}`, BASE);
+            url.searchParams.set('v', String(empresa?.data_atualizacao || Date.now()));
+            return url.href;
+        } catch (error) {
+            console.warn('[Relatório O.S.] URL de logo inválida:', original, error);
+            return '';
+        }
+    }
+
     function renderizarHistoricoPublico(lista) {
         const el = document.getElementById('historico-publico-lista');
         if (!lista.length) {
@@ -828,10 +842,16 @@
             // ── Empresa ──
             const emp = resEmpresa.dados;
             if (emp) {
-                // Logo
-                if (emp.logo_url) {
-                    document.getElementById('logo-container').innerHTML =
-                        `<img src="${emp.logo_url}" class="cabecalho-logo" alt="Logo">`;
+                // Logo: prioriza o endpoint seguro do tenant; converte caminhos legados para a raiz.
+                const logoUrl = resolverUrlLogo(emp);
+                if (logoUrl) {
+                    const logoContainer = document.getElementById('logo-container');
+                    logoContainer.innerHTML = `<img src="${escaparHtml(logoUrl)}" class="cabecalho-logo" alt="Logo da empresa">`;
+                    const logo = logoContainer.querySelector('img');
+                    logo.addEventListener('error', () => {
+                        console.warn('[Relatório O.S.] Logo não pôde ser carregada:', logoUrl);
+                        logoContainer.innerHTML = '<div class="cabecalho-logo-placeholder">Logo indisponível</div>';
+                    }, { once: true });
                 }
 
                 // Razão social e nome fantasia
