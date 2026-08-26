@@ -266,10 +266,22 @@ try {
             } elseif (count($tenants_usuario) === 1) {
                 // Apenas 1 tenant: usar automaticamente
                 $tenant = $tenants_usuario[0];
-                // A permissão local pode restringir usuários comuns dentro do
-                // tenant, mas nunca reduz a autoridade global do Super-Admin.
-                if ($permissao_global !== 'super_admin' && !empty($tenants_usuario[0]['permissao'])) {
-                    $dados_erp['permissao'] = $tenants_usuario[0]['permissao'];
+                // A permissão efetiva é a MAIOR entre a global (usuarios.permissao) e a
+                // local do vínculo (usuario_tenant.permissao) — nunca a menor. A tabela
+                // usuario_tenant tem DEFAULT 'operador' em todas as suas variações de
+                // schema, e pelo menos um ponto de criação de usuário (api_usuarios.php)
+                // historicamente inseria o vínculo sem definir permissao — então confiar
+                // cegamente no valor local rebaixava silenciosamente admins de verdade
+                // para 'operador' a cada login, sem nada corrigir isso depois. Como este
+                // ramo só é alcançado quando o usuário tem exatamente 1 tenant, não existe
+                // aqui um cenário legítimo de "restringir" alguém abaixo do seu papel
+                // global — só o de vínculo desatualizado/mal populado.
+                $hierarquia_login = ['visualizador' => 1, 'operador' => 2, 'gerente' => 3, 'admin' => 4, 'super_admin' => 5];
+                $permissao_local = strtolower(trim((string)($tenants_usuario[0]['permissao'] ?? '')));
+                $nivel_global = $hierarquia_login[$permissao_global] ?? 0;
+                $nivel_local  = $hierarquia_login[$permissao_local]  ?? 0;
+                if ($permissao_global !== 'super_admin' && $nivel_local > $nivel_global) {
+                    $dados_erp['permissao'] = $permissao_local;
                 }
             } else {
                 // Múltiplos tenants: retornar lista para seleção
