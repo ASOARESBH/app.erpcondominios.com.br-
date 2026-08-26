@@ -283,7 +283,7 @@ async function salvarLayoutAdministradora() {
     }
 }
 
-async function buscarCNPJ() {
+async async function buscarCNPJ() {
     const cnpj = state.dom.cnpj.value;
     if (!cnpj) {
         mostrarAlerta('Por favor, informe um CNPJ', 'error');
