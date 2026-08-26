@@ -211,8 +211,12 @@ if ($metodo === 'POST') {
     if ($stmt->execute()) {
         $id_inserido = $conexao->insert_id;
         // Compatibilidade multi-tenant para rotinas que resolvem o contexto pelo vínculo.
-        $vinculo = $conexao->prepare('INSERT IGNORE INTO usuario_tenant (usuario_id, tenant_id, ativo) VALUES (?, ?, 1)');
-        if ($vinculo) { $vinculo->bind_param('ii', $id_inserido, $tenant_id); $vinculo->execute(); $vinculo->close(); }
+        // permissao precisa ser gravada aqui: a coluna tem DEFAULT 'operador' em todas as
+        // variações de schema deste projeto, e o login (api_verificar_tipo_login.php) lê
+        // esse valor para resolver a permissão efetiva — sem isso, todo usuário novo
+        // (inclusive admin) era rebaixado para 'operador' a cada login.
+        $vinculo = $conexao->prepare('INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE permissao = VALUES(permissao), ativo = 1');
+        if ($vinculo) { $vinculo->bind_param('iis', $id_inserido, $tenant_id, $permissao); $vinculo->execute(); $vinculo->close(); }
         if ($rbac_ativo) {
             $slug_grupo_inicial = in_array($permissao, ['visualizador','operador','gerente','admin'], true) ? 'compat-' . $permissao : 'compat-visualizador';
             $grupo = $conexao->prepare("SELECT id FROM rbac_grupos WHERE tenant_id=? AND slug=? AND ativo=1 LIMIT 1");
@@ -309,6 +313,12 @@ if ($metodo === 'PUT') {
     }
     
     if ($stmt->execute()) {
+        // Mantém usuario_tenant.permissao sincronizada — sem isso, promover/rebaixar
+        // alguém aqui não tinha efeito nenhum na permissão efetiva usada no login
+        // (api_verificar_tipo_login.php lê o vínculo, não usuarios.permissao direto).
+        $vinculoUpd = $conexao->prepare('INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE permissao = VALUES(permissao), ativo = 1');
+        if ($vinculoUpd) { $vinculoUpd->bind_param('iis', $id, $tenant_id, $permissao); $vinculoUpd->execute(); $vinculoUpd->close(); }
+
         if ($rbac_ativo) {
             rbacInvalidarCache($conexao, $tenant_id);
             rbacAuditar($conexao, ['modulo_chave'=>'usuarios','acao'=>'EDITAR','registro_tipo'=>'usuarios','registro_id'=>$id,'dados_antes'=>$antes,'dados_depois'=>['nome'=>$nome,'email'=>$email,'funcao'=>$funcao,'departamento'=>$departamento,'permissao'=>$permissao,'ativo'=>$ativo,'sessao_inativa'=>$sessao_inativa],'resultado'=>'SUCESSO','status_http'=>200]);
