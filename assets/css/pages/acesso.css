@@ -45,6 +45,10 @@
 .page-acesso .acesso-verificacao-card #btnValidarAcesso { min-height:54px; min-width:230px; font-size:16px; }
 .page-acesso .acesso-verificacao-card .mensagem-sucesso { font-size:20px; padding:20px; text-align:center; text-transform:uppercase; }
 .page-acesso .acesso-verificacao-card .info-morador { font-size:15px; }
+.page-acesso .sentido-badge, .page-acesso .sentido-entrada, .page-acesso .sentido-saída { font-weight:800; }
+.page-acesso .sentido-badge { display:inline-flex; padding:4px 9px; border-radius:999px; }
+.page-acesso .sentido-entrada { color:#166534; background:#dcfce7; }
+.page-acesso .sentido-saída { color:#9a3412; background:#ffedd5; }
 
 .page-acesso .page-header {
     margin-bottom: 30px;
@@ -85,7 +89,11 @@
 }
 
 .page-acesso .form-grid.single-column {
-    grid-template-columns: minmax(280px, 560px);
+    grid-template-columns: minmax(280px, 1fr) minmax(180px, 260px);
+    max-width: 920px;
+    margin-left: auto;
+    margin-right: auto;
+    align-items: end;
 }
 
 .page-acesso label {
@@ -492,6 +500,7 @@
     .page-acesso .monitor-heading { flex-direction: column; }
     .page-acesso .acesso-monitor-tab { padding: 11px 13px; font-size: 12px; }
     .page-acesso .acesso-verificacao-card #entradaAcesso { font-size: 18px; }
+    .page-acesso .form-grid.single-column { grid-template-columns: 1fr; max-width: none; }
 
     .page-acesso .table-header-actions {
         flex-direction: column;

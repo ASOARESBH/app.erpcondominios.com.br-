@@ -55,7 +55,8 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
     if ($resultado->num_rows > 0) {
         $veiculo = $resultado->fetch_assoc();
         
-        $data_hora = date('Y-m-d H:i:s');
+            $data_hora = date('Y-m-d H:i:s');
+        $tipo_acesso = in_array(($dados['tipo_acesso'] ?? 'Entrada'), ['Entrada', 'Saída'], true) ? $dados['tipo_acesso'] : 'Entrada';
         $placa = $veiculo['placa'];
         $modelo = $veiculo['modelo'];
         $cor = $veiculo['cor'];
@@ -78,11 +79,11 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
         
         $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso 
                                            (data_hora, placa, modelo, cor, tag, tipo, morador_id, 
-                                            unidade_destino, status, liberado) 
-                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                            unidade_destino, status, liberado, tipo_acesso)
+                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
-        $stmt_registro->bind_param("ssssssissi", 
-            $data_hora, $placa, $modelo, $cor, $tag, $tipo, $morador_id, $unidade, $status, $liberado
+        $stmt_registro->bind_param("ssssssisssi",
+            $data_hora, $placa, $modelo, $cor, $tag, $tipo, $morador_id, $unidade, $status, $liberado, $tipo_acesso
         );
         
         $stmt_registro->execute();
@@ -100,7 +101,9 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
             'placa' => $veiculo['placa'],
             'modelo' => $veiculo['modelo'],
             'tipo' => $tipo,
-            'mensagem' => $mensagem
+            'tipo_acesso' => $tipo_acesso,
+            'ultimo_acesso' => date('d/m/Y H:i:s', strtotime($data_hora)),
+            'mensagem' => strtoupper($tipo_acesso) . ' — ' . $mensagem
         ));
         
     } else {
@@ -121,6 +124,7 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
     
     $tag = sanitizar($conexao, $dados['tag'] ?? $dados['card'] ?? $dados['rfid'] ?? '');
     $timestamp = $dados['timestamp'] ?? date('Y-m-d H:i:s');
+    $tipo_acesso = in_array(($dados['tipo_acesso'] ?? 'Entrada'), ['Entrada', 'Saída'], true) ? $dados['tipo_acesso'] : 'Entrada';
     
     if (empty($tag)) {
         registrar_log('WEBHOOK_RFID_ERRO', "Webhook RFID recebido sem TAG RFID válida");
@@ -161,11 +165,11 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
         
         $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso 
                                            (data_hora, placa, modelo, cor, tag, tipo, morador_id, 
-                                            unidade_destino, status, liberado) 
-                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                            unidade_destino, status, liberado, tipo_acesso)
+                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
-        $stmt_registro->bind_param("ssssssissi", 
-            $timestamp, $placa, $modelo, $cor, $tag, $tipo, $morador_id, $unidade, $status, $liberado
+        $stmt_registro->bind_param("ssssssisssi",
+            $timestamp, $placa, $modelo, $cor, $tag, $tipo, $morador_id, $unidade, $status, $liberado, $tipo_acesso
         );
         
         $stmt_registro->execute();
@@ -280,7 +284,7 @@ if ($metodo === 'GET' && isset($_GET['acao']) && $_GET['acao'] === 'ultimos_aces
                 ELSE NULL
             END as origem_liberacao,
             NULL as usuario_liberou,
-            r.liberado, r.status
+            r.liberado, r.status, r.tipo_acesso
             FROM registros_acesso r
             LEFT JOIN moradores m ON r.morador_id = m.id
             LEFT JOIN veiculos v_tag ON r.tag IS NOT NULL AND r.tag <> '' AND v_tag.tag = r.tag

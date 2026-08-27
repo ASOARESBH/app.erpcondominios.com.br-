@@ -63,6 +63,13 @@
                     <label>TAG RFID / Placa / Identificador *</label>
                     <input type="text" id="entradaAcesso" required placeholder="Ex: MAJJHAG0022 ou QWW5D54" autocomplete="off" autofocus>
                 </div>
+                <div>
+                    <label>Sentido do acesso *</label>
+                    <select id="sentidoAcesso">
+                        <option value="Entrada">Entrada</option>
+                        <option value="Saída">Saída</option>
+                    </select>
+                </div>
             </div>
 
             <div class="form-actions">
@@ -111,6 +118,8 @@
                         <th>Modelo</th>
                         <th>Unidade</th>
                         <th>Morador</th>
+                        <th>Dependente</th>
+                        <th>Sentido</th>
                         <th>Status</th>
                         <th>Acoes</th>
                     </tr>

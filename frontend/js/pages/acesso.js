@@ -176,6 +176,7 @@ async function verificarAcesso() {
     if (!input || !btn) return;
 
     const entrada = input.value.trim().toUpperCase();
+    const sentido = document.getElementById('sentidoAcesso')?.value || 'Entrada';
     if (!entrada) return;
 
     btn.disabled = true;
@@ -185,7 +186,7 @@ async function verificarAcesso() {
         const response = await fetch(`${API_RFID}?acao=verificar_tag`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tag: entrada, identificador: entrada })
+            body: JSON.stringify({ tag: entrada, identificador: entrada, tipo_acesso: sentido })
         });
 
         const data = await response.json();
@@ -240,6 +241,8 @@ function mostrarInfoAcesso(dados) {
     const placa = escapeHtml(dados.placa || '-');
     const modelo = escapeHtml(dados.modelo || '-');
     const tipo = escapeHtml(dados.tipo || '-');
+    const sentido = escapeHtml(dados.tipo_acesso || dados.sentido || 'Entrada');
+    const ultimoAcesso = escapeHtml(dados.ultimo_acesso || dados.data_hora || '-');
 
     let extra = '';
     if (tipo.toLowerCase() === 'dependente' && dependente) {
@@ -251,6 +254,9 @@ function mostrarInfoAcesso(dados) {
         <p><strong>Morador:</strong> ${morador}</p>
         ${extra}
         <p><strong>Unidade:</strong> ${unidade}</p>
+        ${dependente ? `<p><strong>Dependente:</strong> ${dependente}</p>` : ''}
+        <p><strong>Sentido:</strong> <span class="sentido-${sentido.toLowerCase()}">${sentido}</span></p>
+        <p><strong>Último acesso:</strong> ${ultimoAcesso}</p>
         <p><strong>TAG RFID:</strong> ${tag}</p>
         <p><strong>Placa:</strong> ${placa}</p>
         <p><strong>Modelo:</strong> ${modelo}</p>
@@ -422,6 +428,8 @@ function renderTabela(acessos) {
         const modelo = escapeHtml(a.modelo || '-');
         const unidade = escapeHtml(a.unidade || '-');
         const morador = escapeHtml(a.morador || '-');
+        const dependente = escapeHtml(a.dependente || '-');
+        const sentido = escapeHtml(a.tipo_acesso || a.sentido || '-');
         const status = escapeHtml(a.status || '-');
         const statusClass = classificarStatus(a.status, a.liberado);
         const id = Number(a.id || 0);
@@ -435,6 +443,8 @@ function renderTabela(acessos) {
                 <td>${modelo}</td>
                 <td>${unidade}</td>
                 <td>${morador}</td>
+                <td>${dependente}</td>
+                <td><span class="sentido-badge sentido-${sentido.toLowerCase()} ">${sentido}</span></td>
                 <td><span class="status-pill ${statusClass}">${status}</span></td>
                 <td>
                     <button class="action-btn view" type="button" onclick="window.AcessoPage?.visualizar(${id})" title="Visualizar">
