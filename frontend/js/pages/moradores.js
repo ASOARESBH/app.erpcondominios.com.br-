@@ -1291,14 +1291,25 @@ function _relCarregarDados() {
     log('Carregando dados para relatórios...');
     // Busca todos os moradores sem paginação
     const urlMor = API_MORADORES + '?por_pagina=9999&pagina=1';
+    const urlDep = API_DEPENDENTES + '?sem_paginacao=1&pagina=1';
+    const urlUni = API_UNIDADES + '?por_pagina=9999';
     Promise.all([
         fetch(urlMor).then(r => r.json()),
-        fetch(API_DEPENDENTES).then(r => r.json()),
-        fetch(API_UNIDADES + '?por_pagina=9999').then(r => r.json()),
+        fetch(urlDep).then(r => r.json()),
+        fetch(urlUni).then(r => r.json()),
     ]).then(([resMor, resDep, resUni]) => {
-        const dadosMor = resMor.sucesso ? (resMor.dados?.itens || resMor.dados || []) : [];
-        const dadosDep = resDep.sucesso ? (Array.isArray(resDep.dados) ? resDep.dados : (resDep.dados?.itens || [])) : [];
-        const dadosUni = resUni.sucesso ? (resUni.dados?.itens || resUni.dados || []) : [];
+        // As APIs usam formatos distintos: lista direta, itens ou dados.dados.
+        const extrairLista = resposta => {
+            if (!resposta?.sucesso) return [];
+            const dados = resposta.dados;
+            if (Array.isArray(dados)) return dados;
+            if (Array.isArray(dados?.itens)) return dados.itens;
+            if (Array.isArray(dados?.dados)) return dados.dados;
+            return [];
+        };
+        const dadosMor = extrairLista(resMor);
+        const dadosDep = extrairLista(resDep);
+        const dadosUni = extrairLista(resUni);
         _relDados.moradores   = Array.isArray(dadosMor) ? dadosMor : [];
         _relDados.dependentes = Array.isArray(dadosDep) ? dadosDep : [];
 
