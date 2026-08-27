@@ -426,6 +426,40 @@ function _marcarCPF(campo, mensagem = '') {
     campo.setAttribute('aria-invalid', mensagem ? 'true' : 'false');
 }
 
+async function _consultarDuplicidadeCPF(campo, mostrarAlerta = true) {
+    const cpf = campo?.value || '';
+    if (!validarCPF(cpf)) {
+        _cpfDuplicado = false;
+        _marcarCPF(campo, cpf ? 'CPF inválido. Confira os dígitos.' : 'CPF é obrigatório.');
+        return false;
+    }
+
+    const seq = ++_cpfCheckSeq;
+    _marcarCPF(campo, '');
+    campo.dataset.cpfChecking = '1';
+    try {
+        const resposta = await fetch(`${API_MORADORES}?cpf=${encodeURIComponent(cpf)}&por_pagina=1`, { credentials: 'include' });
+        const data = await resposta.json();
+        if (seq !== _cpfCheckSeq) return false;
+        const itens = data?.dados?.itens || [];
+        _cpfDuplicado = Boolean(data?.sucesso && itens.length);
+        if (_cpfDuplicado) {
+            _marcarCPF(campo, 'CPF já cadastrado neste tenant.');
+            if (mostrarAlerta) _toast('Atenção: este CPF já possui cadastro neste tenant.', 'error');
+            return true;
+        }
+        _marcarCPF(campo, '');
+        return false;
+    } catch (erro) {
+        _cpfDuplicado = false;
+        log('Falha ao consultar duplicidade do CPF:', erro);
+        _marcarCPF(campo, 'Não foi possível consultar o CPF. Tente novamente.');
+        return false;
+    } finally {
+        if (campo) delete campo.dataset.cpfChecking;
+    }
+}
+
 function _setupValidacaoCPF() {
     const campo = document.getElementById('cpf');
     if (!campo || campo.dataset.cpfReady === '1') return;
@@ -433,38 +467,20 @@ function _setupValidacaoCPF() {
     campo.addEventListener('input', () => {
         campo.value = formatarCPF(campo.value);
         _cpfDuplicado = false;
-        const completo = campo.value.replace(/\D/g, '').length === 11;
-        if (!completo) {
-            _marcarCPF(campo, campo.value ? 'Digite os 11 dígitos do CPF.' : 'CPF é obrigatório.');
-            return;
-        }
-        if (!validarCPF(campo.value)) {
-            _marcarCPF(campo, 'CPF inválido. Confira os dígitos.');
-            return;
-        }
-        _marcarCPF(campo, '');
+        _cpfCheckSeq++;
         clearTimeout(_cpfCheckTimer);
-        const seq = ++_cpfCheckSeq;
-        _cpfCheckTimer = setTimeout(async () => {
-            try {
-                const resposta = await fetch(`${API_MORADORES}?cpf=${encodeURIComponent(campo.value)}&por_pagina=1`, { credentials: 'include' });
-                const data = await resposta.json();
-                if (seq !== _cpfCheckSeq) return;
-                const itens = data?.dados?.itens || [];
-                _cpfDuplicado = Boolean(data?.sucesso && itens.length);
-                if (_cpfDuplicado) {
-                    _marcarCPF(campo, 'CPF já cadastrado neste tenant.');
-                    _toast('Atenção: este CPF já possui cadastro neste tenant.', 'error');
-                } else {
-                    _marcarCPF(campo, '');
-                }
-            } catch (erro) {
-                log('Falha ao consultar duplicidade do CPF:', erro);
-            }
-        }, 350);
+        if (!campo.value) {
+            _marcarCPF(campo, 'CPF é obrigatório.');
+        } else if (campo.value.replace(/\D/g, '').length < 11) {
+            _marcarCPF(campo, 'Digite os 11 dígitos do CPF.');
+        } else if (!validarCPF(campo.value)) {
+            _marcarCPF(campo, 'CPF inválido. Confira os dígitos.');
+        } else {
+            _marcarCPF(campo, '');
+        }
     });
-    campo.addEventListener('blur', () => {
-        if (!validarCPF(campo.value)) _marcarCPF(campo, 'CPF inválido ou incompleto.');
+    campo.addEventListener('blur', async () => {
+        await _consultarDuplicidadeCPF(campo, true);
     });
 }
 
@@ -477,8 +493,8 @@ function _salvarMorador() {
         campoCPF?.focus();
         return;
     }
-    if (_cpfDuplicado) {
-        _toast('Este CPF já está cadastrado neste tenant.', 'error');
+    if (_cpfDuplicado || campoCPF?.dataset.cpfChecking === '1') {
+        _toast('Este CPF já está cadastrado neste tenant ou ainda está sendo consultado.', 'error');
         campoCPF?.focus();
         return;
     }
