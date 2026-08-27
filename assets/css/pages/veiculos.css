@@ -696,7 +696,13 @@
     opacity: 1;
 }
 
-/* Dashboard Gráfico */
+/* Dashboard Gráfico dentro de Relatórios Prontos */
+.page-veiculos .veic-dashboard-grafico-relatorio {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid #e2e8f0;
+}
+
 .page-veiculos .veic-graficos-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -769,6 +775,11 @@
 }
 
 @media (max-width: 640px) {
+    .page-veiculos .veic-dashboard-grafico-relatorio {
+        margin-top: 14px;
+        padding-top: 14px;
+    }
+
     .page-veiculos .rel-tipo-grid {
         grid-template-columns: 1fr;
     }

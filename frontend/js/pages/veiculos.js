@@ -1076,6 +1076,10 @@ async function _relBuscar(pagina = 1) {
     }
 
     _relCarregarDashboard(filtros);
+    if (_relPresetAtivo === 'grafico_geral' && Object.keys(filtros).length) {
+        _relMostrarGraficoGeral();
+        _relCarregarGraficos(filtros);
+    }
 }
 
 function _relRestaurarTabelaHeadPadrao() {
@@ -1143,9 +1147,11 @@ function _relRenderPaginacao(paginaAtual, totalPaginas) {
 // ── Ações do painel de filtros ────────────────────────────────────────────
 function _relPesquisar() {
     _relExtraFiltros = {};
-    _relPresetAtivo = null;
-    document.querySelectorAll('.page-veiculos .rel-tipo-card').forEach((c) => c.classList.remove('ativo'));
+    const graficoAtivo = _relPresetAtivo === 'grafico_geral';
+    _relPresetAtivo = graficoAtivo ? 'grafico_geral' : null;
+    document.querySelectorAll('.page-veiculos .rel-tipo-card').forEach((c) => c.classList.toggle('ativo', graficoAtivo && c.dataset.tipo === 'grafico_geral'));
     _relRestaurarTabelaHeadPadrao();
+    if (graficoAtivo && !Object.keys(_relColetarFiltros()).length) _relOcultarGraficoGeral();
     _relBuscar(1);
 }
 
@@ -1162,6 +1168,7 @@ function _relLimparFiltros() {
     _relPresetAtivo = null;
     document.querySelectorAll('.page-veiculos .rel-tipo-card').forEach((c) => c.classList.remove('ativo'));
     _relRestaurarTabelaHeadPadrao();
+    _relOcultarGraficoGeral();
     _relBuscar(1);
 }
 
@@ -1238,6 +1245,18 @@ function _relAplicarPreset(tipo) {
     if (tipo === 'dependentes') { _relExtraFiltros = { dependentes_apenas: '1' }; _relBuscar(1); return; }
     if (tipo === 'inativos') { _relExtraFiltros = { ativo: '0' }; _relBuscar(1); return; }
 
+    if (tipo === 'grafico_geral') {
+        const filtros = _relColetarFiltros();
+        if (!Object.keys(filtros).length) {
+            _relOcultarGraficoGeral();
+            _relToast('Aplique pelo menos um filtro antes de exibir o gráfico geral.', 'info');
+            return;
+        }
+        _relMostrarGraficoGeral();
+        _relBuscar(1);
+        return;
+    }
+
     if (tipo === 'por_periodo') {
         const dataInicio = document.getElementById('veic-f-data-inicio');
         const dataFim = document.getElementById('veic-f-data-fim');
@@ -1313,13 +1332,13 @@ function _relRenderTabelaAgregada(tipo, linhas) {
 }
 
 // ── Dashboard Grafico (Chart.js, carregado sob demanda via CDN) ──────────
-function _relCarregarGraficos() {
+function _relCarregarGraficos(filtros = {}) {
     const render = async () => {
         try {
             const [tipoRes, corRes, mesRes] = await Promise.all([
-                fetch(`${API_VEICULOS}?acao=relatorio_agregado&tipo_agregado=por_tipo`).then((r) => r.json()),
-                fetch(`${API_VEICULOS}?acao=relatorio_agregado&tipo_agregado=por_cor`).then((r) => r.json()),
-                fetch(`${API_VEICULOS}?acao=relatorio_agregado&tipo_agregado=por_mes`).then((r) => r.json())
+                fetch(`${API_VEICULOS}?${new URLSearchParams({ acao: 'relatorio_agregado', tipo_agregado: 'por_tipo', ...filtros })}`).then((r) => r.json()),
+                fetch(`${API_VEICULOS}?${new URLSearchParams({ acao: 'relatorio_agregado', tipo_agregado: 'por_cor', ...filtros })}`).then((r) => r.json()),
+                fetch(`${API_VEICULOS}?${new URLSearchParams({ acao: 'relatorio_agregado', tipo_agregado: 'por_mes', ...filtros })}`).then((r) => r.json())
             ]);
             _relRenderGraficoTipo(tipoRes.dados || []);
             _relRenderGraficoCor(corRes.dados || []);
@@ -1335,6 +1354,16 @@ function _relCarregarGraficos() {
     script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
     script.onload = render;
     document.head.appendChild(script);
+}
+
+function _relMostrarGraficoGeral() {
+    const el = document.getElementById('veic-dashboard-grafico-relatorio');
+    if (el) el.style.display = '';
+}
+
+function _relOcultarGraficoGeral() {
+    const el = document.getElementById('veic-dashboard-grafico-relatorio');
+    if (el) el.style.display = 'none';
 }
 
 function _relRenderGraficoTipo(linhas) {

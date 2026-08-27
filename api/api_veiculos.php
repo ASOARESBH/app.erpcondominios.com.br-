@@ -583,46 +583,62 @@ $tenant_id = exigirTenantId();
     // ── Agregados: presets de "Relatórios Prontos" e dados dos gráficos ──
     if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_agregado') {
         $tipoAgregado = $_GET['tipo_agregado'] ?? '';
+        $configAgregado = [
+            'por_unidade' => [
+                'select' => 'm.unidade AS chave, COUNT(*) AS total',
+                'group'  => 'm.unidade',
+                'order'  => 'total DESC, m.unidade ASC',
+            ],
+            'por_tipo' => [
+                'select' => "COALESCE(NULLIF(v.tipo,''),'Não informado') AS chave, COUNT(*) AS total",
+                'group'  => 'chave',
+                'order'  => 'total DESC, chave ASC',
+            ],
+            'por_cor' => [
+                'select' => "COALESCE(NULLIF(v.cor,''),'Não informada') AS chave, COUNT(*) AS total",
+                'group'  => 'chave',
+                'order'  => 'total DESC, chave ASC',
+            ],
+            'por_mes' => [
+                'select' => "DATE_FORMAT(v.data_cadastro, '%Y-%m') AS chave, COUNT(*) AS total",
+                'group'  => 'chave',
+                'order'  => 'chave ASC',
+                'extra'  => " AND v.data_cadastro >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)",
+            ],
+            'tags_duplicadas' => [
+                'select' => "v.tag AS chave, COUNT(*) AS total, GROUP_CONCAT(v.placa SEPARATOR ', ') AS placas",
+                'group'  => 'v.tag',
+                'order'  => 'total DESC',
+                'extra'  => " AND v.tag IS NOT NULL AND v.tag != ''",
+                'having' => ' HAVING COUNT(*) > 1',
+            ],
+            'placas_duplicadas' => [
+                'select' => "v.placa AS chave, COUNT(*) AS total, GROUP_CONCAT(v.tag SEPARATOR ', ') AS tags",
+                'group'  => 'v.placa',
+                'order'  => 'total DESC',
+                'having' => ' HAVING COUNT(*) > 1',
+            ],
+        ];
 
-        if ($tipoAgregado === 'por_unidade') {
-            $res = $conexao->query("
-                SELECT m.unidade AS chave, COUNT(*) AS total
-                FROM veiculos v INNER JOIN moradores m ON v.morador_id = m.id
-                GROUP BY m.unidade ORDER BY total DESC, m.unidade ASC
-            ");
-        } elseif ($tipoAgregado === 'por_tipo') {
-            $res = $conexao->query("
-                SELECT COALESCE(NULLIF(v.tipo,''),'Não informado') AS chave, COUNT(*) AS total
-                FROM veiculos v WHERE tenant_id = $tenant_id GROUP BY chave ORDER BY total DESC
-            ");
-        } elseif ($tipoAgregado === 'por_cor') {
-            $res = $conexao->query("
-                SELECT COALESCE(NULLIF(v.cor,''),'Não informada') AS chave, COUNT(*) AS total
-                FROM veiculos v WHERE tenant_id = $tenant_id GROUP BY chave ORDER BY total DESC
-            ");
-        } elseif ($tipoAgregado === 'por_mes') {
-            $res = $conexao->query("
-                SELECT DATE_FORMAT(v.data_cadastro, '%Y-%m') AS chave, COUNT(*) AS total
-                FROM veiculos v WHERE tenant_id = $tenant_id AND v.data_cadastro >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-                GROUP BY chave ORDER BY chave ASC
-            ");
-        } elseif ($tipoAgregado === 'tags_duplicadas') {
-            $res = $conexao->query("
-                SELECT v.tag AS chave, COUNT(*) AS total, GROUP_CONCAT(v.placa SEPARATOR ', ') AS placas
-                FROM veiculos v WHERE tenant_id = $tenant_id AND v.tag IS NOT NULL AND v.tag != ''
-                GROUP BY v.tag HAVING COUNT(*) > 1 ORDER BY total DESC
-            ");
-        } elseif ($tipoAgregado === 'placas_duplicadas') {
-            $res = $conexao->query("
-                SELECT v.placa AS chave, COUNT(*) AS total, GROUP_CONCAT(v.tag SEPARATOR ', ') AS tags
-                FROM veiculos v WHERE tenant_id = $tenant_id GROUP BY v.placa HAVING COUNT(*) > 1 ORDER BY total DESC
-            ");
-        } else {
-            retornar_json(false, "Tipo de agregação inválido");
-        }
-
+        if (!isset($configAgregado[$tipoAgregado])) retornar_json(false, "Tipo de agregação inválido");
+        $cfg = $configAgregado[$tipoAgregado];
+        [$whereSql, $params, $tipos] = _veic_montar_filtros($conexao);
+        $extraSql = $cfg['extra'] ?? '';
+        $havingSql = $cfg['having'] ?? '';
+        $sql = "SELECT {$cfg['select']} FROM veiculos v
+                INNER JOIN moradores m ON v.morador_id = m.id
+                LEFT JOIN dependentes d ON v.dependente_id = d.id
+                WHERE {$whereSql}{$extraSql}
+                GROUP BY {$cfg['group']}{$havingSql}
+                ORDER BY {$cfg['order']}";
+        $stmt = $conexao->prepare($sql);
+        if (!$stmt) throw new Exception('Erro ao preparar agregado: ' . $conexao->error);
+        if (!empty($params)) $stmt->bind_param($tipos, ...$params);
+        $stmt->execute();
+        $res = $stmt->get_result();
         $linhas = [];
-        if ($res) while ($row = $res->fetch_assoc()) $linhas[] = $row;
+        while ($row = $res->fetch_assoc()) $linhas[] = $row;
+        $stmt->close();
         retornar_json(true, "OK", $linhas);
     }
 
