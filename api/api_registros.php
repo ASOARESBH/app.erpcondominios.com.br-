@@ -203,6 +203,26 @@ if ($metodo === 'POST') {
     $visitante_id = isset($dados['visitante_id']) && $dados['visitante_id'] ? intval($dados['visitante_id']) : null;
     $dependente_id = isset($dados['dependente_id']) && $dados['dependente_id'] ? intval($dados['dependente_id']) : null;
     $documento    = trim($dados['documento'] ?? '');
+
+    // A placa cadastrada é a fonte autoritativa: não confiar em modelo, cor,
+    // morador ou unidade enviados pelo navegador, pois campos desabilitados
+    // ainda podem ser alterados por requisições manuais.
+    $stmtVeiculo = $conexao->prepare("SELECT v.modelo, v.cor, v.morador_id, m.nome, m.unidade
+        FROM veiculos v INNER JOIN moradores m ON m.id = v.morador_id AND m.tenant_id = ?
+        WHERE v.tenant_id = ? AND REPLACE(REPLACE(UPPER(v.placa), '-', ''), ' ', '') = REPLACE(REPLACE(UPPER(?), '-', ''), ' ', '') AND v.ativo = 1 LIMIT 1");
+    if ($stmtVeiculo) {
+        $stmtVeiculo->bind_param('iis', $tenant_id, $tenant_id, $placa);
+        $stmtVeiculo->execute();
+        $veiculoCadastrado = $stmtVeiculo->get_result()->fetch_assoc();
+        $stmtVeiculo->close();
+        if ($veiculoCadastrado) {
+            $modelo = trim((string)($veiculoCadastrado['modelo'] ?? ''));
+            $cor = trim((string)($veiculoCadastrado['cor'] ?? ''));
+            $morador_id = (int)$veiculoCadastrado['morador_id'];
+            $unidade_destino = trim((string)($veiculoCadastrado['unidade'] ?? ''));
+            $tipo = 'Morador';
+        }
+    }
     $tag          = null;
     $liberado     = 0;
     $status       = '';

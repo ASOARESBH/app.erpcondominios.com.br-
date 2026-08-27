@@ -871,6 +871,7 @@ function limparFormulario() {
 
     const boxV = document.getElementById('veiculoEncontrado');
     if (boxV) { boxV.style.display = 'none'; boxV.innerHTML = ''; }
+    _definirCamposVeiculoBloqueados(false);
     const boxVis = document.getElementById('visitanteEncontrado');
     if (boxVis) { boxVis.style.display = 'none'; boxVis.classList.remove('visitante-documento-pendente'); boxVis.innerHTML = ''; }
     _limparOcupantes();
@@ -897,54 +898,88 @@ function formatarPlacaInput(e) {
 
 function normalizarPlaca(placa) { return String(placa).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
-function detectarVeiculoPorPlaca() {
+async function detectarVeiculoPorPlaca() {
     const placaInput = document.getElementById('placaRegistro');
     if (!placaInput) return;
     const placa = normalizarPlaca(placaInput.value);
     if (placa.length < 7) { esconderVeiculoEncontrado(); return; }
 
-    const veiculo = veiculosCache.find(v => normalizarPlaca(v.placa || '') === placa);
-    if (!veiculo) { esconderVeiculoEncontrado(); return; }
+    placaInput.dataset.consultando = '1';
+    try {
+        const resp = await fetch(`${API_VEICULOS}?acao=consultar_placa&placa=${encodeURIComponent(placa)}`);
+        const data = await resp.json();
+        const veiculo = data.sucesso && data.dados?.existe ? data.dados : null;
+        if (!veiculo) { esconderVeiculoEncontrado(); return; }
 
-    document.getElementById('modeloRegistro').value = veiculo.modelo || '';
-    document.getElementById('corRegistro').value    = veiculo.cor    || '';
-    document.getElementById('moradorId').value      = veiculo.morador_id || '';
-    document.getElementById('veiculoId').value      = veiculo.id || '';
-    document.getElementById('tipoRegistro').value   = 'Morador';
+        document.getElementById('modeloRegistro').value = veiculo.modelo || '';
+        document.getElementById('corRegistro').value = veiculo.cor || '';
+        document.getElementById('moradorId').value = veiculo.morador_id || '';
+        document.getElementById('veiculoId').value = veiculo.id || '';
+        document.getElementById('tipoRegistro').value = 'Morador';
+        onTipoChange();
 
-    const box = document.getElementById('veiculoEncontrado');
-    if (box) {
-        const depInfo = veiculo.dependente_id && veiculo.dependente_nome
-            ? `${_esc(veiculo.dependente_nome)}, dependente de ${_esc(veiculo.morador_nome || '-')}`
-            : _esc(veiculo.morador_nome || '-');
-        box.innerHTML = `<i class="fas fa-check-circle"></i> Veículo cadastrado: ${_esc(veiculo.modelo || '-')}, ${depInfo} (Unidade ${_esc(veiculo.morador_unidade || '-')})`;
-        box.style.display = 'block';
-    }
-
-    onTipoChange();
-
-    // Pré-selecionar unidade e morador se disponível
-    const unidade = veiculo.morador_unidade || '';
-    if (unidade) {
         const selU = document.getElementById('unidadeMoradorRegistro');
-        if (selU) {
+        const selM = document.getElementById('moradorSelecionadoRegistro');
+        const unidade = veiculo.morador_unidade || '';
+        if (selU && unidade) {
             selU.value = unidade;
-            selU.dispatchEvent(new Event('change'));
-            // Aguardar carregamento dos moradores e selecionar
-            setTimeout(() => {
-                const selM = document.getElementById('moradorSelecionadoRegistro');
-                if (selM && veiculo.morador_id) {
-                    selM.value = veiculo.morador_id;
-                    selM.dispatchEvent(new Event('change'));
-                }
-            }, 600);
+            selU.disabled = true;
         }
+        if (selM && veiculo.morador_id) {
+            selM.innerHTML = '';
+            selM.add(new Option(veiculo.morador_nome || 'Morador cadastrado', veiculo.morador_id));
+            selM.value = String(veiculo.morador_id);
+            selM.disabled = true;
+            const infoBox = document.getElementById('moradorInfoBox');
+            const infoWrap = document.getElementById('moradorInfoWrap');
+            if (infoBox) infoBox.innerHTML = `<i class="fas fa-home" style="margin-right:6px"></i><strong>${_esc(veiculo.morador_nome || '-')}</strong> — Unidade: <strong>${_esc(unidade || '-')}</strong>`;
+            if (infoWrap) infoWrap.style.display = 'block';
+        }
+
+        placaInput.dataset.veiculoPreenchido = '1';
+        _definirCamposVeiculoBloqueados(true);
+        const box = document.getElementById('veiculoEncontrado');
+        if (box) {
+            const depInfo = veiculo.dependente_id && veiculo.dependente_nome
+                ? `${_esc(veiculo.dependente_nome)}, dependente de ${_esc(veiculo.morador_nome || '-')}`
+                : _esc(veiculo.morador_nome || '-');
+            box.innerHTML = `<i class="fas fa-check-circle"></i> Veículo cadastrado: ${_esc(veiculo.modelo || '-')}, ${depInfo} (Unidade ${_esc(unidade || '-')}). Dados preenchidos automaticamente e bloqueados.`;
+            box.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('[Registro] Erro ao consultar veículo por placa:', error);
+        esconderVeiculoEncontrado();
+    } finally {
+        delete placaInput.dataset.consultando;
     }
 }
 
+function _definirCamposVeiculoBloqueados(bloqueado) {
+    ['modeloRegistro', 'corRegistro', 'unidadeMoradorRegistro', 'moradorSelecionadoRegistro'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.disabled = bloqueado;
+        el.classList.toggle('campo-veiculo-bloqueado', bloqueado);
+    });
+}
+
 function esconderVeiculoEncontrado() {
+    const placaInput = document.getElementById('placaRegistro');
+    const eraPreenchido = placaInput?.dataset.veiculoPreenchido === '1';
     document.getElementById('moradorId').value = '';
     document.getElementById('veiculoId').value = '';
+    if (eraPreenchido) {
+        document.getElementById('modeloRegistro').value = '';
+        document.getElementById('corRegistro').value = '';
+        const selU = document.getElementById('unidadeMoradorRegistro');
+        const selM = document.getElementById('moradorSelecionadoRegistro');
+        if (selU) selU.value = '';
+        if (selM) selM.innerHTML = '<option value="">Selecione a unidade primeiro</option>';
+        const infoWrap = document.getElementById('moradorInfoWrap');
+        if (infoWrap) infoWrap.style.display = 'none';
+    }
+    _definirCamposVeiculoBloqueados(false);
+    if (placaInput) delete placaInput.dataset.veiculoPreenchido;
     const box = document.getElementById('veiculoEncontrado');
     if (box) { box.style.display = 'none'; box.innerHTML = ''; }
 }

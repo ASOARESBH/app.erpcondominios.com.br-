@@ -246,6 +246,29 @@ $tenant_id = exigirTenantId();
     // Nunca executar ALTER TABLE durante uma requisição: em hospedagem
     // compartilhada isso pode bloquear a tabela e resultar em HTTP 503.
 
+    // ========== CONSULTAR VEÍCULO COMPLETO PELA PLACA ==========
+    if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'consultar_placa') {
+        $placa_consulta = normalizar_placa_veiculo($_GET['placa'] ?? '');
+        if (!classificar_placa_veiculo($placa_consulta)) retornar_json(false, 'Placa inválida. Use ABC1234 ou ABC1D23.');
+
+        $stmt = $conexao->prepare("SELECT v.id, v.placa, v.modelo, v.cor, v.tipo, v.tag,
+                v.morador_id, v.dependente_id, m.nome AS morador_nome, m.unidade AS morador_unidade,
+                d.nome_completo AS dependente_nome
+            FROM veiculos v
+            INNER JOIN moradores m ON m.id = v.morador_id AND m.tenant_id = ?
+            LEFT JOIN dependentes d ON d.id = v.dependente_id AND d.tenant_id = ?
+            WHERE v.tenant_id = ? AND REPLACE(REPLACE(UPPER(v.placa), '-', ''), ' ', '') = ?
+            LIMIT 1");
+        if (!$stmt) retornar_json(false, 'Não foi possível consultar a placa.');
+        $stmt->bind_param('iiis', $tenant_id, $tenant_id, $tenant_id, $placa_consulta);
+        if (!$stmt->execute()) { $stmt->close(); retornar_json(false, 'Não foi possível consultar a placa.'); }
+        $veiculo = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$veiculo) retornar_json(true, 'Placa não cadastrada.', ['existe' => false, 'placa' => $placa_consulta]);
+        $veiculo['existe'] = true;
+        retornar_json(true, 'Veículo encontrado.', $veiculo);
+    }
+
     // ========== VERIFICAR DISPONIBILIDADE DA PLACA ==========
     if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'verificar_placa') {
         $placa_consulta = normalizar_placa_veiculo($_GET['placa'] ?? '');
