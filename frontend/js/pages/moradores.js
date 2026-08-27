@@ -300,7 +300,7 @@ function _renderMoradores(lista) {
     if (!tbody) return;
 
     if (!lista || lista.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.6;">Nenhum morador encontrado</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.6;">Nenhum morador encontrado</td></tr>';
         _renderPaginacaoMoradores();
         return;
     }
@@ -314,7 +314,12 @@ function _renderMoradores(lista) {
             <td>${m.cpf || '-'}</td>
             <td>${m.unidade || '-'}</td>
             <td>${m.email || '-'}</td>
-            <td style="white-space:nowrap;">
+            <td class="anexos-status">
+                ${Number(m.anexos_count || 0) > 0
+                    ? `<span class="anexo-indicador possui" title="${m.anexos_count} anexo(s) cadastrado(s)"><i class="fas fa-paperclip"></i> Possui anexo</span>`
+                    : '<span class="anexo-indicador nenhum"><i class="fas fa-minus-circle"></i> Sem anexo</span>'}
+            </td>
+            <td class="acoes-morador" style="white-space:nowrap;">
                 <button onclick="window.MoradoresPage.editar(${id})"
                         class="action-btn edit" title="Editar morador">
                     <i class="fas fa-edit"></i>

@@ -227,6 +227,42 @@
     color: #991b1b;
 }
 
+/* Indicador de anexos */
+.page-moradores .anexos-status {
+    white-space: nowrap;
+}
+
+.page-moradores .anexo-indicador {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.page-moradores .anexo-indicador.possui {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.page-moradores .anexo-indicador.nenhum {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.page-moradores th.col-acoes,
+.page-moradores td.acoes-morador {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.page-moradores td.acoes-morador {
+    min-width: 142px;
+}
+
 /* Action Buttons */
 .page-moradores .action-btn {
     width: 34px;

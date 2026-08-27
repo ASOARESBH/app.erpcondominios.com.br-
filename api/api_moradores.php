@@ -220,9 +220,11 @@ $tenant_id = exigirTenantId();
         $stmt_c->close();
 
         // ── Montar query principal com LIMIT/OFFSET ────────────────────
-        $sql = "SELECT id, nome, cpf, unidade, email, telefone, celular, ativo,
-                DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') AS data_cadastro
-                FROM moradores $where ORDER BY $order_by";
+        $sql = "SELECT m.id, m.nome, m.cpf, m.unidade, m.email, m.telefone, m.celular, m.ativo,
+                DATE_FORMAT(m.data_cadastro, '%d/%m/%Y %H:%i') AS data_cadastro,
+                (SELECT COUNT(*) FROM moradores_anexos ma
+                 WHERE ma.tenant_id = m.tenant_id AND ma.morador_id = m.id AND ma.ativo = 1) AS anexos_count
+                FROM moradores m $where ORDER BY $order_by";
 
         $tipos_pag   = $tipos_param;
         $params_pag  = $params;
