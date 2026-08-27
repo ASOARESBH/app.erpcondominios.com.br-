@@ -220,10 +220,25 @@ $tenant_id = exigirTenantId();
         $stmt_c->close();
 
         // ── Montar query principal com LIMIT/OFFSET ────────────────────
+        // A coluna de anexos é opcional para manter compatibilidade com bancos
+        // legados que ainda não receberam a migração moradores_anexos.
+        $tem_tabela_anexos = false;
+        $stmt_tabela_anexos = $conexao->prepare(
+            "SELECT 1 FROM information_schema.tables
+             WHERE table_schema = DATABASE() AND table_name = 'moradores_anexos' LIMIT 1"
+        );
+        if ($stmt_tabela_anexos && $stmt_tabela_anexos->execute()) {
+            $tem_tabela_anexos = (bool)$stmt_tabela_anexos->get_result()->fetch_assoc();
+        }
+        if ($stmt_tabela_anexos) $stmt_tabela_anexos->close();
+
+        $campo_anexos = $tem_tabela_anexos
+            ? "(SELECT COUNT(*) FROM moradores_anexos ma
+                WHERE ma.tenant_id = m.tenant_id AND ma.morador_id = m.id AND ma.ativo = 1) AS anexos_count"
+            : "0 AS anexos_count";
         $sql = "SELECT m.id, m.nome, m.cpf, m.unidade, m.email, m.telefone, m.celular, m.ativo,
                 DATE_FORMAT(m.data_cadastro, '%d/%m/%Y %H:%i') AS data_cadastro,
-                (SELECT COUNT(*) FROM moradores_anexos ma
-                 WHERE ma.tenant_id = m.tenant_id AND ma.morador_id = m.id AND ma.ativo = 1) AS anexos_count
+                $campo_anexos
                 FROM moradores m $where ORDER BY $order_by";
 
         $tipos_pag   = $tipos_param;
@@ -473,7 +488,10 @@ $tenant_id = exigirTenantId();
     $errorLogger->registrarErroAPI('geral', $e->getMessage(), array(), $e);
     
     http_response_code(500);
-    retornar_json(false, "Erro ao processar requisição: " . $e->getMessage());
+    // O detalhe técnico completo permanece apenas no log do servidor.
+    // Nunca devolver nome de banco, tabela, SQL ou caminho interno ao cliente.
+    error_log('[api_moradores][erro] ' . $e->getMessage());
+    retornar_json(false, "Não foi possível processar a solicitação. Tente novamente ou contate o administrador.");
     
 } finally {
     if (isset($conexao)) {
