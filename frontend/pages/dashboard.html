@@ -30,8 +30,18 @@
     })();
     </script>
 
+    <section id="dashboard-personalizado" class="dashboard-personalizado" hidden>
+        <div class="dashboard-personalizado-toolbar">
+            <div><h2><i class="fas fa-sliders-h"></i> Meu Dashboard</h2><p>Widgets disponíveis conforme a configuração do condomínio. Você pode ajustar sua visualização pessoal.</p></div>
+            <button type="button" id="btnPersonalizarDashboard" class="btn-primary-modern"><i class="fas fa-edit"></i> Personalizar</button>
+        </div>
+        <div id="dashboard-editor" class="dashboard-editor" hidden><div id="dashboard-editor-lista"></div><div class="dashboard-editor-actions"><button type="button" id="btnCancelarPersonalizacao" class="btn-secondary-modern">Cancelar</button><button type="button" id="btnSalvarPreferenciasDashboard" class="btn-primary-modern"><i class="fas fa-save"></i> Salvar preferências</button></div></div>
+        <div id="dashboard-widgets-grid" class="dashboard-widgets-grid"></div>
+        <div id="dashboard-vazio" class="dashboard-vazio" hidden><i class="fas fa-chart-pie"></i><h3>Nenhum widget habilitado</h3><p>Ative widgets em Personalizar para montar sua visão do condomínio.</p><button type="button" id="btnRestaurarPreferenciasDashboard" class="btn-secondary-modern">Restaurar padrão</button></div>
+    </section>
+
     <!-- ESTATÍSTICAS GERAIS -->
-    <div class="stats-grid">
+    <div id="dashboard-legado-estatisticas" class="stats-grid">
         <div class="stat-card">
             <i class="fas fa-users icon"></i>
             <h3>Total de Moradores</h3>
@@ -57,7 +67,7 @@
     </div>
 
     <!-- SEÇÃO: CHAMADOS / ORDENS DE SERVIÇO -->
-    <div class="page-card">
+    <div id="dashboard-legado-os" class="page-card">
         <h2 class="section-title">
             <i class="fas fa-tools"></i> Chamados / Ordens de Serviço
             <span class="dash-os-badge" id="dashOsBadge">NOVO</span>
@@ -87,7 +97,7 @@
     </div>
 
     <!-- SEÇÃO: TOP 10 MORADORES COM MAIOR CONSUMO DE ÁGUA -->
-    <div class="page-card">
+    <div id="dashboard-legado-consumo" class="page-card">
         <h2 class="section-title">
             <i class="fas fa-chart-bar"></i> Top 10 Moradores - Maior Consumo de Água
         </h2>
@@ -99,7 +109,7 @@
     </div>
 
     <!-- SEÇÃO: ABASTECIMENTO DE VEÍCULOS -->
-    <div class="page-card">
+    <div id="dashboard-legado-abastecimento" class="page-card">
         <h2 class="section-title">
             <i class="fas fa-gas-pump"></i> Abastecimento de Veículos
         </h2>
@@ -111,7 +121,7 @@
     </div>
 
     <!-- SEÇÃO: HISTÓRICO DE ABASTECIMENTOS -->
-    <div class="page-card">
+    <div id="dashboard-legado-historico" class="page-card">
         <h2 class="section-title">
             <i class="fas fa-history"></i> Histórico de Abastecimentos (Últimos 10)
         </h2>
