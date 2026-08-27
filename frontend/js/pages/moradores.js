@@ -444,8 +444,8 @@ async function _consultarDuplicidadeCPF(campo, mostrarAlerta = true) {
         const itens = data?.dados?.itens || [];
         _cpfDuplicado = Boolean(data?.sucesso && itens.length);
         if (_cpfDuplicado) {
-            _marcarCPF(campo, 'CPF já cadastrado neste tenant.');
-            if (mostrarAlerta) _toast('Atenção: este CPF já possui cadastro neste tenant.', 'error');
+            _marcarCPF(campo, 'CPF já cadastrado no sistema.');
+            if (mostrarAlerta) _toast('Atenção: este CPF já possui cadastro no sistema.', 'error');
             return true;
         }
         _marcarCPF(campo, '');
@@ -494,7 +494,7 @@ function _salvarMorador() {
         return;
     }
     if (_cpfDuplicado || campoCPF?.dataset.cpfChecking === '1') {
-        _toast('Este CPF já está cadastrado neste tenant ou ainda está sendo consultado.', 'error');
+        _toast('Este CPF já está cadastrado no sistema ou ainda está sendo consultado.', 'error');
         campoCPF?.focus();
         return;
     }
