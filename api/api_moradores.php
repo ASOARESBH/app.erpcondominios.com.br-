@@ -295,7 +295,10 @@ $tenant_id = exigirTenantId();
         if (!$stmt) {
             throw new Exception("Erro ao preparar insert: " . $conexao->error);
         }
-        $stmt->bind_param("isssssss", $tenant_id, $nome, $cpf, $unidade, $email, $senha_hash, $telefone, $celular, $observacao);
+        // tenant_id + oito campos de texto = nove parâmetros no total.
+        // O tipo anterior tinha apenas sete "s" e fazia o mysqli rejeitar o bind,
+        // resultando em HTTP 500 antes mesmo de executar o INSERT.
+        $stmt->bind_param("issssssss", $tenant_id, $nome, $cpf, $unidade, $email, $senha_hash, $telefone, $celular, $observacao);
 
         if ($stmt->execute()) {
             $id_inserido = $conexao->insert_id;
