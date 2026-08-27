@@ -40,6 +40,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+if (!function_exists('validar_cpf_morador')) {
+    function validar_cpf_morador(string $cpf): bool {
+        $cpf = preg_replace('/\D/', '', $cpf);
+        if (strlen($cpf) !== 11 || preg_match('/^(\d)\1{10}$/', $cpf)) return false;
+        $soma = 0;
+        for ($i = 0; $i < 9; $i++) $soma += (int)$cpf[$i] * (10 - $i);
+        $digito = ($soma * 10) % 11;
+        if ($digito === 10) $digito = 0;
+        if ($digito !== (int)$cpf[9]) return false;
+        $soma = 0;
+        for ($i = 0; $i < 10; $i++) $soma += (int)$cpf[$i] * (11 - $i);
+        $digito = ($soma * 10) % 11;
+        if ($digito === 10) $digito = 0;
+        return $digito === (int)$cpf[10];
+    }
+}
+
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -256,7 +273,7 @@ $tenant_id = exigirTenantId();
         }
         
         $nome = sanitizar($conexao, $dados['nome'] ?? '');
-        $cpf = sanitizar($conexao, $dados['cpf'] ?? '');
+        $cpf = preg_replace('/\D/', '', (string)($dados['cpf'] ?? ''));
         $unidade = sanitizar($conexao, $dados['unidade'] ?? '');
         $email = sanitizar($conexao, $dados['email'] ?? '');
         $senha = $dados['senha'] ?? '';
@@ -269,12 +286,16 @@ $tenant_id = exigirTenantId();
             retornar_json(false, "Todos os campos obrigatórios devem ser preenchidos");
         }
         
-        // Verificar se CPF já existe
-        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND cpf = ?");
+        if (!validar_cpf_morador($cpf)) {
+            retornar_json(false, "CPF inválido. Confira os 11 dígitos informados");
+        }
+
+        // Verificar CPF normalizado já existente apenas neste tenant.
+        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? LIMIT 1");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
-        $stmt->bind_param("s", $cpf);
+        $stmt->bind_param("is", $tenant_id, $cpf);
         $stmt->execute();
         $stmt->store_result();
         

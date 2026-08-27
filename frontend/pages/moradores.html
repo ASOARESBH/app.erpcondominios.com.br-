@@ -46,7 +46,8 @@
                     </div>
                     <div>
                         <label>CPF *</label>
-                        <input type="text" id="cpf" required placeholder="000.000.000-00" maxlength="14">
+                        <input type="text" id="cpf" required placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="off" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" aria-describedby="cpf-ajuda">
+                            <small id="cpf-ajuda" class="field-help">Digite um CPF válido para consultar duplicidade.</small>
                     </div>
                     <div>
                         <label>Unidade *</label>

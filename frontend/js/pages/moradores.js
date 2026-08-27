@@ -22,6 +22,9 @@ const API_UNIDADES    = '../api/api_unidades.php';
 // ── Estado interno ─────────────────────────────────────────────────────────────
 let _currentTab = 'moradores';
 let _listaMoradores = [];   // cache para o select de dependentes
+let _cpfCheckTimer = null;
+let _cpfCheckSeq = 0;
+let _cpfDuplicado = false;
 
 // Paginação de moradores
 const POR_PAGINA = 25;
@@ -44,6 +47,7 @@ let _depTermoBusca = '';  // termo em uso na paginação de dependentes
 export function init() {
     log('Inicializando módulo...');
     _setupTabs();
+    _setupValidacaoCPF();
     _setupForms();
     _setupFileDrop();
     _carregarUnidades();
@@ -392,7 +396,92 @@ function _irPaginaMoradores(p) {
     document.getElementById('tabelaMoradores')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function formatarCPF(valor) {
+    const digits = String(valor || '').replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return digits.replace(/(\d{3})(\d+)/, '$1.$2');
+    if (digits.length <= 9) return digits.replace(/(\d{3})(\d{3})(\d+)/, '$1.$2.$3');
+    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+}
+
+function validarCPF(valor) {
+    const cpf = String(valor || '').replace(/\D/g, '');
+    if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+    let soma = 0;
+    for (let i = 0; i < 9; i++) soma += Number(cpf[i]) * (10 - i);
+    let digito = (soma * 10) % 11;
+    if (digito === 10) digito = 0;
+    if (digito !== Number(cpf[9])) return false;
+    soma = 0;
+    for (let i = 0; i < 10; i++) soma += Number(cpf[i]) * (11 - i);
+    digito = (soma * 10) % 11;
+    if (digito === 10) digito = 0;
+    return digito === Number(cpf[10]);
+}
+
+function _marcarCPF(campo, mensagem = '') {
+    if (!campo) return;
+    campo.setCustomValidity(mensagem);
+    campo.classList.toggle('input-error', Boolean(mensagem));
+    campo.setAttribute('aria-invalid', mensagem ? 'true' : 'false');
+}
+
+function _setupValidacaoCPF() {
+    const campo = document.getElementById('cpf');
+    if (!campo || campo.dataset.cpfReady === '1') return;
+    campo.dataset.cpfReady = '1';
+    campo.addEventListener('input', () => {
+        campo.value = formatarCPF(campo.value);
+        _cpfDuplicado = false;
+        const completo = campo.value.replace(/\D/g, '').length === 11;
+        if (!completo) {
+            _marcarCPF(campo, campo.value ? 'Digite os 11 dígitos do CPF.' : 'CPF é obrigatório.');
+            return;
+        }
+        if (!validarCPF(campo.value)) {
+            _marcarCPF(campo, 'CPF inválido. Confira os dígitos.');
+            return;
+        }
+        _marcarCPF(campo, '');
+        clearTimeout(_cpfCheckTimer);
+        const seq = ++_cpfCheckSeq;
+        _cpfCheckTimer = setTimeout(async () => {
+            try {
+                const resposta = await fetch(`${API_MORADORES}?cpf=${encodeURIComponent(campo.value)}&por_pagina=1`, { credentials: 'include' });
+                const data = await resposta.json();
+                if (seq !== _cpfCheckSeq) return;
+                const itens = data?.dados?.itens || [];
+                _cpfDuplicado = Boolean(data?.sucesso && itens.length);
+                if (_cpfDuplicado) {
+                    _marcarCPF(campo, 'CPF já cadastrado neste tenant.');
+                    _toast('Atenção: este CPF já possui cadastro neste tenant.', 'error');
+                } else {
+                    _marcarCPF(campo, '');
+                }
+            } catch (erro) {
+                log('Falha ao consultar duplicidade do CPF:', erro);
+            }
+        }, 350);
+    });
+    campo.addEventListener('blur', () => {
+        if (!validarCPF(campo.value)) _marcarCPF(campo, 'CPF inválido ou incompleto.');
+    });
+}
+
 function _salvarMorador() {
+    const campoCPF = document.getElementById('cpf');
+    const cpf = campoCPF?.value || '';
+    if (!validarCPF(cpf)) {
+        _marcarCPF(campoCPF, 'CPF inválido. Informe um CPF válido.');
+        _toast('Informe um CPF válido antes de salvar o morador.', 'error');
+        campoCPF?.focus();
+        return;
+    }
+    if (_cpfDuplicado) {
+        _toast('Este CPF já está cadastrado neste tenant.', 'error');
+        campoCPF?.focus();
+        return;
+    }
     log('Salvando novo morador...');
     const dados = {
         nome:       document.getElementById('nomeCompleto')?.value?.trim(),
