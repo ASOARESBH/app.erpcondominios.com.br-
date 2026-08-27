@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="../assets/css/themes/theme-blue.css">
     <!-- Global Config -->
     <script src="js/config.js"></script>
+    <script src="js/i18n.js"></script>
     <!-- Branding institucional: o login NÃO consulta nem aplica logo de tenant. -->
     <script>
         var LogoManager = (function () {
@@ -395,6 +396,11 @@
 
 <body>
     <div class="login-container">
+        <div class="login-language-control" aria-label="Seleção de idioma">
+            <i class="fas fa-language"></i>
+            <label for="loginLanguageSelect" data-i18n="common.language">Idioma</label>
+            <select id="loginLanguageSelect"><option value="pt-BR">Português</option><option value="en-US">English</option><option value="es-ES">Español</option></select>
+        </div>
         <div class="login-header">
 
             <!-- Limpar flags de redirecionamento anti-loop -->
@@ -413,18 +419,18 @@
                      onerror="LogoManager.onError()">
             </div>
 
-            <p>ERP Condomínio — Gestão Inteligente</p>
+            <p data-i18n="app.title">ERP Condomínio — Gestão Inteligente</p>
         </div>
 
         <div id="alertBox" class="alert"></div>
 
         <form id="loginForm">
             <div class="form-group">
-                <label for="email">E-mail</label>
+                <label for="email" data-i18n="auth.email">E-mail</label>
                 <div class="input-wrapper">
                     <i class="fas fa-envelope"></i>
                     <input type="email" id="email" name="email"
-                           placeholder="Digite seu e-mail"
+                           placeholder="Digite seu e-mail" data-i18n-placeholder="auth.email"
                            required autocomplete="email"
                            autocapitalize="none"
                            autocorrect="off"
@@ -434,11 +440,11 @@
             </div>
 
             <div class="form-group">
-                <label for="senha">Senha</label>
+                <label for="senha" data-i18n="auth.password">Senha</label>
                 <div class="input-wrapper">
                     <i class="fas fa-lock"></i>
                     <input type="password" id="senha" name="senha"
-                           placeholder="Digite sua senha"
+                           placeholder="Digite sua senha" data-i18n-placeholder="auth.password"
                            required autocomplete="current-password">
                     <button type="button" class="btn-toggle-senha" id="btnToggleSenha" tabindex="-1" title="Mostrar/ocultar senha" aria-label="Mostrar senha">
                         <i class="fas fa-eye" id="iconToggleSenha"></i>
@@ -491,6 +497,13 @@
         // ============================================
         // LOGIN FORM
         // ============================================
+        document.addEventListener('DOMContentLoaded', function () {
+            const languageSelect = document.getElementById('loginLanguageSelect');
+            if (!languageSelect || !window.ERP_I18N) return;
+            languageSelect.value = window.ERP_I18N.getLocale();
+            languageSelect.addEventListener('change', function () { window.ERP_I18N.load(languageSelect.value); });
+            document.addEventListener('erp:locale-changed', function (event) { languageSelect.value = event.detail.locale; });
+        });
         const loginForm = document.getElementById('loginForm');
         const btnLogin  = document.getElementById('btnLogin');
         const alertBox  = document.getElementById('alertBox');

@@ -131,7 +131,12 @@
         return match ? match.page : null;
     }
 
+    function labelTraduzido(item) {
+        const chaves = { Dashboard:'nav.dashboard', Moradores:'nav.residents', Veiculos:'nav.vehicles', 'Veículos':'nav.vehicles', Visitantes:'nav.visitors', Acesso:'nav.access', Relatorios:'nav.reports', 'Relatórios':'nav.reports', Financeiro:'nav.financial', Configuracoes:'nav.settings', 'Configurações':'nav.settings' };
+        return window.ERP_I18N && chaves[item.label] ? window.ERP_I18N.t(chaves[item.label]) : item.label;
+    }
     function renderItem(item, activePage) {
+        const itemLabel = labelTraduzido(item);
         const ativoFilho = (item.children || []).some((child) => child.page === activePage);
         const activeClass = item.page === activePage || ativoFilho ? ' active' : '';
         const styleAttr = item.style ? ` style="${item.style}"` : '';
@@ -139,16 +144,17 @@
         const separator = item.separator ? '<li class="nav-item"><hr style="border:none;border-top:1px solid rgba(255,255,255,0.1);margin:0.5rem 0.75rem;"></li>' : '';
         const filhos = (item.children || []).map((child) => {
             const childActive = child.page === activePage ? ' active' : '';
-            return `<li class="nav-item nav-subitem"><a href="${child.href}" data-page="${child.page}" class="nav-link nav-sublink${childActive}" title="${child.label}"><i class="${child.icon}"></i><span>${child.label}</span></a></li>`;
+            const childLabel = labelTraduzido(child);
+            return `<li class="nav-item nav-subitem"><a href="${child.href}" data-page="${child.page}" class="nav-link nav-sublink${childActive}" title="${childLabel}"><i class="${child.icon}"></i><span>${childLabel}</span></a></li>`;
         }).join('');
         return [
             separator,
             `<li class="nav-item"${liStyle}>`,
-            `<a href="${item.href}" data-page="${item.page}" class="nav-link${activeClass}"${styleAttr} title="${item.label}">`,
+            `<a href="${item.href}" data-page="${item.page}" class="nav-link${activeClass}"${styleAttr} title="${itemLabel}">`,
             `<i class="${item.icon}"></i>`,
-            `<span>${item.label}</span>`,
+            `<span>${itemLabel}</span>`,
             '</a>',
-            filhos ? `<ul class="nav-submenu show" aria-label="Submenu ${item.label}">${filhos}</ul>` : '',
+            filhos ? `<ul class="nav-submenu show" aria-label="Submenu ${itemLabel}">${filhos}</ul>` : '',
             '</li>'
         ].join('');
     }
@@ -414,8 +420,8 @@
         setLogEnabled: function (enabled) { state.logEnabled = !!enabled; }
     };
 
-    global.MenuController = api;
-
+        global.MenuController = api;
+    document.addEventListener('erp:locale-changed', () => { if (state.initialized) { renderMenu(); markActive(); } });
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initialize);
     } else {

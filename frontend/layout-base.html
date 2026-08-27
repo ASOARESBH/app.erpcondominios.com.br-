@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-i18n-root>
 
 <head>
     <meta charset="UTF-8">
@@ -22,6 +22,8 @@
 
     <!-- Session Manager Core: gerencia a sessão após autenticação -->
     <script src="js/session-manager-core.js"></script>
+    <!-- Internacionalização global: fallback pt-BR e catálogos pt-BR/en-US/es-ES -->
+    <script src="js/i18n.js"></script>
 </head>
 
 <body>
@@ -36,6 +38,14 @@
     <main class="main-content">
         <header class="header">
             <h1 id="pageTitle"><i class="fas fa-circle"></i> Carregando...</h1>
+            <div class="global-language-control" aria-label="Seleção de idioma">
+                <label for="globalLanguageSelect"><i class="fas fa-language"></i><span data-i18n="common.language">Idioma</span></label>
+                <select id="globalLanguageSelect">
+                    <option value="pt-BR">Português</option>
+                    <option value="en-US">English</option>
+                    <option value="es-ES">Español</option>
+                </select>
+            </div>
             <app-user-menu></app-user-menu>
         </header>
 
@@ -82,6 +92,12 @@
         document.addEventListener('DOMContentLoaded', function () {
             console.log('[App] Inicializando aplicação...');
             AppRouter.init();
+            const languageSelect = document.getElementById('globalLanguageSelect');
+            if (languageSelect && window.ERP_I18N) {
+                languageSelect.value = window.ERP_I18N.getLocale();
+                languageSelect.addEventListener('change', () => window.ERP_I18N.load(languageSelect.value));
+                document.addEventListener('erp:locale-changed', event => { languageSelect.value = event.detail.locale; });
+            }
 
             // Load initial page from URL (?page=X) or default to dashboard
             const initialPage = AppRouter.getPageFromURL('dashboard');
