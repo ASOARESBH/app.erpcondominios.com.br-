@@ -252,7 +252,7 @@ $tenant_id = exigirTenantId();
         $tipo_placa = classificar_placa_veiculo($placa_consulta);
         if (!$tipo_placa) retornar_json(false, 'Placa inválida. Use ABC1234 ou ABC1D23.');
         $id_ignorar = (int)($_GET['id'] ?? 0);
-        $sql = "SELECT id FROM veiculos WHERE tenant_id = ? AND placa = ?" . ($id_ignorar > 0 ? " AND id != ?" : '') . " LIMIT 1";
+        $sql = "SELECT id FROM veiculos WHERE tenant_id = ? AND REPLACE(REPLACE(UPPER(placa), '-', ''), ' ', '') = ?" . ($id_ignorar > 0 ? " AND id != ?" : '') . " LIMIT 1";
         $stmt = $conexao->prepare($sql);
         if (!$stmt) retornar_json(false, 'Não foi possível consultar a disponibilidade da placa.');
         if ($id_ignorar > 0) $stmt->bind_param('isi', $tenant_id, $placa_consulta, $id_ignorar);
@@ -699,7 +699,7 @@ $tenant_id = exigirTenantId();
             }
             
             // Verificar se placa já existe
-            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND placa = ?");
+            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(UPPER(placa), '-', ''), ' ', '') = ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
@@ -813,7 +813,7 @@ $tenant_id = exigirTenantId();
         }
         try {
             // Verificar se placa já existe em outro veículo
-            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND placa = ? AND id != ?");
+            $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(UPPER(placa), '-', ''), ' ', '') = ? AND id != ?");
             if (!$stmt) {
                 throw new Exception("Erro ao preparar query: " . $conexao->error);
             }
