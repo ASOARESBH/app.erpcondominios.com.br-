@@ -29,22 +29,26 @@ $tenant_id = exigirTenantId();
 // ========== VERIFICAR TAG RFID ==========
 if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_tag') {
     $dados = json_decode(file_get_contents('php://input'), true);
-    $tag = sanitizar($conexao, $dados['tag'] ?? '');
+    $tag = sanitizar($conexao, $dados['tag'] ?? $dados['identificador'] ?? '');
+    $identificador = strtoupper(trim((string)($dados['identificador'] ?? $tag)));
+    $identificadorNormalizado = preg_replace('/[^A-Z0-9]/', '', $identificador);
     
     if (empty($tag)) {
         retornar_json(false, "TAG RFID não informada");
     }
     
-    // Buscar veículo pela TAG com dados de dependente
+    // Buscar por TAG RFID ou por placa, sempre no tenant da sessão.
     $stmt = $conexao->prepare("SELECT v.id, v.placa, v.modelo, v.cor, v.tag, v.ativo, v.dependente_id,
                               m.id as morador_id, m.nome as morador_nome, m.unidade as morador_unidade,
                               d.id as dependente_id_check, d.nome_completo as dependente_nome
                               FROM veiculos v
                               INNER JOIN moradores m ON v.morador_id = m.id
                               LEFT JOIN dependentes d ON v.dependente_id = d.id
-                              WHERE v.tag = ? AND v.ativo = 1 AND m.ativo = 1");
+                              WHERE v.tenant_id = ? AND m.tenant_id = ?
+                                AND (v.tag = ? OR REPLACE(REPLACE(UPPER(v.placa), '-', ''), ' ', '') = ?)
+                                AND v.ativo = 1 AND m.ativo = 1");
     
-    $stmt->bind_param("s", $tag);
+    $stmt->bind_param("iiss", $tenant_id, $tenant_id, $tag, $identificadorNormalizado);
     $stmt->execute();
     $resultado = $stmt->get_result();
     

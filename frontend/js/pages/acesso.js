@@ -14,6 +14,7 @@ export function init() {
     console.log('[Acesso] Inicializando...');
 
     setupForm();
+    setupAcessoTabs();
     setupActions();
 
     window.AcessoPage = {
@@ -58,6 +59,23 @@ function setupForm() {
             input.value = input.value.toUpperCase().trim();
         });
     }
+}
+
+function setupAcessoTabs() {
+    const tabs = document.querySelectorAll('[data-acesso-tab]');
+    const paineis = document.querySelectorAll('[data-acesso-painel]');
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+        const alvo = tab.dataset.acessoTab;
+        tabs.forEach(item => {
+            const ativo = item === tab;
+            item.classList.toggle('ativo', ativo);
+            item.setAttribute('aria-selected', ativo ? 'true' : 'false');
+        });
+        paineis.forEach(painel => { painel.hidden = painel.dataset.acessoPainel !== alvo; });
+        if (alvo === 'hub') carregarUltimosHub();
+        if (alvo === 'lpr') carregarUltimosLpr();
+        if (alvo === 'verificacao') document.getElementById('entradaAcesso')?.focus();
+    }));
 }
 
 function setupActions() {
@@ -167,13 +185,13 @@ async function verificarAcesso() {
         const response = await fetch(`${API_RFID}?acao=verificar_tag`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tag: entrada })
+            body: JSON.stringify({ tag: entrada, identificador: entrada })
         });
 
         const data = await response.json();
 
         if (data.sucesso && data?.dados?.liberado) {
-            mostrarMensagem('success', data.dados.mensagem || 'Acesso liberado');
+            mostrarMensagem('success', data.dados.mensagem || 'ACESSO LIBERADO');
             mostrarInfoAcesso(data.dados);
             tocarSom('success');
 

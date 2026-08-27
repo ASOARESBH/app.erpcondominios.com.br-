@@ -4,6 +4,48 @@
 |--------------------------------------------------------------------------
 */
 
+.page-acesso .acesso-monitor-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 18px 0 14px;
+    padding: 6px;
+    background: #e8eef9;
+    border-radius: 12px;
+    overflow-x: auto;
+}
+
+.page-acesso .acesso-monitor-tab {
+    flex: 1 0 auto;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 12px 18px;
+    background: transparent;
+    color: #475569;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.page-acesso .acesso-monitor-tab.ativo {
+    background: #fff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+    box-shadow: 0 2px 8px rgba(30, 64, 175, .12);
+}
+
+.page-acesso .acesso-monitor-painel[hidden] { display: none !important; }
+.page-acesso .acesso-verificacao-card { min-height: 390px; border-top: 4px solid #2563eb; }
+.page-acesso .monitor-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:24px; }
+.page-acesso .monitor-heading h2 { margin: 6px 0 4px; font-size: 24px; }
+.page-acesso .monitor-kicker { color:#2563eb; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.page-acesso .monitor-live { color:#15803d; background:#dcfce7; border:1px solid #86efac; border-radius:999px; padding:8px 12px; font-size:12px; font-weight:800; white-space:nowrap; }
+.page-acesso .monitor-live i { font-size:9px; margin-right:5px; }
+.page-acesso .acesso-verificacao-card #entradaAcesso { min-height:68px; font-size:24px; font-weight:700; letter-spacing:.08em; text-align:center; }
+.page-acesso .acesso-verificacao-card .form-actions { margin-top:24px; }
+.page-acesso .acesso-verificacao-card #btnValidarAcesso { min-height:54px; min-width:230px; font-size:16px; }
+.page-acesso .acesso-verificacao-card .mensagem-sucesso { font-size:20px; padding:20px; text-align:center; text-transform:uppercase; }
+.page-acesso .acesso-verificacao-card .info-morador { font-size:15px; }
+
 .page-acesso .page-header {
     margin-bottom: 30px;
 }
@@ -447,6 +489,10 @@
 }
 
 @media (max-width: 768px) {
+    .page-acesso .monitor-heading { flex-direction: column; }
+    .page-acesso .acesso-monitor-tab { padding: 11px 13px; font-size: 12px; }
+    .page-acesso .acesso-verificacao-card #entradaAcesso { font-size: 18px; }
+
     .page-acesso .table-header-actions {
         flex-direction: column;
         align-items: flex-start;

@@ -11,7 +11,13 @@
         <i class="fas fa-wifi"></i> Status RFID: aguardando verificacao...
     </div>
 
-    <div class="page-card hub-acesso-card">
+    <div class="acesso-monitor-tabs" role="tablist" aria-label="Monitoramento de acesso">
+        <button type="button" class="acesso-monitor-tab ativo" role="tab" aria-selected="true" data-acesso-tab="verificacao"><i class="fas fa-desktop"></i> Monitoramento</button>
+        <button type="button" class="acesso-monitor-tab" role="tab" aria-selected="false" data-acesso-tab="hub"><i class="fas fa-project-diagram"></i> Acesso Hub Local</button>
+        <button type="button" class="acesso-monitor-tab" role="tab" aria-selected="false" data-acesso-tab="lpr"><i class="fas fa-camera"></i> Últimos acessos LPR</button>
+    </div>
+
+    <div class="page-card hub-acesso-card acesso-monitor-painel" data-acesso-painel="hub" hidden>
         <div class="table-header-actions">
             <div>
                 <h2><i class="fas fa-project-diagram"></i> Acessos do Hub Local</h2>
@@ -28,7 +34,7 @@
         </div>
     </div>
 
-    <div class="page-card acesso-lpr-card">
+    <div class="page-card acesso-lpr-card acesso-monitor-painel" data-acesso-painel="lpr" hidden>
         <div class="table-header-actions">
             <div>
                 <h2><i class="fas fa-camera"></i> Últimos acessos LPR</h2>
@@ -45,15 +51,17 @@
         </div>
     </div>
 
-    <div class="page-card">
-        <h2>Verificacao de Acesso</h2>
-        <p class="card-subtitle">Digite a TAG RFID (ou identificador recebido no leitor).</p>
+    <div class="page-card acesso-verificacao-card acesso-monitor-painel" data-acesso-painel="verificacao">
+        <div class="monitor-heading">
+            <div><span class="monitor-kicker"><i class="fas fa-satellite-dish"></i> Monitoramento em tempo real</span><h2>Verificação de Acesso</h2><p class="card-subtitle">Digite ou aproxime uma TAG RFID. Também é possível informar uma placa cadastrada.</p></div>
+            <span class="monitor-live"><i class="fas fa-circle"></i> ONLINE</span>
+        </div>
 
         <form id="acessoForm">
             <div class="form-grid single-column">
                 <div>
-                    <label>TAG RFID / Identificador *</label>
-                    <input type="text" id="entradaAcesso" required placeholder="Ex: MAJJHAG0022" autocomplete="off" autofocus>
+                    <label>TAG RFID / Placa / Identificador *</label>
+                    <input type="text" id="entradaAcesso" required placeholder="Ex: MAJJHAG0022 ou QWW5D54" autocomplete="off" autofocus>
                 </div>
             </div>
 
@@ -72,7 +80,7 @@
         <div id="infoAcesso" class="info-morador" style="display:none;"></div>
     </div>
 
-    <div class="page-card">
+    <div class="page-card ultimos-acessos-card">
         <div class="table-header-actions">
             <h2>Ultimos Acessos Liberados</h2>
             <div class="table-tools">
