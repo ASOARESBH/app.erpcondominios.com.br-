@@ -67,6 +67,17 @@ if (!function_exists('retornar_json')) {
     }
 }
 
+function normalizar_placa_veiculo($valor) {
+    return strtoupper(preg_replace('/[^A-Z0-9]/i', '', (string)$valor));
+}
+
+function classificar_placa_veiculo($valor) {
+    $placa = normalizar_placa_veiculo($valor);
+    if (preg_match('/^[A-Z]{3}[0-9][A-Z][0-9]{2}$/', $placa)) return 'Mercosul';
+    if (preg_match('/^[A-Z]{3}[0-9]{4}$/', $placa)) return 'padrão antigo';
+    return null;
+}
+
 // ============================================================
 // MÓDULO RELATÓRIOS — filtros compartilhados
 // ============================================================
@@ -234,6 +245,28 @@ $tenant_id = exigirTenantId();
     // A estrutura da tabela é alterada exclusivamente por migrations SQL.
     // Nunca executar ALTER TABLE durante uma requisição: em hospedagem
     // compartilhada isso pode bloquear a tabela e resultar em HTTP 503.
+
+    // ========== VERIFICAR DISPONIBILIDADE DA PLACA ==========
+    if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'verificar_placa') {
+        $placa_consulta = normalizar_placa_veiculo($_GET['placa'] ?? '');
+        $tipo_placa = classificar_placa_veiculo($placa_consulta);
+        if (!$tipo_placa) retornar_json(false, 'Placa inválida. Use ABC1234 ou ABC1D23.');
+        $id_ignorar = (int)($_GET['id'] ?? 0);
+        $sql = "SELECT id FROM veiculos WHERE tenant_id = ? AND placa = ?" . ($id_ignorar > 0 ? " AND id != ?" : '') . " LIMIT 1";
+        $stmt = $conexao->prepare($sql);
+        if (!$stmt) retornar_json(false, 'Não foi possível consultar a disponibilidade da placa.');
+        if ($id_ignorar > 0) $stmt->bind_param('isi', $tenant_id, $placa_consulta, $id_ignorar);
+        else $stmt->bind_param('is', $tenant_id, $placa_consulta);
+        if (!$stmt->execute()) { $stmt->close(); retornar_json(false, 'Não foi possível consultar a disponibilidade da placa.'); }
+        $stmt->store_result();
+        $existe = $stmt->num_rows > 0;
+        $stmt->close();
+        retornar_json(true, $existe ? 'Placa já cadastrada no sistema.' : 'Placa disponível.', [
+            'existe' => $existe,
+            'tipo' => $tipo_placa,
+            'placa' => $placa_consulta
+        ]);
+    }
     
     // ========== LISTAR VEÍCULOS PAGINADOS (TELA PRINCIPAL) ==========
     if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'listar_paginado') {
@@ -602,7 +635,7 @@ $tenant_id = exigirTenantId();
             retornar_json(false, "Dados inválidos. Esperado JSON válido");
         }
         
-        $placa = sanitizar($conexao, strtoupper($dados['placa'] ?? ''));
+        $placa = normalizar_placa_veiculo($dados['placa'] ?? '');
         $modelo = sanitizar($conexao, $dados['modelo'] ?? '');
         $cor = sanitizar($conexao, $dados['cor'] ?? '');
         $tipo = sanitizar($conexao, $dados['tipo'] ?? '');
@@ -611,10 +644,12 @@ $tenant_id = exigirTenantId();
         $dependente_id = isset($dados['dependente_id']) && !empty($dados['dependente_id']) ? intval($dados['dependente_id']) : null;
         
         // Validações
-        if (empty($placa) || empty($modelo) || empty($tag) || $morador_id <= 0) {
+                if (empty($placa) || empty($modelo) || empty($tag) || $morador_id <= 0) {
             retornar_json(false, "Placa, modelo, TAG e morador são obrigatórios");
         }
-        
+        if (!classificar_placa_veiculo($placa)) {
+            retornar_json(false, 'Placa inválida. Use ABC1234 ou ABC1D23.');
+        }
         try {
             // Verificar se morador existe
             $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
@@ -763,17 +798,19 @@ $tenant_id = exigirTenantId();
         }
         
         $id = intval($dados['id'] ?? 0);
-        $placa = sanitizar($conexao, strtoupper($dados['placa'] ?? ''));
+        $placa = normalizar_placa_veiculo($dados['placa'] ?? '');
         $modelo = sanitizar($conexao, $dados['modelo'] ?? '');
         $cor = sanitizar($conexao, $dados['cor'] ?? '');
         $tipo = sanitizar($conexao, $dados['tipo'] ?? '');
         $tag = sanitizar($conexao, $dados['tag'] ?? '');
 
         // Validações
-        if ($id <= 0 || empty($placa) || empty($modelo) || empty($tag)) {
+                if ($id <= 0 || empty($placa) || empty($modelo) || empty($tag)) {
             retornar_json(false, "Dados inválidos para atualização");
         }
-        
+        if (!classificar_placa_veiculo($placa)) {
+            retornar_json(false, 'Placa inválida. Use ABC1234 ou ABC1D23.');
+        }
         try {
             // Verificar se placa já existe em outro veículo
             $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND placa = ? AND id != ?");

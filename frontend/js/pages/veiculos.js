@@ -120,6 +120,13 @@ function setupActions() {
         btnCancelar.addEventListener('click', resetForm);
     }
 
+    const campoPlaca = document.getElementById('placa');
+    if (campoPlaca && campoPlaca.dataset.placaReady !== '1') {
+        campoPlaca.dataset.placaReady = '1';
+        campoPlaca.addEventListener('input', () => atualizarPlaca(campoPlaca, false));
+        campoPlaca.addEventListener('blur', () => verificarPlaca(campoPlaca, true));
+    }
+
     const selectMorador = document.getElementById('selectMorador');
     if (selectMorador) {
         selectMorador.addEventListener('change', async () => {
@@ -329,7 +336,8 @@ async function salvarVeiculo() {
     try {
         const moradorId = Number(document.getElementById('selectMorador')?.value || 0);
         const modelo = (document.getElementById('modelo')?.value || '').trim();
-        const placa = normalizarPlaca(document.getElementById('placa')?.value || '');
+        const campoPlaca = document.getElementById('placa');
+        const placa = normalizarPlaca(campoPlaca?.value || '');
         const tag = (document.getElementById('tag')?.value || '').trim();
         const cor = (document.getElementById('cor')?.value || '').trim();
         const tipo = (document.getElementById('tipo')?.value || '').trim();
@@ -339,6 +347,25 @@ async function salvarVeiculo() {
         if (!moradorId || !modelo || !placa || !tag) {
             alert('Morador, modelo, placa e TAG RFID sao obrigatorios.');
             return;
+        }
+
+        if (!validarPlaca(placa)) {
+            atualizarPlaca(campoPlaca, true);
+            alert('Informe uma placa válida no padrão antigo ou Mercosul.');
+            campoPlaca?.focus();
+            return;
+        }
+        if (campoPlaca?.dataset.placaChecking === '1' || campoPlaca?.dataset.placaDuplicada === '1') {
+            alert(campoPlaca.dataset.placaDuplicada === '1' ? 'Placa já cadastrada no sistema.' : 'Aguarde a validação da placa.');
+            campoPlaca?.focus();
+            return;
+        }
+        if (campoPlaca?.dataset.placaValidada !== placa) {
+            const disponivel = await verificarPlaca(campoPlaca, true);
+            if (!disponivel) {
+                campoPlaca?.focus();
+                return;
+            }
         }
 
         if (!modoEdicao && destinoCadastro === 'dependente' && !dependenteId) {
@@ -498,7 +525,79 @@ function resetForm() {
 }
 
 function normalizarPlaca(placa) {
-    return String(placa).trim().toUpperCase().replace(/\s+/g, '');
+    return String(placa).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function classificarPlaca(placa) {
+    const valor = normalizarPlaca(placa);
+    if (/^[A-Z]{3}[0-9][A-Z][0-9]{2}$/.test(valor)) return 'Mercosul';
+    if (/^[A-Z]{3}[0-9]{4}$/.test(valor)) return 'padrão antigo';
+    return null;
+}
+
+function validarPlaca(placa) {
+    return Boolean(classificarPlaca(placa));
+}
+
+function atualizarPlaca(campo, mostrarErro = false) {
+    if (!campo) return false;
+    const valor = normalizarPlaca(campo.value).slice(0, 7);
+    campo.value = valor;
+    delete campo.dataset.placaChecking;
+    delete campo.dataset.placaValidada;
+    delete campo.dataset.placaDuplicada;
+    const ajuda = document.getElementById('placa-ajuda');
+    const tipo = classificarPlaca(valor);
+    if (tipo) {
+        if (ajuda) ajuda.textContent = `Placa ${tipo}. Verificação de disponibilidade ao sair do campo.`;
+        campo.setCustomValidity('');
+        return true;
+    }
+    if (ajuda) ajuda.textContent = valor.length >= 7 ? 'Placa inválida. Use ABC1234 ou ABC1D23.' : 'Digite uma placa válida.';
+    campo.setCustomValidity(mostrarErro && valor ? 'Informe uma placa válida.' : '');
+    return false;
+}
+
+async function verificarPlaca(campo, mostrarAlerta = false) {
+    if (!campo) return false;
+    atualizarPlaca(campo, false);
+    const placa = normalizarPlaca(campo.value);
+    if (!validarPlaca(placa)) {
+        atualizarPlaca(campo, true);
+        return false;
+    }
+    const idEdicao = Number(document.getElementById('veiculoId')?.value || 0);
+    const seq = String(Date.now());
+    campo.dataset.placaChecking = '1';
+    campo.dataset.placaCheckSeq = seq;
+    const ajuda = document.getElementById('placa-ajuda');
+    if (ajuda) ajuda.textContent = `Placa ${classificarPlaca(placa)}. Consultando disponibilidade...`;
+    try {
+        const params = new URLSearchParams({ acao: 'verificar_placa', placa });
+        if (idEdicao) params.set('id', String(idEdicao));
+        const response = await fetch(`${API_VEICULOS}?${params.toString()}`, { credentials: 'include' });
+        const data = await response.json();
+        if (campo.dataset.placaCheckSeq !== seq) return false;
+        const duplicada = Boolean(data?.dados?.existe);
+        campo.dataset.placaDuplicada = duplicada ? '1' : '0';
+        campo.dataset.placaValidada = duplicada ? '' : placa;
+        campo.setCustomValidity(duplicada ? 'Placa já cadastrada no sistema.' : '');
+        if (duplicada) {
+            if (ajuda) ajuda.textContent = 'Placa já cadastrada no sistema.';
+            if (mostrarAlerta) alert('Atenção: esta placa já está cadastrada no sistema.');
+            return false;
+        }
+        if (ajuda) ajuda.textContent = `Placa ${classificarPlaca(placa)} disponível.`;
+        return true;
+    } catch (error) {
+        console.error('[Veiculos] Erro ao verificar placa:', error);
+        campo.dataset.placaValidada = '';
+        campo.setCustomValidity('Não foi possível consultar a placa.');
+        if (ajuda) ajuda.textContent = 'Não foi possível consultar a placa. Tente novamente.';
+        return false;
+    } finally {
+        delete campo.dataset.placaChecking;
+    }
 }
 
 async function onMoradorChange(moradorId) {
