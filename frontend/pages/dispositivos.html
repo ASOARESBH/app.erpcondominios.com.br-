@@ -17,6 +17,9 @@
       <button class="tab-btn active" data-tab="dispositivos">
         <i class="fas fa-microchip"></i> Dispositivos
       </button>
+      <button class="tab-btn" data-tab="lpr">
+        <i class="fas fa-camera"></i> LPR
+      </button>
       <button class="tab-btn" data-tab="eventos">
         <i class="fas fa-history"></i> Eventos
         <span id="badge-eventos" class="tab-badge" style="display:none;"></span>
@@ -25,6 +28,31 @@
         <i class="fas fa-terminal"></i> Fila de Comandos
         <span id="badge-fila" class="tab-badge tab-badge-amber" style="display:none;"></span>
       </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ABA: LPR
+  ════════════════════════════════════════════════════════════════ -->
+  <div id="tab-lpr" class="tab-content">
+    <div class="page-lpr">
+      <div class="page-header lpr-header">
+        <div><h1><i class="fas fa-camera-retro"></i> LPR — Monitoramento local</h1><p>Configure o processamento local e acompanhe a saúde dos agentes Windows.</p></div>
+        <div class="lpr-header-status" id="lprHeaderStatus"><i class="fas fa-circle-notch fa-spin"></i> Verificando...</div>
+      </div>
+      <div id="lprAlert" class="lpr-alert" role="status"></div>
+      <div class="lpr-kpi-grid">
+        <article class="lpr-kpi"><span>Agentes ativos</span><strong id="lprKpiAgents">—</strong><small>máquinas habilitadas</small></article>
+        <article class="lpr-kpi"><span>Câmeras conhecidas</span><strong id="lprKpiCameras">—</strong><small>por heartbeat</small></article>
+        <article class="lpr-kpi"><span>Retenção</span><strong id="lprKpiRetention">30</strong><small>dias configurados</small></article>
+        <article class="lpr-kpi"><span>Últimos eventos</span><strong id="lprKpiEvents">—</strong><small>na janela atual</small></article>
+      </div>
+      <section class="lpr-layout">
+        <article class="page-card lpr-card"><div class="lpr-section-heading"><div><span class="lpr-eyebrow">MOTOR</span><h2>FastALPR</h2></div><span class="lpr-engine-badge">ONNX local</span></div><p class="lpr-muted">O ERP controla parâmetros não sensíveis. A captura RTSP e a credencial da câmera permanecem no agente local Windows.</p><div class="lpr-form-grid"><label>Motor ativo<select id="lprEngine"><option value="fastalpr">FastALPR</option><option value="frigate">Frigate — fallback</option></select></label><label>Backend ONNX<select id="lprBackend"><option value="cpu">CPU</option><option value="openvino">Intel OpenVINO</option><option value="directml">Windows DirectML</option></select></label><label>Confiança mínima<input id="lprConfidence" type="number" min="0" max="1" step="0.01" value="0.80"></label><label>Deduplicação (segundos)<input id="lprDedup" type="number" min="1" max="300" value="20"></label></div><div class="lpr-actions"><button class="btn-primary-modern" id="btnSalvarLpr"><i class="fas fa-save"></i> Salvar configuração</button></div></article>
+        <article class="page-card lpr-card"><div class="lpr-section-heading"><div><span class="lpr-eyebrow">RETENÇÃO</span><h2>Política de dados</h2></div><i class="fas fa-database lpr-section-icon"></i></div><div class="lpr-retention-box"><strong id="lprRetentionLarge">30 dias</strong><span>Eventos LPR confirmados e evidências seguem a política do tenant.</span></div><p class="lpr-muted">A limpeza é executada pelo ERP de forma controlada e filtrada por tenant. Eventos pendentes de sincronização não são apagados silenciosamente.</p></article>
+      </section>
+      <section class="page-card lpr-card"><div class="lpr-section-heading"><div><span class="lpr-eyebrow">AGENTES</span><h2>Saúde das máquinas locais</h2></div><button class="btn-secondary-modern" id="btnAtualizarLpr"><i class="fas fa-sync-alt"></i> Atualizar</button></div><div class="table-container lpr-table-wrapper"><table class="lpr-table"><thead><tr><th>Agente</th><th>Status</th><th>Motor</th><th>Último heartbeat</th><th>Versão</th><th>Erro</th></tr></thead><tbody id="lprAgentsBody"><tr><td colspan="6" class="lpr-empty">Carregando agentes...</td></tr></tbody></table></div></section>
+      <section class="page-card lpr-card"><div class="lpr-section-heading"><div><span class="lpr-eyebrow">CÂMERAS</span><h2>Streams conhecidos</h2></div></div><p class="lpr-muted">As câmeras aparecem aqui depois do heartbeat do agente. A senha RTSP não é armazenada nem exibida no ERP.</p><div class="table-container lpr-table-wrapper"><table class="lpr-table"><thead><tr><th>Câmera</th><th>Agente</th><th>Status</th><th>Último frame</th><th>Frames perdidos</th><th>Erro</th></tr></thead><tbody id="lprCamerasBody"><tr><td colspan="6" class="lpr-empty">Nenhuma câmera reportada.</td></tr></tbody></table></div></section>
     </div>
   </div>
 

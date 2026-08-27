@@ -7,6 +7,7 @@
  */
 
 import * as MonitoringModule from './dispositivos_monitoring.js';
+import * as LprModule from './lpr.js';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const API = window.location.origin + '/api/api_dispositivos.php';
@@ -46,6 +47,7 @@ const _state = {
     tokenAtual:            '',
     evPagina:              1,
     _listeners:            [],
+    lprInicializado:       false,
 };
 
 // ── Lifecycle: init / destroy ─────────────────────────────────────────────────
@@ -72,11 +74,13 @@ export function init() {
 export function destroy() {
     console.log('[Dispositivos] destroy()');
     _state._listeners.forEach(({ el, ev, fn }) => el.removeEventListener(ev, fn));
-    _state._listeners            = [];
+    _state._listeners = [];
+    LprModule.destroy();
     _state.fabricanteSelecionado = 'controlid';
     _state.dispositivoEditandoId = null;
     _state.tokenDispositivoId    = null;
     _state.evPagina              = 1;
+    _state.lprInicializado       = false;
     MonitoringModule.destroy();
     delete window.DispModule;
 }
@@ -91,6 +95,10 @@ function _setupTabs() {
             const tab = btn.dataset.tab;
             const el  = _el('tab-' + tab);
             if (el) el.classList.add('active');
+            if (tab === 'lpr' && !_state.lprInicializado) {
+                _state.lprInicializado = true;
+                LprModule.init();
+            }
             if (tab === 'eventos') _carregarEventos();
             if (tab === 'fila')    _carregarFila();
         });

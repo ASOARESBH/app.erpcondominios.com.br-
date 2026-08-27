@@ -7,12 +7,7 @@
         { id: 'veiculos', label: 'Veiculos', icon: 'fas fa-car', page: 'veiculos', href: 'layout-base.html?page=veiculos', order: 3 },
         { id: 'visitantes', label: 'Visitantes', icon: 'fas fa-user-friends', page: 'visitantes', href: 'layout-base.html?page=visitantes', order: 4 },
         { id: 'registro', label: 'Registro Manual', icon: 'fas fa-clipboard-list', page: 'registro', href: 'layout-base.html?page=registro', order: 5 },
-        {
-            id: 'acesso', label: 'Acesso', icon: 'fas fa-door-open', page: 'acesso', href: 'layout-base.html?page=acesso', order: 6,
-            children: [
-                { id: 'lpr', label: 'LPR', icon: 'fas fa-camera', page: 'lpr', href: 'layout-base.html?page=lpr' }
-            ]
-        },
+        { id: 'acesso', label: 'Acesso', icon: 'fas fa-door-open', page: 'acesso', href: 'layout-base.html?page=acesso', order: 6 },
         { id: 'relatorios', label: 'Relatorios', icon: 'fas fa-file-alt', page: 'relatorios', href: 'layout-base.html?page=relatorios', order: 7 },
         { id: 'financeiro', label: 'Financeiro', icon: 'fas fa-money-bill-wave', page: 'financeiro', href: 'layout-base.html?page=financeiro', order: 8 },
         { id: 'configuracao', label: 'Configuracoes', icon: 'fas fa-cog', page: 'configuracao', href: 'configuracao.html', order: 9 },
