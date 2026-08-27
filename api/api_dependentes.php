@@ -42,6 +42,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Validação matemática de CPF, compartilhada pelo cadastro e pela consulta.
+function validar_cpf_dependente(string $valor): bool {
+    $cpf = preg_replace('/\D/', '', $valor);
+    if (strlen($cpf) !== 11 || preg_match('/^(\d)\1{10}$/', $cpf)) return false;
+    $soma = 0;
+    for ($i = 0; $i < 9; $i++) $soma += (int)$cpf[$i] * (10 - $i);
+    $digito = ($soma * 10) % 11;
+    if ($digito === 10) $digito = 0;
+    if ($digito !== (int)$cpf[9]) return false;
+    $soma = 0;
+    for ($i = 0; $i < 10; $i++) $soma += (int)$cpf[$i] * (11 - $i);
+    $digito = ($soma * 10) % 11;
+    if ($digito === 10) $digito = 0;
+    return $digito === (int)$cpf[10];
+}
+
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -113,6 +129,32 @@ try {
         }
     }
     
+    // ========== VERIFICAR CPF ==========
+    if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'verificar_cpf') {
+        $cpf_consulta = preg_replace('/\D/', '', (string)($_GET['cpf'] ?? ''));
+        if (!validar_cpf_dependente($cpf_consulta)) retornar_json(false, 'CPF inválido. Confira os dígitos.');
+
+        $stmt = $conexao->prepare("SELECT id, nome FROM moradores WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? LIMIT 1");
+        if (!$stmt) throw new Exception('Falha ao preparar verificação de CPF');
+        $stmt->bind_param('is', $tenant_id, $cpf_consulta);
+        if (!$stmt->execute()) throw new Exception('Falha ao consultar CPF');
+        $morador = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($morador) retornar_json(true, 'CPF vinculado a um morador', ['existe' => true, 'tipo' => 'morador', 'nome' => $morador['nome']]);
+
+        $stmt = $conexao->prepare("SELECT id, nome_completo FROM dependentes WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? LIMIT 1");
+        if (!$stmt) throw new Exception('Falha ao preparar verificação de CPF');
+        $stmt->bind_param('is', $tenant_id, $cpf_consulta);
+        if (!$stmt->execute()) throw new Exception('Falha ao consultar CPF');
+        $dependente = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        retornar_json(true, $dependente ? 'CPF já cadastrado como dependente' : 'CPF disponível', [
+            'existe' => (bool)$dependente,
+            'tipo' => $dependente ? 'dependente' : null,
+            'nome' => $dependente['nome_completo'] ?? null
+        ]);
+    }
+
     // ========== LISTAR DEPENDENTES ==========
     if ($metodo === 'GET') {
         // Obter filtros de busca
@@ -231,7 +273,7 @@ try {
         
         $morador_id = isset($dados['morador_id']) ? (int)$dados['morador_id'] : 0;
         $nome_completo = sanitizar($conexao, $dados['nome_completo'] ?? '');
-        $cpf = sanitizar($conexao, $dados['cpf'] ?? '');
+        $cpf = preg_replace('/\D/', '', (string)($dados['cpf'] ?? ''));
         $email = sanitizar($conexao, $dados['email'] ?? '');
         $telefone = sanitizar($conexao, $dados['telefone'] ?? '');
         $celular = sanitizar($conexao, $dados['celular'] ?? '');
@@ -259,8 +301,24 @@ try {
         }
         $stmt->close();
         
-        // Verificar se CPF já existe no tenant atual.
-        $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE tenant_id = ? AND cpf = ?");
+        if (!validar_cpf_dependente($cpf)) {
+            retornar_json(false, 'CPF inválido. Confira os 11 dígitos informados');
+        }
+
+        // Um CPF de morador não pode ser reutilizado por dependente no mesmo tenant.
+        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? LIMIT 1");
+        if (!$stmt) throw new Exception('Falha ao preparar validação do CPF');
+        $stmt->bind_param('is', $tenant_id, $cpf);
+        if (!$stmt->execute()) throw new Exception('Falha ao consultar CPF');
+        $stmt->store_result();
+        if ($stmt->num_rows > 0) {
+            $stmt->close();
+            retornar_json(false, 'Este CPF já está vinculado a um morador e não pode ser cadastrado como dependente');
+        }
+        $stmt->close();
+
+        // Verificar se CPF já existe entre dependentes do tenant atual.
+        $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?");
         if (!$stmt) {
             throw new Exception("Erro ao preparar query: " . $conexao->error);
         }
@@ -305,7 +363,7 @@ try {
         
         $id = isset($dados['id']) ? (int)$dados['id'] : 0;
         $nome_completo = sanitizar($conexao, $dados['nome_completo'] ?? '');
-        $cpf = sanitizar($conexao, $dados['cpf'] ?? '');
+        $cpf = preg_replace('/\D/', '', (string)($dados['cpf'] ?? ''));
         $email = sanitizar($conexao, $dados['email'] ?? '');
         $telefone = sanitizar($conexao, $dados['telefone'] ?? '');
         $celular = sanitizar($conexao, $dados['celular'] ?? '');
@@ -318,6 +376,26 @@ try {
             retornar_json(false, "ID e nome completo são obrigatórios");
         }
         
+        if (!validar_cpf_dependente($cpf)) {
+            retornar_json(false, 'CPF inválido. Confira os 11 dígitos informados');
+        }
+
+        $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? LIMIT 1");
+        if (!$stmt) throw new Exception('Falha ao preparar validação do CPF');
+        $stmt->bind_param('is', $tenant_id, $cpf);
+        $stmt->execute();
+        $stmt->store_result();
+        if ($stmt->num_rows > 0) { $stmt->close(); retornar_json(false, 'Este CPF já está vinculado a um morador e não pode ser usado no dependente'); }
+        $stmt->close();
+
+        $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? AND id != ? LIMIT 1");
+        if (!$stmt) throw new Exception('Falha ao preparar validação de duplicidade');
+        $stmt->bind_param('isi', $tenant_id, $cpf, $id);
+        $stmt->execute();
+        $stmt->store_result();
+        if ($stmt->num_rows > 0) { $stmt->close(); retornar_json(false, 'Este CPF já está cadastrado em outro dependente'); }
+        $stmt->close();
+
         // Atualizar dependente
         $stmt = $conexao->prepare("UPDATE dependentes SET nome_completo = ?, cpf = ?, email = ?, telefone = ?, celular = ?, data_nascimento = ?, parentesco = ?, observacao = ? WHERE tenant_id = $tenant_id AND id = ?");
         if (!$stmt) {

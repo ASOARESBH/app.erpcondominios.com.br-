@@ -163,7 +163,8 @@
                 <div class="form-grid">
                     <div>
                         <label>CPF *</label>
-                        <input type="text" id="cpfDependente" required placeholder="000.000.000-00" maxlength="14">
+                        <input type="text" id="cpfDependente" required placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="off" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" aria-describedby="cpf-dependente-ajuda">
+                        <small id="cpf-dependente-ajuda" class="field-help">Digite um CPF válido para verificar o cadastro.</small>
                     </div>
                     <div>
                         <label>Email</label>

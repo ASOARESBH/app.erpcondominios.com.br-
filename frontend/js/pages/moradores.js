@@ -25,6 +25,9 @@ let _listaMoradores = [];   // cache para o select de dependentes
 let _cpfCheckTimer = null;
 let _cpfCheckSeq = 0;
 let _cpfDuplicado = false;
+let _depCpfDuplicado = false;
+let _depCpfValidado = false;
+let _depCpfCheckSeq = 0;
 
 // Paginação de moradores
 const POR_PAGINA = 25;
@@ -48,6 +51,7 @@ export function init() {
     log('Inicializando módulo...');
     _setupTabs();
     _setupValidacaoCPF();
+    _setupValidacaoCPFDependente();
     _setupForms();
     _setupFileDrop();
     _carregarUnidades();
@@ -800,8 +804,82 @@ function _buscarDependentes() {
     _carregarDependentes(1);
 }
 
-function _salvarDependente() {
+async function _consultarCPFDependente(campo, mostrarAlerta = true) {
+    const cpf = campo?.value || '';
+    _depCpfValidado = false;
+    if (!validarCPF(cpf)) {
+        _depCpfDuplicado = false;
+        _marcarCPF(campo, cpf ? 'CPF inválido. Confira os dígitos.' : 'CPF é obrigatório.');
+        return false;
+    }
+    const seq = ++_depCpfCheckSeq;
+    campo.dataset.cpfChecking = '1';
+    _marcarCPF(campo, 'Consultando CPF...');
+    try {
+        const resposta = await fetch(`${API_DEPENDENTES}?acao=verificar_cpf&cpf=${encodeURIComponent(cpf)}`, { credentials: 'include' });
+        const data = await resposta.json();
+        if (seq !== _depCpfCheckSeq) return false;
+        if (!data?.sucesso) {
+            _depCpfDuplicado = false;
+            _marcarCPF(campo, data?.mensagem || 'Não foi possível validar o CPF.');
+            return false;
+        }
+        const info = data.dados || {};
+        _depCpfDuplicado = Boolean(info.existe);
+        if (_depCpfDuplicado) {
+            const mensagem = info.tipo === 'morador'
+                ? 'Este CPF já está vinculado a um morador.'
+                : 'Este CPF já está cadastrado como dependente.';
+            _marcarCPF(campo, mensagem);
+            if (mostrarAlerta) _toast(`Atenção: ${mensagem}`, 'error');
+            return false;
+        }
+        _depCpfValidado = true;
+        _marcarCPF(campo, '');
+        return true;
+    } catch (erro) {
+        _depCpfDuplicado = false;
+        _marcarCPF(campo, 'Não foi possível consultar o CPF. Tente novamente.');
+        log('Falha ao consultar CPF do dependente:', erro);
+        return false;
+    } finally {
+        if (campo) delete campo.dataset.cpfChecking;
+    }
+}
+
+function _setupValidacaoCPFDependente() {
+    const campo = document.getElementById('cpfDependente');
+    if (!campo || campo.dataset.cpfReady === '1') return;
+    campo.dataset.cpfReady = '1';
+    campo.inputMode = 'numeric';
+    campo.addEventListener('input', () => {
+        campo.value = formatarCPF(campo.value);
+        _depCpfValidado = false;
+        _depCpfDuplicado = false;
+        _depCpfCheckSeq++;
+        if (!campo.value) _marcarCPF(campo, 'CPF é obrigatório.');
+        else if (campo.value.replace(/\D/g, '').length < 11) _marcarCPF(campo, 'Digite os 11 dígitos do CPF.');
+        else if (!validarCPF(campo.value)) _marcarCPF(campo, 'CPF inválido. Confira os dígitos.');
+        else _marcarCPF(campo, '');
+    });
+    campo.addEventListener('blur', () => { _consultarCPFDependente(campo, true); });
+}
+
+async function _salvarDependente() {
     log('Salvando novo dependente...');
+    const campoCPF = document.getElementById('cpfDependente');
+    const cpf = campoCPF?.value || '';
+    if (!validarCPF(cpf)) {
+        _marcarCPF(campoCPF, 'CPF inválido. Informe um CPF válido.');
+        _toast('Informe um CPF válido antes de salvar o dependente.', 'error');
+        campoCPF?.focus();
+        return;
+    }
+    if (_depCpfDuplicado || !_depCpfValidado || campoCPF?.dataset.cpfChecking === '1') {
+        _toast('Valide o CPF ao sair do campo antes de salvar o dependente.', 'error');
+        campoCPF?.focus();
+        return;
+    }
     const dados = {
         morador_id:    document.getElementById('moradorSelecionado')?.value,
         nome_completo: document.getElementById('nomeDependente')?.value?.trim(),
