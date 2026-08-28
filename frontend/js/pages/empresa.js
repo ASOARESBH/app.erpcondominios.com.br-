@@ -8,7 +8,8 @@ const state = {
     administradoras: [],
     layouts: [],
     layoutIdsConfigurados: new Set(),
-    administradoraConfiguradaId: 0
+    administradoraConfiguradaId: 0,
+    dashboardWidgets: []
 };
 
 export function init() {
@@ -17,6 +18,7 @@ export function init() {
     bindEvents();
     carregarDados();
     carregarLayoutAdministradora();
+    carregarDashboardConfig();
 }
 
 export function destroy() {
@@ -54,7 +56,12 @@ function bindDOM() {
         layoutsLista: document.getElementById('empresa-layouts-lista'),
         layoutsCount: document.getElementById('empresa-layouts-count'),
         administradoraStatus: document.getElementById('empresa-administradora-status'),
-        btnSalvarLayoutAdministradora: document.getElementById('btnSalvarLayoutAdministradora')
+        btnSalvarLayoutAdministradora: document.getElementById('btnSalvarLayoutAdministradora'),
+        dashboardPane: document.getElementById('empresa-dashboard-pane'),
+        dashboardLista: document.getElementById('empresa-dashboard-lista'),
+        dashboardStatus: document.getElementById('empresa-dashboard-status'),
+        btnSalvarDashboard: document.getElementById('btnSalvarDashboard'),
+        btnRestaurarDashboard: document.getElementById('btnRestaurarDashboard')
     };
 }
 
@@ -77,6 +84,8 @@ function bindEvents() {
     state.dom.tabs.forEach((tab) => tab.addEventListener('click', () => alternarAbaEmpresa(tab.dataset.empresaTab)));
     if (state.dom.administradoraSelect) state.dom.administradoraSelect.addEventListener('change', renderizarLayoutsAdministradora);
     if (state.dom.btnSalvarLayoutAdministradora) state.dom.btnSalvarLayoutAdministradora.addEventListener('click', salvarLayoutAdministradora);
+    if (state.dom.btnSalvarDashboard) state.dom.btnSalvarDashboard.addEventListener('click', salvarDashboardConfig);
+    if (state.dom.btnRestaurarDashboard) state.dom.btnRestaurarDashboard.addEventListener('click', restaurarDashboardConfig);
 }
 
 function renderizarPreviewLogo(url) {
@@ -170,11 +179,10 @@ async function carregarDados() {
 }
 
 async function alternarAbaEmpresa(aba) {
-    const mostrarDados = aba !== 'administradora';
-    if (state.dom.dadosPane) state.dom.dadosPane.hidden = !mostrarDados;
-    if (state.dom.administradoraPane) state.dom.administradoraPane.hidden = mostrarDados;
-    state.dom.tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.empresaTab === (mostrarDados ? 'dados' : 'administradora')));
-    console.debug('[Empresa] Aba alterada.', { aba: mostrarDados ? 'dados' : 'administradora' });
+    const panes = { dados: state.dom.dadosPane, administradora: state.dom.administradoraPane, dashboard: state.dom.dashboardPane };
+    Object.entries(panes).forEach(([nome, pane]) => { if (pane) pane.hidden = nome !== aba; });
+    state.dom.tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.empresaTab === aba));
+    console.debug('[Empresa] Aba alterada.', { aba });
 }
 
 function escaparHtml(valor) {
@@ -411,5 +419,72 @@ function limparFormulario() {
     }
     if (state.dom.logoPreview) {
         state.dom.logoPreview.innerHTML = '<i class="fas fa-image" style="font-size: 2.5rem; color: #cbd5e1;"></i>';
+    }
+}
+
+function renderizarStatusDashboard(mensagem, tipo = 'info') {
+    const destino = state.dom.dashboardStatus;
+    if (!destino) return;
+    destino.hidden = !mensagem;
+    destino.className = `empresa-administradora-status ${tipo}`;
+    destino.textContent = mensagem || '';
+}
+
+function renderizarDashboardConfig() {
+    const destino = state.dom.dashboardLista;
+    if (!destino) return;
+    const grupos = state.dashboardWidgets.reduce((acc, widget) => {
+        (acc[widget.modulo_key] ||= { nome: widget.modulo_nome, icone: widget.modulo_icone, widgets: [] }).widgets.push(widget);
+        return acc;
+    }, {});
+    destino.innerHTML = Object.values(grupos).map((grupo) => `
+        <section class="empresa-dashboard-modulo">
+            <div class="empresa-dashboard-modulo-head"><h3><i class="${escaparHtml(grupo.icone)}"></i> ${escaparHtml(grupo.nome)}</h3><label class="empresa-dashboard-toggle"><input type="checkbox" data-dashboard-modulo="${escaparHtml(grupo.nome)}" checked><span>Ativar módulo</span></label></div>
+            <div class="empresa-dashboard-widgets">${grupo.widgets.map((widget) => `<label class="empresa-dashboard-widget"><input type="checkbox" data-dashboard-widget="${escaparHtml(widget.widget_key)}" ${Number(widget.habilitado) ? 'checked' : ''}><span><strong>${escaparHtml(widget.widget_nome)}</strong><small>${escaparHtml(widget.descricao || 'Widget informativo')}</small><em>${escaparHtml(widget.widget_tipo)} · ${escaparHtml(widget.tamanho_padrao)}</em></span></label>`).join('')}</div>
+        </section>`).join('');
+    destino.querySelectorAll('[data-dashboard-modulo]').forEach((toggle) => toggle.addEventListener('change', () => {
+        const modulo = toggle.closest('.empresa-dashboard-modulo');
+        modulo?.querySelectorAll('[data-dashboard-widget]').forEach((widget) => { widget.checked = toggle.checked; });
+    }));
+    destino.querySelectorAll('[data-dashboard-widget]').forEach((widget) => widget.addEventListener('change', () => {
+        const modulo = widget.closest('.empresa-dashboard-modulo');
+        const todos = [...modulo.querySelectorAll('[data-dashboard-widget]')];
+        const mestre = modulo.querySelector('[data-dashboard-modulo]');
+        if (mestre) mestre.checked = todos.some((item) => item.checked);
+    }));
+}
+
+async function carregarDashboardConfig() {
+    try {
+        const response = await fetch('/api/api_dashboard_personalizacao.php?acao=empresa_config', { credentials: 'include' });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || `Erro HTTP ${response.status}`);
+        state.dashboardWidgets = data.dados?.widgets || [];
+        renderizarDashboardConfig();
+        renderizarStatusDashboard('A configuração define quais widgets estarão disponíveis para os usuários.', 'info');
+    } catch (error) {
+        console.error('[Empresa] Erro ao carregar Dashboard:', error);
+        renderizarStatusDashboard(error.message, 'error');
+        if (state.dom.dashboardLista) state.dom.dashboardLista.innerHTML = '<p class="empresa-layouts-vazio">Não foi possível carregar o catálogo. Execute a migration do Dashboard e tente novamente.</p>';
+    }
+}
+
+function restaurarDashboardConfig() {
+    state.dom.dashboardLista?.querySelectorAll('[data-dashboard-widget]').forEach((item) => { item.checked = true; });
+    state.dom.dashboardLista?.querySelectorAll('[data-dashboard-modulo]').forEach((item) => { item.checked = true; });
+    renderizarStatusDashboard('Padrão restaurado localmente. Clique em Salvar Dashboard para confirmar.', 'info');
+}
+
+async function salvarDashboardConfig() {
+    const widgets = [...(state.dom.dashboardLista?.querySelectorAll('[data-dashboard-widget]') || [])].map((input) => ({ widget_key: input.dataset.dashboardWidget, habilitado: input.checked ? 1 : 0 }));
+    try {
+        const response = await fetch('/api/api_dashboard_personalizacao.php?acao=empresa_config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ widgets }) });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || `Erro HTTP ${response.status}`);
+        renderizarStatusDashboard('Whitelist do Dashboard salva com sucesso.', 'success');
+        mostrarAlerta('Configuração do Dashboard salva.', 'success');
+    } catch (error) {
+        renderizarStatusDashboard(error.message, 'error');
+        mostrarAlerta(`Erro ao salvar Dashboard: ${error.message}`, 'error');
     }
 }

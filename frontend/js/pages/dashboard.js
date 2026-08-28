@@ -24,6 +24,7 @@ function log(msg, data = null) {
 export function init() {
     log('Inicializando Dashboard...');
 
+    carregarDashboardPersonalizado();
     carregarChamados();
     _osInterval = setInterval(carregarChamados, 30000);
 
@@ -362,5 +363,103 @@ function escapeHtml(text) {
         '"': '&quot;',
         "'": '&#039;'
     };
-    return text.replace(/[&<>"']/g, m => map[m]);
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+// ========== DASHBOARD PERSONALIZADO ==========
+const DASH_PERSONAL_API = '../api/api_dashboard_personalizacao.php';
+let _dashboardWidgets = [];
+let _dashboardPersonalizadoAtivo = false;
+
+async function carregarDashboardPersonalizado() {
+    try {
+        const response = await fetch(`${DASH_PERSONAL_API}?acao=usuario_config`, { credentials: 'include' });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || 'Configuração indisponível');
+        _dashboardWidgets = data.dados?.widgets || [];
+        _dashboardPersonalizadoAtivo = true;
+        document.querySelectorAll('[id^="dashboard-legado-"]').forEach(el => { el.hidden = true; });
+        document.getElementById('dashboard-personalizado').hidden = false;
+        renderizarDashboardWidgets();
+        configurarEventosDashboardPersonalizado();
+    } catch (error) {
+        log('Dashboard personalizado indisponível; mantendo dashboard legado.', error.message);
+    }
+}
+
+function renderizarDashboardWidgets() {
+    const grid = document.getElementById('dashboard-widgets-grid');
+    const vazio = document.getElementById('dashboard-vazio');
+    if (!grid || !vazio) return;
+    const ativos = _dashboardWidgets.filter(widget => Number(widget.habilitado) === 1);
+    grid.innerHTML = '';
+    vazio.hidden = ativos.length > 0;
+    ativos.forEach(widget => {
+        const card = document.createElement('article');
+        card.className = `dashboard-widget-card dashboard-widget-${escapeHtml(widget.widget_tipo || 'kpi')}`;
+        card.dataset.widgetKey = widget.widget_key;
+        card.innerHTML = `<div class="dashboard-widget-card-head"><span><i class="${escapeHtml(widget.modulo_icone || 'fas fa-chart-line')}"></i> ${escapeHtml(widget.modulo_nome || '')}</span><small>${escapeHtml(widget.widget_tipo || '')}</small></div><h3>${escapeHtml(widget.widget_nome || '')}</h3><div class="dashboard-widget-value"><i class="fas fa-spinner fa-spin"></i></div><p>${escapeHtml(widget.descricao || '')}</p>`;
+        grid.appendChild(card);
+        carregarDadosWidget(card, widget);
+    });
+}
+
+async function carregarDadosWidget(card, widget) {
+    const destino = card.querySelector('.dashboard-widget-value');
+    try {
+        if (widget.widget_key === 'os_abertas') {
+            const response = await fetch(`${API_OS}?acao=dashboard_kpis`, { credentials: 'include' });
+            const data = await response.json();
+            if (data.sucesso) { destino.textContent = data.dados?.abertos ?? 0; return; }
+        }
+        const response = await fetch(`${DASH_PERSONAL_API}?acao=widget_data&widget_key=${encodeURIComponent(widget.widget_key)}`, { credentials: 'include' });
+        const data = await response.json();
+        if (data.sucesso && data.dados?.disponivel) destino.textContent = Number(data.dados.total || 0).toLocaleString('pt-BR');
+        else destino.innerHTML = `<span class="dashboard-widget-empty"><i class="fas fa-inbox"></i> ${escapeHtml(data.dados?.mensagem || 'Nenhum dado disponível ainda.')}</span>`;
+    } catch (error) {
+        destino.innerHTML = '<span class="dashboard-widget-empty"><i class="fas fa-triangle-exclamation"></i> Não foi possível carregar.</span>';
+    }
+}
+
+function configurarEventosDashboardPersonalizado() {
+    document.getElementById('btnPersonalizarDashboard')?.addEventListener('click', () => {
+        const editor = document.getElementById('dashboard-editor');
+        if (!editor) return;
+        editor.hidden = false;
+        const lista = document.getElementById('dashboard-editor-lista');
+        lista.innerHTML = _dashboardWidgets.map((widget, index) => `<label class="dashboard-editor-item" draggable="true" data-editor-widget="${escapeHtml(widget.widget_key)}"><input type="checkbox" ${Number(widget.habilitado) ? 'checked' : ''}><span>${escapeHtml(widget.widget_nome)}<small>${escapeHtml(widget.modulo_nome)}</small></span><b title="Arraste para reordenar">☷</b></label>`).join('');
+        habilitarOrdenacaoDashboard(lista);
+    });
+    document.getElementById('btnCancelarPersonalizacao')?.addEventListener('click', () => { const el = document.getElementById('dashboard-editor'); if (el) el.hidden = true; });
+    document.getElementById('btnSalvarPreferenciasDashboard')?.addEventListener('click', salvarPreferenciasDashboard);
+    document.getElementById('btnRestaurarPreferenciasDashboard')?.addEventListener('click', async () => { _dashboardWidgets.forEach(w => { w.habilitado = 1; }); renderizarDashboardWidgets(); await salvarPreferenciasDashboard(); });
+}
+
+function habilitarOrdenacaoDashboard(lista) {
+    if (!lista) return;
+    let arrastado = null;
+    lista.querySelectorAll('[data-editor-widget]').forEach(item => {
+        item.addEventListener('dragstart', () => { arrastado = item; item.classList.add('arrastando'); });
+        item.addEventListener('dragend', () => { arrastado = null; item.classList.remove('arrastando'); });
+        item.addEventListener('dragover', event => { event.preventDefault(); if (arrastado && arrastado !== item) item.before(arrastado); });
+    });
+}
+
+async function salvarPreferenciasDashboard() {
+    const lista = document.getElementById('dashboard-editor-lista');
+    if (lista) {
+        const ordem = [...lista.querySelectorAll('[data-editor-widget]')];
+        _dashboardWidgets.forEach(widget => {
+            const item = ordem.find(el => el.dataset.editorWidget === widget.widget_key);
+            widget.habilitado = item?.querySelector('input')?.checked ? 1 : 0;
+            widget.posicao = item ? ordem.indexOf(item) : widget.posicao;
+        });
+    }
+    try {
+        const response = await fetch(`${DASH_PERSONAL_API}?acao=usuario_config`, { method: 'POST', headers: {'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ widgets: _dashboardWidgets }) });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || 'Não foi possível salvar');
+        document.getElementById('dashboard-editor').hidden = true;
+        renderizarDashboardWidgets();
+    } catch (error) { console.error('[Dashboard] Erro ao salvar preferências:', error); }
 }

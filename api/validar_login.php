@@ -27,10 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Incluir arquivo de configuração
 require_once 'config.php';
+require_once __DIR__ . '/helpers/i18n_helper.php';
 
 // Verificar se a requisição é POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    retornar_json(false, 'Método não permitido');
+    retornar_json(false, erp_t('auth.error.method_not_allowed'));
 }
 
 // Receber dados do formulário (suporta POST e JSON)
@@ -44,7 +45,7 @@ if (strpos($content_type, 'application/json') !== false) {
     $input_data = json_decode($json_input, true);
     
     if (json_last_error() !== JSON_ERROR_NONE) {
-        retornar_json(false, 'JSON inválido');
+        retornar_json(false, erp_t('auth.error.invalid_json'));
     }
 } else {
     // Receber POST tradicional
@@ -56,12 +57,12 @@ $senha = isset($input_data['senha']) ? trim($input_data['senha']) : '';
 
 // Validar campos obrigatórios
 if (empty($email) || empty($senha)) {
-    retornar_json(false, 'Preencha todos os campos!');
+    retornar_json(false, erp_t('auth.required'));
 }
 
 // Validar formato de e-mail
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    retornar_json(false, 'E-mail inválido!');
+    retornar_json(false, erp_t('auth.error.invalid_email'));
 }
 
 try {
@@ -82,7 +83,7 @@ try {
         // Registrar tentativa de login falha
         registrar_log('login_falha', "Tentativa de login com e-mail não cadastrado: {$email}");
         
-        retornar_json(false, 'E-mail ou senha incorretos!');
+        retornar_json(false, erp_t('auth.invalid'));
     }
     
     // Obter dados do usuário
@@ -96,7 +97,7 @@ try {
         // Registrar tentativa de login com usuário inativo
         registrar_log('login_falha', "Tentativa de login com usuário inativo: {$email}", $usuario['nome']);
         
-        retornar_json(false, 'Usuário inativo. Entre em contato com o administrador.');
+        retornar_json(false, erp_t('auth.error.inactive'));
     }
     
     // Verificar senha
@@ -109,7 +110,7 @@ try {
         // Registrar tentativa de login com senha incorreta
         registrar_log('login_falha', "Tentativa de login com senha incorreta: {$email}", $usuario['nome']);
         
-        retornar_json(false, 'E-mail ou senha incorretos!');
+        retornar_json(false, erp_t('auth.invalid'));
     }
     
     // Login bem-sucedido - criar sessão
@@ -138,7 +139,7 @@ try {
     registrar_log('login_sucesso', "Login realizado com sucesso: {$email}", $usuario['nome']);
     
     // Retornar sucesso
-    retornar_json(true, 'Login realizado com sucesso!', array(
+    retornar_json(true, erp_t('auth.success'), array(
         'nome' => $usuario['nome'],
         'permissao' => $usuario['permissao']
     ));
@@ -148,7 +149,7 @@ try {
     error_log("Stack trace: " . $e->getTraceAsString());
     error_log("POST data: " . print_r($_POST, true));
     
-    retornar_json(false, 'Erro ao processar login. Tente novamente.', [
+    retornar_json(false, erp_t('common.error'), [
         'erro_tecnico' => $e->getMessage(),
         'timestamp' => date('Y-m-d H:i:s')
     ]);

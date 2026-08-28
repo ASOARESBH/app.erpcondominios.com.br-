@@ -250,3 +250,20 @@
     .page-empresa .cnpj-search-row button { width:100%; }
     .page-empresa .logo-section { flex-wrap:wrap; gap:1rem !important; }
 }
+
+/* Dashboard personalizável — configuração por condomínio */
+.empresa-dashboard-lista { display:grid; gap:1rem; margin-top:1.25rem; }
+.empresa-dashboard-modulo { border:1px solid #e2e8f0; border-radius:12px; background:#fff; overflow:hidden; }
+.empresa-dashboard-modulo-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.2rem; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+.empresa-dashboard-modulo-head h3 { margin:0; color:#1e293b; font-size:1rem; display:flex; gap:.55rem; align-items:center; }
+.empresa-dashboard-modulo-head h3 i { color:#4f46e5; }
+.empresa-dashboard-toggle { display:flex; align-items:center; gap:.45rem; font-size:.78rem; color:#475569; font-weight:600; }
+.empresa-dashboard-widgets { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:.75rem; padding:1rem; }
+.empresa-dashboard-widget { display:flex; align-items:flex-start; gap:.7rem; padding:.85rem; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; transition:.2s ease; }
+.empresa-dashboard-widget:hover { border-color:#a5b4fc; background:#f8faff; }
+.empresa-dashboard-widget > input,.empresa-dashboard-toggle input { accent-color:#4f46e5; margin-top:.2rem; }
+.empresa-dashboard-widget span { display:flex; flex-direction:column; gap:.2rem; }
+.empresa-dashboard-widget strong { color:#1e293b; font-size:.86rem; }
+.empresa-dashboard-widget small { color:#64748b; font-size:.75rem; line-height:1.4; }
+.empresa-dashboard-widget em { color:#6366f1; font-size:.68rem; font-style:normal; text-transform:uppercase; font-weight:700; letter-spacing:.04em; }
+@media(max-width:600px) { .empresa-dashboard-modulo-head { align-items:flex-start; flex-direction:column; } .empresa-dashboard-widgets { grid-template-columns:1fr; } }

@@ -379,8 +379,9 @@ if ($metodo === 'GET') {
     $parametros = [$tenant_id];
     if ($busca !== '') {
         $buscaLike = '%' . $busca . '%';
-        $sql .= " AND (v.nome_completo LIKE ? OR v.documento LIKE ? OR v.telefone_contato LIKE ? OR v.placa_veiculo LIKE ?)";
-        $tipos .= 'ssss';
+        $sql .= " AND (v.nome_completo LIKE ? OR v.documento LIKE ? OR v.telefone_contato LIKE ? OR v.celular LIKE ? OR v.placa_veiculo LIKE ?)";
+        $tipos .= 'sssss';
+        $parametros[] = $buscaLike;
         $parametros[] = $buscaLike;
         $parametros[] = $buscaLike;
         $parametros[] = $buscaLike;
