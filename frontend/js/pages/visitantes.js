@@ -22,6 +22,7 @@ let salvando          = false;
 let relatorioAnaliticoCache = null;
 let configuracaoCampos = {};
 let visitantesPaginacao = { total: 0, pagina: 1, limite: 50, total_paginas: 0 };
+let visitantesBuscaAtual = '';
 
 export async function init() {
     console.log('[Visitantes] Inicializando v3...');
@@ -152,8 +153,8 @@ function _ativarAba(tab, { atualizarDados = true } = {}) {
     return true;
 }
 
-function _atualizarKpis(lista) {
-    const total   = lista.length;
+function _atualizarKpis(lista, totalConhecido = null) {
+    const total   = Number.isFinite(Number(totalConhecido)) ? Number(totalConhecido) : lista.length;
     const ativos  = lista.filter(v => v.ativo == 1 || v.ativo === true).length;
     const comFoto = lista.filter(v => v.foto).length;
     const comDoc  = lista.filter(v => v.documento_arquivo).length;
@@ -522,13 +523,14 @@ async function _carregarVisitantes(termoBusca = '', pagina = 1) {
             total_paginas: 1
         } : (data.dados || {});
         visitantesCache = Array.isArray(dados.itens) ? dados.itens : [];
+        visitantesBuscaAtual = termo;
         visitantesPaginacao = {
             total: Number(dados.total) || 0,
             pagina: Number(dados.pagina) || 1,
             limite: Number(dados.limite) || 50,
             total_paginas: Number(dados.total_paginas) || 0
         };
-        _atualizarKpis(visitantesCache);
+        _atualizarKpis(visitantesCache, visitantesPaginacao.total);
         _renderVisitantes(visitantesCache);
         _renderPaginacaoVisitantes();
     } catch (error) {
@@ -634,7 +636,7 @@ async function _buscarVisitantes() {
 async function _irPaginaVisitantes(pagina) {
     const paginaAlvo = Math.max(1, Number(pagina) || 1);
     if (paginaAlvo === visitantesPaginacao.pagina || paginaAlvo > visitantesPaginacao.total_paginas) return;
-    const termo = document.getElementById('searchVisitante')?.value?.trim() || '';
+    const termo = visitantesBuscaAtual || document.getElementById('searchVisitante')?.value?.trim() || '';
     await _carregarVisitantes(termo, paginaAlvo);
 }
 
@@ -647,7 +649,14 @@ function _renderPaginacaoVisitantes() {
     const fim = Math.min(pagina * limite, total);
     const anterior = pagina > 1 ? `<button type="button" class="btn-secondary-modern" data-pagina="${pagina - 1}"><i class="fas fa-chevron-left"></i> Anterior</button>` : '';
     const proxima = pagina < totalPaginas ? `<button type="button" class="btn-secondary-modern" data-pagina="${pagina + 1}">Próxima <i class="fas fa-chevron-right"></i></button>` : '';
-    container.innerHTML = `<span>Exibindo ${inicio}–${fim} de ${total} visitantes</span><div class="visitantes-paginacao-acoes">${anterior}${proxima}</div>`;
+    const paginas = [];
+    const inicioPagina = Math.max(1, Math.min(pagina - 2, totalPaginas - 4));
+    const fimPagina = Math.min(totalPaginas, inicioPagina + 4);
+    for (let numero = inicioPagina; numero <= fimPagina; numero += 1) {
+        paginas.push(`<button type="button" class="btn-secondary-modern ${numero === pagina ? 'pagina-atual' : ''}" data-pagina="${numero}" ${numero === pagina ? 'disabled' : ''}>${numero}</button>`);
+    }
+    const termoInfo = visitantesBuscaAtual ? ` para “${_esc(visitantesBuscaAtual)}”` : '';
+    container.innerHTML = `<span>Exibindo ${inicio}–${fim} de ${total} visitantes${termoInfo}</span><div class="visitantes-paginacao-acoes">${anterior}${paginas.join('')}${proxima}</div>`;
     container.style.display = 'flex';
     container.querySelectorAll('[data-pagina]').forEach(btn => btn.addEventListener('click', () => _irPaginaVisitantes(btn.dataset.pagina)));
 }
@@ -869,7 +878,7 @@ async function _salvarVisitante() {
 
         _mostrarAlerta('success', modoEdicao ? 'Visitante atualizado com sucesso!' : 'Visitante cadastrado com sucesso!');
         _resetForm();
-        await _carregarVisitantes();
+        await _carregarVisitantes(visitantesBuscaAtual, visitantesPaginacao.pagina);
 
     } catch (error) {
         console.error('[Visitantes] Erro ao salvar:', error);
@@ -985,7 +994,7 @@ async function _excluirVisitante(id) {
             return;
         }
         if (modoEdicao && Number(visitanteIdEdicao) === Number(id)) _resetForm();
-        await _carregarVisitantes();
+        await _carregarVisitantes(visitantesBuscaAtual, visitantesPaginacao.pagina);
     } catch (error) {
         console.error('[Visitantes] Erro ao excluir:', error);
         _mostrarAlerta('error', 'Erro de conexão ao excluir visitante.');
