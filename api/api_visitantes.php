@@ -387,8 +387,31 @@ if ($metodo === 'GET') {
         $parametros[] = $buscaLike;
         $parametros[] = $buscaLike;
     }
-    $sql .= " ORDER BY v.nome_completo ASC";
+        // Paginação server-side: o usuário dispara a busca, mas nunca transfere a base inteira.
+    $pagina = max(1, (int)($_GET['pagina'] ?? 1));
+    $limite = min(100, max(10, (int)($_GET['limite'] ?? 50)));
+    $offset = ($pagina - 1) * $limite;
 
+    $sqlCount = "SELECT COUNT(*) AS total FROM visitantes v WHERE v.tenant_id = ?";
+    $tiposCount = 'i';
+    $parametrosCount = [$tenant_id];
+    if ($busca !== '') {
+        $sqlCount .= " AND (v.nome_completo LIKE ? OR v.documento LIKE ? OR v.telefone_contato LIKE ? OR v.celular LIKE ? OR v.placa_veiculo LIKE ?)";
+        $tiposCount .= 'sssss';
+        $parametrosCount = array_merge($parametrosCount, array_fill(0, 5, $buscaLike));
+    }
+    $stmtCount = $conexao->prepare($sqlCount);
+    if (!$stmtCount) retornar_json(false, 'Não foi possível preparar a contagem de visitantes.');
+    $stmtCount->bind_param($tiposCount, ...$parametrosCount);
+    $stmtCount->execute();
+    $linhaCount = $stmtCount->get_result()->fetch_assoc();
+    $total = (int)($linhaCount['total'] ?? 0);
+    $stmtCount->close();
+
+    $sql .= " ORDER BY v.nome_completo ASC LIMIT ?, ?";
+    $tipos .= 'ii';
+    $parametros[] = $offset;
+    $parametros[] = $limite;
     $stmt = $conexao->prepare($sql);
     if (!$stmt) retornar_json(false, 'Não foi possível preparar a listagem de visitantes.');
     $stmt->bind_param($tipos, ...$parametros);
@@ -399,8 +422,13 @@ if ($metodo === 'GET') {
         $visitantes[] = $row;
     }
     $stmt->close();
-
-    retornar_json(true, "Visitantes listados com sucesso", $visitantes);
+    retornar_json(true, "Visitantes listados com sucesso", [
+        'itens' => $visitantes,
+        'total' => $total,
+        'pagina' => $pagina,
+        'limite' => $limite,
+        'total_paginas' => $total > 0 ? (int)ceil($total / $limite) : 0
+    ]);
 }
 
 // ========== CRIAR VISITANTE ==========
