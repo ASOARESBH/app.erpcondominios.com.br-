@@ -21,6 +21,7 @@ let documentoExistente = false;
 let salvando          = false;
 let relatorioAnaliticoCache = null;
 let configuracaoCampos = {};
+let visitantesPaginacao = { total: 0, pagina: 1, limite: 50, total_paginas: 0 };
 
 export async function init() {
     console.log('[Visitantes] Inicializando v3...');
@@ -37,6 +38,7 @@ export async function init() {
 
     window.VisitantesPage = {
         buscar:         _buscarVisitantes,
+        irPagina:       _irPaginaVisitantes,
         editar:         _editarVisitante,
         excluir:        _excluirVisitante,
         cancelarEdicao: _resetForm,
@@ -492,7 +494,7 @@ function _setupActions() {
 }
 
 // ===== CARREGAR VISITANTES =====
-async function _carregarVisitantes(termoBusca = '') {
+async function _carregarVisitantes(termoBusca = '', pagina = 1) {
     const tbody = document.querySelector('#tabelaVisitantes tbody');
     _setLoading(true);
 
@@ -500,6 +502,8 @@ async function _carregarVisitantes(termoBusca = '') {
         const params = new URLSearchParams();
         const termo = String(termoBusca || '').trim();
         if (termo) params.set('busca', termo);
+        params.set('pagina', String(Math.max(1, Number(pagina) || 1)));
+        params.set('limite', '50');
         const data = await _requisitarJsonComRetry(`${API_VISITANTES}?${params.toString()}`, {
             credentials: 'include'
         });
@@ -510,9 +514,23 @@ async function _carregarVisitantes(termoBusca = '') {
             return;
         }
 
-        visitantesCache = Array.isArray(data.dados) ? data.dados : [];
+        const dados = Array.isArray(data.dados) ? {
+            itens: data.dados,
+            total: data.dados.length,
+            pagina: 1,
+            limite: data.dados.length || 50,
+            total_paginas: 1
+        } : (data.dados || {});
+        visitantesCache = Array.isArray(dados.itens) ? dados.itens : [];
+        visitantesPaginacao = {
+            total: Number(dados.total) || 0,
+            pagina: Number(dados.pagina) || 1,
+            limite: Number(dados.limite) || 50,
+            total_paginas: Number(dados.total_paginas) || 0
+        };
         _atualizarKpis(visitantesCache);
         _renderVisitantes(visitantesCache);
+        _renderPaginacaoVisitantes();
     } catch (error) {
         const detalhe = error?.message || 'Falha desconhecida';
         console.error('[Visitantes][Carga] Falha ao carregar visitantes:', {
@@ -523,6 +541,8 @@ async function _carregarVisitantes(termoBusca = '') {
         });
 
         const indisponivel = /^HTTP 503\b/.test(detalhe);
+            visitantesPaginacao = { total: 0, pagina: 1, limite: 50, total_paginas: 0 };
+        _renderPaginacaoVisitantes();
         _renderMensagemTabela(
             tbody,
             indisponivel
@@ -607,8 +627,29 @@ async function _buscarVisitantes() {
     const botao = document.getElementById('btnBuscarVisitante');
     const termo = input?.value?.trim() || '';
     if (botao) { botao.disabled = true; botao.dataset.originalText = botao.innerHTML; botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...'; }
-    try { await _carregarVisitantes(termo); }
+    try { await _carregarVisitantes(termo, 1); }
     finally { if (botao) { botao.disabled = false; botao.innerHTML = botao.dataset.originalText || '<i class="fas fa-search"></i> Buscar'; } }
+}
+
+async function _irPaginaVisitantes(pagina) {
+    const paginaAlvo = Math.max(1, Number(pagina) || 1);
+    if (paginaAlvo === visitantesPaginacao.pagina || paginaAlvo > visitantesPaginacao.total_paginas) return;
+    const termo = document.getElementById('searchVisitante')?.value?.trim() || '';
+    await _carregarVisitantes(termo, paginaAlvo);
+}
+
+function _renderPaginacaoVisitantes() {
+    const container = document.getElementById('paginacaoVisitantes');
+    if (!container) return;
+    const { total, pagina, limite, total_paginas: totalPaginas } = visitantesPaginacao;
+    if (!total || !totalPaginas) { container.innerHTML = ''; container.style.display = 'none'; return; }
+    const inicio = ((pagina - 1) * limite) + 1;
+    const fim = Math.min(pagina * limite, total);
+    const anterior = pagina > 1 ? `<button type="button" class="btn-secondary-modern" data-pagina="${pagina - 1}"><i class="fas fa-chevron-left"></i> Anterior</button>` : '';
+    const proxima = pagina < totalPaginas ? `<button type="button" class="btn-secondary-modern" data-pagina="${pagina + 1}">Próxima <i class="fas fa-chevron-right"></i></button>` : '';
+    container.innerHTML = `<span>Exibindo ${inicio}–${fim} de ${total} visitantes</span><div class="visitantes-paginacao-acoes">${anterior}${proxima}</div>`;
+    container.style.display = 'flex';
+    container.querySelectorAll('[data-pagina]').forEach(btn => btn.addEventListener('click', () => _irPaginaVisitantes(btn.dataset.pagina)));
 }
 
 function _filtrarVisitantes(termo) {
