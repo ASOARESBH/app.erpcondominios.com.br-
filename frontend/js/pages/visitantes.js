@@ -33,7 +33,7 @@ export async function init() {
     _setupRelatorios();
     _resetForm();
     await _carregarConfiguracaoCampos();
-    _carregarVisitantes();
+    _renderMensagemTabela(document.querySelector('#tabelaVisitantes tbody'), 'Informe um termo e clique em Buscar para consultar os visitantes.');
 
     window.VisitantesPage = {
         buscar:         _buscarVisitantes,
@@ -143,7 +143,7 @@ function _ativarAba(tab, { atualizarDados = true } = {}) {
         item.classList.toggle('active', item === content);
     });
 
-    if (atualizarDados && tab === 'listagem') _carregarVisitantes();
+    if (atualizarDados && tab === 'listagem') _renderMensagemTabela(document.querySelector('#tabelaVisitantes tbody'), 'Informe um termo e clique em Buscar para consultar os visitantes.');
     if (atualizarDados && tab === 'relatorios') _relAtualizar();
 
     console.debug('[Visitantes][Abas] Aba ativada:', { tab, atualizarDados });
@@ -479,7 +479,6 @@ function _setupForm() {
 function _setupBusca() {
     const input = document.getElementById('searchVisitante');
     if (!input) return;
-    input.addEventListener('input', () => _filtrarVisitantes(input.value));
     input.addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); _buscarVisitantes(); }
     });
@@ -493,12 +492,15 @@ function _setupActions() {
 }
 
 // ===== CARREGAR VISITANTES =====
-async function _carregarVisitantes() {
+async function _carregarVisitantes(termoBusca = '') {
     const tbody = document.querySelector('#tabelaVisitantes tbody');
     _setLoading(true);
 
     try {
-        const data = await _requisitarJsonComRetry(API_VISITANTES, {
+        const params = new URLSearchParams();
+        const termo = String(termoBusca || '').trim();
+        if (termo) params.set('busca', termo);
+        const data = await _requisitarJsonComRetry(`${API_VISITANTES}?${params.toString()}`, {
             credentials: 'include'
         });
 
@@ -600,9 +602,13 @@ async function _lerRespostaJson(response, operacao) {
     return dados;
 }
 
-function _buscarVisitantes() {
-    const termo = document.getElementById('searchVisitante')?.value || '';
-    _filtrarVisitantes(termo);
+async function _buscarVisitantes() {
+    const input = document.getElementById('searchVisitante');
+    const botao = document.getElementById('btnBuscarVisitante');
+    const termo = input?.value?.trim() || '';
+    if (botao) { botao.disabled = true; botao.dataset.originalText = botao.innerHTML; botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...'; }
+    try { await _carregarVisitantes(termo); }
+    finally { if (botao) { botao.disabled = false; botao.innerHTML = botao.dataset.originalText || '<i class="fas fa-search"></i> Buscar'; } }
 }
 
 function _filtrarVisitantes(termo) {
