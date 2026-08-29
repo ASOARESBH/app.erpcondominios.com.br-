@@ -85,7 +85,7 @@ function rv_listar_rotas(mysqli $conn, int $tenantId): array {
     $stmt = $conn->prepare("SELECT r.*, 
         (SELECT COUNT(*) FROM ronda_pontos p WHERE p.tenant_id=r.tenant_id AND p.rota_id=r.id AND p.ativo=1) AS total_pontos,
         (SELECT COUNT(*) FROM ronda_vigilantes v WHERE v.tenant_id=r.tenant_id AND v.rota_id=r.id AND v.ativo=1) AS total_vigilantes
-        FROM ronda_rotas r WHERE r.tenant_id=? ORDER BY r.ativo DESC, r.nome ASC");
+        FROM ronda_rotas r WHERE r.tenant_id=? AND r.ativo=1 ORDER BY r.nome ASC");
     $stmt->bind_param('i', $tenantId);
     $stmt->execute();
     $rotas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
