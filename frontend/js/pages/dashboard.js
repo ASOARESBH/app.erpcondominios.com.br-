@@ -24,7 +24,8 @@ function log(msg, data = null) {
 export function init() {
     log('Inicializando Dashboard...');
 
-    carregarDashboardPersonalizado();
+    // A configuração de widgets é administrada exclusivamente em Empresa > Dashboard.
+    // A tela inicial mantém o Dashboard operacional original.
     carregarChamados();
     _osInterval = setInterval(carregarChamados, 30000);
 
