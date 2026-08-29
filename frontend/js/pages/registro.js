@@ -186,9 +186,13 @@ async function _carregarDependentesMorador(moradorId) {
     sel.disabled = true;
 
     try {
-        const resp = await fetch(`${API_DEPENDENTES}?morador_id=${moradorId}`);
+        const resp = await fetch(`${API_DEPENDENTES}?acao=listar&morador_id=${encodeURIComponent(moradorId)}&por_pagina=0`);
         const data = await resp.json();
-        const deps = Array.isArray(data.dados) ? data.dados : (data.dados?.itens || []);
+        // api_dependentes.php retorna: { sucesso, dados: { dados: [...], ... } }.
+        // Manter os formatos anteriores para compatibilidade com respostas legadas.
+        const deps = Array.isArray(data.dados)
+            ? data.dados
+            : (data.dados?.dados || data.dados?.itens || []);
 
         sel.innerHTML = '<option value="">Selecione o dependente...</option>';
         deps.forEach(d => {
