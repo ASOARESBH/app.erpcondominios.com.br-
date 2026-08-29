@@ -164,10 +164,12 @@ try {
         $filtro_busca   = isset($_GET['busca'])      ? trim($_GET['busca'])      : '';
 
         // Paginação
-        $por_pagina = isset($_GET['por_pagina']) ? max(1, min(200, (int)$_GET['por_pagina'])) : 25;
-        $pagina     = isset($_GET['pagina'])     ? max(1, (int)$_GET['pagina'])               : 1;
-        $sem_paginacao = ($por_pagina === 0 || isset($_GET['sem_paginacao']));
-        if ($sem_paginacao) $por_pagina = 99999;
+        // Preservar por_pagina=0 antes do limite mínimo: o Registro Manual
+        // usa esse valor para carregar todos os dependentes do morador.
+        $por_pagina_param = isset($_GET['por_pagina']) ? (int)$_GET['por_pagina'] : 25;
+        $pagina           = isset($_GET['pagina']) ? max(1, (int)$_GET['pagina']) : 1;
+        $sem_paginacao    = ($por_pagina_param === 0 || isset($_GET['sem_paginacao']));
+        $por_pagina       = $sem_paginacao ? 99999 : max(1, min(200, $por_pagina_param));
         $offset = ($pagina - 1) * $por_pagina;
 
         // Base da query de filtros (reutilizada para COUNT e SELECT)
