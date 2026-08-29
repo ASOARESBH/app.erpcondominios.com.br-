@@ -88,7 +88,7 @@ async function salvarRota(event){
     event.preventDefault();
     if (state.salvandoRota) { log('Tentativa de salvar rota ignorada: gravação já em andamento.'); return; }
     const form = $('#rv-form-rota');
-    const botao = form.querySelector('button[type="submit"]');
+    const botao = document.getElementById('rv-btn-salvar-rota') || form.querySelector('button[type="submit"]');
     const textoOriginal = botao.innerHTML;
     const dias=[...document.querySelectorAll('.rv-weekdays input:checked')].map((i)=>Number(i.value));
     const d={id:Number($('#rv-rota-id').value)||0,nome:$('#rv-rota-nome').value.trim(),descricao:$('#rv-rota-descricao').value.trim(),hora_inicio:$('#rv-rota-inicio').value,hora_fim:$('#rv-rota-fim').value,intervalo_minutos:Number($('#rv-rota-intervalo').value),repeticoes_por_dia:Number($('#rv-rota-repeticoes').value),tolerancia_minutos:Number($('#rv-rota-tolerancia').value),dias_semana:dias,ativo:$('#rv-rota-ativo').checked};
@@ -97,11 +97,25 @@ async function salvarRota(event){
     botao.disabled = true; botao.classList.add('is-loading'); botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
     try {
         const r=await request('salvar_rota',d,'POST');
-        if(!r.sucesso){toast(r.mensagem,'error');return;}
-        modal('rv-modal-rota',false);toast(r.mensagem);await carregarDashboard();
+        if(!r.sucesso){
+            botao.classList.add('is-error');
+            botao.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Não foi salvo';
+            toast(r.mensagem,'error');
+            await new Promise((resolve) => setTimeout(resolve, 1300));
+            return;
+        }
+        botao.classList.remove('is-loading');
+        botao.classList.add('is-success');
+        botao.innerHTML = '<i class="fas fa-check"></i> Rota salva';
+        toast(r.mensagem, 'success');
+        await carregarDashboard();
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        modal('rv-modal-rota',false);
     } finally {
         state.salvandoRota = false;
-        botao.disabled = false; botao.classList.remove('is-loading'); botao.innerHTML = textoOriginal;
+        botao.disabled = false;
+        botao.classList.remove('is-loading', 'is-success', 'is-error');
+        botao.innerHTML = textoOriginal;
     }
 }
 async function salvarPonto(event){event.preventDefault();const d={id:Number($('#rv-ponto-id').value)||0,rota_id:Number($('#rv-ponto-rota-id').value),nome:$('#rv-ponto-nome').value,localizacao:$('#rv-ponto-local').value,instrucoes:$('#rv-ponto-instrucoes').value,ordem:Number($('#rv-ponto-ordem').value),ativo:$('#rv-ponto-ativo').checked};const r=await request('salvar_ponto',d,'POST');if(!r.sucesso){toast(r.mensagem,'error');return;}modal('rv-modal-ponto',false);toast(r.mensagem);carregarDashboard();}
