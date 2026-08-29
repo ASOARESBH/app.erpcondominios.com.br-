@@ -118,8 +118,47 @@ async function salvarRota(event){
         botao.innerHTML = textoOriginal;
     }
 }
-async function salvarPonto(event){event.preventDefault();const d={id:Number($('#rv-ponto-id').value)||0,rota_id:Number($('#rv-ponto-rota-id').value),nome:$('#rv-ponto-nome').value,localizacao:$('#rv-ponto-local').value,instrucoes:$('#rv-ponto-instrucoes').value,ordem:Number($('#rv-ponto-ordem').value),ativo:$('#rv-ponto-ativo').checked};const r=await request('salvar_ponto',d,'POST');if(!r.sucesso){toast(r.mensagem,'error');return;}modal('rv-modal-ponto',false);toast(r.mensagem);carregarDashboard();}
-async function salvarVigilante(event){event.preventDefault();const d={rota_id:Number($('#rv-vig-rota-id').value),colaborador_id:Number($('#rv-vig-colaborador').value)};const r=await request('vincular_vigilante',d,'POST');if(!r.sucesso){toast(r.mensagem,'error');return;}modal('rv-modal-vigilante',false);toast(r.mensagem);carregarDashboard();}
+async function executarComFeedbackBotao(botao, textoCarregando, tarefa, textoSucesso){
+    if(!botao || botao.disabled) return false;
+    const original=botao.innerHTML;
+    botao.disabled=true;
+    botao.classList.remove('is-success','is-error');
+    botao.classList.add('is-loading');
+    botao.innerHTML=`<i class="fas fa-spinner fa-spin"></i> ${textoCarregando}`;
+    try {
+        const resultado=await tarefa();
+        botao.classList.remove('is-loading');
+        botao.classList.add(resultado?.sucesso?'is-success':'is-error');
+        botao.innerHTML=resultado?.sucesso?`<i class="fas fa-check"></i> ${textoSucesso}`:'<i class="fas fa-triangle-exclamation"></i> Não foi salvo';
+        return resultado;
+    } catch (erro) {
+        botao.classList.remove('is-loading');
+        botao.classList.add('is-error');
+        botao.innerHTML='<i class="fas fa-triangle-exclamation"></i> Erro ao salvar';
+        throw erro;
+    } finally {
+        await new Promise((resolve)=>setTimeout(resolve,700));
+        botao.disabled=false;
+        botao.classList.remove('is-loading','is-success','is-error');
+        botao.innerHTML=original;
+    }
+}
+async function salvarPonto(event){
+    event.preventDefault();
+    const d={id:Number($('#rv-ponto-id').value)||0,rota_id:Number($('#rv-ponto-rota-id').value),nome:$('#rv-ponto-nome').value,localizacao:$('#rv-ponto-local').value,instrucoes:$('#rv-ponto-instrucoes').value,ordem:Number($('#rv-ponto-ordem').value),ativo:$('#rv-ponto-ativo').checked};
+    const botao=document.getElementById('rv-btn-salvar-ponto');
+    const r=await executarComFeedbackBotao(botao,'Salvando...',()=>request('salvar_ponto',d,'POST'),'Ponto salvo');
+    if(!r?.sucesso){toast(r?.mensagem||'Não foi possível salvar o ponto.','error');return;}
+    modal('rv-modal-ponto',false);toast(r.mensagem,'success');await carregarDashboard();
+}
+async function salvarVigilante(event){
+    event.preventDefault();
+    const d={rota_id:Number($('#rv-vig-rota-id').value),colaborador_id:Number($('#rv-vig-colaborador').value)};
+    const botao=document.getElementById('rv-btn-vincular-vigilante');
+    const r=await executarComFeedbackBotao(botao,'Vinculando...',()=>request('vincular_vigilante',d,'POST'),'Vigilante vinculado');
+    if(!r?.sucesso){toast(r?.mensagem||'Não foi possível vincular o vigilante.','error');return;}
+    modal('rv-modal-vigilante',false);toast(r.mensagem,'success');await carregarDashboard();
+}
 async function gerarRelatorio(){const r=await request('relatorio',{data_de:$('#rv-rel-de').value,data_ate:$('#rv-rel-ate').value,rota_id:$('#rv-rel-rota').value,colaborador_id:$('#rv-rel-vigilante').value});if(!r.sucesso){toast(r.mensagem,'error');return;}state.report=r.dados.linhas||[];const s=r.dados.resumo||{};$('#rv-rel-total').textContent=s.total??0;$('#rv-rel-prazo').textContent=s.no_prazo??0;$('#rv-rel-atrasado').textContent=s.atrasado??0;$('#rv-rel-tbody').innerHTML=state.report.length?state.report.map((l)=>`<tr><td>${fmtDate(l.registrado_em)}</td><td>${esc(l.rota_nome)}</td><td>${esc(l.ponto_nome)}</td><td>${esc(l.vigilante_nome)}</td><td><span class="rv-sla ${l.status_sla==='atrasado'?'atrasado':'prazo'}">${l.status_sla==='atrasado'?'Atrasado':'No prazo'}</span></td><td>${Number(l.atraso_minutos)||0} min</td></tr>`).join(''):'<tr><td colspan="6" class="rv-empty">Nenhuma leitura encontrada no período.</td></tr>';}
 function downloadQr(id){const c=document.querySelector(`#rv-qr-${id} canvas`);if(!c){toast('QR Code ainda não está pronto.','warn');return;}const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=`ponto-ronda-${id}.png`;a.click();}
 function imprimirQr(id=null){const cards=[...document.querySelectorAll('.rv-qr-card')].filter((c)=>!id||Number(c.dataset.qr)===Number(id));if(!cards.length)return;const area=document.createElement('div');area.id='rv-print-area';area.style.display='none';cards.forEach((card)=>{const clone=card.cloneNode(true);const canvas=card.querySelector('canvas');const alvo=clone.querySelector('canvas');if(canvas&&alvo){const img=document.createElement('img');img.src=canvas.toDataURL('image/png');img.alt='QR Code do ponto de ronda';alvo.replaceWith(img);}area.appendChild(clone);});document.body.appendChild(area);window.print();setTimeout(()=>area.remove(),350);}
