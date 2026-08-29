@@ -140,9 +140,15 @@
             <form id="dependenteForm">
                 <div class="form-grid">
                     <div>
+                        <label>Unidade *</label>
+                        <select id="unidadeDependenteCadastro" required>
+                            <option value="">Selecione uma unidade</option>
+                        </select>
+                    </div>
+                    <div>
                         <label>Morador *</label>
-                        <select id="moradorSelecionado" required>
-                            <option value="">Selecione um morador</option>
+                        <select id="moradorSelecionado" required disabled>
+                            <option value="">Selecione a unidade primeiro</option>
                         </select>
                     </div>
                     <div>

@@ -52,9 +52,9 @@ export function init() {
     _setupTabs();
     _setupValidacaoCPF();
     _setupValidacaoCPFDependente();
+    _setupCascataUnidadeDependente();
     _setupForms();
     _setupFileDrop();
-    _carregarUnidades();
     _carregarMoradores();
     _carregarDependentes();
 
@@ -257,8 +257,8 @@ function _carregarMoradores(pagina = 1) {
                 _listaMoradores = d.itens || [];
                 _renderMoradores(_listaMoradores);
                 _renderPaginacaoMoradores();
-                // Popular selects com todos os moradores (sem paginação)
-                _popularSelectMoradoresTodos();
+                // O cadastro de dependentes usa a cascata Unidade → Morador;
+                // não preencher aqui a lista global de moradores.
             } else {
                 _toast('Erro ao carregar moradores: ' + (data.mensagem || ''), 'error');
             }
@@ -270,7 +270,66 @@ function _carregarMoradores(pagina = 1) {
         });
 }
 
-// Carrega TODOS os moradores (sem paginação) apenas para popular selects
+// Cascata do cadastro de dependentes: Unidade → Morador.
+function _resetarCascataUnidadeDependente() {
+    const selUnidade = document.getElementById('unidadeDependenteCadastro');
+    const selMorador = document.getElementById('moradorSelecionado');
+    if (selUnidade) selUnidade.value = '';
+    if (selMorador) {
+        selMorador.innerHTML = '<option value="">Selecione a unidade primeiro</option>';
+        selMorador.disabled = true;
+    }
+}
+
+function _setupCascataUnidadeDependente() {
+    const selUnidade = document.getElementById('unidadeDependenteCadastro');
+    const selMorador = document.getElementById('moradorSelecionado');
+    if (!selUnidade || !selMorador || selUnidade.dataset.cascataReady === '1') return;
+    selUnidade.dataset.cascataReady = '1';
+
+    fetch(`${API_UNIDADES}?acao=select`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+            const unidades = Array.isArray(data.dados) ? data.dados : (data.dados?.itens || []);
+            selUnidade.innerHTML = '<option value="">Selecione uma unidade</option>';
+            unidades.forEach(u => {
+                const nome = u.nome || u.unidade || u.descricao;
+                if (nome) selUnidade.add(new Option(nome, nome));
+            });
+        })
+        .catch(err => log('Erro ao carregar unidades para dependente:', err));
+
+    selUnidade.addEventListener('change', () => {
+        const unidade = selUnidade.value;
+        selMorador.innerHTML = unidade
+            ? '<option value="">Carregando moradores...</option>'
+            : '<option value="">Selecione a unidade primeiro</option>';
+        selMorador.disabled = true;
+        if (!unidade) return;
+
+        fetch(`${API_MORADORES}?unidade=${encodeURIComponent(unidade)}&ativo=1&por_pagina=0`, { credentials: 'include' })
+            .then(r => r.json())
+            .then(data => {
+                const payload = data.dados || {};
+                const moradores = Array.isArray(payload) ? payload : (payload.itens || payload.dados || []);
+                selMorador.innerHTML = '<option value="">Selecione um morador</option>';
+                moradores.forEach(m => {
+                    const id = m.id || m.id_morador;
+                    const nome = m.nome || m.nome_completo;
+                    if (id && nome) selMorador.add(new Option(nome, id));
+                });
+                selMorador.disabled = moradores.length === 0;
+                if (!moradores.length) selMorador.innerHTML = '<option value="">Nenhum morador nesta unidade</option>';
+            })
+            .catch(err => {
+                log('Erro ao carregar moradores da unidade:', err);
+                selMorador.innerHTML = '<option value="">Erro ao carregar moradores</option>';
+                selMorador.disabled = true;
+            });
+    });
+}
+
+// Compatibilidade legada: mantida para outras integrações que eventualmente a invoquem.
 function _popularSelectMoradoresTodos() {
     fetch(`${API_MORADORES}?por_pagina=0`)
         .then(r => r.json())
@@ -889,8 +948,8 @@ async function _salvarDependente() {
         celular:       document.getElementById('celularDependente')?.value?.trim(),
     };
 
-    if (!dados.morador_id || !dados.nome_completo || !dados.cpf || !dados.parentesco) {
-        _toast('Preencha os campos obrigatórios: Morador, Nome, CPF e Parentesco', 'error'); return;
+    if (!document.getElementById('unidadeDependenteCadastro')?.value || !dados.morador_id || !dados.nome_completo || !dados.cpf || !dados.parentesco) {
+        _toast('Preencha os campos obrigatórios: Unidade, Morador, Nome, CPF e Parentesco', 'error'); return;
     }
 
     log('Dados do novo dependente:', dados);
@@ -906,6 +965,7 @@ async function _salvarDependente() {
             if (data.sucesso) {
                 _toast('<i class="fas fa-check-circle"></i> Dependente cadastrado com sucesso!', 'success');
                 document.getElementById('dependenteForm')?.reset();
+                _resetarCascataUnidadeDependente();
                 _carregarDependentes();
             } else {
                 _toast('Erro: ' + (data.mensagem || 'Erro desconhecido'), 'error');
