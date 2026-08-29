@@ -293,3 +293,14 @@
         justify-content: space-between;
     }
 }
+
+.page-visitantes .visitantes-paginacao .pagina-atual {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+    cursor: default;
+}
+
+.page-visitantes .visitantes-paginacao-acoes {
+    flex-wrap: wrap;
+}

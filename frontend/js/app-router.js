@@ -73,22 +73,15 @@ const AppRouter = {
         // Criar novo elemento link
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = `/assets/css/pages/${pageName}.css`;
+        // Anexa imediatamente para evitar a corrida assíncrona do HEAD: em produção
+        // alguns servidores bloqueiam HEAD ou respondem após a página já renderizar.
+        // O versionamento também impede que o CSS antigo deixe o Dashboard sem os cartões.
+        const versaoCSS = '20260828-ui-2';
+        link.href = `/assets/css/pages/${pageName}.css?v=${versaoCSS}`;
         link.id = 'dynamic-page-css';
-
-        // Verificar se arquivo existe antes de adicionar (evita 404 visual)
-        fetch(link.href, { method: 'HEAD' })
-            .then(response => {
-                if (response.ok) {
-                    document.head.appendChild(link);
-                    console.log(`[Router] ✅ CSS carregado: ${pageName}.css`);
-                } else {
-                    console.log(`[Router] ℹ️ CSS não encontrado para ${pageName} (isso é normal para páginas sem CSS específico)`);
-                }
-            })
-            .catch(error => {
-                console.log(`[Router] ℹ️ Nenhum CSS específico para ${pageName}`);
-            });
+        link.onload = () => console.log(`[Router] ✅ CSS carregado: ${pageName}.css`);
+        link.onerror = () => console.log(`[Router] ℹ️ CSS específico não encontrado para ${pageName}`);
+        document.head.appendChild(link);
     },
 
     /**
