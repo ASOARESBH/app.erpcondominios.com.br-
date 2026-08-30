@@ -55,6 +55,7 @@ export function init() {
     _setupCascataUnidadeDependente();
     _setupForms();
     _setupFileDrop();
+    _carregarUnidades();
     _carregarMoradores();
     _carregarDependentes();
 
@@ -185,15 +186,24 @@ function _toast(msg, tipo = 'success') {
 
 function _carregarUnidades() {
     log('Carregando lista de unidades para selects...');
-    fetch(`${API_UNIDADES}?acao=select`)
-        .then(r => r.json())
+    fetch(`${API_UNIDADES}?acao=select&_ts=${Date.now()}`, { credentials: 'include', cache: 'no-store' })
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
         .then(data => {
-            if (!data.sucesso) return;
+            if (!data.sucesso) throw new Error(data.mensagem || 'Resposta inválida da API de unidades');
             const unidades = Array.isArray(data.dados) ? data.dados : (data.dados?.itens || []);
             log('Unidades carregadas:', unidades.length);
             _popularSelectUnidades(unidades);
         })
-        .catch(err => log('Erro ao carregar unidades:', err));
+        .catch(err => {
+            log('Erro ao carregar unidades:', err);
+            ['unidade', 'edit-morador-unidade'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (sel) sel.innerHTML = '<option value="">Não foi possível carregar as unidades</option>';
+            });
+        });
 }
 
 function _popularSelectUnidades(unidades) {
