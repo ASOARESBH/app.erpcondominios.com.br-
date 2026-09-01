@@ -494,7 +494,7 @@
 <!-- Botões de ação (não imprimem) -->
 <div class="acoes-impressao" id="acoes-impressao" style="display:none;">
     <button class="btn-fechar" onclick="window.close()">✕ Fechar</button>
-    <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <button class="btn-imprimir" onclick="imprimirRelatorio()">🖨️ Imprimir / Salvar PDF</button>
 </div>
 
 <!-- Página de impressão -->
@@ -784,6 +784,27 @@
         return escaparHtml(valor).replace(/\n/g, '<br>');
     }
 
+    function imagensDosAnexos(valor) {
+        let anexos = valor;
+        if (typeof anexos === 'string') {
+            try { anexos = JSON.parse(anexos); } catch (_) { anexos = []; }
+        }
+        if (!Array.isArray(anexos)) return [];
+        return anexos.filter(a => /^image\//i.test(String(a?.tipo || '')) && /^data:image\//i.test(String(a?.base64 || '')));
+    }
+
+    function imprimirRelatorio() {
+        const imagens = Array.from(document.images);
+        const aguardando = imagens.map(img => {
+            if (img.complete) return Promise.resolve();
+            return new Promise(resolve => {
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', resolve, { once: true });
+            });
+        });
+        Promise.all(aguardando).then(() => setTimeout(() => window.print(), 80));
+    }
+
     function resolverUrlLogo(empresa) {
         const original = String(empresa?.logo_url_segura || empresa?.logo_url || '').trim();
         if (!original) return '';
@@ -807,12 +828,15 @@
         const icones = { comentario: 'fa-comment', andamento: 'fa-spinner', solucao: 'fa-check-circle' };
         const tipos = { comentario: 'Comentário', andamento: 'Andamento', solucao: 'Solução' };
         el.innerHTML = lista.filter(item => item.tipo !== 'nota_interna').map(item => {
-            let fotos = [];
-            if (Array.isArray(item.fotos)) fotos = item.fotos;
-            const fotosHtml = fotos.length ? '<div class="historico-publico-fotos">' + fotos.map(f => {
-                const url = `${window.location.origin}/api/api_imagem_projeto.php?tipo=foto&id=${encodeURIComponent(f.id)}`;
-                return `<img src="${url}" alt="${escaparHtml(f.arquivo_nome_original || 'Foto da interação')}" loading="lazy">`;
-            }).join('') + '</div>' : '';
+            const fotosTabela = Array.isArray(item.fotos) ? item.fotos : [];
+            const fotosAnexas = imagensDosAnexos(item.anexos);
+            const fotosHtml = (fotosTabela.length || fotosAnexas.length) ? '<div class="historico-publico-fotos">' +
+                fotosTabela.map(f => {
+                    const url = `${window.location.origin}/api/api_imagem_projeto.php?tipo=foto&id=${encodeURIComponent(f.id)}`;
+                    return `<img src="${escaparHtml(url)}" alt="${escaparHtml(f.arquivo_nome_original || 'Foto da interação')}">`;
+                }).join('') +
+                fotosAnexas.map(a => `<img src="${escaparHtml(a.base64)}" alt="${escaparHtml(a.nome || 'Foto anexada')}">`).join('') +
+                '</div>' : '';
             return `<div class="historico-publico-item">
                 <div class="historico-publico-icone"><i class="fas ${icones[item.tipo] || 'fa-comment'}"></i></div>
                 <div><div class="historico-publico-meta"><span class="historico-publico-tipo">${tipos[item.tipo] || 'Interação'}</span>${escaparHtml(item.usuario_nome || 'Sistema')} — ${formatarData(item.criado_em)}</div>
