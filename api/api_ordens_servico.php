@@ -251,6 +251,19 @@ if ($raw) {
     $decoded = json_decode($raw, true);
     if (json_last_error() === JSON_ERROR_NONE) $body = $decoded;
 }
+function _os_texto_simples($valor): string {
+    $texto = (string)($valor ?? '');
+    if ($texto === '') return '';
+    // Preserva quebras de linha sem permitir tags, atributos ou scripts HTML.
+    $texto = preg_replace('/<\\s*(br|\\/p|\\/div|\\/h[1-6]|\\/li|\\/blockquote|\\/pre)\\b[^>]*>/i', "\n", $texto);
+    $texto = strip_tags($texto);
+    $texto = html_entity_decode($texto, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $texto = str_replace(["\r\n", "\r"], "\n", $texto);
+    $texto = preg_replace('/[ \\t]+\\n/', "\n", $texto);
+    $texto = preg_replace('/\n{3,}/', "\n\n", $texto);
+    return trim($texto);
+}
+
 $acao = $_GET['acao'] ?? $_POST['acao'] ?? $body['acao'] ?? '';
 
 os_log('info', 'Requisição recebida', ['metodo' => $metodo, 'acao' => $acao, 'get' => $_GET]);
@@ -1522,7 +1535,7 @@ switch ($acao) {
         $dados = array_merge($body, $_POST);
         $os_id    = (int)($dados['os_id'] ?? 0);
         $tipo     = trim($dados['tipo'] ?? 'comentario');
-        $mensagem = trim($dados['mensagem'] ?? '');
+        $mensagem = _os_texto_simples($dados['mensagem'] ?? '');
         $anexos   = $dados['anexos'] ?? null;
         $etapa_id   = !empty($dados['etapa_id']) ? (int)$dados['etapa_id'] : null;
         $percentual = (isset($dados['percentual']) && $dados['percentual'] !== '') ? max(0, min(100, (int)$dados['percentual'])) : null;
@@ -1645,7 +1658,7 @@ switch ($acao) {
         $horas_totais    = ($dados['horas_totais'] !== null && $dados['horas_totais'] !== '') ? (float)$dados['horas_totais'] : null;
         $horas_estimadas = !empty($dados['horas_estimadas']) ? (float)$dados['horas_estimadas'] : null;
         $data_previsao   = !empty($dados['data_previsao']) ? trim($dados['data_previsao']) : null;
-        $observacao      = trim($dados['observacao_finalizacao'] ?? '');
+        $observacao      = _os_texto_simples($dados['observacao_finalizacao'] ?? '');
 
         if (!$os_id) retornar_json(false, 'os_id inválido');
         if ($horas_totais !== null && $horas_totais < 0) retornar_json(false, 'Horas totais não podem ser negativas');

@@ -55,6 +55,36 @@ function normalizarIdOS(valor) {
     return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+function escaparHtml(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    })[c]);
+}
+
+function textoSimplesChamado(valor) {
+    const bruto = String(valor ?? '');
+    if (!bruto) return '';
+    const temMarcacao = /<\/?[a-z][^>]*>/i.test(bruto);
+    if (!temMarcacao) return bruto.replace(/\u00a0/g, ' ');
+    const doc = new DOMParser().parseFromString(bruto, 'text/html');
+    doc.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+    doc.querySelectorAll('p,div,h1,h2,h3,h4,h5,h6,li,blockquote,pre').forEach(el => {
+        if (el.nextSibling) el.after(doc.createTextNode('\n'));
+    });
+    return (doc.body.textContent || '').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function configurarEditorTextoSimples() {
+    const editor = document.getElementById('int-mensagem-editor');
+    if (!editor || editor.dataset.textoSimples === '1') return;
+    editor.dataset.textoSimples = '1';
+    editor.addEventListener('paste', event => {
+        event.preventDefault();
+        const texto = event.clipboardData?.getData('text/plain') || '';
+        document.execCommand('insertText', false, texto.replace(/\r\n?/g, '\n'));
+    });
+}
+
 async function _post(acao, dados = {}) {
     try {
         const res = await fetch(API, {
@@ -872,7 +902,7 @@ async function carregarInteracoes(osId) {
                     ${badgeTipoInteracao(int.tipo)}
                     <span class="os-timeline-data">${formatarData(int.criado_em)}</span>
                 </div>
-                <div class="os-timeline-mensagem">${int.mensagem}</div>
+                <div class="os-timeline-mensagem">${escaparHtml(textoSimplesChamado(int.mensagem)).replace(/\n/g, '<br>')}</div>
                 ${projetoInfo}
                 ${anexosHtml}
                 ${fotosHtml}
@@ -897,8 +927,8 @@ async function adicionarInteracao() {
     if (!state.osAtual) return;
     const tipo    = document.getElementById('int-tipo').value;
     const editor  = document.getElementById('int-mensagem-editor');
-    const mensagem = editor ? editor.innerHTML.trim() : '';
-    if (!mensagem || mensagem === '<br>') { toast('Mensagem é obrigatória', 'aviso'); return; }
+    const mensagem = editor ? textoSimplesChamado(editor.innerText || editor.textContent || '') : '';
+    if (!mensagem) { toast('Mensagem é obrigatória', 'aviso'); return; }
 
     const ehProjeto  = !!(state.osAtual.projeto_publico && Number(state.osAtual.projeto_publico) === 1);
     const ehAndamento = tipo === 'andamento' && ehProjeto;
@@ -2178,6 +2208,7 @@ function init_modulo() {
     });
 
     // Interações
+    configurarEditorTextoSimples();
     document.getElementById('btnAdicionarInteracao').addEventListener('click', adicionarInteracao);
     document.getElementById('btnIniciarFinalizacao').addEventListener('click', iniciarFinalizacao);
     document.getElementById('btnCancelarFinalizacao').addEventListener('click', cancelarFinalizacao);
