@@ -32,6 +32,10 @@ $input = monitoring_json_input();
 
 try {
     switch ($action) {
+        case 'autorizar_pareamento':
+            monitoring_require_method('POST');
+            _monitoring_autorizar_pareamento($conexao, $input);
+            break;
         case 'solicitar_pareamento':
             monitoring_require_method('POST');
             _monitoring_solicitar_pareamento($conexao, $input);
@@ -107,13 +111,113 @@ try {
     fechar_conexao($conexao);
 }
 
+function _monitoring_autorizar_pareamento($conexao, $input) {
+    $email = trim((string)($input['email'] ?? ''));
+    $senha = (string)($input['senha'] ?? '');
+    $install_id = trim((string)($input['install_id'] ?? ''));
+    $hardware_fingerprint = trim((string)($input['hardware_fingerprint'] ?? ''));
+    $requested_tenant_id = (int)($input['tenant_id'] ?? 0);
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $senha === '' || !monitoring_valid_install_id($install_id) || strlen($hardware_fingerprint) < 32) {
+        monitoring_json(false, 'Informe usuário, senha e identificação da máquina válidos.', null, 422, 'PAIRING_AUTH_INVALID');
+    }
+
+    $stmt = $conexao->prepare(
+        "SELECT u.id, u.nome, u.email, u.senha, u.permissao,
+                ut.tenant_id, ut.permissao AS tenant_permissao,
+                t.nome_fantasia AS tenant_nome
+           FROM usuarios u
+          INNER JOIN usuario_tenant ut ON ut.usuario_id = u.id AND ut.ativo = 1
+          INNER JOIN tenants t ON t.id = ut.tenant_id AND t.status = 'ativo'
+          WHERE u.email = ? AND u.ativo = 1
+          ORDER BY ut.tenant_id
+          LIMIT 50"
+    );
+    if (!$stmt) monitoring_json(false, 'Serviço de autenticação indisponível.', null, 500, 'PAIRING_AUTH_DB_ERROR');
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $tenants = [];
+    $user = null;
+    while ($row = $result->fetch_assoc()) {
+        if (!$user) $user = $row;
+        $permission = (string)($row['tenant_permissao'] ?: $row['permissao']);
+        if (in_array($permission, ['super_admin', 'admin', 'gerente'], true)) {
+            $tenants[] = ['id' => (int)$row['tenant_id'], 'nome' => $row['tenant_nome'], 'permissao' => $permission];
+        }
+    }
+    $stmt->close();
+    if (!$user || !password_verify($senha, (string)$user['senha'])) {
+        monitoring_json(false, 'Usuário ou senha inválidos.', null, 401, 'PAIRING_AUTH_REQUIRED');
+    }
+    if (!$tenants) {
+        monitoring_json(false, 'Usuário sem permissão para habilitar o Monitoring.', null, 403, 'PAIRING_PERMISSION_DENIED');
+    }
+
+    if (count($tenants) > 1 && $requested_tenant_id <= 0) {
+        monitoring_json(false, 'Selecione o tenant que será vinculado a esta máquina.', ['tenants' => $tenants], 409, 'TENANT_REQUIRED');
+    }
+    $tenant_id = $requested_tenant_id > 0 ? $requested_tenant_id : (int)$tenants[0]['id'];
+    $selected_tenant = null;
+    foreach ($tenants as $tenant) {
+        if ((int)$tenant['id'] === $tenant_id) { $selected_tenant = $tenant; break; }
+    }
+    if (!$selected_tenant) {
+        monitoring_json(false, 'Tenant não pertence ao usuário autorizado.', ['tenants' => $tenants], 403, 'TENANT_FORBIDDEN');
+    }
+
+    $authorization = bin2hex(random_bytes(32));
+    $token_hash = monitoring_hash_bearer($authorization);
+    $fingerprint_hash = hash('sha256', $hardware_fingerprint);
+    $stmt = $conexao->prepare(
+        "INSERT INTO monitoramento_pareamento_autorizacoes
+            (usuario_id, tenant_id, token_hash, install_id, hardware_fingerprint_hash, expires_at, created_ip)
+         VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE), ?)"
+    );
+    $ip = monitoring_ip();
+    $stmt->bind_param('iissss', $user['id'], $tenant_id, $token_hash, $install_id, $fingerprint_hash, $ip);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        monitoring_json(false, 'Não foi possível autorizar o pareamento.', null, 500, 'PAIRING_AUTH_SAVE_ERROR');
+    }
+    $stmt->close();
+    monitoring_log('MONITORING_PAIRING_AUTHORIZED', 'Pré-autorização de pareamento criada.', $user['email']);
+    monitoring_json(true, 'Usuário autorizado para gerar o pareamento.', [
+        'authorization_token' => $authorization,
+        'expires_in' => 900,
+        'user' => ['id' => (int)$user['id'], 'nome' => $user['nome'], 'email' => $user['email']],
+        'tenants' => $tenants,
+    ]);
+}
+
 function _monitoring_solicitar_pareamento($conexao, $input) {
+    $authorization = trim((string)($input['authorization_token'] ?? ''));
     $install_id = trim((string)($input['install_id'] ?? ''));
     $hardware_fingerprint = trim((string)($input['hardware_fingerprint'] ?? ''));
     $pairing_code = strtoupper(trim((string)($input['pairing_code'] ?? '')));
-    if (!monitoring_valid_install_id($install_id) || strlen($hardware_fingerprint) < 32 || !monitoring_valid_pairing_code($pairing_code)) {
+    if (!monitoring_valid_install_id($install_id) || strlen($hardware_fingerprint) < 32 || !monitoring_valid_pairing_code($pairing_code) || !preg_match('/^[a-f0-9]{64}$/', $authorization)) {
         monitoring_json(false, 'Dados de pareamento inválidos.', null, 422, 'PAIRING_INVALID');
     }
+
+    $authorization_hash = monitoring_hash_bearer($authorization);
+    $fingerprint_hash = hash('sha256', $hardware_fingerprint);
+    $stmt = $conexao->prepare(
+        "SELECT id FROM monitoramento_pareamento_autorizacoes
+          WHERE token_hash = ? AND install_id = ? AND hardware_fingerprint_hash = ?
+            AND used_at IS NULL AND expires_at > NOW()
+          LIMIT 1"
+    );
+    $stmt->bind_param('sss', $authorization_hash, $install_id, $fingerprint_hash);
+    $stmt->execute();
+    $authorization_row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$authorization_row) {
+        monitoring_json(false, 'Pré-autorização ausente, expirada ou já utilizada.', null, 401, 'PAIRING_AUTH_REQUIRED');
+    }
+    $stmt = $conexao->prepare("UPDATE monitoramento_pareamento_autorizacoes SET used_at = NOW() WHERE id = ? AND used_at IS NULL");
+    $authorization_id = (int)$authorization_row['id'];
+    $stmt->bind_param('i', $authorization_id);
+    $stmt->execute();
+    $stmt->close();
 
     $stmt = $conexao->prepare("SELECT id, status, tenant_id FROM monitoramento_agentes WHERE install_id = ? ORDER BY id DESC LIMIT 1");
     $stmt->bind_param('s', $install_id);
