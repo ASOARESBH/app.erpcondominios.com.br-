@@ -992,12 +992,58 @@ function _download($db, $sessao) {
         retornar_json(true, 'OK', ['link_externo' => $doc['link_externo']]);
     }
 
-    $caminho = ltrim($doc['arquivo'], './');
-    $lookup = $db->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
-    $lookup->bind_param('is', $tenant_id, $caminho);
-    $lookup->execute();
-    $arquivoBanco = $lookup->get_result()->fetch_assoc();
-    $lookup->close();
+    $caminhoBruto = ltrim(str_replace('\\', '/', (string)$doc['arquivo']), '/');
+    while (strpos($caminhoBruto, './') === 0) $caminhoBruto = substr($caminhoBruto, 2);
+    $caminho = (strpos($caminhoBruto, 'uploads/') === 0 && strpos($caminhoBruto, '..') === false && strpos($caminhoBruto, "\0") === false)
+        ? $caminhoBruto
+        : '';
+    $lookup = $caminho !== '' ? $db->prepare("SELECT id FROM tenant_arquivos
+                            WHERE tenant_id = ? AND ativo = 1
+                              AND (caminho_legado = ? OR REPLACE(caminho_legado, './', '') = ?)
+                            ORDER BY id DESC LIMIT 1") : false;
+    $arquivoBanco = null;
+    if ($lookup) {
+        $lookup->bind_param('iss', $tenant_id, $caminho, $caminho);
+        $lookup->execute();
+        $arquivoBanco = $lookup->get_result()->fetch_assoc();
+        $lookup->close();
+    }
+
+    // Compatibilidade com documentos cadastrados antes da migração para BLOB.
+    // O arquivo é aceito somente dentro de uploads/ e do tenant atual; depois
+    // de encontrado, é migrado para tenant_arquivos e o download segue pelo
+    // armazenamento central, sem expor o caminho físico.
+    if (!$arquivoBanco) {
+        $raizProjeto = realpath(__DIR__ . '/..');
+        $caminhoRelativo = ltrim(str_replace('\\', '/', (string)$doc['arquivo']), '/');
+        if (strpos($caminhoRelativo, './') === 0) $caminhoRelativo = substr($caminhoRelativo, 2);
+        $arquivoLegado = ($raizProjeto && strpos($caminhoRelativo, 'uploads/') === 0)
+            ? realpath($raizProjeto . '/' . $caminhoRelativo)
+            : false;
+        $raizUploads = $raizProjeto ? realpath($raizProjeto . '/uploads') : false;
+        $estaDentroUploads = $arquivoLegado && $raizUploads &&
+            (strpos($arquivoLegado, $raizUploads . DIRECTORY_SEPARATOR) === 0 || $arquivoLegado === $raizUploads);
+        if ($estaDentroUploads && is_file($arquivoLegado) && is_readable($arquivoLegado)) {
+            $conteudoLegado = file_get_contents($arquivoLegado);
+            if ($conteudoLegado !== false) {
+                try {
+                    $migrado = tenant_file_gravar_conteudo(
+                        $db,
+                        (int)$tenant_id,
+                        $conteudoLegado,
+                        basename($arquivoLegado),
+                        'documento',
+                        $caminho,
+                        false,
+                        (int)($sessao['id'] ?? 0)
+                    );
+                    $arquivoBanco = ['id' => (int)$migrado['id']];
+                } catch (Throwable $e) {
+                    error_log('[GED][Download] falha ao migrar arquivo legado: ' . $e->getMessage());
+                }
+            }
+        }
+    }
     if (!$arquivoBanco) retornar_json(false, 'Arquivo não encontrado no armazenamento do tenant.');
 
     _registrar_acesso($db, $sessao, $id, 'download', 'interno');
