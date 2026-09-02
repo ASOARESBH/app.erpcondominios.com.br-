@@ -6,8 +6,9 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/access_control_notification_helper.php';
+require_once __DIR__ . '/helpers/alertas_acesso_helper.php';
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -296,6 +297,14 @@ if ($metodo === 'POST') {
             }
         }
         
+        $alertas_disparados = [];
+        try {
+            $alertas_disparados = alertas_acesso_processar_evento($conexao, (int)$tenant_id, 'visitante_qr', [
+                'placa' => $placa, 'modelo' => $modelo, 'cor' => $cor,
+                'pessoa_nome' => $visitante['nome_completo'], 'unidade' => $unidade_destino,
+                'observacao' => "Tipo de acesso: {$tipo_acesso}", 'tipo_acesso' => 'Entrada',
+            ], 'visitante_qr_' . (int)$registro_acesso_id);
+        } catch (Throwable $e) { error_log('[AlertaAcessoQR] falha não bloqueante: ' . $e->getMessage()); }
         registrar_log('ACESSO_CADASTRADO', "Acesso cadastrado para visitante: {$visitante['nome_completo']}", "Tipo: {$tipo_acesso}, Período: {$data_inicial} a {$data_final}, Placa: {$placa}, Notificacao: " . json_encode($notificacao_acesso));
         
         retornar_json(true, "Acesso cadastrado com sucesso", [
@@ -303,7 +312,8 @@ if ($metodo === 'POST') {
             'qr_code' => $qr_code,
             'dias_permanencia' => $dias_permanencia,
             'registro_acesso_id' => $registro_acesso_id,
-            'notificacao_controle_acesso' => $notificacao_acesso
+            'notificacao_controle_acesso' => $notificacao_acesso,
+            'alertas_acesso' => $alertas_disparados
         ]);
     } else {
         retornar_json(false, "Erro ao cadastrar acesso: " . $stmt->error);

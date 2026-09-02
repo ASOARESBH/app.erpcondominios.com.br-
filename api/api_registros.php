@@ -11,8 +11,9 @@ ob_start();
 
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/access_control_notification_helper.php';
+require_once __DIR__ . '/helpers/alertas_acesso_helper.php';
 require_once __DIR__ . '/helpers/visitantes_config_helper.php';
 
 ob_end_clean();
@@ -457,17 +458,28 @@ if ($metodo === 'POST') {
         ]);
         $notificacao = ['sucesso' => false, 'motivo' => 'excecao_nao_bloqueante'];
     }
-    log_registro('NOTIFICACAO ACESSO PROCESSADA', [
+        log_registro('NOTIFICACAO ACESSO PROCESSADA', [
         'registro_id' => $id_inserido,
         'resultado' => $notificacao,
     ]);
-
+    $alertas_disparados = [];
+    try {
+        $alertas_disparados = alertas_acesso_processar_evento($conexao, (int)$tenant_id, 'registro_manual', [
+            'placa' => $placa, 'modelo' => $modelo, 'cor' => $cor,
+            'pessoa_nome' => $nome_visitante, 'pessoa_cpf' => $documento,
+            'unidade' => $unidade_destino, 'observacao' => $observacao,
+            'tipo_acesso' => $tipo_acesso,
+        ], 'registro_manual_' . (int)$id_inserido);
+    } catch (Throwable $e) {
+        log_registro('ALERTA ACESSO FALHOU (não bloqueante)', ['registro_id' => $id_inserido, 'erro' => $e->getMessage()]);
+    }
     retornar_json(true, $status, [
         'id' => $id_inserido,
         'liberado' => $liberado,
         'status' => $status,
         'tipo_acesso' => $tipo_acesso,
         'notificacao_controle_acesso' => $notificacao,
+        'alertas_acesso' => $alertas_disparados,
         'ocupantes_registrados' => $ocupantesRegistrados,
     ]);
 }

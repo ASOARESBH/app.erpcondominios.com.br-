@@ -6,7 +6,8 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/alertas_acesso_helper.php';
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -91,6 +92,11 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
         
         $nome_acesso = $veiculo['dependente_nome'] ?? $veiculo['morador_nome'];
         registrar_log('ACESSO_RFID', "Acesso via RFID: $placa (TAG RFID: $tag) - " . $nome_acesso);
+        $alertas_disparados = alertas_acesso_processar_evento($conexao, (int)$tenant_id, 'rfid', [
+            'placa' => $placa, 'modelo' => $modelo, 'cor' => $cor,
+            'morador_nome' => $veiculo['morador_nome'], 'unidade' => $unidade,
+            'dependente_nome' => $veiculo['dependente_nome'] ?? '', 'tipo_acesso' => $tipo_acesso,
+        ]);
         
         retornar_json(true, "Acesso liberado", array(
             'liberado' => true,
@@ -103,7 +109,8 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
             'tipo' => $tipo,
             'tipo_acesso' => $tipo_acesso,
             'ultimo_acesso' => date('d/m/Y H:i:s', strtotime($data_hora)),
-            'mensagem' => strtoupper($tipo_acesso) . ' — ' . $mensagem
+            'mensagem' => strtoupper($tipo_acesso) . ' — ' . $mensagem,
+            'alertas' => $alertas_disparados
         ));
         
     } else {
@@ -177,11 +184,17 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
         
         $nome_acesso = $veiculo['dependente_nome'] ?? $veiculo['morador_nome'];
         registrar_log('WEBHOOK_RFID_SUCESSO', "Webhook RFID: $placa (TAG RFID: $tag) - " . $nome_acesso);
+        $alertas_disparados = alertas_acesso_processar_evento($conexao, (int)$tenant_id, 'rfid_webhook', [
+            'placa' => $placa, 'modelo' => $modelo, 'cor' => $cor,
+            'morador_nome' => $veiculo['morador_nome'], 'unidade' => $unidade,
+            'dependente_nome' => $veiculo['dependente_nome'] ?? '', 'tipo_acesso' => $tipo_acesso,
+        ], hash('sha256', 'rfid_webhook|' . $tag . '|' . $timestamp));
         
         retornar_json(true, "Acesso liberado", array(
             'action' => 'open_gate',
             'duration' => 5,
-            'message' => "Bem-vindo, " . ($veiculo['dependente_nome'] ?? $veiculo['morador_nome'])
+            'message' => "Bem-vindo, " . ($veiculo['dependente_nome'] ?? $veiculo['morador_nome']),
+            'alertas' => $alertas_disparados
         ));
         
     } else {

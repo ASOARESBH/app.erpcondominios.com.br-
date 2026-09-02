@@ -50,6 +50,14 @@
       <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Acessar</span></div>
     </div>
 
+    <div class="page-card interactive" data-open-alertas="1" role="button" tabindex="0"
+      title="Cadastrar critérios excepcionais de alerta de acesso">
+      <div class="card-icon" style="background:#fff7ed;"><i class="fas fa-shield-alt" style="color:#ea580c;"></i></div>
+      <h3>Alerta de Acesso</h3>
+      <p>Critérios excepcionais para veículos, pessoas e ocorrências que exigem atenção</p>
+      <div class="card-footer"><span class="card-link"><i class="fas fa-arrow-right"></i> Gerenciar alertas</span></div>
+    </div>
+
     <div class="page-card interactive" data-page="config_visitantes" role="button" tabindex="0"
       title="Configurar campos obrigatórios do cadastro de visitantes">
       <div class="card-icon" style="background:#eefbf3;">
@@ -61,6 +69,19 @@
     </div>
 
   </div>
+
+  <section id="alertas-acesso-panel" class="sistema-alertas-panel" hidden>
+    <div class="sistema-alertas-header"><div><h2><i class="fas fa-shield-alt"></i> Alerta de Acesso</h2><p>Todos os critérios cadastrados precisam coincidir para disparar o alerta.</p></div><button type="button" class="sistema-alertas-close" data-close-alertas aria-label="Fechar"><i class="fas fa-times"></i></button></div>
+    <form id="form-alerta-acesso" class="sistema-alerta-form">
+      <input type="hidden" id="alerta-acesso-id">
+      <div class="sistema-alerta-grid"><label>Nome do alerta *<input id="alerta-acesso-nome" required maxlength="150" placeholder="Ex.: Veículo de atenção"></label><label>Severidade<select id="alerta-acesso-severidade"><option value="informativo">Informativo</option><option value="atencao" selected>Atenção</option><option value="critico">Crítico</option></select></label><label class="sistema-alerta-full">Descrição<textarea id="alerta-acesso-descricao" rows="2" placeholder="Ex.: carreca, cor negra, bermuda"></textarea></label></div>
+      <fieldset class="sistema-alerta-canais"><legend>Notificar por</legend><label><input type="checkbox" name="alerta-canal" value="sistema" checked> Sistema</label><label><input type="checkbox" name="alerta-canal" value="email"> E-mail</label><label><input type="checkbox" name="alerta-canal" value="whatsapp"> WhatsApp</label></fieldset>
+      <div class="sistema-alerta-criterios-head"><h3>Critérios combinados</h3><button type="button" class="btn-primary" id="btn-add-alerta-criterio"><i class="fas fa-plus"></i> Adicionar</button></div><div id="alerta-acesso-criterios" class="sistema-alerta-criterios"></div>
+      <div class="sistema-alerta-actions"><button type="button" class="btn-secondary" id="btn-cancelar-alerta">Cancelar</button><button type="submit" class="btn-primary" id="btn-salvar-alerta"><i class="fas fa-save"></i> Salvar alerta</button></div>
+    </form>
+    <div class="sistema-alertas-lista-wrap"><div class="sistema-alertas-lista-head"><h3>Alertas cadastrados</h3><button type="button" class="btn-secondary" id="btn-atualizar-alertas"><i class="fas fa-sync"></i> Atualizar</button></div><div id="alertas-acesso-lista"></div></div>
+    <div class="sistema-alertas-eventos"><div class="sistema-alertas-lista-head"><h3>Alertas disparados</h3><button type="button" class="btn-secondary" id="btn-atualizar-alerta-eventos"><i class="fas fa-sync"></i> Atualizar</button></div><div id="alertas-acesso-eventos"></div></div>
+  </section>
 
   <div style="margin-top:16px;">
     <button class="stub-btn-back" data-page="configuracao">
