@@ -74,6 +74,28 @@ $metodo  = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
 if (!$conexao) { retornar_json(false, 'Erro ao conectar ao banco de dados'); }
 
+// Validar previamente a estrutura usada por todos os fluxos. Isso evita que
+// um prepare() sobre tabela/coluna ausente vire HTTP 500 genérico no navegador.
+$estrutura_ok = true;
+$estrutura_mensagem = '';
+$checkTabela = $conexao->query("SHOW TABLES LIKE 'moradores_anexos'");
+if (!$checkTabela || $checkTabela->num_rows === 0) {
+    $estrutura_ok = false;
+    $estrutura_mensagem = 'A tabela moradores_anexos não existe. Execute sql/migration_moradores_anexos_multitenant_mysql57.sql.';
+} else {
+    $checkColuna = $conexao->query("SHOW COLUMNS FROM moradores_anexos LIKE 'tenant_id'");
+    if (!$checkColuna || $checkColuna->num_rows === 0) {
+        $estrutura_ok = false;
+        $estrutura_mensagem = 'A tabela moradores_anexos está sem tenant_id. Execute sql/migration_moradores_anexos_multitenant_mysql57.sql.';
+    }
+}
+$checkCentral = $conexao->query("SHOW TABLES LIKE 'tenant_arquivos'");
+if ($estrutura_ok && (!$checkCentral || $checkCentral->num_rows === 0)) {
+    $estrutura_ok = false;
+    $estrutura_mensagem = 'O armazenamento central tenant_arquivos não existe. Execute sql/migration_arquivos_tenant_mysql57.sql.';
+}
+if (!$estrutura_ok) { retornar_json(false, $estrutura_mensagem, ['codigo' => 'ESTRUTURA_ANEXOS_PENDENTE']); }
+
 // ── GET: download de arquivo ──────────────────────────────────────────────────
 if ($metodo === 'GET' && isset($_GET['download'])) {
     $id = intval($_GET['download']);
@@ -209,6 +231,7 @@ if ($metodo === 'POST') {
          (tenant_id, morador_id, nome_documento, nome_arquivo, nome_original, caminho, tipo_mime, tamanho_bytes, criado_por)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
+    if (!$stmt) { retornar_json(false, 'Não foi possível preparar o vínculo do anexo. Verifique a estrutura da tabela moradores_anexos.', null); }
     $stmt->bind_param(
         'iisssssis',
         $tenant_id,
