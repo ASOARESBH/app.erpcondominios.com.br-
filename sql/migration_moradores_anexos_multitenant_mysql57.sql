@@ -1,54 +1,47 @@
--- Correção multi-tenant dos anexos de moradores.
--- Compatível com MySQL 5.7 e usuários HostGator sem permissão em information_schema.
--- Execute no banco selecionado pelo phpMyAdmin.
+-- Migração de anexos de moradores para MySQL 5.7 / HostGator.
+-- Não consulta information_schema.
+-- Execute no banco correto pelo phpMyAdmin.
 
--- A tabela moradores_anexos precisa existir previamente.
--- Se ela ainda não existir, execute antes create_moradores_anexos.sql.
+CREATE TABLE IF NOT EXISTS `moradores_anexos` (
+    `id` INT(11) NOT NULL AUTO_INCREMENT,
+    `tenant_id` INT(11) NOT NULL DEFAULT 1,
+    `morador_id` INT(11) NOT NULL,
+    `nome_documento` VARCHAR(200) NOT NULL,
+    `nome_arquivo` VARCHAR(255) NOT NULL,
+    `nome_original` VARCHAR(255) NOT NULL,
+    `caminho` VARCHAR(500) NOT NULL,
+    `tipo_mime` VARCHAR(100) NOT NULL,
+    `tamanho_bytes` INT(11) NOT NULL DEFAULT 0,
+    `ativo` TINYINT(1) NOT NULL DEFAULT 1,
+    `criado_por` VARCHAR(200) DEFAULT NULL,
+    `data_cadastro` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `data_atualizacao` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_tenant_morador` (`tenant_id`, `morador_id`),
+    KEY `idx_morador_id` (`morador_id`),
+    KEY `idx_ativo` (`ativo`),
+    CONSTRAINT `fk_moradores_anexos_morador`
+        FOREIGN KEY (`morador_id`) REFERENCES `moradores` (`id`)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DELIMITER $$
+-- Se a tabela já existia sem tenant_id, execute esta linha uma única vez:
+-- ALTER TABLE moradores_anexos ADD COLUMN tenant_id INT(11) NOT NULL DEFAULT 1 AFTER id;
 
-DROP PROCEDURE IF EXISTS corrigir_moradores_anexos_tenant$$
-CREATE PROCEDURE corrigir_moradores_anexos_tenant()
-BEGIN
-    -- 1060 = coluna duplicada: significa que a migração já foi aplicada.
-    DECLARE CONTINUE HANDLER FOR 1060 BEGIN END;
-    ALTER TABLE moradores_anexos
-        ADD COLUMN tenant_id INT NOT NULL DEFAULT 1 AFTER id;
-END$$
+-- Se a tabela já existia sem o índice multi-tenant, execute esta linha uma única vez:
+-- ALTER TABLE moradores_anexos ADD INDEX idx_tenant_morador (tenant_id, morador_id);
 
-CALL corrigir_moradores_anexos_tenant()$$
-DROP PROCEDURE corrigir_moradores_anexos_tenant$$
+SHOW TABLES LIKE 'moradores_anexos';
+DESCRIBE moradores_anexos;
 
-DROP PROCEDURE IF EXISTS corrigir_indice_moradores_anexos$$
-CREATE PROCEDURE corrigir_indice_moradores_anexos()
-BEGIN
-    -- 1061 = índice duplicado: significa que o índice já existe.
-    DECLARE CONTINUE HANDLER FOR 1061 BEGIN END;
-    ALTER TABLE moradores_anexos
-        ADD INDEX idx_tenant_morador (tenant_id, morador_id);
-END$$
+-- Registros antigos recebem tenant_id=1 pelo valor DEFAULT.
+-- Revise essa atribuição se houver vários condomínios no mesmo banco.
 
-CALL corrigir_indice_moradores_anexos()$$
-DROP PROCEDURE corrigir_indice_moradores_anexos$$
+SELECT 'Migração concluída: moradores_anexos disponível' AS status;
 
-DELIMITER ;
+-- O upload também requer a tabela tenant_arquivos.
+-- Se ela não existir, importe migration_arquivos_tenant_mysql57.sql.
 
--- Conferência sem consultar information_schema.
-SHOW COLUMNS FROM moradores_anexos;
-SHOW INDEX FROM moradores_anexos;
+-- Fim.
 
--- Registros antigos recebem tenant_id=1 pelo DEFAULT da coluna.
--- Se existirem vários condomínios no mesmo banco, revise os registros antigos
--- antes de liberar o módulo para os demais tenants.
-
-SELECT 'Migração de moradores_anexos concluída' AS status;
-
--- Importante: o upload também requer a tabela tenant_arquivos.
--- Se ela não existir, importe sql/migration_arquivos_tenant_mysql57.sql.
-
--- Fim da migração.
-
--- Diagnóstico: o arquivo anterior falhava somente na consulta final ao
--- information_schema por falta de privilégio do usuário MySQL do HostGator.
--- As alterações anteriores podem ter sido aplicadas; por isso esta versão
--- ignora com segurança coluna e índice já existentes.
+-- Compatibilidade: esta versão não acessa information_schema e não cria procedures.
