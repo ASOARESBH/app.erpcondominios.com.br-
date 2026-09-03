@@ -6,6 +6,7 @@
 
 CREATE TABLE IF NOT EXISTS `moradores_anexos` (
     `id`              INT(11)      NOT NULL AUTO_INCREMENT,
+    `tenant_id`       INT(11)      NOT NULL DEFAULT 1,
     `morador_id`      INT(11)      NOT NULL,
     `nome_documento`  VARCHAR(200) NOT NULL COMMENT 'Nome descritivo informado pelo usuário',
     `nome_arquivo`    VARCHAR(255) NOT NULL COMMENT 'Nome do arquivo no servidor (único)',
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS `moradores_anexos` (
     `data_cadastro`   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `data_atualizacao` TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    KEY `idx_tenant_morador` (`tenant_id`, `morador_id`),
     KEY `idx_morador_id` (`morador_id`),
     KEY `idx_ativo`      (`ativo`),
     CONSTRAINT `fk_moradores_anexos_morador`

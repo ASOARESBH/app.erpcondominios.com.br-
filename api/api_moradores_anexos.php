@@ -65,8 +65,8 @@ define('TIPOS_ACEITOS', [
 // ── Autenticação ──────────────────────────────────────────────────────────────
 try {
     verificarAutenticacao(true, 'operador');
-$tenant_id = exigirTenantId();
-} catch (Exception $e) {
+    $tenant_id = (int) exigirTenantId();
+} catch (Throwable $e) {
     retornar_json(false, 'Não autenticado', null);
 }
 
@@ -77,8 +77,9 @@ if (!$conexao) { retornar_json(false, 'Erro ao conectar ao banco de dados'); }
 // ── GET: download de arquivo ──────────────────────────────────────────────────
 if ($metodo === 'GET' && isset($_GET['download'])) {
     $id = intval($_GET['download']);
-    $stmt = $conexao->prepare("SELECT nome_original, caminho, tipo_mime FROM moradores_anexos WHERE tenant_id = $tenant_id AND id = ? AND ativo = 1");
-    $stmt->bind_param('i', $id);
+    $stmt = $conexao->prepare("SELECT nome_original, caminho, tipo_mime FROM moradores_anexos WHERE tenant_id = ? AND id = ? AND ativo = 1");
+    if (!$stmt) { retornar_json(false, 'Estrutura de anexos indisponível. Execute a migração SQL de moradores_anexos.', null); }
+    $stmt->bind_param('ii', $tenant_id, $id);
     $stmt->execute();
     $res = $stmt->get_result();
     if ($res->num_rows === 0) { retornar_json(false, 'Anexo não encontrado'); }
@@ -87,6 +88,7 @@ if ($metodo === 'GET' && isset($_GET['download'])) {
 
     $caminho = ltrim($row['caminho'], './');
     $lookup = $conexao->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+    if (!$lookup) { fechar_conexao($conexao); retornar_json(false, 'Armazenamento central de arquivos não está configurado.', null); }
     $lookup->bind_param('is', $tenant_id, $caminho);
     $lookup->execute();
     $arquivoBanco = $lookup->get_result()->fetch_assoc();
@@ -125,10 +127,11 @@ if ($metodo === 'GET') {
         "SELECT id, morador_id, nome_documento, nome_original, tipo_mime, tamanho_bytes,
                 DATE_FORMAT(data_cadastro, '%d/%m/%Y %H:%i') as data_cadastro,
                 criado_por
-         FROM moradores_anexos WHERE tenant_id = $tenant_id AND morador_id = ? AND ativo = 1
+         FROM moradores_anexos WHERE tenant_id = ? AND morador_id = ? AND ativo = 1
          ORDER BY data_cadastro DESC"
     );
-    $stmt->bind_param('i', $morador_id);
+    if (!$stmt) { retornar_json(false, 'Estrutura de anexos indisponível. Execute a migração SQL de moradores_anexos.', null); }
+    $stmt->bind_param('ii', $tenant_id, $morador_id);
     $stmt->execute();
     $res   = $stmt->get_result();
     $lista = [];
@@ -178,8 +181,9 @@ if ($metodo === 'POST') {
     }
 
     // Verificar se morador existe
-    $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
-    $stmt->bind_param('i', $morador_id);
+    $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = ? AND id = ?");
+    if (!$stmt) { retornar_json(false, 'Estrutura de moradores indisponível.', null); }
+    $stmt->bind_param('ii', $tenant_id, $morador_id);
     $stmt->execute();
     $stmt->store_result();
     if ($stmt->num_rows === 0) { $stmt->close(); retornar_json(false, 'Morador não encontrado'); }
@@ -242,8 +246,9 @@ if ($metodo === 'DELETE') {
     if ($id <= 0) { retornar_json(false, 'ID inválido'); }
 
     // Buscar caminho do arquivo antes de deletar
-    $stmt = $conexao->prepare("SELECT caminho, nome_documento FROM moradores_anexos WHERE tenant_id = $tenant_id AND id = ? AND ativo = 1");
-    $stmt->bind_param('i', $id);
+    $stmt = $conexao->prepare("SELECT caminho, nome_documento FROM moradores_anexos WHERE tenant_id = ? AND id = ? AND ativo = 1");
+    if (!$stmt) { retornar_json(false, 'Estrutura de anexos indisponível. Execute a migração SQL de moradores_anexos.', null); }
+    $stmt->bind_param('ii', $tenant_id, $id);
     $stmt->execute();
     $res = $stmt->get_result();
     if ($res->num_rows === 0) { $stmt->close(); retornar_json(false, 'Anexo não encontrado'); }
@@ -251,8 +256,9 @@ if ($metodo === 'DELETE') {
     $stmt->close();
 
     // Soft delete (manter arquivo no disco para auditoria)
-    $stmt = $conexao->prepare("UPDATE moradores_anexos SET ativo = 0 WHERE tenant_id = $tenant_id AND id = ?");
-    $stmt->bind_param('i', $id);
+    $stmt = $conexao->prepare("UPDATE moradores_anexos SET ativo = 0 WHERE tenant_id = ? AND id = ?");
+    if (!$stmt) { retornar_json(false, 'Estrutura de anexos indisponível. Execute a migração SQL de moradores_anexos.', null); }
+    $stmt->bind_param('ii', $tenant_id, $id);
     if ($stmt->execute()) {
         $criado_por = $_SESSION['usuario_nome'] ?? 'Sistema';
         try { tenant_file_desativar_caminho($conexao, (int)$tenant_id, ltrim($row['caminho'], './')); } catch (Throwable $e) { error_log('[MoradoresAnexos][Arquivo] ' . $e->getMessage()); }
