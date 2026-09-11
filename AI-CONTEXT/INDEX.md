@@ -33,6 +33,7 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 
 ## 📝 6. IA & Qualidade
 - **Skill Principal (Obrigatória)**: [SKILL.md](SKILL.md)
+- **Protocolo Manus (Persona, Boot e Armadilhas de Arquivos)**: [PROTOCOLO_MANUS.md](PROTOCOLO_MANUS.md)
 - **Prompts Especializados**: [PROMPTS.md](PROMPTS.md)
 - **Checklists de Validação**: [CHECKLISTS.md](CHECKLISTS.md)
 - **Testes & QA**: [TESTING.md](TESTING.md)
@@ -46,3 +47,6 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 
 - **Inadimplência BRCondos**: [INADIMPLENCIA.md](INADIMPLENCIA.md)
+
+## 🗂️ 8. Fora deste índice, por padrão
+As pastas `docs/` e `md/` (na raiz do repositório) guardam relatórios históricos de depuração e deploy, não documentação de arquitetura corrente. Não fazem parte da varredura padrão de nenhuma IA — só devem ser abertas quando uma tarefa citar explicitamente um relatório específico por nome. Ver regras completas em [PROTOCOLO_MANUS.md](PROTOCOLO_MANUS.md).
