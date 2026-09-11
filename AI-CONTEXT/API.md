@@ -61,3 +61,7 @@ As ações abaixo pertencem a `api/api_colaborador_mobile.php` e exigem `Authori
 
 A regra compartilhada de dias, ciclo e SLA está em `api/helpers/ronda_helper.php` e é usada também por `api/api_rondas_vigilante.php`. A deduplicação usa o ciclo calculado e o índice único de `ronda_registros`; a segunda leitura do mesmo ponto no ciclo retorna HTTP 409.
 > O cliente móvel deve apresentar `mensagem` do backend quando `sucesso` for `false`, inclusive em HTTP 4xx, pois `EmployeeApiClient` não transforma status abaixo de 500 em exceção.
+
+## 8. Registro Manual de Acesso
+
+O endpoint `api/api_registros.php` mantém o lançamento manual de acessos de moradores, visitantes e prestadores. O campo `modo_registro` aceita `VEICULO` (padrão, com placa e dados do veículo) ou `PEDESTRE` (sem veículo); neste último modo, `vestimenta` é opcional e a API ignora qualquer lista de `ocupantes` enviada pelo cliente. O retorno permanece no formato `{sucesso, mensagem, dados}` e o `tenant_id` é sempre obtido da sessão autenticada.

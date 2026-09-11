@@ -30,13 +30,21 @@
             <input type="hidden" id="veiculoId"          name="veiculoId">
             <input type="hidden" id="visitanteIdRegistro" name="visitanteIdRegistro">
 
+            <div class="dependente-toggle-row">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="checkPedestre">
+                    <span class="checkbox-custom"></span>
+                    Lançar como <strong>Pedestre</strong> (acesso sem veículo)
+                </label>
+            </div>
+
             <!-- LINHA 1: Data/Hora, Placa, Tipo, Entrada/Saída -->
             <div class="form-grid reg-grid-4">
                 <div>
                     <label>Data e Hora *</label>
                     <input type="datetime-local" id="dataHoraRegistro" required>
                 </div>
-                <div>
+                <div id="campoPlacaRegistro">
                     <label>Placa *</label>
                     <input type="text" id="placaRegistro" maxlength="8" required placeholder="ABC-1D23"
                            autocomplete="off" style="text-transform:uppercase">
@@ -67,13 +75,17 @@
 
             <!-- LINHA 2: Modelo, Cor, Observação -->
             <div class="form-grid reg-grid-3">
-                <div>
+                <div id="campoModeloRegistro">
                     <label>Modelo do Veículo</label>
                     <input type="text" id="modeloRegistro" placeholder="Ex: Corolla, HB20, Strada...">
                 </div>
-                <div>
+                <div id="campoCorRegistro">
                     <label>Cor do Veículo</label>
                     <input type="text" id="corRegistro" placeholder="Ex: Prata, Branco, Preto...">
+                </div>
+                <div id="campoVestimentaRegistro" style="display:none;">
+                    <label>Vestimenta</label>
+                    <input type="text" id="vestimentaRegistro" maxlength="120" placeholder="Ex: camisa azul, boné preto...">
                 </div>
                 <div>
                     <label>Observação</label>
@@ -171,7 +183,7 @@
                 </div>
 
                 <!-- Ocupantes do veículo -->
-                <div class="ocupantes-toggle-row">
+                <div class="ocupantes-toggle-row" id="ocupantesToggleRow">
                     <label class="checkbox-label">
                         <input type="checkbox" id="checkOcupantes">
                         <span class="checkbox-custom"></span>
@@ -389,6 +401,7 @@
 .badge-entrada { background:#dcfce7; color:#16a34a; padding:2px 10px; border-radius:20px; font-size:12px; font-weight:600; }
 .badge-saida   { background:#fee2e2; color:#dc2626; padding:2px 10px; border-radius:20px; font-size:12px; font-weight:600; }
 .badge-ocupante { background:#ede9fe; color:#6d28d9; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; margin-left:6px; white-space:nowrap; }
+.badge-pedestre { background:#e0f2fe; color:#0369a1; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; margin-left:6px; white-space:nowrap; }
 
 /* ── Ocupantes do veículo ─────────────────────────────────── */
 .ocupantes-toggle-row {

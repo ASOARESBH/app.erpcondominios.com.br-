@@ -23,6 +23,7 @@ export function init() {
     console.log('[Registro] Inicializando v3...');
 
     _setupTipoAcesso();
+    _setupModoRegistro();
     _setupForm();
     _setupBusca();
     _setupActions();
@@ -72,6 +73,69 @@ function _atualizarBotoesAcesso() {
 
 function _getTipoAcesso() {
     return document.querySelector('input[name="tipo_acesso"]:checked')?.value || 'Entrada';
+}
+
+function _isPedestre() {
+    return document.getElementById('checkPedestre')?.checked === true;
+}
+
+function _setupModoRegistro() {
+    const check = document.getElementById('checkPedestre');
+    if (!check) return;
+
+    check.addEventListener('change', () => {
+        if (check.checked) {
+            _limparDadosVeiculoParaPedestre();
+        } else {
+            const vestimenta = document.getElementById('vestimentaRegistro');
+            if (vestimenta) vestimenta.value = '';
+        }
+        _atualizarModoRegistro();
+    });
+
+    _atualizarModoRegistro();
+}
+
+function _atualizarModoRegistro() {
+    const pedestre = _isPedestre();
+    const campoPlaca = document.getElementById('campoPlacaRegistro');
+    const campoModelo = document.getElementById('campoModeloRegistro');
+    const campoCor = document.getElementById('campoCorRegistro');
+    const campoVestimenta = document.getElementById('campoVestimentaRegistro');
+    const placaInput = document.getElementById('placaRegistro');
+    const ocupantesToggle = document.getElementById('ocupantesToggleRow');
+    const ocupantesWrap = document.getElementById('ocupantesWrap');
+
+    if (campoPlaca) campoPlaca.style.display = pedestre ? 'none' : '';
+    if (campoModelo) campoModelo.style.display = pedestre ? 'none' : '';
+    if (campoCor) campoCor.style.display = pedestre ? 'none' : '';
+    if (campoVestimenta) campoVestimenta.style.display = pedestre ? '' : 'none';
+    if (placaInput) placaInput.required = !pedestre;
+    if (ocupantesToggle) ocupantesToggle.style.display = pedestre ? 'none' : '';
+    if (ocupantesWrap) {
+        ocupantesWrap.style.display = pedestre
+            ? 'none'
+            : (document.getElementById('checkOcupantes')?.checked ? 'block' : 'none');
+    }
+}
+
+function _limparDadosVeiculoParaPedestre() {
+    const placaInput = document.getElementById('placaRegistro');
+    const modelo = document.getElementById('modeloRegistro');
+    const cor = document.getElementById('corRegistro');
+    const veiculoId = document.getElementById('veiculoId');
+    if (modelo) modelo.value = '';
+    if (cor) cor.value = '';
+    if (veiculoId) veiculoId.value = '';
+    _definirCamposVeiculoBloqueados(false);
+    const box = document.getElementById('veiculoEncontrado');
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+
+    if (placaInput) {
+        placaInput.value = '';
+        delete placaInput.dataset.veiculoPreenchido;
+    }
+    _limparOcupantes();
 }
 
 // ── Carregar Unidades (ambos os selects) ──────────────────────────────────────
@@ -332,6 +396,12 @@ function _setupOcupantes() {
     const wrap  = document.getElementById('ocupantesWrap');
     if (check) {
         check.addEventListener('change', () => {
+            if (_isPedestre()) {
+                check.checked = false;
+                _limparOcupantes();
+                _atualizarModoRegistro();
+                return;
+            }
             if (wrap) wrap.style.display = check.checked ? 'block' : 'none';
             if (!check.checked) _limparOcupantes();
         });
@@ -616,6 +686,8 @@ function onTipoChange() {
         const iW = document.getElementById('moradorInfoWrap'); if (iW) iW.style.display = 'none';
         _resetarDependente();
     }
+
+    _atualizarModoRegistro();
 }
 
 // ── Data/Hora ─────────────────────────────────────────────────────────────────
@@ -670,6 +742,7 @@ function filtrarRegistros(termo) {
         || (r.morador_unidade || r.unidade_destino || '').toLowerCase().includes(q)
         || (r.status || '').toLowerCase().includes(q)
         || (r.modelo || '').toLowerCase().includes(q)
+        || (r.vestimenta || '').toLowerCase().includes(q)
         || (r.tipo_acesso || '').toLowerCase().includes(q)
     );
     renderRegistros(filtrados);
@@ -687,7 +760,8 @@ function renderRegistros(registros) {
         const placa     = _esc(r.placa || '-');
         const modelo    = _esc(r.modelo || '-');
         const cor       = _esc(r.cor || '-');
-        const tipo      = _esc(r.tipo || '-');
+        const tipo      = _esc(r.tipo || '-')
+            + (r.modo_registro === 'PEDESTRE' ? '<span class="badge-pedestre"><i class="fas fa-person-walking"></i> Pedestre</span>' : '');
         const nome      = _esc(r.morador_nome || r.nome_visitante || r.tipo || '-')
             + (r.papel_veiculo === 'OCUPANTE' ? '<span class="badge-ocupante"><i class="fas fa-user-friends"></i> Ocupante</span>' : '');
         const unidade   = _esc(r.morador_unidade || r.unidade_destino || '-');
@@ -740,9 +814,13 @@ async function salvarRegistro() {
         const tipo          = (document.getElementById('tipoRegistro')?.value || '').trim();
         const observacao    = (document.getElementById('observacaoRegistro')?.value || '').trim();
         const tipoAcesso    = _getTipoAcesso();
+        const pedestre      = _isPedestre();
+        const vestimenta    = (document.getElementById('vestimentaRegistro')?.value || '').trim();
 
-        if (!dataHoraInput || !placa || !tipo) {
-            mostrarAlerta('error', 'Data/hora, placa e tipo são obrigatórios.');
+        if (!dataHoraInput || !tipo || (!pedestre && !placa)) {
+            mostrarAlerta('error', pedestre
+                ? 'Data/hora e tipo são obrigatórios.'
+                : 'Data/hora, placa e tipo são obrigatórios.');
             return;
         }
 
@@ -753,8 +831,10 @@ async function salvarRegistro() {
             cor,
             tipo,
             observacao,
-            tipo_acesso: tipoAcesso
+            tipo_acesso: tipoAcesso,
+            modo_registro: pedestre ? 'PEDESTRE' : 'VEICULO'
         };
+        if (pedestre) payload.vestimenta = vestimenta;
 
         // ── Morador ──
         if (tipo === 'Morador') {
@@ -889,6 +969,7 @@ function limparFormulario() {
     const iW = document.getElementById('moradorInfoWrap'); if (iW) iW.style.display = 'none';
     _resetarDependente();
     _atualizarBotoesAcesso();
+    _atualizarModoRegistro();
     atualizarDataHoraAtual();
 }
 
@@ -905,6 +986,7 @@ function normalizarPlaca(placa) { return String(placa).toUpperCase().replace(/[^
 async function detectarVeiculoPorPlaca() {
     const placaInput = document.getElementById('placaRegistro');
     if (!placaInput) return;
+    if (_isPedestre()) return;
     const placa = normalizarPlaca(placaInput.value);
     if (placa.length < 7) { esconderVeiculoEncontrado(); return; }
 
@@ -912,6 +994,7 @@ async function detectarVeiculoPorPlaca() {
     try {
         const resp = await fetch(`${API_VEICULOS}?acao=consultar_placa&placa=${encodeURIComponent(placa)}`);
         const data = await resp.json();
+        if (_isPedestre()) return;
         const veiculo = data.sucesso && data.dados?.existe ? data.dados : null;
         if (!veiculo) { esconderVeiculoEncontrado(); return; }
 

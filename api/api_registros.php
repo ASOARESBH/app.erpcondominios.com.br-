@@ -1,7 +1,7 @@
 <?php
 // =====================================================
 // API PARA REGISTROS DE ACESSO v3
-// Novidades: tipo_acesso (Entrada/Saída), dependente_id
+// Novidades: tipo_acesso (Entrada/Saída), dependente_id, modo_registro e vestimenta
 // Mantém compatibilidade com colunas opcionais via
 // _tem_coluna() + ALTER TABLE automático
 // =====================================================
@@ -67,6 +67,8 @@ _garantir_coluna($conexao, 'registros_acesso', 'documento_visitante', "VARCHAR(3
 // sem que os dois papéis se confundam no histórico.
 _garantir_coluna($conexao, 'registros_acesso', 'papel_veiculo',  "ENUM('TITULAR','OCUPANTE') NOT NULL DEFAULT 'TITULAR'");
 _garantir_coluna($conexao, 'registros_acesso', 'registro_titular_id', "INT NULL DEFAULT NULL");
+_garantir_coluna($conexao, 'registros_acesso', 'modo_registro', "ENUM('VEICULO','PEDESTRE') NOT NULL DEFAULT 'VEICULO'");
+_garantir_coluna($conexao, 'registros_acesso', 'vestimenta',    "VARCHAR(120) NULL DEFAULT NULL");
 
 $tem_tipo_acesso     = true; // acabou de garantir
 $tem_dependente_id   = true;
@@ -141,7 +143,7 @@ if ($metodo === 'GET') {
             r.data_hora, r.placa, r.modelo, r.cor, r.tag, r.tipo,
             r.nome_visitante, r.unidade_destino, r.dias_permanencia,
             r.status, r.liberado, r.observacao,
-            r.tipo_acesso, r.dependente_id,
+            r.tipo_acesso, r.dependente_id, r.modo_registro, r.vestimenta,
             r.papel_veiculo, r.registro_titular_id,
             m.nome AS morador_nome, m.unidade AS morador_unidade,
             d.nome_completo AS dependente_nome
@@ -185,14 +187,26 @@ if ($metodo === 'POST') {
     $nome_visitante   = trim($dados['nome_visitante']   ?? '');
     $observacao       = trim($dados['observacao']       ?? '');
     $tipo_acesso      = trim($dados['tipo_acesso']      ?? 'Entrada');
+    $modo_registro    = strtoupper(trim($dados['modo_registro'] ?? 'VEICULO'));
+    $vestimenta       = trim($dados['vestimenta'] ?? '');
 
     // Validar tipo_acesso
     if (!in_array($tipo_acesso, ['Entrada', 'Saída'])) $tipo_acesso = 'Entrada';
+    if (!in_array($modo_registro, ['VEICULO', 'PEDESTRE'])) $modo_registro = 'VEICULO';
+    if ($modo_registro !== 'PEDESTRE') {
+        $vestimenta = null;
+    } elseif ($vestimenta === '') {
+        $vestimenta = null;
+    } else {
+        $vestimenta = function_exists('mb_substr') ? mb_substr($vestimenta, 0, 120) : substr($vestimenta, 0, 120);
+    }
 
     // Validações
-    if (empty($placa) || empty($tipo)) {
-        log_registro('ERRO validacao', ['placa' => $placa, 'tipo' => $tipo]);
-        retornar_json(false, 'Placa e tipo são obrigatórios');
+    if (empty($tipo) || ($modo_registro === 'VEICULO' && empty($placa))) {
+        log_registro('ERRO validacao', ['placa' => $placa, 'tipo' => $tipo, 'modo_registro' => $modo_registro]);
+        retornar_json(false, $modo_registro === 'PEDESTRE'
+            ? 'Tipo é obrigatório'
+            : 'Placa e tipo são obrigatórios');
     }
 
     if (!in_array($tipo, ['Morador', 'Visitante', 'Prestador'])) {
@@ -205,23 +219,31 @@ if ($metodo === 'POST') {
     $dependente_id = isset($dados['dependente_id']) && $dados['dependente_id'] ? intval($dados['dependente_id']) : null;
     $documento    = trim($dados['documento'] ?? '');
 
+    if ($modo_registro === 'PEDESTRE') {
+        $placa = '';
+        $modelo = '';
+        $cor = '';
+    }
+
     // A placa cadastrada é a fonte autoritativa: não confiar em modelo, cor,
     // morador ou unidade enviados pelo navegador, pois campos desabilitados
     // ainda podem ser alterados por requisições manuais.
-    $stmtVeiculo = $conexao->prepare("SELECT v.modelo, v.cor, v.morador_id, m.nome, m.unidade
-        FROM veiculos v INNER JOIN moradores m ON m.id = v.morador_id AND m.tenant_id = ?
-        WHERE v.tenant_id = ? AND REPLACE(REPLACE(UPPER(v.placa), '-', ''), ' ', '') = REPLACE(REPLACE(UPPER(?), '-', ''), ' ', '') AND v.ativo = 1 LIMIT 1");
-    if ($stmtVeiculo) {
-        $stmtVeiculo->bind_param('iis', $tenant_id, $tenant_id, $placa);
-        $stmtVeiculo->execute();
-        $veiculoCadastrado = $stmtVeiculo->get_result()->fetch_assoc();
-        $stmtVeiculo->close();
-        if ($veiculoCadastrado) {
-            $modelo = trim((string)($veiculoCadastrado['modelo'] ?? ''));
-            $cor = trim((string)($veiculoCadastrado['cor'] ?? ''));
-            $morador_id = (int)$veiculoCadastrado['morador_id'];
-            $unidade_destino = trim((string)($veiculoCadastrado['unidade'] ?? ''));
-            $tipo = 'Morador';
+    if ($modo_registro === 'VEICULO') {
+        $stmtVeiculo = $conexao->prepare("SELECT v.modelo, v.cor, v.morador_id, m.nome, m.unidade
+            FROM veiculos v INNER JOIN moradores m ON m.id = v.morador_id AND m.tenant_id = ?
+            WHERE v.tenant_id = ? AND REPLACE(REPLACE(UPPER(v.placa), '-', ''), ' ', '') = REPLACE(REPLACE(UPPER(?), '-', ''), ' ', '') AND v.ativo = 1 LIMIT 1");
+        if ($stmtVeiculo) {
+            $stmtVeiculo->bind_param('iis', $tenant_id, $tenant_id, $placa);
+            $stmtVeiculo->execute();
+            $veiculoCadastrado = $stmtVeiculo->get_result()->fetch_assoc();
+            $stmtVeiculo->close();
+            if ($veiculoCadastrado) {
+                $modelo = trim((string)($veiculoCadastrado['modelo'] ?? ''));
+                $cor = trim((string)($veiculoCadastrado['cor'] ?? ''));
+                $morador_id = (int)$veiculoCadastrado['morador_id'];
+                $unidade_destino = trim((string)($veiculoCadastrado['unidade'] ?? ''));
+                $tipo = 'Morador';
+            }
         }
     }
     $tag          = null;
@@ -248,19 +270,19 @@ if ($metodo === 'POST') {
                 }
                 $stmt2->close();
             }
-        } else {
+        } elseif ($modo_registro === 'VEICULO') {
             // Tentar detectar pela placa
             $stmt2 = $conexao->prepare(
                 "SELECT v.tag, v.morador_id, m.nome, m.unidade
                  FROM veiculos v
                  INNER JOIN moradores m ON v.morador_id = m.id
-                 WHERE v.placa = ? AND v.ativo = 1"
+                 WHERE v.tenant_id = ? AND m.tenant_id = ? AND v.placa = ? AND v.ativo = 1"
             );
             if (!$stmt2) {
                 log_registro('ERRO prepare busca veiculo', ['erro' => $conexao->error]);
                 retornar_json(false, 'Erro interno ao buscar veículo: ' . $conexao->error);
             }
-            $stmt2->bind_param('s', $placa);
+            $stmt2->bind_param('iis', $tenant_id, $tenant_id, $placa);
             $stmt2->execute();
             $resultado2 = $stmt2->get_result();
 
@@ -276,6 +298,9 @@ if ($metodo === 'POST') {
                 $liberado = 0;
             }
             $stmt2->close();
+        } else {
+            $liberado = 1;
+            $status = '✅ Acesso liberado - Morador';
         }
 
         // Se for dependente, buscar nome do dependente para o status
@@ -323,7 +348,7 @@ if ($metodo === 'POST') {
     // ID de cadastro nem pelo número do documento — para que um operador não
     // consiga "forçar" a liberação repetindo a mesma pessoa na lista.
     $ocupantesValidados = [];
-    if (($tipo === 'Visitante' || $tipo === 'Prestador') && !empty($dados['ocupantes']) && is_array($dados['ocupantes'])) {
+    if ($modo_registro === 'VEICULO' && ($tipo === 'Visitante' || $tipo === 'Prestador') && !empty($dados['ocupantes']) && is_array($dados['ocupantes'])) {
         $idsJaUsados = [(int)$visitante_id];
         $documentosJaUsados = [_normalizar_documento_comparacao($documento)];
         foreach ($dados['ocupantes'] as $ocupanteRaw) {
@@ -349,14 +374,14 @@ if ($metodo === 'POST') {
     // papel_veiculo/registro_titular_id distinguem o condutor/visitante principal
     // dos ocupantes do mesmo veículo, mesmo que um ocupante já seja titular em
     // outro registro (outro veículo) — cada linha é um evento de acesso próprio.
-    $cols  = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante, papel_veiculo, registro_titular_id';
-    $marks = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    $cols  = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante, papel_veiculo, registro_titular_id, modo_registro, vestimenta';
+    $marks = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
     // i=tenant_id(1) s=data_hora(2) s=placa(3) s=modelo(4) s=cor(5) s=tag(6) s=tipo(7)
     // i=morador_id(8) s=nome_visitante(9) s=unidade_destino(10)
     // i=dias_permanencia(11) s=status(12) i=liberado(13) s=observacao(14)
     // s=tipo_acesso(15) i=dependente_id(16) i=visitante_id(17) s=documento_visitante(18)
-    // s=papel_veiculo(19) i=registro_titular_id(20)
-    $types = 'issssssissisissiis' . 'si';
+    // s=papel_veiculo(19) i=registro_titular_id(20) s=modo_registro(21) s=vestimenta(22)
+    $types = 'issssssissisissiis' . 'siss';
     $sql   = "INSERT INTO registros_acesso ($cols) VALUES ($marks)";
 
     $conexao->begin_transaction();
@@ -371,7 +396,8 @@ if ($metodo === 'POST') {
             &$morador_id, &$nome_visitante, &$unidade_destino,
             &$dias_permanencia, &$status, &$liberado, &$observacao,
             &$tipo_acesso, &$dependente_id, &$visitante_id, &$documento,
-            &$papel_veiculo_titular, &$registro_titular_id_nulo
+            &$papel_veiculo_titular, &$registro_titular_id_nulo,
+            &$modo_registro, &$vestimenta
         ];
 
         $stmt = $conexao->prepare($sql);
@@ -381,6 +407,7 @@ if ($metodo === 'POST') {
         log_registro('INSERT executando (titular)', [
             'placa' => $placa, 'tipo' => $tipo, 'tipo_acesso' => $tipo_acesso,
             'morador_id' => $morador_id, 'dependente_id' => $dependente_id, 'visitante_id' => $visitante_id,
+            'modo_registro' => $modo_registro,
         ]);
 
         if (!$stmt->execute()) {
@@ -406,7 +433,7 @@ if ($metodo === 'POST') {
                 &$morador_id, &$ocNome, &$unidade_destino,
                 &$dias_permanencia, &$ocStatus, &$ocLiberado, &$observacao,
                 &$tipo_acesso, &$ocDependente, &$ocVisitanteId, &$ocDocumento,
-                &$ocPapel, &$id_inserido
+                &$ocPapel, &$id_inserido, &$modo_registro, &$vestimenta
             ];
 
             $stmtOc = $conexao->prepare($sql);
@@ -478,6 +505,8 @@ if ($metodo === 'POST') {
         'liberado' => $liberado,
         'status' => $status,
         'tipo_acesso' => $tipo_acesso,
+        'modo_registro' => $modo_registro,
+        'vestimenta' => $vestimenta,
         'notificacao_controle_acesso' => $notificacao,
         'alertas_acesso' => $alertas_disparados,
         'ocupantes_registrados' => $ocupantesRegistrados,
