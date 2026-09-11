@@ -64,4 +64,6 @@ A regra compartilhada de dias, ciclo e SLA está em `api/helpers/ronda_helper.ph
 
 ## 8. Registro Manual de Acesso
 
-O endpoint `api/api_registros.php` mantém o lançamento manual de acessos de moradores, visitantes e prestadores. O campo `modo_registro` aceita `VEICULO` (padrão, com placa e dados do veículo) ou `PEDESTRE` (sem veículo); neste último modo, `vestimenta` é opcional e a API ignora qualquer lista de `ocupantes` enviada pelo cliente. O retorno permanece no formato `{sucesso, mensagem, dados}` e o `tenant_id` é sempre obtido da sessão autenticada.
+O endpoint `api/api_registros.php` mantém o lançamento manual de acessos de moradores, visitantes e prestadores. O campo `modo_registro` aceita `VEICULO` (padrão, com placa e dados do veículo) ou `PEDESTRE` (sem veículo); neste último modo, `vestimenta` é opcional e a API ignora qualquer lista de `ocupantes` enviada pelo cliente. Os lançamentos manuais também gravam `usuario_liberou` com o nome do operador da sessão; eventos automáticos de hardware permanecem sem esse campo. O retorno permanece no formato `{sucesso, mensagem, dados}` e o `tenant_id` é sempre obtido da sessão autenticada.
+
+A ação `verificar_tag` de `api/api_rfid.php`, usada pela verificação manual de acesso no painel, também grava `usuario_liberou` e a ação `ultimos_acessos` devolve esse valor para a tela de detalhes. A ação `webhook` continua sem usuário, pois representa uma liberação automática recebida diretamente do equipamento RFID.

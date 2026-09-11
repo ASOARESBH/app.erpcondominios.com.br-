@@ -69,6 +69,7 @@ _garantir_coluna($conexao, 'registros_acesso', 'papel_veiculo',  "ENUM('TITULAR'
 _garantir_coluna($conexao, 'registros_acesso', 'registro_titular_id', "INT NULL DEFAULT NULL");
 _garantir_coluna($conexao, 'registros_acesso', 'modo_registro', "ENUM('VEICULO','PEDESTRE') NOT NULL DEFAULT 'VEICULO'");
 _garantir_coluna($conexao, 'registros_acesso', 'vestimenta',    "VARCHAR(120) NULL DEFAULT NULL");
+_garantir_coluna($conexao, 'registros_acesso', 'usuario_liberou', "VARCHAR(150) NULL DEFAULT NULL");
 
 $tem_tipo_acesso     = true; // acabou de garantir
 $tem_dependente_id   = true;
@@ -187,6 +188,8 @@ if ($metodo === 'POST') {
     $nome_visitante   = trim($dados['nome_visitante']   ?? '');
     $observacao       = trim($dados['observacao']       ?? '');
     $tipo_acesso      = trim($dados['tipo_acesso']      ?? 'Entrada');
+    $usuario_liberou  = trim((string)($_SESSION['usuario_nome'] ?? ''));
+    if ($usuario_liberou === '') $usuario_liberou = null;
     $modo_registro    = strtoupper(trim($dados['modo_registro'] ?? 'VEICULO'));
     $vestimenta       = trim($dados['vestimenta'] ?? '');
 
@@ -374,14 +377,14 @@ if ($metodo === 'POST') {
     // papel_veiculo/registro_titular_id distinguem o condutor/visitante principal
     // dos ocupantes do mesmo veículo, mesmo que um ocupante já seja titular em
     // outro registro (outro veículo) — cada linha é um evento de acesso próprio.
-    $cols  = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante, papel_veiculo, registro_titular_id, modo_registro, vestimenta';
-    $marks = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    $cols  = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante, papel_veiculo, registro_titular_id, modo_registro, vestimenta, usuario_liberou';
+    $marks = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
     // i=tenant_id(1) s=data_hora(2) s=placa(3) s=modelo(4) s=cor(5) s=tag(6) s=tipo(7)
     // i=morador_id(8) s=nome_visitante(9) s=unidade_destino(10)
     // i=dias_permanencia(11) s=status(12) i=liberado(13) s=observacao(14)
     // s=tipo_acesso(15) i=dependente_id(16) i=visitante_id(17) s=documento_visitante(18)
-    // s=papel_veiculo(19) i=registro_titular_id(20) s=modo_registro(21) s=vestimenta(22)
-    $types = 'issssssissisissiis' . 'siss';
+    // s=papel_veiculo(19) i=registro_titular_id(20) s=modo_registro(21) s=vestimenta(22) s=usuario_liberou(23)
+    $types = 'issssssissisissiis' . 'sisss';
     $sql   = "INSERT INTO registros_acesso ($cols) VALUES ($marks)";
 
     $conexao->begin_transaction();
@@ -397,7 +400,7 @@ if ($metodo === 'POST') {
             &$dias_permanencia, &$status, &$liberado, &$observacao,
             &$tipo_acesso, &$dependente_id, &$visitante_id, &$documento,
             &$papel_veiculo_titular, &$registro_titular_id_nulo,
-            &$modo_registro, &$vestimenta
+            &$modo_registro, &$vestimenta, &$usuario_liberou
         ];
 
         $stmt = $conexao->prepare($sql);
@@ -433,7 +436,7 @@ if ($metodo === 'POST') {
                 &$morador_id, &$ocNome, &$unidade_destino,
                 &$dias_permanencia, &$ocStatus, &$ocLiberado, &$observacao,
                 &$tipo_acesso, &$ocDependente, &$ocVisitanteId, &$ocDocumento,
-                &$ocPapel, &$id_inserido, &$modo_registro, &$vestimenta
+                &$ocPapel, &$id_inserido, &$modo_registro, &$vestimenta, &$usuario_liberou
             ];
 
             $stmtOc = $conexao->prepare($sql);
@@ -476,7 +479,7 @@ if ($metodo === 'POST') {
             $data_hora,
             $nome_visitante,
             $documento,
-            (string) ($_SESSION['usuario_nome'] ?? '')
+            (string) ($usuario_liberou ?? '')
         );
     } catch (Throwable $erro_notificacao) {
         log_registro('NOTIFICACAO ACESSO FALHOU (não bloqueante)', [

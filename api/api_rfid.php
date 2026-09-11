@@ -27,6 +27,21 @@ $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
 $tenant_id = exigirTenantId();
 
+function _tem_coluna($conexao, $tabela, $coluna) {
+    $resultado = $conexao->query("SHOW COLUMNS FROM `$tabela` LIKE '$coluna'");
+    return $resultado && $resultado->num_rows > 0;
+}
+
+function _garantir_coluna($conexao, $tabela, $coluna, $definicao) {
+    if (!_tem_coluna($conexao, $tabela, $coluna)) {
+        if (!$conexao->query("ALTER TABLE `$tabela` ADD COLUMN `$coluna` $definicao")) {
+            error_log("[api_rfid] Falha ao adicionar coluna $coluna em $tabela: " . $conexao->error);
+        }
+    }
+}
+
+_garantir_coluna($conexao, 'registros_acesso', 'usuario_liberou', "VARCHAR(150) NULL DEFAULT NULL");
+
 // ========== VERIFICAR TAG RFID ==========
 if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_tag') {
     $dados = json_decode(file_get_contents('php://input'), true);
@@ -77,14 +92,16 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
         
         $unidade = $veiculo['morador_unidade'];
         $liberado = 1;
+        $usuario_liberou = trim((string)($_SESSION['usuario_nome'] ?? ''));
+        if ($usuario_liberou === '') $usuario_liberou = null;
         
         $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso 
                                            (data_hora, placa, modelo, cor, tag, tipo, morador_id, 
-                                            unidade_destino, status, liberado, tipo_acesso)
-                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                            unidade_destino, status, liberado, tipo_acesso, usuario_liberou)
+                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
-        $stmt_registro->bind_param("ssssssisssi",
-            $data_hora, $placa, $modelo, $cor, $tag, $tipo, $morador_id, $unidade, $status, $liberado, $tipo_acesso
+        $stmt_registro->bind_param("ssssssississ",
+            $data_hora, $placa, $modelo, $cor, $tag, $tipo, $morador_id, $unidade, $status, $liberado, $tipo_acesso, $usuario_liberou
         );
         
         $stmt_registro->execute();
@@ -296,7 +313,7 @@ if ($metodo === 'GET' && isset($_GET['acao']) && $_GET['acao'] === 'ultimos_aces
                 WHEN LOWER(COALESCE(r.status, r.observacao, r.tipo, '')) LIKE '%rfid%' THEN 'TAG RFID'
                 ELSE NULL
             END as origem_liberacao,
-            NULL as usuario_liberou,
+            r.usuario_liberou,
             r.liberado, r.status, r.tipo_acesso
             FROM registros_acesso r
             LEFT JOIN moradores m ON r.morador_id = m.id
