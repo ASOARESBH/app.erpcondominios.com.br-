@@ -395,6 +395,10 @@
             renderMenu({ scope: scope });
             markActive({ scope: scope });
         });
+
+        document.addEventListener('pageLoaded', function () {
+            markActive();
+        });
     }
 
     const api = {

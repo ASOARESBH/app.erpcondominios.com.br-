@@ -159,20 +159,14 @@ const AppRouter = {
                 }
             }
 
-            // 7. Atualizar Sidebar Ativa
-            if (window.SidebarController) {
-                // window.SidebarController.setActiveLink(pageName); 
-                // Precisaremos ajustar o SidebarController para aceitar "nomes" ou links virtuais
-            }
-
-            // 8. Atualizar URL (se solicitado)
+            // 7. Atualizar URL (se solicitado)
             if (updateHistory) {
                 const newUrl = `?page=${pageName}`;
                 history.pushState({ page: pageName }, '', newUrl);
                 console.log(`[Router] URL atualizada: ${newUrl}`);
             }
 
-            // 9. Disparar evento pageLoaded para guard de permissões e outros listeners
+            // 8. Disparar evento pageLoaded para guard de permissões e outros listeners
             document.dispatchEvent(new CustomEvent('pageLoaded', {
                 detail: { page: pageName },
                 bubbles: false
