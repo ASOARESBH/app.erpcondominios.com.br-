@@ -50,9 +50,36 @@ function _tem_coluna($conexao, $tabela, $coluna) {
 }
 
 function _garantir_coluna($conexao, $tabela, $coluna, $definicao) {
-    if (!_tem_coluna($conexao, $tabela, $coluna)) {
-        $conexao->query("ALTER TABLE `$tabela` ADD COLUMN `$coluna` $definicao");
+    if (_tem_coluna($conexao, $tabela, $coluna)) return;
+    $ok = @$conexao->query("ALTER TABLE `$tabela` ADD COLUMN `$coluna` $definicao");
+    if (!$ok && $conexao->errno !== 1060) {
+        log_registro("ERRO ao garantir coluna $coluna em $tabela", ['erro' => $conexao->error, 'errno' => $conexao->errno]);
+    } elseif ($ok) {
         log_registro("ALTER TABLE: coluna $coluna adicionada a $tabela");
+    }
+}
+
+function _tem_indice($conexao, $tabela, $nomeIndice) {
+    $stmt = $conexao->prepare(
+        "SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?
+         LIMIT 1"
+    );
+    if (!$stmt) return false;
+    $stmt->bind_param('ss', $tabela, $nomeIndice);
+    $stmt->execute();
+    $existe = $stmt->get_result()->num_rows > 0;
+    $stmt->close();
+    return $existe;
+}
+
+function _garantir_indice_unico($conexao, $tabela, $nomeIndice, $definicaoColunas) {
+    if (_tem_indice($conexao, $tabela, $nomeIndice)) return;
+    $ok = @$conexao->query("ALTER TABLE `$tabela` ADD UNIQUE KEY `$nomeIndice` ($definicaoColunas)");
+    if (!$ok && $conexao->errno !== 1061) {
+        log_registro("ERRO ao garantir índice $nomeIndice em $tabela", ['erro' => $conexao->error, 'errno' => $conexao->errno]);
+    } elseif ($ok) {
+        log_registro("ALTER TABLE: índice $nomeIndice adicionado a $tabela");
     }
 }
 
@@ -70,6 +97,8 @@ _garantir_coluna($conexao, 'registros_acesso', 'registro_titular_id', "INT NULL 
 _garantir_coluna($conexao, 'registros_acesso', 'modo_registro', "ENUM('VEICULO','PEDESTRE') NOT NULL DEFAULT 'VEICULO'");
 _garantir_coluna($conexao, 'registros_acesso', 'vestimenta',    "VARCHAR(120) NULL DEFAULT NULL");
 _garantir_coluna($conexao, 'registros_acesso', 'usuario_liberou', "VARCHAR(150) NULL DEFAULT NULL");
+_garantir_coluna($conexao, 'registros_acesso', 'idempotency_key', "VARCHAR(36) NULL DEFAULT NULL");
+_garantir_indice_unico($conexao, 'registros_acesso', 'uk_registros_acesso_tenant_idempotency', 'tenant_id, idempotency_key');
 
 $tem_tipo_acesso     = true; // acabou de garantir
 $tem_dependente_id   = true;
@@ -190,6 +219,11 @@ if ($metodo === 'POST') {
     $tipo_acesso      = trim($dados['tipo_acesso']      ?? 'Entrada');
     $usuario_liberou  = trim((string)($_SESSION['usuario_nome'] ?? ''));
     if ($usuario_liberou === '') $usuario_liberou = null;
+    $idempotency_key  = trim((string)($dados['idempotency_key'] ?? ''));
+    if (strlen($idempotency_key) > 36) {
+        retornar_json(false, 'A chave de idempotência é inválida.');
+    }
+    if ($idempotency_key === '') $idempotency_key = null;
     $modo_registro    = strtoupper(trim($dados['modo_registro'] ?? 'VEICULO'));
     $vestimenta       = trim($dados['vestimenta'] ?? '');
 
@@ -377,14 +411,14 @@ if ($metodo === 'POST') {
     // papel_veiculo/registro_titular_id distinguem o condutor/visitante principal
     // dos ocupantes do mesmo veículo, mesmo que um ocupante já seja titular em
     // outro registro (outro veículo) — cada linha é um evento de acesso próprio.
-    $cols  = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante, papel_veiculo, registro_titular_id, modo_registro, vestimenta, usuario_liberou';
-    $marks = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    $cols  = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante, papel_veiculo, registro_titular_id, modo_registro, vestimenta, usuario_liberou, idempotency_key';
+    $marks = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
     // i=tenant_id(1) s=data_hora(2) s=placa(3) s=modelo(4) s=cor(5) s=tag(6) s=tipo(7)
     // i=morador_id(8) s=nome_visitante(9) s=unidade_destino(10)
     // i=dias_permanencia(11) s=status(12) i=liberado(13) s=observacao(14)
     // s=tipo_acesso(15) i=dependente_id(16) i=visitante_id(17) s=documento_visitante(18)
-    // s=papel_veiculo(19) i=registro_titular_id(20) s=modo_registro(21) s=vestimenta(22) s=usuario_liberou(23)
-    $types = 'issssssissisissiis' . 'sisss';
+    // s=papel_veiculo(19) i=registro_titular_id(20) s=modo_registro(21) s=vestimenta(22) s=usuario_liberou(23) s=idempotency_key(24)
+    $types = 'issssssissisissiis' . 'sissss';
     $sql   = "INSERT INTO registros_acesso ($cols) VALUES ($marks)";
 
     $conexao->begin_transaction();
@@ -400,7 +434,7 @@ if ($metodo === 'POST') {
             &$dias_permanencia, &$status, &$liberado, &$observacao,
             &$tipo_acesso, &$dependente_id, &$visitante_id, &$documento,
             &$papel_veiculo_titular, &$registro_titular_id_nulo,
-            &$modo_registro, &$vestimenta, &$usuario_liberou
+            &$modo_registro, &$vestimenta, &$usuario_liberou, &$idempotency_key
         ];
 
         $stmt = $conexao->prepare($sql);
@@ -415,7 +449,36 @@ if ($metodo === 'POST') {
 
         if (!$stmt->execute()) {
             $erro = $stmt->error;
+            $errno = $stmt->errno;
             $stmt->close();
+            if ($errno === 1062 && $idempotency_key !== null) {
+                $conexao->rollback();
+                $stmtExistente = $conexao->prepare(
+                    'SELECT id, liberado, status, tipo_acesso, modo_registro, vestimenta
+                     FROM registros_acesso
+                     WHERE tenant_id = ? AND idempotency_key = ?
+                     LIMIT 1'
+                );
+                if ($stmtExistente) {
+                    $stmtExistente->bind_param('is', $tenant_id, $idempotency_key);
+                    $stmtExistente->execute();
+                    $existente = $stmtExistente->get_result()->fetch_assoc();
+                    $stmtExistente->close();
+                    if ($existente) {
+                        log_registro('POST idempotente', ['id' => $existente['id'], 'idempotency_key' => $idempotency_key]);
+                        retornar_json(true, 'Acesso já havia sido registrado.', [
+                            'id' => (int)$existente['id'],
+                            'liberado' => (int)$existente['liberado'],
+                            'status' => $existente['status'],
+                            'tipo_acesso' => $existente['tipo_acesso'],
+                            'modo_registro' => $existente['modo_registro'],
+                            'vestimenta' => $existente['vestimenta'],
+                            'ocupantes_registrados' => [],
+                            'idempotente' => true,
+                        ]);
+                    }
+                }
+            }
             throw new RuntimeException('Erro ao criar registro: ' . $erro);
         }
         $id_inserido = $conexao->insert_id;
@@ -430,13 +493,14 @@ if ($metodo === 'POST') {
             $ocLiberado    = 1;
             $ocDependente  = null;
             $ocPapel       = 'OCUPANTE';
+            $idempotency_key_ocupante = null;
 
             $paramsOc = [
                 &$tenant_id, &$data_hora, &$placa, &$modelo, &$cor, &$tag, &$tipo,
                 &$morador_id, &$ocNome, &$unidade_destino,
                 &$dias_permanencia, &$ocStatus, &$ocLiberado, &$observacao,
                 &$tipo_acesso, &$ocDependente, &$ocVisitanteId, &$ocDocumento,
-                &$ocPapel, &$id_inserido, &$modo_registro, &$vestimenta, &$usuario_liberou
+                &$ocPapel, &$id_inserido, &$modo_registro, &$vestimenta, &$usuario_liberou, &$idempotency_key_ocupante
             ];
 
             $stmtOc = $conexao->prepare($sql);

@@ -18,6 +18,23 @@ let veiculosCache  = [];
 let salvandoReg    = false;
 let ocupantesAdicionados = []; // [{ visitante_id, nome, documento, tipo_documento }]
 
+function gerarIdempotencyKey() {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    if (globalThis.crypto?.getRandomValues) {
+        const bytes = new Uint8Array(16);
+        globalThis.crypto.getRandomValues(bytes);
+        return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 36);
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`.slice(0, 36);
+}
+
+function garantirIdempotencyKey() {
+    const campo = document.getElementById('idempotencyKeyRegistro');
+    if (!campo) return '';
+    if (!campo.value) campo.value = gerarIdempotencyKey();
+    return campo.value;
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 export function init() {
     console.log('[Registro] Inicializando v3...');
@@ -32,6 +49,7 @@ export function init() {
     _setupCascataMorador();
     _setupCheckDependente();
     _setupOcupantes();
+    garantirIdempotencyKey();
     _carregarUnidades();
 
     atualizarDataHoraAtual();
@@ -819,6 +837,7 @@ async function salvarRegistro() {
         const tipoAcesso    = _getTipoAcesso();
         const pedestre      = _isPedestre();
         const vestimenta    = (document.getElementById('vestimentaRegistro')?.value || '').trim();
+        const idempotencyKey = garantirIdempotencyKey();
 
         if (!dataHoraInput || !tipo || (!pedestre && !placa)) {
             mostrarAlerta('error', pedestre
@@ -835,7 +854,8 @@ async function salvarRegistro() {
             tipo,
             observacao,
             tipo_acesso: tipoAcesso,
-            modo_registro: pedestre ? 'PEDESTRE' : 'VEICULO'
+            modo_registro: pedestre ? 'PEDESTRE' : 'VEICULO',
+            idempotency_key: idempotencyKey
         };
         if (pedestre) payload.vestimenta = vestimenta;
 
@@ -952,6 +972,7 @@ function limparFormulario() {
     ['moradorId', 'veiculoId', 'visitanteIdRegistro'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
     });
+    garantirIdempotencyKey();
 
     document.getElementById('extraCampos')?.style && (document.getElementById('extraCampos').style.display = 'none');
     document.getElementById('camposMorador')?.style && (document.getElementById('camposMorador').style.display = 'none');
