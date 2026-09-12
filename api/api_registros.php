@@ -144,7 +144,7 @@ if ($metodo === 'GET') {
             r.data_hora, r.placa, r.modelo, r.cor, r.tag, r.tipo,
             r.nome_visitante, r.unidade_destino, r.dias_permanencia,
             r.status, r.liberado, r.observacao,
-            r.tipo_acesso, r.dependente_id, r.modo_registro, r.vestimenta,
+            r.tipo_acesso, r.dependente_id, r.modo_registro, r.vestimenta, r.usuario_liberou,
             r.papel_veiculo, r.registro_titular_id,
             m.nome AS morador_nome, m.unidade AS morador_unidade,
             d.nome_completo AS dependente_nome

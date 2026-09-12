@@ -744,6 +744,7 @@ function filtrarRegistros(termo) {
         || (r.modelo || '').toLowerCase().includes(q)
         || (r.vestimenta || '').toLowerCase().includes(q)
         || (r.tipo_acesso || '').toLowerCase().includes(q)
+        || (r.usuario_liberou || '').toLowerCase().includes(q)
     );
     renderRegistros(filtrados);
 }
@@ -765,6 +766,7 @@ function renderRegistros(registros) {
         const nome      = _esc(r.morador_nome || r.nome_visitante || r.tipo || '-')
             + (r.papel_veiculo === 'OCUPANTE' ? '<span class="badge-ocupante"><i class="fas fa-user-friends"></i> Ocupante</span>' : '');
         const unidade   = _esc(r.morador_unidade || r.unidade_destino || '-');
+        const usuarioLiberou = _esc(r.usuario_liberou || '—');
         const status    = _esc(r.status || '-');
         const statusClass = classificarStatus(r.status, r.liberado);
 
@@ -784,6 +786,7 @@ function renderRegistros(registros) {
                 <td>${tipo}</td>
                 <td>${nome}</td>
                 <td>${unidade}</td>
+                <td>${usuarioLiberou}</td>
                 <td>${badgeAcesso}</td>
                 <td><span class="status-pill ${statusClass}">${status}</span></td>
                 <td>
@@ -796,7 +799,7 @@ function renderRegistros(registros) {
 }
 
 function renderMensagemTabela(tbody, msg) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_esc(msg)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${_esc(msg)}</td></tr>`;
 }
 
 // ── Salvar ────────────────────────────────────────────────────────────────────
