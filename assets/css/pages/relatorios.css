@@ -8,6 +8,12 @@
     margin-bottom: 30px;
 }
 
+/* Relatórios com tabelas largas usam toda a área útil do conteúdo. */
+.page-relatorios {
+    width: 100%;
+    max-width: none;
+}
+
 .page-relatorios .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -167,17 +173,22 @@
 
 .page-relatorios .table-wrapper {
     max-height: 620px;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: auto;
+    min-width: 0;
 }
 
 .page-relatorios .table-container {
     border-radius: 12px;
-    overflow: hidden;
+    width: max-content;
+    min-width: 100%;
+    overflow: visible;
     border: 1px solid #e2e8f0;
 }
 
 .page-relatorios table {
     width: 100%;
+    min-width: 1250px;
     border-collapse: collapse;
 }
 
@@ -203,6 +214,23 @@
     border-bottom: 1px solid #f1f5f9;
     color: #334155;
     font-size: 13px;
+}
+
+/* Evita que a tabela comprima todas as colunas para caber à força. */
+.page-relatorios #relatorioTable th,
+.page-relatorios #relatorioTable td {
+    white-space: nowrap;
+}
+
+/* Campos textuais longos quebram dentro de uma largura legível. */
+.page-relatorios #relatorioTable th:nth-child(6),
+.page-relatorios #relatorioTable td:nth-child(6),
+.page-relatorios #relatorioTable th:nth-child(8),
+.page-relatorios #relatorioTable td:nth-child(8),
+.page-relatorios #relatorioTable th:nth-child(12),
+.page-relatorios #relatorioTable td:nth-child(12) {
+    min-width: 160px;
+    white-space: normal;
 }
 
 .page-relatorios tbody tr:hover {

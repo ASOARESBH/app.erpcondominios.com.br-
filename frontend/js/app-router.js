@@ -76,7 +76,7 @@ const AppRouter = {
         // Anexa imediatamente para evitar a corrida assíncrona do HEAD: em produção
         // alguns servidores bloqueiam HEAD ou respondem após a página já renderizar.
         // O versionamento também impede que o CSS antigo deixe o Dashboard sem os cartões.
-        const versaoCSS = '20260828-ui-2';
+        const versaoCSS = '20260917-layout-1';
         link.href = `/assets/css/pages/${pageName}.css?v=${versaoCSS}`;
         link.id = 'dynamic-page-css';
         link.onload = () => console.log(`[Router] ✅ CSS carregado: ${pageName}.css`);

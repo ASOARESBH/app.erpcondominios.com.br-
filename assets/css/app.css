@@ -130,11 +130,20 @@ body {
 .main-content {
     margin-left: 260px;
     padding: 0;
-    width: 100%;
+    width: calc(100% - 260px);
+    max-width: calc(100% - 260px);
+    min-width: 0;
     min-height: 100vh;
     transition: margin-left 0.3s;
     overflow-y: auto;
     /* Ensure proper scroll management */
+}
+
+/* Quando a sidebar é recolhida, liberar também o espaço que ela devolve. */
+.main-content.sidebar-collapsed {
+    margin-left: 68px;
+    width: calc(100% - 68px);
+    max-width: calc(100% - 68px);
 }
 
 /* ===== HEADER ===== */
@@ -187,6 +196,14 @@ body {
 
     .main-content {
         margin-left: 0;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .main-content.sidebar-collapsed {
+        margin-left: 0;
+        width: 100%;
+        max-width: 100%;
     }
 
     .menu-toggle {
