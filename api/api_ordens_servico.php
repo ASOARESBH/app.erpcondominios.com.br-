@@ -235,6 +235,52 @@ $tenant_id = exigirTenantId();
     retornar_json(false, 'Não autenticado: ' . $e->getMessage());
 }
 
+// ─── Escopo de acesso às O.S. ─────────────────────────
+// Administradores/gerentes podem consultar todas as O.S. do tenant. Os demais
+// usuários só podem consultar e alterar registros cujo criado_por_id seja o
+// próprio usuário autenticado. O filtro é sempre aplicado no servidor; o
+// frontend apenas reflete esta regra e nunca é a sua barreira de segurança.
+$os_usuario_atual = obterUsuarioAutenticado();
+$os_usuario_id = (int)($os_usuario_atual['id'] ?? 0);
+$os_permissao_atual = strtolower(trim((string)($os_usuario_atual['permissao'] ?? $_SESSION['usuario_permissao'] ?? 'operador')));
+$os_pode_ver_todas = in_array($os_permissao_atual, ['admin', 'administrador', 'gerente', 'super_admin'], true);
+
+function os_escopo_sql(string $alias = ''): string {
+    global $os_pode_ver_todas, $os_usuario_id;
+    if ($os_pode_ver_todas) return '1=1';
+    $prefixo = $alias !== '' ? $alias . '.' : '';
+    return $prefixo . 'criado_por_id = ' . (int)$os_usuario_id;
+}
+
+function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, status, criado_por_id'): ?array {
+    global $tenant_id, $os_pode_ver_todas, $os_usuario_id;
+    if ($id <= 0) return null;
+    $filtro_usuario = $os_pode_ver_todas ? '' : ' AND criado_por_id = ?';
+    $stmt = $conn->prepare("SELECT $campos FROM os_chamados WHERE tenant_id = ? AND id = ?$filtro_usuario LIMIT 1");
+    if (!$stmt) return null;
+    if ($os_pode_ver_todas) {
+        $stmt->bind_param('ii', $tenant_id, $id);
+    } else {
+        $stmt->bind_param('iii', $tenant_id, $id, $os_usuario_id);
+    }
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc() ?: null;
+    $stmt->close();
+    return $row;
+}
+
+function os_exigir_acesso(int $id, string $mensagem = 'OS não encontrada'): array {
+    global $conn;
+    $os = os_carregar_acessivel($conn, $id);
+    if (!$os) retornar_json(false, $mensagem);
+    return $os;
+}
+
+function os_exigir_gestor(): void {
+    global $os_pode_ver_todas;
+    if (!$os_pode_ver_todas) retornar_json(false, 'Apenas administradores e gerentes podem alterar as configurações de Ordens de Serviço');
+}
+
 // ─── Conexão ─────────────────────────────────────────
 $conn = conectar_banco();
 if (!$conn) {
@@ -735,9 +781,10 @@ switch ($acao) {
     // ─────────────────────────────────────────────────
     case 'dashboard_kpis':
         $kpis = [];
+        $os_scope = os_escopo_sql();
 
         // Totais por status
-        $res = $conn->query("SELECT status, COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id GROUP BY status");
+        $res = $conn->query("SELECT status, COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope GROUP BY status");
         $por_status = ['aberto'=>0,'andamento'=>0,'finalizado'=>0,'cancelado'=>0];
         if ($res) {
             while ($row = $res->fetch_assoc()) {
@@ -751,27 +798,27 @@ switch ($acao) {
         $kpis['total']       = array_sum($por_status);
 
         // Tempo médio de finalização (em horas)
-        $res = $conn->query("SELECT AVG(horas_totais) as media FROM os_chamados WHERE tenant_id = $tenant_id AND status='finalizado' AND horas_totais IS NOT NULL");
+        $res = $conn->query("SELECT AVG(horas_totais) as media FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND status='finalizado' AND horas_totais IS NOT NULL");
         $row = $res ? $res->fetch_assoc() : null;
         $kpis['tempo_medio_horas'] = $row ? round((float)$row['media'], 1) : 0;
 
         // OS abertas hoje
-        $res = $conn->query("SELECT COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND DATE(data_abertura) = CURDATE()");
+        $res = $conn->query("SELECT COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND DATE(data_abertura) = CURDATE()");
         $row = $res ? $res->fetch_assoc() : null;
         $kpis['abertas_hoje'] = $row ? (int)$row['total'] : 0;
 
         // OS urgentes em aberto
-        $res = $conn->query("SELECT COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND prioridade='urgente' AND status IN ('aberto','andamento')");
+        $res = $conn->query("SELECT COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND prioridade='urgente' AND status IN ('aberto','andamento')");
         $row = $res ? $res->fetch_assoc() : null;
         $kpis['urgentes_abertas'] = $row ? (int)$row['total'] : 0;
 
         // OS com prazo vencido (data_previsao < hoje e não finalizado)
-        $res = $conn->query("SELECT COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND data_previsao IS NOT NULL AND data_previsao < CURDATE() AND status NOT IN ('finalizado','cancelado')");
+        $res = $conn->query("SELECT COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND data_previsao IS NOT NULL AND data_previsao < CURDATE() AND status NOT IN ('finalizado','cancelado')");
         $row = $res ? $res->fetch_assoc() : null;
         $kpis['prazo_vencido'] = $row ? (int)$row['total'] : 0;
 
         // Últimas 5 OS abertas
-        $res = $conn->query("SELECT id, numero, titulo, status, prioridade, departamento, DATE_FORMAT(data_abertura,'%d/%m/%Y %H:%i') as data_abertura FROM os_chamados WHERE tenant_id = $tenant_id ORDER BY id DESC LIMIT 5");
+        $res = $conn->query("SELECT id, numero, titulo, status, prioridade, departamento, DATE_FORMAT(data_abertura,'%d/%m/%Y %H:%i') as data_abertura FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope ORDER BY id DESC LIMIT 5");
         $ultimas = [];
         if ($res) {
             while ($row = $res->fetch_assoc()) $ultimas[] = $row;
@@ -779,7 +826,7 @@ switch ($acao) {
         $kpis['ultimas_os'] = $ultimas;
 
         // Por prioridade
-        $res = $conn->query("SELECT prioridade, COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND status NOT IN ('finalizado','cancelado') GROUP BY prioridade");
+        $res = $conn->query("SELECT prioridade, COUNT(*) as total FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND status NOT IN ('finalizado','cancelado') GROUP BY prioridade");
         $por_prioridade = ['baixa'=>0,'media'=>0,'alta'=>0,'urgente'=>0];
         if ($res) {
             while ($row = $res->fetch_assoc()) {
@@ -794,7 +841,7 @@ switch ($acao) {
                    COUNT(*) as total,
                    SUM(status IN ('aberto','andamento')) as abertas,
                    SUM(status = 'finalizado') as finalizadas
-            FROM os_chamados WHERE tenant_id = $tenant_id AND departamento IS NOT NULL AND TRIM(departamento) != ''
+            FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND departamento IS NOT NULL AND TRIM(departamento) != ''
             GROUP BY UPPER(TRIM(departamento))
             ORDER BY total DESC
             LIMIT 12
@@ -820,7 +867,7 @@ switch ($acao) {
                    SUM(status IN ('aberto','andamento')) as abertas,
                    SUM(status = 'finalizado') as finalizadas,
                    SUM(status = 'cancelado') as canceladas
-            FROM os_chamados WHERE tenant_id = $tenant_id AND morador_unidade IS NOT NULL AND TRIM(morador_unidade) != ''
+            FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND morador_unidade IS NOT NULL AND TRIM(morador_unidade) != ''
             GROUP BY TRIM(morador_unidade)
             ORDER BY total DESC
             LIMIT 5
@@ -859,6 +906,8 @@ switch ($acao) {
         $wb_str = $wb ? implode(' AND ', $wb) : '1=1';
 
         $wu = $unid_r ? "AND TRIM(morador_unidade) LIKE '%$unid_r%'" : '';
+        $os_scope = os_escopo_sql();
+        $os_scope_o = os_escopo_sql('o');
 
         $dados_rel = [];
         $sql_rel   = '';
@@ -874,7 +923,7 @@ switch ($acao) {
                     DATE_FORMAT(data_finalizacao,'%d/%m/%Y') as finalizacao,
                     DATEDIFF(COALESCE(data_finalizacao,CURDATE()),data_abertura) as dias,
                     COALESCE(horas_totais,'—') as horas
-                FROM os_chamados WHERE tenant_id = $tenant_id AND $wb_str $wu
+                FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND $wb_str $wu
                 ORDER BY data_abertura DESC LIMIT 500";
                 break;
 
@@ -892,7 +941,7 @@ switch ($acao) {
                     SUM(prioridade='media') as medias,
                     SUM(prioridade='baixa') as baixas,
                     DATE_FORMAT(MIN(data_abertura),'%d/%m/%Y') as abertura_mais_antiga
-                FROM os_chamados WHERE tenant_id = $tenant_id AND status IN ('aberto','andamento')
+                FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND status IN ('aberto','andamento')
                   AND morador_unidade IS NOT NULL AND TRIM(morador_unidade) != ''
                   AND $wb2_str $wu
                 GROUP BY TRIM(morador_unidade)
@@ -915,7 +964,7 @@ switch ($acao) {
                     COALESCE(horas_estimadas,'—') as horas_estimadas,
                     COALESCE(horas_totais,'—') as horas_reais,
                     COALESCE(observacao_finalizacao,'') as observacao
-                FROM os_chamados WHERE tenant_id = $tenant_id AND status='finalizado' AND $wb3_str $wu
+                FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND status='finalizado' AND $wb3_str $wu
                 ORDER BY data_finalizacao DESC LIMIT 500";
                 break;
 
@@ -930,7 +979,7 @@ switch ($acao) {
                         THEN DATEDIFF(data_finalizacao,data_abertura) END),1) as media_dias,
                     ROUND(SUM(COALESCE(horas_totais,0)),1) as total_horas,
                     ROUND(SUM(prioridade='urgente')) as urgentes_atendidas
-                FROM os_chamados WHERE tenant_id = $tenant_id AND $wb_str $wu
+                FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND $wb_str $wu
                 GROUP BY atendente_nome
                 ORDER BY finalizadas DESC, total DESC";
                 break;
@@ -946,7 +995,7 @@ switch ($acao) {
                     ROUND(AVG(CASE WHEN status='finalizado' AND data_finalizacao IS NOT NULL
                         THEN DATEDIFF(data_finalizacao,data_abertura) END),1) as media_dias_resolucao,
                     ROUND(SUM(COALESCE(horas_totais,0)),1) as total_horas
-                FROM os_chamados WHERE tenant_id = $tenant_id AND $wb_str $wu
+                FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND $wb_str $wu
                 GROUP BY UPPER(TRIM(departamento))
                 ORDER BY total DESC";
                 break;
@@ -962,7 +1011,7 @@ switch ($acao) {
                     DATE_FORMAT(data_abertura,'%d/%m/%Y') as abertura,
                     DATE_FORMAT(data_previsao,'%d/%m/%Y') as previsao,
                     DATEDIFF(CURDATE(),data_previsao) as dias_atraso
-                FROM os_chamados WHERE tenant_id = $tenant_id AND data_previsao IS NOT NULL
+                FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND data_previsao IS NOT NULL
                   AND data_previsao < CURDATE()
                   AND status NOT IN ('finalizado','cancelado')
                   AND $wb5_str $wu
@@ -978,7 +1027,7 @@ switch ($acao) {
                     MAX(DATEDIFF(data_finalizacao,data_abertura)) as max_dias,
                     ROUND(AVG(COALESCE(horas_totais,0)),1) as media_horas,
                     ROUND(SUM(COALESCE(horas_totais,0)),1) as total_horas
-                FROM os_chamados WHERE tenant_id = $tenant_id AND status='finalizado' AND data_finalizacao IS NOT NULL AND $wb_str $wu
+                FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND status='finalizado' AND data_finalizacao IS NOT NULL AND $wb_str $wu
                 GROUP BY UPPER(TRIM(departamento))
                 ORDER BY media_dias DESC";
                 break;
@@ -995,7 +1044,7 @@ switch ($acao) {
                         THEN DATEDIFF(o.data_finalizacao,o.data_abertura) END),1) as media_dias
                 FROM os_chamados o
                 LEFT JOIN os_assuntos a ON o.assunto_id = a.id
-                WHERE $wb_str $wu
+                WHERE o.tenant_id = $tenant_id AND $os_scope_o AND $wb_str $wu
                 GROUP BY o.assunto_id, a.nome, UPPER(TRIM(o.departamento))
                 ORDER BY total DESC
                 LIMIT 30";
@@ -1069,6 +1118,11 @@ switch ($acao) {
             $params[] = $data_fim;
             $types .= 's';
         }
+        if (!$os_pode_ver_todas) {
+            $where[] = 'o.criado_por_id = ?';
+            $params[] = $os_usuario_id;
+            $types .= 'i';
+        }
 
         $where_sql = implode(' AND ', $where);
 
@@ -1120,6 +1174,7 @@ switch ($acao) {
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
         $numero_legado = trim((string)($_GET['numero'] ?? $body['numero'] ?? ''));
         if ($id <= 0 && $numero_legado === '') retornar_json(false, 'ID inválido');
+        $filtro_busca_usuario = $os_pode_ver_todas ? '' : ' AND o.criado_por_id = ?';
 
         // Compatibilidade temporária para O.S. legadas gravadas com id=0 antes
         // da correção de AUTO_INCREMENT. O número é único por tenant e permite
@@ -1129,18 +1184,26 @@ switch ($acao) {
                 "SELECT o.*, a.nome as assunto_nome
                  FROM os_chamados o
                  LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id
-                 WHERE o.tenant_id = ? AND o.id = ?"
+                 WHERE o.tenant_id = ? AND o.id = ?$filtro_busca_usuario"
             );
-            $stmt->bind_param('ii', $tenant_id, $id);
+            if ($os_pode_ver_todas) {
+                $stmt->bind_param('ii', $tenant_id, $id);
+            } else {
+                $stmt->bind_param('iii', $tenant_id, $id, $os_usuario_id);
+            }
         } else {
             $stmt = $conn->prepare(
                 "SELECT o.*, a.nome as assunto_nome
                  FROM os_chamados o
                  LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id
-                 WHERE o.tenant_id = ? AND o.numero = ?
+                 WHERE o.tenant_id = ? AND o.numero = ?$filtro_busca_usuario
                  ORDER BY o.data_abertura DESC LIMIT 1"
             );
-            $stmt->bind_param('is', $tenant_id, $numero_legado);
+            if ($os_pode_ver_todas) {
+                $stmt->bind_param('is', $tenant_id, $numero_legado);
+            } else {
+                $stmt->bind_param('isi', $tenant_id, $numero_legado, $os_usuario_id);
+            }
         }
         $stmt->execute();
         $os = $stmt->get_result()->fetch_assoc();
@@ -1199,6 +1262,7 @@ switch ($acao) {
 
         if (empty($titulo)) retornar_json(false, 'Título é obrigatório');
         if (!in_array($prioridade, ['baixa','media','alta','urgente'])) $prioridade = 'media';
+        if ($os_pai_id) os_exigir_acesso($os_pai_id, 'OS pai não encontrada');
 
         // Gerar número sequencial único: OS-YYYY-NNNN
         $ano = date('Y');
@@ -1354,6 +1418,7 @@ switch ($acao) {
         $dados = array_merge($body, $_POST);
         $id = (int)($dados['id'] ?? $_GET['id'] ?? 0);
         if (!$id) retornar_json(false, 'ID inválido');
+        os_exigir_acesso($id);
 
         $titulo      = trim($dados['titulo']      ?? '');
         $descricao   = trim($dados['descricao']   ?? '');
@@ -1402,7 +1467,7 @@ switch ($acao) {
 
             $resAntesProj = $conn->query("SELECT o.projeto_etapa_id, o.projeto_percentual, e.nome AS etapa_nome
                                            FROM os_chamados o LEFT JOIN os_etapas e ON e.id = o.projeto_etapa_id
-                                           WHERE o.id = $id LIMIT 1");
+                                           WHERE o.tenant_id = $tenant_id AND o.id = $id LIMIT 1");
             $antesProj = $resAntesProj ? $resAntesProj->fetch_assoc() : null;
             $etapaAnteriorId    = $antesProj ? (int)$antesProj['projeto_etapa_id'] : 0;
             $etapaAnteriorNome  = $antesProj ? $antesProj['etapa_nome'] : null;
@@ -1473,6 +1538,7 @@ switch ($acao) {
     case 'excluir':
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
         if (!$id) retornar_json(false, 'ID inválido');
+        os_exigir_acesso($id);
 
         // Verificar se existe
         $res = $conn->query("SELECT id, numero, status FROM os_chamados WHERE tenant_id = $tenant_id AND id = $id");
@@ -1498,6 +1564,7 @@ switch ($acao) {
         $os_id = (int)($_GET['os_id'] ?? $body['os_id'] ?? 0);
         $publico = ($_GET['publico'] ?? $body['publico'] ?? '') === '1';
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
 
         $filtro_publico = $publico ? " AND i.tipo <> 'nota_interna'" : '';
         $stmt = $conn->prepare(
@@ -1542,6 +1609,7 @@ switch ($acao) {
         $publica    = !empty($dados['publica']) ? 1 : 0;
 
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
         if (empty($mensagem)) retornar_json(false, 'Mensagem é obrigatória');
         if (!in_array($tipo, ['comentario','andamento','solucao','nota_interna'])) $tipo = 'comentario';
         if ($tipo === 'nota_interna') $publica = 0; // notas internas nunca são públicas
@@ -1661,6 +1729,7 @@ switch ($acao) {
         $observacao      = _os_texto_simples($dados['observacao_finalizacao'] ?? '');
 
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
         if ($horas_totais !== null && $horas_totais < 0) retornar_json(false, 'Horas totais não podem ser negativas');
 
         $res = $conn->query("SELECT id, status, numero, titulo, morador_id, morador_unidade FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
@@ -1736,6 +1805,7 @@ switch ($acao) {
         $prioridade  = trim($dados['prioridade'] ?? 'media');
         $os_pai_id   = !empty($dados['os_pai_id']) ? (int)$dados['os_pai_id'] : null;
         if (!$id) retornar_json(false, 'ID inválido');
+        if (!$os_pode_ver_todas) retornar_json(false, 'Apenas administradores e gerentes podem assumir OS de outros usuários');
         if (!in_array($prioridade, ['baixa','media','alta','urgente'])) retornar_json(false, 'Prioridade inválida');
         // Verificar se OS existe e é do portal
         $res_os = $conn->query("SELECT id, status, origem_portal, assumido_por_id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $id");
@@ -1771,6 +1841,8 @@ switch ($acao) {
         $os_pai_id = (int)($dados['os_pai_id'] ?? 0);
 
         if (!$os_id || !$os_pai_id) retornar_json(false, 'os_id e os_pai_id são obrigatórios');
+        os_exigir_acesso($os_id);
+        os_exigir_acesso($os_pai_id);
         if ($os_id === $os_pai_id) retornar_json(false, 'Uma OS não pode depender de si mesma');
 
         // Verificar se ambas existem
@@ -1822,6 +1894,7 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'criar_assunto':
+        os_exigir_gestor();
         $dados = array_merge($body, $_POST);
         $nome        = trim($dados['nome']        ?? '');
         $descricao   = trim($dados['descricao']   ?? '');
@@ -1838,6 +1911,7 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'editar_assunto':
+        os_exigir_gestor();
         $dados = array_merge($body, $_POST);
         $id          = (int)($dados['id'] ?? $_GET['id'] ?? 0);
         $nome        = trim($dados['nome']        ?? '');
@@ -1857,6 +1931,7 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'excluir_assunto':
+        os_exigir_gestor();
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
         if (!$id) retornar_json(false, 'ID inválido');
 
@@ -1890,6 +1965,7 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'salvar_config':
+        os_exigir_gestor();
         $dados = array_merge($body, $_POST);
         $id             = !empty($dados['id']) ? (int)$dados['id'] : 0;
         $assunto_id     = !empty($dados['assunto_id']) ? (int)$dados['assunto_id'] : null;
@@ -1918,6 +1994,7 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'excluir_config':
+        os_exigir_gestor();
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
         if (!$id) retornar_json(false, 'ID inválido');
         $stmt = $conn->prepare("DELETE FROM os_config_homem_hora WHERE tenant_id = $tenant_id AND id = ?");
@@ -1930,6 +2007,7 @@ switch ($acao) {
     case 'listar_materiais':
         $os_id = (int)($_GET['os_id'] ?? $body['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
 
         $stmt = $conn->prepare("SELECT * FROM os_materiais_usados WHERE tenant_id = $tenant_id AND os_id = ? ORDER BY adicionado_em ASC");
         $stmt->bind_param('i', $os_id);
@@ -1951,6 +2029,7 @@ switch ($acao) {
         $preco_unitario = (float)($dados['preco_unitario'] ?? 0);
 
         if (!$os_id || !$produto_id) retornar_json(false, 'os_id e produto_id são obrigatórios');
+        os_exigir_acesso($os_id);
         if ($quantidade <= 0) retornar_json(false, 'Quantidade deve ser maior que zero');
 
         // Verificar se OS não está finalizada
@@ -1990,6 +2069,7 @@ switch ($acao) {
         $res = $conn->query("SELECT estoque_baixado, os_id FROM os_materiais_usados WHERE tenant_id = $tenant_id AND id = $id");
         $mat = $res ? $res->fetch_assoc() : null;
         if (!$mat) retornar_json(false, 'Material não encontrado');
+        os_exigir_acesso((int)$mat['os_id']);
         if ($mat['estoque_baixado']) retornar_json(false, 'Material já baixado do estoque — não pode ser removido');
 
         $stmt = $conn->prepare("DELETE FROM os_materiais_usados WHERE tenant_id = $tenant_id AND id = ?");
@@ -2003,6 +2083,7 @@ switch ($acao) {
     case 'baixar_estoque_os':
         $os_id = (int)($_GET['os_id'] ?? $body['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
 
         $res_mats = $conn->query(
             "SELECT * FROM os_materiais_usados WHERE tenant_id = $tenant_id AND os_id = $os_id AND estoque_baixado = 0"
@@ -2038,6 +2119,7 @@ switch ($acao) {
         $dados = array_merge($body, $_POST);
         $os_id = (int)($dados['os_id'] ?? $dados['id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
 
         $res = $conn->query("SELECT id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
         if (!$res || $res->num_rows === 0) retornar_json(false, 'O.S não encontrada');
@@ -2073,6 +2155,7 @@ switch ($acao) {
     case 'upload_imagem_capa':
         $os_id = (int)($_POST['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
         if (empty($_FILES['imagem']['tmp_name'])) retornar_json(false, 'Nenhuma imagem enviada');
 
         $res = $conn->query("SELECT id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
@@ -2097,6 +2180,7 @@ switch ($acao) {
         $res = $conn->query("SELECT id, os_id FROM os_interacoes WHERE tenant_id = $tenant_id AND id = $interacao_id");
         $interacaoRow = $res ? $res->fetch_assoc() : null;
         if (!$interacaoRow) retornar_json(false, 'Interação não encontrada');
+        os_exigir_acesso((int)$interacaoRow['os_id']);
 
         $salvas = [];
         $arquivos = $_FILES['fotos'] ?? null;
@@ -2146,6 +2230,7 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'criar_etapa':
+        os_exigir_gestor();
         $dados = array_merge($body, $_POST);
         $nome  = trim($dados['nome']  ?? '');
         $ordem = (int)($dados['ordem'] ?? 0);
@@ -2160,6 +2245,7 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'editar_etapa':
+        os_exigir_gestor();
         $dados = array_merge($body, $_POST);
         $id    = (int)($dados['id'] ?? $_GET['id'] ?? 0);
         $nome  = trim($dados['nome']  ?? '');
@@ -2178,6 +2264,7 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'excluir_etapa':
+        os_exigir_gestor();
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
         if (!$id) retornar_json(false, 'ID inválido');
 
@@ -2198,6 +2285,7 @@ switch ($acao) {
     case 'listar_documentos_projeto':
         $os_id = (int)($_GET['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
 
         $tab_doc = $conn->query("SHOW TABLES LIKE 'documentos'");
         if (!$tab_doc || $tab_doc->num_rows === 0) retornar_json(true, 'OK', []);
@@ -2218,6 +2306,7 @@ switch ($acao) {
         $os_id   = (int)($dados['os_id'] ?? 0);
         $doc_ids = $dados['documento_ids'] ?? [];
         if (!$os_id) retornar_json(false, 'os_id inválido');
+        os_exigir_acesso($os_id);
         if (!is_array($doc_ids)) $doc_ids = [];
         $doc_ids = array_values(array_unique(array_filter(array_map('intval', $doc_ids))));
 

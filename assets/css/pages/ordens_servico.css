@@ -82,6 +82,21 @@
     transform: translateY(-1px);
 }
 
+.page-ordens-servico .os-escopo-aviso {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -4px 0 1rem;
+    padding: 9px 12px;
+    color: #1d4ed8;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    font-size: .82rem;
+    line-height: 1.35;
+}
+.page-ordens-servico .os-escopo-aviso i { flex-shrink: 0; }
+
 /* ── Abas principais ──────────────────────────────────────────────────── */
 .page-ordens-servico .os-tabs {
     display: flex;

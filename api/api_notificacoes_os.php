@@ -104,6 +104,13 @@ verificarAutenticacao(true, 'operador');
 $tenant_id = exigirTenantId();
 $db  = conectar_banco();
 $db->set_charset('utf8mb4');
+$permissaoUsuario = strtolower(trim((string)($_SESSION['usuario_permissao'] ?? 'operador')));
+$podeVerTodasOS = in_array($permissaoUsuario, ['admin', 'administrador', 'gerente', 'super_admin'], true);
+$filtroVisibilidadeOS = $podeVerTodasOS ? '1=1' : 'o.criado_por_id = ' . (int)($_SESSION['usuario_id'] ?? 0);
+$uidAtual = (int)($_SESSION['usuario_id'] ?? 0);
+$filtroAlertasOS = $podeVerTodasOS
+    ? "o.atendente_id = $uidAtual OR o.morador_id = $uidAtual OR o.criado_por_id = $uidAtual"
+    : "o.criado_por_id = $uidAtual";
 
 /*
  * Não execute DDL a cada polling do sino. CREATE TABLE IF NOT EXISTS em cada
@@ -163,17 +170,20 @@ switch ($acao) {
     case 'meus_alertas':
         $uid    = intval($usuario['id']);
         $limite = intval($_GET['limite'] ?? 30);
-        // Auto-sync: incluir alertas de OS onde o usuário é atendente, morador ou criador
+        // Usuários comuns só recebem alertas de O.S. que eles abriram. Gestores
+        // mantêm o comportamento operacional de acompanhar OS atribuídas.
         $db->query("INSERT IGNORE INTO notif_destinatarios (alerta_id, usuario_id)
             SELECT a.id, $uid
             FROM notif_alertas a
             INNER JOIN os_chamados o ON o.id = a.link_id AND a.link_pagina = 'ordens_servico'
-            WHERE o.atendente_id = $uid OR o.morador_id = $uid OR o.criado_por_id = $uid");
+            WHERE o.tenant_id = $tenant_id AND ($filtroAlertasOS)");
         $sql = "SELECT a.*, d.lido, d.dispensado, d.id AS dest_id,
                     DATE_FORMAT(a.criado_em,'%d/%m/%Y %H:%i') AS criado_fmt
                 FROM notif_alertas a
                 JOIN notif_destinatarios d ON d.alerta_id = a.id AND d.usuario_id = $uid
+                INNER JOIN os_chamados o ON o.id = a.link_id AND a.link_pagina = 'ordens_servico' AND o.tenant_id = $tenant_id
                 WHERE d.dispensado = 0
+                  AND $filtroVisibilidadeOS
                 ORDER BY d.lido ASC, a.criado_em DESC
                 LIMIT $limite";
         $rows = $db->query($sql)->fetch_all(MYSQLI_ASSOC);
@@ -247,9 +257,12 @@ switch ($acao) {
             SELECT a.id, $uid
             FROM notif_alertas a
             INNER JOIN os_chamados o ON o.id = a.link_id AND a.link_pagina = 'ordens_servico'
-            WHERE o.atendente_id = $uid OR o.morador_id = $uid OR o.criado_por_id = $uid");
+            WHERE o.tenant_id = $tenant_id AND ($filtroAlertasOS)");
 
         $where = "d.usuario_id = $uid";
+        $where .= " AND a.link_pagina = 'ordens_servico' AND EXISTS (SELECT 1 FROM os_chamados os_acl WHERE os_acl.id = a.link_id AND os_acl.tenant_id = $tenant_id";
+        if (!$podeVerTodasOS) $where .= " AND os_acl.criado_por_id = $uid";
+        $where .= ")";
         if ($evFiltro)    $where .= " AND a.evento = '$evFiltro'";
         if ($lidoFiltro >= 0) $where .= " AND d.lido = $lidoFiltro";
 

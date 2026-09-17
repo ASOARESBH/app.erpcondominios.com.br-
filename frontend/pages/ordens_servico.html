@@ -20,6 +20,11 @@
         </div>
     </div>
 
+    <div id="os-escopo-aviso" class="os-escopo-aviso" style="display:none;" role="status">
+        <i class="fas fa-lock"></i>
+        <span>Seu acesso está restrito às Ordens de Serviço abertas por você. Administradores e gerentes podem visualizar todas.</span>
+    </div>
+
     <!-- Abas internas -->
     <div class="os-tabs">
         <button class="os-tab-btn active" data-tab="dashboard">
@@ -28,7 +33,7 @@
         <button class="os-tab-btn" data-tab="chamados">
             <i class="fas fa-list-alt"></i> Chamados
         </button>
-        <button class="os-tab-btn" data-tab="configuracoes">
+        <button class="os-tab-btn" data-tab="configuracoes" data-os-gestor-only style="display:none;">
             <i class="fas fa-cog"></i> Configurações
         </button>
         <button class="os-tab-btn" data-tab="relatorios">
@@ -240,7 +245,7 @@
     <!-- ═══════════════════════════════════════════════════════ -->
     <!-- ABA: CONFIGURAÇÕES                                      -->
     <!-- ═══════════════════════════════════════════════════════ -->
-    <div class="os-tab-content" id="os-tab-configuracoes">
+    <div class="os-tab-content" id="os-tab-configuracoes" data-os-gestor-only style="display:none;">
 
         <div class="os-config-grid">
 
@@ -934,5 +939,3 @@
 
 <!-- Toast de notificação -->
 <div class="os-toast" id="os-toast" style="display:none;"></div>
-
-

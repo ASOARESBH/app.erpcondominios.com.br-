@@ -55,6 +55,25 @@ function normalizarIdOS(valor) {
     return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+function usuarioEhGestorOS() {
+    const permissao = String(state.usuarioLogado?.permissao || '').trim().toLowerCase();
+    return ['admin', 'administrador', 'gerente', 'super_admin'].includes(permissao);
+}
+
+function usuarioPodeEditarOS(os) {
+    if (!state.usuarioLogado || !os) return false;
+    return usuarioEhGestorOS() || Number(os.criado_por_id) === Number(state.usuarioLogado.id);
+}
+
+function aplicarPoliticaInterfaceOS() {
+    const gestor = usuarioEhGestorOS();
+    document.querySelectorAll('[data-os-gestor-only]').forEach(el => {
+        el.style.display = gestor ? '' : 'none';
+    });
+    const aviso = document.getElementById('os-escopo-aviso');
+    if (aviso) aviso.style.display = gestor ? 'none' : 'flex';
+}
+
 function escaparHtml(valor) {
     return String(valor ?? '').replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
@@ -184,6 +203,10 @@ function initAbas() {
     document.querySelectorAll('.os-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tab = btn.dataset.tab;
+            if (tab === 'configuracoes' && !usuarioEhGestorOS()) {
+                toast('Apenas administradores e gerentes podem acessar as configurações de OS', 'aviso');
+                return;
+            }
             document.querySelectorAll('.os-tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.os-tab-content').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
@@ -335,8 +358,9 @@ async function carregarChamados(pagina = 1) {
     tbody.innerHTML = lista.map(os => {
         const idOS = normalizarIdOS(os.id) || 0;
         const numeroJS = JSON.stringify(String(os.numero || '')).replace(/'/g, '&#39;');
+        const podeEditar = usuarioPodeEditarOS(os);
         const isPortal = os.origem_portal === 'portal_morador';
-        const precisaAssumir = isPortal && !os.assumido_por_id;
+        const precisaAssumir = usuarioEhGestorOS() && isPortal && !os.assumido_por_id;
         const trStyle = isPortal ? 'background:linear-gradient(90deg,#fff7ed 0,transparent 8px);border-left:3px solid #d97706;' : '';
         return `
         <tr style="${trStyle}">
@@ -359,9 +383,9 @@ async function carregarChamados(pagina = 1) {
             <td>${os.atendente_nome || '—'}</td>
             <td>
                 <button class="os-btn-acao ver" onclick='osVerDetalhe(${idOS}, ${numeroJS})' title="Ver detalhes"><i class="fas fa-eye"></i></button>
-                ${os.status !== 'finalizado' ? `<button class="os-btn-acao editar" onclick="osAbrirEditar(${idOS})" title="Editar"><i class="fas fa-edit"></i></button>` : ''}
+                ${podeEditar && os.status !== 'finalizado' ? `<button class="os-btn-acao editar" onclick="osAbrirEditar(${idOS})" title="Editar"><i class="fas fa-edit"></i></button>` : ''}
                 <button class="os-btn-acao imprimir" onclick="osImprimir(${idOS})" title="Imprimir / Gerar PDF"><i class="fas fa-print"></i></button>
-                ${os.status !== 'finalizado' ? `<button class="os-btn-acao excluir" onclick="osExcluir(${idOS},'${os.numero}')" title="Excluir"><i class="fas fa-trash"></i></button>` : ''}
+                ${podeEditar && os.status !== 'finalizado' ? `<button class="os-btn-acao excluir" onclick="osExcluir(${idOS},'${os.numero}')" title="Excluir"><i class="fas fa-trash"></i></button>` : ''}
                 ${precisaAssumir ? `<button class="os-btn-acao" style="background:#d97706;color:#fff;border-color:#d97706" onclick="osAbrirAssumirPortal(${idOS})" title="Assumir OS do Portal"><i class="fas fa-hand-paper"></i></button>` : ''}
             </td>
         </tr>
@@ -581,6 +605,10 @@ async function abrirEditar(id) {
     const res = await _get('buscar', { id });
     if (!res.sucesso) { toast('Erro ao carregar OS', 'erro'); return; }
     const os = res.dados;
+    if (!usuarioPodeEditarOS(os)) {
+        toast('Você só pode editar Ordens de Serviço abertas por você', 'erro');
+        return;
+    }
     limparFormOS();
     document.getElementById('modal-os-titulo').innerHTML = '<i class="fas fa-edit"></i> Editar O.S — ' + os.numero;
     document.getElementById('os-id').value = os.id;
@@ -772,10 +800,14 @@ async function abrirDetalhe(id, numeroLegado = '') {
 
     // Mostrar/ocultar formulários conforme status
     const finalizado = os.status === 'finalizado' || os.status === 'cancelado';
-    const somenteLeitura = finalizado || legadoComIdZero;
+    const podeEditar = usuarioPodeEditarOS(os);
+    const somenteLeitura = finalizado || legadoComIdZero || !podeEditar;
     document.getElementById('os-nova-interacao-form').style.display = somenteLeitura ? 'none' : 'block';
     document.getElementById('os-finalizar-form').style.display = 'none';
     document.getElementById('btnIniciarFinalizacao').style.display = somenteLeitura ? 'none' : 'inline-flex';
+    document.getElementById('btnEditarOS').style.display = podeEditar ? 'inline-flex' : 'none';
+    const btnSalvarProjeto = document.getElementById('btnSalvarProjeto');
+    if (btnSalvarProjeto) btnSalvarProjeto.style.display = podeEditar ? 'inline-flex' : 'none';
     // Ocultar form de adicionar material em O.S. encerrada ou com id legado inválido.
     const matBusca = document.querySelector('#dtab-materiais .os-mat-busca');
     if (matBusca) matBusca.style.display = somenteLeitura ? 'none' : '';
@@ -2311,8 +2343,12 @@ function init_modulo() {
                 state.usuarioLogado = json.usuario;
                 log('Usuário logado:', json.usuario.nome);
             }
+            aplicarPoliticaInterfaceOS();
         })
-        .catch(e => log('Erro ao buscar usuário logado', e))
+        .catch(e => {
+            log('Erro ao buscar usuário logado', e);
+            aplicarPoliticaInterfaceOS();
+        })
         .finally(() => {
             carregarSelects().then(() => {
                 // Após carregar selects, auto-preencher o atendente no select
@@ -2349,6 +2385,10 @@ if (window.OrdensServico) delete window.OrdensServico;
 // ─── ASSUMIR OS DO PORTAL ──────────────────────────────────────────────────────
 // Nota: estas funções são expostas via window.* pois são chamadas inline no HTML
 function osAbrirAssumirPortal(id) {
+    if (!usuarioEhGestorOS()) {
+        toast('Apenas administradores e gerentes podem assumir OS de outros usuários', 'erro');
+        return;
+    }
     const existente = document.getElementById('modalAssumirPortalOS');
     if (existente) existente.remove();
     const modalEl = document.createElement('div');
@@ -2397,6 +2437,10 @@ function osAbrirAssumirPortal(id) {
 window.osAbrirAssumirPortal = osAbrirAssumirPortal;
 
 function osConfirmarAssumirPortal(id) {
+    if (!usuarioEhGestorOS()) {
+        toast('Apenas administradores e gerentes podem assumir OS de outros usuários', 'erro');
+        return;
+    }
     const prioridade = document.getElementById('assumirPortalPrioridade')?.value || 'media';
     const osPaiRaw   = document.getElementById('assumirPortalOSPai')?.value || '';
     const osPaiId    = osPaiRaw ? parseInt(osPaiRaw) : null;

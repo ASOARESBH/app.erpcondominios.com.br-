@@ -7,9 +7,9 @@
 // — este é o ÚNICO caminho para obter essas imagens. Nunca serve o arquivo
 // sem antes validar:
 //   1) o arquivo realmente existe;
-//   2) o projeto está publicado (projeto_publico=1) OU quem pede é um
-//      administrador autenticado do ERP (que pode ver mesmo antes de
-//      publicar, para pré-visualizar o que está configurando).
+//   2) o projeto está publicado (projeto_publico=1) OU quem pede é o
+//      proprietário autenticado da O.S ou um administrador/gerente do ERP
+//      (que pode ver mesmo antes de publicar, para pré-visualizar).
 // Não há distinção adicional para o Portal do Morador: uma vez que o
 // projeto é público, a imagem é, por definição, pública também — por
 // isso <img> comuns funcionam (sem precisar anexar token em cada tag).
@@ -93,17 +93,22 @@ if (!$osId) img_negar('os_id inválido.', 400);
 
 $osTenantDaFoto = (int)($fotoRow['tenant_id'] ?? 0);
 $sqlOs = $tipo === 'foto'
-    ? "SELECT tenant_id, projeto_publico, projeto_imagem_capa FROM os_chamados WHERE id = $osId AND tenant_id = $osTenantDaFoto LIMIT 1"
-    : "SELECT tenant_id, projeto_publico, projeto_imagem_capa FROM os_chamados WHERE id = $osId LIMIT 1";
+    ? "SELECT tenant_id, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = $osId AND tenant_id = $osTenantDaFoto LIMIT 1"
+    : "SELECT tenant_id, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = $osId LIMIT 1";
 $res = $conn->query($sqlOs);
 $os  = $res ? $res->fetch_assoc() : null;
 if (!$os) img_negar('Projeto não encontrado.', 404);
 
 // ── Autorização ──────────────────────────────────────
-// Admin autenticado do ERP sempre pode ver (inclusive antes de publicar,
-// para pré-visualizar). Qualquer outro caso exige projeto publicado.
-$usuarioAdmin = verificarAutenticacao(false);
-$autorizado   = $usuarioAdmin || (int)$os['projeto_publico'] === 1;
+// Projeto publicado é público por definição. Antes da publicação, somente o
+// proprietário da O.S e administradores/gerentes autenticados podem visualizar.
+$usuarioERP = verificarAutenticacao(false);
+$usuarioId  = (int)($usuarioERP['id'] ?? 0);
+$permissao  = strtolower(trim((string)($usuarioERP['permissao'] ?? '')));
+$podeVerTodas = in_array($permissao, ['admin', 'administrador', 'gerente', 'super_admin'], true);
+$ehProprietario = $usuarioId > 0 && $usuarioId === (int)($os['criado_por_id'] ?? 0);
+$mesmoTenant = !$usuarioERP || (int)($usuarioERP['tenant_id'] ?? 0) === (int)$os['tenant_id'];
+$autorizado   = (int)$os['projeto_publico'] === 1 || ($usuarioERP && $mesmoTenant && ($podeVerTodas || $ehProprietario));
 if (!$autorizado) img_negar('Este projeto não está disponível.', 403);
 
 // ── Servir ────────────────────────────────────────────
