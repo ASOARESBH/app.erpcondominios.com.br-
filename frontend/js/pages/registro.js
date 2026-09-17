@@ -240,11 +240,11 @@ function _setupCascataMorador() {
 
             if (!moradorId) {
                 if (infoWrap) infoWrap.style.display = 'none';
-                document.getElementById('moradorId').value = '';
+                setCampoValue('moradorId', '');
                 return;
             }
 
-            document.getElementById('moradorId').value = moradorId;
+            setCampoValue('moradorId', moradorId);
 
             if (infoBox) {
                 infoBox.innerHTML = `<i class="fas fa-home" style="margin-right:6px"></i>
@@ -488,8 +488,8 @@ async function _buscarOcupantePorDocumento() {
             // repetido / ocupante duplicado), nunca a falta do anexo.
             const podeAdicionar = !ehTitular && !jaAdicionado;
 
-            document.getElementById('nomeOcupante').value = v.nome_completo || '';
-            document.getElementById('ocupanteVisitanteIdTemp').value = podeAdicionar ? (v.id || '') : '';
+            setCampoValue('nomeOcupante', v.nome_completo || '');
+            setCampoValue('ocupanteVisitanteIdTemp', podeAdicionar ? (v.id || '') : '');
 
             if (box) {
                 box.style.display = 'flex';
@@ -514,8 +514,8 @@ async function _buscarOcupantePorDocumento() {
             }
             if (btnAdd) btnAdd.disabled = !podeAdicionar;
         } else {
-            document.getElementById('nomeOcupante').value = '';
-            document.getElementById('ocupanteVisitanteIdTemp').value = '';
+            setCampoValue('nomeOcupante', '');
+            setCampoValue('ocupanteVisitanteIdTemp', '');
             if (btnAdd) btnAdd.disabled = true;
             if (box) { box.style.display = 'none'; box.innerHTML = ''; }
             mostrarAlerta('error', 'Ocupante não encontrado no cadastro de Visitantes. Cadastre-o no módulo Visitantes antes de adicioná-lo aqui.');
@@ -611,8 +611,8 @@ async function _buscarVisitantePorDocumento() {
 
         if (data.sucesso && data.dados) {
             const v = data.dados;
-            document.getElementById('nomeVisitanteRegistro').value = v.nome_completo || '';
-            document.getElementById('visitanteIdRegistro').value   = v.id || '';
+            setCampoValue('nomeVisitanteRegistro', v.nome_completo || '');
+            setCampoValue('visitanteIdRegistro', v.id || '');
             const placaInput = document.getElementById('placaRegistro');
             if (placaInput && !placaInput.value && v.placa_veiculo) placaInput.value = v.placa_veiculo;
             if (box) {
@@ -631,8 +631,8 @@ async function _buscarVisitantePorDocumento() {
                         o servidor recusará ao salvar; caso contrário, o acesso pode ser registrado normalmente.</span>`;
             }
         } else {
-            document.getElementById('nomeVisitanteRegistro').value = '';
-            document.getElementById('visitanteIdRegistro').value   = '';
+            setCampoValue('nomeVisitanteRegistro', '');
+            setCampoValue('visitanteIdRegistro', '');
             if (box) { box.style.display = 'none'; box.innerHTML = ''; }
             mostrarAlerta('error', 'Visitante não encontrado. Preencha o nome manualmente ou cadastre-o no módulo Visitantes.');
         }
@@ -690,7 +690,7 @@ function onTipoChange() {
         const selU = document.getElementById('unidadeDestinoRegistro'); if (selU) selU.value = '';
         const selM = document.getElementById('moradorDestinoRegistro');
         if (selM) { selM.innerHTML = '<option value="">Selecione a unidade primeiro</option>'; selM.disabled = true; }
-        document.getElementById('visitanteIdRegistro').value = '';
+        setCampoValue('visitanteIdRegistro', '');
         const boxV = document.getElementById('visitanteEncontrado');
         if (boxV) { boxV.style.display = 'none'; boxV.innerHTML = ''; }
         _limparOcupantes();
@@ -700,7 +700,7 @@ function onTipoChange() {
         const selU = document.getElementById('unidadeMoradorRegistro'); if (selU) selU.value = '';
         const selM = document.getElementById('moradorSelecionadoRegistro');
         if (selM) { selM.innerHTML = '<option value="">Selecione a unidade primeiro</option>'; selM.disabled = true; }
-        document.getElementById('moradorId').value = '';
+        setCampoValue('moradorId', '');
         const iW = document.getElementById('moradorInfoWrap'); if (iW) iW.style.display = 'none';
         _resetarDependente();
     }
@@ -1017,16 +1017,22 @@ async function detectarVeiculoPorPlaca() {
     placaInput.dataset.consultando = '1';
     try {
         const resp = await fetch(`${API_VEICULOS}?acao=consultar_placa&placa=${encodeURIComponent(placa)}`);
+        if (!resp.ok) {
+            throw new Error(`Consulta de veículo falhou (HTTP ${resp.status})`);
+        }
         const data = await resp.json();
+        if (!data || typeof data !== 'object') {
+            throw new Error('Resposta inválida da consulta de veículo.');
+        }
         if (_isPedestre()) return;
         const veiculo = data.sucesso && data.dados?.existe ? data.dados : null;
         if (!veiculo) { esconderVeiculoEncontrado(); return; }
 
-        document.getElementById('modeloRegistro').value = veiculo.modelo || '';
-        document.getElementById('corRegistro').value = veiculo.cor || '';
-        document.getElementById('moradorId').value = veiculo.morador_id || '';
-        document.getElementById('veiculoId').value = veiculo.id || '';
-        document.getElementById('tipoRegistro').value = 'Morador';
+        setCampoValue('modeloRegistro', veiculo.modelo || '');
+        setCampoValue('corRegistro', veiculo.cor || '');
+        setCampoValue('moradorId', veiculo.morador_id || '');
+        setCampoValue('veiculoId', veiculo.id || '');
+        setCampoValue('tipoRegistro', 'Morador');
         onTipoChange();
 
         const selU = document.getElementById('unidadeMoradorRegistro');
@@ -1077,11 +1083,11 @@ function _definirCamposVeiculoBloqueados(bloqueado) {
 function esconderVeiculoEncontrado() {
     const placaInput = document.getElementById('placaRegistro');
     const eraPreenchido = placaInput?.dataset.veiculoPreenchido === '1';
-    document.getElementById('moradorId').value = '';
-    document.getElementById('veiculoId').value = '';
+    setCampoValue('moradorId', '');
+    setCampoValue('veiculoId', '');
     if (eraPreenchido) {
-        document.getElementById('modeloRegistro').value = '';
-        document.getElementById('corRegistro').value = '';
+        setCampoValue('modeloRegistro', '');
+        setCampoValue('corRegistro', '');
         const selU = document.getElementById('unidadeMoradorRegistro');
         const selM = document.getElementById('moradorSelecionadoRegistro');
         if (selU) selU.value = '';
@@ -1096,6 +1102,11 @@ function esconderVeiculoEncontrado() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function setCampoValue(id, value) {
+    const campo = document.getElementById(id);
+    if (campo) campo.value = value ?? '';
+}
+
 function setLoading(ativo) {
     const el = document.getElementById('loadingRegistros');
     if (el) el.style.display = ativo ? 'block' : 'none';
