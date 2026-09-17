@@ -164,6 +164,90 @@ function _normalizar_documento_comparacao($documento) {
     return preg_replace('/[^A-Za-z0-9]/', '', (string)$documento);
 }
 
+// ========== RELATÓRIO DE OCUPANTES ==========
+// Cada ocupante é uma linha própria de registros_acesso e aponta para o
+// lançamento do titular por registro_titular_id. O tenant vem da sessão e
+// nunca do corpo/query enviada pelo navegador.
+if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
+    $dataInicio = trim((string)($_GET['data_inicio'] ?? ''));
+    $dataFim    = trim((string)($_GET['data_fim'] ?? ''));
+    $horaInicio = trim((string)($_GET['hora_inicio'] ?? ''));
+    $horaFim    = trim((string)($_GET['hora_fim'] ?? ''));
+    $placa      = strtoupper(trim((string)($_GET['placa'] ?? '')));
+    $modelo     = trim((string)($_GET['modelo'] ?? ''));
+    $unidade    = trim((string)($_GET['unidade'] ?? ''));
+    $nome       = trim((string)($_GET['nome'] ?? ''));
+    $tipo       = trim((string)($_GET['tipo'] ?? ''));
+    $liberados  = ($_GET['apenas_liberados'] ?? '') === '1';
+
+    if ($dataInicio !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataInicio)) $dataInicio = '';
+    if ($dataFim !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataFim)) $dataFim = '';
+    if ($horaInicio !== '' && !preg_match('/^\d{2}:\d{2}$/', $horaInicio)) $horaInicio = '';
+    if ($horaFim !== '' && !preg_match('/^\d{2}:\d{2}$/', $horaFim)) $horaFim = '';
+    if (!in_array($tipo, ['', 'Visitante', 'Prestador'], true)) $tipo = '';
+
+    $where = ['r.tenant_id = ?', "r.papel_veiculo = 'OCUPANTE'"];
+    $params = [$tenant_id];
+    $types = 'i';
+    if ($dataInicio !== '') { $where[] = 'DATE(r.data_hora) >= ?'; $params[] = $dataInicio; $types .= 's'; }
+    if ($dataFim !== '')    { $where[] = 'DATE(r.data_hora) <= ?'; $params[] = $dataFim; $types .= 's'; }
+    if ($horaInicio !== '') { $where[] = 'TIME(r.data_hora) >= ?'; $params[] = $horaInicio . ':00'; $types .= 's'; }
+    if ($horaFim !== '')    { $where[] = 'TIME(r.data_hora) <= ?'; $params[] = $horaFim . ':59'; $types .= 's'; }
+    if ($placa !== '')      { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
+    if ($modelo !== '')     { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
+    if ($unidade !== '') {
+        $where[] = '(r.unidade_destino LIKE ? OR rt.unidade_destino LIKE ? OR mt.unidade LIKE ?)';
+        $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%';
+        $types .= 'sss';
+    }
+    if ($nome !== '') {
+        $where[] = '(r.nome_visitante LIKE ? OR rt.nome_visitante LIKE ? OR mt.nome LIKE ?)';
+        $params[] = '%' . $nome . '%'; $params[] = '%' . $nome . '%'; $params[] = '%' . $nome . '%';
+        $types .= 'sss';
+    }
+    if ($tipo !== '')      { $where[] = 'r.tipo = ?'; $params[] = $tipo; $types .= 's'; }
+    if ($liberados)        { $where[] = 'r.liberado = 1'; }
+
+    $sql = "SELECT
+                r.id, r.data_hora, DATE_FORMAT(r.data_hora, '%d/%m/%Y %H:%i:%s') AS data_hora_formatada,
+                r.placa, r.modelo, r.cor, r.tipo, r.tipo_acesso, r.status, r.liberado, r.observacao,
+                r.registro_titular_id, r.unidade_destino,
+                COALESCE(NULLIF(TRIM(rt.nome_visitante), ''), NULLIF(TRIM(mt.nome), ''), 'Não identificado') AS titular_nome,
+                COALESCE(NULLIF(TRIM(rt.tipo), ''), 'Não informado') AS titular_tipo,
+                COALESCE(NULLIF(TRIM(r.nome_visitante), ''), 'Não identificado') AS ocupante_nome,
+                COALESCE(NULLIF(TRIM(r.tipo), ''), 'Não informado') AS ocupante_tipo,
+                COALESCE(NULLIF(TRIM(r.unidade_destino), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(mt.unidade), ''), 'Não informado') AS unidade
+            FROM registros_acesso r
+            LEFT JOIN registros_acesso rt ON rt.id = r.registro_titular_id
+                AND rt.tenant_id = r.tenant_id AND rt.papel_veiculo = 'TITULAR'
+            LEFT JOIN moradores mt ON mt.id = rt.morador_id AND mt.tenant_id = r.tenant_id
+            WHERE " . implode(' AND ', $where) . "
+            ORDER BY r.data_hora DESC, r.id DESC
+            LIMIT 10000";
+
+    $stmt = $conexao->prepare($sql);
+    if (!$stmt) retornar_json(false, 'Erro ao preparar relatório de ocupantes: ' . $conexao->error);
+    $bindRefs = [&$types];
+    foreach ($params as &$param) $bindRefs[] = &$param;
+    call_user_func_array([$stmt, 'bind_param'], $bindRefs);
+    $stmt->execute();
+    $resultado = $stmt->get_result();
+    $registrosOcupantes = [];
+    while ($row = $resultado->fetch_assoc()) $registrosOcupantes[] = $row;
+    $stmt->close();
+
+    retornar_json(true, 'Relatório de ocupantes gerado com sucesso.', [
+        'total' => count($registrosOcupantes),
+        'registros' => $registrosOcupantes,
+        'filtros' => [
+            'data_inicio' => $dataInicio, 'data_fim' => $dataFim,
+            'hora_inicio' => $horaInicio, 'hora_fim' => $horaFim,
+            'placa' => $placa, 'modelo' => $modelo, 'unidade' => $unidade,
+            'nome' => $nome, 'tipo' => $tipo, 'apenas_liberados' => $liberados,
+        ],
+    ]);
+}
+
 // ========== LISTAR REGISTROS ==========
 if ($metodo === 'GET') {
     $limite = intval($_GET['limite'] ?? 100);

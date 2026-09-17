@@ -58,12 +58,14 @@
                     <option value="moradores">Somente Moradores</option>
                     <option value="visitantes">Somente Visitantes</option>
                     <option value="prestadores">Somente Prestadores</option>
+                    <option value="ocupantes">Ocupantes de Veículos</option>
                 </select>
             </div>
             <div class="inline-options">
                 <label class="checkbox-group"><input type="checkbox" id="tipoMorador" checked> Morador</label>
                 <label class="checkbox-group"><input type="checkbox" id="tipoVisitante" checked> Visitante</label>
                 <label class="checkbox-group"><input type="checkbox" id="tipoPrestador" checked> Prestador</label>
+                <label class="checkbox-group"><input type="checkbox" id="incluirOcupantes"> Ocupantes</label>
                 <label class="checkbox-group"><input type="checkbox" id="apenasLiberados"> Apenas Liberados</label>
             </div>
         </div>
@@ -92,15 +94,15 @@
             </div>
             <div class="stat-card">
                 <div class="value" id="totalMoradores">0</div>
-                <div class="label">Moradores</div>
+                <div class="label" id="labelTotalMoradores">Moradores</div>
             </div>
             <div class="stat-card">
                 <div class="value" id="totalVisitantes">0</div>
-                <div class="label">Visitantes</div>
+                <div class="label" id="labelTotalVisitantes">Visitantes</div>
             </div>
             <div class="stat-card">
                 <div class="value" id="totalPrestadores">0</div>
-                <div class="label">Prestadores</div>
+                <div class="label" id="labelTotalPrestadores">Prestadores</div>
             </div>
             <div class="stat-card">
                 <div class="value" id="totalLiberados">0</div>

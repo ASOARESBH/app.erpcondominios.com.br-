@@ -8,6 +8,8 @@ let todosRegistros = [];
 let registrosFiltrados = [];
 let termoBuscaLocal = '';
 let audioCtx = null;
+let modoRelatorioOcupantes = false;
+let ocupantesRequestId = 0;
 
 export function init() {
     console.log('[Relatorios] Inicializando...');
@@ -34,6 +36,8 @@ export function destroy() {
     registrosFiltrados = [];
     termoBuscaLocal = '';
     audioCtx = null;
+    modoRelatorioOcupantes = false;
+    ocupantesRequestId += 1;
 }
 
 function setupActions() {
@@ -53,7 +57,7 @@ function setupActions() {
         });
     }
 
-    ['tipoRelatorio', 'apenasLiberados', 'tipoMorador', 'tipoVisitante', 'tipoPrestador']
+    ['tipoRelatorio', 'apenasLiberados', 'tipoMorador', 'tipoVisitante', 'tipoPrestador', 'incluirOcupantes']
         .forEach((id) => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', aplicarFiltros);
@@ -77,7 +81,73 @@ function setDatasPadrao() {
     if (dataFinal) dataFinal.value = hoje.toISOString().slice(0, 10);
 }
 
+function getTipoOcupanteFiltro() {
+    const tipos = [];
+    if (getChecked('tipoVisitante')) tipos.push('Visitante');
+    if (getChecked('tipoPrestador')) tipos.push('Prestador');
+    return tipos.length === 1 ? tipos[0] : '';
+}
+
+function atualizarLayoutRelatorioOcupantes(ativo) {
+    const headers = ativo
+        ? ['Data', 'Hora', 'Placa', 'Modelo', 'Unidade', 'Titular', 'Classificação titular', 'Ocupante', 'Classificação ocupante', 'Entrada/Saída', 'Status', 'Observação']
+        : ['Data', 'Hora', 'Placa', 'Modelo', 'Cor', 'TAG RFID', 'Tipo', 'Nome', 'Unidade', 'Dias Perm.', 'Status', 'Observação'];
+    const thead = document.querySelector('#relatorioTable thead tr');
+    if (thead) thead.innerHTML = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('');
+
+    setText('labelTotalMoradores', ativo ? 'Titulares' : 'Moradores');
+    setText('labelTotalVisitantes', ativo ? 'Ocupantes visitantes' : 'Visitantes');
+    setText('labelTotalPrestadores', ativo ? 'Ocupantes prestadores' : 'Prestadores');
+}
+
+async function carregarRelatorioOcupantes() {
+    const requestId = ++ocupantesRequestId;
+    setLoading(true);
+    const params = new URLSearchParams({ acao: 'relatorio_ocupantes' });
+    const filtros = {
+        data_inicio: getValue('dataInicial'), data_fim: getValue('dataFinal'),
+        hora_inicio: getValue('horaInicial'), hora_fim: getValue('horaFinal'),
+        placa: getValue('filtroPlaca'), modelo: getValue('filtroModelo'),
+        unidade: getValue('filtroUnidade'), nome: getValue('filtroNome'),
+        tipo: getTipoOcupanteFiltro(),
+        apenas_liberados: getChecked('apenasLiberados') ? '1' : '',
+    };
+    Object.entries(filtros).forEach(([key, value]) => { if (value !== '') params.set(key, value); });
+
+    if (!getChecked('tipoVisitante') && !getChecked('tipoPrestador')) {
+        registrosFiltrados = [];
+        renderTabelaOcupantes([]);
+        atualizarEstatisticas([]);
+        setLoading(false);
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_REGISTROS}?${params.toString()}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (requestId !== ocupantesRequestId) return;
+        if (!data.sucesso) throw new Error(data.mensagem || 'Não foi possível consultar ocupantes.');
+        registrosFiltrados = Array.isArray(data.dados?.registros) ? data.dados.registros : [];
+        aplicarBuscaLocalTabela();
+        atualizarEstatisticas(registrosFiltrados);
+    } catch (error) {
+        if (requestId !== ocupantesRequestId) return;
+        console.error('[Relatorios] Erro ao carregar ocupantes:', error);
+        registrosFiltrados = [];
+        renderTabelaOcupantes([]);
+        atualizarEstatisticas([]);
+        mostrarAlerta('error', 'Não foi possível carregar o relatório de ocupantes.');
+    } finally {
+        if (requestId === ocupantesRequestId) setLoading(false);
+    }
+}
+
 async function carregarTodosRegistros() {
+    if (modoRelatorioOcupantes) {
+        await carregarRelatorioOcupantes();
+        return;
+    }
     setLoading(true);
 
     try {
@@ -123,11 +193,31 @@ function aplicarFiltros() {
     const tipoMorador = getChecked('tipoMorador');
     const tipoVisitante = getChecked('tipoVisitante');
     const tipoPrestador = getChecked('tipoPrestador');
+    const incluirOcupantes = getChecked('incluirOcupantes');
     const apenasLiberados = getChecked('apenasLiberados');
+
+    if (tipoRelatorio === 'ocupantes') {
+        if (!modoRelatorioOcupantes) {
+            modoRelatorioOcupantes = true;
+            setChecked('incluirOcupantes', true);
+            atualizarLayoutRelatorioOcupantes(true);
+        }
+        carregarRelatorioOcupantes();
+        return;
+    }
+
+    if (modoRelatorioOcupantes) {
+        modoRelatorioOcupantes = false;
+        ocupantesRequestId += 1;
+        atualizarLayoutRelatorioOcupantes(false);
+        setLoading(false);
+    }
 
     registrosFiltrados = todosRegistros.filter((r) => {
         const dt = parseDataHora(r.data_hora);
         if (!dt) return false;
+
+        if (!incluirOcupantes && r.papel_veiculo === 'OCUPANTE') return false;
 
         if (dataInicial) {
             const dIni = new Date(`${dataInicial}T00:00:00`);
@@ -181,7 +271,8 @@ function aplicarBuscaLocalTabela() {
     const termo = termoBuscaLocal.toLowerCase().trim();
 
     if (!termo) {
-        renderTabela(registrosFiltrados);
+        if (modoRelatorioOcupantes) renderTabelaOcupantes(registrosFiltrados);
+        else renderTabela(registrosFiltrados);
         return;
     }
 
@@ -194,6 +285,10 @@ function aplicarBuscaLocalTabela() {
         const tipo = String(r.tipo || '').toLowerCase();
         const nome = String(r.morador_nome || r.nome_visitante || '').toLowerCase();
         const unidade = String(r.morador_unidade || r.unidade_destino || '').toLowerCase();
+        const titular = String(r.titular_nome || '').toLowerCase();
+        const titularTipo = String(r.titular_tipo || '').toLowerCase();
+        const ocupante = String(r.ocupante_nome || '').toLowerCase();
+        const ocupanteTipo = String(r.ocupante_tipo || '').toLowerCase();
         const status = String(r.status || '').toLowerCase();
         const obs = String(r.observacao || '').toLowerCase();
 
@@ -201,11 +296,14 @@ function aplicarBuscaLocalTabela() {
             dataHora.includes(termo) || placa.includes(termo) || modelo.includes(termo) ||
             cor.includes(termo) || tag.includes(termo) || tipo.includes(termo) ||
             nome.includes(termo) || unidade.includes(termo) || status.includes(termo) ||
+            titular.includes(termo) || titularTipo.includes(termo) ||
+            ocupante.includes(termo) || ocupanteTipo.includes(termo) ||
             obs.includes(termo)
         );
     });
 
-    renderTabela(dados);
+    if (modoRelatorioOcupantes) renderTabelaOcupantes(dados);
+    else renderTabela(dados);
 }
 
 function renderTabela(lista) {
@@ -243,11 +341,48 @@ function renderTabela(lista) {
     }).join('');
 }
 
+function renderTabelaOcupantes(lista) {
+    const tbody = document.querySelector('#relatorioTable tbody');
+    if (!tbody) return;
+    if (!lista || lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Nenhum ocupante encontrado com os filtros aplicados.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = lista.map((r) => {
+        const { data, hora } = formatarDataHoraLinha(r);
+        const acesso = r.tipo_acesso === 'Entrada' || r.tipo_acesso === 'Saída' ? r.tipo_acesso : '-';
+        const status = escapeHtml(r.status || '-');
+        const statusClass = classificarStatus(status, r.liberado);
+        return `
+            <tr>
+                <td>${escapeHtml(data)}</td>
+                <td>${escapeHtml(hora)}</td>
+                <td>${escapeHtml(r.placa || '-')}</td>
+                <td>${escapeHtml(r.modelo || '-')}</td>
+                <td>${escapeHtml(r.unidade || r.unidade_destino || '-')}</td>
+                <td><strong>${escapeHtml(r.titular_nome || 'Não identificado')}</strong></td>
+                <td>${escapeHtml(r.titular_tipo || 'Não informado')}</td>
+                <td><strong>${escapeHtml(r.ocupante_nome || r.nome_visitante || 'Não identificado')}</strong></td>
+                <td>${escapeHtml(r.ocupante_tipo || r.tipo || 'Não informado')}</td>
+                <td>${escapeHtml(acesso)}</td>
+                <td><span class="status-pill ${statusClass}">${status}</span></td>
+                <td>${escapeHtml(r.observacao || '-')}</td>
+            </tr>`;
+    }).join('');
+}
+
 function atualizarEstatisticas(lista) {
     const total = lista.length;
-    const moradores = lista.filter((r) => r.tipo === 'Morador').length;
-    const visitantes = lista.filter((r) => r.tipo === 'Visitante').length;
-    const prestadores = lista.filter((r) => r.tipo === 'Prestador').length;
+    const moradores = modoRelatorioOcupantes
+        ? new Set(lista.map((r) => r.registro_titular_id || `${r.titular_nome || ''}|${r.placa || ''}`)).size
+        : lista.filter((r) => r.tipo === 'Morador').length;
+    const visitantes = modoRelatorioOcupantes
+        ? lista.filter((r) => r.ocupante_tipo === 'Visitante').length
+        : lista.filter((r) => r.tipo === 'Visitante').length;
+    const prestadores = modoRelatorioOcupantes
+        ? lista.filter((r) => r.ocupante_tipo === 'Prestador').length
+        : lista.filter((r) => r.tipo === 'Prestador').length;
     const liberados = lista.filter((r) => Number(r.liberado) === 1).length;
 
     setText('totalRegistros', total);
@@ -258,6 +393,10 @@ function atualizarEstatisticas(lista) {
 }
 
 function exportarCSV() {
+    if (modoRelatorioOcupantes) {
+        exportarCSVOcupantes();
+        return;
+    }
     if (!registrosFiltrados.length) {
         mostrarAlerta('error', 'Nenhum registro para exportar.');
         tocarSom('error');
@@ -302,7 +441,40 @@ function exportarCSV() {
     tocarSom('success');
 }
 
+function exportarCSVOcupantes() {
+    if (!registrosFiltrados.length) {
+        mostrarAlerta('error', 'Nenhum ocupante para exportar.');
+        tocarSom('error');
+        return;
+    }
+    const header = 'Data;Hora;Placa;Modelo;Unidade;Nome do Titular;Classificação do Titular;Nome do Ocupante;Classificação do Ocupante;Entrada/Saída;Status;Observação\n';
+    const linhas = registrosFiltrados.map((r) => {
+        const { data, hora } = formatarDataHoraLinha(r);
+        return [
+            data, hora, r.placa || '', r.modelo || '', r.unidade || r.unidade_destino || '',
+            r.titular_nome || 'Não identificado', r.titular_tipo || 'Não informado',
+            r.ocupante_nome || r.nome_visitante || 'Não identificado', r.ocupante_tipo || r.tipo || 'Não informado',
+            r.tipo_acesso || '', r.status || '', r.observacao || '',
+        ].map(csvEscape).join(';');
+    });
+    const blob = new Blob(['\uFEFF' + header + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio_ocupantes_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    mostrarAlerta('success', 'CSV de ocupantes exportado com sucesso.');
+    tocarSom('success');
+}
+
 function gerarPDF() {
+    if (modoRelatorioOcupantes) {
+        gerarPDFOcupantes();
+        return;
+    }
     // Coleta os filtros ativos e abre o relatorio de acessos em nova aba
     const dataInicial = getValue('dataInicial');
     const dataFinal   = getValue('dataFinal');
@@ -327,6 +499,18 @@ function gerarPDF() {
 
     const base = window.location.origin + '/api/api_relatorio_acessos_pdf.php';
     window.open(base + '?' + params.toString(), '_blank');
+}
+
+function gerarPDFOcupantes() {
+    const params = new URLSearchParams({
+        data_inicio: getValue('dataInicial'), data_fim: getValue('dataFinal'),
+        hora_inicio: getValue('horaInicial'), hora_fim: getValue('horaFinal'),
+        placa: getValue('filtroPlaca'), modelo: getValue('filtroModelo'),
+        unidade: getValue('filtroUnidade'), nome: getValue('filtroNome'),
+        tipo: getTipoOcupanteFiltro(),
+        apenas_liberados: getChecked('apenasLiberados') ? '1' : '',
+    });
+    window.open(`${window.location.origin}/api/api_relatorio_ocupantes_pdf.php?${params.toString()}`, '_blank');
 }
 
 function rankingPDF() {
@@ -425,6 +609,7 @@ function limparFiltros() {
     setChecked('tipoMorador', true);
     setChecked('tipoVisitante', true);
     setChecked('tipoPrestador', true);
+    setChecked('incluirOcupantes', false);
     setChecked('apenasLiberados', false);
 
     const tipoRelatorio = document.getElementById('tipoRelatorio');
