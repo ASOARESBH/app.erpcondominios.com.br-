@@ -538,7 +538,10 @@ if ($metodo === 'POST') {
             if ($errno === 1062 && $idempotency_key !== null) {
                 $conexao->rollback();
                 $stmtExistente = $conexao->prepare(
-                    'SELECT id, liberado, status, tipo_acesso, modo_registro, vestimenta
+                    'SELECT id, data_hora, placa, modelo, cor, tipo, morador_id, nome_visitante,
+                            unidade_destino, dias_permanencia, observacao, tipo_acesso,
+                            dependente_id, visitante_id, documento_visitante, modo_registro,
+                            vestimenta, liberado, status
                      FROM registros_acesso
                      WHERE tenant_id = ? AND idempotency_key = ?
                      LIMIT 1'
@@ -549,16 +552,49 @@ if ($metodo === 'POST') {
                     $existente = $stmtExistente->get_result()->fetch_assoc();
                     $stmtExistente->close();
                     if ($existente) {
-                        log_registro('POST idempotente', ['id' => $existente['id'], 'idempotency_key' => $idempotency_key]);
-                        retornar_json(true, 'Acesso já havia sido registrado.', [
-                            'id' => (int)$existente['id'],
-                            'liberado' => (int)$existente['liberado'],
-                            'status' => $existente['status'],
-                            'tipo_acesso' => $existente['tipo_acesso'],
-                            'modo_registro' => $existente['modo_registro'],
-                            'vestimenta' => $existente['vestimenta'],
-                            'ocupantes_registrados' => [],
-                            'idempotente' => true,
+                        $mesmo_lancamento =
+                            (string)($existente['data_hora'] ?? '') === (string)$data_hora &&
+                            (string)($existente['placa'] ?? '') === (string)$placa &&
+                            (string)($existente['modelo'] ?? '') === (string)$modelo &&
+                            (string)($existente['cor'] ?? '') === (string)$cor &&
+                            (string)($existente['tipo'] ?? '') === (string)$tipo &&
+                            (int)($existente['morador_id'] ?? 0) === (int)($morador_id ?? 0) &&
+                            (string)($existente['nome_visitante'] ?? '') === (string)$nome_visitante &&
+                            (string)($existente['unidade_destino'] ?? '') === (string)$unidade_destino &&
+                            (int)($existente['dias_permanencia'] ?? 0) === (int)$dias_permanencia &&
+                            (string)($existente['observacao'] ?? '') === (string)$observacao &&
+                            (string)($existente['tipo_acesso'] ?? '') === (string)$tipo_acesso &&
+                            (int)($existente['dependente_id'] ?? 0) === (int)($dependente_id ?? 0) &&
+                            (int)($existente['visitante_id'] ?? 0) === (int)($visitante_id ?? 0) &&
+                            (string)($existente['documento_visitante'] ?? '') === (string)$documento &&
+                            (string)($existente['modo_registro'] ?? '') === (string)$modo_registro &&
+                            (string)($existente['vestimenta'] ?? '') === (string)($vestimenta ?? '');
+
+                        if ($mesmo_lancamento) {
+                            log_registro('POST idempotente', ['id' => $existente['id'], 'idempotency_key' => $idempotency_key]);
+                            retornar_json(true, 'Acesso já havia sido registrado.', [
+                                'id' => (int)$existente['id'],
+                                'liberado' => (int)$existente['liberado'],
+                                'status' => $existente['status'],
+                                'tipo_acesso' => $existente['tipo_acesso'],
+                                'modo_registro' => $existente['modo_registro'],
+                                'vestimenta' => $existente['vestimenta'],
+                                'ocupantes_registrados' => [],
+                                'idempotente' => true,
+                            ]);
+                        }
+
+                        log_registro('CONFLITO chave idempotente', [
+                            'id_existente' => $existente['id'],
+                            'idempotency_key' => $idempotency_key,
+                            'placa_existente' => $existente['placa'],
+                            'placa_nova' => $placa,
+                            'tipo_acesso_existente' => $existente['tipo_acesso'],
+                            'tipo_acesso_novo' => $tipo_acesso,
+                        ]);
+                        retornar_json(false, 'A chave deste lançamento já pertence a outro acesso. Gere uma nova chave para continuar.', [
+                            'codigo' => 'IDEMPOTENCY_CONFLICT',
+                            'idempotente' => false,
                         ]);
                     }
                 }

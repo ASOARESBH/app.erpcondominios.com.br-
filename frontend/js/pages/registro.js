@@ -12,6 +12,7 @@ const API_VISITANTES  = '../api/api_visitantes.php';
 const API_MORADORES   = '../api/api_moradores.php';
 const API_DEPENDENTES = '../api/api_dependentes.php';
 const API_UNIDADES    = '../api/api_unidades.php';
+const REGISTRO_FEEDBACK_STORAGE_KEY = 'registro_manual_feedback';
 
 let registrosCache = [];
 let veiculosCache  = [];
@@ -62,6 +63,7 @@ export function init() {
     atualizarDataHoraAtual();
     carregarVeiculos();
     carregarRegistros();
+    _mostrarFeedbackPosAtualizacao();
 
     window.RegistroPage = {
         buscar:  buscarRegistros,
@@ -79,6 +81,7 @@ export function destroy() {
     veiculosCache  = [];
     salvandoReg    = false;
     ocupantesAdicionados = [];
+    ultimoEnvioRegistro = null;
 }
 
 // ── Toggle Entrada / Saída ────────────────────────────────────────────────────
@@ -936,12 +939,28 @@ async function salvarRegistro() {
 
         console.log('[Registro] Payload:', payload);
 
-        const response = await fetch(API_REGISTROS, {
+        let response = await fetch(API_REGISTROS, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const data = await response.json();
+        let data = await response.json();
+
+        if (!data.sucesso && data.dados?.codigo === 'IDEMPOTENCY_CONFLICT') {
+            const campo = document.getElementById('idempotencyKeyRegistro');
+            const novaChave = gerarIdempotencyKey();
+            if (campo) campo.value = novaChave;
+            payload.idempotency_key = novaChave;
+            ultimoEnvioRegistro = { chave: novaChave, assinatura: assinaturaRegistro(payload) };
+            console.log('[Registro] Colisão de chave detectada; repetindo o novo lançamento com chave renovada.');
+
+            response = await fetch(API_REGISTROS, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            data = await response.json();
+        }
 
         if (!data.sucesso) { mostrarAlerta('error', data.mensagem || 'Falha ao registrar acesso.'); return; }
 
@@ -949,9 +968,17 @@ async function salvarRegistro() {
         const mensagemSucesso = qtdOcupantes > 0
             ? `${data.mensagem || 'Registro salvo com sucesso.'} + ${qtdOcupantes} ocupante${qtdOcupantes > 1 ? 's' : ''} registrado${qtdOcupantes > 1 ? 's' : ''}.`
             : (data.mensagem || 'Registro salvo com sucesso.');
-        mostrarAlerta('success', mensagemSucesso);
         limparFormulario();
-        await carregarRegistros();
+        try {
+            sessionStorage.setItem(REGISTRO_FEEDBACK_STORAGE_KEY, JSON.stringify({
+                mensagem: mensagemSucesso,
+                criado_em: Date.now()
+            }));
+        } catch (storageError) {
+            console.warn('[Registro] Não foi possível preservar o aviso após atualização:', storageError);
+        }
+        window.location.reload();
+        return;
 
     } catch (error) {
         console.error('[Registro] Erro ao salvar registro:', error);
@@ -959,6 +986,20 @@ async function salvarRegistro() {
     } finally {
         salvandoReg = false;
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Registrar Acesso'; }
+    }
+}
+
+function _mostrarFeedbackPosAtualizacao() {
+    try {
+        const bruto = sessionStorage.getItem(REGISTRO_FEEDBACK_STORAGE_KEY);
+        if (!bruto) return;
+        sessionStorage.removeItem(REGISTRO_FEEDBACK_STORAGE_KEY);
+        const feedback = JSON.parse(bruto);
+        if (feedback?.mensagem && Date.now() - Number(feedback.criado_em || 0) < 60000) {
+            mostrarAlerta('success', feedback.mensagem);
+        }
+    } catch (error) {
+        console.warn('[Registro] Não foi possível restaurar o aviso após atualização:', error);
     }
 }
 
