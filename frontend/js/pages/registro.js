@@ -860,8 +860,7 @@ async function salvarRegistro() {
             tipo,
             observacao,
             tipo_acesso: tipoAcesso,
-            modo_registro: pedestre ? 'PEDESTRE' : 'VEICULO',
-            idempotency_key: idempotencyKey
+            modo_registro: pedestre ? 'PEDESTRE' : 'VEICULO'
         };
         if (pedestre) payload.vestimenta = vestimenta;
 
