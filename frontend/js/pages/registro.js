@@ -17,6 +17,7 @@ let registrosCache = [];
 let veiculosCache  = [];
 let salvandoReg    = false;
 let ocupantesAdicionados = []; // [{ visitante_id, nome, documento, tipo_documento }]
+let ultimoEnvioRegistro = null;
 
 function gerarIdempotencyKey() {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -33,6 +34,12 @@ function garantirIdempotencyKey() {
     if (!campo) return '';
     if (!campo.value) campo.value = gerarIdempotencyKey();
     return campo.value;
+}
+
+function assinaturaRegistro(payload) {
+    const dados = { ...payload };
+    delete dados.idempotency_key;
+    return JSON.stringify(dados);
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -837,7 +844,6 @@ async function salvarRegistro() {
         const tipoAcesso    = _getTipoAcesso();
         const pedestre      = _isPedestre();
         const vestimenta    = (document.getElementById('vestimentaRegistro')?.value || '').trim();
-        const idempotencyKey = garantirIdempotencyKey();
 
         if (!dataHoraInput || !tipo || (!pedestre && !placa)) {
             mostrarAlerta('error', pedestre
@@ -917,6 +923,18 @@ async function salvarRegistro() {
             }
         }
 
+        const assinaturaAtual = assinaturaRegistro(payload);
+        const campoIdempotency = document.getElementById('idempotencyKeyRegistro');
+        if (ultimoEnvioRegistro
+            && campoIdempotency?.value === ultimoEnvioRegistro.chave
+            && ultimoEnvioRegistro.assinatura !== assinaturaAtual) {
+            campoIdempotency.value = gerarIdempotencyKey();
+            console.log('[Registro] Novo lançamento detectado; chave de idempotência renovada.');
+        }
+        const idempotencyKey = garantirIdempotencyKey();
+        payload.idempotency_key = idempotencyKey;
+        ultimoEnvioRegistro = { chave: idempotencyKey, assinatura: assinaturaAtual };
+
         console.log('[Registro] Payload:', payload);
 
         const response = await fetch(API_REGISTROS, {
@@ -966,6 +984,7 @@ async function excluirRegistro(id) {
 
 // ── Limpar Formulário ─────────────────────────────────────────────────────────
 function limparFormulario() {
+    ultimoEnvioRegistro = null;
     const form = document.getElementById('registroForm');
     if (form) form.reset();
 
