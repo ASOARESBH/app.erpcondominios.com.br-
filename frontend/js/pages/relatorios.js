@@ -90,7 +90,7 @@ function getTipoOcupanteFiltro() {
 
 function atualizarLayoutRelatorioOcupantes(ativo) {
     const headers = ativo
-        ? ['Data', 'Hora', 'Placa', 'Modelo', 'Unidade', 'Titular', 'Classificação titular', 'Ocupante', 'Classificação ocupante', 'Entrada/Saída', 'Status', 'Observação']
+        ? ['Data', 'Hora', 'Placa', 'Modelo', 'Unidade', 'Pessoa', 'CPF/Documento', 'Relação', 'Tipo', 'Entrada/Saída', 'Status', 'Observação']
         : ['Data', 'Hora', 'Placa', 'Modelo', 'Cor', 'TAG RFID', 'Tipo', 'Nome', 'Unidade', 'Dias Perm.', 'Status', 'Observação'];
     const thead = document.querySelector('#relatorioTable thead tr');
     if (thead) thead.innerHTML = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('');
@@ -196,7 +196,7 @@ function aplicarFiltros() {
     const incluirOcupantes = getChecked('incluirOcupantes');
     const apenasLiberados = getChecked('apenasLiberados');
 
-    if (tipoRelatorio === 'ocupantes') {
+    if (tipoRelatorio === 'ocupantes' || incluirOcupantes) {
         if (!modoRelatorioOcupantes) {
             modoRelatorioOcupantes = true;
             setChecked('incluirOcupantes', true);
@@ -276,7 +276,7 @@ function aplicarBuscaLocalTabela() {
         return;
     }
 
-    const dados = registrosFiltrados.filter((r) => {
+    const corresponde = (r) => {
         const dataHora = `${r.data_hora_formatada || ''} ${r.data_hora || ''}`.toLowerCase();
         const placa = String(r.placa || '').toLowerCase();
         const modelo = String(r.modelo || '').toLowerCase();
@@ -287,8 +287,10 @@ function aplicarBuscaLocalTabela() {
         const unidade = String(r.morador_unidade || r.unidade_destino || '').toLowerCase();
         const titular = String(r.titular_nome || '').toLowerCase();
         const titularTipo = String(r.titular_tipo || '').toLowerCase();
+        const titularCpf = String(r.titular_cpf || '').toLowerCase();
         const ocupante = String(r.ocupante_nome || '').toLowerCase();
         const ocupanteTipo = String(r.ocupante_tipo || '').toLowerCase();
+        const ocupanteCpf = String(r.ocupante_cpf || '').toLowerCase();
         const status = String(r.status || '').toLowerCase();
         const obs = String(r.observacao || '').toLowerCase();
 
@@ -297,10 +299,17 @@ function aplicarBuscaLocalTabela() {
             cor.includes(termo) || tag.includes(termo) || tipo.includes(termo) ||
             nome.includes(termo) || unidade.includes(termo) || status.includes(termo) ||
             titular.includes(termo) || titularTipo.includes(termo) ||
-            ocupante.includes(termo) || ocupanteTipo.includes(termo) ||
+            titularCpf.includes(termo) || ocupante.includes(termo) || ocupanteTipo.includes(termo) ||
+            ocupanteCpf.includes(termo) ||
             obs.includes(termo)
         );
-    });
+    };
+
+    const correspondentes = registrosFiltrados.filter(corresponde);
+    const chavesEncontradas = new Set(correspondentes.map((r) => String(r.registro_titular_id || `sem-titular-${r.id}`)));
+    const dados = modoRelatorioOcupantes
+        ? registrosFiltrados.filter((r) => chavesEncontradas.has(String(r.registro_titular_id || `sem-titular-${r.id}`)))
+        : correspondentes;
 
     if (modoRelatorioOcupantes) renderTabelaOcupantes(dados);
     else renderTabela(dados);
@@ -349,27 +358,70 @@ function renderTabelaOcupantes(lista) {
         return;
     }
 
-    tbody.innerHTML = lista.map((r) => {
-        const { data, hora } = formatarDataHoraLinha(r);
-        const acesso = r.tipo_acesso === 'Entrada' || r.tipo_acesso === 'Saída' ? r.tipo_acesso : '-';
-        const status = escapeHtml(r.status || '-');
-        const statusClass = classificarStatus(status, r.liberado);
-        return `
-            <tr>
-                <td>${escapeHtml(data)}</td>
-                <td>${escapeHtml(hora)}</td>
-                <td>${escapeHtml(r.placa || '-')}</td>
-                <td>${escapeHtml(r.modelo || '-')}</td>
-                <td>${escapeHtml(r.unidade || r.unidade_destino || '-')}</td>
-                <td><strong>${escapeHtml(r.titular_nome || 'Não identificado')}</strong></td>
-                <td>${escapeHtml(r.titular_tipo || 'Não informado')}</td>
-                <td><strong>${escapeHtml(r.ocupante_nome || r.nome_visitante || 'Não identificado')}</strong></td>
-                <td>${escapeHtml(r.ocupante_tipo || r.tipo || 'Não informado')}</td>
-                <td>${escapeHtml(acesso)}</td>
-                <td><span class="status-pill ${statusClass}">${status}</span></td>
-                <td>${escapeHtml(r.observacao || '-')}</td>
-            </tr>`;
-    }).join('');
+    const grupos = new Map();
+    lista.forEach((r) => {
+        const chave = String(r.registro_titular_id || `sem-titular-${r.id}`);
+        if (!grupos.has(chave)) grupos.set(chave, []);
+        grupos.get(chave).push(r);
+    });
+
+    const linhas = [];
+    grupos.forEach((ocupantes) => {
+        const primeiro = ocupantes[0];
+        const titular = {
+            ...primeiro,
+            data_hora: primeiro.titular_data_hora || primeiro.data_hora,
+            data_hora_formatada: primeiro.titular_data_hora_formatada || primeiro.data_hora_formatada,
+            placa: primeiro.titular_placa || primeiro.placa,
+            modelo: primeiro.titular_modelo || primeiro.modelo,
+            nome: primeiro.titular_nome || 'Não identificado',
+            cpf: primeiro.titular_cpf || 'Não informado',
+            tipo_pessoa: primeiro.titular_tipo || 'Não informado',
+            tipo_acesso: primeiro.titular_tipo_acesso || primeiro.tipo_acesso,
+            status: primeiro.titular_status || primeiro.status,
+            liberado: primeiro.titular_liberado ?? primeiro.liberado,
+            observacao: primeiro.titular_observacao || primeiro.observacao,
+        };
+        linhas.push(renderLinhaOcupante(titular, 'titular', 0));
+
+        ocupantes.forEach((r, index) => {
+            linhas.push(renderLinhaOcupante({
+                ...r,
+                nome: r.ocupante_nome || r.nome_visitante || 'Não identificado',
+                cpf: r.ocupante_cpf || 'Não informado',
+                tipo_pessoa: r.ocupante_tipo || r.tipo || 'Não informado',
+            }, 'ocupante', index + 1));
+        });
+    });
+
+    tbody.innerHTML = linhas.join('');
+}
+
+function renderLinhaOcupante(r, papel, numero) {
+    const { data, hora } = formatarDataHoraLinha(r);
+    const acesso = r.tipo_acesso === 'Entrada' || r.tipo_acesso === 'Saída' ? r.tipo_acesso : '-';
+    const status = escapeHtml(r.status || '-');
+    const statusClass = classificarStatus(status, r.liberado);
+    const titular = papel === 'titular';
+    const relacao = titular ? 'Titular do veículo' : `└─ Ocupante ${numero}`;
+    const pessoa = escapeHtml(r.nome || '-');
+    const documento = escapeHtml(r.cpf || 'Não informado');
+
+    return `
+        <tr class="relatorio-linha-${titular ? 'titular' : 'ocupante'}">
+            <td>${escapeHtml(data)}</td>
+            <td>${escapeHtml(hora)}</td>
+            <td>${escapeHtml(r.placa || '-')}</td>
+            <td>${escapeHtml(r.modelo || '-')}</td>
+            <td>${escapeHtml(r.unidade || r.unidade_destino || '-')}</td>
+            <td class="relatorio-pessoa"><strong>${pessoa}</strong></td>
+            <td class="relatorio-documento">${documento}</td>
+            <td><span class="relatorio-relacao ${titular ? 'relatorio-relacao-titular' : ''}">${escapeHtml(relacao)}</span></td>
+            <td>${escapeHtml(r.tipo_pessoa || '-')}</td>
+            <td>${escapeHtml(acesso)}</td>
+            <td><span class="status-pill ${statusClass}">${status}</span></td>
+            <td>${escapeHtml(r.observacao || '-')}</td>
+        </tr>`;
 }
 
 function atualizarEstatisticas(lista) {
@@ -447,13 +499,13 @@ function exportarCSVOcupantes() {
         tocarSom('error');
         return;
     }
-    const header = 'Data;Hora;Placa;Modelo;Unidade;Nome do Titular;Classificação do Titular;Nome do Ocupante;Classificação do Ocupante;Entrada/Saída;Status;Observação\n';
+    const header = 'Data;Hora;Placa;Modelo;Unidade;Nome do Titular;CPF/Documento do Titular;Tipo do Titular;Nome do Ocupante;CPF/Documento do Ocupante;Tipo do Ocupante;Entrada/Saída;Status;Observação\n';
     const linhas = registrosFiltrados.map((r) => {
         const { data, hora } = formatarDataHoraLinha(r);
         return [
             data, hora, r.placa || '', r.modelo || '', r.unidade || r.unidade_destino || '',
-            r.titular_nome || 'Não identificado', r.titular_tipo || 'Não informado',
-            r.ocupante_nome || r.nome_visitante || 'Não identificado', r.ocupante_tipo || r.tipo || 'Não informado',
+            r.titular_nome || 'Não identificado', r.titular_cpf || 'Não informado', r.titular_tipo || 'Não informado',
+            r.ocupante_nome || r.nome_visitante || 'Não identificado', r.ocupante_cpf || 'Não informado', r.ocupante_tipo || r.tipo || 'Não informado',
             r.tipo_acesso || '', r.status || '', r.observacao || '',
         ].map(csvEscape).join(';');
     });

@@ -201,9 +201,14 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
         $types .= 'sss';
     }
     if ($nome !== '') {
-        $where[] = '(r.nome_visitante LIKE ? OR rt.nome_visitante LIKE ? OR mt.nome LIKE ?)';
-        $params[] = '%' . $nome . '%'; $params[] = '%' . $nome . '%'; $params[] = '%' . $nome . '%';
-        $types .= 'sss';
+        $where[] = '(r.nome_visitante LIKE ? OR r.documento_visitante LIKE ?
+            OR vo.nome_completo LIKE ? OR vo.documento LIKE ?
+            OR rt.nome_visitante LIKE ? OR rt.documento_visitante LIKE ?
+            OR vt.nome_completo LIKE ? OR vt.documento LIKE ?
+            OR mt.nome LIKE ? OR mt.cpf LIKE ?)';
+        $buscaNome = '%' . $nome . '%';
+        for ($i = 0; $i < 10; $i++) $params[] = $buscaNome;
+        $types .= 'ssssssssss';
     }
     if ($tipo !== '')      { $where[] = 'r.tipo = ?'; $params[] = $tipo; $types .= 's'; }
     if ($liberados)        { $where[] = 'r.liberado = 1'; }
@@ -212,8 +217,25 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
                 r.id, r.data_hora, DATE_FORMAT(r.data_hora, '%d/%m/%Y %H:%i:%s') AS data_hora_formatada,
                 r.placa, r.modelo, r.cor, r.tipo, r.tipo_acesso, r.status, r.liberado, r.observacao,
                 r.registro_titular_id, r.unidade_destino,
+                COALESCE(NULLIF(TRIM(vo.documento), ''), NULLIF(TRIM(r.documento_visitante), ''), 'Não informado') AS ocupante_cpf,
+                COALESCE(NULLIF(TRIM(vo.tipo_documento), ''),
+                    CASE WHEN NULLIF(TRIM(r.documento_visitante), '') IS NOT NULL THEN 'CPF/Documento' ELSE 'Não informado' END
+                ) AS ocupante_tipo_documento,
+                rt.data_hora AS titular_data_hora,
+                DATE_FORMAT(rt.data_hora, '%d/%m/%Y %H:%i:%s') AS titular_data_hora_formatada,
+                rt.placa AS titular_placa, rt.modelo AS titular_modelo, rt.cor AS titular_cor,
                 COALESCE(NULLIF(TRIM(rt.nome_visitante), ''), NULLIF(TRIM(mt.nome), ''), 'Não identificado') AS titular_nome,
                 COALESCE(NULLIF(TRIM(rt.tipo), ''), 'Não informado') AS titular_tipo,
+                COALESCE(NULLIF(TRIM(vt.documento), ''), NULLIF(TRIM(rt.documento_visitante), ''), NULLIF(TRIM(mt.cpf), ''), 'Não informado') AS titular_cpf,
+                COALESCE(NULLIF(TRIM(vt.tipo_documento), ''),
+                    CASE
+                        WHEN NULLIF(TRIM(rt.documento_visitante), '') IS NOT NULL THEN 'CPF/Documento'
+                        WHEN NULLIF(TRIM(mt.cpf), '') IS NOT NULL THEN 'CPF'
+                        ELSE 'Não informado'
+                    END
+                ) AS titular_tipo_documento,
+                rt.tipo_acesso AS titular_tipo_acesso, rt.status AS titular_status,
+                rt.liberado AS titular_liberado, rt.observacao AS titular_observacao,
                 COALESCE(NULLIF(TRIM(r.nome_visitante), ''), 'Não identificado') AS ocupante_nome,
                 COALESCE(NULLIF(TRIM(r.tipo), ''), 'Não informado') AS ocupante_tipo,
                 COALESCE(NULLIF(TRIM(r.unidade_destino), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(mt.unidade), ''), 'Não informado') AS unidade
@@ -221,6 +243,8 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
             LEFT JOIN registros_acesso rt ON rt.id = r.registro_titular_id
                 AND rt.tenant_id = r.tenant_id AND rt.papel_veiculo = 'TITULAR'
             LEFT JOIN moradores mt ON mt.id = rt.morador_id AND mt.tenant_id = r.tenant_id
+            LEFT JOIN visitantes vo ON vo.id = r.visitante_id AND vo.tenant_id = r.tenant_id
+            LEFT JOIN visitantes vt ON vt.id = rt.visitante_id AND vt.tenant_id = r.tenant_id
             WHERE " . implode(' AND ', $where) . "
             ORDER BY r.data_hora DESC, r.id DESC
             LIMIT 10000";

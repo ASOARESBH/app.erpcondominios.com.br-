@@ -51,8 +51,14 @@ if ($unidade !== '') {
     $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%'; $types .= 'sss';
 }
 if ($nome !== '') {
-    $where[] = '(r.nome_visitante LIKE ? OR rt.nome_visitante LIKE ? OR mt.nome LIKE ?)';
-    $params[] = '%' . $nome . '%'; $params[] = '%' . $nome . '%'; $params[] = '%' . $nome . '%'; $types .= 'sss';
+    $where[] = '(r.nome_visitante LIKE ? OR r.documento_visitante LIKE ?
+        OR vo.nome_completo LIKE ? OR vo.documento LIKE ?
+        OR rt.nome_visitante LIKE ? OR rt.documento_visitante LIKE ?
+        OR vt.nome_completo LIKE ? OR vt.documento LIKE ?
+        OR mt.nome LIKE ? OR mt.cpf LIKE ?)';
+    $buscaNome = '%' . $nome . '%';
+    for ($i = 0; $i < 10; $i++) $params[] = $buscaNome;
+    $types .= 'ssssssssss';
 }
 if ($tipo !== '') { $where[] = 'r.tipo = ?'; $params[] = $tipo; $types .= 's'; }
 if ($apenas_liberados) $where[] = 'r.liberado = 1';
@@ -60,6 +66,8 @@ if ($apenas_liberados) $where[] = 'r.liberado = 1';
 $sql = "SELECT DATE_FORMAT(r.data_hora, '%d/%m/%Y') data_fmt,
                DATE_FORMAT(r.data_hora, '%H:%i:%s') hora_fmt,
                r.placa, r.modelo, r.tipo_acesso, r.status, r.liberado, r.observacao,
+               COALESCE(NULLIF(TRIM(vo.documento), ''), NULLIF(TRIM(r.documento_visitante), ''), 'Não informado') ocupante_cpf,
+               COALESCE(NULLIF(TRIM(vt.documento), ''), NULLIF(TRIM(rt.documento_visitante), ''), NULLIF(TRIM(mt.cpf), ''), 'Não informado') titular_cpf,
                COALESCE(NULLIF(TRIM(rt.nome_visitante), ''), NULLIF(TRIM(mt.nome), ''), 'Não identificado') titular_nome,
                COALESCE(NULLIF(TRIM(rt.tipo), ''), 'Não informado') titular_tipo,
                COALESCE(NULLIF(TRIM(r.nome_visitante), ''), 'Não identificado') ocupante_nome,
@@ -69,6 +77,8 @@ $sql = "SELECT DATE_FORMAT(r.data_hora, '%d/%m/%Y') data_fmt,
         LEFT JOIN registros_acesso rt ON rt.id = r.registro_titular_id
             AND rt.tenant_id = r.tenant_id AND rt.papel_veiculo = 'TITULAR'
         LEFT JOIN moradores mt ON mt.id = rt.morador_id AND mt.tenant_id = r.tenant_id
+        LEFT JOIN visitantes vo ON vo.id = r.visitante_id AND vo.tenant_id = r.tenant_id
+        LEFT JOIN visitantes vt ON vt.id = rt.visitante_id AND vt.tenant_id = rt.tenant_id
         WHERE " . implode(' AND ', $where) . "
         ORDER BY r.data_hora DESC, r.id DESC LIMIT 10000";
 $stmt = $conn->prepare($sql);
@@ -109,6 +119,6 @@ foreach ($registros as $registro) {
 </style></head><body><button class="print" onclick="window.print()">Imprimir / Salvar PDF</button>
 <div class="report"><header class="header"><div><h1><?= ocupante_pdf_esc($nome_empresa) ?></h1><p>CNPJ: <?= ocupante_pdf_esc($cnpj) ?></p><p>Relatório detalhado de ocupantes de veículos</p></div><div class="meta"><strong>Gerado em <?= date('d/m/Y H:i') ?></strong><br>Operador: <?= ocupante_pdf_esc($operador) ?><br>Período: <?= date('d/m/Y', strtotime($data_inicio)) ?> a <?= date('d/m/Y', strtotime($data_fim)) ?></div></header>
 <div class="title">Ocupantes lançados nos veículos</div><div class="kpis"><div class="kpi"><strong><?= $total ?></strong><span>Total de ocupantes</span></div><div class="kpi"><strong><?= count($titulares) ?></strong><span>Titulares relacionados</span></div><div class="kpi"><strong><?= $visitantes ?></strong><span>Ocupantes visitantes</span></div><div class="kpi"><strong><?= $prestadores ?></strong><span>Ocupantes prestadores</span></div></div>
-<section class="section"><h2><?= $total ?> ocupante(s) encontrado(s)</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Placa</th><th>Modelo</th><th>Unidade</th><th>Titular</th><th>Classificação titular</th><th>Ocupante</th><th>Classificação ocupante</th><th>Entrada/Saída</th><th>Status</th><th>Observação</th></tr></thead><tbody>
-<?php if (!$registros): ?><tr><td colspan="12" class="empty">Nenhum ocupante encontrado com os filtros aplicados.</td></tr><?php else: foreach ($registros as $r): ?><tr><td><?= ocupante_pdf_esc($r['data_fmt']) ?></td><td><?= ocupante_pdf_esc($r['hora_fmt']) ?></td><td><?= ocupante_pdf_esc($r['placa'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['modelo'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['unidade']) ?></td><td><strong><?= ocupante_pdf_esc($r['titular_nome']) ?></strong></td><td><?= ocupante_pdf_esc($r['titular_tipo']) ?></td><td><strong><?= ocupante_pdf_esc($r['ocupante_nome']) ?></strong></td><td><?= ocupante_pdf_esc($r['ocupante_tipo']) ?></td><td><?= ocupante_pdf_esc($r['tipo_acesso'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['status'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['observacao'] ?: '-') ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
+<section class="section"><h2><?= $total ?> ocupante(s) encontrado(s)</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Placa</th><th>Modelo</th><th>Unidade</th><th>Titular</th><th>CPF titular</th><th>Classificação titular</th><th>Ocupante</th><th>CPF ocupante</th><th>Classificação ocupante</th><th>Entrada/Saída</th><th>Status</th><th>Observação</th></tr></thead><tbody>
+<?php if (!$registros): ?><tr><td colspan="14" class="empty">Nenhum ocupante encontrado com os filtros aplicados.</td></tr><?php else: foreach ($registros as $r): ?><tr><td><?= ocupante_pdf_esc($r['data_fmt']) ?></td><td><?= ocupante_pdf_esc($r['hora_fmt']) ?></td><td><?= ocupante_pdf_esc($r['placa'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['modelo'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['unidade']) ?></td><td><strong><?= ocupante_pdf_esc($r['titular_nome']) ?></strong></td><td><?= ocupante_pdf_esc($r['titular_cpf']) ?></td><td><?= ocupante_pdf_esc($r['titular_tipo']) ?></td><td><strong><?= ocupante_pdf_esc($r['ocupante_nome']) ?></strong></td><td><?= ocupante_pdf_esc($r['ocupante_cpf']) ?></td><td><?= ocupante_pdf_esc($r['ocupante_tipo']) ?></td><td><?= ocupante_pdf_esc($r['tipo_acesso'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['status'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['observacao'] ?: '-') ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <footer class="footer"><span><?= ocupante_pdf_esc($nome_empresa) ?> — ERP Condomínio</span><span>Relatório gerado em <?= date('d/m/Y H:i') ?></span></footer></div></body></html>

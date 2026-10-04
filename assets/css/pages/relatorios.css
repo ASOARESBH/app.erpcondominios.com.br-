@@ -237,6 +237,55 @@
     background: rgba(37, 99, 235, 0.04);
 }
 
+.page-relatorios #relatorioTable .relatorio-linha-titular {
+    background: #eff6ff;
+    border-top: 2px solid #bfdbfe;
+}
+
+.page-relatorios #relatorioTable .relatorio-linha-titular td {
+    color: #1e3a8a;
+    font-weight: 600;
+}
+
+.page-relatorios #relatorioTable .relatorio-linha-ocupante {
+    background: #fff;
+}
+
+.page-relatorios #relatorioTable .relatorio-linha-ocupante td {
+    color: #475569;
+    font-size: 12px;
+}
+
+.page-relatorios #relatorioTable .relatorio-linha-ocupante td:first-child {
+    border-left: 4px solid #93c5fd;
+}
+
+.page-relatorios #relatorioTable .relatorio-pessoa {
+    min-width: 210px;
+}
+
+.page-relatorios #relatorioTable .relatorio-documento {
+    min-width: 145px;
+    font-variant-numeric: tabular-nums;
+}
+
+.page-relatorios .relatorio-relacao {
+    display: inline-flex;
+    align-items: center;
+    min-width: 130px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.page-relatorios .relatorio-relacao-titular {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
 .page-relatorios tbody tr:last-child td {
     border-bottom: none;
 }

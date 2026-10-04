@@ -17,3 +17,4 @@ O sistema possui relatórios em PDF (gerados pelo PHP) e relatórios na tela (HT
 - **Dashboard Principal**: KPIs de moradores, consumo de água, saldo financeiro, chamados abertos.
 - **Relatórios Bancários**: Extrato e conciliação.
 - **Relatórios de Inventário**: Posição de estoque.
+- **Relatório de Ocupantes de Veículos**: ao marcar `Ocupantes / ramificação`, a tela consulta `api/api_registros.php?acao=relatorio_ocupantes` e exibe cada veículo como titular, seguido dos ocupantes relacionados por `registro_titular_id`, com nome completo, CPF/documento, unidade, data/hora, Entrada/Saída, status e observação. A busca local aceita placa, nome, CPF/documento, unidade e status; CSV e PDF também incluem os documentos.
