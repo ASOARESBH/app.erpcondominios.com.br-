@@ -179,6 +179,8 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
     $nome       = trim((string)($_GET['nome'] ?? ''));
     $tipo       = trim((string)($_GET['tipo'] ?? ''));
     $liberados  = ($_GET['apenas_liberados'] ?? '') === '1';
+    $limite     = intval($_GET['limite'] ?? 5000);
+    $limite     = min(max($limite, 100), 5000);
 
     if ($dataInicio !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataInicio)) $dataInicio = '';
     if ($dataFim !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataFim)) $dataFim = '';
@@ -210,7 +212,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
         $types .= 's';
     }
     if ($nome !== '') {
-        $where[] = '(rt.nome_visitante LIKE ? OR rt.documento_visitante LIKE ?
+        $where[] = "(rt.nome_visitante LIKE ? OR rt.documento_visitante LIKE ?
             OR vt.nome_completo LIKE ? OR vt.documento LIKE ?
             OR mt.nome LIKE ? OR mt.cpf LIKE ?
             OR EXISTS (
@@ -222,7 +224,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
                        OR filtro_pessoa.registro_titular_id = $grupoExpr)
                   AND (filtro_pessoa.nome_visitante LIKE ? OR filtro_pessoa.documento_visitante LIKE ?
                        OR filtro_vo.nome_completo LIKE ? OR filtro_vo.documento LIKE ?)
-            ))';
+            ))";
         $buscaNome = '%' . $nome . '%';
         for ($i = 0; $i < 10; $i++) $params[] = $buscaNome;
         $types .= 'ssssssssss';
@@ -295,14 +297,24 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
             LEFT JOIN visitantes vo ON vo.id = r.visitante_id AND vo.tenant_id = r.tenant_id
             LEFT JOIN visitantes vt ON vt.id = rt.visitante_id AND vt.tenant_id = r.tenant_id
             WHERE " . implode(' AND ', $where) . "
-            ORDER BY r.data_hora DESC, r.id DESC";
+            ORDER BY r.data_hora DESC, r.id DESC
+            LIMIT ?";
+    $params[] = $limite;
+    $types .= 'i';
 
     $stmt = $conexao->prepare($sql);
-    if (!$stmt) retornar_json(false, 'Erro ao preparar relatório de ocupantes: ' . $conexao->error);
+    if (!$stmt) {
+        log_registro('ERRO ao preparar relatório de ocupantes', ['erro' => $conexao->error, 'errno' => $conexao->errno]);
+        retornar_json(false, 'Não foi possível preparar o relatório de ocupantes.');
+    }
     $bindRefs = [&$types];
     foreach ($params as &$param) $bindRefs[] = &$param;
     call_user_func_array([$stmt, 'bind_param'], $bindRefs);
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        log_registro('ERRO ao executar relatório de ocupantes', ['erro' => $stmt->error, 'errno' => $stmt->errno]);
+        $stmt->close();
+        retornar_json(false, 'Não foi possível executar o relatório de ocupantes.');
+    }
     $resultado = $stmt->get_result();
     $registrosOcupantes = [];
     while ($row = $resultado->fetch_assoc()) $registrosOcupantes[] = $row;
@@ -316,6 +328,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
             'hora_inicio' => $horaInicio, 'hora_fim' => $horaFim,
             'placa' => $placa, 'modelo' => $modelo, 'unidade' => $unidade,
             'nome' => $nome, 'tipo' => $tipo, 'apenas_liberados' => $liberados,
+            'limite' => $limite,
         ],
     ]);
 }

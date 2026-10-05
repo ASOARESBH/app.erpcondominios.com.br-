@@ -180,7 +180,10 @@ async function carregarRelatorioOcupantes() {
         registrosFiltrados = [];
         renderTabelaOcupantes([]);
         atualizarEstatisticas([]);
-        mostrarAlerta('error', 'Não foi possível carregar o relatório de ocupantes.');
+        const mensagem = error?.message && !/^HTTP \d+$/.test(error.message)
+            ? error.message
+            : 'Não foi possível carregar o relatório de ocupantes.';
+        mostrarAlerta('error', mensagem);
     } finally {
         if (requestId === ocupantesRequestId) setLoading(false);
     }

@@ -28,6 +28,8 @@ $unidade = trim((string)($_GET['unidade'] ?? ''));
 $nome = trim((string)($_GET['nome'] ?? ''));
 $tipo = trim((string)($_GET['tipo'] ?? ''));
 $apenas_liberados = ($_GET['apenas_liberados'] ?? '') === '1';
+$limite = intval($_GET['limite'] ?? 5000);
+$limite = min(max($limite, 100), 5000);
 
 if ($data_inicio !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $data_inicio)) $data_inicio = '';
 if ($data_fim !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $data_fim)) $data_fim = '';
@@ -123,7 +125,9 @@ $sql = "SELECT DATE_FORMAT(r.data_hora, '%d/%m/%Y') data_fmt,
         LEFT JOIN visitantes vo ON vo.id = r.visitante_id AND vo.tenant_id = r.tenant_id
         LEFT JOIN visitantes vt ON vt.id = rt.visitante_id AND vt.tenant_id = rt.tenant_id
         WHERE " . implode(' AND ', $where) . "
-        ORDER BY $grupo_expr DESC, r.papel_veiculo DESC, r.id ASC";
+        ORDER BY $grupo_expr DESC, r.papel_veiculo DESC, r.id ASC LIMIT ?";
+$params[] = $limite;
+$types .= 'i';
 $stmt = $conn->prepare($sql);
 if (!$stmt) { http_response_code(500); exit('Não foi possível preparar o relatório de ocupantes.'); }
 ocupante_pdf_bind($stmt, $types, $params);
