@@ -242,6 +242,22 @@
     border-top: 2px solid #bfdbfe;
 }
 
+.page-relatorios #relatorioTable .relatorio-grupo-destino {
+    background: #172f73;
+}
+
+.page-relatorios #relatorioTable .relatorio-grupo-destino td {
+    color: #fff;
+    font-size: 12px;
+    padding: 10px 16px;
+    white-space: normal;
+}
+
+.page-relatorios #relatorioTable .relatorio-destino-separador {
+    margin: 0 8px;
+    color: #93c5fd;
+}
+
 .page-relatorios #relatorioTable .relatorio-linha-titular td {
     color: #1e3a8a;
     font-weight: 600;

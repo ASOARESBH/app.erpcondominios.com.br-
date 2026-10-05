@@ -45,8 +45,8 @@
                 <input type="text" id="filtroUnidade" placeholder="Ex: Gleba 93">
             </div>
             <div>
-                <label>Nome / Morador</label>
-                <input type="text" id="filtroNome" placeholder="Nome do morador/visitante">
+                <label>Morador / Condutor / Ocupante</label>
+                <input type="text" id="filtroNome" placeholder="Nome ou CPF do morador, condutor ou ocupante">
             </div>
         </div>
 
@@ -65,7 +65,7 @@
                 <label class="checkbox-group"><input type="checkbox" id="tipoMorador" checked> Morador</label>
                 <label class="checkbox-group"><input type="checkbox" id="tipoVisitante" checked> Visitante</label>
                 <label class="checkbox-group"><input type="checkbox" id="tipoPrestador" checked> Prestador</label>
-                <label class="checkbox-group"><input type="checkbox" id="incluirOcupantes"> Ocupantes / ramificação</label>
+                <label class="checkbox-group"><input type="checkbox" id="incluirOcupantes"> Destino + condutor + ocupantes</label>
                 <label class="checkbox-group"><input type="checkbox" id="apenasLiberados"> Apenas Liberados</label>
             </div>
         </div>
@@ -111,7 +111,7 @@
         </div>
 
         <div class="search-box">
-            <input type="text" id="buscaLocalRelatorio" placeholder="Buscar por placa, nome, CPF, unidade ou status...">
+            <input type="text" id="buscaLocalRelatorio" placeholder="Buscar por placa, unidade, morador, condutor, ocupante, CPF ou status...">
             <label class="audio-toggle">
                 <input type="checkbox" id="habilitarSomRelatorios" checked>
                 Som de feedback
