@@ -70,15 +70,19 @@ function bindClick(id, fn) {
 }
 
 function setDatasPadrao() {
-    const hoje = new Date();
-    const trintaDiasAtras = new Date();
-    trintaDiasAtras.setDate(hoje.getDate() - 30);
-
     const dataInicial = document.getElementById('dataInicial');
     const dataFinal = document.getElementById('dataFinal');
+    const hoje = dataLocalISO();
 
-    if (dataInicial) dataInicial.value = trintaDiasAtras.toISOString().slice(0, 10);
-    if (dataFinal) dataFinal.value = hoje.toISOString().slice(0, 10);
+    if (dataInicial) dataInicial.value = hoje;
+    if (dataFinal) dataFinal.value = hoje;
+}
+
+function dataLocalISO(data = new Date()) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, '0');
+    const dia = String(data.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
 }
 
 function getTipoOcupanteFiltro() {
@@ -86,6 +90,38 @@ function getTipoOcupanteFiltro() {
     if (getChecked('tipoVisitante')) tipos.push('Visitante');
     if (getChecked('tipoPrestador')) tipos.push('Prestador');
     return tipos.length === 1 ? tipos[0] : '';
+}
+
+function getTipoRegistroFiltro() {
+    const tiposMarcados = [];
+    if (getChecked('tipoMorador')) tiposMarcados.push('Morador');
+    if (getChecked('tipoVisitante')) tiposMarcados.push('Visitante');
+    if (getChecked('tipoPrestador')) tiposMarcados.push('Prestador');
+
+    const tipoRelatorio = getValue('tipoRelatorio');
+    if (['moradores', 'visitantes', 'prestadores'].includes(tipoRelatorio)) {
+        const tipo = tipoRelatorio === 'moradores' ? 'Morador'
+            : tipoRelatorio === 'visitantes' ? 'Visitante' : 'Prestador';
+        return tiposMarcados.includes(tipo) ? tipo : 'Nenhum';
+    }
+    return tiposMarcados.length ? tiposMarcados.join(',') : 'Nenhum';
+}
+
+function montarParametrosRegistros() {
+    const params = new URLSearchParams({ limite: '500' });
+    const filtros = {
+        data_inicio: getValue('dataInicial'), data_fim: getValue('dataFinal'),
+        hora_inicio: getValue('horaInicial'), hora_fim: getValue('horaFinal'),
+        placa: getValue('filtroPlaca'), modelo: getValue('filtroModelo'),
+        unidade: getValue('filtroUnidade'), nome: getValue('filtroNome'),
+        tipo: getTipoRegistroFiltro(),
+        apenas_liberados: getChecked('apenasLiberados') ? '1' : '',
+        ignorar_ocupantes: getChecked('incluirOcupantes') ? '' : '1',
+    };
+    Object.entries(filtros).forEach(([key, value]) => {
+        if (value !== '') params.set(key, value);
+    });
+    return params;
 }
 
 function atualizarLayoutRelatorioOcupantes(ativo) {
@@ -151,7 +187,8 @@ async function carregarTodosRegistros() {
     setLoading(true);
 
     try {
-        const response = await fetch(`${API_REGISTROS}?limite=10000`);
+        const params = montarParametrosRegistros();
+        const response = await fetch(`${API_REGISTROS}?${params.toString()}`);
         const data = await response.json();
 
         if (!data.sucesso) {
@@ -161,8 +198,10 @@ async function carregarTodosRegistros() {
         }
 
         todosRegistros = Array.isArray(data.dados) ? data.dados : [];
-        aplicarFiltros();
-        mostrarAlerta('success', `${todosRegistros.length} registro(s) carregado(s).`);
+        registrosFiltrados = todosRegistros;
+        aplicarBuscaLocalTabela();
+        atualizarEstatisticas(registrosFiltrados);
+        mostrarAlerta('success', `${todosRegistros.length} registro(s) carregado(s) no período selecionado.`);
         tocarSom('success');
     } catch (error) {
         console.error('[Relatorios] Erro ao carregar:', error);
@@ -179,22 +218,8 @@ function setLoading(ativo) {
 }
 
 function aplicarFiltros() {
-    const dataInicial = getValue('dataInicial');
-    const dataFinal = getValue('dataFinal');
-    const horaInicial = getValue('horaInicial');
-    const horaFinal = getValue('horaFinal');
-
-    const filtroPlaca = getValue('filtroPlaca').toUpperCase().trim();
-    const filtroModelo = getValue('filtroModelo').toLowerCase().trim();
-    const filtroUnidade = getValue('filtroUnidade').toLowerCase().trim();
-    const filtroNome = getValue('filtroNome').toLowerCase().trim();
-
     const tipoRelatorio = getValue('tipoRelatorio');
-    const tipoMorador = getChecked('tipoMorador');
-    const tipoVisitante = getChecked('tipoVisitante');
-    const tipoPrestador = getChecked('tipoPrestador');
     const incluirOcupantes = getChecked('incluirOcupantes');
-    const apenasLiberados = getChecked('apenasLiberados');
 
     if (tipoRelatorio === 'ocupantes' || incluirOcupantes) {
         if (!modoRelatorioOcupantes) {
@@ -210,61 +235,8 @@ function aplicarFiltros() {
         modoRelatorioOcupantes = false;
         ocupantesRequestId += 1;
         atualizarLayoutRelatorioOcupantes(false);
-        setLoading(false);
     }
-
-    registrosFiltrados = todosRegistros.filter((r) => {
-        const dt = parseDataHora(r.data_hora);
-        if (!dt) return false;
-
-        if (!incluirOcupantes && r.papel_veiculo === 'OCUPANTE') return false;
-
-        if (dataInicial) {
-            const dIni = new Date(`${dataInicial}T00:00:00`);
-            if (dt < dIni) return false;
-        }
-
-        if (dataFinal) {
-            const dFim = new Date(`${dataFinal}T23:59:59`);
-            if (dt > dFim) return false;
-        }
-
-        if (horaInicial) {
-            const hhmm = dt.toTimeString().slice(0, 5);
-            if (hhmm < horaInicial) return false;
-        }
-
-        if (horaFinal) {
-            const hhmm = dt.toTimeString().slice(0, 5);
-            if (hhmm > horaFinal) return false;
-        }
-
-        const placa = String(r.placa || '').toUpperCase();
-        const modelo = String(r.modelo || '').toLowerCase();
-        const unidade = String(r.morador_unidade || r.unidade_destino || '').toLowerCase();
-        const nome = String(r.morador_nome || r.nome_visitante || '').toLowerCase();
-        const tipo = String(r.tipo || '');
-
-        if (filtroPlaca && !placa.includes(filtroPlaca)) return false;
-        if (filtroModelo && !modelo.includes(filtroModelo)) return false;
-        if (filtroUnidade && !unidade.includes(filtroUnidade)) return false;
-        if (filtroNome && !nome.includes(filtroNome)) return false;
-
-        if (!tipoMorador && tipo === 'Morador') return false;
-        if (!tipoVisitante && tipo === 'Visitante') return false;
-        if (!tipoPrestador && tipo === 'Prestador') return false;
-
-        if (tipoRelatorio === 'moradores' && tipo !== 'Morador') return false;
-        if (tipoRelatorio === 'visitantes' && tipo !== 'Visitante') return false;
-        if (tipoRelatorio === 'prestadores' && tipo !== 'Prestador') return false;
-
-        if (apenasLiberados && Number(r.liberado) !== 1) return false;
-
-        return true;
-    });
-
-    aplicarBuscaLocalTabela();
-    atualizarEstatisticas(registrosFiltrados);
+    carregarTodosRegistros();
 }
 
 function aplicarBuscaLocalTabela() {
@@ -284,6 +256,7 @@ function aplicarBuscaLocalTabela() {
         const tag = String(r.tag || '').toLowerCase();
         const tipo = String(r.tipo || '').toLowerCase();
         const nome = String(r.morador_nome || r.nome_visitante || '').toLowerCase();
+        const documento = String(r.documento_visitante || '').toLowerCase();
         const unidade = String(r.morador_unidade || r.unidade_destino || '').toLowerCase();
         const titular = String(r.titular_nome || '').toLowerCase();
         const titularTipo = String(r.titular_tipo || '').toLowerCase();
@@ -297,7 +270,7 @@ function aplicarBuscaLocalTabela() {
         return (
             dataHora.includes(termo) || placa.includes(termo) || modelo.includes(termo) ||
             cor.includes(termo) || tag.includes(termo) || tipo.includes(termo) ||
-            nome.includes(termo) || unidade.includes(termo) || status.includes(termo) ||
+            nome.includes(termo) || documento.includes(termo) || unidade.includes(termo) || status.includes(termo) ||
             titular.includes(termo) || titularTipo.includes(termo) ||
             titularCpf.includes(termo) || ocupante.includes(termo) || ocupanteTipo.includes(termo) ||
             ocupanteCpf.includes(termo) ||

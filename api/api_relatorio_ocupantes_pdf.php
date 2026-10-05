@@ -40,15 +40,18 @@ if ($data_fim === '') $data_fim = date('Y-m-d');
 $where = ['r.tenant_id = ?', "r.papel_veiculo = 'OCUPANTE'"];
 $params = [(int)$tenant_id];
 $types = 'i';
-if ($data_inicio !== '') { $where[] = 'DATE(r.data_hora) >= ?'; $params[] = $data_inicio; $types .= 's'; }
-if ($data_fim !== '') { $where[] = 'DATE(r.data_hora) <= ?'; $params[] = $data_fim; $types .= 's'; }
+if ($data_inicio !== '') { $where[] = 'r.data_hora >= ?'; $params[] = $data_inicio . ' 00:00:00'; $types .= 's'; }
+if ($data_fim !== '') {
+    $data_fim_exclusiva = date('Y-m-d', strtotime($data_fim . ' +1 day')) . ' 00:00:00';
+    $where[] = 'r.data_hora < ?'; $params[] = $data_fim_exclusiva; $types .= 's';
+}
 if ($hora_inicio !== '') { $where[] = 'TIME(r.data_hora) >= ?'; $params[] = $hora_inicio . ':00'; $types .= 's'; }
 if ($hora_fim !== '') { $where[] = 'TIME(r.data_hora) <= ?'; $params[] = $hora_fim . ':59'; $types .= 's'; }
 if ($placa !== '') { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
 if ($modelo !== '') { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
 if ($unidade !== '') {
-    $where[] = '(r.unidade_destino LIKE ? OR rt.unidade_destino LIKE ? OR mt.unidade LIKE ?)';
-    $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%'; $types .= 'sss';
+    $where[] = "COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), '')) LIKE ?";
+    $params[] = '%' . $unidade . '%'; $types .= 's';
 }
 if ($nome !== '') {
     $where[] = '(r.nome_visitante LIKE ? OR r.documento_visitante LIKE ?
@@ -72,7 +75,7 @@ $sql = "SELECT DATE_FORMAT(r.data_hora, '%d/%m/%Y') data_fmt,
                COALESCE(NULLIF(TRIM(rt.tipo), ''), 'Não informado') titular_tipo,
                COALESCE(NULLIF(TRIM(r.nome_visitante), ''), 'Não identificado') ocupante_nome,
                COALESCE(NULLIF(TRIM(r.tipo), ''), 'Não informado') ocupante_tipo,
-               COALESCE(NULLIF(TRIM(r.unidade_destino), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(mt.unidade), ''), 'Não informado') unidade
+               COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), ''), 'Não informado') unidade
         FROM registros_acesso r
         LEFT JOIN registros_acesso rt ON rt.id = r.registro_titular_id
             AND rt.tenant_id = r.tenant_id AND rt.papel_veiculo = 'TITULAR'
@@ -80,7 +83,7 @@ $sql = "SELECT DATE_FORMAT(r.data_hora, '%d/%m/%Y') data_fmt,
         LEFT JOIN visitantes vo ON vo.id = r.visitante_id AND vo.tenant_id = r.tenant_id
         LEFT JOIN visitantes vt ON vt.id = rt.visitante_id AND vt.tenant_id = rt.tenant_id
         WHERE " . implode(' AND ', $where) . "
-        ORDER BY r.data_hora DESC, r.id DESC LIMIT 10000";
+        ORDER BY r.data_hora DESC, r.id DESC LIMIT 1000";
 $stmt = $conn->prepare($sql);
 if (!$stmt) { http_response_code(500); exit('Não foi possível preparar o relatório de ocupantes.'); }
 ocupante_pdf_bind($stmt, $types, $params);

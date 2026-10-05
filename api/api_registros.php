@@ -189,16 +189,19 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
     $where = ['r.tenant_id = ?', "r.papel_veiculo = 'OCUPANTE'"];
     $params = [$tenant_id];
     $types = 'i';
-    if ($dataInicio !== '') { $where[] = 'DATE(r.data_hora) >= ?'; $params[] = $dataInicio; $types .= 's'; }
-    if ($dataFim !== '')    { $where[] = 'DATE(r.data_hora) <= ?'; $params[] = $dataFim; $types .= 's'; }
+    if ($dataInicio !== '') { $where[] = 'r.data_hora >= ?'; $params[] = $dataInicio . ' 00:00:00'; $types .= 's'; }
+    if ($dataFim !== '') {
+        $dataFimExclusiva = date('Y-m-d', strtotime($dataFim . ' +1 day')) . ' 00:00:00';
+        $where[] = 'r.data_hora < ?'; $params[] = $dataFimExclusiva; $types .= 's';
+    }
     if ($horaInicio !== '') { $where[] = 'TIME(r.data_hora) >= ?'; $params[] = $horaInicio . ':00'; $types .= 's'; }
     if ($horaFim !== '')    { $where[] = 'TIME(r.data_hora) <= ?'; $params[] = $horaFim . ':59'; $types .= 's'; }
     if ($placa !== '')      { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
     if ($modelo !== '')     { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
     if ($unidade !== '') {
-        $where[] = '(r.unidade_destino LIKE ? OR rt.unidade_destino LIKE ? OR mt.unidade LIKE ?)';
-        $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%';
-        $types .= 'sss';
+        $where[] = "COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), '')) LIKE ?";
+        $params[] = '%' . $unidade . '%';
+        $types .= 's';
     }
     if ($nome !== '') {
         $where[] = '(r.nome_visitante LIKE ? OR r.documento_visitante LIKE ?
@@ -238,7 +241,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
                 rt.liberado AS titular_liberado, rt.observacao AS titular_observacao,
                 COALESCE(NULLIF(TRIM(r.nome_visitante), ''), 'Não identificado') AS ocupante_nome,
                 COALESCE(NULLIF(TRIM(r.tipo), ''), 'Não informado') AS ocupante_tipo,
-                COALESCE(NULLIF(TRIM(r.unidade_destino), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(mt.unidade), ''), 'Não informado') AS unidade
+                COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), ''), 'Não informado') AS unidade
             FROM registros_acesso r
             LEFT JOIN registros_acesso rt ON rt.id = r.registro_titular_id
                 AND rt.tenant_id = r.tenant_id AND rt.papel_veiculo = 'TITULAR'
@@ -247,7 +250,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
             LEFT JOIN visitantes vt ON vt.id = rt.visitante_id AND vt.tenant_id = r.tenant_id
             WHERE " . implode(' AND ', $where) . "
             ORDER BY r.data_hora DESC, r.id DESC
-            LIMIT 10000";
+            LIMIT 1000";
 
     $stmt = $conexao->prepare($sql);
     if (!$stmt) retornar_json(false, 'Erro ao preparar relatório de ocupantes: ' . $conexao->error);
@@ -275,21 +278,76 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
 // ========== LISTAR REGISTROS ==========
 if ($metodo === 'GET') {
     $limite = intval($_GET['limite'] ?? 100);
+    $limite = min(max($limite, 1), 1000);
+    $where = ['r.tenant_id = ?'];
+    $params = [$tenant_id];
+    $types = 'i';
+
+    $dataInicio = trim((string)($_GET['data_inicio'] ?? ''));
+    $dataFim = trim((string)($_GET['data_fim'] ?? ''));
+    $horaInicio = trim((string)($_GET['hora_inicio'] ?? ''));
+    $horaFim = trim((string)($_GET['hora_fim'] ?? ''));
+    $placa = strtoupper(trim((string)($_GET['placa'] ?? '')));
+    $modelo = trim((string)($_GET['modelo'] ?? ''));
+    $unidade = trim((string)($_GET['unidade'] ?? ''));
+    $nome = trim((string)($_GET['nome'] ?? ''));
+    $tipoParam = trim((string)($_GET['tipo'] ?? ''));
+
+    if ($dataInicio !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataInicio)) {
+        $where[] = 'r.data_hora >= ?'; $params[] = $dataInicio . ' 00:00:00'; $types .= 's';
+    }
+    if ($dataFim !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataFim)) {
+        $dataFimExclusiva = date('Y-m-d', strtotime($dataFim . ' +1 day')) . ' 00:00:00';
+        $where[] = 'r.data_hora < ?'; $params[] = $dataFimExclusiva; $types .= 's';
+    }
+    if ($horaInicio !== '' && preg_match('/^\d{2}:\d{2}$/', $horaInicio)) {
+        $where[] = 'TIME(r.data_hora) >= ?'; $params[] = $horaInicio . ':00'; $types .= 's';
+    }
+    if ($horaFim !== '' && preg_match('/^\d{2}:\d{2}$/', $horaFim)) {
+        $where[] = 'TIME(r.data_hora) <= ?'; $params[] = $horaFim . ':59'; $types .= 's';
+    }
+    if ($placa !== '') { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
+    if ($modelo !== '') { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
+    if ($unidade !== '') {
+        $where[] = '(r.unidade_destino LIKE ? OR m.unidade LIKE ?)';
+        $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%'; $types .= 'ss';
+    }
+    if ($nome !== '') {
+        $where[] = '(r.nome_visitante LIKE ? OR r.documento_visitante LIKE ? OR m.nome LIKE ? OR m.cpf LIKE ? OR d.nome_completo LIKE ?)';
+        $buscaNome = '%' . $nome . '%';
+        for ($i = 0; $i < 5; $i++) $params[] = $buscaNome;
+        $types .= 'sssss';
+    }
+    if ($tipoParam !== '') {
+        $tiposValidos = array_values(array_intersect(
+            ['Morador', 'Visitante', 'Prestador'],
+            array_filter(array_map('trim', explode(',', $tipoParam)))
+        ));
+        if (!$tiposValidos) {
+            $where[] = '1 = 0';
+        } else {
+            $placeholders = implode(', ', array_fill(0, count($tiposValidos), '?'));
+            $where[] = "r.tipo IN ($placeholders)";
+            foreach ($tiposValidos as $tipoValido) { $params[] = $tipoValido; $types .= 's'; }
+        }
+    }
+    if (($_GET['apenas_liberados'] ?? '') === '1') $where[] = 'r.liberado = 1';
+    if (($_GET['ignorar_ocupantes'] ?? '') === '1') $where[] = "r.papel_veiculo <> 'OCUPANTE'";
 
     $sql = "SELECT r.id,
             DATE_FORMAT(r.data_hora, '%d/%m/%Y %H:%i:%s') AS data_hora_formatada,
             r.data_hora, r.placa, r.modelo, r.cor, r.tag, r.tipo,
-            r.nome_visitante, r.unidade_destino, r.dias_permanencia,
+            r.nome_visitante, r.documento_visitante, r.unidade_destino, r.dias_permanencia,
             r.status, r.liberado, r.observacao,
             r.tipo_acesso, r.dependente_id, r.modo_registro, r.vestimenta, r.usuario_liberou,
             r.papel_veiculo, r.registro_titular_id,
             m.nome AS morador_nome, m.unidade AS morador_unidade,
             d.nome_completo AS dependente_nome
             FROM registros_acesso r
-            LEFT JOIN moradores m ON r.morador_id = m.id
-            LEFT JOIN dependentes d ON r.dependente_id = d.id
-            WHERE r.tenant_id = ?
-            ORDER BY r.data_hora DESC
+            LEFT JOIN moradores m ON r.morador_id = m.id AND m.tenant_id = r.tenant_id
+            LEFT JOIN dependentes d ON r.dependente_id = d.id AND d.tenant_id = r.tenant_id
+            WHERE " . implode(' AND ', $where) . "
+            ORDER BY r.data_hora DESC, r.id DESC
             LIMIT ?";
 
     $stmt = $conexao->prepare($sql);
@@ -297,7 +355,11 @@ if ($metodo === 'GET') {
         log_registro('ERRO prepare GET', ['erro' => $conexao->error]);
         retornar_json(false, 'Erro ao preparar consulta: ' . $conexao->error);
     }
-    $stmt->bind_param('ii', $tenant_id, $limite);
+    $params[] = $limite;
+    $types .= 'i';
+    $bindRefs = [&$types];
+    foreach ($params as &$param) $bindRefs[] = &$param;
+    call_user_func_array([$stmt, 'bind_param'], $bindRefs);
     $stmt->execute();
     $resultado = $stmt->get_result();
 
@@ -408,7 +470,7 @@ if ($metodo === 'POST') {
                     $mor = $res2->fetch_assoc();
                     $liberado = 1;
                     $status   = '✅ Acesso liberado - ' . $mor['nome'];
-                    if (empty($unidade_destino)) $unidade_destino = $mor['unidade'];
+                    $unidade_destino = $mor['unidade'];
                 } else {
                     $status   = '🟨 Registro manual - Morador';
                     $liberado = 1;
@@ -477,6 +539,23 @@ if ($metodo === 'POST') {
             retornar_json(false, $validacaoTitular['mensagem']);
         }
         $visitante = $validacaoTitular['visitante'];
+
+        if (!$morador_id) {
+            retornar_json(false, 'Selecione o morador e a unidade de destino.');
+        }
+        $stmtDestino = $conexao->prepare('SELECT unidade FROM moradores WHERE tenant_id = ? AND id = ? LIMIT 1');
+        if (!$stmtDestino) {
+            log_registro('ERRO prepare unidade destino', ['erro' => $conexao->error, 'morador_id' => $morador_id]);
+            retornar_json(false, 'Não foi possível validar a unidade de destino.');
+        }
+        $stmtDestino->bind_param('ii', $tenant_id, $morador_id);
+        $stmtDestino->execute();
+        $destino = $stmtDestino->get_result()->fetch_assoc();
+        $stmtDestino->close();
+        if (!$destino) {
+            retornar_json(false, 'Morador ou unidade de destino inválido.');
+        }
+        $unidade_destino = trim((string)$destino['unidade']);
 
         // Usa somente os dados confirmados no cadastro do tenant.
         $nome_visitante = $visitante['nome_completo'];
