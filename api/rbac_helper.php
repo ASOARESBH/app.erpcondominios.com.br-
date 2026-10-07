@@ -211,6 +211,16 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         return in_array($permissao, ['admin', 'super_admin'], true);
     }
 
+    function rbacUsuarioAlvoTemAcessoTotal($conexao, $usuarioId, $tenantId) {
+        $st = $conexao->prepare("SELECT LOWER(COALESCE(permissao, '')) AS permissao FROM usuarios WHERE id=? AND tenant_id=? LIMIT 1");
+        if (!$st) return false;
+        $st->bind_param('ii', $usuarioId, $tenantId);
+        $st->execute();
+        $linha = $st->get_result()->fetch_assoc();
+        $st->close();
+        return in_array((string)($linha['permissao'] ?? ''), ['admin', 'super_admin'], true);
+    }
+
     function rbacObterPermissoesEfetivas($conexao, $usuarioId, $tenantId, $forcarAtualizacao = false) {
         if (!rbacTabelasDisponiveis($conexao)) return ['modo_compatibilidade' => true, 'is_super_admin' => rbacUsuarioEhSuperAdmin(), 'is_admin_total' => rbacUsuarioTemAcessoTotal(), 'permitidas' => [], 'detalhes' => []];
         $revisao = rbacObterRevisao($conexao, $tenantId);
@@ -259,7 +269,8 @@ if (!function_exists('rbacTabelasDisponiveis')) {
             }
             $efetivas[$chave] = ['permitido' => !$negado && $permitido, 'escopo' => $escopo, 'origens' => $origens];
         }
-        $resultado = ['modo_compatibilidade' => false, 'is_super_admin' => rbacUsuarioEhSuperAdmin(), 'is_admin_total' => rbacUsuarioTemAcessoTotal(), 'usuario_id' => (int)$usuarioId, 'tenant_id' => (int)$tenantId, 'revisao' => $revisao, 'grupos' => $grupos, 'permitidas' => $efetivas, 'detalhes' => $detalhes];
+        $alvoAcessoTotal = rbacUsuarioAlvoTemAcessoTotal($conexao, $usuarioId, $tenantId);
+        $resultado = ['modo_compatibilidade' => false, 'is_super_admin' => $alvoAcessoTotal, 'is_admin_total' => $alvoAcessoTotal, 'usuario_id' => (int)$usuarioId, 'tenant_id' => (int)$tenantId, 'revisao' => $revisao, 'grupos' => $grupos, 'permitidas' => $efetivas, 'detalhes' => $detalhes];
         $_SESSION['_rbac_cache'] = $resultado;
         return $resultado;
     }
