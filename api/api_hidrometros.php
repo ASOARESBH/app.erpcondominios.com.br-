@@ -23,9 +23,15 @@ ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
 
+verificarAutenticacao(true);
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
 $tenant_id = exigirTenantId();
+
+if (rbacTabelasDisponiveis($conexao)) {
+    $acao_rbac = $metodo === 'GET' ? 'visualizar' : ($metodo === 'POST' ? 'criar' : 'editar');
+    rbacExigir($conexao, 'hidrometro', $acao_rbac, ['submodulo_chave' => 'hidrometro']);
+}
 
 // ========== BUSCAR HISTÓRICO (deve vir ANTES do GET genérico) ==========
 if ($metodo === 'GET' && isset($_GET['historico'])) {

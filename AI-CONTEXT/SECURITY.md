@@ -17,3 +17,12 @@ Definida no `auth_helper.php`:
 ## 3. Proteção de Diretórios
 Pastas sensíveis (como `/api/`) devem ter arquivo `.htaccess` bloqueando listagem de diretórios (`Options -Indexes`).
 Arquivos de upload de moradores/documentos ficam fora da raiz pública ou protegidos por script PHP que valida a sessão antes de entregar o arquivo.
+
+## 4. Submódulos de Manutenção
+- O perfil legado `operador` não concede automaticamente acesso a Estoque, Abastecimento,
+  Hidrômetros, Leituras, Inventário, Checklists ou Ordens de Serviço.
+- As rotas SPA devem consultar `minhas_permissoes` para bloquear a abertura direta de um
+  submódulo sem `visualizar`; a tela geral de Manutenção deve ocultar seus cards e abas negados.
+- As APIs desses submódulos devem chamar `rbacExigir()` por ação (`visualizar`, `criar`,
+  `editar` ou `excluir`) depois da autenticação. A proteção de frontend é somente visual e
+  nunca substitui a autorização server-side.

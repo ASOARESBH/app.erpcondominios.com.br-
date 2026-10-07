@@ -44,8 +44,16 @@ $tenant_id = exigirTenantId();
 $conexao = conectar_banco();
 $acao = $_POST['acao'] ?? $_GET['acao'] ?? '';
 
-// Verificar permissão para ações de escrita
+// Verificar a ação do submódulo no RBAC; o perfil legado abaixo é apenas
+// compatibilidade para instalações que ainda não executaram a migration.
 $acoes_escrita = ['criar', 'atualizar', 'fechar', 'deletar'];
+if (rbacTabelasDisponiveis($conexao)) {
+    $acao_rbac = 'visualizar';
+    if (in_array($acao, ['criar'], true)) $acao_rbac = 'criar';
+    elseif (in_array($acao, ['atualizar', 'fechar'], true)) $acao_rbac = 'editar';
+    elseif ($acao === 'deletar') $acao_rbac = 'excluir';
+    rbacExigir($conexao, 'checklists', $acao_rbac, ['submodulo_chave' => $acao ?: null]);
+}
 if (in_array($acao, $acoes_escrita)) {
     verificarPermissao('operador');
 }

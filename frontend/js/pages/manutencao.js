@@ -17,10 +17,40 @@ let _listeners = [];
 // ============================================================
 export function init() {
     console.log('[Manutencao] Inicializando módulo v3.0...');
-    _setupKeyboardNavigation();
-    _setupTabNavigation();
-    console.log('[Manutencao] Cards disponíveis:', _getCardList());
-    console.log('[Manutencao] Módulo pronto.');
+    // O roteador impede a abertura direta de uma página sem permissão, mas a
+    // visão geral também precisa esconder as abas/cards dos submódulos negados.
+    // A autorização continua sendo server-side; aqui apenas refletimos o estado.
+    void _filtrarSubmodulosPorPermissao().finally(() => {
+        _setupKeyboardNavigation();
+        _setupTabNavigation();
+        console.log('[Manutencao] Cards disponíveis:', _getCardList());
+        console.log('[Manutencao] Módulo pronto.');
+    });
+}
+
+async function _filtrarSubmodulosPorPermissao() {
+    const controles = Array.from(document.querySelectorAll('.page-manutencao [data-page]'));
+    if (!controles.length || !window.MenuController || typeof window.MenuController.autorizarPagina !== 'function') return;
+
+    const paginas = [...new Set(controles.map((el) => el.dataset.page).filter(Boolean))];
+    const acesso = new Map();
+    await Promise.all(paginas.map(async (pagina) => {
+        try {
+            acesso.set(pagina, await window.MenuController.autorizarPagina(pagina));
+        } catch (erro) {
+            console.error('[Manutencao] Falha ao consultar permissão de', pagina, erro);
+            acesso.set(pagina, false);
+        }
+    }));
+
+    controles.forEach((el) => {
+        const permitido = acesso.get(el.dataset.page) === true;
+        el.hidden = !permitido;
+        if (!permitido) {
+            el.setAttribute('aria-hidden', 'true');
+            if (el.classList.contains('interactive')) el.setAttribute('tabindex', '-1');
+        }
+    });
 }
 
 export function destroy() {
@@ -83,6 +113,6 @@ function _navegarPara(pageName) {
 
 function _getCardList() {
     return Array.from(
-        document.querySelectorAll('.page-manutencao .page-card[data-page]')
+        document.querySelectorAll('.page-manutencao .page-card[data-page]:not([hidden])')
     ).map(c => c.dataset.page);
 }

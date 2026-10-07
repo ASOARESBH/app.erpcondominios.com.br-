@@ -40,7 +40,11 @@
     const PAGE_TO_PERMISSION = {
         dashboard:'dashboard', moradores:'moradores', veiculos:'veiculos', visitantes:'visitantes', registro:'registro',
         acesso:'acesso', lpr:'lpr', relatorios:'relatorios_acesso', financeiro:'financeiro', configuracao:'configuracao',
-        unidades:'unidades', manutencao:'manutencao', administrativa:'administrativo', recursos_humanos:'recursos_humanos',
+        unidades:'unidades', manutencao:'manutencao', hidrometro:'hidrometro', leitura:'leitura',
+        relatorios_hidrometro:'relatorios_hidrometro', abastecimento:'abastecimento', estoque:'estoque',
+        inventario:'inventario', relatorios_inventario:'relatorios_inventario', ordens_servico:'ordens_servico',
+        imprimir_os:'imprimir_os', checklists:'checklists', documentos:'documentos',
+        administrativa:'administrativo', recursos_humanos:'recursos_humanos',
         usuarios:'usuarios', empresa:'empresa', dispositivos:'dispositivos', seguranca:'seguranca', sistema:'sistema', config_visitantes:'sistema',
         meu_perfil:'meu_perfil', inadimplencia:'inadimplencia', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin'
     };

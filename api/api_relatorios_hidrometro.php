@@ -30,8 +30,12 @@ ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
 
+verificarAutenticacao(true);
 $conexao = conectar_banco();
 $tenant_id = exigirTenantId();
+if (rbacTabelasDisponiveis($conexao)) {
+    rbacExigir($conexao, 'relatorios_hidrometro', 'visualizar', ['submodulo_chave' => 'relatorios_hidrometro']);
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     retornar_json(false, 'Método não suportado');

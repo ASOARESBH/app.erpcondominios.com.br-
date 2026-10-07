@@ -20,8 +20,11 @@ require_once 'tenant_helper.php';;
 ob_end_clean();
 
 $conn    = conectar_banco();
-$usuario = verificarAutenticacao(false, 'operador');
+$usuario = verificarAutenticacao(true, 'operador');
 $tenant_id = exigirTenantId();
+if (rbacTabelasDisponiveis($conn)) {
+    rbacExigir($conn, 'relatorios_inventario', 'visualizar', ['submodulo_chave' => 'relatorios_inventario']);
+}
 
 date_default_timezone_set('America/Sao_Paulo');
 

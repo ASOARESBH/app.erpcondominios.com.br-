@@ -312,6 +312,17 @@ function _os_texto_simples($valor): string {
 
 $acao = $_GET['acao'] ?? $_POST['acao'] ?? $body['acao'] ?? '';
 
+if (rbacTabelasDisponiveis($conn)) {
+    $acoes_criar = ['criar', 'adicionar_interacao', 'vincular_chamado', 'adicionar_material', 'salvar_projeto', 'upload_imagem_capa', 'upload_foto_interacao', 'criar_etapa'];
+    $acoes_editar = ['editar', 'finalizar', 'assumir_portal', 'remover_material', 'baixar_estoque_os', 'editar_assunto', 'salvar_config', 'editar_etapa'];
+    $acoes_excluir = ['excluir', 'excluir_assunto', 'excluir_config', 'excluir_etapa'];
+    $acao_rbac = 'visualizar';
+    if (in_array($acao, $acoes_criar, true)) $acao_rbac = 'criar';
+    elseif (in_array($acao, $acoes_editar, true)) $acao_rbac = 'editar';
+    elseif (in_array($acao, $acoes_excluir, true)) $acao_rbac = 'excluir';
+    rbacExigir($conn, 'ordens_servico', $acao_rbac, ['submodulo_chave' => $acao ?: null]);
+}
+
 os_log('info', 'Requisição recebida', ['metodo' => $metodo, 'acao' => $acao, 'get' => $_GET]);
 
 // =====================================================

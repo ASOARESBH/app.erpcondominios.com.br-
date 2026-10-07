@@ -45,7 +45,18 @@ $conexao = conectar_banco();
 $metodo = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
-// Para operações de escrita, verificar permissão
+// O perfil legado (operador) não substitui a permissão específica do módulo.
+// Sem este guard qualquer operador conseguia consultar e alterar Estoque mesmo
+// após o administrador revogar estoque.visualizar/criar/editar/excluir no RBAC.
+if (rbacTabelasDisponiveis($conexao)) {
+    $acao_rbac = 'visualizar';
+    if ($metodo === 'POST') $acao_rbac = 'criar';
+    elseif ($metodo === 'PUT') $acao_rbac = 'editar';
+    elseif ($metodo === 'DELETE') $acao_rbac = 'excluir';
+    rbacExigir($conexao, 'estoque', $acao_rbac, ['submodulo_chave' => $action ?: null]);
+}
+
+// Compatibilidade legada enquanto o RBAC não estiver instalado.
 if ($metodo !== 'GET') {
     verificarPermissao('operador');
 }

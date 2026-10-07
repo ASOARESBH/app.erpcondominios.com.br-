@@ -81,10 +81,21 @@ $tenant_id = exigirTenantId();
 if (!$db) retornar_json(false, 'Erro ao conectar ao banco de dados');
 $db->set_charset('utf8mb4');
 
-_criar_tabelas($db);
-
 $sessao = _sessao();
 $acao   = $_GET['acao'] ?? $_POST['acao'] ?? '';
+
+if (rbacTabelasDisponiveis($db)) {
+    $acoes_criar = ['grupo_salvar', 'grupo_membro_add', 'pasta_salvar', 'documento_salvar', 'compartilhamento_gerar', 'tipo_salvar'];
+    $acoes_editar = ['compartilhamento_desativar', 'grupo_membro_remove'];
+    $acoes_excluir = ['grupo_excluir', 'pasta_excluir', 'documento_excluir', 'tipo_excluir'];
+    $acao_rbac = 'visualizar';
+    if (in_array($acao, $acoes_criar, true)) $acao_rbac = 'criar';
+    elseif (in_array($acao, $acoes_editar, true)) $acao_rbac = 'editar';
+    elseif (in_array($acao, $acoes_excluir, true)) $acao_rbac = 'excluir';
+    rbacExigir($db, 'documentos', $acao_rbac, ['submodulo_chave' => $acao ?: null]);
+}
+
+_criar_tabelas($db);
 
 switch ($acao) {
     // ── Leitura ──────────────────────────────────────────────

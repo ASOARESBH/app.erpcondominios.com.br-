@@ -48,9 +48,15 @@ ob_end_clean();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
 
+verificarAutenticacao(true);
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
 $tenant_id = exigirTenantId();
+
+if (rbacTabelasDisponiveis($conexao)) {
+    $acao_rbac = $metodo === 'GET' ? 'visualizar' : 'criar';
+    rbacExigir($conexao, 'leitura', $acao_rbac, ['submodulo_chave' => 'leitura']);
+}
 
 // Constantes
 define('VALOR_METRO_CUBICO', 6.16);

@@ -28,6 +28,9 @@ $conn = conectar_banco();
 // auth_helper já chama session_start() internamente
 $usuario = verificarAutenticacao(true, 'operador');
 $tenant_id = exigirTenantId();
+if (rbacTabelasDisponiveis($conn)) {
+    rbacExigir($conn, 'abastecimento', 'visualizar', ['submodulo_chave' => 'relatorio']);
+}
 // Se não autenticado, verificarAutenticacao() já encerra com HTTP 401 + JSON
 
 // ── 2. Configurações regionais ────────────────────────────────

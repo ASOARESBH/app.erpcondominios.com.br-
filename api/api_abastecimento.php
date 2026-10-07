@@ -92,12 +92,30 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 // Obter método da requisição
 $metodo = $_SERVER['REQUEST_METHOD'];
+$action = $_GET['action'] ?? '';
+$dados_post = null;
+if ($metodo === 'POST') {
+    $dados_post = json_decode(file_get_contents('php://input'), true) ?: [];
+    $action = $dados_post['action'] ?? '';
+}
+
+// O perfil legado apenas confirma que o usuário é operador; não autoriza o
+// submódulo. O RBAC deve ser a fonte de verdade para leitura e escrita.
+if (rbacTabelasDisponiveis($conn)) {
+    $acao_rbac = $action === 'recalcular_saldo'
+        ? 'editar'
+        : ($metodo === 'GET' ? 'visualizar' : 'criar');
+    rbacExigir(
+        $conn,
+        'abastecimento',
+        $acao_rbac,
+        ['submodulo_chave' => $action ?: 'abastecimento']
+    );
+}
 
 // GET - Listar dados
 if ($metodo === 'GET') {
     // Autenticação já verificada acima
-    $action = $_GET['action'] ?? '';
-    
     switch ($action) {
         case 'listar_veiculos':
             listarVeiculos($conn, $tenant_id);
@@ -137,9 +155,7 @@ if ($metodo === 'GET') {
 
 // POST - Criar registros
 if ($metodo === 'POST') {
-    $dados = json_decode(file_get_contents('php://input'), true);
-    $action = $dados['action'] ?? '';
-    
+    $dados = $dados_post ?: [];
     switch ($action) {
         case 'cadastrar_veiculo':
             cadastrarVeiculo($conn, $dados, $tenant_id);

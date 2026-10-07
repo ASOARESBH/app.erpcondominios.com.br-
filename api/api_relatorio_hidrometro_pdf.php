@@ -24,8 +24,11 @@ require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 
 $conn    = conectar_banco();
-$usuario = verificarAutenticacao(false, 'operador');
+$usuario = verificarAutenticacao(true, 'operador');
 $tenant_id = exigirTenantId();
+if (rbacTabelasDisponiveis($conn)) {
+    rbacExigir($conn, 'relatorios_hidrometro', 'visualizar', ['submodulo_chave' => 'relatorios_hidrometro']);
+}
 
 date_default_timezone_set('America/Sao_Paulo');
 
