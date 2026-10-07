@@ -82,6 +82,13 @@ if ($metodo === 'GET' && $acao === 'permissoes_usuario') {
         $usuario_rbac = rbacUsuarioMesmoTenant($conexao, $usuario_id, $tenant_id);
         if (!$usuario_rbac) retornar_json(false, 'Usuário não encontrado no condomínio atual');
         $dados_rbac = rbacFormatoPermissoesApi($conexao, $usuario_id, $tenant_id, true);
+        $grupoSync = rbacSincronizarGrupoCompatibilidade($conexao, $tenant_id, $usuario_id, $usuario_rbac['permissao'], $_SESSION['usuario_id'] ?? 0);
+        if (!$grupoSync['ok']) {
+            error_log('[PermissoesModulos][RBAC] Falha ao reparar grupo do usuário ' . $usuario_id . ': ' . ($grupoSync['mensagem'] ?? 'erro desconhecido'));
+        } elseif ($grupoSync['alterado']) {
+            rbacInvalidarCache($conexao, $tenant_id);
+            $dados_rbac = rbacFormatoPermissoesApi($conexao, $usuario_id, $tenant_id, true);
+        }
         retornar_json(true, 'Permissões efetivas carregadas', ['usuario'=>$usuario_rbac, 'permissoes'=>$dados_rbac['modulos'], 'grupos'=>$dados_rbac['grupos'], 'revisao'=>$dados_rbac['revisao']]);
     }
     if ($usuario_id <= 0) {

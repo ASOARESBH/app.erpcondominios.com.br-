@@ -312,6 +312,7 @@ if ($metodo === 'PUT') {
         $stmt->bind_param("ssssssiii", $nome, $email, $funcao, $departamento, $permissao, $ativo, $sessao_inativa, $tenant_id, $id);
     }
     
+    $conexao->begin_transaction();
     if ($stmt->execute()) {
         // Mantém usuario_tenant.permissao sincronizada — sem isso, promover/rebaixar
         // alguém aqui não tinha efeito nenhum na permissão efetiva usada no login
@@ -320,12 +321,24 @@ if ($metodo === 'PUT') {
         if ($vinculoUpd) { $vinculoUpd->bind_param('iis', $id, $tenant_id, $permissao); $vinculoUpd->execute(); $vinculoUpd->close(); }
 
         if ($rbac_ativo) {
+            $grupoSync = rbacSincronizarGrupoCompatibilidade($conexao, $tenant_id, $id, $permissao);
+            if (!$grupoSync['ok']) {
+                $conexao->rollback();
+                error_log('[Usuarios][RBAC] Falha ao sincronizar perfil do usuário ' . $id . ': ' . ($grupoSync['mensagem'] ?? 'erro desconhecido'));
+                retornar_json(false, 'Não foi possível sincronizar as permissões do perfil. Nenhuma alteração foi aplicada.');
+            }
+        }
+
+        $conexao->commit();
+
+        if ($rbac_ativo) {
             rbacInvalidarCache($conexao, $tenant_id);
             rbacAuditar($conexao, ['modulo_chave'=>'usuarios','acao'=>'EDITAR','registro_tipo'=>'usuarios','registro_id'=>$id,'dados_antes'=>$antes,'dados_depois'=>['nome'=>$nome,'email'=>$email,'funcao'=>$funcao,'departamento'=>$departamento,'permissao'=>$permissao,'ativo'=>$ativo,'sessao_inativa'=>$sessao_inativa],'resultado'=>'SUCESSO','status_http'=>200]);
         }
         registrar_log('USUARIO_ATUALIZADO', "Usuário atualizado: $nome (ID: $id)", $nome);
         retornar_json(true, "Usuário atualizado com sucesso");
     } else {
+        $conexao->rollback();
         retornar_json(false, "Erro ao atualizar usuário: " . $stmt->error);
     }
     

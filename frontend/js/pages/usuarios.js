@@ -454,13 +454,23 @@ function renderizarGruposModulos(modulos, usuario) {
         mods.forEach(m => {
             if (!m.perfil_permite && habilitar) return; // não habilitar o que o perfil não permite
             const perm = state.permissoesEditadas[m.modulo_chave];
-            if (perm) perm.pode_acessar = habilitar ? 1 : 0;
+            if (perm) {
+                perm.pode_acessar = habilitar ? 1 : 0;
+                if (!habilitar) {
+                    perm.pode_criar = 0;
+                    perm.pode_editar = 0;
+                    perm.pode_excluir = 0;
+                    perm.pode_exportar = 0;
+                }
+            }
             const toggle = document.getElementById(`toggle_${m.modulo_chave}`);
             if (toggle) toggle.checked = habilitar && !!m.perfil_permite;
             const card = document.getElementById(`card_${m.modulo_chave}`);
             if (card) _atualizarClasseCard(card, habilitar && !!m.perfil_permite, m.perfil_permite);
         });
         _atualizarContadorGrupo(grupo);
+        state.alteracoesPendentes = (state.alteracoesPendentes || 0) + 1;
+        _atualizarBadgePendente(state.alteracoesPendentes);
     };
 }
 
@@ -533,6 +543,12 @@ function _onToggleModulo(chave, habilitado) {
     const perm = state.permissoesEditadas[chave];
     if (!perm) return;
     perm.pode_acessar = habilitado ? 1 : 0;
+    if (!habilitado) {
+        perm.pode_criar = 0;
+        perm.pode_editar = 0;
+        perm.pode_excluir = 0;
+        perm.pode_exportar = 0;
+    }
     const card = document.getElementById(`card_${chave}`);
     const m = state.todosModulos.find(x => x.modulo_chave === chave);
     if (card) _atualizarClasseCard(card, habilitado, m?.perfil_permite);
@@ -549,6 +565,12 @@ function _onTogglePerm(chave, permKey, chip) {
     // Se clicar em 'Ver' (pode_acessar), ativar/desativar o módulo todo
     if (permKey === 'pode_acessar') {
         perm.pode_acessar = perm.pode_acessar ? 0 : 1;
+        if (!perm.pode_acessar) {
+            perm.pode_criar = 0;
+            perm.pode_editar = 0;
+            perm.pode_excluir = 0;
+            perm.pode_exportar = 0;
+        }
         chip.classList.toggle('on',  !!perm.pode_acessar);
         chip.classList.toggle('off', !perm.pode_acessar);
         // Desabilitar/habilitar os outros chips
@@ -603,13 +625,21 @@ function habilitarTodos() {
     Object.keys(
         state.todosModulos.reduce((acc, m) => { acc[m.grupo] = true; return acc; }, {})
     ).forEach(g => _atualizarContadorGrupo(g));
+    state.alteracoesPendentes = (state.alteracoesPendentes || 0) + 1;
+    _atualizarBadgePendente(state.alteracoesPendentes);
     mostrarAlerta('Todos os módulos habilitados. Clique em Salvar para confirmar.', 'info');
 }
 
 function desabilitarTodos() {
     state.todosModulos.forEach(m => {
         const perm = state.permissoesEditadas[m.modulo_chave];
-        if (perm) { perm.pode_acessar = 0; }
+        if (perm) {
+            perm.pode_acessar = 0;
+            perm.pode_criar = 0;
+            perm.pode_editar = 0;
+            perm.pode_excluir = 0;
+            perm.pode_exportar = 0;
+        }
         const toggle = document.getElementById(`toggle_${m.modulo_chave}`);
         if (toggle) toggle.checked = false;
         const card = document.getElementById(`card_${m.modulo_chave}`);
@@ -620,6 +650,8 @@ function desabilitarTodos() {
     Object.keys(
         state.todosModulos.reduce((acc, m) => { acc[m.grupo] = true; return acc; }, {})
     ).forEach(g => _atualizarContadorGrupo(g));
+    state.alteracoesPendentes = (state.alteracoesPendentes || 0) + 1;
+    _atualizarBadgePendente(state.alteracoesPendentes);
     mostrarAlerta('Todos os módulos desabilitados. Clique em Salvar para confirmar.', 'warning');
 }
 
@@ -666,6 +698,8 @@ function salvarPermissoes() {
             const total = Object.keys(state.permissoesEditadas).length;
             const hab   = Object.values(state.permissoesEditadas).filter(p => p.pode_acessar).length;
             if (state.dom.modAuditOrigem) state.dom.modAuditOrigem.textContent = `${hab}/${total} módulos habilitados`;
+            console.log('[Usuarios] Permissões salvas; recarregando estado efetivo do usuário', state.usuarioModuloAtual.id);
+            selecionarUsuarioModulos(state.usuarioModuloAtual.id);
         } else {
             mostrarAlerta('Erro ao salvar: ' + data.mensagem, 'error');
         }
@@ -848,8 +882,13 @@ function _exibirAuditoria(permissoes) {
     const d = state.dom;
     if (!d.modAuditoriaBar) return;
 
-    // Verificar se algum módulo tem registro individual (origem = 'individual')
-    const comRegistro = Object.values(permissoes).filter(p => p.origem === 'individual');
+    // O RBAC moderno informa a origem por ação, enquanto a camada legada
+    // informa p.origem no módulo. Ambos representam uma exceção persistida.
+    const comRegistro = Object.values(permissoes).filter(p =>
+        p.origem === 'individual' || Object.values(p.origens || {}).some(origens =>
+            Array.isArray(origens) && origens.some(origem => origem.origem === 'individual')
+        )
+    );
     const totalModulos = Object.values(permissoes).length;
     const habilitados  = Object.values(permissoes).filter(p => p.pode_acessar).length;
 

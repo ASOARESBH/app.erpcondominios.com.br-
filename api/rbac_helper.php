@@ -125,6 +125,76 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         unset($_SESSION['_rbac_cache']);
     }
 
+    function rbacSincronizarGrupoCompatibilidade($conexao, $tenantId, $usuarioId, $permissao, $ator = null) {
+        if (!rbacTabelasDisponiveis($conexao) || (int)$tenantId <= 0 || (int)$usuarioId <= 0) {
+            return ['ok' => true, 'alterado' => false];
+        }
+
+        $perfis = ['visualizador', 'operador', 'gerente', 'admin'];
+        $permissao = strtolower(trim((string)$permissao));
+        if (!in_array($permissao, $perfis, true)) $permissao = 'visualizador';
+        $slugAlvo = 'compat-' . $permissao;
+        $ator = (int)($ator ?? ($_SESSION['usuario_id'] ?? 0));
+
+        $st = $conexao->prepare("SELECT id,slug FROM rbac_grupos WHERE tenant_id=? AND slug LIKE 'compat-%' AND ativo=1 AND excluido_em IS NULL");
+        if (!$st) return ['ok' => false, 'alterado' => false, 'mensagem' => 'Não foi possível consultar os grupos compatíveis.'];
+        $st->bind_param('i', $tenantId);
+        $st->execute();
+        $rs = $st->get_result();
+        $grupos = [];
+        while ($linha = $rs->fetch_assoc()) $grupos[$linha['slug']] = (int)$linha['id'];
+        $st->close();
+
+        if (!isset($grupos[$slugAlvo])) {
+            rbacSeedGruposCompatibilidade($conexao, (int)$tenantId);
+            $st = $conexao->prepare("SELECT id FROM rbac_grupos WHERE tenant_id=? AND slug=? AND ativo=1 AND excluido_em IS NULL LIMIT 1");
+            if ($st) {
+                $st->bind_param('is', $tenantId, $slugAlvo);
+                $st->execute();
+                $linha = $st->get_result()->fetch_assoc();
+                $st->close();
+                if ($linha) $grupos[$slugAlvo] = (int)$linha['id'];
+            }
+        }
+
+        if (!isset($grupos[$slugAlvo])) {
+            error_log('[RBAC] Grupo compatível ausente para o perfil ' . $permissao . ' no tenant ' . (int)$tenantId);
+            return ['ok' => false, 'alterado' => false, 'mensagem' => 'Grupo compatível do perfil não encontrado.'];
+        }
+
+        $alvoId = $grupos[$slugAlvo];
+        $st = $conexao->prepare("SELECT grupo_id FROM rbac_usuario_grupos WHERE usuario_id=? AND tenant_id=? AND ativo=1 AND removido_em IS NULL AND grupo_id IN (" . implode(',', array_map('intval', array_values($grupos))) . ")");
+        if (!$st) return ['ok' => false, 'alterado' => false, 'mensagem' => 'Não foi possível verificar o grupo compatível atual.'];
+        $st->bind_param('ii', $usuarioId, $tenantId);
+        $st->execute();
+        $rs = $st->get_result();
+        $ativos = [];
+        while ($linha = $rs->fetch_assoc()) $ativos[] = (int)$linha['grupo_id'];
+        $st->close();
+
+        if (count($ativos) === 1 && (int)$ativos[0] === $alvoId) {
+            return ['ok' => true, 'alterado' => false, 'grupo_id' => $alvoId];
+        }
+
+        foreach ($grupos as $grupoId) {
+            $st = $conexao->prepare('UPDATE rbac_usuario_grupos SET ativo=0,removido_em=NOW() WHERE usuario_id=? AND tenant_id=? AND grupo_id=? AND ativo=1');
+            if (!$st) return ['ok' => false, 'alterado' => false, 'mensagem' => 'Não foi possível desativar o grupo compatível anterior.'];
+            $st->bind_param('iii', $usuarioId, $tenantId, $grupoId);
+            if (!$st->execute()) { $erro = $st->error; $st->close(); return ['ok' => false, 'alterado' => false, 'mensagem' => $erro]; }
+            $st->close();
+        }
+
+        $st = $conexao->prepare('INSERT INTO rbac_usuario_grupos (usuario_id,tenant_id,grupo_id,ativo,atribuido_por_usuario_id,atribuido_em,removido_em) VALUES (?,?,?,1,?,NOW(),NULL) ON DUPLICATE KEY UPDATE ativo=1,atribuido_por_usuario_id=VALUES(atribuido_por_usuario_id),atribuido_em=NOW(),removido_em=NULL');
+        if (!$st) return ['ok' => false, 'alterado' => false, 'mensagem' => 'Não foi possível ativar o grupo compatível do perfil.'];
+        $st->bind_param('iiii', $usuarioId, $tenantId, $alvoId, $ator);
+        $ok = $st->execute();
+        $erro = $st->error;
+        $st->close();
+        if (!$ok) return ['ok' => false, 'alterado' => false, 'mensagem' => $erro];
+
+        return ['ok' => true, 'alterado' => true, 'grupo_id' => $alvoId];
+    }
+
     function rbacUsuarioEhSuperAdmin() {
         return strtolower((string)($_SESSION['usuario_permissao'] ?? '')) === 'super_admin';
     }
