@@ -26,3 +26,13 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - As APIs desses submódulos devem chamar `rbacExigir()` por ação (`visualizar`, `criar`,
   `editar` ou `excluir`) depois da autenticação. A proteção de frontend é somente visual e
   nunca substitui a autorização server-side.
+
+## 5. Moradores, Dependentes e Anexos
+- `visualizar` no módulo `moradores` permite listar/consultar moradores e dependentes,
+  abrir anexos existentes e gerar os relatórios do módulo.
+- `criar`, `editar` e `excluir` controlam, respectivamente, o cadastro, a alteração e a
+  remoção de moradores, dependentes e anexos. Dependentes e anexos são subrecursos do
+  módulo `moradores`, portanto não exigem uma chave RBAC paralela.
+- `api_moradores.php`, `api_dependentes.php`, `api_moradores_anexos.php`, o PDF de
+  moradores e o conteúdo privado de `api_arquivos_tenant.php` devem validar a ação no
+  backend. Esconder botões no frontend não é suficiente.

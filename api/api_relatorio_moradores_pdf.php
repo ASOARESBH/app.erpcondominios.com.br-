@@ -25,6 +25,7 @@ require_once 'tenant_helper.php';;
 $conn    = conectar_banco();
 $usuario = verificarAutenticacao(false, 'operador');
 $tenant_id = exigirTenantId();
+rbacExigir($conn, 'moradores', 'visualizar', ['submodulo_chave' => 'relatorios']);
 
 // ── 2. Configurações regionais ────────────────────────────────
 date_default_timezone_set('America/Sao_Paulo');
@@ -80,7 +81,8 @@ $dependentes = [];
 $sql_mor = "SELECT m.id, m.nome, m.cpf, m.unidade, m.email, m.telefone, m.celular, m.ativo,
                    u.descricao AS unidade_descricao
             FROM moradores m
-            LEFT JOIN unidades u ON u.nome = m.unidade
+            LEFT JOIN unidades u ON u.nome = m.unidade AND u.tenant_id = m.tenant_id
+            WHERE m.tenant_id = " . (int)$tenant_id . "
             ORDER BY
                 CAST(REGEXP_REPLACE(COALESCE(m.unidade,'0'), '[^0-9]', '') AS UNSIGNED) ASC,
                 m.unidade ASC,
@@ -95,7 +97,8 @@ if ($mysql_ver < 8.0) {
     $sql_mor = "SELECT m.id, m.nome, m.cpf, m.unidade, m.email, m.telefone, m.celular, m.ativo,
                        u.descricao AS unidade_descricao
                 FROM moradores m
-                LEFT JOIN unidades u ON u.nome = m.unidade
+                LEFT JOIN unidades u ON u.nome = m.unidade AND u.tenant_id = m.tenant_id
+                WHERE m.tenant_id = " . (int)$tenant_id . "
                 ORDER BY
                     LENGTH(m.unidade) ASC,
                     m.unidade ASC,
@@ -113,7 +116,8 @@ if ($res_mor) {
 $sql_dep = "SELECT d.id, d.nome_completo, d.cpf, d.parentesco, d.email, d.celular,
                    m.nome AS morador_nome, m.unidade AS morador_unidade, m.id AS morador_id
             FROM dependentes d
-            INNER JOIN moradores m ON d.morador_id = m.id
+            INNER JOIN moradores m ON d.morador_id = m.id AND m.tenant_id = d.tenant_id
+            WHERE d.tenant_id = " . (int)$tenant_id . "
             ORDER BY m.unidade ASC, m.nome ASC, d.nome_completo ASC";
 $res_dep = $conn->query($sql_dep);
 if ($res_dep) {

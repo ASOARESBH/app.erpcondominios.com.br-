@@ -42,6 +42,22 @@ let _depPaginaAtual = 1;
 let _depTotalPaginas = 1;
 let _depTotal = 0;
 let _depTermoBusca = '';  // termo em uso na paginação de dependentes
+let _permissoesMoradores = null;
+
+// O frontend apenas antecipa o bloqueio; as APIs também validam estas ações.
+// Dependentes, anexos e relatórios fazem parte do módulo RBAC "moradores".
+function _temPermissaoMoradores(acao) {
+    const pm = window.PermissoesModulos;
+    if (!pm || typeof pm.temPermissao !== 'function') return true;
+    const chave = acao === 'visualizar' ? 'pode_acessar' : `pode_${acao}`;
+    return pm.temPermissao('moradores', chave);
+}
+
+function _exigirPermissaoMoradores(acao, mensagem) {
+    if (_temPermissaoMoradores(acao)) return true;
+    _toast(mensagem || 'Você não tem permissão para realizar esta operação.', 'error');
+    return false;
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // INIT / DESTROY
@@ -58,6 +74,14 @@ export function init() {
     _carregarUnidades();
     _carregarMoradores();
     _carregarDependentes();
+
+    // O seletor genérico do shell não alcança os botões .action-btn criados
+    // dinamicamente nesta página. Reaplicar aqui cobre formulários, modais,
+    // tabelas, anexos e relatórios.
+    const pm = window.PermissoesModulos;
+    if (pm && typeof pm.carregarPermissoes === 'function') {
+        pm.carregarPermissoes(_aplicarPermissoesMoradores);
+    }
 
     window.MoradoresPage = {
         // Moradores
@@ -136,6 +160,41 @@ export function init() {
 export function destroy() {
     log('Destruindo módulo...');
     delete window.MoradoresPage;
+}
+
+function _aplicarPermissoesMoradores(perms) {
+    _permissoesMoradores = perms;
+    const modulo = perms?.is_admin ? null : (perms?.permissoes?.moradores || {});
+    const pode = acao => perms?.is_admin || Boolean(modulo?.[`pode_${acao}`]);
+    const ocultar = (seletor, permitido) => {
+        document.querySelectorAll(seletor).forEach(el => {
+            el.style.display = permitido ? '' : 'none';
+            el.setAttribute('aria-hidden', permitido ? 'false' : 'true');
+            if (!permitido) el.setAttribute('disabled', 'disabled');
+        });
+    };
+
+    if (!perms || (!perms.is_admin && !perms.permissoes)) return;
+    document.querySelectorAll('[data-mor-perm]').forEach(el => {
+        const permitido = el.dataset.morPerm === 'visualizar'
+            ? pode('acessar')
+            : pode(el.dataset.morPerm);
+        el.style.display = permitido ? '' : 'none';
+        el.setAttribute('aria-hidden', permitido ? 'false' : 'true');
+        if (!permitido) el.setAttribute('disabled', 'disabled');
+    });
+
+    // Controles sem data-mor-perm próprio.
+    ocultar('#moradorForm button[type="submit"], #dependenteForm button[type="submit"]', pode('criar'));
+    ocultar('#modal-editar-morador .mor-modal-footer .btn-primary-modern, #modal-editar-dependente .mor-modal-footer .btn-primary-modern', pode('editar'));
+    ocultar('#modal-anexos .mor-upload-box .btn-primary-modern', pode('criar'));
+    ocultar('#rel-btn-csv, #rel-btn-pdf', pode('acessar'));
+    document.querySelectorAll('#moradorForm, #dependenteForm').forEach(form => {
+        const card = form.closest('.page-card');
+        if (card) card.style.display = pode('criar') ? '' : 'none';
+    });
+    const uploadBox = document.querySelector('#modal-anexos .mor-upload-box');
+    if (uploadBox) uploadBox.style.display = pode('criar') ? '' : 'none';
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -266,6 +325,7 @@ function _carregarMoradores(pagina = 1) {
                 _paginaAtual    = d.pagina ?? 1;
                 _listaMoradores = d.itens || [];
                 _renderMoradores(_listaMoradores);
+                if (_permissoesMoradores) _aplicarPermissoesMoradores(_permissoesMoradores);
                 _renderPaginacaoMoradores();
                 // O cadastro de dependentes usa a cascata Unidade → Morador;
                 // não preencher aqui a lista global de moradores.
@@ -393,7 +453,7 @@ function _renderMoradores(lista) {
                     : '<span class="anexo-indicador nenhum"><i class="fas fa-minus-circle"></i> Sem anexo</span>'}
             </td>
             <td class="acoes-morador" style="white-space:nowrap;">
-                <button onclick="window.MoradoresPage.editar(${id})"
+                <button data-mor-perm="editar" data-action="editar" onclick="window.MoradoresPage.editar(${id})"
                         class="action-btn edit" title="Editar morador">
                     <i class="fas fa-edit"></i>
                 </button>
@@ -401,7 +461,7 @@ function _renderMoradores(lista) {
                         class="action-btn attach" title="Anexos do morador">
                     <i class="fas fa-paperclip"></i>
                 </button>
-                <button onclick="window.MoradoresPage.excluir(${id})"
+                <button data-mor-perm="excluir" data-action="excluir" onclick="window.MoradoresPage.excluir(${id})"
                         class="action-btn delete" title="Excluir morador">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -563,6 +623,7 @@ function _setupValidacaoCPF() {
 }
 
 function _salvarMorador() {
+    if (!_exigirPermissaoMoradores('criar', 'Você pode apenas visualizar Moradores.')) return;
     const campoCPF = document.getElementById('cpf');
     const cpf = campoCPF?.value || '';
     if (!validarCPF(cpf)) {
@@ -623,6 +684,7 @@ function _buscarMoradores() {
 }
 
 function _excluirMorador(id) {
+    if (!_exigirPermissaoMoradores('excluir', 'Você não tem permissão para excluir Moradores.')) return;
     if (!confirm('Deseja realmente excluir este morador? Esta ação não pode ser desfeita.')) return;
     log('Excluindo morador ID:', id);
 
@@ -650,6 +712,7 @@ function _excluirMorador(id) {
 // ── Modal Editar Morador ───────────────────────────────────────────────────────
 
 function _abrirModalEditarMorador(id) {
+    if (!_exigirPermissaoMoradores('editar', 'Você pode apenas visualizar Moradores.')) return;
     log('Abrindo modal editar morador ID:', id);
 
     fetch(`${API_MORADORES}?id=${id}`)
@@ -697,6 +760,7 @@ function _fecharModalMorador() {
 }
 
 function _salvarEdicaoMorador() {
+    if (!_exigirPermissaoMoradores('editar', 'Você não tem permissão para editar Moradores.')) return;
     const id = document.getElementById('edit-morador-id')?.value;
     if (!id) { _toast('ID inválido', 'error'); return; }
 
@@ -768,6 +832,7 @@ function _carregarDependentes(pagina = 1) {
                 _depTotalPaginas = payload.total_paginas ?? 1;
                 _depPaginaAtual  = payload.pagina        ?? pagina;
                 _renderDependentes(lista);
+                if (_permissoesMoradores) _aplicarPermissoesMoradores(_permissoesMoradores);
                 _renderPaginacaoDependentes();
             } else {
                 _toast('Erro ao carregar dependentes: ' + (data.mensagem || ''), 'error');
@@ -809,10 +874,10 @@ function _renderDependentes(lista) {
             <td>${email}</td>
             <td>${celular}</td>
             <td style="white-space:nowrap;">
-                <button class="action-btn edit" onclick="window.MoradoresPage.editarDependente(${id})" title="Editar">
+                <button data-mor-perm="editar" data-action="editar" class="action-btn edit" onclick="window.MoradoresPage.editarDependente(${id})" title="Editar">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="action-btn delete" onclick="window.MoradoresPage.excluirDependente(${id})" title="Excluir">
+                <button data-mor-perm="excluir" data-action="excluir" class="action-btn delete" onclick="window.MoradoresPage.excluirDependente(${id})" title="Excluir">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
@@ -935,6 +1000,7 @@ function _setupValidacaoCPFDependente() {
 }
 
 async function _salvarDependente() {
+    if (!_exigirPermissaoMoradores('criar', 'Você pode apenas visualizar Dependentes.')) return;
     log('Salvando novo dependente...');
     const campoCPF = document.getElementById('cpfDependente');
     const cpf = campoCPF?.value || '';
@@ -988,6 +1054,7 @@ async function _salvarDependente() {
 }
 
 function _excluirDependente(id) {
+    if (!_exigirPermissaoMoradores('excluir', 'Você não tem permissão para excluir Dependentes.')) return;
     if (!confirm('Deseja realmente excluir este dependente?')) return;
     log('Excluindo dependente ID:', id);
 
@@ -1015,6 +1082,7 @@ function _excluirDependente(id) {
 // ── Modal Editar Dependente ────────────────────────────────────────────────────
 
 function _abrirModalEditarDependente(id) {
+    if (!_exigirPermissaoMoradores('editar', 'Você pode apenas visualizar Dependentes.')) return;
     log('Abrindo modal editar dependente ID:', id);
 
     fetch(`${API_DEPENDENTES}?id=${id}`)
@@ -1045,6 +1113,7 @@ function _fecharModalDependente() {
 }
 
 function _salvarEdicaoDependente() {
+    if (!_exigirPermissaoMoradores('editar', 'Você não tem permissão para editar Dependentes.')) return;
     const id = document.getElementById('edit-dep-id')?.value;
     if (!id) { _toast('ID inválido', 'error'); return; }
 
@@ -1144,6 +1213,7 @@ function _carregarAnexos(moradorId) {
             log('Anexos carregados:', data);
             if (data.sucesso) {
                 _renderAnexos(data.dados || []);
+                if (_permissoesMoradores) _aplicarPermissoesMoradores(_permissoesMoradores);
             } else {
                 container.innerHTML = '<p style="text-align:center;color:#ef4444;">Erro ao carregar anexos</p>';
             }
@@ -1187,7 +1257,7 @@ function _renderAnexos(lista) {
                    style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">
                     <i class="fas fa-download"></i>
                 </a>
-                <button class="action-btn delete" title="Remover anexo"
+                <button data-mor-perm="excluir" data-action="excluir" class="action-btn delete" title="Remover anexo"
                         onclick="window.MoradoresPage.excluirAnexo(${a.id})">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -1197,6 +1267,7 @@ function _renderAnexos(lista) {
 }
 
 function _enviarAnexo() {
+    if (!_exigirPermissaoMoradores('criar', 'Você não tem permissão para adicionar anexos.')) return;
     const moradorId    = document.getElementById('anexo-morador-id')?.value;
     const nomeDoc      = document.getElementById('anexo-nome-doc')?.value?.trim();
     const inputArquivo = document.getElementById('anexo-arquivo');
@@ -1274,6 +1345,7 @@ function _enviarAnexo() {
 }
 
 function _excluirAnexo(id) {
+    if (!_exigirPermissaoMoradores('excluir', 'Você não tem permissão para remover anexos.')) return;
     if (!confirm('Deseja realmente remover este documento?')) return;
     log('Removendo anexo ID:', id);
 
@@ -1718,6 +1790,7 @@ function _relRenderGrafico(ranking) {
 
 // ── Gerar PDF (abre nova aba com a API PHP) ───────────────────────────────────────
 function _relGerarPDF(tipoOverride) {
+    if (!_exigirPermissaoMoradores('visualizar', 'Você não tem permissão para visualizar relatórios de Moradores.')) return;
     const tipo   = tipoOverride || _relTipoAtual;
     const filtro = (document.getElementById('rel-filtro-texto')?.value || '').trim();
     if (!tipo) { _toast('Selecione um tipo de relatório primeiro', 'info'); return; }
@@ -1729,6 +1802,7 @@ function _relGerarPDF(tipoOverride) {
 
 // ── Exportar CSV ────────────────────────────────────────────────────────────
 function _relExportarCSV(tipoOverride) {
+    if (!_exigirPermissaoMoradores('visualizar', 'Você não tem permissão para visualizar relatórios de Moradores.')) return;
     const tipo = tipoOverride || _relTipoAtual;
     if (!tipo) { _toast('Selecione um tipo de relatório primeiro', 'info'); return; }
     const cfg  = REL_TIPOS[tipo];

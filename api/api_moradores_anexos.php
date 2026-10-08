@@ -74,6 +74,15 @@ $metodo  = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
 if (!$conexao) { retornar_json(false, 'Erro ao conectar ao banco de dados'); }
 
+// Anexos obedecem ao mesmo módulo do cadastro de Moradores: visualizar o
+// morador permite consultar documentos; criar/excluir controlam o arquivo.
+$acao_rbac = array(
+    'GET'    => 'visualizar',
+    'POST'   => 'criar',
+    'DELETE' => 'excluir',
+)[$metodo] ?? 'visualizar';
+rbacExigir($conexao, 'moradores', $acao_rbac, ['submodulo_chave' => 'anexos']);
+
 // Validar previamente a estrutura usada por todos os fluxos. Isso evita que
 // um prepare() sobre tabela/coluna ausente vire HTTP 500 genérico no navegador.
 $estrutura_ok = true;
@@ -165,8 +174,6 @@ if ($metodo === 'GET') {
 
 // ── POST: upload de novo anexo ────────────────────────────────────────────────
 if ($metodo === 'POST') {
-    verificarPermissao('admin');
-
     $morador_id     = isset($_POST['morador_id'])     ? intval($_POST['morador_id'])          : 0;
     $nome_documento = isset($_POST['nome_documento']) ? trim($_POST['nome_documento'])         : '';
 
@@ -262,8 +269,6 @@ if ($metodo === 'POST') {
 
 // ── DELETE: remover anexo ─────────────────────────────────────────────────────
 if ($metodo === 'DELETE') {
-    verificarPermissao('admin');
-
     $dados = json_decode(file_get_contents('php://input'), true);
     $id    = isset($dados['id']) ? intval($dados['id']) : 0;
     if ($id <= 0) { retornar_json(false, 'ID inválido'); }

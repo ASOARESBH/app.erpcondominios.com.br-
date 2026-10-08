@@ -85,10 +85,16 @@ $tenant_id = exigirTenantId();
         throw new Exception("Erro ao conectar ao banco de dados");
     }
     
-    // Para operações de escrita, verificar permissão de admin
-    if ($metodo !== 'GET') {
-        verificarPermissao('admin');
-    }
+    // O RBAC granular é a fonte de verdade deste módulo. A checagem legada
+    // de nível admin bloqueava operadores autorizados individualmente e,
+    // simultaneamente, não diferenciava visualizar/criar/editar/excluir.
+    $acao_rbac = array(
+        'GET'    => 'visualizar',
+        'POST'   => 'criar',
+        'PUT'    => 'editar',
+        'DELETE' => 'excluir',
+    )[$metodo] ?? 'visualizar';
+    rbacExigir($conexao, 'moradores', $acao_rbac);
     
     // ========== OBTER MORADOR ESPECÍFICO ==========
     if ($metodo === 'GET' && isset($_GET['id'])) {

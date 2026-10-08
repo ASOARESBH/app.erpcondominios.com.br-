@@ -85,3 +85,17 @@ No POST manual, a unidade de Visitante/Prestador é resolvida novamente pelo `mo
 ## 10. Manutenção — autorização por submódulo
 
 As páginas de Manutenção (`hidrometro`, `leitura`, `relatorios_hidrometro`, `abastecimento`, `estoque`, `inventario`, `relatorios_inventario`, `ordens_servico`, `imprimir_os`, `checklists` e `documentos`) são rotas RBAC próprias. O `MenuController` e a visão geral ocultam cards/abas sem `visualizar`, e o `AppRouter` bloqueia a URL direta. As APIs de Estoque, Abastecimento, Checklists, Hidrômetros, Leituras, Inventário e Ordens de Serviço, incluindo relatórios PDF/gerenciais, validam novamente `rbacExigir()` no servidor; o perfil legado `operador` não libera esses recursos quando há uma negação individual.
+
+## 11. Moradores, Dependentes e Anexos — autorização granular
+
+`api/api_moradores.php` e `api/api_dependentes.php` usam a chave RBAC `moradores`: `GET`
+exige `visualizar`, `POST` exige `criar`, `PUT` exige `editar` e `DELETE` exige `excluir`.
+Dependentes são um subrecurso do módulo Moradores e não possuem uma permissão paralela.
+
+`api/api_moradores_anexos.php` aplica `visualizar` para listar/consultar/download,
+`criar` para upload e `excluir` para remoção. O PDF de Moradores e o conteúdo privado de
+`api/api_arquivos_tenant.php` também exigem `moradores.visualizar` e filtram os dados pelo
+`tenant_id` da sessão. A tela `frontend/pages/moradores.html` e
+`frontend/js/pages/moradores.js` refletem a mesma matriz: um usuário somente visualizador
+consegue consultar moradores, dependentes, anexos e relatórios, mas não vê nem executa
+criar, editar ou excluir.

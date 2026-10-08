@@ -86,10 +86,15 @@ try {
         throw new Exception("Erro ao conectar ao banco de dados");
     }
     
-    // Para operações de escrita, verificar permissão de admin
-    if ($metodo !== 'GET') {
-        verificarPermissao('admin');
-    }
+    // Dependentes fazem parte do módulo Moradores: visualizar permite
+    // consulta, enquanto o CRUD exige a ação correspondente do mesmo módulo.
+    $acao_rbac = array(
+        'GET'    => 'visualizar',
+        'POST'   => 'criar',
+        'PUT'    => 'editar',
+        'DELETE' => 'excluir',
+    )[$metodo] ?? 'visualizar';
+    rbacExigir($conexao, 'moradores', $acao_rbac, ['submodulo_chave' => 'dependentes']);
     
     // ========== OBTER DEPENDENTE ESPECÍFICO ==========
     if ($metodo === 'GET' && isset($_GET['id'])) {

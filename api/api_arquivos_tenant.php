@@ -90,11 +90,15 @@ try {
     if ($acao === 'publico') {
         $token = preg_replace('/[^a-f0-9]/i', '', $_GET['token'] ?? '');
         if (strlen($token) !== 48) tf_json(false, 'Token público inválido', null, 400);
-        $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE token_publico = ? AND publico = 1 AND ativo = 1 LIMIT 1');
+        $stmt = $db->prepare('SELECT tipo, nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE token_publico = ? AND publico = 1 AND ativo = 1 LIMIT 1');
         $stmt->bind_param('s', $token);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         if (!$row) tf_json(false, 'Arquivo não encontrado', null, 404);
+        if (($row['tipo'] ?? '') === 'morador_anexo') {
+            verificarAutenticacao(true, 'operador');
+            rbacExigir($db, 'moradores', 'visualizar', ['submodulo_chave' => 'anexos']);
+        }
         tf_stream($row, false);
     }
 
@@ -108,6 +112,10 @@ try {
         // autenticado abaixo e, sem session_start(), toda logo privada cai
         // incorretamente no fluxo de arquivo público e retorna 404.
         $sessionTenant = (int)(obterTenantId() ?? 0);
+        if (strpos($legacy, 'uploads/moradores_anexos/') === 0) {
+            verificarAutenticacao(true, 'operador');
+            rbacExigir($db, 'moradores', 'visualizar', ['submodulo_chave' => 'anexos']);
+        }
         if ($sessionTenant > 0) {
             $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
             $stmt->bind_param('is', $sessionTenant, $legacy);
@@ -127,6 +135,15 @@ try {
     if ($acao === 'conteudo') {
         $id = (int)($_GET['id'] ?? 0);
         if ($id <= 0) tf_json(false, 'Identificador de arquivo inválido', null, 400);
+        $tipoStmt = $db->prepare('SELECT tipo FROM tenant_arquivos WHERE id = ? AND tenant_id = ? AND ativo = 1 LIMIT 1');
+        if (!$tipoStmt) tf_json(false, 'Arquivo não encontrado ou sem permissão', null, 404);
+        $tipoStmt->bind_param('ii', $id, $tenantId);
+        $tipoStmt->execute();
+        $tipoArquivo = $tipoStmt->get_result()->fetch_assoc()['tipo'] ?? '';
+        $tipoStmt->close();
+        if ($tipoArquivo === 'morador_anexo') {
+            rbacExigir($db, 'moradores', 'visualizar', ['submodulo_chave' => 'anexos', 'registro_tipo' => 'tenant_arquivo', 'registro_id' => $id]);
+        }
         $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE id = ? AND tenant_id = ? AND ativo = 1 LIMIT 1');
         $stmt->bind_param('ii', $id, $tenantId);
         $stmt->execute();
@@ -137,6 +154,9 @@ try {
 
     if ($acao === 'listar') {
         $type = trim($_GET['tipo'] ?? '');
+        if ($type === 'morador_anexo') {
+            rbacExigir($db, 'moradores', 'visualizar', ['submodulo_chave' => 'anexos']);
+        }
         $sql = 'SELECT id, tipo, nome_original, extensao, mime_type, tamanho_bytes, publico, token_publico, caminho_legado, criado_em FROM tenant_arquivos WHERE tenant_id = ? AND ativo = 1';
         if ($type !== '') $sql .= ' AND tipo = ?';
         $sql .= ' ORDER BY criado_em DESC';
@@ -162,10 +182,16 @@ try {
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime = $finfo->buffer($content) ?: 'application/octet-stream';
         $pathHint = trim($_POST['caminho_legado'] ?? '');
+        if (strpos($pathHint, 'uploads/moradores_anexos/') === 0) {
+            rbacExigir($db, 'moradores', 'criar', ['submodulo_chave' => 'anexos']);
+        }
         list($inferredType, $inferredPublic) = tf_type_from_path($pathHint);
         $type = preg_replace('/[^a-z0-9_\-]/i', '', $_POST['tipo'] ?? $inferredType);
         if ($type === '') $type = $inferredType;
         $public = !empty($_POST['publico']) && tf_is_superadmin() ? 1 : $inferredPublic;
+        if ($type === 'morador_anexo' || strpos($pathHint, 'uploads/moradores_anexos/') === 0) {
+            $public = 0;
+        }
         $stored = tf_insert_file($db, $tenantId, $type, $file['name'], $mime, $content, $public, $pathHint ?: null);
         error_log("[ArquivosTenant][UPLOAD] tenant={$tenantId}; arquivo={$stored['id']}; tipo={$type}; bytes={$stored['bytes']}");
         tf_json(true, 'Arquivo armazenado no banco', [

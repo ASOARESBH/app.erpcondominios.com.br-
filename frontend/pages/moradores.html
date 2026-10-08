@@ -80,7 +80,7 @@
                         <input type="text" id="observacao" placeholder="Observações gerais">
                     </div>
                 </div>
-                <button type="submit" class="btn-primary-modern">
+                <button type="submit" class="btn-primary-modern" data-mor-perm="criar">
                     <i class="fas fa-save"></i> Salvar Morador
                 </button>
             </form>
@@ -181,7 +181,7 @@
                         <input type="tel" id="celularDependente" placeholder="(00) 90000-0000">
                     </div>
                 </div>
-                <button type="submit" class="btn-primary-modern">
+                <button type="submit" class="btn-primary-modern" data-mor-perm="criar">
                     <i class="fas fa-save"></i> Salvar Dependente
                 </button>
             </form>
@@ -336,11 +336,11 @@
                     <h2 id="rel-painel-nome">Relatório</h2>
                 </div>
                 <div class="rel-painel-acoes">
-                    <button class="btn-secondary-modern" id="rel-btn-csv"
+                    <button class="btn-secondary-modern" id="rel-btn-csv" data-mor-perm="visualizar"
                             onclick="window.MoradoresPage?.relExportarCSV()">
                         <i class="fas fa-file-csv"></i> Exportar CSV
                     </button>
-                    <button class="btn-primary-modern" id="rel-btn-pdf"
+                    <button class="btn-primary-modern" id="rel-btn-pdf" data-mor-perm="visualizar"
                             onclick="window.MoradoresPage?.relGerarPDF()">
                         <i class="fas fa-print"></i> Imprimir / PDF
                     </button>
@@ -461,7 +461,7 @@
                 <button class="btn-secondary-modern" onclick="window.MoradoresPage?.fecharModalMorador()">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
-                <button class="btn-primary-modern" onclick="window.MoradoresPage?.salvarEdicaoMorador()">
+                <button class="btn-primary-modern" data-mor-perm="editar" onclick="window.MoradoresPage?.salvarEdicaoMorador()">
                     <i class="fas fa-save"></i> Salvar Alterações
                 </button>
             </div>
@@ -520,7 +520,7 @@
                 <button class="btn-secondary-modern" onclick="window.MoradoresPage?.fecharModalDependente()">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
-                <button class="btn-primary-modern" onclick="window.MoradoresPage?.salvarEdicaoDependente()">
+                <button class="btn-primary-modern" data-mor-perm="editar" onclick="window.MoradoresPage?.salvarEdicaoDependente()">
                     <i class="fas fa-save"></i> Salvar Alterações
                 </button>
             </div>
@@ -568,7 +568,7 @@
                         </div>
                         <p id="mor-upload-status" style="font-size:.8rem;color:#64748b;margin-top:4px;"></p>
                     </div>
-                    <button class="btn-primary-modern" onclick="window.MoradoresPage?.enviarAnexo()" style="margin-top:12px;">
+                    <button class="btn-primary-modern" data-mor-perm="criar" onclick="window.MoradoresPage?.enviarAnexo()" style="margin-top:12px;">
                         <i class="fas fa-upload"></i> Enviar Documento
                     </button>
                 </div>
