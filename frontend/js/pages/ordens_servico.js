@@ -33,6 +33,8 @@ const state = {
     configHHCache: [],      // Lista completa para paginação local
     configHHPagina: 1,
     etapas: [],             // Cache de etapas de projeto (Módulo Projetos)
+    osPermissoes: {},       // Matriz carregada para o usuário selecionado
+    osPermissoesUsuarioId: null,
 };
 
 // ─── Utilitários ──────────────────────────────────────────────────────────
@@ -60,9 +62,15 @@ function usuarioEhGestorOS() {
     return ['admin', 'administrador', 'gerente', 'super_admin'].includes(permissao);
 }
 
-function usuarioPodeEditarOS(os) {
+function usuarioPodeAcaoOS(os, acao = 'visualizar') {
     if (!state.usuarioLogado || !os) return false;
+    const campo = 'pode_' + acao;
+    if (Object.prototype.hasOwnProperty.call(os, campo)) return Number(os[campo]) === 1;
     return usuarioEhGestorOS() || Number(os.criado_por_id) === Number(state.usuarioLogado.id);
+}
+
+function usuarioPodeEditarOS(os) {
+    return usuarioPodeAcaoOS(os, 'editar');
 }
 
 function aplicarPoliticaInterfaceOS() {
@@ -359,6 +367,7 @@ async function carregarChamados(pagina = 1) {
         const idOS = normalizarIdOS(os.id) || 0;
         const numeroJS = JSON.stringify(String(os.numero || '')).replace(/'/g, '&#39;');
         const podeEditar = usuarioPodeEditarOS(os);
+        const podeExcluir = usuarioPodeAcaoOS(os, 'excluir');
         const isPortal = os.origem_portal === 'portal_morador';
         const precisaAssumir = usuarioEhGestorOS() && isPortal && !os.assumido_por_id;
         const trStyle = isPortal ? 'background:linear-gradient(90deg,#fff7ed 0,transparent 8px);border-left:3px solid #d97706;' : '';
@@ -385,7 +394,7 @@ async function carregarChamados(pagina = 1) {
                 <button class="os-btn-acao ver" onclick='osVerDetalhe(${idOS}, ${numeroJS})' title="Ver detalhes"><i class="fas fa-eye"></i></button>
                 ${podeEditar && os.status !== 'finalizado' ? `<button class="os-btn-acao editar" onclick="osAbrirEditar(${idOS})" title="Editar"><i class="fas fa-edit"></i></button>` : ''}
                 <button class="os-btn-acao imprimir" onclick="osImprimir(${idOS})" title="Imprimir / Gerar PDF"><i class="fas fa-print"></i></button>
-                ${podeEditar && os.status !== 'finalizado' ? `<button class="os-btn-acao excluir" onclick="osExcluir(${idOS},'${os.numero}')" title="Excluir"><i class="fas fa-trash"></i></button>` : ''}
+                ${podeExcluir && os.status !== 'finalizado' ? `<button class="os-btn-acao excluir" onclick="osExcluir(${idOS},'${os.numero}')" title="Excluir"><i class="fas fa-trash"></i></button>` : ''}
                 ${precisaAssumir ? `<button class="os-btn-acao" style="background:#d97706;color:#fff;border-color:#d97706" onclick="osAbrirAssumirPortal(${idOS})" title="Assumir OS do Portal"><i class="fas fa-hand-paper"></i></button>` : ''}
             </td>
         </tr>
@@ -1507,6 +1516,7 @@ async function carregarSelects() {
         const jsonU = await resU.json();
         state.usuarios = jsonU.dados || [];
         preencherSelect('os-atendente', state.usuarios, 'id', 'nome', '— Selecione —');
+        preencherSelect('os-permissao-usuario', state.usuarios, 'id', 'nome', '— Selecione um usuário —');
     } catch (e) { log('Erro ao carregar usuários', e); }
 }
 
@@ -1524,8 +1534,93 @@ async function carregarConfiguracoes() {
     carregarAssuntos();
     carregarConfigHH();
     carregarEtapas();
+    carregarPermissoesOS();
 }
 
+function _estadoPermissaoOS(valor) {
+    return Number(valor) === 1 || valor === true;
+}
+
+function _normalizarLinhaPermissaoOS(linha) {
+    if (!linha) return;
+    const visualizar = linha.querySelector('[data-os-acao="visualizar"]');
+    const crud = linha.querySelectorAll('[data-os-acao="criar"],[data-os-acao="editar"],[data-os-acao="excluir"]');
+    const habilitada = !!visualizar?.checked;
+    crud.forEach(input => {
+        input.disabled = !habilitada;
+        if (!habilitada) input.checked = false;
+    });
+}
+
+async function carregarPermissoesOS() {
+    const select = document.getElementById('os-permissao-usuario');
+    if (!select || !usuarioEhGestorOS()) return;
+    const usuarioId = Number(select.value || state.usuarios[0]?.id || 0);
+    if (!usuarioId) return;
+    select.value = String(usuarioId);
+    const res = await _get('listar_permissoes_os', { usuario_id: usuarioId });
+    if (!res.sucesso) {
+        toast(res.mensagem || 'Não foi possível carregar as permissões de O.S.', 'erro');
+        return;
+    }
+    state.osPermissoesUsuarioId = usuarioId;
+    state.osPermissoes = res.dados || {};
+    document.getElementById('os-restritivo-checkbox').checked = _estadoPermissaoOS(res.dados?.restritivo_os);
+    const lista = res.dados?.departamentos || [];
+    const permissoes = res.dados?.permissoes || {};
+    const tbody = document.getElementById('os-permissoes-tbody');
+    if (!tbody) return;
+    if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="os-loading-text">Nenhum departamento cadastrado.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = lista.map(departamento => {
+        const chave = String(departamento || '').toUpperCase();
+        const p = permissoes[chave] || {};
+        const marcar = acao => _estadoPermissaoOS(p[acao]) ? ' checked' : '';
+        return `<tr data-os-departamento="${escaparHtml(chave)}">
+            <td><strong>${escaparHtml(departamento)}</strong></td>
+            ${['visualizar', 'criar', 'editar', 'excluir'].map(acao => `
+                <td class="os-permissao-check"><input type="checkbox" data-os-acao="${acao}"${marcar(acao)} aria-label="${acao} ${escaparHtml(departamento)}"></td>
+            `).join('')}
+        </tr>`;
+    }).join('');
+    tbody.querySelectorAll('tr[data-os-departamento]').forEach(_normalizarLinhaPermissaoOS);
+}
+
+async function salvarPermissoesOS() {
+    const usuarioId = Number(document.getElementById('os-permissao-usuario')?.value || 0);
+    const tbody = document.getElementById('os-permissoes-tbody');
+    if (!usuarioId || !tbody) return;
+    const permissoes = {};
+    tbody.querySelectorAll('tr[data-os-departamento]').forEach(linha => {
+        const dep = linha.dataset.osDepartamento || '';
+        if (!dep) return;
+        const ler = acao => !!linha.querySelector(`[data-os-acao="${acao}"]`)?.checked;
+        permissoes[dep] = {
+            visualizar: ler('visualizar'),
+            criar: ler('criar'),
+            editar: ler('editar'),
+            excluir: ler('excluir'),
+        };
+    });
+    const btn = document.getElementById('btnSalvarPermissoesOS');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
+    const res = await _post('salvar_permissoes_os', {
+        usuario_id: usuarioId,
+        restritivo_os: document.getElementById('os-restritivo-checkbox')?.checked ? 1 : 0,
+        permissoes,
+    });
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Salvar permissões'; }
+    if (res.sucesso) {
+        toast('Permissões de O.S. salvas com sucesso', 'sucesso');
+        await carregarPermissoesOS();
+        carregarChamados(state.paginaAtual);
+        if (state.abaAtiva === 'dashboard') carregarDashboard();
+    } else {
+        toast(res.mensagem || 'Não foi possível salvar as permissões de O.S.', 'erro');
+    }
+}
 const CFG_POR_PAGINA = 10;
 
 function _cfgPagHTML(pagina, totalPag, ini, total, fnPrev, fnNext) {
@@ -2314,6 +2409,15 @@ function init_modulo() {
             document.getElementById('modal-etapa').style.display = 'none';
         }
     });
+
+    // Matriz de abertura/controle de O.S. por usuário e departamento.
+    document.getElementById('os-permissao-usuario').addEventListener('change', carregarPermissoesOS);
+    document.getElementById('os-permissoes-tbody').addEventListener('change', e => {
+        if (e.target.matches('[data-os-acao="visualizar"]')) {
+            _normalizarLinhaPermissaoOS(e.target.closest('tr'));
+        }
+    });
+    document.getElementById('btnSalvarPermissoesOS').addEventListener('click', salvarPermissoesOS);
 
     // Aba Projeto (modal de detalhe)
     document.getElementById('btnSalvarProjeto').addEventListener('click', salvarProjeto);

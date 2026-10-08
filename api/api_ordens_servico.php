@@ -236,33 +236,102 @@ $tenant_id = exigirTenantId();
 }
 
 // ─── Escopo de acesso às O.S. ─────────────────────────
-// Administradores/gerentes podem consultar todas as O.S. do tenant. Os demais
-// usuários só podem consultar e alterar registros cujo criado_por_id seja o
-// próprio usuário autenticado. O filtro é sempre aplicado no servidor; o
-// frontend apenas reflete esta regra e nunca é a sua barreira de segurança.
+// Gestores sem matriz específica preservam o acesso legado ao tenant. Quando
+// existe uma matriz, a consulta combina autoria própria com departamentos
+// liberados; a Restritividade O.S. reduz a consulta à autoria. O filtro é
+// sempre aplicado no servidor; o frontend apenas reflete esta regra.
 $os_usuario_atual = obterUsuarioAutenticado();
 $os_usuario_id = (int)($os_usuario_atual['id'] ?? 0);
 $os_permissao_atual = strtolower(trim((string)($os_usuario_atual['permissao'] ?? $_SESSION['usuario_permissao'] ?? 'operador')));
-$os_pode_ver_todas = in_array($os_permissao_atual, ['admin', 'administrador', 'gerente', 'super_admin'], true);
+$os_eh_gestor = in_array($os_permissao_atual, ['admin', 'administrador', 'gerente', 'super_admin'], true);
+$os_pode_ver_todas = $os_eh_gestor;
+$os_restritivo = false;
+$os_politica_departamentos_ativa = false;
+$os_permissoes_departamento_cache = [];
 
-function os_escopo_sql(string $alias = ''): string {
-    global $os_pode_ver_todas, $os_usuario_id;
-    if ($os_pode_ver_todas) return '1=1';
-    $prefixo = $alias !== '' ? $alias . '.' : '';
-    return $prefixo . 'criado_por_id = ' . (int)$os_usuario_id;
+function os_departamento_chave($departamento): string {
+    return strtoupper(trim((string)($departamento ?? '')));
 }
 
-function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, status, criado_por_id'): ?array {
-    global $tenant_id, $os_pode_ver_todas, $os_usuario_id;
-    if ($id <= 0) return null;
-    $filtro_usuario = $os_pode_ver_todas ? '' : ' AND criado_por_id = ?';
-    $stmt = $conn->prepare("SELECT $campos FROM os_chamados WHERE tenant_id = ? AND id = ?$filtro_usuario LIMIT 1");
-    if (!$stmt) return null;
-    if ($os_pode_ver_todas) {
-        $stmt->bind_param('ii', $tenant_id, $id);
-    } else {
-        $stmt->bind_param('iii', $tenant_id, $id, $os_usuario_id);
+function os_carregar_politica_usuario(mysqli $conn): void {
+    global $tenant_id, $os_usuario_id, $os_eh_gestor, $os_pode_ver_todas,
+           $os_restritivo, $os_politica_departamentos_ativa, $os_permissoes_departamento_cache;
+
+    $os_restritivo = false;
+    $os_politica_departamentos_ativa = false;
+
+    $stmt = $conn->prepare(
+        'SELECT restritivo_os FROM os_usuarios_config WHERE tenant_id = ? AND usuario_id = ? LIMIT 1'
+    );
+    if ($stmt) {
+        $stmt->bind_param('ii', $tenant_id, $os_usuario_id);
+        $stmt->execute();
+        $config = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $os_restritivo = !empty($config['restritivo_os']);
     }
+
+    $stmt = $conn->prepare(
+        'SELECT departamento, pode_visualizar, pode_criar, pode_editar, pode_excluir
+         FROM os_permissoes_departamento WHERE tenant_id = ? AND usuario_id = ?'
+    );
+    if ($stmt) {
+        $stmt->bind_param('ii', $tenant_id, $os_usuario_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $dep = os_departamento_chave($row['departamento']);
+            if ($dep === '') continue;
+            $os_permissoes_departamento_cache[$dep] = [
+                'visualizar' => (int)$row['pode_visualizar'],
+                'criar'      => (int)$row['pode_criar'],
+                'editar'     => (int)$row['pode_editar'],
+                'excluir'    => (int)$row['pode_excluir'],
+            ];
+        }
+        $stmt->close();
+        $os_politica_departamentos_ativa = count($os_permissoes_departamento_cache) > 0;
+    }
+
+    // A restrição explícita vence a herança do perfil gestor. Sem configuração,
+    // preserva-se a compatibilidade: gestores veem todo o tenant.
+    $os_pode_ver_todas = $os_eh_gestor && !$os_restritivo && !$os_politica_departamentos_ativa;
+}
+
+function os_escopo_sql(string $alias = ''): string {
+    global $os_pode_ver_todas, $os_usuario_id, $tenant_id, $os_restritivo;
+    if ($os_pode_ver_todas) return '1=1';
+    $prefixo = $alias !== '' ? $alias . '.' : '';
+    if ($os_restritivo) return $prefixo . 'criado_por_id = ' . (int)$os_usuario_id;
+    return '(' . $prefixo . 'criado_por_id = ' . (int)$os_usuario_id
+        . ' OR UPPER(TRIM(COALESCE(' . $prefixo . 'departamento, \'\'))) IN ('
+        . 'SELECT UPPER(TRIM(p.departamento)) FROM os_permissoes_departamento p '
+        . 'WHERE p.tenant_id = ' . (int)$tenant_id
+        . ' AND p.usuario_id = ' . (int)$os_usuario_id
+        . ' AND p.pode_visualizar = 1))';
+}
+
+function os_pode_acao_departamento(string $departamento, string $acao): bool {
+    global $os_pode_ver_todas, $os_politica_departamentos_ativa, $os_permissoes_departamento_cache;
+    if ($os_pode_ver_todas) return true;
+    if (!$os_politica_departamentos_ativa) return true;
+
+    $dep = os_departamento_chave($departamento);
+    return !empty($os_permissoes_departamento_cache[$dep][$acao]);
+}
+
+function os_exigir_acao_departamento(string $departamento, string $acao): void {
+    if (os_pode_acao_departamento($departamento, $acao)) return;
+    retornar_json(false, 'Você não possui permissão para esta ação no departamento informado.');
+}
+
+function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, status, departamento, criado_por_id'): ?array {
+    global $tenant_id;
+    if ($id <= 0) return null;
+    $escopo = os_escopo_sql();
+    $stmt = $conn->prepare("SELECT $campos FROM os_chamados WHERE tenant_id = ? AND id = ? AND ($escopo) LIMIT 1");
+    if (!$stmt) return null;
+    $stmt->bind_param('ii', $tenant_id, $id);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc() ?: null;
     $stmt->close();
@@ -276,9 +345,22 @@ function os_exigir_acesso(int $id, string $mensagem = 'OS não encontrada'): arr
     return $os;
 }
 
+function os_exigir_acao_os(int $id, string $acao, string $mensagem = 'OS não encontrada'): array {
+    $os = os_exigir_acesso($id, $mensagem);
+    // A Restritividade O.S. garante que o autor continue podendo consultar a
+    // própria ordem, mesmo que nenhum departamento tenha sido marcado. As
+    // ações de alteração continuam sujeitas à matriz do departamento.
+    global $os_usuario_id;
+    if ($acao === 'visualizar' && (int)($os['criado_por_id'] ?? 0) === $os_usuario_id) return $os;
+    if (!os_pode_acao_departamento((string)($os['departamento'] ?? ''), $acao)) {
+        retornar_json(false, 'Você não possui a permissão necessária para esta ação no departamento da O.S.');
+    }
+    return $os;
+}
+
 function os_exigir_gestor(): void {
-    global $os_pode_ver_todas;
-    if (!$os_pode_ver_todas) retornar_json(false, 'Apenas administradores e gerentes podem alterar as configurações de Ordens de Serviço');
+    global $os_eh_gestor;
+    if (!$os_eh_gestor) retornar_json(false, 'Apenas administradores e gerentes podem alterar as configurações de Ordens de Serviço');
 }
 
 // ─── Conexão ─────────────────────────────────────────
@@ -465,6 +547,19 @@ function _os_add_column_if_missing($conn, $tabela, $coluna, $definicao) {
     }
 }
 
+function _os_corrigir_indice_departamentos($conn) {
+    // A tabela histórica usava UNIQUE(nome), o que bloqueava o mesmo
+    // departamento em dois condomínios. A chave correta inclui o tenant.
+    $old = $conn->query("SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='departamentos' AND INDEX_NAME='uk_nome'");
+    if ($old && (int)$old->fetch_assoc()['total'] > 0) {
+        @$conn->query('ALTER TABLE `departamentos` DROP INDEX `uk_nome`');
+    }
+    $new = $conn->query("SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='departamentos' AND INDEX_NAME='uk_tenant_nome'");
+    if ($new && (int)$new->fetch_assoc()['total'] === 0) {
+        @$conn->query('ALTER TABLE `departamentos` ADD UNIQUE KEY `uk_tenant_nome` (`tenant_id`,`nome`)');
+    }
+}
+
 function _os_garantir_esquema_projetos($conn) {
     // Projeto Público — classificação e informações públicas da O.S
     _os_add_column_if_missing($conn, 'os_chamados', 'projeto_publico', "TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
@@ -518,12 +613,46 @@ function _os_garantir_esquema_projetos($conn) {
     // porque projeto_departamento_id depende dela existir desde o primeiro uso do módulo.
     $conn->query("CREATE TABLE IF NOT EXISTS departamentos (
         id            INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id     INT NOT NULL DEFAULT 1,
         nome          VARCHAR(100) NOT NULL,
         descricao     VARCHAR(255) DEFAULT NULL,
         ativo         TINYINT(1) NOT NULL DEFAULT 1,
         criado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uk_nome (nome)
+        UNIQUE KEY uk_tenant_nome (tenant_id, nome)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    _os_add_column_if_missing($conn, 'departamentos', 'tenant_id', "INT NOT NULL DEFAULT 1 AFTER id");
+    _os_corrigir_indice_departamentos($conn);
+
+    // Matriz de acesso por usuário e departamento. A ausência de linhas para
+    // um usuário mantém a compatibilidade do legado; ao salvar a configuração,
+    // a tela grava uma linha por departamento para tornar os desligamentos
+    // explícitos e auditáveis.
+    $conn->query("CREATE TABLE IF NOT EXISTS os_usuarios_config (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id     INT NOT NULL DEFAULT 1,
+        usuario_id    INT NOT NULL,
+        restritivo_os TINYINT(1) NOT NULL DEFAULT 0,
+        criado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_os_usuario_config (tenant_id, usuario_id),
+        KEY idx_os_usuario_config_tenant (tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $conn->query("CREATE TABLE IF NOT EXISTS os_permissoes_departamento (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id       INT NOT NULL DEFAULT 1,
+        usuario_id      INT NOT NULL,
+        departamento     VARCHAR(100) NOT NULL,
+        pode_visualizar TINYINT(1) NOT NULL DEFAULT 0,
+        pode_criar      TINYINT(1) NOT NULL DEFAULT 0,
+        pode_editar     TINYINT(1) NOT NULL DEFAULT 0,
+        pode_excluir    TINYINT(1) NOT NULL DEFAULT 0,
+        criado_em       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_os_usuario_departamento (tenant_id, usuario_id, departamento),
+        KEY idx_os_permissoes_usuario (tenant_id, usuario_id),
+        KEY idx_os_permissoes_departamento (tenant_id, departamento)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     // Fotos de obra por interação — conteúdo persistido em tenant_arquivos.
@@ -549,6 +678,7 @@ function _os_garantir_esquema_projetos($conn) {
     // Capas e fotos de obra são mantidas em tenant_arquivos; não há diretórios públicos.
 }
 _os_garantir_esquema_projetos($conn);
+os_carregar_politica_usuario($conn);
 
 // Salva os campos de configuração pública do projeto (aba "Projeto" da O.S).
 // Chamada tanto pela ação dedicada `salvar_projeto` quanto reaproveitável
@@ -1129,11 +1259,10 @@ switch ($acao) {
             $params[] = $data_fim;
             $types .= 's';
         }
-        if (!$os_pode_ver_todas) {
-            $where[] = 'o.criado_por_id = ?';
-            $params[] = $os_usuario_id;
-            $types .= 'i';
-        }
+        // Escopo efetivo: proprietário em modo restritivo ou departamentos
+        // explicitamente liberados na matriz do usuário. A expressão é
+        // tenant-safe e não depende de filtros enviados pelo navegador.
+        $where[] = '(' . os_escopo_sql('o') . ')';
 
         $where_sql = implode(' AND ', $where);
 
@@ -1169,7 +1298,13 @@ switch ($acao) {
         $stmt->execute();
         $res = $stmt->get_result();
         $lista = [];
-        while ($row = $res->fetch_assoc()) $lista[] = $row;
+        while ($row = $res->fetch_assoc()) {
+            $row['pode_visualizar'] = 1;
+            $row['pode_criar']      = os_pode_acao_departamento((string)($row['departamento'] ?? ''), 'criar') ? 1 : 0;
+            $row['pode_editar']     = os_pode_acao_departamento((string)($row['departamento'] ?? ''), 'editar') ? 1 : 0;
+            $row['pode_excluir']    = os_pode_acao_departamento((string)($row['departamento'] ?? ''), 'excluir') ? 1 : 0;
+            $lista[] = $row;
+        }
 
         retornar_json(true, 'OS listadas', [
             'lista'      => $lista,
@@ -1185,7 +1320,7 @@ switch ($acao) {
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
         $numero_legado = trim((string)($_GET['numero'] ?? $body['numero'] ?? ''));
         if ($id <= 0 && $numero_legado === '') retornar_json(false, 'ID inválido');
-        $filtro_busca_usuario = $os_pode_ver_todas ? '' : ' AND o.criado_por_id = ?';
+        $filtro_busca_escopo = ' AND (' . os_escopo_sql('o') . ')';
 
         // Compatibilidade temporária para O.S. legadas gravadas com id=0 antes
         // da correção de AUTO_INCREMENT. O número é único por tenant e permite
@@ -1195,30 +1330,26 @@ switch ($acao) {
                 "SELECT o.*, a.nome as assunto_nome
                  FROM os_chamados o
                  LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id
-                 WHERE o.tenant_id = ? AND o.id = ?$filtro_busca_usuario"
+                 WHERE o.tenant_id = ? AND o.id = ?$filtro_busca_escopo"
             );
-            if ($os_pode_ver_todas) {
-                $stmt->bind_param('ii', $tenant_id, $id);
-            } else {
-                $stmt->bind_param('iii', $tenant_id, $id, $os_usuario_id);
-            }
+            $stmt->bind_param('ii', $tenant_id, $id);
         } else {
             $stmt = $conn->prepare(
                 "SELECT o.*, a.nome as assunto_nome
                  FROM os_chamados o
                  LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id
-                 WHERE o.tenant_id = ? AND o.numero = ?$filtro_busca_usuario
+                 WHERE o.tenant_id = ? AND o.numero = ?$filtro_busca_escopo
                  ORDER BY o.data_abertura DESC LIMIT 1"
             );
-            if ($os_pode_ver_todas) {
-                $stmt->bind_param('is', $tenant_id, $numero_legado);
-            } else {
-                $stmt->bind_param('isi', $tenant_id, $numero_legado, $os_usuario_id);
-            }
+            $stmt->bind_param('is', $tenant_id, $numero_legado);
         }
         $stmt->execute();
         $os = $stmt->get_result()->fetch_assoc();
         if (!$os) retornar_json(false, 'OS não encontrada');
+        $os['pode_visualizar'] = 1;
+        $os['pode_criar']      = os_pode_acao_departamento((string)($os['departamento'] ?? ''), 'criar') ? 1 : 0;
+        $os['pode_editar']     = os_pode_acao_departamento((string)($os['departamento'] ?? ''), 'editar') ? 1 : 0;
+        $os['pode_excluir']    = os_pode_acao_departamento((string)($os['departamento'] ?? ''), 'excluir') ? 1 : 0;
         // Em consultas de compatibilidade pelo número, use o identificador
         // íntegro devolvido pelo banco para carregar os vínculos do registro.
         $id = (int)$os['id'];
@@ -1273,6 +1404,7 @@ switch ($acao) {
 
         if (empty($titulo)) retornar_json(false, 'Título é obrigatório');
         if (!in_array($prioridade, ['baixa','media','alta','urgente'])) $prioridade = 'media';
+        os_exigir_acao_departamento($departamento, 'criar');
         if ($os_pai_id) os_exigir_acesso($os_pai_id, 'OS pai não encontrada');
 
         // Gerar número sequencial único: OS-YYYY-NNNN
@@ -1429,7 +1561,7 @@ switch ($acao) {
         $dados = array_merge($body, $_POST);
         $id = (int)($dados['id'] ?? $_GET['id'] ?? 0);
         if (!$id) retornar_json(false, 'ID inválido');
-        os_exigir_acesso($id);
+        $os_anterior = os_exigir_acao_os($id, 'editar');
 
         $titulo      = trim($dados['titulo']      ?? '');
         $descricao   = trim($dados['descricao']   ?? '');
@@ -1445,6 +1577,7 @@ switch ($acao) {
         $data_previsao = !empty($dados['data_previsao']) ? $dados['data_previsao'] : null;
 
         if (empty($titulo)) retornar_json(false, 'Título é obrigatório');
+        os_exigir_acao_departamento($departamento, 'editar');
 
         $stmt = $conn->prepare(
             "UPDATE os_chamados SET
@@ -1549,13 +1682,13 @@ switch ($acao) {
     case 'excluir':
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
         if (!$id) retornar_json(false, 'ID inválido');
-        os_exigir_acesso($id);
+        $os = os_exigir_acao_os($id, 'excluir');
 
         // Verificar se existe
         $res = $conn->query("SELECT id, numero, status FROM os_chamados WHERE tenant_id = $tenant_id AND id = $id");
-        $os = $res ? $res->fetch_assoc() : null;
-        if (!$os) retornar_json(false, 'OS não encontrada');
-        if ($os['status'] === 'finalizado') retornar_json(false, 'Não é possível excluir uma OS finalizada');
+        $os_excluir = $res ? $res->fetch_assoc() : null;
+        if (!$os_excluir) retornar_json(false, 'OS não encontrada');
+        if ($os_excluir['status'] === 'finalizado') retornar_json(false, 'Não é possível excluir uma OS finalizada');
 
         // Excluir dependências
         $conn->query("DELETE FROM os_interacoes WHERE tenant_id = $tenant_id AND os_id = $id");
@@ -1566,7 +1699,7 @@ switch ($acao) {
         $stmt->bind_param('i', $id);
         if (!$stmt->execute()) retornar_json(false, 'Erro ao excluir OS');
 
-        os_log('info', 'OS excluída', ['os_id' => $id, 'numero' => $os['numero']]);
+        os_log('info', 'OS excluída', ['os_id' => $id, 'numero' => $os_excluir['numero']]);
         retornar_json(true, 'OS excluída com sucesso');
         break;
 
@@ -1575,7 +1708,7 @@ switch ($acao) {
         $os_id = (int)($_GET['os_id'] ?? $body['os_id'] ?? 0);
         $publico = ($_GET['publico'] ?? $body['publico'] ?? '') === '1';
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'visualizar');
 
         $filtro_publico = $publico ? " AND i.tipo <> 'nota_interna'" : '';
         $stmt = $conn->prepare(
@@ -1620,7 +1753,7 @@ switch ($acao) {
         $publica    = !empty($dados['publica']) ? 1 : 0;
 
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'editar');
         if (empty($mensagem)) retornar_json(false, 'Mensagem é obrigatória');
         if (!in_array($tipo, ['comentario','andamento','solucao','nota_interna'])) $tipo = 'comentario';
         if ($tipo === 'nota_interna') $publica = 0; // notas internas nunca são públicas
@@ -1740,7 +1873,7 @@ switch ($acao) {
         $observacao      = _os_texto_simples($dados['observacao_finalizacao'] ?? '');
 
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'editar');
         if ($horas_totais !== null && $horas_totais < 0) retornar_json(false, 'Horas totais não podem ser negativas');
 
         $res = $conn->query("SELECT id, status, numero, titulo, morador_id, morador_unidade FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
@@ -1816,10 +1949,12 @@ switch ($acao) {
         $prioridade  = trim($dados['prioridade'] ?? 'media');
         $os_pai_id   = !empty($dados['os_pai_id']) ? (int)$dados['os_pai_id'] : null;
         if (!$id) retornar_json(false, 'ID inválido');
-        if (!$os_pode_ver_todas) retornar_json(false, 'Apenas administradores e gerentes podem assumir OS de outros usuários');
+        if (!$os_eh_gestor) retornar_json(false, 'Apenas administradores e gerentes podem assumir OS de outros usuários');
         if (!in_array($prioridade, ['baixa','media','alta','urgente'])) retornar_json(false, 'Prioridade inválida');
-        // Verificar se OS existe e é do portal
-        $res_os = $conn->query("SELECT id, status, origem_portal, assumido_por_id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $id");
+        // Verificar se a O.S. está no escopo do gestor e possui edição no
+        // departamento antes de consultar os dados específicos do portal.
+        os_exigir_acao_os($id, 'editar');
+        $res_os = $conn->query("SELECT id, status, departamento, origem_portal, assumido_por_id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $id");
         $os_row = $res_os ? $res_os->fetch_assoc() : null;
         if (!$os_row) retornar_json(false, 'OS não encontrada');
         if ($os_row['origem_portal'] !== 'portal_morador') retornar_json(false, 'Esta OS não foi aberta pelo portal do morador');
@@ -1852,7 +1987,7 @@ switch ($acao) {
         $os_pai_id = (int)($dados['os_pai_id'] ?? 0);
 
         if (!$os_id || !$os_pai_id) retornar_json(false, 'os_id e os_pai_id são obrigatórios');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'editar');
         os_exigir_acesso($os_pai_id);
         if ($os_id === $os_pai_id) retornar_json(false, 'Uma OS não pode depender de si mesma');
 
@@ -1872,24 +2007,163 @@ switch ($acao) {
         // Criar tabela central se ainda não existir e fazer seed inicial
         $conn->query("CREATE TABLE IF NOT EXISTS departamentos (
             id            INT AUTO_INCREMENT PRIMARY KEY,
+            tenant_id     INT NOT NULL DEFAULT 1,
             nome          VARCHAR(100) NOT NULL,
             descricao     VARCHAR(255) DEFAULT NULL,
             ativo         TINYINT(1) NOT NULL DEFAULT 1,
             criado_em     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uk_nome (nome)
+            UNIQUE KEY uk_tenant_nome (tenant_id, nome)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         $cnt_dept = $conn->query("SELECT COUNT(*) as c FROM departamentos WHERE tenant_id = $tenant_id AND ativo=1");
         if ($cnt_dept && (int)$cnt_dept->fetch_assoc()['c'] === 0) {
             $seeds_dept = ['ADMINISTRATIVO','FINANCEIRO','JARDINAGEM','LIMPEZA','MANUTENÇÃO','PORTARIA','RONDA','SEGURANÇA','ZELADORIA'];
-            $st_seed = $conn->prepare("INSERT IGNORE INTO departamentos (nome) VALUES (?)");
-            foreach ($seeds_dept as $sd) { $st_seed->bind_param('s', $sd); $st_seed->execute(); }
+            $st_seed = $conn->prepare("INSERT IGNORE INTO departamentos (tenant_id, nome) VALUES (?, ?)");
+            foreach ($seeds_dept as $sd) { $st_seed->bind_param('is', $tenant_id, $sd); $st_seed->execute(); }
         }
-        // Retornar apenas departamentos ativos da tabela central
-        $r_dept = $conn->query("SELECT nome FROM departamentos WHERE tenant_id = $tenant_id AND ativo=1 ORDER BY nome ASC");
+        // Incluir também valores históricos presentes em O.S. para que a
+        // matriz não esconda um departamento usado antes do cadastro central.
+        $st_dept = $conn->prepare(
+            'SELECT nome FROM departamentos WHERE tenant_id = ? AND ativo = 1
+             UNION
+             SELECT DISTINCT TRIM(departamento) AS nome FROM os_chamados
+             WHERE tenant_id = ? AND departamento IS NOT NULL AND TRIM(departamento) <> ""
+             ORDER BY nome ASC'
+        );
+        $st_dept->bind_param('ii', $tenant_id, $tenant_id);
+        $st_dept->execute();
+        $r_dept = $st_dept->get_result();
         $todos  = [];
         if ($r_dept) while ($row = $r_dept->fetch_assoc()) $todos[] = $row['nome'];
+        $st_dept->close();
         retornar_json(true, 'Departamentos carregados', $todos);
+        break;
+
+    // ─────────────────────────────────────────────────
+    case 'listar_permissoes_os':
+        os_exigir_gestor();
+        $alvo_id = (int)($_GET['usuario_id'] ?? $body['usuario_id'] ?? 0);
+        if (!$alvo_id) retornar_json(false, 'Usuário inválido');
+
+        $stmt = $conn->prepare('SELECT id, nome, permissao, ativo FROM usuarios WHERE tenant_id = ? AND id = ? LIMIT 1');
+        $stmt->bind_param('ii', $tenant_id, $alvo_id);
+        $stmt->execute();
+        $alvo = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$alvo) retornar_json(false, 'Usuário não encontrado no condomínio atual');
+
+        $departamentos = [];
+        $st_dep = $conn->prepare(
+            'SELECT nome FROM departamentos WHERE tenant_id = ? AND ativo = 1
+             UNION
+             SELECT DISTINCT TRIM(departamento) AS nome FROM os_chamados
+             WHERE tenant_id = ? AND departamento IS NOT NULL AND TRIM(departamento) <> ""
+             ORDER BY nome ASC'
+        );
+        $st_dep->bind_param('ii', $tenant_id, $tenant_id);
+        $st_dep->execute();
+        $res_dep = $st_dep->get_result();
+        if ($res_dep) while ($row = $res_dep->fetch_assoc()) $departamentos[] = os_departamento_chave($row['nome']);
+        $st_dep->close();
+
+        $config = ['restritivo_os' => 0];
+        $stmt = $conn->prepare('SELECT restritivo_os FROM os_usuarios_config WHERE tenant_id = ? AND usuario_id = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('ii', $tenant_id, $alvo_id);
+            $stmt->execute();
+            $config = $stmt->get_result()->fetch_assoc() ?: $config;
+            $stmt->close();
+        }
+
+        $permissoes = [];
+        $stmt = $conn->prepare('SELECT departamento, pode_visualizar, pode_criar, pode_editar, pode_excluir FROM os_permissoes_departamento WHERE tenant_id = ? AND usuario_id = ? ORDER BY departamento ASC');
+        if ($stmt) {
+            $stmt->bind_param('ii', $tenant_id, $alvo_id);
+            $stmt->execute();
+            $res_perm = $stmt->get_result();
+            while ($row = $res_perm->fetch_assoc()) {
+                $dep = os_departamento_chave($row['departamento']);
+                if ($dep !== '' && !in_array($dep, $departamentos, true)) $departamentos[] = $dep;
+                $permissoes[$dep] = [
+                    'visualizar' => (int)$row['pode_visualizar'],
+                    'criar'      => (int)$row['pode_criar'],
+                    'editar'     => (int)$row['pode_editar'],
+                    'excluir'    => (int)$row['pode_excluir'],
+                ];
+            }
+            $stmt->close();
+        }
+        sort($departamentos, SORT_NATURAL | SORT_FLAG_CASE);
+        retornar_json(true, 'Permissões de O.S. carregadas', [
+            'usuario'       => $alvo,
+            'restritivo_os' => (int)($config['restritivo_os'] ?? 0),
+            'departamentos' => array_values(array_unique($departamentos)),
+            'permissoes'    => $permissoes,
+        ]);
+        break;
+
+    // ─────────────────────────────────────────────────
+    case 'salvar_permissoes_os':
+        os_exigir_gestor();
+        $dados = array_merge($body, $_POST);
+        $alvo_id = (int)($dados['usuario_id'] ?? 0);
+        if (!$alvo_id) retornar_json(false, 'Usuário inválido');
+        $permissoes = is_array($dados['permissoes'] ?? null) ? $dados['permissoes'] : [];
+        $restritivo = !empty($dados['restritivo_os']) ? 1 : 0;
+
+        $stmt = $conn->prepare('SELECT id FROM usuarios WHERE tenant_id = ? AND id = ? LIMIT 1');
+        $stmt->bind_param('ii', $tenant_id, $alvo_id);
+        $stmt->execute();
+        $existe = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$existe) retornar_json(false, 'Usuário não encontrado no condomínio atual');
+
+        $conn->begin_transaction();
+        try {
+            $stmt_cfg = $conn->prepare(
+                'INSERT INTO os_usuarios_config (tenant_id, usuario_id, restritivo_os) VALUES (?,?,?)
+                 ON DUPLICATE KEY UPDATE restritivo_os = VALUES(restritivo_os), atualizado_em = NOW()'
+            );
+            $stmt_cfg->bind_param('iii', $tenant_id, $alvo_id, $restritivo);
+            if (!$stmt_cfg->execute()) throw new RuntimeException($stmt_cfg->error);
+            $stmt_cfg->close();
+
+            $stmt_del = $conn->prepare('DELETE FROM os_permissoes_departamento WHERE tenant_id = ? AND usuario_id = ?');
+            $stmt_del->bind_param('ii', $tenant_id, $alvo_id);
+            if (!$stmt_del->execute()) throw new RuntimeException($stmt_del->error);
+            $stmt_del->close();
+
+            $stmt_ins = $conn->prepare(
+                'INSERT INTO os_permissoes_departamento
+                 (tenant_id, usuario_id, departamento, pode_visualizar, pode_criar, pode_editar, pode_excluir)
+                 VALUES (?,?,?,?,?,?,?)'
+            );
+            $salvos = 0;
+            foreach ($permissoes as $departamento => $valores) {
+                $dep = os_departamento_chave($departamento);
+                if ($dep === '' || !is_array($valores)) continue;
+                $visualizar = !empty($valores['visualizar']) ? 1 : 0;
+                $criar      = !empty($valores['criar']) ? 1 : 0;
+                $editar     = !empty($valores['editar']) ? 1 : 0;
+                $excluir    = !empty($valores['excluir']) ? 1 : 0;
+                // CRUD sem visualização é incoerente; a API normaliza a linha.
+                if (!$visualizar) $criar = $editar = $excluir = 0;
+                $stmt_ins->bind_param('iisiiii', $tenant_id, $alvo_id, $dep, $visualizar, $criar, $editar, $excluir);
+                if (!$stmt_ins->execute()) throw new RuntimeException($stmt_ins->error);
+                $salvos++;
+            }
+            $stmt_ins->close();
+            $conn->commit();
+            retornar_json(true, 'Permissões de O.S. salvas com sucesso', [
+                'usuario_id' => $alvo_id,
+                'restritivo_os' => $restritivo,
+                'departamentos_salvos' => $salvos,
+            ]);
+        } catch (Throwable $e_perm) {
+            $conn->rollback();
+            os_log('erro', 'Falha ao salvar permissões de O.S.', ['erro' => $e_perm->getMessage(), 'usuario_id' => $alvo_id]);
+            retornar_json(false, 'Não foi possível salvar as permissões de O.S.');
+        }
         break;
 
     case 'listar_assuntos':
@@ -2018,7 +2292,7 @@ switch ($acao) {
     case 'listar_materiais':
         $os_id = (int)($_GET['os_id'] ?? $body['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'visualizar');
 
         $stmt = $conn->prepare("SELECT * FROM os_materiais_usados WHERE tenant_id = $tenant_id AND os_id = ? ORDER BY adicionado_em ASC");
         $stmt->bind_param('i', $os_id);
@@ -2040,7 +2314,7 @@ switch ($acao) {
         $preco_unitario = (float)($dados['preco_unitario'] ?? 0);
 
         if (!$os_id || !$produto_id) retornar_json(false, 'os_id e produto_id são obrigatórios');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'editar');
         if ($quantidade <= 0) retornar_json(false, 'Quantidade deve ser maior que zero');
 
         // Verificar se OS não está finalizada
@@ -2080,7 +2354,7 @@ switch ($acao) {
         $res = $conn->query("SELECT estoque_baixado, os_id FROM os_materiais_usados WHERE tenant_id = $tenant_id AND id = $id");
         $mat = $res ? $res->fetch_assoc() : null;
         if (!$mat) retornar_json(false, 'Material não encontrado');
-        os_exigir_acesso((int)$mat['os_id']);
+        os_exigir_acao_os((int)$mat['os_id'], 'editar');
         if ($mat['estoque_baixado']) retornar_json(false, 'Material já baixado do estoque — não pode ser removido');
 
         $stmt = $conn->prepare("DELETE FROM os_materiais_usados WHERE tenant_id = $tenant_id AND id = ?");
@@ -2094,7 +2368,7 @@ switch ($acao) {
     case 'baixar_estoque_os':
         $os_id = (int)($_GET['os_id'] ?? $body['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'editar');
 
         $res_mats = $conn->query(
             "SELECT * FROM os_materiais_usados WHERE tenant_id = $tenant_id AND os_id = $os_id AND estoque_baixado = 0"
@@ -2130,7 +2404,7 @@ switch ($acao) {
         $dados = array_merge($body, $_POST);
         $os_id = (int)($dados['os_id'] ?? $dados['id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'editar');
 
         $res = $conn->query("SELECT id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
         if (!$res || $res->num_rows === 0) retornar_json(false, 'O.S não encontrada');
@@ -2166,7 +2440,7 @@ switch ($acao) {
     case 'upload_imagem_capa':
         $os_id = (int)($_POST['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'editar');
         if (empty($_FILES['imagem']['tmp_name'])) retornar_json(false, 'Nenhuma imagem enviada');
 
         $res = $conn->query("SELECT id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
@@ -2191,7 +2465,7 @@ switch ($acao) {
         $res = $conn->query("SELECT id, os_id FROM os_interacoes WHERE tenant_id = $tenant_id AND id = $interacao_id");
         $interacaoRow = $res ? $res->fetch_assoc() : null;
         if (!$interacaoRow) retornar_json(false, 'Interação não encontrada');
-        os_exigir_acesso((int)$interacaoRow['os_id']);
+        os_exigir_acao_os((int)$interacaoRow['os_id'], 'editar');
 
         $salvas = [];
         $arquivos = $_FILES['fotos'] ?? null;
@@ -2296,7 +2570,7 @@ switch ($acao) {
     case 'listar_documentos_projeto':
         $os_id = (int)($_GET['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'visualizar');
 
         $tab_doc = $conn->query("SHOW TABLES LIKE 'documentos'");
         if (!$tab_doc || $tab_doc->num_rows === 0) retornar_json(true, 'OK', []);
@@ -2317,7 +2591,7 @@ switch ($acao) {
         $os_id   = (int)($dados['os_id'] ?? 0);
         $doc_ids = $dados['documento_ids'] ?? [];
         if (!$os_id) retornar_json(false, 'os_id inválido');
-        os_exigir_acesso($os_id);
+        os_exigir_acao_os($os_id, 'editar');
         if (!is_array($doc_ids)) $doc_ids = [];
         $doc_ids = array_values(array_unique(array_filter(array_map('intval', $doc_ids))));
 

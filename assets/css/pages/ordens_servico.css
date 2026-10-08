@@ -1646,3 +1646,30 @@
     .page-ordens-servico .os-filtro-group.os-filtro-data { min-width: 100%; max-width: 100%; }
     .page-ordens-servico .os-filtros-acoes { flex-direction: row; }
 }
+
+/* ── Matriz de acesso de O.S. ─────────────────────────────────────────── */
+.page-ordens-servico .os-card-permissoes-os .os-card-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+}
+.page-ordens-servico .os-permissao-restritiva {
+    display: inline-flex; align-items: center; gap: .55rem; padding: .55rem .75rem;
+    border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; color: #9a3412;
+    cursor: pointer;
+}
+.page-ordens-servico .os-permissao-restritiva input { width: 17px; height: 17px; accent-color: #ea580c; }
+.page-ordens-servico .os-permissao-restritiva span { display: flex; flex-direction: column; gap: 2px; }
+.page-ordens-servico .os-permissao-restritiva small { color: #c2410c; font-size: .72rem; font-weight: 500; }
+.page-ordens-servico .os-permissao-help {
+    margin: 1rem 0; padding: .7rem .85rem; border-left: 3px solid #2563eb;
+    background: #eff6ff; color: #475569; font-size: .82rem; line-height: 1.45;
+}
+.page-ordens-servico .os-permissoes-table-wrap { overflow-x: auto; }
+.page-ordens-servico .os-permissoes-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+.page-ordens-servico .os-permissoes-table th,
+.page-ordens-servico .os-permissoes-table td { padding: .65rem .75rem; border-bottom: 1px solid #e2e8f0; text-align: center; }
+.page-ordens-servico .os-permissoes-table th:first-child,
+.page-ordens-servico .os-permissoes-table td:first-child { text-align: left; }
+.page-ordens-servico .os-permissoes-table th { color: #475569; background: #f8fafc; font-size: .76rem; text-transform: uppercase; letter-spacing: .03em; }
+.page-ordens-servico .os-permissoes-table td { color: #334155; font-size: .86rem; }
+.page-ordens-servico .os-permissao-check input { width: 17px; height: 17px; accent-color: #2563eb; cursor: pointer; }
+.page-ordens-servico .os-permissao-check input:disabled { cursor: not-allowed; opacity: .35; }

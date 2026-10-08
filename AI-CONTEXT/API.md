@@ -86,6 +86,12 @@ No POST manual, a unidade de Visitante/Prestador é resolvida novamente pelo `mo
 
 As páginas de Manutenção (`hidrometro`, `leitura`, `relatorios_hidrometro`, `abastecimento`, `estoque`, `inventario`, `relatorios_inventario`, `ordens_servico`, `imprimir_os`, `checklists` e `documentos`) são rotas RBAC próprias. O `MenuController` e a visão geral ocultam cards/abas sem `visualizar`, e o `AppRouter` bloqueia a URL direta. As APIs de Estoque, Abastecimento, Checklists, Hidrômetros, Leituras, Inventário e Ordens de Serviço, incluindo relatórios PDF/gerenciais, validam novamente `rbacExigir()` no servidor; o perfil legado `operador` não libera esses recursos quando há uma negação individual.
 
+## 10.1 Ordens de Serviço — escopo por usuário e departamento
+
+`GET api/api_ordens_servico.php?acao=listar_permissoes_os&usuario_id=...` e `POST ...` com `acao=salvar_permissoes_os` são exclusivos de administradores/gerentes e operam somente no `tenant_id` da sessão. A matriz grava `visualizar`, `criar`, `editar` e `excluir` por usuário e departamento em `os_permissoes_departamento`; o checkbox `restritivo_os` grava em `os_usuarios_config` e, quando ativo, limita dashboard, listagem, detalhe, relatórios, interações, materiais e imagens às O.S. abertas pelo próprio usuário.
+
+Sem restritividade, o usuário pode consultar as próprias O.S. e as dos departamentos marcados. A API também valida a ação do departamento na criação, edição, exclusão, interação, finalização, materiais, projetos, documentos e impressão; esconder botões no frontend não é considerado autorização. A ausência de configuração mantém a compatibilidade do legado, sem abrir dados entre tenants.
+
 ## 11. Moradores, Dependentes e Anexos — autorização granular
 
 `api/api_moradores.php` e `api/api_dependentes.php` usam a chave RBAC `moradores`: `GET`

@@ -36,3 +36,12 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - `api_moradores.php`, `api_dependentes.php`, `api_moradores_anexos.php`, o PDF de
   moradores e o conteúdo privado de `api_arquivos_tenant.php` devem validar a ação no
   backend. Esconder botões no frontend não é suficiente.
+
+## 6. Escopo de Ordens de Serviço
+- A matriz `os_permissoes_departamento` é tenant-aware e controla visualização, criação,
+  edição e exclusão por usuário e departamento. As próprias O.S. do usuário permanecem
+  consultáveis; o checkbox `restritivo_os` pode limitar a consulta a elas.
+- Dashboard, listagem, busca individual, relatórios, interações, finalização, materiais,
+  projetos, documentos, impressão e imagens devem aplicar o mesmo escopo server-side.
+- Uma URL direta, um botão oculto ou um departamento enviado no payload nunca substitui
+  a resolução do departamento armazenado na O.S. e a validação da sessão autenticada.

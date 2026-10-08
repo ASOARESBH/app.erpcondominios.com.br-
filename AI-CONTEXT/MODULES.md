@@ -14,7 +14,8 @@ O ERP é dividido em módulos de negócios independentes, acessíveis pelo `side
 - **Relatórios Financeiros**: DRE, fluxo de caixa.
 
 ## 3. Manutenção & Operação
-- **Ordens de Serviço (O.S.)**: Abertura de chamados, mudança de status, interações.
+- **Ordens de Serviço (O.S.)**: Abertura de chamados, mudança de status, interações e
+  matriz tenant-aware de acesso por usuário/departamento com restritividade opcional.
 - **Estoque/Inventário**: Controle de patrimônio e insumos.
 - **Hidrômetros**: Leitura de consumo de água, cálculo de tarifas, geração de demonstrativos.
 

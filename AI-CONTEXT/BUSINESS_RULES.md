@@ -19,6 +19,10 @@
 - **Status**: `Aberto` → `Em Andamento` → `Finalizado` / `Cancelado`.
 - Ao adicionar uma interação, o status muda automaticamente para `Em Andamento`.
 - O solicitante (morador) recebe notificação push ao abrir e ao finalizar a O.S.
+- O acesso às O.S. pode ser configurado por usuário e departamento, separando `Visualizar`,
+  `Criar`, `Editar` e `Excluir`. A restritividade, quando marcada, permite ao usuário
+  consultar somente as O.S. abertas por ele; a validação vale também para dashboard,
+  relatórios, interações, materiais, projetos, documentos, impressão e imagens.
 
 ## 5. Documentos (GED)
 - Documentos podem ter visibilidade: `todos`, `moradores`, `usuarios` ou `unidades_especificas`.

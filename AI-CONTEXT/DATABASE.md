@@ -47,3 +47,17 @@ A API móvel calcula `ciclo_chave` como `sha256(tenant_id|rota_id|colaborador_id
 ## 7. Registros de Acesso
 
 A tabela `registros_acesso` registra os eventos manuais e automáticos de entrada e saída, sempre isolados por `tenant_id`. No lançamento manual, `modo_registro` é `VEICULO` por padrão ou `PEDESTRE` para acessos sem veículo; `vestimenta` (`VARCHAR(120)`, nula) guarda a descrição opcional da roupa da pessoa. A coluna `usuario_liberou` (`VARCHAR(150)`, nula) preserva o nome do operador autenticado que efetuou uma liberação manual, de forma independente do cadastro atual desse usuário. A coluna opcional `idempotency_key` (`VARCHAR(36)`, nula) recebe a chave do formulário, com índice único `uk_registros_acesso_tenant_idempotency (tenant_id, idempotency_key)`; como a coluna aceita `NULL`, registros antigos e origens que não enviam chave não colidem. Eventos automáticos de hardware não preenchem `usuario_liberou`, e registros históricos anteriores à adoção dos campos permanecem com valores nulos. Registros `PEDESTRE` não exigem placa, modelo ou cor e não geram registros de ocupantes.
+
+## 8. Escopo de Ordens de Serviço
+
+`os_usuarios_config` guarda uma configuração por `(tenant_id, usuario_id)`, incluindo
+`restritivo_os`. `os_permissoes_departamento` guarda as ações `pode_visualizar`,
+`pode_criar`, `pode_editar` e `pode_excluir` por `(tenant_id, usuario_id, departamento)`.
+As duas tabelas são criadas/verificadas de forma idempotente pela API de O.S. e nunca
+aceitam `tenant_id` vindo do navegador.
+
+A tabela central `departamentos` deve possuir `tenant_id` e a chave única
+`(tenant_id, nome)`. A API corrige a chave histórica global `uk_nome` antes de listar ou
+salvar a matriz, permitindo que condomínios diferentes usem departamentos com o mesmo
+nome. O escopo aplicado às consultas de `os_chamados` combina autoria própria com
+departamentos autorizados; a restritividade reduz o conjunto à autoria.

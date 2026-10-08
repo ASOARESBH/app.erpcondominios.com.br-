@@ -92,11 +92,18 @@ if ($tipo === 'foto') {
 if (!$osId) img_negar('os_id inválido.', 400);
 
 $osTenantDaFoto = (int)($fotoRow['tenant_id'] ?? 0);
-$sqlOs = $tipo === 'foto'
-    ? "SELECT tenant_id, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = $osId AND tenant_id = $osTenantDaFoto LIMIT 1"
-    : "SELECT tenant_id, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = $osId LIMIT 1";
-$res = $conn->query($sqlOs);
+$stmtOs = $tipo === 'foto'
+    ? $conn->prepare('SELECT tenant_id, departamento, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = ? AND tenant_id = ? LIMIT 1')
+    : $conn->prepare('SELECT tenant_id, departamento, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = ? LIMIT 1');
+if ($tipo === 'foto') {
+    $stmtOs->bind_param('ii', $osId, $osTenantDaFoto);
+} else {
+    $stmtOs->bind_param('i', $osId);
+}
+$stmtOs->execute();
+$res = $stmtOs->get_result();
 $os  = $res ? $res->fetch_assoc() : null;
+$stmtOs->close();
 if (!$os) img_negar('Projeto não encontrado.', 404);
 
 // ── Autorização ──────────────────────────────────────
@@ -108,7 +115,49 @@ $permissao  = strtolower(trim((string)($usuarioERP['permissao'] ?? '')));
 $podeVerTodas = in_array($permissao, ['admin', 'administrador', 'gerente', 'super_admin'], true);
 $ehProprietario = $usuarioId > 0 && $usuarioId === (int)($os['criado_por_id'] ?? 0);
 $mesmoTenant = !$usuarioERP || (int)($usuarioERP['tenant_id'] ?? 0) === (int)$os['tenant_id'];
-$autorizado   = (int)$os['projeto_publico'] === 1 || ($usuarioERP && $mesmoTenant && ($podeVerTodas || $ehProprietario));
+$autorizado = false;
+if (!$usuarioERP) {
+    // O Portal pode visualizar somente projeto explicitamente publicado.
+    $autorizado = (int)$os['projeto_publico'] === 1;
+} elseif ($mesmoTenant) {
+    // No painel, uma política de O.S. configurada vence a publicidade do
+    // projeto: a restrição deve valer também para imagens acessadas por URL.
+    $temPolitica = false;
+    $restritivo = false;
+    $stCfg = $conn->prepare('SELECT restritivo_os FROM os_usuarios_config WHERE tenant_id = ? AND usuario_id = ? LIMIT 1');
+    if ($stCfg) {
+        $tenantSessao = (int)($usuarioERP['tenant_id'] ?? 0);
+        $stCfg->bind_param('ii', $tenantSessao, $usuarioId);
+        $stCfg->execute();
+        $cfg = $stCfg->get_result()->fetch_assoc();
+        $stCfg->close();
+        $restritivo = !empty($cfg['restritivo_os']);
+    }
+    $stQtd = $conn->prepare('SELECT COUNT(*) AS total FROM os_permissoes_departamento WHERE tenant_id = ? AND usuario_id = ?');
+    if ($stQtd) {
+        $tenantSessao = (int)($usuarioERP['tenant_id'] ?? 0);
+        $stQtd->bind_param('ii', $tenantSessao, $usuarioId);
+        $stQtd->execute();
+        $qtd = $stQtd->get_result()->fetch_assoc();
+        $stQtd->close();
+        $temPolitica = ((int)($qtd['total'] ?? 0)) > 0;
+    }
+    $podeDepartamento = false;
+    if (!$restritivo && $temPolitica) {
+        $stDep = $conn->prepare('SELECT 1 FROM os_permissoes_departamento WHERE tenant_id = ? AND usuario_id = ? AND UPPER(TRIM(departamento)) = ? AND pode_visualizar = 1 LIMIT 1');
+        if ($stDep) {
+            $tenantSessao = (int)($usuarioERP['tenant_id'] ?? 0);
+            $departamentoOs = strtoupper(trim((string)($os['departamento'] ?? '')));
+            $stDep->bind_param('iis', $tenantSessao, $usuarioId, $departamentoOs);
+            $stDep->execute();
+            $podeDepartamento = (bool)$stDep->get_result()->fetch_assoc();
+            $stDep->close();
+        }
+    }
+    $autorizado = $restritivo
+        ? $ehProprietario
+        : ($temPolitica ? ($ehProprietario || $podeDepartamento) : ((int)$os['projeto_publico'] === 1 || $podeVerTodas || $ehProprietario));
+}
 if (!$autorizado) img_negar('Este projeto não está disponível.', 403);
 
 // ── Servir ────────────────────────────────────────────

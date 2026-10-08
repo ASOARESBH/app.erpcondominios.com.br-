@@ -22,7 +22,7 @@
 
     <div id="os-escopo-aviso" class="os-escopo-aviso" style="display:none;" role="status">
         <i class="fas fa-lock"></i>
-        <span>Seu acesso está restrito às Ordens de Serviço abertas por você. Administradores e gerentes podem visualizar todas.</span>
+        <span>Seu acesso às O.S. é filtrado por autoria, departamento e ações configuradas. A Restritividade O.S. limita a visualização às ordens abertas por você.</span>
     </div>
 
     <!-- Abas internas -->
@@ -290,6 +290,45 @@
                 <div class="os-card-body">
                     <div id="lista-etapas">
                         <div class="os-loading-text">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Permissões por usuário/departamento -->
+            <div class="os-card os-card-permissoes-os" style="grid-column:1 / -1;">
+                <div class="os-card-header">
+                    <span><i class="fas fa-user-lock"></i> Acesso às Ordens de Serviço</span>
+                    <button class="btn-os-salvar" id="btnSalvarPermissoesOS" type="button">
+                        <i class="fas fa-save"></i> Salvar permissões
+                    </button>
+                </div>
+                <div class="os-card-body">
+                    <div class="os-form-row" style="align-items:end;">
+                        <div class="os-form-group" style="margin:0;max-width:420px;">
+                            <label for="os-permissao-usuario">Configurar permissões de:</label>
+                            <select id="os-permissao-usuario">
+                                <option value="">— Selecione um usuário —</option>
+                            </select>
+                        </div>
+                        <label class="os-permissao-restritiva" title="Quando ativa, o usuário só verá as O.S. abertas por ele.">
+                            <input type="checkbox" id="os-restritivo-checkbox">
+                            <span><strong>Restritividade O.S.</strong><small>Ver somente O.S. abertas pelo próprio usuário</small></span>
+                        </label>
+                    </div>
+                    <p class="os-permissao-help">
+                        Selecione os departamentos e ações permitidos. <strong>Visualizar</strong> libera a O.S.,
+                        enquanto <strong>Criar, Editar e Excluir</strong> controlam as operações no departamento.
+                        A matriz é aplicada no servidor e vale para dashboard, listagem, detalhe, interações, materiais e impressão.
+                    </p>
+                    <div class="os-permissoes-table-wrap">
+                        <table class="os-permissoes-table">
+                            <thead><tr>
+                                <th>Departamento</th><th>Visualizar</th><th>Criar</th><th>Editar</th><th>Excluir</th>
+                            </tr></thead>
+                            <tbody id="os-permissoes-tbody">
+                                <tr><td colspan="5" class="os-loading-text">Selecione um usuário para carregar.</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
