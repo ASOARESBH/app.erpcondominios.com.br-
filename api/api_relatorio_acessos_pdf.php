@@ -73,6 +73,7 @@ $hora_fim     = trim($_GET['hora_fim']     ?? '');
 $filtro_placa = strtoupper(trim($_GET['placa']   ?? ''));
 $filtro_modelo= trim($_GET['modelo']  ?? '');
 $filtro_unid  = trim($_GET['unidade'] ?? '');
+$unidade_exata = ($_GET['unidade_exata'] ?? '') === '1';
 $filtro_nome  = trim($_GET['nome']    ?? '');
 $filtro_tipo  = trim($_GET['tipo']    ?? '');
 $auto_print   = ($_GET['print'] ?? '') === 'true';
@@ -110,9 +111,11 @@ if ($filtro_modelo !== '') {
     $types   .= 's';
 }
 if ($filtro_unid !== '') {
-    $where[]  = "(r.unidade_destino LIKE ? OR m.unidade LIKE ?)";
-    $params[] = '%' . $filtro_unid . '%';
-    $params[] = '%' . $filtro_unid . '%';
+    $operador_unidade = $unidade_exata ? '=' : 'LIKE';
+    $valor_unidade = $unidade_exata ? $filtro_unid : '%' . $filtro_unid . '%';
+    $where[]  = "(r.unidade_destino {$operador_unidade} ? OR m.unidade {$operador_unidade} ?)";
+    $params[] = $valor_unidade;
+    $params[] = $valor_unidade;
     $types   .= 'ss';
 }
 if ($filtro_nome !== '') {

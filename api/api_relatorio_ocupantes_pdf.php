@@ -25,6 +25,7 @@ $hora_fim = trim((string)($_GET['hora_fim'] ?? ''));
 $placa = strtoupper(trim((string)($_GET['placa'] ?? '')));
 $modelo = trim((string)($_GET['modelo'] ?? ''));
 $unidade = trim((string)($_GET['unidade'] ?? ''));
+$unidade_exata = ($_GET['unidade_exata'] ?? '') === '1';
 $nome = trim((string)($_GET['nome'] ?? ''));
 $tipo = trim((string)($_GET['tipo'] ?? ''));
 $apenas_liberados = ($_GET['apenas_liberados'] ?? '') === '1';
@@ -56,8 +57,10 @@ if ($hora_fim !== '') { $where[] = 'TIME(r.data_hora) <= ?'; $params[] = $hora_f
 if ($placa !== '') { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
 if ($modelo !== '') { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
 if ($unidade !== '') {
-    $where[] = "COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), '')) LIKE ?";
-    $params[] = '%' . $unidade . '%'; $types .= 's';
+    $operador_unidade = $unidade_exata ? '=' : 'LIKE';
+    $valor_unidade = $unidade_exata ? $unidade : '%' . $unidade . '%';
+    $where[] = "COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), '')) {$operador_unidade} ?";
+    $params[] = $valor_unidade; $types .= 's';
 }
 if ($nome !== '') {
     $where[] = '(rt.nome_visitante LIKE ? OR rt.documento_visitante LIKE ?

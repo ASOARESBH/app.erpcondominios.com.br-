@@ -3,6 +3,7 @@
  */
 
 const API_REGISTROS = '../api/api_registros.php';
+const API_UNIDADES = '../api/api_unidades.php?acao=select';
 
 let todosRegistros = [];
 let registrosFiltrados = [];
@@ -10,6 +11,7 @@ let termoBuscaLocal = '';
 let audioCtx = null;
 let modoRelatorioOcupantes = false;
 let ocupantesRequestId = 0;
+let unidadesRequestId = 0;
 
 export function init() {
     console.log('[Relatorios] Inicializando...');
@@ -17,6 +19,7 @@ export function init() {
     setupActions();
     setDatasPadrao();
     prepararAudioContext();
+    carregarUnidadesFiltro();
     carregarTodosRegistros();
 
     window.RelatoriosPage = {
@@ -38,6 +41,7 @@ export function destroy() {
     audioCtx = null;
     modoRelatorioOcupantes = false;
     ocupantesRequestId += 1;
+    unidadesRequestId += 1;
 }
 
 function setupActions() {
@@ -67,6 +71,29 @@ function setupActions() {
 function bindClick(id, fn) {
     const btn = document.getElementById(id);
     if (btn) btn.addEventListener('click', fn);
+}
+
+async function carregarUnidadesFiltro() {
+    const requestId = ++unidadesRequestId;
+    const select = document.getElementById('filtroUnidade');
+    if (!select) return;
+    try {
+        const response = await fetch(API_UNIDADES, { credentials: 'include' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (requestId !== unidadesRequestId) return;
+        if (!data.sucesso) throw new Error(data.mensagem || 'Não foi possível carregar as unidades.');
+        const unidades = Array.isArray(data.dados) ? data.dados : (data.dados?.itens || []);
+        select.innerHTML = '<option value="">Todas as unidades</option>' + unidades
+            .filter((unidade) => Number(unidade.ativo ?? 1) === 1)
+            .map((unidade) => `<option value="${escapeHtml(unidade.nome)}">${escapeHtml(unidade.nome)}</option>`)
+            .join('');
+        console.log('[Relatorios] Unidades carregadas para o filtro:', unidades.length);
+    } catch (error) {
+        if (requestId !== unidadesRequestId) return;
+        console.error('[Relatorios] Erro ao carregar unidades do filtro:', error);
+        select.innerHTML = '<option value="">Todas as unidades</option>';
+    }
 }
 
 function setDatasPadrao() {
@@ -116,11 +143,12 @@ function getTipoRegistroFiltro() {
 
 function montarParametrosRegistros() {
     const params = new URLSearchParams({ limite: '500' });
+    const unidade = getValue('filtroUnidade');
     const filtros = {
         data_inicio: getValue('dataInicial'), data_fim: getValue('dataFinal'),
         hora_inicio: getValue('horaInicial'), hora_fim: getValue('horaFinal'),
         placa: getValue('filtroPlaca'), modelo: getValue('filtroModelo'),
-        unidade: getValue('filtroUnidade'), nome: getValue('filtroNome'),
+        unidade, unidade_exata: unidade ? '1' : '', nome: getValue('filtroNome'),
         tipo: getTipoRegistroFiltro(),
         apenas_liberados: getChecked('apenasLiberados') ? '1' : '',
         ignorar_ocupantes: getChecked('incluirOcupantes') ? '' : '1',
@@ -147,11 +175,12 @@ async function carregarRelatorioOcupantes() {
     const requestId = ++ocupantesRequestId;
     setLoading(true);
     const params = new URLSearchParams({ acao: 'relatorio_ocupantes' });
+    const unidade = getValue('filtroUnidade');
     const filtros = {
         data_inicio: getValue('dataInicial'), data_fim: getValue('dataFinal'),
         hora_inicio: getValue('horaInicial'), hora_fim: getValue('horaFinal'),
         placa: getValue('filtroPlaca'), modelo: getValue('filtroModelo'),
-        unidade: getValue('filtroUnidade'), nome: getValue('filtroNome'),
+        unidade, unidade_exata: unidade ? '1' : '', nome: getValue('filtroNome'),
         tipo: getTipoOcupanteFiltro(),
         apenas_liberados: getChecked('apenasLiberados') ? '1' : '',
     };
@@ -561,7 +590,7 @@ function gerarPDF() {
     if (horaFinal)   params.set('hora_fim',    horaFinal);
     if (placa)       params.set('placa',       placa);
     if (modelo)      params.set('modelo',      modelo);
-    if (unidade)     params.set('unidade',     unidade);
+    if (unidade) { params.set('unidade', unidade); params.set('unidade_exata', '1'); }
     if (nome)        params.set('nome',        nome);
     if (tipo && tipo !== 'todos') params.set('tipo', tipo);
 
@@ -570,14 +599,16 @@ function gerarPDF() {
 }
 
 function gerarPDFOcupantes() {
+    const unidade = getValue('filtroUnidade');
     const params = new URLSearchParams({
         data_inicio: getValue('dataInicial'), data_fim: getValue('dataFinal'),
         hora_inicio: getValue('horaInicial'), hora_fim: getValue('horaFinal'),
         placa: getValue('filtroPlaca'), modelo: getValue('filtroModelo'),
-        unidade: getValue('filtroUnidade'), nome: getValue('filtroNome'),
+        unidade, nome: getValue('filtroNome'),
         tipo: getTipoOcupanteFiltro(),
         apenas_liberados: getChecked('apenasLiberados') ? '1' : '',
     });
+    if (unidade) params.set('unidade_exata', '1');
     window.open(`${window.location.origin}/api/api_relatorio_ocupantes_pdf.php?${params.toString()}`, '_blank');
 }
 

@@ -176,6 +176,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
     $placa      = strtoupper(trim((string)($_GET['placa'] ?? '')));
     $modelo     = trim((string)($_GET['modelo'] ?? ''));
     $unidade    = trim((string)($_GET['unidade'] ?? ''));
+    $unidadeExata = ($_GET['unidade_exata'] ?? '') === '1';
     $nome       = trim((string)($_GET['nome'] ?? ''));
     $tipo       = trim((string)($_GET['tipo'] ?? ''));
     $liberados  = ($_GET['apenas_liberados'] ?? '') === '1';
@@ -207,8 +208,10 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
     if ($placa !== '')      { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
     if ($modelo !== '')     { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
     if ($unidade !== '') {
-        $where[] = "COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), '')) LIKE ?";
-        $params[] = '%' . $unidade . '%';
+        $operadorUnidade = $unidadeExata ? '=' : 'LIKE';
+        $valorUnidade = $unidadeExata ? $unidade : '%' . $unidade . '%';
+        $where[] = "COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), '')) $operadorUnidade ?";
+        $params[] = $valorUnidade;
         $types .= 's';
     }
     if ($nome !== '') {
@@ -348,6 +351,7 @@ if ($metodo === 'GET') {
     $placa = strtoupper(trim((string)($_GET['placa'] ?? '')));
     $modelo = trim((string)($_GET['modelo'] ?? ''));
     $unidade = trim((string)($_GET['unidade'] ?? ''));
+    $unidadeExata = ($_GET['unidade_exata'] ?? '') === '1';
     $nome = trim((string)($_GET['nome'] ?? ''));
     $tipoParam = trim((string)($_GET['tipo'] ?? ''));
 
@@ -367,8 +371,10 @@ if ($metodo === 'GET') {
     if ($placa !== '') { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
     if ($modelo !== '') { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
     if ($unidade !== '') {
-        $where[] = '(r.unidade_destino LIKE ? OR m.unidade LIKE ?)';
-        $params[] = '%' . $unidade . '%'; $params[] = '%' . $unidade . '%'; $types .= 'ss';
+        $operadorUnidade = $unidadeExata ? '=' : 'LIKE';
+        $valorUnidade = $unidadeExata ? $unidade : '%' . $unidade . '%';
+        $where[] = "(r.unidade_destino $operadorUnidade ? OR m.unidade $operadorUnidade ?)";
+        $params[] = $valorUnidade; $params[] = $valorUnidade; $types .= 'ss';
     }
     if ($nome !== '') {
         $where[] = '(r.nome_visitante LIKE ? OR r.documento_visitante LIKE ? OR m.nome LIKE ? OR m.cpf LIKE ? OR d.nome_completo LIKE ?)';
