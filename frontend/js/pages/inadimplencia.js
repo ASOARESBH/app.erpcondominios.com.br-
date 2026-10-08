@@ -7,17 +7,19 @@ let _importacaoId = 0;
 let _rankingPagina = 1;
 let _rankingTimer = null;
 let _dashboard = null;
+let _layouts = [];
 
 export function init() {
     _abortController = new AbortController();
     _importacaoId = 0;
     _rankingPagina = 1;
     _dashboard = null;
+    _layouts = [];
     _vincularEventos();
     _mostrarVazio(true);
     _limparFlash();
-    // Sem snapshot, a tela permanece apenas no formulário. O dashboard só é aberto após confirmar histórico concluído.
-    void _restaurarUltimoSnapshot();
+    // O catálogo é carregado antes do histórico para que cada snapshot já apareça com sua origem/layout.
+    void (async () => { await _carregarCatalogoLayouts(); await _restaurarUltimoSnapshot(); })();
     log('Módulo inicializado: verificando silenciosamente o histórico persistido do tenant.');
 }
 
@@ -38,6 +40,7 @@ function _vincularEventos() {
         const arquivo = event.target.files?.[0];
         document.getElementById('inad-arquivo-nome').textContent = arquivo ? arquivo.name : 'Nenhum arquivo selecionado';
     }, { signal });
+    document.getElementById('inad-layout-select')?.addEventListener('change', _renderLayoutSelecionado, { signal });
     document.getElementById('inad-form-importacao')?.addEventListener('submit', _importar, { signal });
     document.getElementById('inad-importacao-select')?.addEventListener('change', event => {
         _importacaoId = Number(event.target.value) || 0; _rankingPagina = 1; _carregarDashboard(_importacaoId);
@@ -91,6 +94,72 @@ async function _api(acao, options = {}) {
     return data.dados;
 }
 
+async function _carregarCatalogoLayouts() {
+    const select = document.getElementById('inad-layout-select');
+    try {
+        const dados = await _api('catalogo_layouts');
+        _layouts = Array.isArray(dados.layouts) ? dados.layouts : [];
+        _renderCatalogoLayouts();
+    } catch (erro) {
+        if (erro.name !== 'AbortError') {
+            if (select) select.innerHTML = '<option value="">Catálogo indisponível</option>';
+            _setLayoutStatus('Não foi possível carregar o catálogo de layouts.', 'error');
+            log('Catálogo de layouts indisponível:', erro.message);
+        }
+    }
+}
+
+function _renderCatalogoLayouts() {
+    const select = document.getElementById('inad-layout-select');
+    if (!select) return;
+    const homologado = _layouts.find(layout => layout.habilitado) || _layouts[0];
+    select.innerHTML = _layouts.map(layout => {
+        const estado = layout.habilitado ? 'Homologado' : 'Planejado';
+        return `<option value="${_esc(layout.id)}">${_esc(layout.nome)} — ${estado}</option>`;
+    }).join('');
+    if (homologado) select.value = homologado.id;
+    _renderLayoutSelecionado();
+}
+
+function _layoutSelecionado() {
+    const id = document.getElementById('inad-layout-select')?.value || '';
+    return _layouts.find(layout => layout.id === id) || null;
+}
+
+function _renderLayoutSelecionado() {
+    const layout = _layoutSelecionado();
+    const input = document.getElementById('inad-arquivo');
+    const tipo = document.getElementById('inad-arquivo-tipo');
+    const botao = document.getElementById('inad-btn-importar');
+    if (!layout) {
+        _setLayoutStatus('Selecione um layout de origem.', 'error');
+        if (botao) botao.disabled = true;
+        return;
+    }
+    const formatos = Array.isArray(layout.formatos) ? layout.formatos : [];
+    if (input) input.accept = formatos.map(formato => ({ PDF: 'application/pdf,.pdf', CSV: '.csv,text/csv', XLSX: '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }[formato] || `.${String(formato).toLowerCase()}`)).join(',');
+    if (tipo) tipo.textContent = `${formatos.join(' / ') || 'Arquivo'} de até 20 MB`;
+    if (layout.habilitado) {
+        _setLayoutStatus(`${layout.status}: ${layout.descricao}`, 'success');
+        if (botao) { botao.disabled = false; botao.title = ''; }
+    } else {
+        _setLayoutStatus(`${layout.status}: ${layout.descricao}`, 'warning');
+        if (botao) { botao.disabled = true; botao.title = 'Este layout ainda não está homologado.'; }
+    }
+}
+
+function _setLayoutStatus(texto, tipo) {
+    const status = document.getElementById('inad-layout-status');
+    if (!status) return;
+    status.textContent = texto;
+    status.className = `inad-layout-status ${tipo || ''}`;
+}
+
+function _rotuloLayout(item) {
+    const layout = _layouts.find(candidate => candidate.id === item?.layout_id);
+    return layout?.nome || item?.fonte_sistema || 'BRCondos';
+}
+
 async function _restaurarUltimoSnapshot() {
     try {
         const historico = await _api('listar_importacoes', { params: { pagina: 1, por_pagina: 1 } });
@@ -139,11 +208,14 @@ async function _importar(event) {
     event.preventDefault();
     const input = document.getElementById('inad-arquivo');
     const arquivo = input?.files?.[0];
-    if (!arquivo) { _flash('Selecione o PDF de Inadimplência Detalhado antes de importar.', 'error'); return; }
+    if (!arquivo) { _flash('Selecione o arquivo do relatório de inadimplência antes de importar.', 'error'); return; }
+    const layout = _layoutSelecionado();
+    if (!layout) { _flash('Selecione a empresa e o layout de origem antes de importar.', 'error'); return; }
+    if (!layout.habilitado) { _flash('Este layout está catalogado para implementação futura e ainda não está homologado.', 'info'); return; }
     const botao = document.getElementById('inad-btn-importar');
     botao.disabled = true; botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando e analisando...';
     try {
-        const form = new FormData(); form.append('arquivo', arquivo);
+        const form = new FormData(); form.append('arquivo', arquivo); form.append('layout_id', layout.id);
         const dados = await _api('importar', { method: 'POST', body: form });
         input.value = ''; document.getElementById('inad-arquivo-nome').textContent = 'Nenhum arquivo selecionado';
         const feedback = document.getElementById('inad-import-feedback');
@@ -219,8 +291,8 @@ function _renderHistoricoGrafico(historico) {
 function _renderMudancas(mudancas) { _renderListaMudancas('inad-mudancas-novo', mudancas.NOVO, 'Nenhuma nova unidade'); _renderListaMudancas('inad-mudancas-evoluindo', mudancas.EVOLUINDO, 'Nenhuma piora relevante'); _renderListaMudancas('inad-mudancas-quitado', [...(mudancas.QUITADO||[]),...(mudancas.CORRIGIDO||[])], 'Nenhuma regularização identificada'); }
 function _renderListaMudancas(id, lista, vazio) { const el=document.getElementById(id); const itens=(lista||[]).slice(0,5); el.innerHTML=itens.length?itens.map(i=>`<li><strong>Gleba ${_esc(i.gleba_numero)}</strong><span>${i.delta>=0?'+':''}${_fmtMoeda(i.delta)}</span></li>`).join(''):`<li><span>${_esc(vazio)}</span></li>`; }
 function _renderHeuristica(h) { _setText('inad-heuristica-texto', h.mensagem || '—'); const el=document.getElementById('inad-risco-alto'); const itens=h.risco_alto||[]; el.innerHTML=itens.length?itens.map(i=>`<span class="inad-risk-chip"><i class="fas fa-exclamation-circle"></i> Gleba ${_esc(i.gleba_numero)} · ${_fmtMoeda(i.delta)}</span>`).join(''):'<span class="inad-risk-empty">Nenhuma unidade atingiu o critério de duas evoluções consecutivas.</span>'; }
-function _renderSelectImportacoes(itens, atualId) { const select=document.getElementById('inad-importacao-select'); select.innerHTML=itens.slice().reverse().map(i=>`<option value="${i.id}">${_esc(_fmtData(i.data_base))} · ${_fmtMoeda(i.total_projetado)}</option>`).join(''); select.value=String(atualId); }
-function _renderHistorico(itens, atualId) { const el=document.getElementById('inad-historico-body'); const rows=itens.slice().reverse(); el.innerHTML=rows.map(i=>`<tr${Number(i.id)===Number(atualId)?' class="row-active"':''}><td>${_esc(_fmtData(i.data_base))}</td><td>${_esc(i.nome_arquivo||'Relatório BRCondos')}</td><td>${_fmtNumero(i.quantidade_unidades)}</td><td>${_fmtMoeda(i.total_lancado)}</td><td><strong>${_fmtMoeda(i.total_projetado)}</strong></td><td>${Number(i.totais_reconciliam)?'<span class="inad-validation-ok"><i class="fas fa-check-circle"></i> Conciliado</span>':'<span class="inad-validation-warn"><i class="fas fa-exclamation-triangle"></i> Revisar</span>'}</td><td><button type="button" class="inad-history-btn" data-importacao-id="${i.id}">Revisar</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty-table">Nenhum snapshot encontrado.</td></tr>'; }
+function _renderSelectImportacoes(itens, atualId) { const select=document.getElementById('inad-importacao-select'); select.innerHTML=itens.slice().reverse().map(i=>`<option value="${i.id}">${_esc(_fmtData(i.data_base))} · ${_esc(_rotuloLayout(i))} · ${_fmtMoeda(i.total_projetado)}</option>`).join(''); select.value=String(atualId); }
+function _renderHistorico(itens, atualId) { const el=document.getElementById('inad-historico-body'); const rows=itens.slice().reverse(); el.innerHTML=rows.map(i=>`<tr${Number(i.id)===Number(atualId)?' class="row-active"':''}><td>${_esc(_fmtData(i.data_base))}</td><td><strong>${_esc(_rotuloLayout(i))}</strong><br><small>${_esc(i.nome_arquivo||'Relatório')}</small></td><td>${_fmtNumero(i.quantidade_unidades)}</td><td>${_fmtMoeda(i.total_lancado)}</td><td><strong>${_fmtMoeda(i.total_projetado)}</strong></td><td>${Number(i.totais_reconciliam)?'<span class="inad-validation-ok"><i class="fas fa-check-circle"></i> Conciliado</span>':'<span class="inad-validation-warn"><i class="fas fa-exclamation-triangle"></i> Revisar</span>'}</td><td><button type="button" class="inad-history-btn" data-importacao-id="${i.id}">Revisar</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty-table">Nenhum snapshot encontrado.</td></tr>'; }
 
 async function _carregarRanking() {
     if (!_importacaoId) return; const busca=document.getElementById('inad-busca')?.value||''; const carteira=document.getElementById('inad-carteira-filtro')?.value||''; const ordem=document.getElementById('inad-ordem')?.value||'divida_desc';

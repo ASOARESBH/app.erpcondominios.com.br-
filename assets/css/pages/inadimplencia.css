@@ -13,6 +13,14 @@
 .page-inadimplencia .inad-section-head h2 { margin:0 0 5px; font-size:1.08rem; color:var(--color-text,#0f172a); }
 .page-inadimplencia .inad-section-head h2 i { color:var(--inad-amber); margin-right:6px; }
 .page-inadimplencia .inad-section-head p { margin:0; font-size:.87rem; color:var(--color-text-secondary,#64748b); line-height:1.45; }
+.page-inadimplencia .inad-layout-selector { display:grid; grid-template-columns:minmax(280px,1fr) minmax(240px,1.2fr); gap:8px 14px; align-items:end; margin:0 0 14px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; }
+.page-inadimplencia .inad-layout-field { display:grid; gap:5px; }
+.page-inadimplencia .inad-layout-field label { font-size:.78rem; color:#475569; font-weight:700; }
+.page-inadimplencia .inad-layout-status { min-height:20px; padding:7px 10px; border-radius:7px; background:#f1f5f9; color:#475569; font-size:.78rem; line-height:1.35; }
+.page-inadimplencia .inad-layout-status.success { background:#ecfdf5; color:#047857; }
+.page-inadimplencia .inad-layout-status.warning { background:#fffbeb; color:#92400e; }
+.page-inadimplencia .inad-layout-status.error { background:#fef2f2; color:#991b1b; }
+.page-inadimplencia .inad-layout-help { grid-column:1 / -1; margin:0; color:#64748b; font-size:.76rem; line-height:1.4; }
 .page-inadimplencia .inad-badge { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; padding:6px 10px; border-radius:99px; background:#ecfdf5; color:#047857; font-size:.75rem; font-weight:700; }
 .page-inadimplencia .inad-badge-neutral { background:#f1f5f9; color:#475569; white-space:normal; text-align:center; }
 .page-inadimplencia .inad-upload-row { display:flex; align-items:center; gap:12px; padding:13px; background:linear-gradient(135deg,#fffbeb,#fff7ed); border:1px dashed #f59e0b; border-radius:12px; }
@@ -35,6 +43,7 @@
 @media (max-width: 1024px) { .page-inadimplencia .inad-insights-grid { grid-template-columns:1fr; }.page-inadimplencia .inad-changes-grid { grid-template-columns:1fr; }.page-inadimplencia .inad-change { min-height:0; } }
 @media (max-width: 720px) { .page-inadimplencia .inad-header,.page-inadimplencia .inad-section-head,.page-inadimplencia .inad-ranking-head { flex-direction:column; }.page-inadimplencia .inad-header-actions { width:100%; }.page-inadimplencia .inad-header-actions button { flex:1; }.page-inadimplencia .inad-upload-row { align-items:stretch; flex-direction:column; }.page-inadimplencia .inad-file-picker { width:100%; }.page-inadimplencia .inad-file-name { white-space:normal; }.page-inadimplencia .inad-upload-row button { width:100%; }.page-inadimplencia .inad-badge { white-space:normal; }.page-inadimplencia .inad-filters { flex-wrap:wrap; }.page-inadimplencia .inad-filters .input-wrapper,.page-inadimplencia .inad-filters select,.page-inadimplencia .inad-filters button { flex:1 1 100%; width:100%; }.page-inadimplencia .inad-select-import { width:100%; }.page-inadimplencia .inad-select-import select { flex:1; }.page-inadimplencia .inad-bar-row { grid-template-columns:110px 1fr; }.page-inadimplencia .inad-bar-value { grid-column:2; }.page-inadimplencia .inad-pagination { justify-content:center; } }
 @media print { .page-inadimplencia .inad-header-actions,.page-inadimplencia .inad-import-card,.page-inadimplencia .inad-filters,.page-inadimplencia .inad-pagination,.page-inadimplencia .inad-history-card,.page-inadimplencia .inad-select-import { display:none!important; }.page-inadimplencia .page-card { break-inside:avoid; box-shadow:none; border:1px solid #cbd5e1; }.page-inadimplencia .inad-changes-grid { grid-template-columns:repeat(3,1fr); } }
+@media (max-width: 720px) { .page-inadimplencia .inad-layout-selector { grid-template-columns:1fr; }.page-inadimplencia .inad-layout-help { grid-column:auto; } }
 .page-inadimplencia .inad-gestao-card { margin-bottom:18px; border-top:3px solid #0f766e; }
 .page-inadimplencia .inad-gestao-resumo { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
 .page-inadimplencia .inad-gestao-metrica { display:flex; flex-direction:column; gap:3px; padding:12px; border-radius:9px; background:#f8fafc; border:1px solid #e2e8f0; }

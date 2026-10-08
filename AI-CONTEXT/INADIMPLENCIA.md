@@ -4,19 +4,23 @@
 
 O módulo `inadimplencia` importa o **Relatório de Inadimplência Detalhado** do BRCondos em PDF e transforma cada arquivo em um snapshot histórico isolado pelo `tenant_id` da sessão. Ele é destinado à análise gerencial; não cria, baixa, negocia nem altera títulos financeiros operacionais.
 
+A tela também mantém um catálogo explícito de cinco fontes/layouts prioritários para evolução futura: **BRCondos**, **Superlógica**, **Ahreas**, **TownSq** e **PACTO**. Somente o layout `brcondos-inadimplencia-detalhado-v1` está `HOMOLOGADO` e habilitado para importação; os demais aparecem como `PLANEJADO` para não induzir o usuário a enviar um arquivo de origem desconhecida ao parser BRCondos.
+
 A tela é carregada pela rota `layout-base.html?page=inadimplencia`, acessível em **Financeiro → Inadimplência** para perfis a partir de `gerente` e Super-Admin conforme a política de módulos.
 
 ## Persistência
 
 | Tabela | Finalidade | Isolamento obrigatório |
 |---|---|---|
-| `inadimplencia_importacoes` | Cabeçalho e totais de cada PDF importado | `tenant_id` em toda leitura e escrita |
+| `inadimplencia_importacoes` | Cabeçalho, origem/layout e totais de cada arquivo importado | `tenant_id` em toda leitura e escrita |
 | `inadimplencia_lancamentos` | Linhas normalizadas do relatório e chaves de comparação | `tenant_id` e `importacao_id` |
 | `tenant_arquivos` | PDF original preservado como BLOB | referência vinculada ao tenant |
 | `tenant_arquivo_referencias` | Evidência entre PDF e importação | `arquivo_id` do BLOB já isolado |
 | `logs_financeiro` | Auditoria de importação, parser e reconciliação | contexto da requisição e usuário |
 
 A migration explícita é `sql/migration_inadimplencia_mysql57.sql`. A API também verifica as duas tabelas de domínio antes de operar para evitar uma falha de primeira execução, mas a migration continua obrigatória no processo de deploy.
+
+As colunas `fonte_sistema`, `layout_id` e `layout_versao` registram o adaptador escolhido em cada snapshot. A API executa uma migração aditiva idempotente dessas colunas para instalações antigas; registros anteriores recebem os defaults do parser BRCondos.
 
 ## Parser BRCondos
 
@@ -43,6 +47,7 @@ A ordenação do ranking é uma lista branca fixa no backend. A tela escapa cont
 | Ação | Método | Descrição |
 |---|---|---|
 | `importar` | POST | Recebe PDF, persiste BLOB, processa e cria snapshot |
+| `catalogo_layouts` | GET | Lista as fontes, variantes, formatos, campos candidatos e status de homologação |
 | `dashboard` | GET | KPIs, carteiras, histórico, comparação e heurística |
 | `listar_importacoes` | GET | Histórico paginado de snapshots |
 | `ranking` | GET | Ranking paginado e filtrado por Gleba/morador/carteira |
@@ -51,6 +56,8 @@ A ordenação do ranking é uma lista branca fixa no backend. A tela escapa cont
 | `exportar_csv` | GET | Exportação UTF-8 BOM do ranking selecionado |
 
 A saída PDF usa o fluxo padrão do ERP: o botão **Gerar PDF** abre a visualização de impressão do navegador, onde o usuário salva em PDF. O CSV contém o ranking visível sem alterar dados.
+
+O POST recebe `layout_id`. Layouts `PLANEJADO` são rejeitados com `codigo=LAYOUT_NAO_HOMOLOGADO`; não há fallback silencioso para BRCondos. Cada snapshot concluído devolve e persiste a fonte, o identificador e a versão do layout, permitindo adicionar adaptadores sem sobrescrever o parser existente.
 
 ## Validação de referência
 
@@ -63,4 +70,3 @@ A tabela adicional `inadimplencia_comparacoes` mantém um único resumo para cad
 Na conclusão de uma importação, o resumo é gravado na mesma transação dos lançamentos. Para snapshots históricos já existentes, o dashboard gera esse resumo de forma idempotente na primeira consulta. A tela inicia consultando apenas o histórico: ela recupera o último snapshot `CONCLUIDO` quando há dados persistidos e mantém somente o formulário de PDF para tenants que ainda não têm importações.
 
 O painel **Prioridades do gestor** usa exclusivamente dados armazenados nos snapshots. Ele destaca novas inadimplências, aumentos de dívida, regularizações e risco alto por duas evoluções consecutivas; trata relatórios iguais como **Sem alteração relevante** e não executa previsão automática de cobrança.
-

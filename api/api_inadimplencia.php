@@ -36,6 +36,7 @@ $acao = strtolower(trim((string)($_GET['acao'] ?? $_POST['acao'] ?? '')));
 try {
     switch ($acao) {
         case 'importar':              _importar(); break;
+        case 'catalogo_layouts':      _catalogoLayouts(); break;
         case 'dashboard':             _dashboard(); break;
         case 'listar_importacoes':    _listarImportacoes(); break;
         case 'ranking':               _ranking(); break;
@@ -50,6 +51,92 @@ try {
     retornar_json(false, 'Não foi possível concluir a operação de inadimplência.');
 }
 
+function _catalogoLayoutsDados() {
+    return [
+        [
+            'id' => 'brcondos-inadimplencia-detalhado-v1',
+            'fonte_sistema' => 'BRCONDOS',
+            'empresa' => 'BRCondos',
+            'nome' => 'BRCondos — Inadimplência Detalhada',
+            'versao' => '1',
+            'status' => 'HOMOLOGADO',
+            'habilitado' => true,
+            'formatos' => ['PDF'],
+            'variantes' => ['Relatório de Inadimplência Detalhado'],
+            'campos_futuros' => ['Gleba', 'proprietário', 'CPF', 'carteira', 'vencimento', 'valor', 'juros', 'multa', 'correção', 'projeção'],
+            'descricao' => 'Parser atual em produção; preserva comparação histórica, vínculos e reconciliação.',
+            'fontes' => ['https://brcondos.com.br/administracao-de-condominio/', 'https://blog.brcondos.com.br/brcondos-prestacao-de-contas/']
+        ],
+        [
+            'id' => 'superlogica-inadimplencia-v1',
+            'fonte_sistema' => 'SUPERLOGICA',
+            'empresa' => 'Superlógica',
+            'nome' => 'Superlógica — Inadimplência 001B/002C/003A',
+            'versao' => '1',
+            'status' => 'PLANEJADO',
+            'habilitado' => false,
+            'formatos' => ['CSV', 'XLSX'],
+            'variantes' => ['001B — Resumo da inadimplência', '002C — Inadimplência detalhada/composição', '003A — Inadimplência horizontal'],
+            'campos_futuros' => ['unidade', 'valor em aberto', 'quantidade de cobranças', 'data de referência', 'status financeiro'],
+            'descricao' => 'Catálogo futuro. A exportação é documentada, mas o schema real ainda precisa de amostra autorizada.',
+            'fontes' => ['https://condominios.superlogica.com/hc/pt-br/articles/40637797648535-Como-gerar-Relat%C3%B3rios-dispon%C3%ADveis-para-acompanhamento-do-Saldo-da-unidade', 'https://condominios.superlogica.com/hc/pt-br/articles/41295059929623-Como-gerar-Gerar-relat%C3%B3rios-em-CSV-e-Excel']
+        ],
+        [
+            'id' => 'ahreas-inadimplencia-v1',
+            'fonte_sistema' => 'AHREAS',
+            'empresa' => 'Ahreas — Grupo Superlógica',
+            'nome' => 'Ahreas — Inadimplência e cobrança',
+            'versao' => '1',
+            'status' => 'PLANEJADO',
+            'habilitado' => false,
+            'formatos' => ['PDF', 'CSV', 'XLSX'],
+            'variantes' => ['Relatório de inadimplência', 'Planilha discriminada de débito'],
+            'campos_futuros' => ['unidade', 'principal', 'correção', 'juros', 'multa', 'acordo', 'jurídico', 'status da cobrança'],
+            'descricao' => 'Catálogo futuro. Não confundir relatório de inadimplência com arquivo de retorno bancário.',
+            'fontes' => ['https://ahreas.com/administradoras-de-condominio-como-ter-total-controle-sobre-a-inadimplencia/', 'https://ahreas.zendesk.com/hc/pt-br/articles/31412028365207-Inadimpl%C3%AAncia-Zero']
+        ],
+        [
+            'id' => 'townsq-inadimplencia-v1',
+            'fonte_sistema' => 'TOWNSQ',
+            'empresa' => 'TownSq',
+            'nome' => 'TownSq — Relatório financeiro/inadimplência',
+            'versao' => '1',
+            'status' => 'PLANEJADO',
+            'habilitado' => false,
+            'formatos' => ['PDF', 'CSV', 'XLSX'],
+            'variantes' => ['Lista de inadimplentes', 'Relatório financeiro'],
+            'campos_futuros' => ['unidade', 'valor da dívida', 'taxa de inadimplência', 'acordo', 'período', 'status'],
+            'descricao' => 'Catálogo futuro. A extensão e o cabeçalho do relatório precisam ser confirmados por amostra.',
+            'fontes' => ['https://townsq.com.br/', 'https://contato.townsq.com.br/prestacao-de-contas-sindico-condominio/']
+        ],
+        [
+            'id' => 'pacto-inadimplencia-v1',
+            'fonte_sistema' => 'PACTO',
+            'empresa' => 'PACTO',
+            'nome' => 'PACTO — Área do Cliente/App',
+            'versao' => '1',
+            'status' => 'PLANEJADO',
+            'habilitado' => false,
+            'formatos' => ['PDF', 'CSV', 'XLSX'],
+            'variantes' => ['Débitos atualizados', 'Extrato/balancete', 'Relatório de cobrança'],
+            'campos_futuros' => ['unidade', 'condômino', 'valor do débito', 'vencimento', 'situação', 'negociação'],
+            'descricao' => 'Catálogo futuro. A Área do Cliente comprova os dados, mas não publica layout de exportação.',
+            'fontes' => ['https://pactonet.com.br/', 'https://pactonet.com.br/?page_id=379']
+        ]
+    ];
+}
+
+function _catalogoLayouts() {
+    retornar_json(true, 'Catálogo de layouts carregado.', ['layouts' => _catalogoLayoutsDados()]);
+}
+
+function _obterLayoutInadimplencia($layoutId) {
+    foreach (_catalogoLayoutsDados() as $layout) {
+        if ($layout['id'] === $layoutId) return $layout;
+    }
+    return null;
+}
+
 function _garantirTabelas() {
     global $conn;
     $sqlImportacoes = "CREATE TABLE IF NOT EXISTS `inadimplencia_importacoes` (
@@ -57,6 +144,9 @@ function _garantirTabelas() {
         `tenant_id` int(11) NOT NULL,
         `arquivo_id` int(11) DEFAULT NULL,
         `nome_arquivo` varchar(255) NOT NULL,
+        `fonte_sistema` varchar(60) NOT NULL DEFAULT 'BRCONDOS',
+        `layout_id` varchar(100) NOT NULL DEFAULT 'brcondos-inadimplencia-detalhado-v1',
+        `layout_versao` varchar(20) NOT NULL DEFAULT '1',
         `associacao_nome` varchar(255) DEFAULT NULL,
         `data_base` date DEFAULT NULL,
         `data_geracao_relatorio` datetime DEFAULT NULL,
@@ -139,11 +229,32 @@ function _garantirTabelas() {
     if (!$conn->query($sqlImportacoes) || !$conn->query($sqlLancamentos) || !$conn->query($sqlComparacoes)) {
         throw new RuntimeException('Falha ao preparar tabelas de inadimplência: ' . $conn->error);
     }
+    _inadGarantirColuna('inadimplencia_importacoes', 'fonte_sistema', "VARCHAR(60) NOT NULL DEFAULT 'BRCONDOS' AFTER nome_arquivo");
+    _inadGarantirColuna('inadimplencia_importacoes', 'layout_id', "VARCHAR(100) NOT NULL DEFAULT 'brcondos-inadimplencia-detalhado-v1' AFTER fonte_sistema");
+    _inadGarantirColuna('inadimplencia_importacoes', 'layout_versao', "VARCHAR(20) NOT NULL DEFAULT '1' AFTER layout_id");
+}
+
+function _inadGarantirColuna($tabela, $coluna, $definicao) {
+    global $conn;
+    $stmt = $conn->prepare('SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?');
+    $stmt->bind_param('ss', $tabela, $coluna);
+    $stmt->execute();
+    $existe = (int)$stmt->get_result()->fetch_assoc()['total'] > 0;
+    $stmt->close();
+    if (!$existe && !$conn->query("ALTER TABLE `$tabela` ADD COLUMN `$coluna` $definicao")) {
+        throw new RuntimeException('Falha ao atualizar o schema de inadimplência: ' . $conn->error);
+    }
 }
 
 function _importar() {
     global $conn, $tenant_id, $usuario_nome, $usuario_id;
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') retornar_json(false, 'Método inválido. Use POST.');
+    $layoutId = trim((string)($_POST['layout_id'] ?? 'brcondos-inadimplencia-detalhado-v1'));
+    $layout = _obterLayoutInadimplencia($layoutId);
+    if (!$layout) retornar_json(false, 'Layout de inadimplência inválido. Selecione uma opção do catálogo.');
+    if (!$layout['habilitado']) {
+        retornar_json(false, 'O layout ' . $layout['nome'] . ' está catalogado para implementação futura e ainda não está homologado para importação.', ['codigo' => 'LAYOUT_NAO_HOMOLOGADO', 'layout_id' => $layout['id'], 'status' => $layout['status']]);
+    }
     if (empty($_FILES['arquivo']['tmp_name'])) retornar_json(false, 'Selecione o relatório PDF de inadimplência.');
 
     $arquivo = $_FILES['arquivo'];
@@ -158,9 +269,9 @@ function _importar() {
     if (!in_array($mime, ['application/pdf', 'application/x-pdf', 'application/octet-stream'], true)) {
         retornar_json(false, 'O arquivo enviado não foi reconhecido como PDF.');
     }
-    $inicio_importacao = log_fin_inicio('inadimplencia', 'importar', 'Iniciando importação do relatório ' . $nome);
-    $stmt = $conn->prepare('INSERT INTO inadimplencia_importacoes (tenant_id,nome_arquivo,status,usuario) VALUES (?,?,\'PROCESSANDO\',?)');
-    $stmt->bind_param('iss', $tenant_id, $nome, $usuario_nome);
+    $inicio_importacao = log_fin_inicio('inadimplencia', 'importar', 'Iniciando importação ' . $layout['id'] . ' do relatório ' . $nome);
+    $stmt = $conn->prepare('INSERT INTO inadimplencia_importacoes (tenant_id,nome_arquivo,fonte_sistema,layout_id,layout_versao,status,usuario) VALUES (?,?,?,?,?,\'PROCESSANDO\',?)');
+    $stmt->bind_param('isssss', $tenant_id, $nome, $layout['fonte_sistema'], $layout['id'], $layout['versao'], $usuario_nome);
     $stmt->execute();
     $importacao_id = (int)$conn->insert_id;
     $stmt->close();
@@ -241,6 +352,9 @@ function _importar() {
         'total_sem_vinculo' => $sem_vinculo,
         'totais_reconciliam' => (bool)$reconciliam,
         'alerta_reconciliacao' => $alerta,
+        'fonte_sistema' => $layout['fonte_sistema'],
+        'layout_id' => $layout['id'],
+        'layout_versao' => $layout['versao'],
         'comparacao' => $comparacaoPersistida,
         'avisos' => $parse['avisos']
     ]);
@@ -342,7 +456,7 @@ function _dashboard() {
     $comparacao = _compararDados((int)$atual['id'], $anterior ? (int)$anterior['id'] : 0);
     $ranking = _obterRanking((int)$atual['id'], ['limite' => 50]);
     $historico = [];
-    $stmt = $conn->prepare("SELECT id,nome_arquivo,data_base,total_projetado,total_lancado,quantidade_unidades,totais_reconciliam,status,criado_em FROM inadimplencia_importacoes WHERE tenant_id=? AND status='CONCLUIDO' ORDER BY data_base ASC,id ASC");
+    $stmt = $conn->prepare("SELECT id,nome_arquivo,fonte_sistema,layout_id,layout_versao,data_base,total_projetado,total_lancado,quantidade_unidades,totais_reconciliam,status,criado_em FROM inadimplencia_importacoes WHERE tenant_id=? AND status='CONCLUIDO' ORDER BY data_base ASC,id ASC");
     $stmt->bind_param('i', $tenant_id); $stmt->execute(); $res = $stmt->get_result(); while ($r = $res->fetch_assoc()) $historico[] = $r; $stmt->close();
     $carteiras = _distribuicaoCarteira((int)$atual['id']);
     $judicial = 0; foreach ($ranking as $r) if ((int)$r['permite_receber'] === 0 || stripos((string)$r['carteira_status'], 'JUDICIAL') !== false) $judicial++;

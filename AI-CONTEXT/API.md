@@ -76,6 +76,12 @@ O GET padrão de `api/api_registros.php` aceita filtros server-side de período,
 
 No POST manual, a unidade de Visitante/Prestador é resolvida novamente pelo `morador_id` do destino dentro do tenant, e a unidade do Morador é sempre obtida do cadastro oficial. O valor enviado pelo navegador não pode substituir a unidade persistida.
 
+## 8.1 Inadimplência — catálogo de fontes e layouts
+
+`GET api/api_inadimplencia.php?acao=catalogo_layouts` retorna cinco perfis versionados para importação futura: `BRCONDOS`, `SUPERLOGICA`, `AHREAS`, `TOWNSQ` e `PACTO`. O perfil `brcondos-inadimplencia-detalhado-v1` é o único com `habilitado: true` e mantém o parser PDF já homologado. Os demais são `PLANEJADO`: a tela exibe a fonte, formatos e campos candidatos, mas não permite importar nem faz fallback silencioso para o parser BRCondos.
+
+`POST api/api_inadimplencia.php?acao=importar` recebe `layout_id` junto do arquivo. O backend valida o catálogo antes de armazenar o BLOB; layouts não homologados retornam `codigo: LAYOUT_NAO_HOMOLOGADO`. A tabela `inadimplencia_importacoes` preserva `fonte_sistema`, `layout_id` e `layout_versao` para que futuros adaptadores sejam aditivos, versionados e auditáveis por tenant.
+
 ## 9. Usuários — perfis e permissões por módulo
 
 `PUT /api/api_usuarios.php` mantém `usuarios.permissao`, `usuario_tenant.permissao` e o grupo RBAC de compatibilidade (`compat-visualizador`, `compat-operador`, `compat-gerente` ou `compat-admin`) sincronizados no mesmo tenant. Ao trocar o perfil, somente o grupo compatível anterior é desativado; grupos personalizados e exceções individuais permanecem preservados.

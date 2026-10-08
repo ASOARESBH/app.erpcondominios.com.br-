@@ -5,7 +5,7 @@
         <div>
             <div class="inad-breadcrumb"><a href="#" data-nav-financeiro>Financeiro</a><span>/</span><span>Inadimplência</span></div>
             <h1><i class="fas fa-user-clock"></i> Inadimplência</h1>
-            <p>Importe relatórios BRCondos, acompanhe a carteira de cobrança e compare a evolução por unidade.</p>
+            <p>Importe relatórios de inadimplência, acompanhe a carteira de cobrança e compare a evolução por unidade.</p>
         </div>
         <div class="inad-header-actions">
             <button type="button" class="btn-secondary-modern" id="inad-btn-pdf"><i class="fas fa-file-pdf"></i> Gerar PDF</button>
@@ -18,15 +18,25 @@
     <section class="page-card inad-import-card" aria-labelledby="inad-import-title">
         <div class="inad-section-head">
             <div>
-                <h2 id="inad-import-title"><i class="fas fa-file-import"></i> Importar relatório BRCondos</h2>
-                <p>Envie o PDF de Inadimplência Detalhado. O snapshot será preservado para comparação histórica.</p>
+                <h2 id="inad-import-title"><i class="fas fa-file-import"></i> Importar relatório de inadimplência</h2>
+                <p>Selecione a empresa e o layout de origem. O snapshot será preservado para comparação histórica.</p>
             </div>
             <span class="inad-badge"><i class="fas fa-shield-alt"></i> Dados isolados por condomínio</span>
+        </div>
+        <div class="inad-layout-selector">
+            <div class="inad-layout-field">
+                <label for="inad-layout-select">Empresa / layout de origem</label>
+                <select id="inad-layout-select" class="form-control">
+                    <option value="">Carregando catálogo...</option>
+                </select>
+            </div>
+            <div id="inad-layout-status" class="inad-layout-status" role="status" aria-live="polite">Consultando layouts disponíveis...</div>
+            <p id="inad-layout-help" class="inad-layout-help">O BRCondos usa o parser homologado atual. Os demais layouts ficam catalogados para homologação futura.</p>
         </div>
         <form id="inad-form-importacao" class="inad-upload-row" novalidate>
             <label class="inad-file-picker" for="inad-arquivo">
                 <i class="fas fa-file-pdf"></i>
-                <span><strong>Selecionar PDF</strong><small>Relatório BRCondos de até 20 MB</small></span>
+                <span><strong>Selecionar arquivo</strong><small id="inad-arquivo-tipo">PDF de até 20 MB</small></span>
             </label>
             <input id="inad-arquivo" name="arquivo" type="file" accept="application/pdf,.pdf" required hidden>
             <span id="inad-arquivo-nome" class="inad-file-name">Nenhum arquivo selecionado</span>
@@ -38,7 +48,7 @@
     <section id="inad-empty" class="page-card inad-empty-state" hidden>
         <i class="fas fa-chart-line"></i>
         <h2>Nenhum relatório importado</h2>
-        <p>Importe o primeiro Relatório de Inadimplência Detalhado do BRCondos para montar a carteira de cobrança deste condomínio.</p>
+        <p>Importe o primeiro relatório homologado para montar a carteira de cobrança deste condomínio.</p>
     </section>
 
     <div id="inad-dashboard" hidden>
@@ -97,7 +107,7 @@
 
         <section class="page-card inad-history-card">
             <div class="inad-section-head"><div><h2>Histórico de importações</h2><p>Todos os relatórios permanecem disponíveis como snapshots auditáveis.</p></div></div>
-            <div class="table-responsive"><table class="data-table"><thead><tr><th>Data base</th><th>Arquivo</th><th>Unidades</th><th>Lançado</th><th>Projetado</th><th>Validação</th><th>Ação</th></tr></thead><tbody id="inad-historico-body"></tbody></table></div>
+            <div class="table-responsive"><table class="data-table"><thead><tr><th>Data base</th><th>Origem / arquivo</th><th>Unidades</th><th>Lançado</th><th>Projetado</th><th>Validação</th><th>Ação</th></tr></thead><tbody id="inad-historico-body"></tbody></table></div>
         </section>
     </div>
 </div>
