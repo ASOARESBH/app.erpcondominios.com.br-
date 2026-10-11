@@ -83,6 +83,24 @@ function _garantir_indice_unico($conexao, $tabela, $nomeIndice, $definicaoColuna
     }
 }
 
+function _garantir_registro_titular_nulo($conexao) {
+    $resultado = @$conexao->query(
+        "SHOW COLUMNS FROM `registros_acesso` LIKE 'registro_titular_id'"
+    );
+    $coluna = $resultado ? $resultado->fetch_assoc() : null;
+    if ($resultado) $resultado->free();
+    if (!$coluna || strtoupper((string)($coluna['Null'] ?? '')) === 'YES') return;
+
+    // Instalações antigas criaram o campo como NOT NULL DEFAULT 0.
+    // O titular precisa aceitar NULL; zero não é um ID de titular válido.
+    $tipo = preg_replace('/[^a-zA-Z0-9_(), ]/', '', (string)($coluna['Type'] ?? 'INT'));
+    if ($tipo === '') $tipo = 'INT';
+    @$conexao->query("ALTER TABLE `registros_acesso` MODIFY COLUMN `registro_titular_id` $tipo NULL DEFAULT NULL");
+    if ($conexao->errno && $conexao->errno !== 1060) {
+        log_registro('ERRO ao normalizar registro_titular_id', ['erro' => $conexao->error, 'errno' => $conexao->errno]);
+    }
+}
+
 // Garantir colunas novas (cria automaticamente se não existirem)
 _garantir_coluna($conexao, 'registros_acesso', 'tipo_acesso',    "ENUM('Entrada','Saída') DEFAULT 'Entrada'");
 _garantir_coluna($conexao, 'registros_acesso', 'dependente_id',  "INT NULL DEFAULT NULL");
@@ -94,6 +112,7 @@ _garantir_coluna($conexao, 'registros_acesso', 'documento_visitante', "VARCHAR(3
 // sem que os dois papéis se confundam no histórico.
 _garantir_coluna($conexao, 'registros_acesso', 'papel_veiculo',  "ENUM('TITULAR','OCUPANTE') NOT NULL DEFAULT 'TITULAR'");
 _garantir_coluna($conexao, 'registros_acesso', 'registro_titular_id', "INT NULL DEFAULT NULL");
+_garantir_registro_titular_nulo($conexao);
 _garantir_coluna($conexao, 'registros_acesso', 'modo_registro', "ENUM('VEICULO','PEDESTRE') NOT NULL DEFAULT 'VEICULO'");
 _garantir_coluna($conexao, 'registros_acesso', 'vestimenta',    "VARCHAR(120) NULL DEFAULT NULL");
 _garantir_coluna($conexao, 'registros_acesso', 'usuario_liberou', "VARCHAR(150) NULL DEFAULT NULL");
@@ -194,7 +213,10 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
         array_filter(array_map('trim', explode(',', $tipo)))
     ));
 
-    $grupoExpr = 'COALESCE(r.registro_titular_id, r.id)';
+    // Registros anteriores à migração podem ter recebido 0 como valor padrão.
+    // Quando o vínculo se perdeu, recuperamos o titular pelo mesmo evento de
+    // veículo (tenant, data/hora, placa, modelo, cor, tipo e destino).
+    $grupoExpr = 'COALESCE(NULLIF(r.registro_titular_id, 0), legado.id, r.id)';
     $where = ['r.tenant_id = ?', "(r.papel_veiculo = 'OCUPANTE' OR r.papel_veiculo = 'TITULAR' OR r.papel_veiculo IS NULL)"];
     $params = [$tenant_id];
     $types = 'i';
@@ -294,6 +316,23 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
                 CASE WHEN r.papel_veiculo = 'OCUPANTE' THEN COALESCE(NULLIF(TRIM(r.tipo), ''), 'Não informado') END AS ocupante_tipo,
                 COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), ''), 'Não informado') AS unidade
             FROM registros_acesso r
+            LEFT JOIN registros_acesso legado ON r.papel_veiculo = 'OCUPANTE'
+                AND COALESCE(r.registro_titular_id, 0) = 0
+                AND legado.id = (
+                    SELECT MAX(rl.id)
+                    FROM registros_acesso rl
+                    WHERE rl.tenant_id = r.tenant_id
+                      AND (rl.papel_veiculo = 'TITULAR' OR rl.papel_veiculo IS NULL)
+                      AND rl.id < r.id
+                      AND rl.data_hora = r.data_hora
+                      AND rl.placa <=> r.placa
+                      AND rl.modelo <=> r.modelo
+                      AND rl.cor <=> r.cor
+                      AND rl.tipo <=> r.tipo
+                      AND rl.tipo_acesso <=> r.tipo_acesso
+                      AND rl.morador_id <=> r.morador_id
+                      AND rl.unidade_destino <=> r.unidade_destino
+                )
             LEFT JOIN registros_acesso rt ON rt.id = $grupoExpr
                 AND rt.tenant_id = r.tenant_id AND (rt.papel_veiculo = 'TITULAR' OR rt.papel_veiculo IS NULL)
             LEFT JOIN moradores mt ON mt.id = rt.morador_id AND mt.tenant_id = r.tenant_id

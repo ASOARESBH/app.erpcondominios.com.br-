@@ -43,7 +43,7 @@ $tipos = array_values(array_intersect(
     ['Morador', 'Visitante', 'Prestador'],
     array_filter(array_map('trim', explode(',', $tipo)))
 ));
-$grupo_expr = 'COALESCE(r.registro_titular_id, r.id)';
+$grupo_expr = 'COALESCE(NULLIF(r.registro_titular_id, 0), legado.id, r.id)';
 $where = ['r.tenant_id = ?', "(r.papel_veiculo = 'OCUPANTE' OR r.papel_veiculo = 'TITULAR' OR r.papel_veiculo IS NULL)"];
 $params = [(int)$tenant_id];
 $types = 'i';
@@ -122,6 +122,23 @@ $sql = "SELECT DATE_FORMAT(r.data_hora, '%d/%m/%Y') data_fmt,
                CASE WHEN r.papel_veiculo = 'OCUPANTE' THEN COALESCE(NULLIF(TRIM(r.tipo), ''), 'Não informado') END ocupante_tipo,
                COALESCE(NULLIF(TRIM(mt.unidade), ''), NULLIF(TRIM(rt.unidade_destino), ''), NULLIF(TRIM(r.unidade_destino), ''), 'Não informado') unidade
         FROM registros_acesso r
+        LEFT JOIN registros_acesso legado ON r.papel_veiculo = 'OCUPANTE'
+            AND COALESCE(r.registro_titular_id, 0) = 0
+            AND legado.id = (
+                SELECT MAX(rl.id)
+                FROM registros_acesso rl
+                WHERE rl.tenant_id = r.tenant_id
+                  AND (rl.papel_veiculo = 'TITULAR' OR rl.papel_veiculo IS NULL)
+                  AND rl.id < r.id
+                  AND rl.data_hora = r.data_hora
+                  AND rl.placa <=> r.placa
+                  AND rl.modelo <=> r.modelo
+                  AND rl.cor <=> r.cor
+                  AND rl.tipo <=> r.tipo
+                  AND rl.tipo_acesso <=> r.tipo_acesso
+                  AND rl.morador_id <=> r.morador_id
+                  AND rl.unidade_destino <=> r.unidade_destino
+            )
         LEFT JOIN registros_acesso rt ON rt.id = $grupo_expr
             AND rt.tenant_id = r.tenant_id AND (rt.papel_veiculo = 'TITULAR' OR rt.papel_veiculo IS NULL)
         LEFT JOIN moradores mt ON mt.id = rt.morador_id AND mt.tenant_id = r.tenant_id

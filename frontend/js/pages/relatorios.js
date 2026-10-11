@@ -324,13 +324,20 @@ function aplicarBuscaLocalTabela() {
     };
 
     const correspondentes = registrosFiltrados.filter(corresponde);
-    const chavesEncontradas = new Set(correspondentes.map((r) => String(r.registro_titular_id || `sem-titular-${r.id}`)));
+    const chavesEncontradas = new Set(correspondentes.map(chaveGrupoRegistro));
     const dados = modoRelatorioOcupantes
-        ? registrosFiltrados.filter((r) => chavesEncontradas.has(String(r.registro_titular_id || `sem-titular-${r.id}`)))
+        ? registrosFiltrados.filter((r) => chavesEncontradas.has(chaveGrupoRegistro(r)))
         : correspondentes;
 
     if (modoRelatorioOcupantes) renderTabelaOcupantes(dados);
     else renderTabela(dados);
+}
+
+function chaveGrupoRegistro(registro) {
+    const idTitular = Number(registro?.registro_titular_id);
+    return Number.isInteger(idTitular) && idTitular > 0
+        ? String(idTitular)
+        : `sem-titular-${registro?.id || 'desconhecido'}`;
 }
 
 function renderTabela(lista) {
@@ -378,7 +385,7 @@ function renderTabelaOcupantes(lista) {
 
     const grupos = new Map();
     lista.forEach((r) => {
-        const chave = String(r.registro_titular_id || `sem-titular-${r.id}`);
+        const chave = chaveGrupoRegistro(r);
         if (!grupos.has(chave)) grupos.set(chave, []);
         grupos.get(chave).push(r);
     });
@@ -393,7 +400,7 @@ function renderTabelaOcupantes(lista) {
         const placa = primeiro.titular_placa || primeiro.placa || '-';
         const modelo = primeiro.titular_modelo || primeiro.modelo || '-';
         const condutor = primeiro.condutor_nome || primeiro.titular_nome || 'Condutor não identificado';
-        const groupKey = primeiro.registro_titular_id || primeiro.id;
+        const groupKey = chaveGrupoRegistro(primeiro).replace(/^sem-titular-/, '');
         linhas.push(`
             <tr class="relatorio-grupo-destino">
                 <td colspan="12">
@@ -466,7 +473,7 @@ function renderLinhaOcupante(r, papel, numero) {
 function atualizarEstatisticas(lista) {
     const total = lista.length;
     const moradores = modoRelatorioOcupantes
-        ? new Set(lista.map((r) => `${r.destino_morador_id || r.destino_morador_nome || 'sem-morador'}|${r.destino_unidade || r.unidade || ''}`)).size
+        ? new Set(lista.map(chaveGrupoRegistro)).size
         : lista.filter((r) => r.tipo === 'Morador').length;
     const visitantes = modoRelatorioOcupantes
         ? lista.filter((r) => r.ocupante_tipo === 'Visitante').length
@@ -477,7 +484,7 @@ function atualizarEstatisticas(lista) {
     const liberados = modoRelatorioOcupantes
         ? new Set(lista
             .filter((r) => Number(r.liberado) === 1 || Number(r.titular_liberado) === 1)
-            .map((r) => String(r.registro_titular_id || r.id)))
+            .map(chaveGrupoRegistro))
             .size
         : lista.filter((r) => Number(r.liberado) === 1).length;
 
