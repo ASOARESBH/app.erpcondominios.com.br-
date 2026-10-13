@@ -54,8 +54,10 @@ if ($data_fim !== '') {
 }
 if ($hora_inicio !== '') { $where[] = 'TIME(r.data_hora) >= ?'; $params[] = $hora_inicio . ':00'; $types .= 's'; }
 if ($hora_fim !== '') { $where[] = 'TIME(r.data_hora) <= ?'; $params[] = $hora_fim . ':59'; $types .= 's'; }
-if ($placa !== '') { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
-if ($modelo !== '') { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
+// O filtro identifica o veículo do grupo, mesmo quando a linha do ocupante
+// legado não possui placa/modelo preenchidos.
+if ($placa !== '') { $where[] = "COALESCE(NULLIF(TRIM(rt.placa), ''), NULLIF(TRIM(r.placa), '')) LIKE ?"; $params[] = '%' . $placa . '%'; $types .= 's'; }
+if ($modelo !== '') { $where[] = "COALESCE(NULLIF(TRIM(rt.modelo), ''), NULLIF(TRIM(r.modelo), '')) LIKE ?"; $params[] = '%' . $modelo . '%'; $types .= 's'; }
 if ($unidade !== '') {
     $operador_unidade = $unidade_exata ? '=' : 'LIKE';
     $valor_unidade = $unidade_exata ? $unidade : '%' . $unidade . '%';
@@ -125,15 +127,15 @@ $sql = "SELECT DATE_FORMAT(r.data_hora, '%d/%m/%Y') data_fmt,
         LEFT JOIN registros_acesso legado ON r.papel_veiculo = 'OCUPANTE'
             AND COALESCE(r.registro_titular_id, 0) = 0
             AND legado.id = (
-                SELECT MAX(rl.id)
+                SELECT CASE WHEN COUNT(*) = 1 THEN MAX(rl.id) ELSE NULL END
                 FROM registros_acesso rl
                 WHERE rl.tenant_id = r.tenant_id
                   AND (rl.papel_veiculo = 'TITULAR' OR rl.papel_veiculo IS NULL)
                   AND rl.id < r.id
                   AND rl.data_hora = r.data_hora
-                  AND rl.placa <=> r.placa
-                  AND rl.modelo <=> r.modelo
-                  AND rl.cor <=> r.cor
+                  AND (NULLIF(TRIM(r.placa), '') IS NULL OR rl.placa <=> r.placa)
+                  AND (NULLIF(TRIM(r.modelo), '') IS NULL OR rl.modelo <=> r.modelo)
+                  AND (NULLIF(TRIM(r.cor), '') IS NULL OR rl.cor <=> r.cor)
                   AND rl.tipo <=> r.tipo
                   AND rl.tipo_acesso <=> r.tipo_acesso
                   AND rl.morador_id <=> r.morador_id

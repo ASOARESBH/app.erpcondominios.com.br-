@@ -227,8 +227,10 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
     }
     if ($horaInicio !== '') { $where[] = 'TIME(r.data_hora) >= ?'; $params[] = $horaInicio . ':00'; $types .= 's'; }
     if ($horaFim !== '')    { $where[] = 'TIME(r.data_hora) <= ?'; $params[] = $horaFim . ':59'; $types .= 's'; }
-    if ($placa !== '')      { $where[] = 'r.placa LIKE ?'; $params[] = '%' . $placa . '%'; $types .= 's'; }
-    if ($modelo !== '')     { $where[] = 'r.modelo LIKE ?'; $params[] = '%' . $modelo . '%'; $types .= 's'; }
+    // O veículo do grupo é identificado pelo titular. Linhas filhas legadas
+    // podem não possuir placa/modelo, embora o titular recuperado em rt possua.
+    if ($placa !== '')      { $where[] = "COALESCE(NULLIF(TRIM(rt.placa), ''), NULLIF(TRIM(r.placa), '')) LIKE ?"; $params[] = '%' . $placa . '%'; $types .= 's'; }
+    if ($modelo !== '')     { $where[] = "COALESCE(NULLIF(TRIM(rt.modelo), ''), NULLIF(TRIM(r.modelo), '')) LIKE ?"; $params[] = '%' . $modelo . '%'; $types .= 's'; }
     if ($unidade !== '') {
         $operadorUnidade = $unidadeExata ? '=' : 'LIKE';
         $valorUnidade = $unidadeExata ? $unidade : '%' . $unidade . '%';
@@ -319,15 +321,15 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
             LEFT JOIN registros_acesso legado ON r.papel_veiculo = 'OCUPANTE'
                 AND COALESCE(r.registro_titular_id, 0) = 0
                 AND legado.id = (
-                    SELECT MAX(rl.id)
+                    SELECT CASE WHEN COUNT(*) = 1 THEN MAX(rl.id) ELSE NULL END
                     FROM registros_acesso rl
                     WHERE rl.tenant_id = r.tenant_id
                       AND (rl.papel_veiculo = 'TITULAR' OR rl.papel_veiculo IS NULL)
                       AND rl.id < r.id
                       AND rl.data_hora = r.data_hora
-                      AND rl.placa <=> r.placa
-                      AND rl.modelo <=> r.modelo
-                      AND rl.cor <=> r.cor
+                      AND (NULLIF(TRIM(r.placa), '') IS NULL OR rl.placa <=> r.placa)
+                      AND (NULLIF(TRIM(r.modelo), '') IS NULL OR rl.modelo <=> r.modelo)
+                      AND (NULLIF(TRIM(r.cor), '') IS NULL OR rl.cor <=> r.cor)
                       AND rl.tipo <=> r.tipo
                       AND rl.tipo_acesso <=> r.tipo_acesso
                       AND rl.morador_id <=> r.morador_id
