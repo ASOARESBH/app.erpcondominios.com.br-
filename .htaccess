@@ -79,6 +79,8 @@ RewriteRule ^ - [L]
 RewriteRule ^dashboard/?$ frontend/layout-base.html?page=dashboard [L]
 RewriteRule ^projetos/?$ projetos_publico.php [QSA,L]
 RewriteRule ^projetos/(\d+)/?$ projetos_publico.php?id=$1 [QSA,L]
+RewriteRule ^projetos/([a-z0-9][a-z0-9-]{2,59})/(\d+)/?$ projetos_publico.php?tenant_slug=$1&id=$2 [QSA,L,NE]
+RewriteRule ^projetos/([a-z0-9][a-z0-9-]{2,59})/?$ projetos_publico.php?tenant_slug=$1 [QSA,L,NE]
 
 # Fallback da SPA, preservando extensões de conteúdo estático.
 RewriteCond %{REQUEST_FILENAME} !-f

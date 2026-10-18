@@ -8,6 +8,8 @@
  * - GET  /api_empresa.php?action=obter          -> Obter dados da empresa
  * - POST /api_empresa.php?action=atualizar      -> Atualizar dados da empresa
  * - POST /api_empresa.php?action=upload_logo    -> Upload de logo
+ * - GET  /api_empresa.php?action=validar_projetos_slug&slug=... -> Validar URL pública de Projetos
+ * - POST /api_empresa.php?action=salvar_projetos_slug -> Salvar URL pública de Projetos
  * - GET  /api_empresa.php?action=validar_cnpj   -> Validar CNPJ
  * - GET  /api_empresa.php?action=buscar_cnpj    -> Buscar dados do CNPJ
  */
@@ -81,9 +83,19 @@ $usuario_id = (int)($usuario['id'] ?? $_SESSION['usuario_id'] ?? 0);
 
 $conexao = conectar_banco();
 
+function tenant_tem_coluna_projetos_slug($conexao) {
+    $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tenants' AND COLUMN_NAME = 'projetos_slug'");
+    if (!$stmt) return false;
+    $stmt->execute();
+    $linha = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return (int)($linha['total'] ?? 0) > 0;
+}
+
 function dados_empresa_consolidados($conexao, $tenant_id) {
     // tenants mantém a identidade comercial criada no Super-Admin.
-    $stmtTenant = $conexao->prepare("SELECT id, slug, razao_social, nome_fantasia, cnpj, plano, status, logo_url, email_principal, telefone, cidade, estado FROM tenants WHERE id = ? LIMIT 1");
+    $campoProjetosSlug = tenant_tem_coluna_projetos_slug($conexao) ? 'projetos_slug' : 'NULL AS projetos_slug';
+    $stmtTenant = $conexao->prepare("SELECT id, slug, {$campoProjetosSlug}, razao_social, nome_fantasia, cnpj, plano, status, logo_url, email_principal, telefone, cidade, estado FROM tenants WHERE id = ? LIMIT 1");
     if (!$stmtTenant) return null;
     $stmtTenant->bind_param('i', $tenant_id);
     $stmtTenant->execute();
@@ -125,6 +137,8 @@ function dados_empresa_consolidados($conexao, $tenant_id) {
 
     return [
         'id' => (int)($empresa['id'] ?? 0), 'tenant_id' => (int)$tenant_id, 'slug' => $tenant['slug'],
+        'projetos_slug' => $tenant['projetos_slug'] ?? null,
+        'projetos_url' => projetos_url_publica($tenant['projetos_slug'] ?? null),
         'cnpj' => $valor('cnpj'), 'razao_social' => $valor('razao_social'), 'nome_fantasia' => $valor('nome_fantasia'),
         'endereco_rua' => $valor('endereco_rua'), 'endereco_numero' => $valor('endereco_numero'),
         'endereco_complemento' => $valor('endereco_complemento'), 'endereco_bairro' => $valor('endereco_bairro'),
@@ -135,6 +149,23 @@ function dados_empresa_consolidados($conexao, $tenant_id) {
         'situacao' => $empresa['situacao'] ?? (($tenant['status'] ?? 'ativo') === 'ativo' ? 'ativo' : 'inativo'),
         'plano' => $tenant['plano'] ?? 'basico', 'origem_dados' => $empresa ? 'empresa_e_tenant' : 'tenant'
     ];
+}
+
+function normalizar_slug_projetos($valor) {
+    $valor = trim((string)$valor);
+    if ($valor === '') return null;
+    $transliterado = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $valor);
+    if ($transliterado !== false) $valor = $transliterado;
+    $valor = strtolower($valor);
+    $valor = preg_replace('/[^a-z0-9]+/', '-', $valor);
+    $valor = trim((string)$valor, '-');
+    if ($valor === '' || strlen($valor) > 60) return null;
+    return $valor;
+}
+
+function projetos_url_publica($slug) {
+    $slug = normalizar_slug_projetos($slug);
+    return $slug ? 'https://app.erpcondominios.com.br/projetos/' . rawurlencode($slug) : null;
 }
 
 function estrutura_layout_administradora_disponivel($conexao) {
@@ -183,6 +214,62 @@ if ($action === 'obter' && $metodo === 'GET') {
     } catch (Throwable $e) {
         error_log("[EMPRESA_MT] erro_obter tenant_id={$tenant_id}: " . $e->getMessage());
         retornar_json(false, 'Erro ao obter dados do condomínio', null);
+    }
+}
+
+if (in_array($action, ['validar_projetos_slug', 'salvar_projetos_slug'], true) && !tenant_tem_coluna_projetos_slug($conexao)) {
+    retornar_json(false, 'A configuração de URL pública de Projetos ainda não foi instalada. Execute a migration_projetos_slug_tenant_mysql57.sql.', null);
+}
+
+if ($action === 'validar_projetos_slug' && $metodo === 'GET') {
+    $entrada = trim((string)($_GET['slug'] ?? ''));
+    $slug = normalizar_slug_projetos($entrada);
+    if ($entrada !== '' && $slug === null) retornar_json(false, 'Use somente letras, números e hífens no identificador.', null);
+    if ($slug !== null && strlen($slug) < 3) retornar_json(false, 'O identificador deve ter pelo menos 3 caracteres.', ['slug' => $slug, 'disponivel' => false]);
+
+    $disponivel = true;
+    if ($slug !== null) {
+        $stmt = $conexao->prepare('SELECT id FROM tenants WHERE projetos_slug = ? AND id <> ? LIMIT 1');
+        $stmt->bind_param('si', $slug, $tenant_id);
+        $stmt->execute();
+        $disponivel = !$stmt->get_result()->fetch_assoc();
+        $stmt->close();
+    }
+    retornar_json(true, $disponivel ? 'Identificador disponível.' : 'Identificador já está em uso por outro tenant.', [
+        'slug' => $slug,
+        'disponivel' => $disponivel,
+        'url' => projetos_url_publica($slug)
+    ]);
+}
+
+if ($action === 'salvar_projetos_slug' && $metodo === 'POST') {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input)) retornar_json(false, 'Dados da URL pública inválidos.', null);
+        $entrada = trim((string)($input['slug'] ?? ''));
+        $slug = normalizar_slug_projetos($entrada);
+        if ($entrada !== '' && $slug === null) retornar_json(false, 'Use somente letras, números e hífens no identificador.', null);
+        if ($slug !== null && strlen($slug) < 3) retornar_json(false, 'O identificador deve ter pelo menos 3 caracteres.', null);
+
+        $stmt = $conexao->prepare('UPDATE tenants SET projetos_slug = ? WHERE id = ?');
+        if (!$stmt) throw new RuntimeException($conexao->error);
+        $stmt->bind_param('si', $slug, $tenant_id);
+        if (!$stmt->execute()) {
+            $duplicado = (int)$stmt->errno === 1062;
+            $stmt->close();
+            if ($duplicado) retornar_json(false, 'Esse identificador já está em uso por outro tenant.', null);
+            throw new RuntimeException('Falha ao salvar o identificador público.');
+        }
+        $stmt->close();
+        $_SESSION['tenant_projetos_slug'] = $slug;
+        error_log("[EMPRESA_MT] projetos_slug_salvo tenant_id={$tenant_id} usuario_id={$usuario_id} slug=" . ($slug ?: '(desativado)'));
+        retornar_json(true, $slug ? 'URL pública de Projetos salva com sucesso.' : 'URL personalizada removida. A rota legada continua disponível.', [
+            'slug' => $slug,
+            'url' => projetos_url_publica($slug)
+        ]);
+    } catch (Throwable $e) {
+        error_log("[EMPRESA_MT] erro_projetos_slug tenant_id={$tenant_id}: " . $e->getMessage());
+        retornar_json(false, 'Erro ao salvar a URL pública de Projetos.', null);
     }
 }
 

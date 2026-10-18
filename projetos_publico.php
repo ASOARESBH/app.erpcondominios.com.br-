@@ -21,23 +21,44 @@
 require_once __DIR__ . '/api/config.php';
 
 $idProjeto   = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$tenantSlug  = strtolower(trim((string)($_GET['tenant_slug'] ?? '')));
+$tenantIdPublico = null;
+$tenantContextoSolicitado = $tenantSlug !== '';
 $origem      = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost');
 // URL amigável (/projetos ou /projetos/123), resolvida via .htaccess na raiz
 // para este mesmo arquivo — usada nas tags de SEO e no botão de compartilhar.
-$urlAtual    = $origem . '/projetos' . ($idProjeto ? '/' . $idProjeto : '');
+$baseProjetosUrl = $origem . '/projetos' . ($tenantSlug !== '' ? '/' . rawurlencode($tenantSlug) : '');
+$urlAtual    = $baseProjetosUrl . ($idProjeto ? '/' . $idProjeto : '');
 
 $seoTitulo    = 'Projetos e Obras — Transparência';
 $seoDescricao = 'Acompanhe em tempo real as obras, reformas e melhorias em andamento na associação.';
 $seoImagem    = null; // sem asset de logo/favicon garantido no projeto — só define og:image se o projeto tiver capa
 
+if ($tenantSlug !== '' && preg_match('/^[a-z0-9][a-z0-9-]{2,59}$/', $tenantSlug) === 1) {
+    $conexaoTenant = @conectar_banco();
+    if ($conexaoTenant) {
+        $stmtTenant = $conexaoTenant->prepare("SELECT id FROM tenants WHERE projetos_slug = ? AND status = 'ativo' LIMIT 1");
+        if ($stmtTenant) {
+            $stmtTenant->bind_param('s', $tenantSlug);
+            $stmtTenant->execute();
+            $tenantIdPublico = (int)($stmtTenant->get_result()->fetch_assoc()['id'] ?? 0);
+            $stmtTenant->close();
+        }
+        fechar_conexao($conexaoTenant);
+    }
+}
+if ($tenantContextoSolicitado && $tenantIdPublico === null) $tenantIdPublico = 0;
+
 if ($idProjeto) {
     $conexaoSeo = @conectar_banco();
     if ($conexaoSeo) {
-        $stmtSeo = $conexaoSeo->prepare(
-            "SELECT projeto_nome, projeto_descricao, projeto_imagem_capa, numero
-             FROM os_chamados WHERE id = ? AND projeto_publico = 1 LIMIT 1"
-        );
-        $stmtSeo->bind_param('i', $idProjeto);
+        $sqlSeo = "SELECT projeto_nome, projeto_descricao, projeto_imagem_capa, numero
+                   FROM os_chamados WHERE id = ? AND projeto_publico = 1";
+        if ($tenantIdPublico) $sqlSeo .= ' AND tenant_id = ?';
+        $sqlSeo .= ' LIMIT 1';
+        $stmtSeo = $conexaoSeo->prepare($sqlSeo);
+        if ($tenantIdPublico) $stmtSeo->bind_param('ii', $idProjeto, $tenantIdPublico);
+        else $stmtSeo->bind_param('i', $idProjeto);
         $stmtSeo->execute();
         $projetoSeo = $stmtSeo->get_result()->fetch_assoc();
         if ($projetoSeo) {
@@ -244,7 +265,8 @@ body { margin:0; font-family: 'Segoe UI', Arial, sans-serif; background: var(--b
                     <div class="pp-info-item"><div class="pp-info-label">Última Atualização</div><div id="ppDetUltimaAtualizacao">—</div></div>
                 </div>
                 <div style="margin-top:1rem;">
-                    <button class="pp-btn" onclick="ppCompartilhar()"><i class="fab fa-whatsapp"></i> Compartilhar</button>
+                    <button class="pp-btn" onclick="ppCompartilhar()"><i class="fas fa-share-alt"></i> Compartilhar</button>
+                    <button class="pp-btn" onclick="ppCopiarUrl()"><i class="fas fa-link"></i> Copiar URL</button>
                 </div>
             </div>
         </div>
@@ -279,6 +301,8 @@ const PP = {
     API_IMG: window.location.origin + '/api/api_imagem_projeto.php',
     buscaTimer: null,
     idInicial: <?php echo (int)$idProjeto; ?>,
+    tenantSlug: <?php echo json_encode($tenantSlug, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+    basePath: <?php echo json_encode('/projetos' . ($tenantSlug !== '' ? '/' . rawurlencode($tenantSlug) : ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
 };
 
 function escHtmlPP(str) {
@@ -287,8 +311,16 @@ function escHtmlPP(str) {
 }
 
 function ppApi(params) {
-    const url = PP.API + '?' + new URLSearchParams(params).toString();
+    const query = new URLSearchParams(params);
+    if (PP.tenantSlug) query.set('tenant_slug', PP.tenantSlug);
+    const url = PP.API + '?' + query.toString();
     return fetch(url).then(r => r.json());
+}
+
+function ppImagem(params) {
+    const query = new URLSearchParams(params);
+    if (PP.tenantSlug) query.set('tenant_slug', PP.tenantSlug);
+    return PP.API_IMG + '?' + query.toString();
 }
 
 // Status público é sempre derivado do status real da O.S pelo backend
@@ -336,7 +368,7 @@ function ppRenderCard(p) {
     const cor = ppCorPorPercentual(pct);
     // Capa sempre resolvida pelo backend (capa definida > primeira foto publicada
     // > imagem institucional padrão) — o card nunca fica vazio.
-    const capaUrl = `${PP.API_IMG}?tipo=capa&os_id=${p.id}&thumb=1`;
+    const capaUrl = ppImagem({ tipo: 'capa', os_id: p.id, thumb: 1 });
     return `
     <div class="pp-card-proj" onclick="ppAbrirDetalhe(${p.id})">
         <div class="pp-card-capa-wrap">
@@ -361,7 +393,7 @@ function ppRenderCard(p) {
 function ppVoltarLista() {
     document.getElementById('ppVistaDetalhe').style.display = 'none';
     document.getElementById('ppVistaLista').style.display = 'block';
-    history.replaceState(null, '', window.location.pathname);
+    history.replaceState(null, '', PP.basePath);
 }
 
 function ppAbrirDetalhe(id) {
@@ -370,7 +402,7 @@ function ppAbrirDetalhe(id) {
     document.getElementById('ppDetTimeline').innerHTML = '<div class="pp-empty"><i class="fas fa-spinner fa-spin"></i></div>';
     document.getElementById('ppDetDocsCard').style.display = 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    history.replaceState(null, '', '?id=' + id);
+    history.replaceState(null, '', PP.basePath + '/' + encodeURIComponent(id));
 
     ppApi({ acao: 'detalhe', id }).then(data => {
         if (!data.sucesso) { alert(data.mensagem || 'Projeto não encontrado.'); ppVoltarLista(); return; }
@@ -383,7 +415,7 @@ function ppRenderDetalhe(p, timeline, documentos) {
     const pct = Math.max(0, Math.min(100, parseInt(p.projeto_percentual, 10) || 0));
     const cor = ppCorPorPercentual(pct);
 
-    document.getElementById('ppDetCapa').src = `${PP.API_IMG}?tipo=capa&os_id=${p.id}`;
+    document.getElementById('ppDetCapa').src = ppImagem({ tipo: 'capa', os_id: p.id });
     const selo = document.getElementById('ppDetHeroSelo');
     selo.textContent = ppStatusLabel(p.projeto_status);
     selo.style.background = ppStatusCor(p.projeto_status);
@@ -411,7 +443,7 @@ function ppRenderDetalhe(p, timeline, documentos) {
         tlEl.innerHTML = timeline.map((t) => {
             const nomeEtapa = t.etapa_nome || 'Atualização';
             const fotos = (t.fotos || []).map(fotoId => {
-                const urlFoto = `${PP.API_IMG}?tipo=foto&id=${fotoId}`;
+                const urlFoto = ppImagem({ tipo: 'foto', id: fotoId });
                 todasFotos.push(urlFoto);
                 return `<img src="${urlFoto}" loading="lazy" onclick="ppAbrirLightbox('${urlFoto}')">`;
             }).join('');
@@ -445,7 +477,7 @@ function ppRenderDetalhe(p, timeline, documentos) {
             <div style="display:flex;align-items:center;gap:.6rem;padding:.6rem 0;border-bottom:1px solid var(--border);">
                 <i class="fas fa-file-alt"></i>
                 <span style="flex:1;">${escHtmlPP(d.nome)}</span>
-                <a class="pp-btn" style="padding:.4rem .8rem;font-size:.8rem;" href="${PP.API}?acao=documento&id=${d.id}"><i class="fas fa-download"></i></a>
+                <a class="pp-btn" style="padding:.4rem .8rem;font-size:.8rem;" href="${(() => { const q = new URLSearchParams({ acao: 'documento', id: d.id }); if (PP.tenantSlug) q.set('tenant_slug', PP.tenantSlug); return PP.API + '?' + q.toString(); })()}"><i class="fas fa-download"></i></a>
             </div>
         `).join('');
     } else docsCard.style.display = 'none';
@@ -461,8 +493,24 @@ function ppFecharLightbox() {
 }
 
 function ppCompartilhar() {
-    const texto = encodeURIComponent((PP.projetoAtual?.projeto_nome || 'Projeto') + ' — acompanhe o andamento: ' + window.location.href);
-    window.open('https://wa.me/?text=' + texto, '_blank');
+    const url = window.location.href;
+    const texto = (PP.projetoAtual?.projeto_nome || 'Projeto') + ' — acompanhe o andamento';
+    if (navigator.share) {
+        navigator.share({ title: PP.projetoAtual?.projeto_nome || 'Projeto', text: texto, url }).catch(() => {});
+        return;
+    }
+    const textoWhatsApp = encodeURIComponent(texto + ': ' + url);
+    window.open('https://wa.me/?text=' + textoWhatsApp, '_blank', 'noopener');
+}
+
+function ppCopiarUrl() {
+    const url = window.location.href;
+    const concluir = () => window.alert('URL do projeto copiada.');
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url).then(concluir).catch(() => window.prompt('Copie a URL do projeto:', url));
+    } else {
+        window.prompt('Copie a URL do projeto:', url);
+    }
 }
 
 // Inicialização

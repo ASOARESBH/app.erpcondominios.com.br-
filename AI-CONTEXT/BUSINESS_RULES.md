@@ -38,3 +38,9 @@ O risco alto é uma heurística explicável e não uma previsão: a Gleba deve a
 ## 7. Registro Manual de Acesso
 
 O Registro Manual pode lançar acessos em dois modos: `VEICULO`, quando a placa e os dados do veículo fazem parte do evento, e `PEDESTRE`, quando a pessoa acessa sem veículo. O tipo de acesso continua sendo Morador, Visitante ou Prestador nos dois modos. Pedestres podem informar opcionalmente a vestimenta para facilitar a identificação no histórico, mas não podem possuir ocupantes de veículo; a validação de documento digitalizado para Visitante e Prestador permanece inalterada.
+
+## 8. Projetos públicos por tenant
+
+- Projeto não cria uma entidade paralela: é uma Ordem de Serviço marcada como pública, preservando título, departamento, responsável e datas na O.S. original.
+- Cada tenant pode configurar um `projetos_slug` único na aba Empresa. A URL `/projetos/{slug}` lista somente projetos públicos daquele tenant; `/projetos/{slug}/{id}` detalha apenas uma O.S. pública do mesmo tenant.
+- A página pública é somente leitura. O detalhe oferece compartilhamento nativo/WhatsApp e cópia da URL canônica; a remoção do slug não exclui projetos e mantém a rota legada `/projetos`.

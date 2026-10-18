@@ -98,6 +98,12 @@ As páginas de Manutenção (`hidrometro`, `leitura`, `relatorios_hidrometro`, `
 
 Sem restritividade, o usuário pode consultar as próprias O.S. e as dos departamentos marcados. A API também valida a ação do departamento na criação, edição, exclusão, interação, finalização, materiais, projetos, documentos e impressão; esconder botões no frontend não é considerado autorização. A ausência de configuração mantém a compatibilidade do legado, sem abrir dados entre tenants.
 
+## 10.2 Projetos — URL pública personalizada por tenant
+
+Projetos continuam sendo O.S. marcadas com `os_chamados.projeto_publico=1`; não existe um cadastro paralelo. A aba Empresa usa `api/api_empresa.php` com `action=validar_projetos_slug` (GET) e `action=salvar_projetos_slug` (POST) para validar e gravar `tenants.projetos_slug` no tenant da sessão. O identificador é normalizado para letras minúsculas, números e hífens, precisa ser único entre tenants e pode ser removido para retornar à rota legada.
+
+As rotas públicas `/projetos/{slug}` e `/projetos/{slug}/{id}` encaminham o slug para `api/api_publico_projetos.php` e aplicam `tenant_id` em dashboard, listagem, detalhe, timeline, documentos e cache. A API de imagens (`api/api_imagem_projeto.php`) também revalida o slug e o tenant antes de servir capa ou foto. `/projetos` e `/projetos/{id}` permanecem compatíveis com o comportamento público legado.
+
 ## 11. Moradores, Dependentes e Anexos — autorização granular
 
 `api/api_moradores.php` e `api/api_dependentes.php` usam a chave RBAC `moradores`: `GET`

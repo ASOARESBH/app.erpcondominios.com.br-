@@ -267,3 +267,20 @@
 .empresa-dashboard-widget small { color:#64748b; font-size:.75rem; line-height:1.4; }
 .empresa-dashboard-widget em { color:#6366f1; font-size:.68rem; font-style:normal; text-transform:uppercase; font-weight:700; letter-spacing:.04em; }
 @media(max-width:600px) { .empresa-dashboard-modulo-head { align-items:flex-start; flex-direction:column; } .empresa-dashboard-widgets { grid-template-columns:1fr; } }
+
+/* URL pública personalizada de Projetos */
+.page-empresa .empresa-projetos-card { padding:22px; }
+.page-empresa .empresa-projetos-selecao { max-width:760px; }
+.page-empresa .empresa-projetos-selecao small { color:#64748b; font-size:.76rem; line-height:1.4; }
+.page-empresa .empresa-projetos-url-input { display:flex; align-items:stretch; width:100%; min-width:0; }
+.page-empresa .empresa-projetos-url-input span { display:flex; align-items:center; padding:9px 10px; border:1px solid #d1d5db; border-right:0; border-radius:8px 0 0 8px; background:#f8fafc; color:#64748b; font-size:.82rem; white-space:nowrap; }
+.page-empresa .empresa-projetos-url-input input { border-radius:0 8px 8px 0; }
+.page-empresa .empresa-projetos-url { display:flex; align-items:center; gap:6px; padding:11px 13px; border:1px solid #bbf7d0; border-radius:8px; background:#f0fdf4; color:#166534; font-size:.84rem; overflow-wrap:anywhere; }
+.page-empresa .empresa-projetos-url a { color:#166534; font-weight:650; }
+.page-empresa .empresa-projetos-hint { margin:16px 0 0; color:#64748b; font-size:.8rem; line-height:1.45; }
+.page-empresa .empresa-projetos-hint i { color:#4f46e5; margin-right:5px; }
+@media(max-width:700px) {
+    .page-empresa .empresa-projetos-url-input { display:block; }
+    .page-empresa .empresa-projetos-url-input span { border-right:1px solid #d1d5db; border-radius:8px 8px 0 0; overflow:hidden; text-overflow:ellipsis; }
+    .page-empresa .empresa-projetos-url-input input { border-radius:0 0 8px 8px; }
+}

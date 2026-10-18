@@ -11,10 +11,10 @@
 //   - Somente leitura — nenhuma ação grava dados.
 //
 // Endpoints (GET, acao=):
-//   dashboard                       — contadores por status público
-//   listar&status=&busca=&pagina=   — cards de projetos
-//   detalhe&id=                     — projeto completo (timeline+documentos públicos)
-//   documento&id=                   — download de documento público vinculado ao projeto
+//   dashboard&tenant_slug=          — contadores por status público
+//   listar&status=&busca=&pagina=&tenant_slug= — cards de projetos
+//   detalhe&id=&tenant_slug=        — projeto completo (timeline+documentos públicos)
+//   documento&id=&tenant_slug=      — download de documento público vinculado ao projeto
 
 ob_start();
 require_once 'config.php';
@@ -58,7 +58,7 @@ function pub_rate_limit($conn, $rota) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     $ip   = $conn->real_escape_string(pub_ip());
-    $rota = $conn->real_escape_string($rota);
+    $rota = $conn->real_escape_string(substr((string)$rota, 0, 60));
     $limite = 60; // por minuto
 
     $res = $conn->query("SELECT COUNT(*) c FROM publico_rate_limit WHERE ip='$ip' AND rota='$rota' AND criado_em >= DATE_SUB(NOW(), INTERVAL 1 MINUTE)");
@@ -141,25 +141,53 @@ function pub_limpar_descricao($html) {
     return trim(preg_replace('/\s+/', ' ', strip_tags($html)));
 }
 
+function pub_slug_valido($slug) {
+    return $slug === '' || preg_match('/^[a-z0-9][a-z0-9-]{2,59}$/', $slug) === 1;
+}
+
+function pub_resolver_tenant($conexao, $slug) {
+    $slug = strtolower(trim((string)$slug));
+    if (!pub_slug_valido($slug)) pub_json(false, 'Identificador de tenant inválido.', null, 400);
+    if ($slug === '') return null;
+
+    $stmt = $conexao->prepare("SELECT id, projetos_slug FROM tenants WHERE projetos_slug = ? AND status = 'ativo' LIMIT 1");
+    if (!$stmt) pub_json(false, 'Erro interno no servidor. Tente novamente mais tarde.', null, 500);
+    $stmt->bind_param('s', $slug);
+    $stmt->execute();
+    $tenant = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$tenant) pub_json(false, 'Projetos públicos não encontrados para este identificador.', null, 404);
+    return (int)$tenant['id'];
+}
+
 // ========== INICIALIZAÇÃO ==========
 $conexao = conectar_banco();
 if (!$conexao) pub_json(false, 'Erro ao conectar ao banco de dados.', null, 500);
 $conexao->set_charset('utf8mb4');
 
 $acao = $_GET['acao'] ?? '';
+$tenantSlug = strtolower(trim((string)($_GET['tenant_slug'] ?? '')));
+$tenantIdPublico = pub_resolver_tenant($conexao, $tenantSlug);
 
 try {
 
-    pub_rate_limit($conexao, $acao ?: 'desconhecida');
+    pub_rate_limit($conexao, ($acao ?: 'desconhecida') . ':' . ($tenantSlug ?: 'global'));
 
     // ============================================================
     // DASHBOARD
     // ============================================================
     if ($acao === 'dashboard') {
-        $cache = pub_cache_get('dashboard');
+        $cache = pub_cache_get('dashboard_' . ($tenantIdPublico ?? 'global'));
         if ($cache !== null) pub_json(true, 'OK', $cache);
 
-        $res = $conexao->query("SELECT status, COUNT(*) c FROM os_chamados WHERE projeto_publico = 1 GROUP BY status");
+        if ($tenantIdPublico !== null) {
+            $stmtStatus = $conexao->prepare("SELECT status, COUNT(*) c FROM os_chamados WHERE tenant_id = ? AND projeto_publico = 1 GROUP BY status");
+            $stmtStatus->bind_param('i', $tenantIdPublico);
+            $stmtStatus->execute();
+            $res = $stmtStatus->get_result();
+        } else {
+            $res = $conexao->query("SELECT status, COUNT(*) c FROM os_chamados WHERE projeto_publico = 1 GROUP BY status");
+        }
         $porStatusOs = [];
         if ($res) while ($r = $res->fetch_assoc()) $porStatusOs[$r['status']] = (int)$r['c'];
 
@@ -168,7 +196,14 @@ try {
         $finalizado   = $porStatusOs['finalizado'] ?? 0;
         $cancelado    = $porStatusOs['cancelado']  ?? 0;
 
-        $resMedia = $conexao->query("SELECT ROUND(AVG(projeto_percentual)) m FROM os_chamados WHERE projeto_publico = 1 AND status IN ('aberto','andamento')");
+        if ($tenantIdPublico !== null) {
+            $stmtMedia = $conexao->prepare("SELECT ROUND(AVG(projeto_percentual)) m FROM os_chamados WHERE tenant_id = ? AND projeto_publico = 1 AND status IN ('aberto','andamento')");
+            $stmtMedia->bind_param('i', $tenantIdPublico);
+            $stmtMedia->execute();
+            $resMedia = $stmtMedia->get_result();
+        } else {
+            $resMedia = $conexao->query("SELECT ROUND(AVG(projeto_percentual)) m FROM os_chamados WHERE projeto_publico = 1 AND status IN ('aberto','andamento')");
+        }
         $percentualMedio = $resMedia ? (int)($resMedia->fetch_assoc()['m'] ?? 0) : 0;
 
         $dados = [
@@ -179,7 +214,7 @@ try {
             'total_ativos'      => $planejamento + $execucao,
             'percentual_medio'  => $percentualMedio,
         ];
-        pub_cache_set('dashboard', $dados);
+        pub_cache_set('dashboard_' . ($tenantIdPublico ?? 'global'), $dados);
         pub_json(true, 'OK', $dados);
     }
 
@@ -195,13 +230,18 @@ try {
         $limit  = 20;
         $offset = ($pagina - 1) * $limit;
 
-        $chaveCache = 'listar_' . md5($status . '|' . $busca . '|' . $pagina);
+        $chaveCache = 'listar_' . ($tenantIdPublico ?? 'global') . '_' . md5($status . '|' . $busca . '|' . $pagina);
         $cache = pub_cache_get($chaveCache);
         if ($cache !== null) pub_json(true, 'OK', $cache);
 
         $where  = ['o.projeto_publico = 1'];
         $params = [];
         $types  = '';
+        if ($tenantIdPublico !== null) {
+            $where[] = 'o.tenant_id = ?';
+            $params[] = $tenantIdPublico;
+            $types .= 'i';
+        }
 
         if ($status !== '' && in_array($status, ['planejamento','execucao','finalizado','cancelado'], true)) {
             $statusOs = pub_status_os_correspondente($status);
@@ -250,28 +290,34 @@ try {
         $id = (int)($_GET['id'] ?? 0);
         if (!$id) pub_json(false, 'ID inválido.', null, 400);
 
-        $chaveCache = 'detalhe_' . $id;
+        $chaveCache = 'detalhe_' . ($tenantIdPublico ?? 'global') . '_' . $id;
         $cache = pub_cache_get($chaveCache);
         if ($cache !== null) pub_json(true, 'OK', $cache);
 
-        $stmt = $conexao->prepare("SELECT " . pub_campos_publicos() . " " . pub_from_join() . " WHERE o.id = ? AND o.projeto_publico = 1 LIMIT 1");
-        $stmt->bind_param('i', $id);
+        $sqlDetalhe = "SELECT " . pub_campos_publicos() . " " . pub_from_join() . " WHERE o.id = ? AND o.projeto_publico = 1";
+        if ($tenantIdPublico !== null) $sqlDetalhe .= ' AND o.tenant_id = ?';
+        $sqlDetalhe .= ' LIMIT 1';
+        $stmt = $conexao->prepare($sqlDetalhe);
+        if ($tenantIdPublico !== null) $stmt->bind_param('ii', $id, $tenantIdPublico);
+        else $stmt->bind_param('i', $id);
         $stmt->execute();
         $projeto = $stmt->get_result()->fetch_assoc();
         // IDOR: nunca revela se o id existe mas não é público — mesma mensagem genérica
         if (!$projeto) pub_json(false, 'Projeto não encontrado.', null, 404);
         $projeto['projeto_descricao'] = pub_limpar_descricao($projeto['projeto_descricao']);
 
-        $stmtInt = $conexao->prepare(
+        $sqlInt =
             "SELECT i.id, i.mensagem, i.percentual,
                     DATE_FORMAT(i.criado_em,'%d/%m/%Y') AS data,
                     e.nome AS etapa_nome
              FROM os_interacoes i
              LEFT JOIN os_etapas e ON e.id = i.etapa_id
-             WHERE i.os_id = ? AND i.tipo = 'andamento' AND i.publica = 1
-             ORDER BY i.criado_em ASC"
-        );
-        $stmtInt->bind_param('i', $id);
+             WHERE i.os_id = ? AND i.tipo = 'andamento' AND i.publica = 1";
+        if ($tenantIdPublico !== null) $sqlInt .= ' AND i.tenant_id = ?';
+        $sqlInt .= ' ORDER BY i.criado_em ASC';
+        $stmtInt = $conexao->prepare($sqlInt);
+        if ($tenantIdPublico !== null) $stmtInt->bind_param('ii', $id, $tenantIdPublico);
+        else $stmtInt->bind_param('i', $id);
         $stmtInt->execute();
         $resInt = $stmtInt->get_result();
         $timeline = [];
@@ -280,7 +326,14 @@ try {
 
         if ($idsInteracoes) {
             $idsSql = implode(',', $idsInteracoes);
-            $resFotos = $conexao->query("SELECT id, interacao_id FROM os_interacao_fotos WHERE interacao_id IN ($idsSql) ORDER BY criado_em ASC");
+            if ($tenantIdPublico !== null) {
+                $stmtFotos = $conexao->prepare("SELECT id, interacao_id FROM os_interacao_fotos WHERE tenant_id = ? AND interacao_id IN ($idsSql) ORDER BY criado_em ASC");
+                $stmtFotos->bind_param('i', $tenantIdPublico);
+                $stmtFotos->execute();
+                $resFotos = $stmtFotos->get_result();
+            } else {
+                $resFotos = $conexao->query("SELECT id, interacao_id FROM os_interacao_fotos WHERE interacao_id IN ($idsSql) ORDER BY criado_em ASC");
+            }
             $fotosPorInteracao = [];
             if ($resFotos) while ($f = $resFotos->fetch_assoc()) $fotosPorInteracao[(int)$f['interacao_id']][] = (int)$f['id'];
             foreach ($timeline as &$t) { $t['fotos'] = $fotosPorInteracao[(int)$t['id']] ?? []; unset($t['id']); }
@@ -291,14 +344,16 @@ try {
         $documentos = [];
         $tabDoc = $conexao->query("SHOW TABLES LIKE 'documentos'");
         if ($tabDoc && $tabDoc->num_rows > 0) {
-            $stmtDoc = $conexao->prepare(
+            $sqlDoc =
                 "SELECT id, nome FROM documentos
                  WHERE os_id = ? AND status = 'ativo'
                    AND (data_expiracao IS NULL OR data_expiracao >= CURDATE())
-                   AND visibilidade = 'todos'
-                 ORDER BY nome ASC"
-            );
-            $stmtDoc->bind_param('i', $id);
+                   AND visibilidade = 'todos'";
+            if ($tenantIdPublico !== null) $sqlDoc .= ' AND EXISTS (SELECT 1 FROM os_chamados od WHERE od.id = documentos.os_id AND od.tenant_id = ?)';
+            $sqlDoc .= ' ORDER BY nome ASC';
+            $stmtDoc = $conexao->prepare($sqlDoc);
+            if ($tenantIdPublico !== null) $stmtDoc->bind_param('ii', $id, $tenantIdPublico);
+            else $stmtDoc->bind_param('i', $id);
             $stmtDoc->execute();
             $resDoc = $stmtDoc->get_result();
             while ($row = $resDoc->fetch_assoc()) $documentos[] = $row;
@@ -319,17 +374,19 @@ try {
         $tabDoc = $conexao->query("SHOW TABLES LIKE 'documentos'");
         if (!$tabDoc || $tabDoc->num_rows === 0) pub_json(false, 'Documento não disponível.', null, 404);
 
-        $stmt = $conexao->prepare(
+        $sqlDocPublico =
             "SELECT arquivo, arquivo_tipo, arquivo_nome_original, link_externo, nome
              FROM documentos
              WHERE id = ? AND os_id IS NOT NULL
                AND (SELECT projeto_publico FROM os_chamados WHERE id = documentos.os_id) = 1
                AND status = 'ativo'
                AND (data_expiracao IS NULL OR data_expiracao >= CURDATE())
-               AND visibilidade = 'todos'
-             LIMIT 1"
-        );
-        $stmt->bind_param('i', $id);
+               AND visibilidade = 'todos'";
+        if ($tenantIdPublico !== null) $sqlDocPublico .= ' AND (SELECT tenant_id FROM os_chamados WHERE id = documentos.os_id) = ?';
+        $sqlDocPublico .= ' LIMIT 1';
+        $stmt = $conexao->prepare($sqlDocPublico);
+        if ($tenantIdPublico !== null) $stmt->bind_param('ii', $id, $tenantIdPublico);
+        else $stmt->bind_param('i', $id);
         $stmt->execute();
         $doc = $stmt->get_result()->fetch_assoc();
         if (!$doc) pub_json(false, 'Documento não encontrado ou não é público.', null, 404);

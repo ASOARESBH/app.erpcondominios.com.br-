@@ -9,7 +9,9 @@ const state = {
     layouts: [],
     layoutIdsConfigurados: new Set(),
     administradoraConfiguradaId: 0,
-    dashboardWidgets: []
+    dashboardWidgets: [],
+    projetosSlug: null,
+    projetosUrl: null
 };
 
 export function init() {
@@ -51,6 +53,14 @@ function bindDOM() {
         situacao: document.getElementById('situacao'),
         tabs: Array.from(document.querySelectorAll('[data-empresa-tab]')),
         dadosPane: document.getElementById('empresa-dados-pane'),
+        projetosPane: document.getElementById('empresa-projetos-pane'),
+        projetosSlug: document.getElementById('projetos_slug'),
+        projetosStatus: document.getElementById('empresa-projetos-status'),
+        projetosUrl: document.getElementById('empresa-projetos-url'),
+        btnValidarProjetosSlug: document.getElementById('btnValidarProjetosSlug'),
+        btnSalvarProjetosSlug: document.getElementById('btnSalvarProjetosSlug'),
+        btnCopiarProjetosUrl: document.getElementById('btnCopiarProjetosUrl'),
+        btnCompartilharProjetosUrl: document.getElementById('btnCompartilharProjetosUrl'),
         administradoraPane: document.getElementById('empresa-administradora-pane'),
         administradoraSelect: document.getElementById('administradora_id'),
         layoutsLista: document.getElementById('empresa-layouts-lista'),
@@ -82,6 +92,10 @@ function bindEvents() {
         state.dom.btnLimpar.addEventListener('click', limparFormulario);
     }
     state.dom.tabs.forEach((tab) => tab.addEventListener('click', () => alternarAbaEmpresa(tab.dataset.empresaTab)));
+    if (state.dom.btnValidarProjetosSlug) state.dom.btnValidarProjetosSlug.addEventListener('click', validarProjetosSlug);
+    if (state.dom.btnSalvarProjetosSlug) state.dom.btnSalvarProjetosSlug.addEventListener('click', salvarProjetosSlug);
+    if (state.dom.btnCopiarProjetosUrl) state.dom.btnCopiarProjetosUrl.addEventListener('click', copiarProjetosUrl);
+    if (state.dom.btnCompartilharProjetosUrl) state.dom.btnCompartilharProjetosUrl.addEventListener('click', compartilharProjetosUrl);
     if (state.dom.administradoraSelect) state.dom.administradoraSelect.addEventListener('change', renderizarLayoutsAdministradora);
     if (state.dom.btnSalvarLayoutAdministradora) state.dom.btnSalvarLayoutAdministradora.addEventListener('click', salvarLayoutAdministradora);
     if (state.dom.btnSalvarDashboard) state.dom.btnSalvarDashboard.addEventListener('click', salvarDashboardConfig);
@@ -163,6 +177,10 @@ async function carregarDados() {
             state.dom.email_cobranca.value = empresa.email_cobranca || '';
             state.dom.telefone.value = empresa.telefone || '';
             state.dom.situacao.value = empresa.situacao || 'ativo';
+            state.projetosSlug = empresa.projetos_slug || null;
+            state.projetosUrl = empresa.projetos_url || null;
+            if (state.dom.projetosSlug) state.dom.projetosSlug.value = state.projetosSlug || '';
+            renderizarProjetosUrl();
 
             // A URL BLOB autenticada é a fonte primária. O caminho legado fica
             // somente como compatibilidade enquanto a migração é concluída.
@@ -179,7 +197,7 @@ async function carregarDados() {
 }
 
 async function alternarAbaEmpresa(aba) {
-    const panes = { dados: state.dom.dadosPane, administradora: state.dom.administradoraPane, dashboard: state.dom.dashboardPane };
+    const panes = { dados: state.dom.dadosPane, projetos: state.dom.projetosPane, administradora: state.dom.administradoraPane, dashboard: state.dom.dashboardPane };
     Object.entries(panes).forEach(([nome, pane]) => { if (pane) pane.hidden = nome !== aba; });
     state.dom.tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.empresaTab === aba));
     console.debug('[Empresa] Aba alterada.', { aba });
@@ -289,6 +307,94 @@ async function salvarLayoutAdministradora() {
         renderizarStatusAdministradora(error.message, 'error');
         mostrarAlerta(`Erro ao salvar Layout Administradora: ${error.message}`, 'error');
     }
+}
+
+function renderizarStatusProjetos(mensagem, tipo = 'info') {
+    const destino = state.dom.projetosStatus;
+    if (!destino) return;
+    destino.hidden = !mensagem;
+    destino.className = `empresa-administradora-status ${tipo}`;
+    destino.textContent = mensagem || '';
+}
+
+function renderizarProjetosUrl() {
+    const url = state.projetosUrl;
+    const destino = state.dom.projetosUrl;
+    if (destino) {
+        destino.hidden = !url;
+        destino.replaceChildren();
+        if (url) {
+            const legenda = document.createElement('span');
+            legenda.textContent = 'URL ativa: ';
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = url;
+            destino.append(legenda, link);
+        }
+    }
+    if (state.dom.btnCopiarProjetosUrl) state.dom.btnCopiarProjetosUrl.hidden = !url;
+    if (state.dom.btnCompartilharProjetosUrl) state.dom.btnCompartilharProjetosUrl.hidden = !url;
+}
+
+async function validarProjetosSlug() {
+    const slug = state.dom.projetosSlug?.value.trim() || '';
+    try {
+        const query = new URLSearchParams({ action: 'validar_projetos_slug', slug });
+        const response = await fetch(`${state.apiBase}api_empresa.php?${query.toString()}`, { credentials: 'include' });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || `Erro HTTP ${response.status}`);
+        if (data.dados?.slug !== null && data.dados?.slug !== undefined && state.dom.projetosSlug) state.dom.projetosSlug.value = data.dados.slug || '';
+        renderizarStatusProjetos(data.mensagem, data.dados?.disponivel ? 'success' : 'error');
+        return Boolean(data.dados?.disponivel);
+    } catch (error) {
+        renderizarStatusProjetos(error.message, 'error');
+        return false;
+    }
+}
+
+async function salvarProjetosSlug() {
+    const slug = state.dom.projetosSlug?.value.trim() || '';
+    if (!(await validarProjetosSlug())) return;
+    try {
+        const response = await fetch(`${state.apiBase}api_empresa.php?action=salvar_projetos_slug`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ slug })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || `Erro HTTP ${response.status}`);
+        state.projetosSlug = data.dados?.slug || null;
+        state.projetosUrl = data.dados?.url || null;
+        if (state.dom.projetosSlug) state.dom.projetosSlug.value = state.projetosSlug || '';
+        renderizarProjetosUrl();
+        renderizarStatusProjetos(data.mensagem, 'success');
+        mostrarAlerta(data.mensagem, 'success');
+    } catch (error) {
+        renderizarStatusProjetos(error.message, 'error');
+        mostrarAlerta(`Erro ao salvar URL de Projetos: ${error.message}`, 'error');
+    }
+}
+
+function copiarProjetosUrl() {
+    if (!state.projetosUrl) return;
+    const url = state.projetosUrl;
+    const sucesso = () => mostrarAlerta('URL pública de Projetos copiada.', 'success');
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(sucesso).catch(() => window.prompt('Copie a URL pública de Projetos:', url));
+    else window.prompt('Copie a URL pública de Projetos:', url);
+}
+
+function compartilharProjetosUrl() {
+    if (!state.projetosUrl) return;
+    const url = state.projetosUrl;
+    const titulo = 'Projetos e Obras';
+    if (navigator.share) {
+        navigator.share({ title: titulo, text: 'Acompanhe os Projetos e Obras', url }).catch(() => {});
+        return;
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent('Acompanhe os Projetos e Obras: ' + url)}`, '_blank', 'noopener');
 }
 
 async function buscarCNPJ() {

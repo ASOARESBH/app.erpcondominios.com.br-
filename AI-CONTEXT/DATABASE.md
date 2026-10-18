@@ -63,3 +63,12 @@ A tabela central `departamentos` deve possuir `tenant_id` e a chave única
 salvar a matriz, permitindo que condomínios diferentes usem departamentos com o mesmo
 nome. O escopo aplicado às consultas de `os_chamados` combina autoria própria com
 departamentos autorizados; a restritividade reduz o conjunto à autoria.
+
+## 9. URL pública de Projetos
+
+`tenants.projetos_slug` guarda o identificador opcional usado nas rotas públicas
+`/projetos/{slug}` e `/projetos/{slug}/{id}`. A coluna é `VARCHAR(60)` com índice
+único e aceita `NULL`, permitindo que tenants sem configuração mantenham a rota
+legada `/projetos`. A migration canônica é
+`sql/migration_projetos_slug_tenant_mysql57.sql`; o backend nunca aceita
+`tenant_id` do navegador e resolve o tenant exclusivamente pelo slug cadastrado.

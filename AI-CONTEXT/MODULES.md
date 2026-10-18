@@ -28,3 +28,7 @@ O ERP é dividido em módulos de negócios independentes, acessíveis pelo `side
 - **App do Morador**: Interface PWA para celular (notificações push via Firebase, reserva de espaços, visualização de boletos).
 
 - **Inadimplência**: Importação do Relatório de Inadimplência Detalhado BRCondos, snapshots históricos, comparação por Gleba, ranking, CSV e geração de PDF pelo fluxo de impressão. A tela mantém catálogo versionado para BRCondos, Superlógica, Ahreas, TownSq e PACTO; somente BRCondos está homologado atualmente. Exige permissão `inadimplencia` com nível mínimo `gerente`; consulte `AI-CONTEXT/INADIMPLENCIA.md`.
+
+
+## 6. Projetos e Obras
+- **Projetos**: classificação pública de uma O.S. existente (`os_chamados.projeto_publico=1`), com etapas, percentual, timeline, fotos e documentos; a aba Empresa configura o slug exclusivo do tenant para compartilhar `/projetos/{slug}` sem duplicar o cadastro operacional.

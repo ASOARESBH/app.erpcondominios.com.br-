@@ -71,20 +71,41 @@ $tipo    = $_GET['tipo'] ?? 'capa';
 $osId    = (int)($_GET['os_id'] ?? 0);
 $fotoId  = (int)($_GET['id'] ?? 0);
 $thumb   = !empty($_GET['thumb']);
+$tenantSlug = strtolower(trim((string)($_GET['tenant_slug'] ?? '')));
+$tenantIdPublico = null;
+if ($tenantSlug !== '') {
+    if (preg_match('/^[a-z0-9][a-z0-9-]{2,59}$/', $tenantSlug) !== 1) img_negar('Identificador de tenant inválido.', 400);
+    $stmtTenantPublico = $conn->prepare("SELECT id FROM tenants WHERE projetos_slug = ? AND status = 'ativo' LIMIT 1");
+    if (!$stmtTenantPublico) img_negar('Erro interno no servidor.', 500);
+    $stmtTenantPublico->bind_param('s', $tenantSlug);
+    $stmtTenantPublico->execute();
+    $tenantPublico = $stmtTenantPublico->get_result()->fetch_assoc();
+    $stmtTenantPublico->close();
+    if (!$tenantPublico) img_negar('Projeto não encontrado.', 404);
+    $tenantIdPublico = (int)$tenantPublico['id'];
+}
 
 if (!in_array($tipo, ['capa', 'foto'], true)) img_negar('Tipo inválido.', 400);
 
 $fotoRow = null;
 if ($tipo === 'foto') {
     if (!$fotoId) img_negar('ID inválido.', 400);
-    $res = $conn->query(
+    $sqlFoto =
         "SELECT f.arquivo, f.tenant_id, i.os_id
          FROM os_interacao_fotos f
          JOIN os_interacoes i ON i.id = f.interacao_id AND i.tenant_id = f.tenant_id
          JOIN os_chamados o ON o.id = i.os_id AND o.tenant_id = i.tenant_id
-         WHERE f.id = $fotoId AND f.interacao_id > 0 LIMIT 1"
-    );
+         WHERE f.id = ? AND f.interacao_id > 0";
+    if ($tenantIdPublico !== null) $sqlFoto .= ' AND f.tenant_id = ?';
+    $sqlFoto .= ' LIMIT 1';
+    $stmtFoto = $conn->prepare($sqlFoto);
+    if (!$stmtFoto) img_negar('Erro interno no servidor.', 500);
+    if ($tenantIdPublico !== null) $stmtFoto->bind_param('ii', $fotoId, $tenantIdPublico);
+    else $stmtFoto->bind_param('i', $fotoId);
+    $stmtFoto->execute();
+    $res = $stmtFoto->get_result();
     $fotoRow = $res ? $res->fetch_assoc() : null;
+    $stmtFoto->close();
     if (!$fotoRow) img_negar('Foto não encontrada.', 404);
     $osId = (int)$fotoRow['os_id'];
 }
@@ -92,14 +113,24 @@ if ($tipo === 'foto') {
 if (!$osId) img_negar('os_id inválido.', 400);
 
 $osTenantDaFoto = (int)($fotoRow['tenant_id'] ?? 0);
-$stmtOs = $tipo === 'foto'
-    ? $conn->prepare('SELECT tenant_id, departamento, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = ? AND tenant_id = ? LIMIT 1')
-    : $conn->prepare('SELECT tenant_id, departamento, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = ? LIMIT 1');
+$sqlOs = 'SELECT tenant_id, departamento, projeto_publico, projeto_imagem_capa, criado_por_id FROM os_chamados WHERE id = ?';
+$tiposOs = 'i';
+$paramOs = [$osId];
 if ($tipo === 'foto') {
-    $stmtOs->bind_param('ii', $osId, $osTenantDaFoto);
-} else {
-    $stmtOs->bind_param('i', $osId);
+    $sqlOs .= ' AND tenant_id = ?';
+    $tiposOs .= 'i';
+    $paramOs[] = $osTenantDaFoto;
+} elseif ($tenantIdPublico !== null) {
+    $sqlOs .= ' AND tenant_id = ?';
+    $tiposOs .= 'i';
+    $paramOs[] = $tenantIdPublico;
 }
+$sqlOs .= ' LIMIT 1';
+$stmtOs = $conn->prepare($sqlOs);
+if (!$stmtOs) img_negar('Erro interno no servidor.', 500);
+$referenciasOs = [$tiposOs];
+foreach ($paramOs as $indice => $valor) $referenciasOs[] = &$paramOs[$indice];
+call_user_func_array([$stmtOs, 'bind_param'], $referenciasOs);
 $stmtOs->execute();
 $res = $stmtOs->get_result();
 $os  = $res ? $res->fetch_assoc() : null;
@@ -171,13 +202,18 @@ if (!empty($os['projeto_imagem_capa'])) {
     if (img_servir_banco($conn, (int)$os['tenant_id'], $os['projeto_imagem_capa'])) exit;
 }
 
-$resPrimeira = $conn->query(
+$stmtPrimeira = $conn->prepare(
     "SELECT f.arquivo FROM os_interacao_fotos f
-     JOIN os_interacoes i ON i.id = f.interacao_id
-     WHERE f.tenant_id = " . (int)$os['tenant_id'] . " AND i.os_id = $osId
+     JOIN os_interacoes i ON i.id = f.interacao_id AND i.tenant_id = f.tenant_id
+     WHERE f.tenant_id = ? AND i.os_id = ?
      ORDER BY f.criado_em ASC LIMIT 1"
 );
+$tenantDaOs = (int)$os['tenant_id'];
+$stmtPrimeira->bind_param('ii', $tenantDaOs, $osId);
+$stmtPrimeira->execute();
+$resPrimeira = $stmtPrimeira->get_result();
 $primeira = $resPrimeira ? $resPrimeira->fetch_assoc() : null;
+$stmtPrimeira->close();
 if ($primeira) {
     if (img_servir_banco($conn, (int)$os['tenant_id'], $primeira['arquivo'])) exit;
 }
