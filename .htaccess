@@ -3,6 +3,7 @@
 # permanecer fora desse diretório; as regras abaixo são defesa adicional.
 
 Options -Indexes
+DirectoryIndex login.html
 RewriteEngine On
 
 # -----------------------------------------------------------------------------
