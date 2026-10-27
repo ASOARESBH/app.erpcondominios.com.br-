@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS `abastecimento_lancamentos` (
   `tipo_combustivel` enum('Gasolina','Álcool','Diesel') NOT NULL,
   `operador_id` int(11) NOT NULL,
   `usuario_logado` varchar(100) NOT NULL,
+  `observacao` text NULL,
   `data_registro` datetime NOT NULL,
   PRIMARY KEY (`id`),
   KEY `veiculo_id` (`veiculo_id`),
@@ -127,6 +128,7 @@ LIMIT 50;
 -- Registra cada abastecimento realizado.
 -- O campo usuario_logado armazena quem estava logado no momento do registro (log de auditoria).
 -- O campo operador_id indica quem realizou fisicamente o abastecimento.
+-- O campo observacao guarda informações adicionais opcionais do lançamento.
 
 -- Tabela abastecimento_recargas:
 -- Sistema de crédito/débito para controlar o saldo disponível.

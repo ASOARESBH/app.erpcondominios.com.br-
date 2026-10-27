@@ -4,6 +4,7 @@
  * API DE ABASTECIMENTO
  * =====================================================
  * Gerencia veículos, abastecimentos e recargas
+ * @version 2.1.0
  */
 
 // Função para retornar JSON
@@ -138,7 +139,7 @@ if ($metodo === 'GET') {
             break;
             
         case 'relatorio':
-            gerarRelatorio($conn);
+            gerarRelatorio($conn, $tenant_id);
             break;
 
         case 'recalcular_saldo':
@@ -321,15 +322,19 @@ function lancarAbastecimento($conn, $dados, $tenant_id) {
         $stmt = $conn->prepare("
             INSERT INTO abastecimento_lancamentos
             (tenant_id, veiculo_id, data_abastecimento, km_abastecimento, litros, valor,
-             tipo_combustivel, operador_id, usuario_logado, data_registro)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+             tipo_combustivel, operador_id, usuario_logado, observacao, data_registro)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
         if (!$stmt) throw new RuntimeException($conn->error);
         $dataAbastecimento = (string)($dados['data_abastecimento'] ?? '');
         $kmAbastecimento = (int)($dados['km_abastecimento'] ?? 0);
         $litros = (float)($dados['litros'] ?? 0);
         $tipoCombustivel = (string)($dados['tipo_combustivel'] ?? '');
-        $stmt->bind_param('iisiddsis', $tenant_id, $veiculoId, $dataAbastecimento, $kmAbastecimento, $litros, $valor, $tipoCombustivel, $operadorId, $usuarioLogado);
+        $observacao = trim((string)($dados['observacao'] ?? ''));
+        if (mb_strlen($observacao, 'UTF-8') > 5000) {
+            throw new RuntimeException('A observação deve ter no máximo 5.000 caracteres.');
+        }
+        $stmt->bind_param('iisiddsiss', $tenant_id, $veiculoId, $dataAbastecimento, $kmAbastecimento, $litros, $valor, $tipoCombustivel, $operadorId, $usuarioLogado, $observacao);
         
         if ($stmt->execute()) {
             // Atualizar saldo
@@ -600,11 +605,11 @@ function listarUsuarios($conn, $tenant_id) {
 // RELATÓRIOS
 // ============================================
 
-function gerarRelatorio($conn) {
+function gerarRelatorio($conn, $tenant_id) {
     try {
-        $where = [];
-        $params = [];
-        $types = '';
+        $where = ['a.tenant_id = ?'];
+        $params = [$tenant_id];
+        $types = 'i';
         
         // Filtro por veículo
         if (!empty($_GET['veiculo_id'])) {
@@ -643,8 +648,8 @@ function gerarRelatorio($conn) {
                 v.modelo as veiculo_modelo,
                 u.nome as operador_nome
             FROM abastecimento_lancamentos a
-            INNER JOIN abastecimento_veiculos v ON a.veiculo_id = v.id
-            INNER JOIN usuarios u ON a.operador_id = u.id
+            INNER JOIN abastecimento_veiculos v ON a.veiculo_id = v.id AND v.tenant_id = a.tenant_id
+            INNER JOIN usuarios u ON a.operador_id = u.id AND u.tenant_id = a.tenant_id
             $whereClause
             ORDER BY a.veiculo_id, a.data_abastecimento ASC
         ";

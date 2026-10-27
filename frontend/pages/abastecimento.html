@@ -169,6 +169,12 @@
                             <option value="">Selecione um operador...</option>
                         </select>
                     </div>
+                    <div class="form-group form-group-full">
+                        <label for="observacao_abastecimento">Observação</label>
+                        <textarea id="observacao_abastecimento" rows="3" maxlength="5000"
+                            placeholder="Informe qualquer detalhe relevante sobre o abastecimento (opcional)..."></textarea>
+                        <span class="form-hint">Campo opcional. A informação ficará disponível no histórico e nos relatórios.</span>
+                    </div>
                 </div>
                 <!-- Preview de custo -->
                 <div class="calc-preview" id="calcPreviewAbast">
@@ -218,11 +224,12 @@
                             <th>Valor</th>
                             <th>Combustível</th>
                             <th>Operador</th>
+                            <th>Observação</th>
                         </tr>
                     </thead>
                     <tbody id="listaAbastecimentos">
                         <tr class="empty-row">
-                            <td colspan="7">
+                            <td colspan="8">
                                 <i class="fas fa-gas-pump"></i>
                                 <p>Nenhum abastecimento registrado</p>
                             </td>
@@ -407,6 +414,7 @@
                                 <th>Consumo</th>
                                 <th>Combustível</th>
                                 <th>Operador</th>
+                                <th>Observação</th>
                             </tr>
                         </thead>
                         <tbody id="relatorioDetalhado"></tbody>

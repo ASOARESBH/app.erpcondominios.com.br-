@@ -92,6 +92,10 @@ No POST manual, a unidade de Visitante/Prestador é resolvida novamente pelo `mo
 
 As páginas de Manutenção (`hidrometro`, `leitura`, `relatorios_hidrometro`, `abastecimento`, `estoque`, `inventario`, `relatorios_inventario`, `ordens_servico`, `imprimir_os`, `checklists` e `documentos`) são rotas RBAC próprias. O `MenuController` e a visão geral ocultam cards/abas sem `visualizar`, e o `AppRouter` bloqueia a URL direta. As APIs de Estoque, Abastecimento, Checklists, Hidrômetros, Leituras, Inventário e Ordens de Serviço, incluindo relatórios PDF/gerenciais, validam novamente `rbacExigir()` no servidor; o perfil legado `operador` não libera esses recursos quando há uma negação individual.
 
+### 10.0.1 Abastecimento — observação do lançamento
+
+`POST /api/api_abastecimento.php` com `action=lancar_abastecimento` aceita o campo opcional `observacao`. O valor é gravado em `abastecimento_lancamentos.observacao` e retorna nas ações `listar_abastecimentos` e `relatorio`, sempre filtrado pelo `tenant_id` da sessão. A tela também o inclui no CSV; o PDF é gerado por `api/api_relatorio_abastecimento_pdf.php` com a mesma coluna. A migration compatível com MySQL/MariaDB 5.7 é `sql/migration_observacao_abastecimento_mysql57.sql`.
+
 ## 10.1 Ordens de Serviço — escopo por usuário e departamento
 
 `GET api/api_ordens_servico.php?acao=listar_permissoes_os&usuario_id=...` e `POST ...` com `acao=salvar_permissoes_os` são exclusivos de administradores/gerentes e operam somente no `tenant_id` da sessão. A matriz grava `visualizar`, `criar`, `editar` e `excluir` por usuário e departamento em `os_permissoes_departamento`; o checkbox `restritivo_os` grava em `os_usuarios_config` e, quando ativo, limita dashboard, listagem, detalhe, relatórios, interações, materiais e imagens às O.S. abertas pelo próprio usuário.

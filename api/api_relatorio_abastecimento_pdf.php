@@ -13,7 +13,7 @@
  *   combustivel  — Tipo de combustível (opcional)
  *   print        — Se "true", dispara window.print() automaticamente
  *
- * @version 1.1.0
+ * @version 1.2.0
  */
 
 // ── 1. Bootstrap ──────────────────────────────────────────────
@@ -70,9 +70,9 @@ $combustivel = trim($_GET['combustivel'] ?? '');
 $auto_print  = ($_GET['print'] ?? '') === 'true';
 
 // ── 5. Query principal ────────────────────────────────────────
-$where  = [];
-$params = [];
-$types  = '';
+$where  = ['a.tenant_id = ?'];
+$params = [$tenant_id];
+$types  = 'i';
 
 if ($veiculo_id !== '') {
     $where[]  = "a.veiculo_id = ?";
@@ -104,12 +104,13 @@ $sql = "
         a.litros,
         a.valor,
         a.tipo_combustivel,
+        a.observacao,
         v.placa  AS veiculo_placa,
         v.modelo AS veiculo_modelo,
         u.nome   AS operador_nome
     FROM abastecimento_lancamentos a
-    INNER JOIN abastecimento_veiculos v ON a.veiculo_id = v.id
-    INNER JOIN usuarios              u ON a.operador_id = u.id
+    INNER JOIN abastecimento_veiculos v ON a.veiculo_id = v.id AND v.tenant_id = a.tenant_id
+    INNER JOIN usuarios              u ON a.operador_id = u.id AND u.tenant_id = a.tenant_id
     $whereClause
     ORDER BY a.data_abastecimento DESC
 ";
@@ -144,10 +145,10 @@ if ($result) {
 // ── 6. Dados do veículo selecionado (para o filtro info) ──────
 $veiculo_label = 'Todos os veículos';
 if ($veiculo_id !== '') {
-    $stmt_v = $conn->prepare("SELECT placa, modelo FROM abastecimento_veiculos WHERE id = ?");
+    $stmt_v = $conn->prepare("SELECT placa, modelo FROM abastecimento_veiculos WHERE id = ? AND tenant_id = ?");
     if ($stmt_v) {
         $vid = (int) $veiculo_id;
-        $stmt_v->bind_param('i', $vid);
+        $stmt_v->bind_param('ii', $vid, $tenant_id);
         $stmt_v->execute();
         $res_v = $stmt_v->get_result()->fetch_assoc();
         if ($res_v) {
@@ -316,6 +317,15 @@ function fmt_num($n, $dec = 2) {
         }
         td.r { text-align: right; }
 
+        td.observation-cell {
+            min-width: 150px;
+            max-width: 230px;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+        }
+        .muted { color: #94a3b8; font-style: italic; }
+
         tbody tr:nth-child(even) { background: var(--bg-alt); }
         tbody tr:hover           { background: #eff6ff; }
 
@@ -448,6 +458,7 @@ function fmt_num($n, $dec = 2) {
                 <th>KM</th>
                 <th>Combustível</th>
                 <th>Operador</th>
+                <th>Observação</th>
                 <th class="r">Litros</th>
                 <th class="r">Valor (R$)</th>
             </tr>
@@ -466,13 +477,14 @@ function fmt_num($n, $dec = 2) {
                             </span>
                         </td>
                         <td><?= htmlspecialchars($row['operador_nome']) ?></td>
+                        <td class="observation-cell"><?= $row['observacao'] !== null && $row['observacao'] !== '' ? nl2br(htmlspecialchars($row['observacao'])) : '<span class="muted">—</span>' ?></td>
                         <td class="r"><?= fmt_num((float)$row['litros']) ?> L</td>
                         <td class="r">R$ <?= fmt_num((float)$row['valor']) ?></td>
                     </tr>
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr class="empty-row">
-                    <td colspan="8">Nenhum registro encontrado para os filtros selecionados.</td>
+                    <td colspan="9">Nenhum registro encontrado para os filtros selecionados.</td>
                 </tr>
             <?php endif; ?>
         </tbody>

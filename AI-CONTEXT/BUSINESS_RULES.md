@@ -51,3 +51,9 @@ O Registro Manual pode lançar acessos em dois modos: `VEICULO`, quando a placa 
 - A tela Sistema > Moradores possui abas separadas para campos de Moradores e de Dependentes, com configuração por tenant e validação duplicada no frontend e no backend.
 - Nome, CPF e unidade do Morador permanecem estruturais; no Dependente, o vínculo com o morador titular e o nome completo permanecem estruturais. Os outros campos podem ser definidos como obrigatórios ou opcionais pelo usuário com `Sistema > Configurar`.
 - A opção `Permitir mais de um veículo por dependente` é desativada por padrão para preservar os dados e o comportamento existentes. Quando habilitada, o Dependente pode receber vários veículos, sem alterar a unicidade de placa e TAG do tenant.
+
+## 10. Abastecimento
+
+- O lançamento de abastecimento pode receber uma observação livre e opcional para registrar qualquer detalhe operacional relevante.
+- A observação acompanha o lançamento e deve aparecer no histórico da aba Lançamento, no relatório HTML, no CSV exportado e no PDF, sem alterar cálculos de saldo, KM, litros ou consumo.
+- Nenhum registro antigo é invalidado: quando a observação não existir, a interface exibe `—` e o relatório mantém os demais dados.

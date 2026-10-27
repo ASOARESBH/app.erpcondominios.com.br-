@@ -12,7 +12,7 @@
  *  - Relatórios: filtros, KPIs e tabela detalhada
  *
  * @module abastecimento
- * @version 2.0.0
+ * @version 2.1.0
  */
 'use strict';
 
@@ -356,6 +356,7 @@ async function _lancarAbastecimento() {
         valor               : valor,
         tipo_combustivel    : document.getElementById('tipo_combustivel').value,
         operador_id         : document.getElementById('operador_id').value,
+        observacao          : (document.getElementById('observacao_abastecimento').value || '').trim(),
     };
 
     // ═══ PROTEÇÃO CAMADA 2: chave de idempotência (30s de janela) ═══
@@ -421,6 +422,7 @@ function _renderAbastecimentos() {
             <td><strong>R$ ${_formatarMoeda(a.valor)}</strong></td>
             <td>${_esc(a.tipo_combustivel)}</td>
             <td>${_esc(a.operador_nome)}</td>
+            <td class="observacao-cell">${a.observacao ? _esc(a.observacao) : '<span class="observacao-vazia">—</span>'}</td>
         </tr>
     `).join('');
 }
@@ -761,6 +763,7 @@ function _renderRelatorio(dados) {
                     <td>${consumo}</td>
                     <td>${_esc(d.tipo_combustivel)}</td>
                     <td>${_esc(d.operador_nome)}</td>
+                    <td class="observacao-cell">${d.observacao ? _esc(d.observacao) : '<span class="observacao-vazia">—</span>'}</td>
                 </tr>
             `;
         }).join('');
@@ -776,7 +779,7 @@ function _exportarCSV() {
         return;
     }
 
-    const headers = ['Data/Hora','Modelo','Placa','KM','Litros','Valor','Combustível','Operador'];
+    const headers = ['Data/Hora','Modelo','Placa','KM','Litros','Valor','Combustível','Operador','Observação'];
     const rows = _state.relatorioData.map(d => [
         _formatarData(d.data_abastecimento),
         d.veiculo_modelo,
@@ -786,6 +789,7 @@ function _exportarCSV() {
         parseFloat(d.valor).toFixed(2),
         d.tipo_combustivel,
         d.operador_nome,
+        d.observacao || '',
     ]);
 
     const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
