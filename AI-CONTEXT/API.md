@@ -117,3 +117,12 @@ Dependentes são um subrecurso do módulo Moradores e não possuem uma permissã
 `frontend/js/pages/moradores.js` refletem a mesma matriz: um usuário somente visualizador
 consegue consultar moradores, dependentes, anexos e relatórios, mas não vê nem executa
 criar, editar ou excluir.
+
+
+## 12. Parâmetros de Moradores e Dependentes
+
+- `GET /api/api_config_moradores.php`: retorna, para o tenant da sessão, os campos configuráveis de `moradores` e `dependentes`, além das regras operacionais. A ação exige `sistema.visualizar` no RBAC.
+- `PUT /api/api_config_moradores.php`: grava somente as chaves do catálogo oficial, sem aceitar `tenant_id` do cliente. A ação exige `sistema.configurar` e registra auditoria quando o RBAC está instalado.
+- Campos estruturais (`moradores.nome`, `moradores.cpf`, `moradores.unidade`, `dependentes.morador_id` e `dependentes.nome_completo`) permanecem obrigatórios e não podem ser desativados. Os demais campos são aplicados pelo backend de Moradores e Dependentes.
+- A opção `dependente_multiplos_veiculos` controla `POST /api/api_veiculos.php`: desativada, preserva o limite legado de um veículo por dependente; ativada, permite vários veículos do mesmo dependente. A unicidade de placa e TAG por tenant continua valendo.
+- A estrutura é instalada por `sql/migration_config_cadastro_moradores_mysql57.sql`. Sem a migration, a API opera em modo de compatibilidade com os defaults atuais e rejeita gravações de configuração.

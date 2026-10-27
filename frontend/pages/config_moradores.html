@@ -1,0 +1,63 @@
+<div id="page-metadata" data-title="Parâmetros de Moradores" data-icon="fa-users-cog" style="display:none"></div>
+
+<div class="page-wrapper page-config-moradores">
+    <nav class="stub-breadcrumb">
+        <span data-page="configuracao"><i class="fas fa-cog"></i> Configurações</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span data-page="sistema">Sistema</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span>Moradores</span>
+    </nav>
+
+    <div class="page-header">
+        <h1><i class="fas fa-users-cog"></i> Parâmetros de Moradores</h1>
+        <p>Defina os campos obrigatórios e as regras de cadastro deste condomínio.</p>
+    </div>
+
+    <div id="configMoradoresAlerta" aria-live="polite"></div>
+
+    <div class="page-card config-moradores-card">
+        <div class="config-moradores-intro">
+            <div class="config-moradores-intro-icon"><i class="fas fa-sliders-h"></i></div>
+            <div>
+                <h2>Configuração por condomínio</h2>
+                <p>As regras são aplicadas no formulário e confirmadas no servidor antes de gravar qualquer cadastro.</p>
+            </div>
+        </div>
+
+        <div class="config-moradores-note">
+            <i class="fas fa-shield-alt"></i>
+            <span>Somente usuários com permissão de <strong>Sistema &gt; Configurar</strong> podem alterar estas regras. Campos estruturais não podem ser desativados.</span>
+        </div>
+
+        <div id="configMoradoresLoading" class="loading config-moradores-loading">
+            <i class="fas fa-spinner fa-spin"></i><span>Carregando parâmetros do condomínio...</span>
+        </div>
+
+        <div class="config-moradores-tabs" role="tablist" aria-label="Parâmetros de moradores">
+            <button type="button" class="config-moradores-tab active" data-config-tab="moradores" role="tab" aria-selected="true"><i class="fas fa-user"></i> Moradores</button>
+            <button type="button" class="config-moradores-tab" data-config-tab="dependentes" role="tab" aria-selected="false"><i class="fas fa-user-friends"></i> Dependentes</button>
+        </div>
+
+        <section id="configMoradoresGrupoMoradores" class="config-moradores-panel active" data-config-panel="moradores" role="tabpanel">
+            <div class="config-moradores-panel-heading">
+                <div><h2>Cadastro de Moradores</h2><p>Escolha quais dados complementares devem ser exigidos no cadastro.</p></div>
+            </div>
+            <div id="configMoradoresListaMoradores" class="config-moradores-lista"></div>
+        </section>
+
+        <section id="configMoradoresGrupoDependentes" class="config-moradores-panel" data-config-panel="dependentes" role="tabpanel" hidden>
+            <div class="config-moradores-panel-heading">
+                <div><h2>Cadastro de Dependentes</h2><p>Controle os dados do dependente e o vínculo com o morador titular.</p></div>
+            </div>
+            <div id="configMoradoresListaDependentes" class="config-moradores-lista"></div>
+            <div class="config-moradores-regras-heading"><h3><i class="fas fa-car"></i> Regras de veículos</h3><span>Aplicadas também no cadastro de Veículos.</span></div>
+            <div id="configMoradoresListaOpcoes" class="config-moradores-opcoes"></div>
+        </section>
+
+        <div class="form-actions config-moradores-actions">
+            <button type="button" id="btnSalvarConfigMoradores" class="btn-primary-modern"><i class="fas fa-save"></i> Salvar configurações</button>
+            <button type="button" id="btnVoltarSistemaMoradores" class="btn-secondary-modern"><i class="fas fa-arrow-left"></i> Voltar ao Sistema</button>
+        </div>
+    </div>
+</div>

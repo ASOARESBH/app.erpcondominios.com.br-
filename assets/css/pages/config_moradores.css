@@ -1,0 +1,49 @@
+.page-config-moradores .config-moradores-card { max-width:1080px; }
+.config-moradores-intro { display:flex; align-items:center; gap:14px; padding-bottom:18px; border-bottom:1px solid #e2e8f0; }
+.config-moradores-intro-icon { width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#1d4ed8; background:#dbeafe; font-size:20px; flex:0 0 auto; }
+.config-moradores-intro h2 { margin:0 0 4px; color:#1e293b; font-size:18px; }
+.config-moradores-intro p { margin:0; color:#64748b; font-size:13px; line-height:1.5; }
+.config-moradores-note { display:flex; gap:9px; margin:18px 0; padding:11px 13px; border:1px solid #bfdbfe; border-radius:9px; color:#1e40af; background:#eff6ff; font-size:12px; line-height:1.45; }
+.config-moradores-note i { margin-top:2px; }
+.config-moradores-loading { min-height:130px; align-items:center; justify-content:center; gap:9px; color:#2563eb; }
+.config-moradores-tabs { display:flex; gap:8px; margin:20px 0 16px; border-bottom:1px solid #e2e8f0; }
+.config-moradores-tab { border:0; border-bottom:3px solid transparent; background:transparent; color:#64748b; padding:11px 16px; cursor:pointer; font-weight:700; font-size:13px; }
+.config-moradores-tab:hover { color:#1d4ed8; background:#f8fafc; }
+.config-moradores-tab.active { color:#1d4ed8; border-bottom-color:#2563eb; }
+.config-moradores-panel-heading { margin-bottom:14px; }
+.config-moradores-panel-heading h2 { margin:0 0 4px; color:#1e293b; font-size:16px; }
+.config-moradores-panel-heading p { margin:0; color:#64748b; font-size:12px; }
+.config-moradores-panel[hidden] { display:none; }
+.config-moradores-lista { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.config-campo-item, .config-moradores-opcao { position:relative; display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:center; gap:10px; min-height:86px; padding:13px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; cursor:pointer; transition:border-color .18s,box-shadow .18s,background .18s; }
+.config-campo-item:hover, .config-moradores-opcao:hover { border-color:#93c5fd; box-shadow:0 2px 8px rgba(37,99,235,.08); }
+.config-campo-item.ativo, .config-moradores-opcao.ativo { border-color:#86efac; background:#f0fdf4; }
+.config-campo-item.fixo { cursor:default; background:#f8fafc; }
+.config-campo-icone, .config-moradores-opcao-icone { width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#2563eb; background:#eff6ff; }
+.config-campo-item.ativo .config-campo-icone, .config-moradores-opcao.ativo .config-moradores-opcao-icone { color:#15803d; background:#dcfce7; }
+.config-campo-texto, .config-moradores-opcao-texto { min-width:0; display:flex; flex-direction:column; gap:3px; }
+.config-campo-texto strong, .config-moradores-opcao-texto strong { color:#1e293b; font-size:13px; }
+.config-campo-texto strong em { color:#64748b; font-size:9px; font-style:normal; text-transform:uppercase; letter-spacing:.35px; }
+.config-campo-texto small, .config-moradores-opcao-texto small { color:#64748b; line-height:1.35; font-size:11px; }
+.config-campo-switch { position:relative; width:42px; height:24px; flex:0 0 auto; }
+.config-campo-switch input { opacity:0; width:0; height:0; }
+.config-switch-slider { position:absolute; inset:0; border-radius:999px; background:#cbd5e1; transition:.2s; }
+.config-switch-slider:before { content:''; position:absolute; width:18px; height:18px; left:3px; top:3px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.18); transition:.2s; }
+.config-campo-switch input:checked + .config-switch-slider { background:#16a34a; }
+.config-campo-switch input:checked + .config-switch-slider:before { transform:translateX(18px); }
+.config-campo-switch input:focus + .config-switch-slider { outline:3px solid rgba(37,99,235,.25); }
+.config-campo-switch input:disabled + .config-switch-slider { opacity:.55; cursor:not-allowed; }
+.config-campo-status { grid-column:2 / 4; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.35px; }
+.config-campo-item.ativo .config-campo-status, .config-moradores-opcao.ativo .config-campo-status { color:#15803d; }
+.config-moradores-regras-heading { display:flex; align-items:baseline; gap:9px; margin:25px 0 12px; padding-top:18px; border-top:1px solid #e2e8f0; }
+.config-moradores-regras-heading h3 { margin:0; color:#1e293b; font-size:14px; }
+.config-moradores-regras-heading span { color:#64748b; font-size:11px; }
+.config-moradores-opcoes { display:grid; grid-template-columns:1fr; gap:12px; }
+.config-moradores-actions { margin-top:22px; padding-top:16px; border-top:1px solid #e2e8f0; }
+@media (max-width:760px) {
+    .config-moradores-lista { grid-template-columns:1fr; }
+    .config-moradores-intro { align-items:flex-start; }
+    .config-moradores-tab { flex:1; padding-left:8px; padding-right:8px; }
+    .config-moradores-regras-heading { display:block; }
+    .config-moradores-regras-heading span { display:block; margin-top:4px; }
+}

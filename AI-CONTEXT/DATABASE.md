@@ -72,3 +72,8 @@ departamentos autorizados; a restritividade reduz o conjunto à autoria.
 legada `/projetos`. A migration canônica é
 `sql/migration_projetos_slug_tenant_mysql57.sql`; o backend nunca aceita
 `tenant_id` do navegador e resolve o tenant exclusivamente pelo slug cadastrado.
+
+
+## 10. Configuração de Moradores e Dependentes
+
+`config_moradores_campos` guarda a obrigatoriedade dos campos dos grupos `moradores` e `dependentes` por `(tenant_id, grupo, campo)`. `config_moradores_opcoes` guarda regras operacionais por `(tenant_id, opcao)`, incluindo `dependente_multiplos_veiculos`. Ambas as tabelas preservam o usuário que alterou a regra e são criadas pela migration `sql/migration_config_cadastro_moradores_mysql57.sql`. O backend resolve o tenant pela sessão; nunca usa `tenant_id` enviado pelo navegador.

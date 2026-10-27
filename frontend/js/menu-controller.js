@@ -46,7 +46,7 @@
         imprimir_os:'imprimir_os', checklists:'checklists', documentos:'documentos',
         administrativa:'administrativo', recursos_humanos:'recursos_humanos',
         usuarios:'usuarios', empresa:'empresa', dispositivos:'dispositivos', seguranca:'seguranca', sistema:'sistema', config_visitantes:'sistema',
-        meu_perfil:'meu_perfil', inadimplencia:'inadimplencia', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin'
+        meu_perfil:'meu_perfil', inadimplencia:'inadimplencia', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin', config_moradores:'sistema'
     };
 
     function emContextoGlobalSuperAdmin() {

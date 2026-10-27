@@ -18,6 +18,7 @@ require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 require_once __DIR__ . '/helpers/email_alertas_dispatcher.php';
+require_once __DIR__ . '/helpers/moradores_config_helper.php';
 
 // Limpar buffer e definir headers
 ob_end_clean();
@@ -84,6 +85,7 @@ $tenant_id = exigirTenantId();
     if (!$conexao) {
         throw new Exception("Erro ao conectar ao banco de dados");
     }
+    $configMoradores = moradores_obter_configuracao($conexao, (int)$tenant_id);
     
     // O RBAC granular é a fonte de verdade deste módulo. A checagem legada
     // de nível admin bloqueava operadores autorizados individualmente e,
@@ -305,8 +307,13 @@ $tenant_id = exigirTenantId();
         $observacao = sanitizar($conexao, $dados['observacao'] ?? '');
         
         // Validações
-        if (empty($nome) || empty($cpf) || empty($unidade) || empty($email) || empty($senha)) {
-            retornar_json(false, "Todos os campos obrigatórios devem ser preenchidos");
+        $erroConfiguracao = moradores_validar_campos_configurados($configMoradores, [
+            'nome' => $nome, 'cpf' => $cpf, 'unidade' => $unidade, 'email' => $email,
+            'senha' => $senha, 'telefone' => $telefone, 'celular' => $celular, 'observacao' => $observacao,
+        ], 'moradores');
+        if ($erroConfiguracao) retornar_json(false, $erroConfiguracao);
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            retornar_json(false, "Informe um e-mail válido");
         }
         
         if (!validar_cpf_morador($cpf)) {
@@ -329,7 +336,7 @@ $tenant_id = exigirTenantId();
         $stmt->close();
         
         // Criptografar senha
-        $senha_hash = password_hash($senha, PASSWORD_DEFAULT);
+        $senha_hash = $senha !== '' ? password_hash($senha, PASSWORD_DEFAULT) : '';
         
         // Inserir morador
         // tenant_id gravado explicitamente: sem isso, a coluna (adicionada via
@@ -387,9 +394,16 @@ $tenant_id = exigirTenantId();
         $celular = sanitizar($conexao, $dados['celular'] ?? '');
         $observacao = sanitizar($conexao, $dados['observacao'] ?? '');
         
-        // Validações
-        if ($id <= 0 || empty($nome) || empty($cpf) || empty($unidade) || empty($email)) {
+        if ($id <= 0) {
             retornar_json(false, "Dados inválidos para atualização");
+        }
+        $erroConfiguracao = moradores_validar_campos_configurados($configMoradores, [
+            'nome' => $nome, 'cpf' => $cpf, 'unidade' => $unidade, 'email' => $email,
+            'telefone' => $telefone, 'celular' => $celular, 'observacao' => $observacao,
+        ], 'moradores', true);
+        if ($erroConfiguracao) retornar_json(false, $erroConfiguracao);
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            retornar_json(false, "Informe um e-mail válido");
         }
         
         // Verificar se CPF já existe em outro morador

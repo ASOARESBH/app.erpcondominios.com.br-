@@ -18,6 +18,7 @@ const API_MORADORES   = '../api/api_moradores.php';
 const API_DEPENDENTES = '../api/api_dependentes.php';
 const API_ANEXOS      = '../api/api_moradores_anexos.php';
 const API_UNIDADES    = '../api/api_unidades.php';
+const API_CONFIG_MORADORES = '../api/api_config_moradores.php';
 
 // ── Estado interno ─────────────────────────────────────────────────────────────
 let _currentTab = 'moradores';
@@ -28,6 +29,7 @@ let _cpfDuplicado = false;
 let _depCpfDuplicado = false;
 let _depCpfValidado = false;
 let _depCpfCheckSeq = 0;
+let _configMoradores = null;
 
 // Paginação de moradores
 const POR_PAGINA = 25;
@@ -71,6 +73,7 @@ export function init() {
     _setupCascataUnidadeDependente();
     _setupForms();
     _setupFileDrop();
+    _carregarConfiguracaoMoradores();
     _carregarUnidades();
     _carregarMoradores();
     _carregarDependentes();
@@ -160,6 +163,40 @@ export function init() {
 export function destroy() {
     log('Destruindo módulo...');
     delete window.MoradoresPage;
+    _configMoradores = null;
+}
+
+function _campoObrigatorio(grupo, campo, padrao = true) {
+    const configurado = _configMoradores?.campos?.[grupo]?.find(item => item.campo === campo);
+    return configurado ? Boolean(configurado.obrigatorio) : padrao;
+}
+
+function _aplicarConfiguracaoMoradores(configuracao) {
+    _configMoradores = configuracao;
+    const campos = {
+        moradores: {
+            email: ['email', 'edit-morador-email'], senha: ['senha'], telefone: ['telefone', 'edit-morador-telefone'],
+            celular: ['celular', 'edit-morador-celular'], observacao: ['observacao', 'edit-morador-observacao'],
+        },
+        dependentes: {
+            parentesco: ['parentesco', 'edit-dep-parentesco'], cpf: ['cpfDependente', 'edit-dep-cpf'],
+            email: ['emailDependente', 'edit-dep-email'], telefone: ['telefoneDependente', 'edit-dep-telefone'],
+            celular: ['celularDependente', 'edit-dep-celular'], observacao: ['observacaoDependente', 'edit-dep-observacao'],
+        },
+    };
+    Object.entries(campos).forEach(([grupo, itens]) => Object.entries(itens).forEach(([campo, ids]) => {
+        ids.forEach(id => { const elemento = document.getElementById(id); if (elemento) elemento.required = _campoObrigatorio(grupo, campo, false); });
+    }));
+}
+
+async function _carregarConfiguracaoMoradores() {
+    try {
+        const resposta = await fetch(`${API_CONFIG_MORADORES}?_ts=${Date.now()}`, { credentials: 'include', cache: 'no-store' });
+        const dados = await resposta.json();
+        if (resposta.ok && dados.sucesso && dados.dados) _aplicarConfiguracaoMoradores(dados.dados);
+    } catch (erro) {
+        log('Configuração de campos indisponível; mantendo regras padrão:', erro);
+    }
 }
 
 function _aplicarPermissoesMoradores(perms) {
@@ -649,7 +686,9 @@ function _salvarMorador() {
         observacao: document.getElementById('observacao')?.value?.trim(),
     };
 
-    if (!dados.nome || !dados.cpf || !dados.unidade || !dados.email || !dados.senha) {
+    if (!dados.nome || !dados.cpf || !dados.unidade ||
+        (_campoObrigatorio('moradores', 'email') && !dados.email) ||
+        (_campoObrigatorio('moradores', 'senha') && !dados.senha)) {
         _toast('Preencha todos os campos obrigatórios (*)', 'error'); return;
     }
 
@@ -778,7 +817,7 @@ function _salvarEdicaoMorador() {
     const senha = document.getElementById('edit-morador-senha')?.value;
     if (senha) dados.senha = senha;
 
-    if (!dados.nome || !dados.cpf || !dados.unidade || !dados.email) {
+    if (!dados.nome || !dados.cpf || !dados.unidade || (_campoObrigatorio('moradores', 'email') && !dados.email)) {
         _toast('Preencha todos os campos obrigatórios (*)', 'error'); return;
     }
 
@@ -941,6 +980,12 @@ function _buscarDependentes() {
 async function _consultarCPFDependente(campo, mostrarAlerta = true) {
     const cpf = campo?.value || '';
     _depCpfValidado = false;
+    if (!cpf && !_campoObrigatorio('dependentes', 'cpf', true)) {
+        _depCpfDuplicado = false;
+        _depCpfValidado = true;
+        _marcarCPF(campo, '');
+        return true;
+    }
     if (!validarCPF(cpf)) {
         _depCpfDuplicado = false;
         _marcarCPF(campo, cpf ? 'CPF inválido. Confira os dígitos.' : 'CPF é obrigatório.');
@@ -991,7 +1036,8 @@ function _setupValidacaoCPFDependente() {
         _depCpfValidado = false;
         _depCpfDuplicado = false;
         _depCpfCheckSeq++;
-        if (!campo.value) _marcarCPF(campo, 'CPF é obrigatório.');
+        if (!campo.value && !_campoObrigatorio('dependentes', 'cpf', true)) _marcarCPF(campo, '');
+        else if (!campo.value) _marcarCPF(campo, 'CPF é obrigatório.');
         else if (campo.value.replace(/\D/g, '').length < 11) _marcarCPF(campo, 'Digite os 11 dígitos do CPF.');
         else if (!validarCPF(campo.value)) _marcarCPF(campo, 'CPF inválido. Confira os dígitos.');
         else _marcarCPF(campo, '');
@@ -1004,13 +1050,19 @@ async function _salvarDependente() {
     log('Salvando novo dependente...');
     const campoCPF = document.getElementById('cpfDependente');
     const cpf = campoCPF?.value || '';
-    if (!validarCPF(cpf)) {
+    if (_campoObrigatorio('dependentes', 'cpf', true) && !validarCPF(cpf)) {
         _marcarCPF(campoCPF, 'CPF inválido. Informe um CPF válido.');
         _toast('Informe um CPF válido antes de salvar o dependente.', 'error');
         campoCPF?.focus();
         return;
     }
-    if (_depCpfDuplicado || !_depCpfValidado || campoCPF?.dataset.cpfChecking === '1') {
+    if (cpf && !validarCPF(cpf)) {
+        _marcarCPF(campoCPF, 'CPF inválido. Informe um CPF válido.');
+        _toast('Informe um CPF válido antes de salvar o dependente.', 'error');
+        campoCPF?.focus();
+        return;
+    }
+    if (_depCpfDuplicado || (cpf && !_depCpfValidado) || campoCPF?.dataset.cpfChecking === '1') {
         _toast('Valide o CPF ao sair do campo antes de salvar o dependente.', 'error');
         campoCPF?.focus();
         return;
@@ -1021,10 +1073,14 @@ async function _salvarDependente() {
         parentesco:    document.getElementById('parentesco')?.value,
         cpf:           document.getElementById('cpfDependente')?.value?.trim(),
         email:         document.getElementById('emailDependente')?.value?.trim(),
+        telefone:      document.getElementById('telefoneDependente')?.value?.trim(),
         celular:       document.getElementById('celularDependente')?.value?.trim(),
+        observacao:    document.getElementById('observacaoDependente')?.value?.trim(),
     };
 
-    if (!document.getElementById('unidadeDependenteCadastro')?.value || !dados.morador_id || !dados.nome_completo || !dados.cpf || !dados.parentesco) {
+    if (!document.getElementById('unidadeDependenteCadastro')?.value || !dados.morador_id || !dados.nome_completo ||
+        (_campoObrigatorio('dependentes', 'cpf', true) && !dados.cpf) ||
+        (_campoObrigatorio('dependentes', 'parentesco', true) && !dados.parentesco)) {
         _toast('Preencha os campos obrigatórios: Unidade, Morador, Nome, CPF e Parentesco', 'error'); return;
     }
 
@@ -1097,6 +1153,7 @@ function _abrirModalEditarDependente(id) {
             document.getElementById('edit-dep-cpf').value        = d.cpf || '';
             document.getElementById('edit-dep-parentesco').value = d.parentesco || '';
             document.getElementById('edit-dep-email').value      = d.email || '';
+            document.getElementById('edit-dep-telefone').value   = d.telefone || '';
             document.getElementById('edit-dep-celular').value    = d.celular || '';
             document.getElementById('edit-dep-observacao').value = d.observacao || '';
 
@@ -1123,12 +1180,14 @@ function _salvarEdicaoDependente() {
         cpf:           document.getElementById('edit-dep-cpf')?.value?.trim(),
         parentesco:    document.getElementById('edit-dep-parentesco')?.value,
         email:         document.getElementById('edit-dep-email')?.value?.trim(),
+        telefone:      document.getElementById('edit-dep-telefone')?.value?.trim(),
         celular:       document.getElementById('edit-dep-celular')?.value?.trim(),
         observacao:    document.getElementById('edit-dep-observacao')?.value?.trim(),
     };
 
-    if (!dados.nome_completo || !dados.cpf) {
-        _toast('Nome completo e CPF são obrigatórios', 'error'); return;
+    if (!dados.nome_completo || (_campoObrigatorio('dependentes', 'cpf', true) && !dados.cpf) ||
+        (_campoObrigatorio('dependentes', 'parentesco', true) && !dados.parentesco)) {
+        _toast('Preencha os campos obrigatórios do dependente.', 'error'); return;
     }
 
     log('Salvando edição dependente:', dados);

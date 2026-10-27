@@ -32,3 +32,8 @@ O ERP é dividido em módulos de negócios independentes, acessíveis pelo `side
 
 ## 6. Projetos e Obras
 - **Projetos**: classificação pública de uma O.S. existente (`os_chamados.projeto_publico=1`), com etapas, percentual, timeline, fotos e documentos; a aba Empresa configura o slug exclusivo do tenant para compartilhar `/projetos/{slug}` sem duplicar o cadastro operacional.
+
+
+## 7. Parâmetros de Moradores
+
+A rota SPA `config_moradores` pertence ao módulo protegido `sistema` e é acessada pelo cartão Moradores em Parâmetros do Sistema. A página possui as abas Moradores e Dependentes e configura campos obrigatórios e a regra de múltiplos veículos por dependente. O consumo administrativo usa `api/api_config_moradores.php`; o cadastro efetivo continua nos endpoints canônicos `api/api_moradores.php`, `api/api_dependentes.php` e `api/api_veiculos.php`.

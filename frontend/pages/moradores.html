@@ -58,12 +58,12 @@
                 </div>
                 <div class="form-grid">
                     <div>
-                        <label>Email *</label>
-                        <input type="email" id="email" required placeholder="email@exemplo.com">
+                        <label>Email</label>
+                        <input type="email" id="email" placeholder="email@exemplo.com">
                     </div>
                     <div>
-                        <label>Senha *</label>
-                        <input type="password" id="senha" required placeholder="Senha de acesso ao portal">
+                        <label>Senha</label>
+                        <input type="password" id="senha" placeholder="Senha de acesso ao portal">
                     </div>
                     <div>
                         <label>Telefone</label>
@@ -156,8 +156,8 @@
                         <input type="text" id="nomeDependente" required placeholder="Nome do dependente">
                     </div>
                     <div>
-                        <label>Parentesco *</label>
-                        <select id="parentesco" required>
+                        <label>Parentesco</label>
+                        <select id="parentesco">
                             <option value="">Selecione...</option>
                             <option value="Cônjuge">Cônjuge</option>
                             <option value="Filho(a)">Filho(a)</option>
@@ -168,8 +168,8 @@
                 </div>
                 <div class="form-grid">
                     <div>
-                        <label>CPF *</label>
-                        <input type="text" id="cpfDependente" required placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="off" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" aria-describedby="cpf-dependente-ajuda">
+                        <label>CPF</label>
+                        <input type="text" id="cpfDependente" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="off" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" aria-describedby="cpf-dependente-ajuda">
                         <small id="cpf-dependente-ajuda" class="field-help">Digite um CPF válido para verificar o cadastro.</small>
                     </div>
                     <div>
@@ -179,6 +179,14 @@
                     <div>
                         <label>Telefone Celular</label>
                         <input type="tel" id="celularDependente" placeholder="(00) 90000-0000">
+                    </div>
+                    <div>
+                        <label>Telefone</label>
+                        <input type="tel" id="telefoneDependente" placeholder="(00) 0000-0000">
+                    </div>
+                    <div>
+                        <label>Observação</label>
+                        <input type="text" id="observacaoDependente" placeholder="Observações">
                     </div>
                 </div>
                 <button type="submit" class="btn-primary-modern" data-mor-perm="criar">
@@ -434,8 +442,8 @@
                 </div>
                 <div class="form-grid">
                     <div>
-                        <label>Email *</label>
-                        <input type="email" id="edit-morador-email" required placeholder="email@exemplo.com">
+                        <label>Email</label>
+                        <input type="email" id="edit-morador-email" placeholder="email@exemplo.com">
                     </div>
                     <div>
                         <label>Telefone</label>
@@ -487,12 +495,12 @@
                         <input type="text" id="edit-dep-nome" required placeholder="Nome completo">
                     </div>
                     <div>
-                        <label>CPF *</label>
-                        <input type="text" id="edit-dep-cpf" required placeholder="000.000.000-00" maxlength="14">
+                        <label>CPF</label>
+                        <input type="text" id="edit-dep-cpf" placeholder="000.000.000-00" maxlength="14">
                     </div>
                     <div>
-                        <label>Parentesco *</label>
-                        <select id="edit-dep-parentesco" required>
+                        <label>Parentesco</label>
+                        <select id="edit-dep-parentesco">
                             <option value="">Selecione...</option>
                             <option value="Cônjuge">Cônjuge</option>
                             <option value="Filho(a)">Filho(a)</option>
@@ -509,6 +517,10 @@
                     <div>
                         <label>Telefone Celular</label>
                         <input type="tel" id="edit-dep-celular" placeholder="(00) 90000-0000">
+                    </div>
+                    <div>
+                        <label>Telefone</label>
+                        <input type="tel" id="edit-dep-telefone" placeholder="(00) 0000-0000">
                     </div>
                     <div>
                         <label>Observação</label>

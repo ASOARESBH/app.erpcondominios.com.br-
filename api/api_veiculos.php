@@ -11,7 +11,7 @@
  * 6. Deletar veículo
  * 7. Validar placa duplicada
  * 8. Validar TAG duplicada
- * 9. Validar um veículo por dependente
+ * 9. Validar um veículo por dependente conforme a regra do tenant
  */
 
 // Limpar qualquer saída anterior
@@ -23,6 +23,7 @@ require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
 require_once 'debug_veiculos.php';
 require_once __DIR__ . '/helpers/access_control_notification_helper.php';
+require_once __DIR__ . '/helpers/moradores_config_helper.php';
 
 // Registrar debug inicial
 registrar_debug('INICIO', 'API de veículos iniciada', array(
@@ -236,6 +237,7 @@ $tenant_id = exigirTenantId();
     if (!$conexao) {
         throw new Exception("Erro ao conectar ao banco de dados");
     }
+    $configMoradores = moradores_obter_configuracao($conexao, (int)$tenant_id);
 
     // Para operações de escrita, verificar permissão de admin
     if ($metodo !== 'GET') {
@@ -721,20 +723,22 @@ $tenant_id = exigirTenantId();
                 }
                 $stmt->close();
                 
-                // Verificar se dependente já tem um veículo
-                $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = $tenant_id AND dependente_id = ?");
-                if (!$stmt) {
-                    throw new Exception("Erro ao preparar query: " . $conexao->error);
-                }
-                $stmt->bind_param("i", $dependente_id);
-                $stmt->execute();
-                $stmt->store_result();
-                
-                if ($stmt->num_rows > 0) {
+                if (!moradores_config_opcao_habilitada($configMoradores, 'dependente_multiplos_veiculos')) {
+                    // Compatibilidade: a regra original continua valendo quando a opção estiver desligada.
+                    $stmt = $conexao->prepare("SELECT id FROM veiculos WHERE tenant_id = ? AND dependente_id = ?");
+                    if (!$stmt) {
+                        throw new Exception("Erro ao preparar query: " . $conexao->error);
+                    }
+                    $stmt->bind_param("ii", $tenant_id, $dependente_id);
+                    $stmt->execute();
+                    $stmt->store_result();
+
+                    if ($stmt->num_rows > 0) {
+                        $stmt->close();
+                        retornar_json(false, "Este dependente já possui um veículo cadastrado. Ative em Sistema > Moradores > Dependentes a opção de múltiplos veículos para permitir outro cadastro");
+                    }
                     $stmt->close();
-                    retornar_json(false, "Este dependente já possui um veículo cadastrado. Máximo de 1 veículo por dependente");
                 }
-                $stmt->close();
             }
             
             // Verificar se placa já existe

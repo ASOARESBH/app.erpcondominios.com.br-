@@ -44,3 +44,10 @@ O Registro Manual pode lançar acessos em dois modos: `VEICULO`, quando a placa 
 - Projeto não cria uma entidade paralela: é uma Ordem de Serviço marcada como pública, preservando título, departamento, responsável e datas na O.S. original.
 - Cada tenant pode configurar um `projetos_slug` único na aba Empresa. A URL `/projetos/{slug}` lista somente projetos públicos daquele tenant; `/projetos/{slug}/{id}` detalha apenas uma O.S. pública do mesmo tenant.
 - A página pública é somente leitura. O detalhe oferece compartilhamento nativo/WhatsApp e cópia da URL canônica; a remoção do slug não exclui projetos e mantém a rota legada `/projetos`.
+
+
+## 9. Parâmetros de Moradores e Dependentes
+
+- A tela Sistema > Moradores possui abas separadas para campos de Moradores e de Dependentes, com configuração por tenant e validação duplicada no frontend e no backend.
+- Nome, CPF e unidade do Morador permanecem estruturais; no Dependente, o vínculo com o morador titular e o nome completo permanecem estruturais. Os outros campos podem ser definidos como obrigatórios ou opcionais pelo usuário com `Sistema > Configurar`.
+- A opção `Permitir mais de um veículo por dependente` é desativada por padrão para preservar os dados e o comportamento existentes. Quando habilitada, o Dependente pode receber vários veículos, sem alterar a unicidade de placa e TAG do tenant.

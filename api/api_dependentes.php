@@ -20,6 +20,7 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 require_once 'error_logger.php';
+require_once __DIR__ . '/helpers/moradores_config_helper.php';
 
 // Limpar buffer e definir headers
 ob_end_clean();
@@ -85,6 +86,7 @@ try {
     if (!$conexao) {
         throw new Exception("Erro ao conectar ao banco de dados");
     }
+    $configMoradores = moradores_obter_configuracao($conexao, (int)$tenant_id);
     
     // Dependentes fazem parte do módulo Moradores: visualizar permite
     // consulta, enquanto o CRUD exige a ação correspondente do mesmo módulo.
@@ -288,10 +290,11 @@ try {
         $parentesco = sanitizar($conexao, $dados['parentesco'] ?? '');
         $observacao = sanitizar($conexao, $dados['observacao'] ?? '');
         
-        // Validações
-        if ($morador_id <= 0 || empty($nome_completo) || empty($cpf)) {
-            retornar_json(false, "Morador, nome completo e CPF são obrigatórios");
-        }
+        $erroConfiguracao = moradores_validar_campos_configurados($configMoradores, [
+            'morador_id' => $morador_id, 'nome_completo' => $nome_completo, 'parentesco' => $parentesco,
+            'cpf' => $cpf, 'email' => $email, 'celular' => $celular, 'observacao' => $observacao,
+        ], 'dependentes');
+        if ($erroConfiguracao) retornar_json(false, $erroConfiguracao);
         
         // Verificar se o morador pertence ao mesmo tenant da sessão.
         $stmt = $conexao->prepare("SELECT id FROM moradores WHERE tenant_id = ? AND id = ?");
@@ -308,7 +311,7 @@ try {
         }
         $stmt->close();
         
-        if (!validar_cpf_dependente($cpf)) {
+        if ($cpf !== '' && !validar_cpf_dependente($cpf)) {
             retornar_json(false, 'CPF inválido. Confira os 11 dígitos informados');
         }
 
@@ -318,7 +321,7 @@ try {
         $stmt->bind_param('is', $tenant_id, $cpf);
         if (!$stmt->execute()) throw new Exception('Falha ao consultar CPF');
         $stmt->store_result();
-        if ($stmt->num_rows > 0) {
+        if ($cpf !== '' && $stmt->num_rows > 0) {
             $stmt->close();
             retornar_json(false, 'Este CPF já está vinculado a um morador e não pode ser cadastrado como dependente');
         }
@@ -333,7 +336,7 @@ try {
         $stmt->execute();
         $stmt->store_result();
         
-        if ($stmt->num_rows > 0) {
+        if ($cpf !== '' && $stmt->num_rows > 0) {
             $stmt->close();
             retornar_json(false, "CPF já cadastrado no sistema");
         }
@@ -378,12 +381,16 @@ try {
         $parentesco = sanitizar($conexao, $dados['parentesco'] ?? '');
         $observacao = sanitizar($conexao, $dados['observacao'] ?? '');
         
-        // Validações
-        if ($id <= 0 || empty($nome_completo)) {
-            retornar_json(false, "ID e nome completo são obrigatórios");
+        if ($id <= 0) {
+            retornar_json(false, "ID inválido");
         }
+        $erroConfiguracao = moradores_validar_campos_configurados($configMoradores, [
+            'nome_completo' => $nome_completo, 'parentesco' => $parentesco,
+            'cpf' => $cpf, 'email' => $email, 'celular' => $celular, 'observacao' => $observacao,
+        ], 'dependentes');
+        if ($erroConfiguracao) retornar_json(false, $erroConfiguracao);
         
-        if (!validar_cpf_dependente($cpf)) {
+        if ($cpf !== '' && !validar_cpf_dependente($cpf)) {
             retornar_json(false, 'CPF inválido. Confira os 11 dígitos informados');
         }
 
@@ -392,7 +399,7 @@ try {
         $stmt->bind_param('is', $tenant_id, $cpf);
         $stmt->execute();
         $stmt->store_result();
-        if ($stmt->num_rows > 0) { $stmt->close(); retornar_json(false, 'Este CPF já está vinculado a um morador e não pode ser usado no dependente'); }
+        if ($cpf !== '' && $stmt->num_rows > 0) { $stmt->close(); retornar_json(false, 'Este CPF já está vinculado a um morador e não pode ser usado no dependente'); }
         $stmt->close();
 
         $stmt = $conexao->prepare("SELECT id FROM dependentes WHERE tenant_id = ? AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? AND id != ? LIMIT 1");
@@ -400,7 +407,7 @@ try {
         $stmt->bind_param('isi', $tenant_id, $cpf, $id);
         $stmt->execute();
         $stmt->store_result();
-        if ($stmt->num_rows > 0) { $stmt->close(); retornar_json(false, 'Este CPF já está cadastrado em outro dependente'); }
+        if ($cpf !== '' && $stmt->num_rows > 0) { $stmt->close(); retornar_json(false, 'Este CPF já está cadastrado em outro dependente'); }
         $stmt->close();
 
         // Atualizar dependente
