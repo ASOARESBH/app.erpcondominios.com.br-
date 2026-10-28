@@ -27,11 +27,12 @@ $tenant_id = exigirTenantId();
 $conexao = conectar_banco();
 $metodo = $_SERVER['REQUEST_METHOD'];
 
-// No RBAC, somente quem possui Sistema > Configurar pode alterar a regra.
+// A configuração é tenant-aware e precisa ser lida pelo cadastro para aplicar
+// a regra correta a cada operador. Somente Sistema > Configurar pode alterá-la.
 // Sem a migration RBAC, preserva-se a exigência administrativa legada.
 $rbacAtivo = rbacTabelasDisponiveis($conexao);
 if ($metodo === 'GET') {
-    if ($rbacAtivo) rbacExigir($conexao, 'sistema', 'visualizar');
+    if ($rbacAtivo) rbacExigir($conexao, 'visitantes', 'visualizar');
     else verificarPermissao('admin');
 } else {
     if ($rbacAtivo) rbacExigir($conexao, 'sistema', 'configurar');

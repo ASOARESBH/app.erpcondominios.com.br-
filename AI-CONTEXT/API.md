@@ -130,3 +130,9 @@ criar, editar ou excluir.
 - Campos estruturais (`moradores.nome`, `moradores.cpf`, `moradores.unidade`, `dependentes.morador_id` e `dependentes.nome_completo`) permanecem obrigatórios e não podem ser desativados. Os demais campos são aplicados pelo backend de Moradores e Dependentes.
 - A opção `dependente_multiplos_veiculos` controla `POST /api/api_veiculos.php`: desativada, preserva o limite legado de um veículo por dependente; ativada, permite vários veículos do mesmo dependente. A unicidade de placa e TAG por tenant continua valendo.
 - A estrutura é instalada por `sql/migration_config_cadastro_moradores_mysql57.sql`. Sem a migration, a API opera em modo de compatibilidade com os defaults atuais e rejeita gravações de configuração.
+
+## 13. Configuração de Visitantes
+
+- `GET /api/api_config_visitantes.php` retorna a configuração de campos obrigatórios do tenant autenticado para que o cadastro de Visitantes aplique a regra correta a cada operador. Com RBAC ativo, exige `visitantes.visualizar`; não exige `sistema.visualizar`.
+- `PUT /api/api_config_visitantes.php` grava somente as chaves do catálogo oficial e continua exigindo `sistema.configurar`. O `tenant_id` é sempre resolvido da sessão e a alteração é auditada.
+- Essa separação é necessária porque operadores com acesso a Visitantes precisam ler a política do tenant, mesmo sem permissão para alterar Parâmetros do Sistema.
