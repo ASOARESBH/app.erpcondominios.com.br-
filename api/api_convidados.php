@@ -458,7 +458,7 @@ function convidados_listar(mysqli $conexao, $tenantId) {
     $paramsListaSemPaginacao = $paramsFiltros;
     $paramsListaSemPaginacao[] = $limite;
     $paramsListaSemPaginacao[] = $offset;
-    $stmtLista = convidados_executar($conexao, $sqlLista, $tiposFiltros . 'sssii', $paramsListaSemPaginacao);
+    $stmtLista = convidados_executar($conexao, $sqlLista, $tiposFiltros . 'ii', $paramsListaSemPaginacao);
     $linhas = convidados_todas_linhas($stmtLista);
     $stmtLista->close();
     $convidados = [];
