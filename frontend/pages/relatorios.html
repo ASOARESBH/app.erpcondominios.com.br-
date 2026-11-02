@@ -60,6 +60,8 @@
                     <option value="moradores">Somente Moradores</option>
                     <option value="visitantes">Somente Visitantes</option>
                     <option value="prestadores">Somente Prestadores</option>
+                    <option value="entregadores_autorizados">Somente Entregadores Autorizados</option>
+                    <option value="familiares">Somente Familiares</option>
                     <option value="ocupantes">Ocupantes de Veículos</option>
                 </select>
             </div>
@@ -67,6 +69,8 @@
                 <label class="checkbox-group"><input type="checkbox" id="tipoMorador" checked> Morador</label>
                 <label class="checkbox-group"><input type="checkbox" id="tipoVisitante" checked> Visitante</label>
                 <label class="checkbox-group"><input type="checkbox" id="tipoPrestador" checked> Prestador</label>
+                <label class="checkbox-group"><input type="checkbox" id="tipoEntregadorAutorizado" checked> Entregador Autorizado</label>
+                <label class="checkbox-group"><input type="checkbox" id="tipoFamiliar" checked> Familiar</label>
                 <label class="checkbox-group"><input type="checkbox" id="incluirOcupantes"> Destino + condutor + ocupantes</label>
                 <label class="checkbox-group"><input type="checkbox" id="apenasLiberados"> Apenas Liberados</label>
             </div>
@@ -105,6 +109,14 @@
             <div class="stat-card">
                 <div class="value" id="totalPrestadores">0</div>
                 <div class="label" id="labelTotalPrestadores">Prestadores</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="totalEntregadoresAutorizados">0</div>
+                <div class="label" id="labelTotalEntregadoresAutorizados">Entregadores</div>
+            </div>
+            <div class="stat-card">
+                <div class="value" id="totalFamiliares">0</div>
+                <div class="label" id="labelTotalFamiliares">Familiares</div>
             </div>
             <div class="stat-card">
                 <div class="value" id="totalLiberados">0</div>
@@ -176,6 +188,8 @@
                     <option value="Morador">Morador</option>
                     <option value="Visitante">Visitante</option>
                     <option value="Prestador">Prestador</option>
+                    <option value="Entregador Autorizado">Entregador Autorizado</option>
+                    <option value="Familiar">Familiar</option>
                 </select>
             </div>
             <div>

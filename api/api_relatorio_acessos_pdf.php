@@ -28,13 +28,14 @@ require_once 'tenant_helper.php';;
 $conn    = conectar_banco();
 $usuario = verificarAutenticacao(false, 'operador');
 $tenant_id = exigirTenantId();
+if (rbacTabelasDisponiveis($conn)) rbacExigir($conn, 'relatorios_acesso', 'imprimir');
 
 // ── 2. Configuracoes regionais ────────────────────────────────
 date_default_timezone_set('America/Sao_Paulo');
 
 // ── 3. Dados da empresa — Multi-Tenant ─────────────────────────────────
 $empresa = [];
-$_tenant_id_rel = $_SESSION['tenant_id'] ?? 1;
+$_tenant_id_rel = (int)$tenant_id;
 
 // Buscar na tabela tenants (fonte primária)
 $_stmt_t = $conn->prepare("SELECT razao_social, nome_fantasia, cnpj, logo_url FROM tenants WHERE id = ? LIMIT 1");
@@ -86,9 +87,9 @@ $data_inicio_fmt = date('d/m/Y', strtotime($data_inicio));
 $data_fim_fmt    = date('d/m/Y', strtotime($data_fim));
 
 // ── 5. Query principal ────────────────────────────────────────
-$where  = ["DATE(r.data_hora) >= ?", "DATE(r.data_hora) <= ?"];
-$params = [$data_inicio, $data_fim];
-$types  = 'ss';
+$where  = ["r.tenant_id = ?", "DATE(r.data_hora) >= ?", "DATE(r.data_hora) <= ?"];
+$params = [(int)$tenant_id, $data_inicio, $data_fim];
+$types  = 'iss';
 
 if ($hora_inicio !== '') {
     $where[]  = "TIME(r.data_hora) >= ?";
@@ -124,10 +125,26 @@ if ($filtro_nome !== '') {
     $params[] = '%' . $filtro_nome . '%';
     $types   .= 'ss';
 }
-if ($filtro_tipo !== '' && in_array($filtro_tipo, ['Morador','Visitante','Prestador'])) {
-    $where[]  = "r.tipo = ?";
-    $params[] = $filtro_tipo;
-    $types   .= 's';
+if ($filtro_tipo !== '') {
+    $mapaTipos = [
+        'morador' => 'Morador', 'moradores' => 'Morador',
+        'visitante' => 'Visitante', 'visitantes' => 'Visitante',
+        'prestador' => 'Prestador', 'prestadores' => 'Prestador',
+        'entregador autorizado' => 'Entregador Autorizado', 'entregadores_autorizados' => 'Entregador Autorizado',
+        'familiar' => 'Familiar', 'familiares' => 'Familiar',
+    ];
+    $tiposFiltro = [];
+    foreach (explode(',', $filtro_tipo) as $tipoRecebido) {
+        $chaveTipo = strtolower(trim($tipoRecebido));
+        if (isset($mapaTipos[$chaveTipo])) $tiposFiltro[] = $mapaTipos[$chaveTipo];
+    }
+    $tiposFiltro = array_values(array_unique($tiposFiltro));
+    if (!$tiposFiltro) {
+        $where[] = '1 = 0';
+    } else {
+        $where[] = 'r.tipo IN (' . implode(', ', array_fill(0, count($tiposFiltro), '?')) . ')';
+        foreach ($tiposFiltro as $tipoValido) { $params[] = $tipoValido; $types .= 's'; }
+    }
 }
 
 $where_sql = implode(' AND ', $where);
@@ -141,7 +158,7 @@ $sql = "
         COALESCE(m.unidade, r.unidade_destino, '—') AS unidade,
         r.dias_permanencia, r.status, r.liberado, r.observacao
     FROM registros_acesso r
-    LEFT JOIN moradores m ON r.morador_id = m.id
+    LEFT JOIN moradores m ON r.morador_id = m.id AND m.tenant_id = r.tenant_id
     WHERE {$where_sql}
     ORDER BY r.data_hora DESC
     LIMIT 2000
@@ -162,6 +179,8 @@ $total      = count($registros);
 $moradores  = count(array_filter($registros, fn($r) => $r['tipo'] === 'Morador'));
 $visitantes = count(array_filter($registros, fn($r) => $r['tipo'] === 'Visitante'));
 $prestadores= count(array_filter($registros, fn($r) => $r['tipo'] === 'Prestador'));
+$entregadores_autorizados = count(array_filter($registros, fn($r) => $r['tipo'] === 'Entregador Autorizado'));
+$familiares = count(array_filter($registros, fn($r) => $r['tipo'] === 'Familiar'));
 $liberados  = count(array_filter($registros, fn($r) => $r['liberado'] == 1));
 
 // ── 7. Resumo dos filtros ─────────────────────────────────────
@@ -223,7 +242,7 @@ html, body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color:
 }
 .titulo-relatorio .filtro-info { font-size: 10px; font-weight: 400; opacity: .8; text-transform: none; letter-spacing: 0; }
 
-.kpis { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 2px solid #e2e8f0; }
+.kpis { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 2px solid #e2e8f0; }
 .kpi { padding: 14px 12px; text-align: center; border-right: 1px solid #e2e8f0; }
 .kpi:last-child { border-right: none; }
 .kpi-valor { font-size: 22px; font-weight: 800; color: #1e3a8a; line-height: 1; }
@@ -306,6 +325,8 @@ tbody td { padding: 6px 6px; vertical-align: middle; }
         <div class="kpi"><div class="kpi-valor"><?= $moradores ?></div><div class="kpi-label">Moradores</div></div>
         <div class="kpi"><div class="kpi-valor"><?= $visitantes ?></div><div class="kpi-label">Visitantes</div></div>
         <div class="kpi"><div class="kpi-valor"><?= $prestadores ?></div><div class="kpi-label">Prestadores</div></div>
+        <div class="kpi"><div class="kpi-valor"><?= $entregadores_autorizados ?></div><div class="kpi-label">Entregadores</div></div>
+        <div class="kpi"><div class="kpi-valor"><?= $familiares ?></div><div class="kpi-label">Familiares</div></div>
         <div class="kpi"><div class="kpi-valor"><?= $liberados ?></div><div class="kpi-label">Liberados</div></div>
     </div>
 

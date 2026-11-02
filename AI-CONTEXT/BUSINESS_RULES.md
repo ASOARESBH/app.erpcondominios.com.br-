@@ -57,3 +57,14 @@ O Registro Manual pode lançar acessos em dois modos: `VEICULO`, quando a placa 
 - O lançamento de abastecimento pode receber uma observação livre e opcional para registrar qualquer detalhe operacional relevante.
 - A observação acompanha o lançamento e deve aparecer no histórico da aba Lançamento, no relatório HTML, no CSV exportado e no PDF, sem alterar cálculos de saldo, KM, litros ou consumo.
 - Nenhum registro antigo é invalidado: quando a observação não existir, a interface exibe `—` e o relatório mantém os demais dados.
+
+
+## 11. Lista de Convidados no Registro Manual
+
+- Morador ou dependente anfitrião cadastra um convidado previsto para uma unidade, data/período e quantidade/modalidade de entradas; a validade final é calculada e persistida pelo backend.
+- A entrada na portaria só ocorre dentro da validade, com documento e tipo correspondentes, anfitrião/unidade corretos e saldo de entradas. Entrada incrementa o contador; saída não consome saldo e é aceita para fechar uma presença já iniciada, inclusive após o fim da validade.
+- Os movimentos Entrada/Saída do convite e a linha correspondente em `registros_acesso` são atômicos. Retentativas com a mesma chave não consomem a entrada duas vezes.
+- A lista mascara CPF, mantém histórico e autoria e exibe EXPIRADO calculado pela data corrente de São Paulo sem alterar retroativamente o status salvo. Cancelamento requer motivo, só é permitido no status PREVISTO e fica auditável; um convidado PRESENTE precisa registrar saída antes de qualquer encerramento.
+- Familiar significa parente visitante sem residência na unidade; não substitui o fluxo de Dependente. Entregador Autorizado e Familiar seguem o fluxo de Visitante/Prestador para cadastro, documento, destino e ocupantes.
+- O cadastro completo de Visitante pode ser realizado na chegada e segue as mesmas regras de campos/anexos configuradas em Sistema > Visitantes; a política nunca é duplicada ou afrouxada pela Lista de Convidados.
+- Entregador Autorizado e Familiar são tipos distintos em `registros_acesso`; precisam permanecer selecionáveis nos filtros simples/ramificados, contadores e exportações (CSV/PDF) e no histórico do Portal do Morador, sempre dentro do tenant autenticado.

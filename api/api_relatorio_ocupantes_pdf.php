@@ -7,6 +7,7 @@ require_once 'tenant_helper.php';
 $conn = conectar_banco();
 $usuario = verificarAutenticacao(false, 'operador');
 $tenant_id = exigirTenantId();
+if (rbacTabelasDisponiveis($conn)) rbacExigir($conn, 'relatorios_acesso', 'imprimir');
 date_default_timezone_set('America/Sao_Paulo');
 
 function ocupante_pdf_esc($valor): string {
@@ -40,7 +41,7 @@ if ($data_inicio === '') $data_inicio = date('Y-m-d');
 if ($data_fim === '') $data_fim = date('Y-m-d');
 
 $tipos = array_values(array_intersect(
-    ['Morador', 'Visitante', 'Prestador'],
+    ['Morador', 'Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'],
     array_filter(array_map('trim', explode(',', $tipo)))
 ));
 $grupo_expr = 'COALESCE(NULLIF(r.registro_titular_id, 0), legado.id, r.id)';
@@ -175,10 +176,14 @@ $ocupantes_total = count(array_filter($registros, static fn($registro) => ($regi
 $titulares = [];
 $visitantes = 0;
 $prestadores = 0;
+$entregadores = 0;
+$familiares = 0;
 foreach ($registros as $registro) {
     $titulares[($registro['titular_nome'] ?? '') . '|' . ($registro['unidade'] ?? '') . '|' . ($registro['placa'] ?? '')] = true;
     if (($registro['ocupante_tipo'] ?? '') === 'Visitante') $visitantes++;
     if (($registro['ocupante_tipo'] ?? '') === 'Prestador') $prestadores++;
+    if (($registro['ocupante_tipo'] ?? '') === 'Entregador Autorizado') $entregadores++;
+    if (($registro['ocupante_tipo'] ?? '') === 'Familiar') $familiares++;
 }
 ?>
 <!doctype html>
@@ -188,7 +193,7 @@ foreach ($registros as $registro) {
 *{box-sizing:border-box}body{font:11px Arial,sans-serif;margin:0;background:#f1f5f9;color:#172033}.report{max-width:1260px;margin:20px auto;background:#fff;box-shadow:0 8px 30px #1e3a8a1f}.header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:24px 30px;display:flex;justify-content:space-between;gap:20px}.header h1{font-size:18px;margin:0 0 5px}.header p{margin:3px 0;opacity:.85}.meta{text-align:right;line-height:1.6}.title{background:#172f73;color:#fff;padding:10px 30px;font-weight:bold;font-size:13px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:2px solid #e2e8f0}.kpi{text-align:center;padding:14px;border-right:1px solid #e2e8f0}.kpi strong{display:block;color:#1e3a8a;font-size:22px}.kpi span{color:#64748b;font-size:9px;text-transform:uppercase}.section{padding:0 24px 24px}.section h2{color:#1e3a8a;font-size:12px;text-transform:uppercase;border-bottom:2px solid #2563eb;padding:16px 0 9px}table{width:100%;border-collapse:collapse;font-size:9px}th{background:#1e3a8a;color:#fff;padding:8px 5px;text-align:left;text-transform:uppercase;font-size:8px}td{padding:7px 5px;border-bottom:1px solid #e2e8f0}tr:nth-child(even){background:#f8fafc}.empty{text-align:center;padding:24px;color:#64748b}.footer{background:#172f73;color:#fff;padding:12px 30px;font-size:9px;display:flex;justify-content:space-between}.print{position:fixed;right:16px;top:16px;background:#2563eb;color:#fff;border:0;padding:10px 18px;border-radius:7px;cursor:pointer}@media print{body{background:#fff}.report{margin:0;box-shadow:none}.print{display:none}@page{size:A4 landscape;margin:8mm}thead{display:table-header-group}tr{page-break-inside:avoid}}
 </style></head><body><button class="print" onclick="window.print()">Imprimir / Salvar PDF</button>
 <div class="report"><header class="header"><div><h1><?= ocupante_pdf_esc($nome_empresa) ?></h1><p>CNPJ: <?= ocupante_pdf_esc($cnpj) ?></p><p>Relatório detalhado de ocupantes de veículos</p></div><div class="meta"><strong>Gerado em <?= date('d/m/Y H:i') ?></strong><br>Operador: <?= ocupante_pdf_esc($operador) ?><br>Período: <?= date('d/m/Y', strtotime($data_inicio)) ?> a <?= date('d/m/Y', strtotime($data_fim)) ?></div></header>
-<div class="title">Acessos com condutor e ocupantes</div><div class="kpis"><div class="kpi"><strong><?= $ocupantes_total ?></strong><span>Ocupantes secundários</span></div><div class="kpi"><strong><?= count($titulares) ?></strong><span>Grupos/veículos</span></div><div class="kpi"><strong><?= $visitantes ?></strong><span>Ocupantes visitantes</span></div><div class="kpi"><strong><?= $prestadores ?></strong><span>Ocupantes prestadores</span></div></div>
+<div class="title">Acessos com condutor e ocupantes</div><div class="kpis"><div class="kpi"><strong><?= $ocupantes_total ?></strong><span>Ocupantes secundários</span></div><div class="kpi"><strong><?= count($titulares) ?></strong><span>Grupos/veículos</span></div><div class="kpi"><strong><?= $visitantes ?></strong><span>Ocupantes visitantes</span></div><div class="kpi"><strong><?= $prestadores ?></strong><span>Ocupantes prestadores</span></div><div class="kpi"><strong><?= $entregadores ?></strong><span>Entregadores autorizados</span></div><div class="kpi"><strong><?= $familiares ?></strong><span>Familiares</span></div></div>
 <section class="section"><h2><?= $total ?> linha(s) de rastreamento encontrada(s)</h2><table><thead><tr><th>Data</th><th>Hora</th><th>Placa</th><th>Modelo</th><th>Morador destino</th><th>Unidade</th><th>Pessoa</th><th>CPF/documento</th><th>Relação</th><th>Tipo</th><th>Entrada/Saída</th><th>Status</th><th>Observação</th></tr></thead><tbody>
 <?php if (!$registros): ?><tr><td colspan="13" class="empty">Nenhum acesso encontrado com os filtros aplicados.</td></tr><?php else: foreach ($registros as $r): $ehOcupante = ($r['linha_papel'] ?? '') === 'OCUPANTE'; ?><tr class="<?= $ehOcupante ? 'ocupante' : 'condutor' ?>"><td><?= ocupante_pdf_esc($r['data_fmt']) ?></td><td><?= ocupante_pdf_esc($r['hora_fmt']) ?></td><td><?= ocupante_pdf_esc($r['placa'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['modelo'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['destino_morador_nome'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['destino_unidade'] ?: $r['unidade']) ?></td><td><strong><?= ocupante_pdf_esc($ehOcupante ? $r['ocupante_nome'] : $r['condutor_nome']) ?></strong></td><td><?= ocupante_pdf_esc($ehOcupante ? $r['ocupante_cpf'] : $r['condutor_cpf']) ?></td><td><?= ocupante_pdf_esc($ehOcupante ? 'Ocupante secundário' : 'Condutor principal') ?></td><td><?= ocupante_pdf_esc($ehOcupante ? $r['ocupante_tipo'] : $r['condutor_tipo']) ?></td><td><?= ocupante_pdf_esc($r['tipo_acesso'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['status'] ?: '-') ?></td><td><?= ocupante_pdf_esc($r['observacao'] ?: '-') ?></td></tr><?php endforeach; endif; ?></tbody></table></section>
 <footer class="footer"><span><?= ocupante_pdf_esc($nome_empresa) ?> — ERP Condomínio</span><span>Relatório gerado em <?= date('d/m/Y H:i') ?></span></footer></div></body></html>

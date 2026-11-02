@@ -5,6 +5,16 @@ Registro de alterações significativas no ERP.
 ## [2.1.6] - 2026-10-31
 ### Planejado
 - **Lista de Convidados no Registro de Acesso**: analisados `registro.html`/`registro.js`, `api_registros.php`, `api_visitantes.php`, `api_acessos_visitantes.php`, `api_portal_morador.php`, RBAC e app Flutter para especificar uma nova aba "Lista de Convidados" (cadastro pela portaria e pelo morador, herança de visitante por CPF/RG, tipos Entregador Autorizado e Familiar, data prevista, dias de permanência, controle de entradas único/múltiplos de 2/indeterminado, origem do cadastro, autoria Usuário/Morador/Dependente e navegação por data). Decisões registradas: não reutilizar `acessos_visitantes` (regra de 1 acesso ativo por visitante é incompatível); `registros_acesso.tipo` é ENUM e precisa de migration + atualização de todas as whitelists; dependente não possui login hoje, então a autoria `DEPENDENTE` fica preparada mas não é gravada. Nenhuma alteração de código feita nesta tarefa — apenas análise e prompt em `PROMPT_LISTA_CONVIDADOS_20261031.md`.
+### Adicionado
+- **Registro Manual — Lista de Convidados (painel web)**: incluída tabela tenant-aware de convites com anfitrião morador/dependente, documento, período de validade, modalidade e limite de entradas, autoria, histórico, cancelamento e chave de idempotência. A tela inclui navegação por data, busca, filtros, formulário acessível e deep-link `?page=registro&aba=convidados`.
+- A API de convidados aplica autenticação, isolamento pelo tenant da sessão e RBAC por ação. A movimentação Entrada/Saída revalida convite, documento, destino, validade e limite sob transação; os novos tipos **Entregador Autorizado** e **Familiar** são categorias próprias.
+### Alterado
+- **Relatórios**: os tipos novos foram incluídos em filtros, KPIs, análises, CSV, PDFs e histórico do Portal do Morador. As consultas de Relatórios passaram a identificar a ação própria para exigir `relatorios_acesso.visualizar`, sem confundir essa permissão com a listagem operacional de Registros Recentes.
+- **Registro SPA**: respostas assíncronas de Convidados verificam a raiz ativa antes de atualizar a interface; a migration é `sql/migration_lista_convidados_mysql57.sql`.
+### Validado
+- `php -l` nos endpoints PHP alterados; `node --check` nos módulos JS alterados; `git diff --check`.
+- Migration executada duas vezes em banco MariaDB descartável; `convidado_id` e os dois valores do ENUM foram confirmados. Consulta sintética validou estados por data e isolamento tenant-aware.
+- A aplicação da migration na base de produção, o teste end-to-end autenticado e as fases Portal/App Mobile não fazem parte deste escopo web e ainda não foram executados.
 
 ## [2.1.5] - 2026-08-13
 ### Investigado

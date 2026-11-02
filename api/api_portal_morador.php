@@ -236,7 +236,7 @@ if ($action === 'controle_acesso' && $metodo === 'GET') {
     if ($data_fim !== '' && !preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $data_fim)) {
         retornar_json(false, 'Data final inválida.');
     }
-    if ($tipo !== '' && !in_array($tipo, ['Morador', 'Visitante', 'Prestador'], true)) {
+    if ($tipo !== '' && !in_array($tipo, ['Morador', 'Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'], true)) {
         retornar_json(false, 'Tipo de acesso inválido.');
     }
 

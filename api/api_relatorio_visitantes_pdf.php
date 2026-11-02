@@ -23,9 +23,10 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 
-$conn    = conectar_banco();
+$conn = conectar_banco();
 $usuario = verificarAutenticacao(false, 'operador');
 $tenant_id = exigirTenantId();
+if (rbacTabelasDisponiveis($conn)) rbacExigir($conn, 'visitantes', 'imprimir');
 
 // ── 2. Configuracoes regionais ────────────────────────────────
 date_default_timezone_set('America/Sao_Paulo');
@@ -95,6 +96,7 @@ $sql = "SELECT v.id, v.nome_completo, v.documento, v.tipo_documento,
         FROM visitantes v
         LEFT JOIN usuarios u
                ON u.id = v.cadastrado_por_usuario_id
+              AND u.tenant_id = v.tenant_id
         LEFT JOIN moradores m_autor
                ON m_autor.id = v.cadastrado_por_morador_id
               AND m_autor.tenant_id = v.tenant_id
@@ -184,29 +186,29 @@ if ($f_ativo === '0') $filtros_aplicados[] = 'Somente inativos';
 if (in_array($f_origem, ['FUNCIONARIO', 'MORADOR', 'LEGADO'], true)) $filtros_aplicados[] = 'Origem: ' . $f_origem;
 $resumo_filtros = implode(' | ', $filtros_aplicados);
 
-// ── Indicadores analíticos de acessos (Visitante e Prestador) ─────────────
+// ── Indicadores analíticos de acessos a convidados ────────────────────────
 $analitico = [
-    'resumo' => ['total' => 0, 'visitantes' => 0, 'prestadores' => 0, 'entradas' => 0, 'saidas' => 0, 'liberados' => 0, 'pendentes' => 0],
+    'resumo' => ['total' => 0, 'visitantes' => 0, 'prestadores' => 0, 'entregadores_autorizados' => 0, 'familiares' => 0, 'entradas' => 0, 'saidas' => 0, 'liberados' => 0, 'pendentes' => 0],
     'pico' => ['rotulo' => 'Sem registros', 'total' => 0],
     'unidades' => [], 'pessoas' => [], 'tendencia' => []
 ];
 if ($tipo_relatorio === 'analitico') {
-    $where = "tenant_id = ? AND data_hora >= ? AND data_hora < DATE_ADD(?, INTERVAL 1 DAY) AND tipo IN ('Visitante','Prestador')";
+    $where = "tenant_id = ? AND data_hora >= ? AND data_hora < DATE_ADD(?, INTERVAL 1 DAY) AND tipo IN ('Visitante','Prestador','Entregador Autorizado','Familiar')";
     $paramsAnalitico = [$tenant_id, $data_inicio_analitico, $data_fim_analitico];
-    $sqlResumoAnalitico = "SELECT COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores, SUM(tipo_acesso='Entrada') entradas, SUM(tipo_acesso='Saída') saidas, SUM(liberado=1) liberados, SUM(liberado=0) pendentes FROM registros_acesso WHERE $where";
+    $sqlResumoAnalitico = "SELECT COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores, SUM(tipo='Entregador Autorizado') entregadores_autorizados, SUM(tipo='Familiar') familiares, SUM(tipo_acesso='Entrada') entradas, SUM(tipo_acesso='Saída') saidas, SUM(liberado=1) liberados, SUM(liberado=0) pendentes FROM registros_acesso WHERE $where";
     $st = $conn->prepare($sqlResumoAnalitico);
     if ($st) { $st->bind_param('iss', ...$paramsAnalitico); $st->execute(); $linha = $st->get_result()->fetch_assoc() ?: []; $st->close(); foreach ($analitico['resumo'] as $campo => $_) $analitico['resumo'][$campo] = (int)($linha[$campo] ?? 0); }
 
-    $st = $conn->prepare("SELECT HOUR(data_hora) hora, COUNT(*) total FROM registros_acesso WHERE tenant_id = ? AND data_hora >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND tipo IN ('Visitante','Prestador') GROUP BY HOUR(data_hora) ORDER BY total DESC, hora ASC LIMIT 1");
+    $st = $conn->prepare("SELECT HOUR(data_hora) hora, COUNT(*) total FROM registros_acesso WHERE tenant_id = ? AND data_hora >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND tipo IN ('Visitante','Prestador','Entregador Autorizado','Familiar') GROUP BY HOUR(data_hora) ORDER BY total DESC, hora ASC LIMIT 1");
     if ($st) { $st->bind_param('i', $tenant_id); $st->execute(); $linha = $st->get_result()->fetch_assoc(); $st->close(); if ($linha) $analitico['pico'] = ['rotulo' => str_pad((string)$linha['hora'], 2, '0', STR_PAD_LEFT) . ':00', 'total' => (int)$linha['total']]; }
 
-    $st = $conn->prepare("SELECT COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado') unidade, COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores FROM registros_acesso WHERE $where GROUP BY COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado') ORDER BY total DESC, unidade ASC LIMIT 10");
+    $st = $conn->prepare("SELECT COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado') unidade, COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores, SUM(tipo='Entregador Autorizado') entregadores_autorizados, SUM(tipo='Familiar') familiares FROM registros_acesso WHERE $where GROUP BY COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado') ORDER BY total DESC, unidade ASC LIMIT 10");
     if ($st) { $st->bind_param('iss', ...$paramsAnalitico); $st->execute(); $rs = $st->get_result(); while ($linha = $rs->fetch_assoc()) $analitico['unidades'][] = $linha; $st->close(); }
 
     $st = $conn->prepare("SELECT COALESCE(NULLIF(TRIM(nome_visitante), ''), 'Não identificado') nome, tipo, COUNT(*) total FROM registros_acesso WHERE $where GROUP BY COALESCE(NULLIF(TRIM(nome_visitante), ''), 'Não identificado'), tipo ORDER BY total DESC, nome ASC LIMIT 10");
     if ($st) { $st->bind_param('iss', ...$paramsAnalitico); $st->execute(); $rs = $st->get_result(); while ($linha = $rs->fetch_assoc()) $analitico['pessoas'][] = $linha; $st->close(); }
 
-    $st = $conn->prepare("SELECT DATE_FORMAT(data_hora, '%d/%m') data, COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores FROM registros_acesso WHERE $where GROUP BY DATE(data_hora), DATE_FORMAT(data_hora, '%d/%m') ORDER BY DATE(data_hora) DESC LIMIT 31");
+    $st = $conn->prepare("SELECT DATE_FORMAT(data_hora, '%d/%m') data, COUNT(*) total, SUM(tipo='Visitante') visitantes, SUM(tipo='Prestador') prestadores, SUM(tipo='Entregador Autorizado') entregadores_autorizados, SUM(tipo='Familiar') familiares FROM registros_acesso WHERE $where GROUP BY DATE(data_hora), DATE_FORMAT(data_hora, '%d/%m') ORDER BY DATE(data_hora) DESC LIMIT 31");
     if ($st) { $st->bind_param('iss', ...$paramsAnalitico); $st->execute(); $rs = $st->get_result(); while ($linha = $rs->fetch_assoc()) $analitico['tendencia'][] = $linha; $st->close(); }
     $resumo_filtros = 'Período: ' . $data_inicio_analitico . ' até ' . $data_fim_analitico;
 }
@@ -386,17 +388,19 @@ tbody td { padding: 7px 8px; vertical-align: middle; }
         <div class="kpi"><div class="kpi-valor"><?= $r['total'] ?></div><div class="kpi-label">Acessos no Período</div></div>
         <div class="kpi"><div class="kpi-valor"><?= $r['visitantes'] ?></div><div class="kpi-label">Visitantes</div></div>
         <div class="kpi"><div class="kpi-valor"><?= $r['prestadores'] ?></div><div class="kpi-label">Prestadores</div></div>
+        <div class="kpi"><div class="kpi-valor"><?= $r['entregadores_autorizados'] ?></div><div class="kpi-label">Entregadores</div></div>
+        <div class="kpi"><div class="kpi-valor"><?= $r['familiares'] ?></div><div class="kpi-label">Familiares</div></div>
         <div class="kpi"><div class="kpi-valor"><?= esc($analitico['pico']['rotulo']) ?></div><div class="kpi-label">Pico 24h (<?= $analitico['pico']['total'] ?>)</div></div>
         <div class="kpi"><div class="kpi-valor"><?= $taxa ?>%</div><div class="kpi-label">Taxa de Liberação</div></div>
     </div>
 
     <div class="secao">
         <div class="secao-titulo">Ranking de Glebas / Unidades por Acessos</div>
-        <table><thead><tr><th>#</th><th>Gleba / Unidade</th><th>Total</th><th>Visitantes</th><th>Prestadores</th></tr></thead><tbody>
+        <table><thead><tr><th>#</th><th>Gleba / Unidade</th><th>Total</th><th>Visitantes</th><th>Prestadores</th><th>Entregadores</th><th>Familiares</th></tr></thead><tbody>
         <?php if (empty($analitico['unidades'])): ?>
-            <tr><td colspan="5" class="sem-dados">Não há acessos de visitantes ou prestadores no período selecionado</td></tr>
+            <tr><td colspan="7" class="sem-dados">Não há acessos de convidados no período selecionado</td></tr>
         <?php else: foreach ($analitico['unidades'] as $pos => $linha): ?>
-            <tr><td><?= $pos + 1 ?></td><td><strong><?= esc($linha['unidade']) ?></strong></td><td><?= (int)$linha['total'] ?></td><td><?= (int)$linha['visitantes'] ?></td><td><?= (int)$linha['prestadores'] ?></td></tr>
+            <tr><td><?= $pos + 1 ?></td><td><strong><?= esc($linha['unidade']) ?></strong></td><td><?= (int)$linha['total'] ?></td><td><?= (int)$linha['visitantes'] ?></td><td><?= (int)$linha['prestadores'] ?></td><td><?= (int)$linha['entregadores_autorizados'] ?></td><td><?= (int)$linha['familiares'] ?></td></tr>
         <?php endforeach; endif; ?>
         </tbody></table>
     </div>
@@ -414,11 +418,11 @@ tbody td { padding: 7px 8px; vertical-align: middle; }
 
     <div class="secao">
         <div class="secao-titulo">Tendência Diária de Acessos</div>
-        <table><thead><tr><th>Data</th><th>Total</th><th>Visitantes</th><th>Prestadores</th></tr></thead><tbody>
+        <table><thead><tr><th>Data</th><th>Total</th><th>Visitantes</th><th>Prestadores</th><th>Entregadores</th><th>Familiares</th></tr></thead><tbody>
         <?php if (empty($analitico['tendencia'])): ?>
-            <tr><td colspan="4" class="sem-dados">Sem movimentos no período selecionado</td></tr>
+            <tr><td colspan="6" class="sem-dados">Sem movimentos no período selecionado</td></tr>
         <?php else: foreach ($analitico['tendencia'] as $linha): ?>
-            <tr><td><?= esc($linha['data']) ?></td><td><?= (int)$linha['total'] ?></td><td><?= (int)$linha['visitantes'] ?></td><td><?= (int)$linha['prestadores'] ?></td></tr>
+            <tr><td><?= esc($linha['data']) ?></td><td><?= (int)$linha['total'] ?></td><td><?= (int)$linha['visitantes'] ?></td><td><?= (int)$linha['prestadores'] ?></td><td><?= (int)$linha['entregadores_autorizados'] ?></td><td><?= (int)$linha['familiares'] ?></td></tr>
         <?php endforeach; endif; ?>
         </tbody></table>
         <p style="margin-top:10px;font-size:9px;color:#64748b;">Entradas: <?= $r['entradas'] ?> &nbsp;|&nbsp; Saídas: <?= $r['saidas'] ?> &nbsp;|&nbsp; Liberados: <?= $r['liberados'] ?> &nbsp;|&nbsp; Pendentes: <?= $r['pendentes'] ?></p>

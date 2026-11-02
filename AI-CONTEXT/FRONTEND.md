@@ -28,6 +28,11 @@ export function destroy() {
 - Em áreas autenticadas, previews e cabeçalhos devem preferir URLs BLOB autenticadas devolvidas pela API, nunca montar caminhos `uploads/...` manualmente.
 - O Portal do Morador consulta `get_logo_empresa.php` com a sessão PHP do morador e deve restaurar a marca institucional ou ícone padrão quando a logo não existir ou falhar.
 
+### Registro — Lista de Convidados
+- `frontend/js/pages/registro-convidados.js` é um módulo ES separado, montado dentro de `.page-registro`; `destroy()` cancela a lista em andamento, invalida cascatas e remove listeners antes de outra rota ser carregada.
+- Respostas de unidades, moradores, dependentes, busca documental, detalhe e gravações devem confirmar que ainda pertencem à mesma raiz SPA conectada antes de modificar o DOM.
+- A aba ativa persiste em `?page=registro&aba=manual|convidados`; `frontend/js/app-router.js` preserva `aba` durante a primeira carga/atualização da rota Registro.
+
 ## 5. UI Components
 - **Modais**: Usar as classes padronizadas `.modal-overlay`, `.modal-content`.
 - **Botões**: `.btn-primary-modern`, `.btn-secondary-modern`.

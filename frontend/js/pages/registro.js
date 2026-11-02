@@ -1,7 +1,7 @@
 /**
  * Registro Manual Page Module v3
  * - Tipo Morador: cascata Unidade → Morador → (checkbox) Dependente
- * - Tipo Visitante/Prestador: busca por doc, cascata Unidade → Morador destino
+ * - Tipos de convidado: busca por documento, cascata Unidade → Morador destino e vínculo de Lista de Convidados
  * - Campo Entrada / Saída gravado no banco
  * - Detecção automática de veículo por placa
  */
@@ -12,6 +12,7 @@ const API_VISITANTES  = '../api/api_visitantes.php';
 const API_MORADORES   = '../api/api_moradores.php';
 const API_DEPENDENTES = '../api/api_dependentes.php';
 const API_UNIDADES    = '../api/api_unidades.php';
+const API_CONVIDADOS = '../api/api_convidados.php';
 const REGISTRO_FEEDBACK_STORAGE_KEY = 'registro_manual_feedback';
 
 let registrosCache = [];
@@ -19,6 +20,12 @@ let veiculosCache  = [];
 let salvandoReg    = false;
 let ocupantesAdicionados = []; // [{ visitante_id, nome, documento, tipo_documento }]
 let ultimoEnvioRegistro = null;
+let moduloConvidados = null;
+let convidadoAtivo = null;
+let politicaVisitantes = null;
+let registroLifecycleToken = 0;
+let documentoBuscaToken = 0;
+let convidadoSelecaoToken = 0;
 
 function gerarIdempotencyKey() {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -43,10 +50,16 @@ function assinaturaRegistro(payload) {
     return JSON.stringify(dados);
 }
 
+function registroEstaAtivo(token = registroLifecycleToken) {
+    return token === registroLifecycleToken && !!document.getElementById('registroForm');
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 export function init() {
+    const lifecycleToken = ++registroLifecycleToken;
     console.log('[Registro] Inicializando v3...');
 
+    _garantirTiposRegistro();
     _setupTipoAcesso();
     _setupModoRegistro();
     _setupForm();
@@ -64,24 +77,63 @@ export function init() {
     carregarVeiculos();
     carregarRegistros();
     _mostrarFeedbackPosAtualizacao();
+    _carregarModuloConvidados(lifecycleToken);
 
     window.RegistroPage = {
         buscar:  buscarRegistros,
         excluir: excluirRegistro,
         limpar:  limparFormulario,
-        removerOcupante: removerOcupante
+        removerOcupante: removerOcupante,
+        iniciarConvidado
     };
     console.log('[Registro] Módulo pronto.');
 }
 
 export function destroy() {
     console.log('[Registro] Limpando...');
+    registroLifecycleToken += 1;
+    documentoBuscaToken += 1;
+    convidadoSelecaoToken += 1;
+    if (moduloConvidados?.destroy) {
+        try { moduloConvidados.destroy(); } catch (error) { console.warn('[Registro][Convidados] Falha ao destruir módulo:', error); }
+    }
+    moduloConvidados = null;
     delete window.RegistroPage;
     registrosCache = [];
     veiculosCache  = [];
     salvandoReg    = false;
     ocupantesAdicionados = [];
     ultimoEnvioRegistro = null;
+    convidadoAtivo = null;
+    politicaVisitantes = null;
+}
+
+function _carregarModuloConvidados(lifecycleToken) {
+    import('./registro-convidados.js')
+        .then((modulo) => {
+            if (lifecycleToken !== registroLifecycleToken || !document.getElementById('tab-lista-convidados')) {
+                if (typeof modulo.destroy === 'function') modulo.destroy();
+                return;
+            }
+            moduloConvidados = modulo;
+            if (typeof modulo.init === 'function') modulo.init();
+            console.log('[Registro][Convidados] Módulo carregado.');
+        })
+        .catch((error) => {
+            moduloConvidados = null;
+            console.warn('[Registro][Convidados] Módulo opcional indisponível; mantendo o registro manual:', error?.message || error);
+        });
+}
+
+function _garantirTiposRegistro() {
+    const select = document.getElementById('tipoRegistro');
+    if (!select) return;
+    [
+        ['Entregador Autorizado', 'Entregador Autorizado'],
+        ['Familiar', 'Familiar']
+    ].forEach(([value, label]) => {
+        if (![...select.options].some((option) => option.value === value)) select.add(new Option(label, value));
+    });
 }
 
 // ── Toggle Entrada / Saída ────────────────────────────────────────────────────
@@ -168,9 +220,11 @@ function _limparDadosVeiculoParaPedestre() {
 
 // ── Carregar Unidades (ambos os selects) ──────────────────────────────────────
 async function _carregarUnidades() {
+    const lifecycleToken = registroLifecycleToken;
     try {
-        const resp = await fetch(API_UNIDADES + '?acao=select');
+        const resp = await fetch(API_UNIDADES + '?acao=select', { credentials: 'include' });
         const data = await resp.json();
+        if (!registroEstaAtivo(lifecycleToken)) return;
         const unidades = Array.isArray(data.dados) ? data.dados : (data.dados?.itens || []);
 
         // Select de destino (visitante/prestador)
@@ -189,6 +243,7 @@ async function _carregarUnidades() {
 
         console.log(`[Registro] ${unidades.length} unidades carregadas.`);
     } catch (e) {
+        if (!registroEstaAtivo(lifecycleToken)) return;
         console.warn('[Registro] Não foi possível carregar unidades:', e);
     }
 }
@@ -199,6 +254,7 @@ function _setupCascataMorador() {
     if (!selUnidade) return;
 
     selUnidade.addEventListener('change', async () => {
+        const lifecycleToken = registroLifecycleToken;
         const unidade = selUnidade.value;
         const selMorador = document.getElementById('moradorSelecionadoRegistro');
         const infoWrap   = document.getElementById('moradorInfoWrap');
@@ -216,8 +272,9 @@ function _setupCascataMorador() {
         if (selMorador) { selMorador.innerHTML = '<option value="">Carregando...</option>'; selMorador.disabled = true; }
 
         try {
-            const resp = await fetch(`${API_MORADORES}?unidade=${encodeURIComponent(unidade)}&ativo=1&por_pagina=0`);
+            const resp = await fetch(`${API_MORADORES}?unidade=${encodeURIComponent(unidade)}&ativo=1&por_pagina=0`, { credentials: 'include' });
             const data = await resp.json();
+            if (!registroEstaAtivo(lifecycleToken) || selUnidade.value !== unidade) return;
             const moradores = data.dados?.itens || (Array.isArray(data.dados) ? data.dados : []);
 
             if (selMorador) {
@@ -233,6 +290,7 @@ function _setupCascataMorador() {
             }
             if (infoWrap) infoWrap.style.display = 'none';
         } catch (e) {
+            if (!registroEstaAtivo(lifecycleToken) || selUnidade.value !== unidade) return;
             if (selMorador) { selMorador.innerHTML = '<option value="">Erro ao carregar</option>'; selMorador.disabled = true; }
         }
     });
@@ -271,6 +329,7 @@ function _setupCascataMorador() {
 
 // ── Carregar Dependentes ──────────────────────────────────────────────────────
 async function _carregarDependentesMorador(moradorId) {
+    const lifecycleToken = registroLifecycleToken;
     const sel = document.getElementById('dependenteSelecionadoRegistro');
     if (!sel) return;
 
@@ -278,8 +337,9 @@ async function _carregarDependentesMorador(moradorId) {
     sel.disabled = true;
 
     try {
-        const resp = await fetch(`${API_DEPENDENTES}?acao=listar&morador_id=${encodeURIComponent(moradorId)}&por_pagina=0`);
+        const resp = await fetch(`${API_DEPENDENTES}?acao=listar&morador_id=${encodeURIComponent(moradorId)}&por_pagina=0`, { credentials: 'include' });
         const data = await resp.json();
+        if (!registroEstaAtivo(lifecycleToken) || document.getElementById('moradorSelecionadoRegistro')?.value !== String(moradorId)) return;
         // api_dependentes.php retorna: { sucesso, dados: { dados: [...], ... } }.
         // Manter os formatos anteriores para compatibilidade com respostas legadas.
         const deps = Array.isArray(data.dados)
@@ -298,6 +358,7 @@ async function _carregarDependentesMorador(moradorId) {
 
         console.log(`[Registro] ${deps.length} dependentes carregados para morador ${moradorId}.`);
     } catch (e) {
+        if (!registroEstaAtivo(lifecycleToken) || document.getElementById('moradorSelecionadoRegistro')?.value !== String(moradorId)) return;
         sel.innerHTML = '<option value="">Erro ao carregar dependentes</option>';
         sel.disabled = true;
         console.warn('[Registro] Erro ao carregar dependentes:', e);
@@ -353,6 +414,7 @@ function _setupCascataVisitante() {
     if (!selUnidade) return;
 
     selUnidade.addEventListener('change', () => {
+        const lifecycleToken = registroLifecycleToken;
         const unidade   = selUnidade.value;
         const selMorador = document.getElementById('moradorDestinoRegistro');
         if (!selMorador) return;
@@ -369,19 +431,26 @@ function _setupCascataVisitante() {
         fetch(`${API_MORADORES}?unidade=${encodeURIComponent(unidade)}&ativo=1&por_pagina=0`)
             .then(r => r.json())
             .then(data => {
+                if (!registroEstaAtivo(lifecycleToken) || selUnidade.value !== unidade) return;
                 const moradores = data.dados?.itens || (Array.isArray(data.dados) ? data.dados : []);
                 selMorador.innerHTML = '<option value="">Selecione o morador...</option>';
                 moradores.forEach(m => selMorador.add(new Option(m.nome_completo || m.nome, m.id)));
                 selMorador.disabled = moradores.length === 0;
                 if (moradores.length === 0) selMorador.innerHTML = '<option value="">Nenhum morador nesta unidade</option>';
             })
-            .catch(() => { selMorador.innerHTML = '<option value="">Erro ao carregar</option>'; selMorador.disabled = true; });
+            .catch(() => {
+                if (!registroEstaAtivo(lifecycleToken) || selUnidade.value !== unidade) return;
+                selMorador.innerHTML = '<option value="">Erro ao carregar</option>';
+                selMorador.disabled = true;
+            });
     });
 }
 
 // ── Máscara Documento ─────────────────────────────────────────────────────────
 function _aplicarMascaraDocumentoValor(tipo, valor) {
-    let v = valor.replace(/\D/g, '');
+    let v = tipo === 'CPF'
+        ? String(valor || '').replace(/\D/g, '')
+        : String(valor || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
     if (tipo === 'CPF') {
         v = v.slice(0, 11);
         if (v.length > 9)      v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
@@ -404,11 +473,14 @@ function _setupMascaraDocumento() {
     tipoDoc.addEventListener('change', () => {
         docInput.value = '';
         docInput.placeholder = tipoDoc.value === 'CPF' ? '000.000.000-00' : 'XX.XXX.XXX-X';
+        _invalidarPessoaSelecionadaRegistro();
     });
 
     docInput.addEventListener('input', () => {
         docInput.value = _aplicarMascaraDocumentoValor(tipoDoc.value, docInput.value);
+        _invalidarPessoaSelecionadaRegistro();
     });
+    docInput.addEventListener('change', _invalidarPessoaSelecionadaRegistro);
 
     docInput.addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); _buscarVisitantePorDocumento(); }
@@ -416,6 +488,22 @@ function _setupMascaraDocumento() {
 
     const btnBuscar = document.getElementById('btnBuscarDocRegistro');
     if (btnBuscar) btnBuscar.addEventListener('click', _buscarVisitantePorDocumento);
+}
+
+function _invalidarPessoaSelecionadaRegistro() {
+    documentoBuscaToken += 1;
+    convidadoSelecaoToken += 1;
+    convidadoAtivo = null;
+    setCampoValue('visitanteIdRegistro', '');
+    setCampoValue('convidadoIdRegistro', '');
+    setCampoValue('nomeVisitanteRegistro', '');
+    const nomeInput = document.getElementById('nomeVisitanteRegistro');
+    if (nomeInput) nomeInput.readOnly = false;
+    ['visitanteEncontrado', 'convidadoPrevistoRegistro'].forEach((id) => {
+        const box = document.getElementById(id);
+        if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+    });
+    document.getElementById('cadastroVisitanteNaChegada')?.remove();
 }
 
 // ── Ocupantes do Veículo (Visitante/Prestador) ────────────────────────────────
@@ -473,18 +561,29 @@ function _resetBuscaOcupante() {
 async function _buscarOcupantePorDocumento() {
     const docInput = document.getElementById('documentoOcupante');
     const doc = docInput?.value.trim() || '';
+    const tipoDocumento = document.getElementById('tipoDocOcupante')?.value || 'CPF';
     if (!doc) { mostrarAlerta('error', 'Informe o documento do ocupante para buscar.'); return; }
+    if (tipoDocumento === 'CPF' && !_cpfValidoRegistro(doc)) { mostrarAlerta('error', 'CPF do ocupante inválido.'); return; }
+    const lifecycleToken = registroLifecycleToken;
+    const searchToken = ++documentoBuscaToken;
+    const isCurrent = () => registroEstaAtivo(lifecycleToken) && searchToken === documentoBuscaToken
+        && document.getElementById('tipoDocOcupante')?.value === tipoDocumento
+        && _normalizarDocumentoComparacao(document.getElementById('documentoOcupante')?.value || '') === _normalizarDocumentoComparacao(doc);
 
     const btnBuscar = document.getElementById('btnBuscarDocOcupante');
     if (btnBuscar) { btnBuscar.disabled = true; btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
 
     try {
-        const resp = await fetch(`${API_VISITANTES}?documento=${encodeURIComponent(doc)}`);
+        const parametros = new URLSearchParams({ documento: doc, tipo_documento: tipoDocumento });
+        const resp = await fetch(`${API_VISITANTES}?${parametros.toString()}`, { credentials: 'include' });
         const data = await resp.json();
+        if (!isCurrent()) return;
         const box    = document.getElementById('ocupanteEncontrado');
         const btnAdd = document.getElementById('btnAdicionarOcupante');
 
-        if (data.sucesso && data.dados) {
+        if (data.sucesso && data.dados
+            && String(data.dados.tipo_documento || '').toUpperCase() === tipoDocumento
+            && _normalizarDocumentoComparacao(data.dados.documento) === _normalizarDocumentoComparacao(doc)) {
             const v = data.dados;
             const idTitular      = document.getElementById('visitanteIdRegistro')?.value || '';
             const docTitular      = _normalizarDocumentoComparacao(document.getElementById('documentoRegistro')?.value || '');
@@ -531,10 +630,11 @@ async function _buscarOcupantePorDocumento() {
             mostrarAlerta('error', 'Ocupante não encontrado no cadastro de Visitantes. Cadastre-o no módulo Visitantes antes de adicioná-lo aqui.');
         }
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('[Registro] Erro ao buscar ocupante:', error);
         mostrarAlerta('error', 'Erro ao buscar cadastro do ocupante.');
     } finally {
-        if (btnBuscar) { btnBuscar.disabled = false; btnBuscar.innerHTML = '<i class="fas fa-search"></i>'; }
+        if (isCurrent() && btnBuscar?.isConnected) { btnBuscar.disabled = false; btnBuscar.innerHTML = '<i class="fas fa-search"></i>'; }
     }
 }
 
@@ -606,23 +706,118 @@ function _limparOcupantes() {
 }
 
 // ── Buscar Visitante por Documento ────────────────────────────────────────────
+function _dataHojeRegistroSaoPaulo() {
+    const partes = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date());
+    const valores = Object.fromEntries(partes.filter(parte => parte.type !== 'literal').map(parte => [parte.type, parte.value]));
+    return `${valores.year}-${valores.month}-${valores.day}`;
+}
+
+function _obterBoxConvidadoPrevisto() {
+    let box = document.getElementById('convidadoPrevistoRegistro');
+    if (box) return box;
+    const referencia = document.getElementById('visitanteEncontrado');
+    if (!referencia?.parentNode) return null;
+    box = document.createElement('div');
+    box.id = 'convidadoPrevistoRegistro';
+    box.className = 'convidado-previsto-registro';
+    box.style.display = 'none';
+    referencia.insertAdjacentElement('afterend', box);
+    return box;
+}
+
+async function _buscarConvidadosPrevistos(doc, tipoDocumento, isCurrent = () => true) {
+    const box = _obterBoxConvidadoPrevisto();
+    if (!box) return false;
+    box.style.display = 'none';
+    box.innerHTML = '';
+    const parametros = new URLSearchParams({
+        acao: 'buscar_documento', tipo_documento: tipoDocumento,
+        documento: doc, data: _dataHojeRegistroSaoPaulo()
+    });
+    const response = await fetch(`${API_CONVIDADOS}?${parametros.toString()}`, { credentials: 'include' });
+    const data = await response.json();
+    if (!isCurrent()) return false;
+    if (!response.ok || !data.sucesso) throw new Error(data.mensagem || 'Não foi possível buscar convites para este documento.');
+    const convites = Array.isArray(data.dados?.convidados) ? data.dados.convidados : [];
+    if (!convites.length) return false;
+    box.innerHTML = `<strong><i class="fas fa-calendar-check"></i> Convidado previsto para hoje</strong>
+        ${convites.map(convite => {
+            const entradas = convite.limite_entradas === null
+                ? `${Number(convite.entradas_utilizadas || 0)} usadas · Indeterminado`
+                : `${Number(convite.entradas_utilizadas || 0)}/${Number(convite.limite_entradas || 0)} entradas`;
+            const anfitriao = convite.anfitriao?.nome || convite.morador_nome || 'Anfitrião';
+            return `<div class="convidado-previsto-item">
+                <span><b>${_esc(convite.nome || 'Convidado')}</b> — ${_esc(convite.unidade || '')}, convidado de ${_esc(anfitriao)} · ${_esc(entradas)}</span>
+                <button type="button" class="btn-vincular-convidado" data-convidado-id="${Number(convite.id)}">Vincular</button>
+            </div>`;
+        }).join('')}`;
+    box.style.display = 'block';
+    box.querySelectorAll('[data-convidado-id]').forEach(button => {
+        button.addEventListener('click', async () => {
+            const id = Number(button.dataset.convidadoId);
+            if (!Number.isInteger(id) || id <= 0) return;
+            if (!isCurrent()) return;
+            const selectionToken = ++convidadoSelecaoToken;
+            box.querySelectorAll('[data-convidado-id]').forEach((item) => { item.disabled = true; });
+            try {
+                const detalheParams = new URLSearchParams({ acao: 'obter', id: String(id), data: _dataHojeRegistroSaoPaulo() });
+                const detalheResponse = await fetch(`${API_CONVIDADOS}?${detalheParams.toString()}`, { credentials: 'include' });
+                const detalhe = await detalheResponse.json();
+                if (!isCurrent() || selectionToken !== convidadoSelecaoToken) return;
+                if (!detalheResponse.ok || !detalhe.sucesso) throw new Error(detalhe.mensagem || 'Não foi possível obter os dados do convite.');
+                await iniciarConvidado(detalhe.dados, 'Entrada');
+                box.style.display = 'none';
+                box.innerHTML = '';
+            } catch (error) {
+                if (!isCurrent() || selectionToken !== convidadoSelecaoToken) return;
+                console.error('[Registro][Convidados] Falha ao vincular pelo documento:', error);
+                mostrarAlerta('error', error?.message || 'Não foi possível vincular o convidado.');
+            } finally {
+                if (isCurrent() && selectionToken === convidadoSelecaoToken) {
+                    box.querySelectorAll('[data-convidado-id]').forEach((item) => { item.disabled = false; });
+                }
+            }
+        });
+    });
+    return true;
+}
+
 async function _buscarVisitantePorDocumento() {
     const docInput = document.getElementById('documentoRegistro');
     const doc = docInput?.value.trim() || '';
     if (!doc) { mostrarAlerta('error', 'Informe o documento para buscar.'); return; }
+    const tipoDocumento = document.getElementById('tipoDocRegistro')?.value || 'CPF';
+    if (tipoDocumento === 'CPF' && !_cpfValidoRegistro(doc)) {
+        mostrarAlerta('error', 'CPF inválido. Confira os dígitos informados.');
+        return;
+    }
+
+    const searchToken = ++documentoBuscaToken;
+    const isCurrent = () => searchToken === documentoBuscaToken
+        && document.getElementById('documentoRegistro')?.isConnected
+        && document.getElementById('tipoDocRegistro')?.value === tipoDocumento
+        && _normalizarDocumentoComparacao(document.getElementById('documentoRegistro')?.value || '') === _normalizarDocumentoComparacao(doc);
 
     const btnBuscar = document.getElementById('btnBuscarDocRegistro');
     if (btnBuscar) { btnBuscar.disabled = true; btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
 
     try {
-        const resp = await fetch(`${API_VISITANTES}?documento=${encodeURIComponent(doc)}`);
+        const parametrosVisitante = new URLSearchParams({ documento: doc, tipo_documento: tipoDocumento });
+        const resp = await fetch(`${API_VISITANTES}?${parametrosVisitante.toString()}`, { credentials: 'include' });
         const data = await resp.json();
+        if (!isCurrent()) return;
         const box  = document.getElementById('visitanteEncontrado');
 
-        if (data.sucesso && data.dados) {
+        if (data.sucesso && data.dados
+            && String(data.dados.tipo_documento || '').toUpperCase() === tipoDocumento
+            && _normalizarDocumentoComparacao(data.dados.documento) === _normalizarDocumentoComparacao(doc)) {
             const v = data.dados;
             setCampoValue('nomeVisitanteRegistro', v.nome_completo || '');
             setCampoValue('visitanteIdRegistro', v.id || '');
+            const nomeInput = document.getElementById('nomeVisitanteRegistro');
+            if (nomeInput) nomeInput.readOnly = true;
             const placaInput = document.getElementById('placaRegistro');
             if (placaInput && !placaInput.value && v.placa_veiculo) placaInput.value = v.placa_veiculo;
             if (box) {
@@ -644,14 +839,31 @@ async function _buscarVisitantePorDocumento() {
             setCampoValue('nomeVisitanteRegistro', '');
             setCampoValue('visitanteIdRegistro', '');
             if (box) { box.style.display = 'none'; box.innerHTML = ''; }
-            mostrarAlerta('error', 'Visitante não encontrado. Preencha o nome manualmente ou cadastre-o no módulo Visitantes.');
+            const temConvite = await _buscarConvidadosPrevistos(doc, tipoDocumento, isCurrent);
+            if (!isCurrent()) return;
+            if (!temConvite) mostrarAlerta('error', 'Visitante não encontrado. Preencha o nome manualmente ou cadastre-o no módulo Visitantes.');
+            return;
         }
+        await _buscarConvidadosPrevistos(doc, tipoDocumento, isCurrent);
     } catch (error) {
+        if (!isCurrent()) return;
         console.error('[Registro] Erro ao buscar visitante:', error);
-        mostrarAlerta('error', 'Erro ao buscar cadastro do visitante.');
+        mostrarAlerta('error', error?.message || 'Erro ao buscar cadastro do visitante.');
     } finally {
-        if (btnBuscar) { btnBuscar.disabled = false; btnBuscar.innerHTML = '<i class="fas fa-search"></i>'; }
+        if (isCurrent() && btnBuscar?.isConnected) { btnBuscar.disabled = false; btnBuscar.innerHTML = '<i class="fas fa-search"></i>'; }
     }
+}
+
+function _cpfValidoRegistro(valor) {
+    const cpf = String(valor || '').replace(/\D/g, '');
+    if (cpf.length !== 11 || /^([0-9])\1{10}$/.test(cpf)) return false;
+    for (let tamanho = 9; tamanho <= 10; tamanho++) {
+        let soma = 0;
+        for (let i = 0; i < tamanho; i++) soma += Number(cpf[i]) * (tamanho + 1 - i);
+        const digito = (soma * 10) % 11 % 10;
+        if (Number(cpf[tamanho]) !== digito) return false;
+    }
+    return true;
 }
 
 // ── Form Setup ────────────────────────────────────────────────────────────────
@@ -690,10 +902,15 @@ function onTipoChange() {
     const extraCampos  = document.getElementById('extraCampos');
     const camposMorador = document.getElementById('camposMorador');
 
-    if (extraCampos)  extraCampos.style.display  = (tipo === 'Visitante' || tipo === 'Prestador') ? 'block' : 'none';
+    if (convidadoAtivo && _normalizarTipoConvidado(convidadoAtivo.tipo_convidado) !== tipo) {
+        convidadoAtivo = null;
+        setCampoValue('convidadoIdRegistro', '');
+    }
+
+    if (extraCampos)  extraCampos.style.display  = _tipoExigeDocumento(tipo) ? 'block' : 'none';
     if (camposMorador) camposMorador.style.display = tipo === 'Morador' ? 'block' : 'none';
 
-    if (tipo !== 'Visitante' && tipo !== 'Prestador') {
+    if (!_tipoExigeDocumento(tipo)) {
         ['nomeVisitanteRegistro', 'documentoRegistro', 'diasPermanenciaRegistro'].forEach(id => {
             const el = document.getElementById(id); if (el) el.value = '';
         });
@@ -718,6 +935,333 @@ function onTipoChange() {
     _atualizarModoRegistro();
 }
 
+function _tipoExigeDocumento(tipo) {
+    return ['Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'].includes(tipo);
+}
+
+function _normalizarTipoConvidado(tipo) {
+    const mapa = {
+        VISITANTE: 'Visitante',
+        PRESTADOR: 'Prestador',
+        ENTREGADOR_AUTORIZADO: 'Entregador Autorizado',
+        FAMILIAR: 'Familiar'
+    };
+    const chave = String(tipo || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    return mapa[chave] || String(tipo || 'Visitante');
+}
+
+function _garantirCampoConvidado() {
+    let campo = document.getElementById('convidadoIdRegistro');
+    if (!campo) {
+        campo = document.createElement('input');
+        campo.type = 'hidden';
+        campo.id = 'convidadoIdRegistro';
+        campo.name = 'convidado_id';
+        document.getElementById('registroForm')?.appendChild(campo);
+    }
+    return campo;
+}
+
+function _ativarAbaManual() {
+    const botao = document.querySelector('.page-registro .tab-button[data-tab="manual"]');
+    if (botao) botao.click();
+    const painel = document.getElementById('tab-registro-manual');
+    if (painel) painel.style.display = '';
+    document.getElementById('registroForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function iniciarConvidado(guest, tipoAcesso = 'Entrada') {
+    if (!guest || !Number.isInteger(Number(guest.id)) || Number(guest.id) <= 0) {
+        throw new Error('O convite selecionado é inválido. Atualize a lista e tente novamente.');
+    }
+    const tipo = _normalizarTipoConvidado(guest.tipo_convidado);
+    if (!_tipoExigeDocumento(tipo)) throw new Error('O tipo deste convidado não pode ser registrado pelo fluxo de visitantes.');
+    const lifecycleToken = registroLifecycleToken;
+    const selectionToken = ++convidadoSelecaoToken;
+    document.getElementById('cadastroVisitanteNaChegada')?.remove();
+    const convitesPendentes = document.getElementById('convidadoPrevistoRegistro');
+    if (convitesPendentes) { convitesPendentes.style.display = 'none'; convitesPendentes.innerHTML = ''; }
+
+    _ativarAbaManual();
+    setCampoValue('tipoRegistro', tipo);
+    onTipoChange();
+    convidadoAtivo = { ...guest };
+    _garantirCampoConvidado().value = String(guest.id);
+    setCampoValue('tipoDocRegistro', ['CPF', 'RG'].includes(String(guest.tipo_documento || '').toUpperCase())
+        ? String(guest.tipo_documento).toUpperCase()
+        : 'CPF');
+    setCampoValue('documentoRegistro', guest.documento || guest.documento_completo || '');
+    setCampoValue('nomeVisitanteRegistro', guest.nome || guest.nome_completo || '');
+    setCampoValue('visitanteIdRegistro', guest.visitante_id || '');
+    const nomeInput = document.getElementById('nomeVisitanteRegistro');
+    if (nomeInput) nomeInput.readOnly = Boolean(guest.visitante_id);
+    setCampoValue('diasPermanenciaRegistro', guest.dias_permanencia || 1);
+
+    const radio = document.querySelector(`input[name="tipo_acesso"][value="${tipoAcesso === 'Saída' ? 'Saída' : 'Entrada'}"]`);
+    if (radio) radio.checked = true;
+    _atualizarBotoesAcesso();
+    await _selecionarDestinoConvidado(guest, selectionToken, lifecycleToken);
+    if (!registroEstaAtivo(lifecycleToken) || selectionToken !== convidadoSelecaoToken || Number(convidadoAtivo?.id) !== Number(guest.id)) return false;
+
+    const box = document.getElementById('visitanteEncontrado');
+    if (box) {
+        box.style.display = 'flex';
+        box.classList.toggle('visitante-documento-pendente', !guest.visitante_id);
+        box.innerHTML = guest.visitante_id
+            ? `<i class="fas fa-check-circle"></i><span>Convidado vinculado: <strong>${_esc(guest.nome || guest.nome_completo || 'Visitante')}</strong> — ${_esc(tipoAcesso)}. Confira os dados e confirme o registro.</span>`
+            : `<i class="fas fa-info-circle"></i><span>Convidado sem cadastro-base de visitante. Complete o cadastro abaixo antes de confirmar a entrada.</span>`;
+    }
+    if (!guest.visitante_id) _mostrarCadastroVisitanteNaChegada(guest);
+    else document.getElementById('cadastroVisitanteNaChegada')?.remove();
+    _ativarAbaManual();
+    document.getElementById('placaRegistro')?.focus();
+    return true;
+}
+
+async function _selecionarDestinoConvidado(guest, selectionToken = convidadoSelecaoToken, lifecycleToken = registroLifecycleToken) {
+    const unidade = String(guest?.unidade || guest?.unidade_destino || '');
+    const moradorId = String(guest?.morador_id || guest?.anfitriao_morador_id || '');
+    const unidadeEl = document.getElementById('unidadeDestinoRegistro');
+    const moradorEl = document.getElementById('moradorDestinoRegistro');
+    if (!unidadeEl || !moradorEl) return;
+    unidadeEl.value = unidade;
+    moradorEl.innerHTML = '<option value="">Carregando...</option>';
+    moradorEl.disabled = true;
+    try {
+        const resp = await fetch(`${API_MORADORES}?unidade=${encodeURIComponent(unidade)}&ativo=1&por_pagina=0`, { credentials: 'include' });
+        const data = await resp.json();
+        if (!registroEstaAtivo(lifecycleToken) || selectionToken !== convidadoSelecaoToken || Number(convidadoAtivo?.id) !== Number(guest?.id) || unidadeEl.value !== unidade) return false;
+        const moradores = data.dados?.itens || (Array.isArray(data.dados) ? data.dados : []);
+        moradorEl.innerHTML = '<option value="">Selecione o morador...</option>';
+        moradores.forEach((morador) => moradorEl.add(new Option(morador.nome_completo || morador.nome, morador.id)));
+        moradorEl.value = moradorId;
+        moradorEl.disabled = moradores.length === 0;
+    } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken) || selectionToken !== convidadoSelecaoToken || Number(convidadoAtivo?.id) !== Number(guest?.id)) return false;
+        console.warn('[Registro][Convidados] Erro ao carregar destino:', error);
+        moradorEl.innerHTML = '<option value="">Não foi possível carregar o morador</option>';
+    } finally {
+        if (registroEstaAtivo(lifecycleToken) && selectionToken === convidadoSelecaoToken && Number(convidadoAtivo?.id) === Number(guest?.id)) moradorEl.disabled = false;
+    }
+    return registroEstaAtivo(lifecycleToken) && selectionToken === convidadoSelecaoToken && Number(convidadoAtivo?.id) === Number(guest?.id);
+}
+
+async function _carregarPoliticaVisitantes() {
+    if (politicaVisitantes) return politicaVisitantes;
+    const lifecycleToken = registroLifecycleToken;
+    try {
+        const resp = await fetch(`${API_CONVIDADOS}?acao=politica_visitantes`, { credentials: 'include' });
+        const data = await resp.json();
+        if (!registroEstaAtivo(lifecycleToken)) return null;
+        if (!resp.ok || !data.sucesso) throw new Error(data.mensagem || `HTTP ${resp.status}`);
+        politicaVisitantes = {};
+        (data.dados?.campos || []).forEach((campo) => { politicaVisitantes[campo.campo] = campo; });
+        console.log('[Registro][Convidados] Política de visitantes carregada.');
+    } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken)) return null;
+        console.warn('[Registro][Convidados] Não foi possível carregar a política de visitantes:', error);
+        politicaVisitantes = null;
+        throw new Error('Não foi possível carregar a política de cadastro deste condomínio. Atualize a tela ou solicite suporte antes de cadastrar o convidado.');
+    }
+    _atualizarCamposCadastroChegada();
+    return politicaVisitantes;
+}
+
+function _atualizarCamposCadastroChegada() {
+    const mapa = {
+        convidadoChegadaNome: 'nome_completo',
+        convidadoChegadaTipoDocumento: 'tipo_documento',
+        convidadoChegadaDocumento: 'documento',
+        convidadoChegadaTelefone: 'telefone_contato',
+        convidadoChegadaCelular: 'celular',
+        convidadoChegadaEmail: 'email',
+        convidadoChegadaObservacao: 'observacao'
+    };
+    Object.entries(mapa).forEach(([id, campo]) => {
+        const elemento = document.getElementById(id);
+        if (elemento) elemento.required = Boolean(politicaVisitantes?.[campo]?.obrigatorio);
+    });
+}
+
+function _mostrarCadastroVisitanteNaChegada(guest) {
+    const extra = document.getElementById('extraCampos');
+    if (!extra || document.getElementById('cadastroVisitanteNaChegada')) return;
+    const lifecycleToken = registroLifecycleToken;
+    const box = document.createElement('div');
+    box.id = 'cadastroVisitanteNaChegada';
+    box.className = 'visitante-encontrado visitante-documento-pendente';
+    box.innerHTML = `
+        <strong>Visitante ainda não cadastrado.</strong>
+        <span>Preencha os dados abaixo. A política do condomínio será validada antes de liberar o cadastro.</span>
+        <div class="form-grid reg-grid-3" style="width:100%;margin-top:10px;">
+            <label>Nome completo *<input id="convidadoChegadaNome" type="text"></label>
+            <label>Tipo de documento *<select id="convidadoChegadaTipoDocumento"><option value="CPF">CPF</option><option value="RG">RG</option></select></label>
+            <label>Número do documento *<input id="convidadoChegadaDocumento" type="text" inputmode="text"></label>
+            <label>Telefone de contato<input id="convidadoChegadaTelefone" type="text"></label>
+            <label>Celular<input id="convidadoChegadaCelular" type="text"></label>
+            <label>E-mail<input id="convidadoChegadaEmail" type="email"></label>
+            <label>Observação<input id="convidadoChegadaObservacao" type="text" maxlength="500"></label>
+            <label>Foto<input id="convidadoChegadaFoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+            <label>Documento digitalizado<input id="convidadoChegadaDocumentoArquivo" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"></label>
+        </div>
+        <button type="button" class="btn-secondary-modern" id="btnCriarVisitanteChegada" disabled>Carregando política...</button>
+        <small id="convidadoChegadaPolitica" style="display:block;margin-top:8px;"></small>`;
+    extra.insertBefore(box, extra.firstChild);
+    setCampoValue('convidadoChegadaNome', guest?.nome || guest?.nome_completo || '');
+    setCampoValue('convidadoChegadaTipoDocumento', guest?.tipo_documento || 'CPF');
+    setCampoValue('convidadoChegadaDocumento', guest?.documento || '');
+    setCampoValue('convidadoChegadaTelefone', guest?.telefone || guest?.telefone_contato || '');
+    setCampoValue('convidadoChegadaCelular', guest?.celular || '');
+    setCampoValue('convidadoChegadaEmail', guest?.email || '');
+    setCampoValue('convidadoChegadaObservacao', guest?.observacao || '');
+    const tipoDocumentoEl = document.getElementById('convidadoChegadaTipoDocumento');
+    const documentoEl = document.getElementById('convidadoChegadaDocumento');
+    tipoDocumentoEl?.addEventListener('change', () => {
+        if (documentoEl) documentoEl.value = '';
+        _atualizarCamposCadastroChegada();
+    });
+    documentoEl?.addEventListener('input', () => {
+        if (documentoEl && tipoDocumentoEl) documentoEl.value = _aplicarMascaraDocumentoValor(tipoDocumentoEl.value, documentoEl.value);
+    });
+    document.getElementById('btnCriarVisitanteChegada')?.addEventListener('click', () => _criarVisitanteNaChegada());
+    _carregarPoliticaVisitantes().then(() => {
+        if (!registroEstaAtivo(lifecycleToken) || Number(convidadoAtivo?.id) !== Number(guest?.id)) return;
+        if (!politicaVisitantes) throw new Error('Política de cadastro indisponível.');
+        const obrigatorios = Object.values(politicaVisitantes || {}).filter((campo) => campo.obrigatorio).map((campo) => campo.rotulo);
+        const politicaEl = document.getElementById('convidadoChegadaPolitica');
+        if (politicaEl) politicaEl.textContent = obrigatorios.length ? `Obrigatórios neste condomínio: ${obrigatorios.join(', ')}.` : 'Nenhum campo adicional obrigatório configurado.';
+        const botao = document.getElementById('btnCriarVisitanteChegada');
+        if (botao) { botao.disabled = false; botao.textContent = 'Cadastrar visitante e continuar'; }
+    }).catch((error) => {
+        if (!registroEstaAtivo(lifecycleToken) || Number(convidadoAtivo?.id) !== Number(guest?.id)) return;
+        const politicaEl = document.getElementById('convidadoChegadaPolitica');
+        if (politicaEl) politicaEl.textContent = error.message;
+        const botao = document.getElementById('btnCriarVisitanteChegada');
+        if (botao) { botao.disabled = true; botao.textContent = 'Política indisponível'; }
+    });
+}
+
+async function _criarVisitanteNaChegada() {
+    const lifecycleToken = registroLifecycleToken;
+    const guestId = Number(convidadoAtivo?.id || 0);
+    const button = document.getElementById('btnCriarVisitanteChegada');
+    if (!convidadoAtivo?.id) {
+        mostrarAlerta('error', 'Selecione novamente o convidado antes de concluir o cadastro.');
+        return;
+    }
+    const campos = {
+        nome_completo: (document.getElementById('convidadoChegadaNome')?.value || '').trim(),
+        tipo_documento: document.getElementById('convidadoChegadaTipoDocumento')?.value || 'CPF',
+        documento: (document.getElementById('convidadoChegadaDocumento')?.value || '').trim(),
+        telefone_contato: (document.getElementById('convidadoChegadaTelefone')?.value || '').trim(),
+        telefone: (document.getElementById('convidadoChegadaTelefone')?.value || '').trim(),
+        celular: (document.getElementById('convidadoChegadaCelular')?.value || '').trim(),
+        email: (document.getElementById('convidadoChegadaEmail')?.value || '').trim(),
+        observacao: (document.getElementById('convidadoChegadaObservacao')?.value || '').trim()
+    };
+    const documentoConvidado = _normalizarDocumentoComparacao(convidadoAtivo?.documento_normalizado || convidadoAtivo?.documento || '');
+    if (!registroEstaAtivo(lifecycleToken) || !guestId || Number(convidadoAtivo?.id) !== guestId) return;
+    if (campos.tipo_documento !== String(convidadoAtivo?.tipo_documento || '').toUpperCase()
+        || _normalizarDocumentoComparacao(campos.documento) !== documentoConvidado) {
+        mostrarAlerta('error', 'O documento e o tipo informado precisam coincidir com os dados do convite.');
+        return;
+    }
+    if (campos.tipo_documento === 'CPF' && !_cpfValidoRegistro(campos.documento)) {
+        mostrarAlerta('error', 'CPF inválido. Confira os dígitos informados.');
+        document.getElementById('convidadoChegadaDocumento')?.focus();
+        return;
+    }
+    if (!campos.nome_completo || !campos.documento) {
+        mostrarAlerta('error', 'Informe o nome e o documento do visitante.');
+        return;
+    }
+
+    let config;
+    try {
+        config = await _carregarPoliticaVisitantes();
+    } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken) || Number(convidadoAtivo?.id) !== guestId) return;
+        mostrarAlerta('error', error?.message || 'Não foi possível validar a política de cadastro.');
+        return;
+    }
+    if (!registroEstaAtivo(lifecycleToken) || Number(convidadoAtivo?.id) !== guestId) return;
+    if (!config) {
+        mostrarAlerta('error', 'A política de cadastro deste condomínio não está disponível.');
+        return;
+    }
+    const inputIds = {
+        nome_completo: 'convidadoChegadaNome',
+        tipo_documento: 'convidadoChegadaTipoDocumento',
+        documento: 'convidadoChegadaDocumento',
+        telefone_contato: 'convidadoChegadaTelefone',
+        celular: 'convidadoChegadaCelular',
+        email: 'convidadoChegadaEmail',
+        observacao: 'convidadoChegadaObservacao'
+    };
+    for (const [campo, id] of Object.entries(inputIds)) {
+        if (config?.[campo]?.obrigatorio && !String(campos[campo] || '').trim()) {
+            mostrarAlerta('error', `O campo "${config[campo].rotulo}" é obrigatório neste condomínio.`);
+            document.getElementById(id)?.focus();
+            return;
+        }
+    }
+
+    const foto = document.getElementById('convidadoChegadaFoto')?.files?.[0] || null;
+    const documentoArquivo = document.getElementById('convidadoChegadaDocumentoArquivo')?.files?.[0] || null;
+    if (config?.foto?.obrigatorio && !foto) {
+        mostrarAlerta('error', 'A foto do visitante é obrigatória para este condomínio.');
+        document.getElementById('convidadoChegadaFoto')?.focus();
+        return;
+    }
+    if (config?.documento_digitalizado?.obrigatorio && !documentoArquivo) {
+        mostrarAlerta('error', 'O documento digitalizado é obrigatório para este condomínio.');
+        document.getElementById('convidadoChegadaDocumentoArquivo')?.focus();
+        return;
+    }
+    if (config?.anexo_evidencia?.obrigatorio && !foto && !documentoArquivo) {
+        mostrarAlerta('error', 'Anexe uma foto ou o documento digitalizado, conforme a configuração deste condomínio.');
+        document.getElementById('convidadoChegadaFoto')?.focus();
+        return;
+    }
+
+    if (button) { button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cadastrando...'; }
+    try {
+        const form = new FormData();
+        form.append('dados', JSON.stringify(campos));
+        if (foto) form.append('foto', foto);
+        if (documentoArquivo) form.append('documento', documentoArquivo);
+        const response = await fetch(API_VISITANTES, { method: 'POST', credentials: 'include', body: form });
+        const data = await response.json();
+        if (!registroEstaAtivo(lifecycleToken) || Number(convidadoAtivo?.id) !== guestId) return;
+        if (!response.ok || !data.sucesso) throw new Error(data.mensagem || 'Não foi possível cadastrar o visitante.');
+        const visitanteId = Number(data.dados?.id || 0);
+        if (visitanteId <= 0) throw new Error('O cadastro não retornou o identificador do visitante. Atualize a lista antes de continuar.');
+
+        convidadoAtivo.visitante_id = visitanteId;
+        convidadoAtivo.nome = campos.nome_completo;
+        setCampoValue('visitanteIdRegistro', visitanteId);
+        setCampoValue('nomeVisitanteRegistro', campos.nome_completo);
+        const nomeInput = document.getElementById('nomeVisitanteRegistro');
+        if (nomeInput) nomeInput.readOnly = true;
+        setCampoValue('tipoDocRegistro', campos.tipo_documento);
+        setCampoValue('documentoRegistro', campos.documento);
+        document.getElementById('cadastroVisitanteNaChegada')?.remove();
+        const box = document.getElementById('visitanteEncontrado');
+        if (box) {
+            box.style.display = 'flex';
+            box.classList.remove('visitante-documento-pendente');
+            box.innerHTML = `<i class="fas fa-check-circle"></i><span>Cadastro de <strong>${_esc(campos.nome_completo)}</strong> concluído e vinculado ao convite. Agora confirme o registro de acesso.</span>`;
+        }
+        mostrarAlerta('success', 'Visitante cadastrado e vinculado. Confirme o registro de acesso.');
+    } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken) || Number(convidadoAtivo?.id) !== guestId) return;
+        console.error('[Registro][Convidados] Erro ao cadastrar visitante na chegada:', error);
+        mostrarAlerta('error', error?.message || 'Não foi possível cadastrar o visitante.');
+    } finally {
+        if (registroEstaAtivo(lifecycleToken) && Number(convidadoAtivo?.id) === guestId && button?.isConnected) { button.disabled = false; button.innerHTML = 'Cadastrar visitante e continuar'; }
+    }
+}
+
 // ── Data/Hora ─────────────────────────────────────────────────────────────────
 function atualizarDataHoraAtual() {
     const input = document.getElementById('dataHoraRegistro');
@@ -729,11 +1273,14 @@ function atualizarDataHoraAtual() {
 
 // ── Carregar Veículos ─────────────────────────────────────────────────────────
 async function carregarVeiculos() {
+    const lifecycleToken = registroLifecycleToken;
     try {
-        const response = await fetch(API_VEICULOS);
+        const response = await fetch(API_VEICULOS, { credentials: 'include' });
         const data = await response.json();
+        if (!registroEstaAtivo(lifecycleToken)) return;
         veiculosCache = (data.sucesso && Array.isArray(data.dados)) ? data.dados : [];
     } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken)) return;
         console.error('[Registro] Erro ao carregar veículos:', error);
         veiculosCache = [];
     }
@@ -741,19 +1288,22 @@ async function carregarVeiculos() {
 
 // ── Carregar Registros ────────────────────────────────────────────────────────
 async function carregarRegistros() {
+    const lifecycleToken = registroLifecycleToken;
     const tbody = document.querySelector('#tabelaRegistros tbody');
     setLoading(true);
     try {
-        const response = await fetch(`${API_REGISTROS}?limite=100`);
+        const response = await fetch(`${API_REGISTROS}?limite=100`, { credentials: 'include' });
         const data = await response.json();
+        if (!registroEstaAtivo(lifecycleToken)) return;
         if (!data.sucesso) { renderMensagemTabela(tbody, data.mensagem || 'Erro ao carregar registros.'); return; }
         registrosCache = data.dados || [];
         renderRegistros(registrosCache);
     } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken)) return;
         console.error('[Registro] Erro ao carregar registros:', error);
         renderMensagemTabela(tbody, 'Erro de conexão ao carregar registros.');
     } finally {
-        setLoading(false);
+        if (registroEstaAtivo(lifecycleToken)) setLoading(false);
     }
 }
 
@@ -807,17 +1357,17 @@ function renderRegistros(registros) {
 
         return `
             <tr>
-                <td>${dataHora}</td>
-                <td><span class="plate-badge">${placa}</span></td>
-                <td>${modelo}</td>
-                <td>${cor}</td>
-                <td>${tipo}</td>
-                <td>${nome}</td>
-                <td>${unidade}</td>
-                <td>${usuarioLiberou}</td>
-                <td>${badgeAcesso}</td>
-                <td><span class="status-pill ${statusClass}">${status}</span></td>
-                <td>
+                <td data-label="Data/Hora">${dataHora}</td>
+                <td data-label="Placa"><span class="plate-badge">${placa}</span></td>
+                <td data-label="Modelo">${modelo}</td>
+                <td data-label="Cor">${cor}</td>
+                <td data-label="Tipo">${tipo}</td>
+                <td data-label="Nome">${nome}</td>
+                <td data-label="Unidade">${unidade}</td>
+                <td data-label="Usuário que liberou">${usuarioLiberou}</td>
+                <td data-label="Entrada/Saída">${badgeAcesso}</td>
+                <td data-label="Status"><span class="status-pill ${statusClass}">${status}</span></td>
+                <td data-label="Ações">
                     <button class="action-btn delete" type="button" onclick="window.RegistroPage.excluir(${id})" title="Excluir registro">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -833,6 +1383,7 @@ function renderMensagemTabela(tbody, msg) {
 // ── Salvar ────────────────────────────────────────────────────────────────────
 async function salvarRegistro() {
     if (salvandoReg) return;
+    const lifecycleToken = registroLifecycleToken;
     salvandoReg = true;
     const btn = document.getElementById('btnSalvarRegistro');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
@@ -866,6 +1417,8 @@ async function salvarRegistro() {
             modo_registro: pedestre ? 'PEDESTRE' : 'VEICULO'
         };
         if (pedestre) payload.vestimenta = vestimenta;
+        const convidadoId = Number(document.getElementById('convidadoIdRegistro')?.value || 0);
+        if (convidadoId > 0) payload.convidado_id = convidadoId;
 
         // ── Morador ──
         if (tipo === 'Morador') {
@@ -887,8 +1440,8 @@ async function salvarRegistro() {
             }
         }
 
-        // ── Visitante / Prestador ──
-        if (tipo === 'Visitante' || tipo === 'Prestador') {
+        // ── Visitante, Prestador, Entregador Autorizado ou Familiar ──
+        if (_tipoExigeDocumento(tipo)) {
             const nomeVisitante   = (document.getElementById('nomeVisitanteRegistro')?.value || '').trim();
             const unidadeDestino  = document.getElementById('unidadeDestinoRegistro')?.value || '';
             const moradorDestino  = document.getElementById('moradorDestinoRegistro')?.value || '';
@@ -896,11 +1449,11 @@ async function salvarRegistro() {
             const visitanteId     = document.getElementById('visitanteIdRegistro')?.value || '';
             const documento       = document.getElementById('documentoRegistro')?.value.trim() || '';
 
-            if (!nomeVisitante)  { mostrarAlerta('error', 'Informe o nome do visitante/prestador.'); return; }
+            if (!nomeVisitante)  { mostrarAlerta('error', 'Informe o nome do visitante/convidado.'); return; }
             if (!unidadeDestino) { mostrarAlerta('error', 'Selecione a unidade de destino.'); return; }
             if (!moradorDestino) { mostrarAlerta('error', 'Selecione o morador que será visitado.'); return; }
             if (!visitanteId) {
-                mostrarAlerta('error', 'Localize um visitante/prestador cadastrado pelo documento. O registro manual exige documento digitalizado anexado.');
+                mostrarAlerta('error', 'Cadastre o visitante pelo formulário de chegada antes de confirmar o acesso.');
                 document.getElementById('documentoRegistro')?.focus();
                 return;
             }
@@ -911,6 +1464,8 @@ async function salvarRegistro() {
             payload.dias_permanencia = diasPermanencia;
             if (visitanteId) payload.visitante_id = visitanteId;
             if (documento)   payload.documento     = documento;
+            const tipoDocumento = document.getElementById('tipoDocRegistro')?.value || '';
+            if (tipoDocumento) payload.tipo_documento = tipoDocumento;
 
             // Ocupantes: cada um vira um registro de acesso próprio (papel_veiculo=OCUPANTE),
             // vinculado ao registro titular, para que o mesmo veículo/horário fique
@@ -937,14 +1492,21 @@ async function salvarRegistro() {
         payload.idempotency_key = idempotencyKey;
         ultimoEnvioRegistro = { chave: idempotencyKey, assinatura: assinaturaAtual };
 
-        console.log('[Registro] Payload:', payload);
+        console.log('[Registro] Enviando acesso manual.', {
+            tipo, tipo_acesso: tipoAcesso, modo_registro: payload.modo_registro,
+            vinculado_a_convite: convidadoId > 0,
+            ocupantes: Array.isArray(payload.ocupantes) ? payload.ocupantes.length : 0
+        });
 
         let response = await fetch(API_REGISTROS, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(payload)
         });
+        if (!registroEstaAtivo(lifecycleToken)) return;
         let data = await response.json();
+        if (!registroEstaAtivo(lifecycleToken)) return;
 
         if (!data.sucesso && data.dados?.codigo === 'IDEMPOTENCY_CONFLICT') {
             const campo = document.getElementById('idempotencyKeyRegistro');
@@ -957,9 +1519,12 @@ async function salvarRegistro() {
             response = await fetch(API_REGISTROS, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify(payload)
             });
+            if (!registroEstaAtivo(lifecycleToken)) return;
             data = await response.json();
+            if (!registroEstaAtivo(lifecycleToken)) return;
         }
 
         if (!data.sucesso) { mostrarAlerta('error', data.mensagem || 'Falha ao registrar acesso.'); return; }
@@ -981,11 +1546,14 @@ async function salvarRegistro() {
         return;
 
     } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken)) return;
         console.error('[Registro] Erro ao salvar registro:', error);
         mostrarAlerta('error', 'Erro interno ao salvar registro.');
     } finally {
-        salvandoReg = false;
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Registrar Acesso'; }
+        if (registroEstaAtivo(lifecycleToken)) {
+            salvandoReg = false;
+            if (btn?.isConnected) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Registrar Acesso'; }
+        }
     }
 }
 
@@ -1006,17 +1574,22 @@ function _mostrarFeedbackPosAtualizacao() {
 // ── Excluir ───────────────────────────────────────────────────────────────────
 async function excluirRegistro(id) {
     if (!confirm('Deseja realmente excluir este registro?')) return;
+    const lifecycleToken = registroLifecycleToken;
     try {
         const response = await fetch(API_REGISTROS, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ id: Number(id) })
         });
+        if (!registroEstaAtivo(lifecycleToken)) return;
         const data = await response.json();
+        if (!registroEstaAtivo(lifecycleToken)) return;
         if (!data.sucesso) { mostrarAlerta('error', data.mensagem || 'Falha ao excluir registro.'); return; }
         mostrarAlerta('success', data.mensagem || 'Registro excluído com sucesso.');
         await carregarRegistros();
     } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken)) return;
         console.error('[Registro] Erro ao excluir registro:', error);
         mostrarAlerta('error', 'Erro de conexão ao excluir registro.');
     }
@@ -1025,6 +1598,7 @@ async function excluirRegistro(id) {
 // ── Limpar Formulário ─────────────────────────────────────────────────────────
 function limparFormulario() {
     ultimoEnvioRegistro = null;
+    convidadoAtivo = null;
     const form = document.getElementById('registroForm');
     if (form) form.reset();
 
@@ -1042,6 +1616,8 @@ function limparFormulario() {
     const boxVis = document.getElementById('visitanteEncontrado');
     if (boxVis) { boxVis.style.display = 'none'; boxVis.classList.remove('visitante-documento-pendente'); boxVis.innerHTML = ''; }
     _limparOcupantes();
+    document.getElementById('cadastroVisitanteNaChegada')?.remove();
+    setCampoValue('convidadoIdRegistro', '');
 
     const selMorDest = document.getElementById('moradorDestinoRegistro');
     if (selMorDest) { selMorDest.innerHTML = '<option value="">Selecione a unidade primeiro</option>'; selMorDest.disabled = true; }
@@ -1072,14 +1648,16 @@ async function detectarVeiculoPorPlaca() {
     if (_isPedestre()) return;
     const placa = normalizarPlaca(placaInput.value);
     if (placa.length < 7) { esconderVeiculoEncontrado(); return; }
+    const lifecycleToken = registroLifecycleToken;
 
     placaInput.dataset.consultando = '1';
     try {
-        const resp = await fetch(`${API_VEICULOS}?acao=consultar_placa&placa=${encodeURIComponent(placa)}`);
+        const resp = await fetch(`${API_VEICULOS}?acao=consultar_placa&placa=${encodeURIComponent(placa)}`, { credentials: 'include' });
         if (!resp.ok) {
             throw new Error(`Consulta de veículo falhou (HTTP ${resp.status})`);
         }
         const data = await resp.json();
+        if (!registroEstaAtivo(lifecycleToken) || !placaInput.isConnected || normalizarPlaca(placaInput.value) !== placa) return;
         if (!data || typeof data !== 'object') {
             throw new Error('Resposta inválida da consulta de veículo.');
         }
@@ -1123,10 +1701,11 @@ async function detectarVeiculoPorPlaca() {
             box.style.display = 'block';
         }
     } catch (error) {
+        if (!registroEstaAtivo(lifecycleToken) || !placaInput.isConnected || normalizarPlaca(placaInput.value) !== placa) return;
         console.error('[Registro] Erro ao consultar veículo por placa:', error);
         esconderVeiculoEncontrado();
     } finally {
-        delete placaInput.dataset.consultando;
+        if (placaInput.isConnected) delete placaInput.dataset.consultando;
     }
 }
 

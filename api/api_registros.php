@@ -32,21 +32,89 @@ function log_registro($msg, $dados = null) {
 // ===== RETORNO JSON =====
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
-        $resposta = ['sucesso' => $sucesso, 'mensagem' => $mensagem];
-        if ($dados !== null) $resposta['dados'] = $dados;
+        $resposta = ['sucesso' => $sucesso, 'mensagem' => $mensagem, 'dados' => $dados ?? []];
         echo json_encode($resposta, JSON_UNESCAPED_UNICODE);
         exit;
     }
 }
 
 $metodo  = $_SERVER['REQUEST_METHOD'];
+$auth = verificarAutenticacao(true, 'operador');
 $conexao = conectar_banco();
-$tenant_id = exigirTenantId();
+if (!$conexao) {
+    retornar_json(false, 'Não foi possível conectar ao banco de dados.', []);
+}
+$tenant_id = (int)($auth['tenant_id'] ?? 0);
+if ($tenant_id <= 0) {
+    retornar_json(false, 'Contexto de condomínio não identificado.', []);
+}
+
+if (!in_array($metodo, ['GET', 'POST', 'PUT', 'DELETE'], true)) {
+    http_response_code(405);
+    retornar_json(false, 'Método não permitido.', []);
+}
+
+if (rbacTabelasDisponiveis($conexao)) {
+    if ($metodo === 'GET' && in_array(($_GET['acao'] ?? ''), ['relatorio_ocupantes', 'relatorio_acessos'], true)) {
+        rbacExigir($conexao, 'relatorios_acesso', 'visualizar');
+    } else {
+        $acaoRegistro = ['GET' => 'visualizar', 'POST' => 'criar', 'PUT' => 'editar', 'DELETE' => 'excluir'][$metodo];
+        rbacExigir($conexao, 'registro', $acaoRegistro);
+    }
+} elseif ($metodo !== 'GET') {
+    verificarPermissao('operador');
+}
 
 // ===== VERIFICAR / CRIAR COLUNAS EXTRAS =====
 function _tem_coluna($conexao, $tabela, $coluna) {
     $r = $conexao->query("SHOW COLUMNS FROM `$tabela` LIKE '$coluna'");
     return $r && $r->num_rows > 0;
+}
+
+function _tem_tabela($conexao, $tabela) {
+    $stmt = $conexao->prepare("SHOW TABLES LIKE ?");
+    if (!$stmt) return false;
+    $stmt->bind_param('s', $tabela);
+    $stmt->execute();
+    $existe = $stmt->get_result()->num_rows > 0;
+    $stmt->close();
+    return $existe;
+}
+
+function _mensagem_migration_convidados() {
+    return 'A integração de convidados ainda não está instalada. Aplique a migration da lista de convidados antes de registrar este acesso.';
+}
+
+function _tipo_convidado_compativel($tipoRegistro, $tipoConvidado) {
+    $mapa = [
+        'VISITANTE' => 'Visitante',
+        'PRESTADOR' => 'Prestador',
+        'ENTREGADOR_AUTORIZADO' => 'Entregador Autorizado',
+        'FAMILIAR' => 'Familiar',
+    ];
+    $chave = strtoupper(trim((string)$tipoConvidado));
+    $chave = preg_replace('/[^A-Z0-9]+/', '_', $chave);
+    return ($mapa[$chave] ?? null) === $tipoRegistro;
+}
+
+function _tipo_exige_cadastro_visitante($tipo) {
+    return in_array($tipo, ['Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'], true);
+}
+
+function _registro_idempotente_coincide(array $existente, array $esperado) {
+    $camposTexto = [
+        'data_hora', 'placa', 'modelo', 'cor', 'tipo', 'nome_visitante',
+        'unidade_destino', 'observacao', 'tipo_acesso', 'documento_visitante',
+        'modo_registro', 'vestimenta', 'status'
+    ];
+    foreach ($camposTexto as $campo) {
+        if ((string)($existente[$campo] ?? '') !== (string)($esperado[$campo] ?? '')) return false;
+    }
+    $camposInteiros = ['morador_id', 'dias_permanencia', 'dependente_id', 'visitante_id', 'liberado', 'convidado_id'];
+    foreach ($camposInteiros as $campo) {
+        if ((int)($existente[$campo] ?? 0) !== (int)($esperado[$campo] ?? 0)) return false;
+    }
+    return true;
 }
 
 function _garantir_coluna($conexao, $tabela, $coluna, $definicao) {
@@ -118,6 +186,7 @@ _garantir_coluna($conexao, 'registros_acesso', 'vestimenta',    "VARCHAR(120) NU
 _garantir_coluna($conexao, 'registros_acesso', 'usuario_liberou', "VARCHAR(150) NULL DEFAULT NULL");
 _garantir_coluna($conexao, 'registros_acesso', 'idempotency_key', "VARCHAR(36) NULL DEFAULT NULL");
 _garantir_indice_unico($conexao, 'registros_acesso', 'uk_registros_acesso_tenant_idempotency', 'tenant_id, idempotency_key');
+$tem_convidado_id = _tem_coluna($conexao, 'registros_acesso', 'convidado_id');
 
 $tem_tipo_acesso     = true; // acabou de garantir
 $tem_dependente_id   = true;
@@ -180,7 +249,7 @@ function _validar_visitante_para_registro($conexao, $tenant_id, $visitante_id, $
 
 // Normaliza um documento (CPF/RG) para comparação — remove pontuação/espaços.
 function _normalizar_documento_comparacao($documento) {
-    return preg_replace('/[^A-Za-z0-9]/', '', (string)$documento);
+    return strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string)$documento));
 }
 
 // ========== RELATÓRIO DE OCUPANTES ==========
@@ -209,7 +278,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'relatorio_ocupantes') {
     if ($dataInicio === '') $dataInicio = date('Y-m-d');
     if ($dataFim === '') $dataFim = $dataInicio;
     $tipos = array_values(array_intersect(
-        ['Morador', 'Visitante', 'Prestador'],
+        ['Morador', 'Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'],
         array_filter(array_map('trim', explode(',', $tipo)))
     ));
 
@@ -425,7 +494,7 @@ if ($metodo === 'GET') {
     }
     if ($tipoParam !== '') {
         $tiposValidos = array_values(array_intersect(
-            ['Morador', 'Visitante', 'Prestador'],
+            ['Morador', 'Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'],
             array_filter(array_map('trim', explode(',', $tipoParam)))
         ));
         if (!$tiposValidos) {
@@ -458,7 +527,7 @@ if ($metodo === 'GET') {
     $stmt = $conexao->prepare($sql);
     if (!$stmt) {
         log_registro('ERRO prepare GET', ['erro' => $conexao->error]);
-        retornar_json(false, 'Erro ao preparar consulta: ' . $conexao->error);
+        retornar_json(false, 'Não foi possível preparar a consulta de registros.');
     }
     $params[] = $limite;
     $types .= 'i';
@@ -479,10 +548,12 @@ if ($metodo === 'GET') {
 // ========== CRIAR REGISTRO MANUAL ==========
 if ($metodo === 'POST') {
     $dados = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($dados)) retornar_json(false, 'Dados do registro inválidos.');
 
-    log_registro('POST recebido', $dados);
+    log_registro('POST recebido', ['tipo' => $dados['tipo'] ?? null, 'tipo_acesso' => $dados['tipo_acesso'] ?? null, 'modo_registro' => $dados['modo_registro'] ?? null]);
 
-    $data_hora        = $dados['data_hora']        ?? date('Y-m-d H:i:s');
+    $data_hora        = str_replace('T', ' ', trim((string)($dados['data_hora'] ?? date('Y-m-d H:i:s'))));
+    if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $data_hora)) $data_hora .= ':00';
     $placa            = strtoupper(trim($dados['placa']    ?? ''));
     $modelo           = trim($dados['modelo']           ?? '');
     $cor              = trim($dados['cor']              ?? '');
@@ -515,21 +586,29 @@ if ($metodo === 'POST') {
 
     // Validações
     if (empty($tipo) || ($modo_registro === 'VEICULO' && empty($placa))) {
-        log_registro('ERRO validacao', ['placa' => $placa, 'tipo' => $tipo, 'modo_registro' => $modo_registro]);
+        log_registro('ERRO validacao', ['tipo' => $tipo, 'modo_registro' => $modo_registro]);
         retornar_json(false, $modo_registro === 'PEDESTRE'
             ? 'Tipo é obrigatório'
             : 'Placa e tipo são obrigatórios');
     }
 
-    if (!in_array($tipo, ['Morador', 'Visitante', 'Prestador'])) {
-        log_registro('ERRO tipo invalido', ['tipo' => $tipo]);
-        retornar_json(false, 'Tipo inválido: ' . $tipo);
+    if (!in_array($tipo, ['Morador', 'Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'], true)) {
+        log_registro('ERRO tipo invalido');
+        retornar_json(false, 'Tipo de acesso inválido.');
     }
 
     $morador_id   = isset($dados['morador_id'])   && $dados['morador_id']   ? intval($dados['morador_id'])   : null;
     $visitante_id = isset($dados['visitante_id']) && $dados['visitante_id'] ? intval($dados['visitante_id']) : null;
     $dependente_id = isset($dados['dependente_id']) && $dados['dependente_id'] ? intval($dados['dependente_id']) : null;
     $documento    = trim($dados['documento'] ?? '');
+    $documento_informado = $documento;
+    $tipo_documento_informado = strtoupper(trim((string)($dados['tipo_documento'] ?? '')));
+    $convidado_id = isset($dados['convidado_id']) && $dados['convidado_id'] ? intval($dados['convidado_id']) : null;
+
+    if ($convidado_id !== null && $convidado_id <= 0) $convidado_id = null;
+    if ($convidado_id !== null && (!$tem_convidado_id || !_tem_tabela($conexao, 'convidados'))) {
+        retornar_json(false, _mensagem_migration_convidados(), ['codigo' => 'MIGRATION_CONVIDADOS_PENDENTE']);
+    }
 
     if ($modo_registro === 'PEDESTRE') {
         $placa = '';
@@ -552,11 +631,76 @@ if ($metodo === 'POST') {
             if ($veiculoCadastrado) {
                 $modelo = trim((string)($veiculoCadastrado['modelo'] ?? ''));
                 $cor = trim((string)($veiculoCadastrado['cor'] ?? ''));
-                $morador_id = (int)$veiculoCadastrado['morador_id'];
-                $unidade_destino = trim((string)($veiculoCadastrado['unidade'] ?? ''));
-                $tipo = 'Morador';
+                if ($convidado_id === null) {
+                    $morador_id = (int)$veiculoCadastrado['morador_id'];
+                    $unidade_destino = trim((string)($veiculoCadastrado['unidade'] ?? ''));
+                }
+                if ($convidado_id === null) $tipo = 'Morador';
             }
         }
+    }
+
+    $convidado = null;
+    if ($convidado_id !== null) {
+        $stmtConvidado = $conexao->prepare(
+            'SELECT id, morador_id, unidade, anfitriao_tipo, dependente_id, visitante_id,
+                    tipo_documento, documento, documento_normalizado, nome, tipo_convidado,
+                    data_prevista_chegada, validade_fim, entradas_utilizadas, limite_entradas, status
+             FROM convidados WHERE tenant_id = ? AND id = ? LIMIT 1'
+        );
+        if (!$stmtConvidado) {
+            retornar_json(false, 'Não foi possível validar o convidado para este acesso.');
+        }
+        $stmtConvidado->bind_param('ii', $tenant_id, $convidado_id);
+        $stmtConvidado->execute();
+        $convidado = $stmtConvidado->get_result()->fetch_assoc();
+        $stmtConvidado->close();
+        if (!$convidado) {
+            retornar_json(false, 'Convidado não encontrado no condomínio atual.');
+        }
+        if (!in_array((string)$convidado['status'], ['PREVISTO', 'PRESENTE'], true)) {
+            retornar_json(false, 'Este convidado não está disponível para novos registros de acesso.');
+        }
+        $dataRegistroConvidado = substr(str_replace('T', ' ', (string)$data_hora), 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataRegistroConvidado)
+            || $dataRegistroConvidado < (string)$convidado['data_prevista_chegada']
+            || ($tipo_acesso === 'Entrada' && $dataRegistroConvidado > (string)$convidado['validade_fim'])) {
+            retornar_json(false, 'A data e hora do registro estão fora da validade do convidado.');
+        }
+        if ($tipo_acesso === 'Saída' && (string)$convidado['status'] !== 'PRESENTE') {
+            retornar_json(false, 'A saída do convidado só pode ser registrada após uma entrada.');
+        }
+        if (!_tipo_convidado_compativel($tipo, $convidado['tipo_convidado'])) {
+            retornar_json(false, 'O tipo do registro não corresponde ao tipo autorizado no convite.');
+        }
+        if ($morador_id !== null && (int)$morador_id !== (int)$convidado['morador_id']) {
+            retornar_json(false, 'O morador de destino não corresponde ao convite.');
+        }
+        if ($unidade_destino !== '' && strcasecmp($unidade_destino, (string)$convidado['unidade']) !== 0) {
+            retornar_json(false, 'A unidade de destino não corresponde ao convite.');
+        }
+        if ($dependente_id !== null && (int)$dependente_id !== (int)($convidado['dependente_id'] ?? 0)) {
+            retornar_json(false, 'O dependente de destino não corresponde ao convite.');
+        }
+        if ((string)($convidado['anfitriao_tipo'] ?? 'MORADOR') === 'DEPENDENTE' && empty($convidado['dependente_id'])) {
+            retornar_json(false, 'O convite de dependente está sem o dependente de destino configurado.');
+        }
+        $documentoConvidado = _normalizar_documento_comparacao($convidado['documento_normalizado'] ?: $convidado['documento']);
+        if ($tipo_documento_informado !== '' && $tipo_documento_informado !== strtoupper((string)$convidado['tipo_documento'])) {
+            retornar_json(false, 'O tipo de documento informado não corresponde ao convidado selecionado.');
+        }
+        if ($documento_informado === '' || _normalizar_documento_comparacao($documento_informado) !== $documentoConvidado) {
+            retornar_json(false, 'O documento informado não corresponde ao convidado selecionado.');
+        }
+        if ($visitante_id !== null && !empty($convidado['visitante_id']) && (int)$visitante_id !== (int)$convidado['visitante_id']) {
+            retornar_json(false, 'O cadastro de visitante não corresponde ao convidado selecionado.');
+        }
+        $morador_id = (int)$convidado['morador_id'];
+        $unidade_destino = trim((string)$convidado['unidade']);
+        $nome_visitante = trim((string)$convidado['nome']);
+        if ((string)($convidado['anfitriao_tipo'] ?? 'MORADOR') === 'DEPENDENTE') $dependente_id = (int)$convidado['dependente_id'];
+        if (!empty($convidado['visitante_id'])) $visitante_id = (int)$convidado['visitante_id'];
+        $documento = trim((string)$convidado['documento']);
     }
     $tag          = null;
     $liberado     = 0;
@@ -566,9 +710,9 @@ if ($metodo === 'POST') {
     if ($tipo === 'Morador') {
         // Se morador_id já foi enviado pelo frontend (seleção manual), usar diretamente
         if ($morador_id) {
-            $stmt2 = $conexao->prepare("SELECT nome, unidade FROM moradores WHERE tenant_id = $tenant_id AND id = ?");
+            $stmt2 = $conexao->prepare('SELECT nome, unidade FROM moradores WHERE tenant_id = ? AND id = ?');
             if ($stmt2) {
-                $stmt2->bind_param('i', $morador_id);
+                $stmt2->bind_param('ii', $tenant_id, $morador_id);
                 $stmt2->execute();
                 $res2 = $stmt2->get_result();
                 if ($res2->num_rows > 0) {
@@ -591,8 +735,8 @@ if ($metodo === 'POST') {
                  WHERE v.tenant_id = ? AND m.tenant_id = ? AND v.placa = ? AND v.ativo = 1"
             );
             if (!$stmt2) {
-                log_registro('ERRO prepare busca veiculo', ['erro' => $conexao->error]);
-                retornar_json(false, 'Erro interno ao buscar veículo: ' . $conexao->error);
+                log_registro('ERRO prepare busca veiculo', ['errno' => $conexao->errno]);
+                retornar_json(false, 'Não foi possível consultar o veículo.');
             }
             $stmt2->bind_param('iis', $tenant_id, $tenant_id, $placa);
             $stmt2->execute();
@@ -617,9 +761,9 @@ if ($metodo === 'POST') {
 
         // Se for dependente, buscar nome do dependente para o status
         if ($dependente_id) {
-            $stmtDep = $conexao->prepare("SELECT nome_completo FROM dependentes WHERE tenant_id = $tenant_id AND id = ?");
+            $stmtDep = $conexao->prepare('SELECT nome_completo FROM dependentes WHERE tenant_id = ? AND id = ?');
             if ($stmtDep) {
-                $stmtDep->bind_param('i', $dependente_id);
+                $stmtDep->bind_param('ii', $tenant_id, $dependente_id);
                 $stmtDep->execute();
                 $resDep = $stmtDep->get_result();
                 if ($resDep->num_rows > 0) {
@@ -644,13 +788,21 @@ if ($metodo === 'POST') {
             retornar_json(false, $validacaoTitular['mensagem']);
         }
         $visitante = $validacaoTitular['visitante'];
+        if ($convidado !== null) {
+            $documentoVisitante = _normalizar_documento_comparacao($visitante['documento'] ?? '');
+            if (strtoupper((string)($visitante['tipo_documento'] ?? '')) !== strtoupper((string)$convidado['tipo_documento'])
+                || $documentoVisitante === ''
+                || $documentoVisitante !== _normalizar_documento_comparacao($convidado['documento_normalizado'] ?: $convidado['documento'])) {
+                retornar_json(false, 'O cadastro selecionado não corresponde ao documento autorizado no convite.');
+            }
+        }
 
         if (!$morador_id) {
             retornar_json(false, 'Selecione o morador e a unidade de destino.');
         }
         $stmtDestino = $conexao->prepare('SELECT unidade FROM moradores WHERE tenant_id = ? AND id = ? LIMIT 1');
         if (!$stmtDestino) {
-            log_registro('ERRO prepare unidade destino', ['erro' => $conexao->error, 'morador_id' => $morador_id]);
+            log_registro('ERRO prepare unidade destino', ['errno' => $conexao->errno]);
             retornar_json(false, 'Não foi possível validar a unidade de destino.');
         }
         $stmtDestino->bind_param('ii', $tenant_id, $morador_id);
@@ -677,7 +829,7 @@ if ($metodo === 'POST') {
     // ID de cadastro nem pelo número do documento — para que um operador não
     // consiga "forçar" a liberação repetindo a mesma pessoa na lista.
     $ocupantesValidados = [];
-    if ($modo_registro === 'VEICULO' && ($tipo === 'Visitante' || $tipo === 'Prestador') && !empty($dados['ocupantes']) && is_array($dados['ocupantes'])) {
+    if ($modo_registro === 'VEICULO' && _tipo_exige_cadastro_visitante($tipo) && !empty($dados['ocupantes']) && is_array($dados['ocupantes'])) {
         $idsJaUsados = [(int)$visitante_id];
         $documentosJaUsados = [_normalizar_documento_comparacao($documento)];
         foreach ($dados['ocupantes'] as $ocupanteRaw) {
@@ -705,18 +857,160 @@ if ($metodo === 'POST') {
     // outro registro (outro veículo) — cada linha é um evento de acesso próprio.
     $cols  = 'tenant_id, data_hora, placa, modelo, cor, tag, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, dependente_id, visitante_id, documento_visitante, papel_veiculo, registro_titular_id, modo_registro, vestimenta, usuario_liberou, idempotency_key';
     $marks = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    if ($tem_convidado_id) {
+        $cols .= ', convidado_id';
+        $marks .= ', ?';
+    }
     // i=tenant_id(1) s=data_hora(2) s=placa(3) s=modelo(4) s=cor(5) s=tag(6) s=tipo(7)
     // i=morador_id(8) s=nome_visitante(9) s=unidade_destino(10)
     // i=dias_permanencia(11) s=status(12) i=liberado(13) s=observacao(14)
     // s=tipo_acesso(15) i=dependente_id(16) i=visitante_id(17) s=documento_visitante(18)
     // s=papel_veiculo(19) i=registro_titular_id(20) s=modo_registro(21) s=vestimenta(22) s=usuario_liberou(23) s=idempotency_key(24)
-    $types = 'issssssissisissiis' . 'sissss';
+    $types = 'issssssissisissiis' . 'sissss' . ($tem_convidado_id ? 'i' : '');
     $sql   = "INSERT INTO registros_acesso ($cols) VALUES ($marks)";
+    $esperadoIdempotencia = [
+        'data_hora' => $data_hora, 'placa' => $placa, 'modelo' => $modelo, 'cor' => $cor,
+        'tipo' => $tipo, 'morador_id' => $morador_id, 'nome_visitante' => $nome_visitante,
+        'unidade_destino' => $unidade_destino, 'dias_permanencia' => $dias_permanencia,
+        'observacao' => $observacao, 'tipo_acesso' => $tipo_acesso, 'dependente_id' => $dependente_id,
+        'visitante_id' => $visitante_id, 'documento_visitante' => $documento,
+        'modo_registro' => $modo_registro, 'vestimenta' => $vestimenta, 'liberado' => $liberado,
+        'status' => $status, 'convidado_id' => ($tem_convidado_id && $convidado_id !== null) ? (int)$convidado_id : 0,
+    ];
 
     $conexao->begin_transaction();
     $id_inserido = 0;
     $ocupantesRegistrados = [];
     try {
+        if ($convidado_id !== null) {
+            $stmtLockConvidado = $conexao->prepare(
+                'SELECT id, morador_id, unidade, anfitriao_tipo, dependente_id, visitante_id,
+                        tipo_documento, documento, documento_normalizado, nome, tipo_convidado,
+                        data_prevista_chegada, validade_fim, status, entradas_utilizadas, limite_entradas
+                 FROM convidados WHERE tenant_id = ? AND id = ? FOR UPDATE'
+            );
+            if (!$stmtLockConvidado) throw new DomainException(_mensagem_migration_convidados());
+            $stmtLockConvidado->bind_param('ii', $tenant_id, $convidado_id);
+            if (!$stmtLockConvidado->execute()) throw new RuntimeException('Não foi possível bloquear o convidado para este acesso.');
+            $convidadoBloqueado = $stmtLockConvidado->get_result()->fetch_assoc();
+            $stmtLockConvidado->close();
+            if ($idempotency_key !== null && $idempotency_key !== '') {
+                $campoConvidadoSelect = $tem_convidado_id ? 'convidado_id' : '0 AS convidado_id';
+                $stmtReplay = $conexao->prepare(
+                    "SELECT id, data_hora, placa, modelo, cor, tipo, morador_id, nome_visitante,
+                            unidade_destino, dias_permanencia, observacao, tipo_acesso, dependente_id,
+                            visitante_id, documento_visitante, modo_registro, vestimenta, liberado, status,
+                            $campoConvidadoSelect
+                     FROM registros_acesso WHERE tenant_id = ? AND idempotency_key = ? LIMIT 1"
+                );
+                if (!$stmtReplay) throw new RuntimeException('Não foi possível validar a chave de idempotência.');
+                $stmtReplay->bind_param('is', $tenant_id, $idempotency_key);
+                if (!$stmtReplay->execute()) {
+                    $stmtReplay->close();
+                    throw new RuntimeException('Não foi possível validar a chave de idempotência.');
+                }
+                $registroReplay = $stmtReplay->get_result()->fetch_assoc();
+                $stmtReplay->close();
+                if ($registroReplay) {
+                    if (!_registro_idempotente_coincide($registroReplay, $esperadoIdempotencia)) {
+                        throw new DomainException('A chave de idempotência já foi usada para outro registro.');
+                    }
+                    $conexao->rollback();
+                    retornar_json(true, 'Acesso já havia sido registrado.', [
+                        'id' => (int)$registroReplay['id'],
+                        'liberado' => (int)$registroReplay['liberado'],
+                        'status' => $registroReplay['status'],
+                        'tipo_acesso' => $registroReplay['tipo_acesso'],
+                        'modo_registro' => $registroReplay['modo_registro'],
+                        'vestimenta' => $registroReplay['vestimenta'],
+                        'ocupantes_registrados' => [],
+                    ]);
+                }
+            }
+            if (!$convidadoBloqueado || !in_array((string)$convidadoBloqueado['status'], ['PREVISTO', 'PRESENTE'], true)) {
+                throw new DomainException('Este convidado não está disponível para novos registros de acesso.');
+            }
+            $dataRegistroBloqueado = substr(str_replace('T', ' ', (string)$data_hora), 0, 10);
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataRegistroBloqueado)
+                || $dataRegistroBloqueado < (string)$convidadoBloqueado['data_prevista_chegada']
+                || ($tipo_acesso === 'Entrada' && $dataRegistroBloqueado > (string)$convidadoBloqueado['validade_fim'])) {
+                throw new DomainException('A data e hora do registro estão fora da validade do convidado.');
+            }
+            $stmtUltimaMovimentacao = $conexao->prepare(
+                'SELECT tipo_acesso FROM registros_acesso WHERE tenant_id = ? AND convidado_id = ? ORDER BY data_hora DESC, id DESC LIMIT 1'
+            );
+            if (!$stmtUltimaMovimentacao) throw new RuntimeException('Não foi possível validar a última movimentação do convidado.');
+            $stmtUltimaMovimentacao->bind_param('ii', $tenant_id, $convidado_id);
+            if (!$stmtUltimaMovimentacao->execute()) throw new RuntimeException('Não foi possível validar a última movimentação do convidado.');
+            $ultimaMovimentacao = $stmtUltimaMovimentacao->get_result()->fetch_assoc();
+            $stmtUltimaMovimentacao->close();
+            $ultimoTipoAcesso = (string)($ultimaMovimentacao['tipo_acesso'] ?? '');
+            if ($tipo_acesso === 'Entrada' && $ultimoTipoAcesso === 'Entrada') {
+                throw new DomainException('O convidado já possui uma entrada sem saída registrada.');
+            }
+            if ($tipo_acesso === 'Saída' && $ultimoTipoAcesso !== 'Entrada') {
+                throw new DomainException('Não há uma entrada pendente de saída para este convidado.');
+            }
+            if ($tipo_acesso === 'Saída' && (string)$convidadoBloqueado['status'] !== 'PRESENTE') {
+                throw new DomainException('A saída do convidado só pode ser registrada após uma entrada.');
+            }
+            if (!_tipo_convidado_compativel($tipo, $convidadoBloqueado['tipo_convidado'])) {
+                throw new DomainException('O tipo do registro não corresponde ao tipo autorizado no convite.');
+            }
+            if ((int)$morador_id !== (int)$convidadoBloqueado['morador_id']) {
+                throw new DomainException('O morador de destino não corresponde ao convite.');
+            }
+            if (strcasecmp($unidade_destino, (string)$convidadoBloqueado['unidade']) !== 0) {
+                throw new DomainException('A unidade de destino não corresponde ao convite.');
+            }
+            if ($dependente_id !== null && (int)$dependente_id !== (int)($convidadoBloqueado['dependente_id'] ?? 0)) {
+                throw new DomainException('O dependente de destino não corresponde ao convite.');
+            }
+            if ((string)($convidadoBloqueado['anfitriao_tipo'] ?? 'MORADOR') === 'DEPENDENTE' && empty($convidadoBloqueado['dependente_id'])) {
+                throw new DomainException('O convite de dependente está sem o dependente de destino configurado.');
+            }
+            if ((string)($convidadoBloqueado['anfitriao_tipo'] ?? 'MORADOR') === 'DEPENDENTE') $dependente_id = (int)$convidadoBloqueado['dependente_id'];
+            $documentoBloqueado = _normalizar_documento_comparacao($convidadoBloqueado['documento_normalizado'] ?: $convidadoBloqueado['documento']);
+            if (_normalizar_documento_comparacao($documento) !== $documentoBloqueado) {
+                throw new DomainException('O documento informado não corresponde ao convidado selecionado.');
+            }
+            if ($visitante_id !== null && !empty($convidadoBloqueado['visitante_id']) && (int)$visitante_id !== (int)$convidadoBloqueado['visitante_id']) {
+                throw new DomainException('O cadastro de visitante não corresponde ao convidado selecionado.');
+            }
+
+            if ($tipo_acesso === 'Entrada') {
+                $stmtConsumir = $conexao->prepare(
+                    "UPDATE convidados
+                     SET entradas_utilizadas = entradas_utilizadas + 1,
+                         status = 'PRESENTE',
+                         primeira_entrada_em = COALESCE(primeira_entrada_em, NOW()),
+                         ultima_movimentacao_em = NOW(),
+                         visitante_id = COALESCE(visitante_id, NULLIF(?, 0))
+                     WHERE tenant_id = ? AND id = ?
+                       AND (limite_entradas IS NULL OR entradas_utilizadas < limite_entradas)"
+                );
+                if (!$stmtConsumir) throw new RuntimeException('Não foi possível consumir a entrada do convidado.');
+                $visitanteParaConvidado = $visitante_id !== null ? (int)$visitante_id : null;
+                $stmtConsumir->bind_param('iii', $visitanteParaConvidado, $tenant_id, $convidado_id);
+                if (!$stmtConsumir->execute() || $stmtConsumir->affected_rows !== 1) {
+                    $stmtConsumir->close();
+                    throw new DomainException('O limite de entradas deste convidado já foi atingido.');
+                }
+                $stmtConsumir->close();
+            } else {
+                $stmtSaida = $conexao->prepare(
+                    "UPDATE convidados
+                     SET status = CASE WHEN limite_entradas IS NOT NULL AND entradas_utilizadas >= limite_entradas
+                                       THEN 'FINALIZADO' ELSE 'PRESENTE' END,
+                         ultima_movimentacao_em = NOW()
+                     WHERE tenant_id = ? AND id = ?"
+                );
+                if (!$stmtSaida) throw new RuntimeException('Não foi possível finalizar a movimentação do convidado.');
+                $stmtSaida->bind_param('ii', $tenant_id, $convidado_id);
+                if (!$stmtSaida->execute()) throw new RuntimeException('Não foi possível finalizar a movimentação do convidado.');
+                $stmtSaida->close();
+            }
+        }
         // Registro titular
         $papel_veiculo_titular = 'TITULAR';
         $registro_titular_id_nulo = null;
@@ -728,16 +1022,13 @@ if ($metodo === 'POST') {
             &$papel_veiculo_titular, &$registro_titular_id_nulo,
             &$modo_registro, &$vestimenta, &$usuario_liberou, &$idempotency_key
         ];
+        if ($tem_convidado_id) $params[] = &$convidado_id;
 
         $stmt = $conexao->prepare($sql);
-        if (!$stmt) throw new RuntimeException('Erro ao preparar inserção: ' . $conexao->error);
+        if (!$stmt) throw new RuntimeException('Não foi possível preparar a gravação do registro.');
         call_user_func_array([$stmt, 'bind_param'], array_merge([&$types], $params));
 
-        log_registro('INSERT executando (titular)', [
-            'placa' => $placa, 'tipo' => $tipo, 'tipo_acesso' => $tipo_acesso,
-            'morador_id' => $morador_id, 'dependente_id' => $dependente_id, 'visitante_id' => $visitante_id,
-            'modo_registro' => $modo_registro,
-        ]);
+        log_registro('INSERT executando (titular)', ['tipo' => $tipo, 'tipo_acesso' => $tipo_acesso, 'modo_registro' => $modo_registro]);
 
         if (!$stmt->execute()) {
             $erro = $stmt->error;
@@ -745,11 +1036,12 @@ if ($metodo === 'POST') {
             $stmt->close();
             if ($errno === 1062 && $idempotency_key !== null) {
                 $conexao->rollback();
+                $campoConvidadoSelect = $tem_convidado_id ? 'convidado_id' : '0 AS convidado_id';
                 $stmtExistente = $conexao->prepare(
                     'SELECT id, data_hora, placa, modelo, cor, tipo, morador_id, nome_visitante,
                             unidade_destino, dias_permanencia, observacao, tipo_acesso,
                             dependente_id, visitante_id, documento_visitante, modo_registro,
-                            vestimenta, liberado, status
+                            vestimenta, liberado, status, ' . $campoConvidadoSelect . '
                      FROM registros_acesso
                      WHERE tenant_id = ? AND idempotency_key = ?
                      LIMIT 1'
@@ -760,26 +1052,10 @@ if ($metodo === 'POST') {
                     $existente = $stmtExistente->get_result()->fetch_assoc();
                     $stmtExistente->close();
                     if ($existente) {
-                        $mesmo_lancamento =
-                            (string)($existente['data_hora'] ?? '') === (string)$data_hora &&
-                            (string)($existente['placa'] ?? '') === (string)$placa &&
-                            (string)($existente['modelo'] ?? '') === (string)$modelo &&
-                            (string)($existente['cor'] ?? '') === (string)$cor &&
-                            (string)($existente['tipo'] ?? '') === (string)$tipo &&
-                            (int)($existente['morador_id'] ?? 0) === (int)($morador_id ?? 0) &&
-                            (string)($existente['nome_visitante'] ?? '') === (string)$nome_visitante &&
-                            (string)($existente['unidade_destino'] ?? '') === (string)$unidade_destino &&
-                            (int)($existente['dias_permanencia'] ?? 0) === (int)$dias_permanencia &&
-                            (string)($existente['observacao'] ?? '') === (string)$observacao &&
-                            (string)($existente['tipo_acesso'] ?? '') === (string)$tipo_acesso &&
-                            (int)($existente['dependente_id'] ?? 0) === (int)($dependente_id ?? 0) &&
-                            (int)($existente['visitante_id'] ?? 0) === (int)($visitante_id ?? 0) &&
-                            (string)($existente['documento_visitante'] ?? '') === (string)$documento &&
-                            (string)($existente['modo_registro'] ?? '') === (string)$modo_registro &&
-                            (string)($existente['vestimenta'] ?? '') === (string)($vestimenta ?? '');
+                        $mesmo_lancamento = _registro_idempotente_coincide($existente, $esperadoIdempotencia);
 
                         if ($mesmo_lancamento) {
-                            log_registro('POST idempotente', ['id' => $existente['id'], 'idempotency_key' => $idempotency_key]);
+                            log_registro('POST idempotente', ['id' => $existente['id']]);
                             retornar_json(true, 'Acesso já havia sido registrado.', [
                                 'id' => (int)$existente['id'],
                                 'liberado' => (int)$existente['liberado'],
@@ -792,14 +1068,7 @@ if ($metodo === 'POST') {
                             ]);
                         }
 
-                        log_registro('CONFLITO chave idempotente', [
-                            'id_existente' => $existente['id'],
-                            'idempotency_key' => $idempotency_key,
-                            'placa_existente' => $existente['placa'],
-                            'placa_nova' => $placa,
-                            'tipo_acesso_existente' => $existente['tipo_acesso'],
-                            'tipo_acesso_novo' => $tipo_acesso,
-                        ]);
+                        log_registro('CONFLITO chave idempotente', ['id_existente' => $existente['id']]);
                         retornar_json(false, 'A chave deste lançamento já pertence a outro acesso. Gere uma nova chave para continuar.', [
                             'codigo' => 'IDEMPOTENCY_CONFLICT',
                             'idempotente' => false,
@@ -807,7 +1076,8 @@ if ($metodo === 'POST') {
                     }
                 }
             }
-            throw new RuntimeException('Erro ao criar registro: ' . $erro);
+            log_registro('ERRO insert titular', ['errno' => $errno]);
+            throw new RuntimeException('Não foi possível registrar o acesso.');
         }
         $id_inserido = $conexao->insert_id;
         $stmt->close();
@@ -830,15 +1100,20 @@ if ($metodo === 'POST') {
                 &$tipo_acesso, &$ocDependente, &$ocVisitanteId, &$ocDocumento,
                 &$ocPapel, &$id_inserido, &$modo_registro, &$vestimenta, &$usuario_liberou, &$idempotency_key_ocupante
             ];
+            if ($tem_convidado_id) {
+                $convidado_id_ocupante = null;
+                $paramsOc[] = &$convidado_id_ocupante;
+            }
 
             $stmtOc = $conexao->prepare($sql);
-            if (!$stmtOc) throw new RuntimeException('Erro ao preparar inserção de ocupante: ' . $conexao->error);
+            if (!$stmtOc) throw new RuntimeException('Não foi possível preparar o registro do ocupante.');
             call_user_func_array([$stmtOc, 'bind_param'], array_merge([&$types], $paramsOc));
 
             if (!$stmtOc->execute()) {
-                $erroOc = $stmtOc->error;
+                $errnoOcupante = $stmtOc->errno;
                 $stmtOc->close();
-                throw new RuntimeException('Erro ao registrar o ocupante ' . $ocNome . ': ' . $erroOc);
+                log_registro('ERRO insert ocupante', ['errno' => $errnoOcupante]);
+                throw new RuntimeException('Não foi possível registrar um ocupante.');
             }
             $ocupantesRegistrados[] = ['id' => $conexao->insert_id, 'nome' => $ocNome, 'visitante_id' => $ocVisitanteId];
             $stmtOc->close();
@@ -847,12 +1122,13 @@ if ($metodo === 'POST') {
         $conexao->commit();
     } catch (Throwable $erroTransacao) {
         $conexao->rollback();
-        log_registro('ERRO transacao registro+ocupantes', ['erro' => $erroTransacao->getMessage()]);
-        retornar_json(false, $erroTransacao->getMessage());
+        $erroEsperado = $erroTransacao instanceof DomainException;
+        log_registro('ERRO transacao registro+ocupantes', ['erro' => $erroTransacao->getMessage(), 'codigo' => (int)$erroTransacao->getCode()]);
+        retornar_json(false, $erroEsperado ? $erroTransacao->getMessage() : 'Não foi possível registrar o acesso.');
     }
 
     log_registro('INSERT OK', ['id' => $id_inserido, 'status' => $status, 'tipo_acesso' => $tipo_acesso, 'ocupantes' => count($ocupantesRegistrados)]);
-    registrar_log('REGISTRO_CRIADO', "Registro manual criado: $placa ($tipo) - $tipo_acesso" . (count($ocupantesRegistrados) ? ' + ' . count($ocupantesRegistrados) . ' ocupante(s)' : ''));
+    registrar_log('REGISTRO_CRIADO', "Registro manual criado: $tipo - $tipo_acesso" . (count($ocupantesRegistrados) ? ' + ' . count($ocupantesRegistrados) . ' ocupante(s)' : ''));
 
     // O acesso é a operação prioritária. A notificação é complementar e
     // jamais pode desfazer uma entrada/saída registrada com sucesso.
@@ -920,17 +1196,19 @@ if ($metodo === 'PUT') {
         retornar_json(false, 'ID inválido');
     }
 
-    $stmt = $conexao->prepare('UPDATE registros_acesso SET observacao=?, status=? WHERE tenant_id = $tenant_id AND id=?');
+    $stmt = $conexao->prepare('UPDATE registros_acesso SET observacao=?, status=? WHERE tenant_id = ? AND id=?');
     if (!$stmt) {
-        retornar_json(false, 'Erro ao preparar atualização: ' . $conexao->error);
+        log_registro('ERRO prepare atualização', ['erro' => $conexao->error]);
+        retornar_json(false, 'Não foi possível preparar a atualização do registro.');
     }
-    $stmt->bind_param('ssi', $observacao, $status, $id);
+    $stmt->bind_param('ssii', $observacao, $status, $tenant_id, $id);
 
     if ($stmt->execute()) {
         registrar_log('REGISTRO_ATUALIZADO', "Registro atualizado: ID $id");
         retornar_json(true, 'Registro atualizado com sucesso');
     } else {
-        retornar_json(false, 'Erro ao atualizar registro: ' . $stmt->error);
+        log_registro('ERRO atualizar registro', ['errno' => $stmt->errno]);
+        retornar_json(false, 'Não foi possível atualizar o registro.');
     }
     $stmt->close();
 }
@@ -944,17 +1222,19 @@ if ($metodo === 'DELETE') {
         retornar_json(false, 'ID inválido');
     }
 
-    $stmt = $conexao->prepare('DELETE FROM registros_acesso WHERE tenant_id = $tenant_id AND id = ?');
+    $stmt = $conexao->prepare('DELETE FROM registros_acesso WHERE tenant_id = ? AND id = ?');
     if (!$stmt) {
-        retornar_json(false, 'Erro ao preparar exclusão: ' . $conexao->error);
+        log_registro('ERRO prepare exclusão', ['erro' => $conexao->error]);
+        retornar_json(false, 'Não foi possível preparar a exclusão do registro.');
     }
-    $stmt->bind_param('i', $id);
+    $stmt->bind_param('ii', $tenant_id, $id);
 
     if ($stmt->execute()) {
         registrar_log('REGISTRO_EXCLUIDO', "Registro excluído: ID $id");
         retornar_json(true, 'Registro excluído com sucesso');
     } else {
-        retornar_json(false, 'Erro ao excluir registro: ' . $stmt->error);
+        log_registro('ERRO excluir registro', ['errno' => $stmt->errno]);
+        retornar_json(false, 'Não foi possível excluir o registro.');
     }
     $stmt->close();
 }

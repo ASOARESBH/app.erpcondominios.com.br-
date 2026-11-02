@@ -23,13 +23,14 @@ require_once 'tenant_helper.php';;
 $conn    = conectar_banco();
 $usuario = verificarAutenticacao(false, 'operador');
 $tenant_id = exigirTenantId();
+if (rbacTabelasDisponiveis($conn)) rbacExigir($conn, 'relatorios_acesso', 'imprimir');
 
 // ── 2. Configuracoes regionais ────────────────────────────────
 date_default_timezone_set('America/Sao_Paulo');
 
 // ── 3. Dados da empresa — Multi-Tenant ─────────────────────────────────
 $empresa = [];
-$_tenant_id_rel = $_SESSION['tenant_id'] ?? 1;
+$_tenant_id_rel = (int)$tenant_id;
 
 // Buscar na tabela tenants (fonte primária)
 $_stmt_t = $conn->prepare("SELECT razao_social, nome_fantasia, cnpj, logo_url FROM tenants WHERE id = ? LIMIT 1");
@@ -73,14 +74,26 @@ $data_inicio_fmt = date('d/m/Y', strtotime("-{$dias} days"));
 $data_fim_fmt    = date('d/m/Y');
 
 // ── 5. Query — Ranking por placa ─────────────────────────────
-$where  = ["DATE(r.data_hora) >= ?", "DATE(r.data_hora) <= ?"];
-$params = [$data_inicio, $data_fim];
-$types  = 'ss';
+$where  = ["r.tenant_id = ?", "DATE(r.data_hora) >= ?", "DATE(r.data_hora) <= ?"];
+$params = [(int)$tenant_id, $data_inicio, $data_fim];
+$types  = 'iss';
 
-if ($tipo_filtro !== '' && in_array($tipo_filtro, ['Morador','Visitante','Prestador'])) {
-    $where[]  = "r.tipo = ?";
-    $params[] = $tipo_filtro;
-    $types   .= 's';
+if ($tipo_filtro !== '') {
+    $mapaTipos = [
+        'morador' => 'Morador', 'moradores' => 'Morador',
+        'visitante' => 'Visitante', 'visitantes' => 'Visitante',
+        'prestador' => 'Prestador', 'prestadores' => 'Prestador',
+        'entregador autorizado' => 'Entregador Autorizado', 'entregadores_autorizados' => 'Entregador Autorizado',
+        'familiar' => 'Familiar', 'familiares' => 'Familiar',
+    ];
+    $chaveTipo = strtolower($tipo_filtro);
+    if (isset($mapaTipos[$chaveTipo])) {
+        $where[] = 'r.tipo = ?';
+        $params[] = $mapaTipos[$chaveTipo];
+        $types .= 's';
+    } else {
+        $where[] = '1 = 0';
+    }
 }
 if ($placa_filtro !== '') {
     $where[]  = "r.placa LIKE ?";
@@ -103,7 +116,7 @@ $sql_ranking = "
         MIN(DATE_FORMAT(r.data_hora, '%d/%m/%Y'))              AS primeiro_acesso,
         MAX(DATE_FORMAT(r.data_hora, '%d/%m/%Y %H:%i'))        AS ultimo_acesso
     FROM registros_acesso r
-    LEFT JOIN moradores m ON r.morador_id = m.id
+    LEFT JOIN moradores m ON r.morador_id = m.id AND m.tenant_id = r.tenant_id
     WHERE {$where_sql}
     GROUP BY r.placa, r.tipo
     ORDER BY total_acessos DESC

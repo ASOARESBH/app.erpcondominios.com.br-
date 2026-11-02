@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS registros_acesso (
     modelo VARCHAR(100),
     cor VARCHAR(50),
     tag VARCHAR(50),
-    tipo ENUM('Morador', 'Visitante', 'Prestador') NOT NULL,
+    tipo ENUM('Morador', 'Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar') NOT NULL,
     morador_id INT NULL,
     nome_visitante VARCHAR(200),
     unidade_destino VARCHAR(50),
@@ -97,4 +97,3 @@ INSERT INTO configuracoes (chave, valor, descricao) VALUES
 ('tempo_abertura_cancela', '5', 'Tempo de abertura da cancela em segundos'),
 ('nome_condominio', 'ERP Condomínio', 'Nome do condomínio')
 ON DUPLICATE KEY UPDATE valor=valor;
-

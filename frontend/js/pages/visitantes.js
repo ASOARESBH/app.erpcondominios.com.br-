@@ -1168,6 +1168,8 @@ function _relMostrarAnalitico(analise, container) {
     const total = Number(resumo.total_acessos || 0);
     const visitantes = Number(resumo.visitantes || 0);
     const prestadores = Number(resumo.prestadores || 0);
+    const entregadoresAutorizados = Number(resumo.entregadores_autorizados || 0);
+    const familiares = Number(resumo.familiares || 0);
     const liberados = Number(resumo.liberados || 0);
     const taxaLiberacao = total ? Math.round((liberados / total) * 100) : 0;
     const pico = analise?.horario_pico_24h || { rotulo: 'Sem registros', total: 0 };
@@ -1185,6 +1187,8 @@ function _relMostrarAnalitico(analise, container) {
             <div class="vis-analytics-card"><div class="valor">${total}</div><div class="rotulo">Acessos no período</div></div>
             <div class="vis-analytics-card visitor"><div class="valor">${visitantes}</div><div class="rotulo">Visitantes</div></div>
             <div class="vis-analytics-card provider"><div class="valor">${prestadores}</div><div class="rotulo">Prestadores de serviço</div></div>
+            <div class="vis-analytics-card provider"><div class="valor">${entregadoresAutorizados}</div><div class="rotulo">Entregadores autorizados</div></div>
+            <div class="vis-analytics-card visitor"><div class="valor">${familiares}</div><div class="rotulo">Familiares</div></div>
             <div class="vis-analytics-card peak"><div class="valor">${_esc(pico.rotulo)}</div><div class="rotulo">Pico nas últimas 24h (${Number(pico.total || 0)} acesso(s))</div></div>
             <div class="vis-analytics-card success"><div class="valor">${taxaLiberacao}%</div><div class="rotulo">Taxa de liberação (${liberados}/${total})</div></div>
         </div>`;
@@ -1202,14 +1206,14 @@ function _relMostrarAnalitico(analise, container) {
 
     const pessoas = rankingPessoas.length ? rankingPessoas.map((item, indice) => `<div class="vis-ranking-row"><span class="vis-ranking-pos">${indice + 1}º</span><span>${_esc(item.nome)}</span><span class="cadastro-tipo ${item.tipo === 'Prestador' ? 'funcionario' : 'morador'}">${_esc(item.tipo)}</span><span class="vis-ranking-total">${Number(item.total || 0)}</span></div>`).join('') : '<p style="color:#64748b;font-size:12px">Sem recorrências no período.</p>';
 
-    const tendenciaLinhas = tendencia.length ? tendencia.map(item => `<tr><td>${_esc(item.data)}</td><td>${Number(item.total || 0)}</td><td>${Number(item.visitantes || 0)}</td><td>${Number(item.prestadores || 0)}</td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:#64748b">Sem movimentos no período.</td></tr>';
+    const tendenciaLinhas = tendencia.length ? tendencia.map(item => `<tr><td>${_esc(item.data)}</td><td>${Number(item.total || 0)}</td><td>${Number(item.visitantes || 0)}</td><td>${Number(item.prestadores || 0)}</td><td>${Number(item.entregadores_autorizados || 0)}</td><td>${Number(item.familiares || 0)}</td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#64748b">Sem movimentos no período.</td></tr>';
 
     container.innerHTML = `<p style="font-size:12px;color:#64748b;margin:0 0 12px"><i class="fas fa-calendar-alt"></i> Período analisado: <strong>${_esc(periodo.data_inicio || '')}</strong> até <strong>${_esc(periodo.data_fim || '')}</strong>. Dados consolidados exclusivamente para o condomínio atual.</p>${cards}
         <div class="vis-analytics-sections">
             <section class="vis-analytics-section"><h3><i class="fas fa-trophy"></i> Ranking de Glebas / Unidades</h3>${rankingGlebas}</section>
             <section class="vis-analytics-section"><h3><i class="fas fa-clock"></i> Distribuição de horários — últimas 24h</h3><div class="vis-hour-bars">${horas}</div></section>
             <section class="vis-analytics-section"><h3><i class="fas fa-user-clock"></i> Pessoas mais registradas</h3>${pessoas}</section>
-            <section class="vis-analytics-section"><h3><i class="fas fa-chart-area"></i> Tendência diária</h3><table class="vis-tendencia-table"><thead><tr><th>Data</th><th>Total</th><th>Visitantes</th><th>Prestadores</th></tr></thead><tbody>${tendenciaLinhas}</tbody></table></section>
+            <section class="vis-analytics-section"><h3><i class="fas fa-chart-area"></i> Tendência diária</h3><table class="vis-tendencia-table"><thead><tr><th>Data</th><th>Total</th><th>Visitantes</th><th>Prestadores</th><th>Entregadores</th><th>Familiares</th></tr></thead><tbody>${tendenciaLinhas}</tbody></table></section>
         </div>`;
 }
 
@@ -1311,20 +1315,22 @@ function _relExportarCSVAnalitico(analise) {
         ['Total de acessos', resumo.total_acessos || 0],
         ['Visitantes', resumo.visitantes || 0],
         ['Prestadores de serviço', resumo.prestadores || 0],
+        ['Entregadores autorizados', resumo.entregadores_autorizados || 0],
+        ['Familiares', resumo.familiares || 0],
         ['Entradas', resumo.entradas || 0],
         ['Saídas', resumo.saidas || 0],
         ['Acessos liberados', resumo.liberados || 0],
         ['Registros pendentes', resumo.pendentes || 0],
         ['Horário de pico — últimas 24h', `${pico.rotulo || 'Sem registros'} (${pico.total || 0})`],
         [],
-        ['RANKING GLEBAS / UNIDADES', 'TOTAL', 'VISITANTES', 'PRESTADORES'],
-        ...(analise?.ranking_unidades || []).map(item => [item.unidade || 'Não informado', item.total || 0, item.visitantes || 0, item.prestadores || 0]),
+        ['RANKING GLEBAS / UNIDADES', 'TOTAL', 'VISITANTES', 'PRESTADORES', 'ENTREGADORES', 'FAMILIARES'],
+        ...(analise?.ranking_unidades || []).map(item => [item.unidade || 'Não informado', item.total || 0, item.visitantes || 0, item.prestadores || 0, item.entregadores_autorizados || 0, item.familiares || 0]),
         [],
         ['PESSOAS MAIS REGISTRADAS', 'TIPO', 'TOTAL'],
         ...(analise?.ranking_pessoas || []).map(item => [item.nome || 'Não identificado', item.tipo || '', item.total || 0]),
         [],
-        ['TENDÊNCIA DIÁRIA', 'TOTAL', 'VISITANTES', 'PRESTADORES'],
-        ...(analise?.tendencia_diaria || []).map(item => [item.data || '', item.total || 0, item.visitantes || 0, item.prestadores || 0]),
+        ['TENDÊNCIA DIÁRIA', 'TOTAL', 'VISITANTES', 'PRESTADORES', 'ENTREGADORES', 'FAMILIARES'],
+        ...(analise?.tendencia_diaria || []).map(item => [item.data || '', item.total || 0, item.visitantes || 0, item.prestadores || 0, item.entregadores_autorizados || 0, item.familiares || 0]),
     ];
     const csv = linhas.map(linha => linha.map(campo => `"${String(campo ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });

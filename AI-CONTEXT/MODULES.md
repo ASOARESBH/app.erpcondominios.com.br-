@@ -37,3 +37,10 @@ O ERP é dividido em módulos de negócios independentes, acessíveis pelo `side
 ## 7. Parâmetros de Moradores
 
 A rota SPA `config_moradores` pertence ao módulo protegido `sistema` e é acessada pelo cartão Moradores em Parâmetros do Sistema. A página possui as abas Moradores e Dependentes e configura campos obrigatórios e a regra de múltiplos veículos por dependente. O consumo administrativo usa `api/api_config_moradores.php`; o cadastro efetivo continua nos endpoints canônicos `api/api_moradores.php`, `api/api_dependentes.php` e `api/api_veiculos.php`.
+
+
+## 8. Lista de Convidados
+
+A aba Lista de Convidados é parte da rota SPA `registro` e usa `api/api_convidados.php` para previsão, busca por documento, histórico, cancelamento e autoria. O Registro Manual vincula o acesso ao convite e atualiza entradas/status na mesma transação. A migration é `sql/migration_lista_convidados_mysql57.sql`. A gestão de convites pelo Portal do Morador ("Meus Convidados"), o app Flutter e integrações de hardware permanecem fora desta entrega; o Portal existente apenas ganhou suporte aos filtros de histórico para Entregador Autorizado e Familiar.
+
+Os tipos `Entregador Autorizado` e `Familiar` são categorias próprias nos registros e estão incluídos nos filtros/contadores de `relatorios`, CSV, PDFs gerais/ramificados e ranking, além do histórico do Portal do Morador.

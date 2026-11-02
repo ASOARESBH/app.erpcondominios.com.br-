@@ -61,7 +61,7 @@ function setupActions() {
         });
     }
 
-    ['tipoRelatorio', 'apenasLiberados', 'tipoMorador', 'tipoVisitante', 'tipoPrestador', 'incluirOcupantes']
+    ['tipoRelatorio', 'apenasLiberados', 'tipoMorador', 'tipoVisitante', 'tipoPrestador', 'tipoEntregadorAutorizado', 'tipoFamiliar', 'incluirOcupantes']
         .forEach((id) => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', aplicarFiltros);
@@ -117,10 +117,14 @@ function getTipoOcupanteFiltro() {
     if (getChecked('tipoMorador')) tipos.push('Morador');
     if (getChecked('tipoVisitante')) tipos.push('Visitante');
     if (getChecked('tipoPrestador')) tipos.push('Prestador');
+    if (getChecked('tipoEntregadorAutorizado')) tipos.push('Entregador Autorizado');
+    if (getChecked('tipoFamiliar')) tipos.push('Familiar');
     const tipoRelatorio = getValue('tipoRelatorio');
-    if (['moradores', 'visitantes', 'prestadores'].includes(tipoRelatorio)) {
-        const tipoSelecionado = tipoRelatorio === 'moradores' ? 'Morador'
-            : tipoRelatorio === 'visitantes' ? 'Visitante' : 'Prestador';
+    if (['moradores', 'visitantes', 'prestadores', 'entregadores_autorizados', 'familiares'].includes(tipoRelatorio)) {
+        const tipoSelecionado = {
+            moradores: 'Morador', visitantes: 'Visitante', prestadores: 'Prestador',
+            entregadores_autorizados: 'Entregador Autorizado', familiares: 'Familiar'
+        }[tipoRelatorio];
         return tipos.includes(tipoSelecionado) ? tipoSelecionado : 'Nenhum';
     }
     return tipos.join(',');
@@ -131,18 +135,22 @@ function getTipoRegistroFiltro() {
     if (getChecked('tipoMorador')) tiposMarcados.push('Morador');
     if (getChecked('tipoVisitante')) tiposMarcados.push('Visitante');
     if (getChecked('tipoPrestador')) tiposMarcados.push('Prestador');
+    if (getChecked('tipoEntregadorAutorizado')) tiposMarcados.push('Entregador Autorizado');
+    if (getChecked('tipoFamiliar')) tiposMarcados.push('Familiar');
 
     const tipoRelatorio = getValue('tipoRelatorio');
-    if (['moradores', 'visitantes', 'prestadores'].includes(tipoRelatorio)) {
-        const tipo = tipoRelatorio === 'moradores' ? 'Morador'
-            : tipoRelatorio === 'visitantes' ? 'Visitante' : 'Prestador';
+    if (['moradores', 'visitantes', 'prestadores', 'entregadores_autorizados', 'familiares'].includes(tipoRelatorio)) {
+        const tipo = {
+            moradores: 'Morador', visitantes: 'Visitante', prestadores: 'Prestador',
+            entregadores_autorizados: 'Entregador Autorizado', familiares: 'Familiar'
+        }[tipoRelatorio];
         return tiposMarcados.includes(tipo) ? tipo : 'Nenhum';
     }
     return tiposMarcados.length ? tiposMarcados.join(',') : 'Nenhum';
 }
 
 function montarParametrosRegistros() {
-    const params = new URLSearchParams({ limite: '500' });
+    const params = new URLSearchParams({ acao: 'relatorio_acessos', limite: '500' });
     const unidade = getValue('filtroUnidade');
     const filtros = {
         data_inicio: getValue('dataInicial'), data_fim: getValue('dataFinal'),
@@ -169,6 +177,8 @@ function atualizarLayoutRelatorioOcupantes(ativo) {
     setText('labelTotalMoradores', ativo ? 'Titulares' : 'Moradores');
     setText('labelTotalVisitantes', ativo ? 'Ocupantes visitantes' : 'Visitantes');
     setText('labelTotalPrestadores', ativo ? 'Ocupantes prestadores' : 'Prestadores');
+    setText('labelTotalEntregadoresAutorizados', ativo ? 'Ocupantes entregadores' : 'Entregadores');
+    setText('labelTotalFamiliares', ativo ? 'Ocupantes familiares' : 'Familiares');
 }
 
 async function carregarRelatorioOcupantes() {
@@ -186,7 +196,8 @@ async function carregarRelatorioOcupantes() {
     };
     Object.entries(filtros).forEach(([key, value]) => { if (value !== '') params.set(key, value); });
 
-    if (!getChecked('tipoMorador') && !getChecked('tipoVisitante') && !getChecked('tipoPrestador')) {
+    if (!getChecked('tipoMorador') && !getChecked('tipoVisitante') && !getChecked('tipoPrestador')
+        && !getChecked('tipoEntregadorAutorizado') && !getChecked('tipoFamiliar')) {
         registrosFiltrados = [];
         renderTabelaOcupantes([]);
         atualizarEstatisticas([]);
@@ -481,6 +492,12 @@ function atualizarEstatisticas(lista) {
     const prestadores = modoRelatorioOcupantes
         ? lista.filter((r) => r.ocupante_tipo === 'Prestador').length
         : lista.filter((r) => r.tipo === 'Prestador').length;
+    const entregadores = modoRelatorioOcupantes
+        ? lista.filter((r) => r.ocupante_tipo === 'Entregador Autorizado').length
+        : lista.filter((r) => r.tipo === 'Entregador Autorizado').length;
+    const familiares = modoRelatorioOcupantes
+        ? lista.filter((r) => r.ocupante_tipo === 'Familiar').length
+        : lista.filter((r) => r.tipo === 'Familiar').length;
     const liberados = modoRelatorioOcupantes
         ? new Set(lista
             .filter((r) => Number(r.liberado) === 1 || Number(r.titular_liberado) === 1)
@@ -492,6 +509,8 @@ function atualizarEstatisticas(lista) {
     setText('totalMoradores', moradores);
     setText('totalVisitantes', visitantes);
     setText('totalPrestadores', prestadores);
+    setText('totalEntregadoresAutorizados', entregadores);
+    setText('totalFamiliares', familiares);
     setText('totalLiberados', liberados);
 }
 
@@ -588,7 +607,7 @@ function gerarPDF() {
     const modelo      = getValue('filtroModelo');
     const unidade     = getValue('filtroUnidade');
     const nome        = getValue('filtroNome');
-    const tipo        = getValue('tipoRelatorio');
+    const tipo        = getTipoRegistroFiltro();
 
     const params = new URLSearchParams();
     if (dataInicial) params.set('data_inicio', dataInicial);
@@ -599,7 +618,7 @@ function gerarPDF() {
     if (modelo)      params.set('modelo',      modelo);
     if (unidade) { params.set('unidade', unidade); params.set('unidade_exata', '1'); }
     if (nome)        params.set('nome',        nome);
-    if (tipo && tipo !== 'todos') params.set('tipo', tipo);
+    if (tipo) params.set('tipo', tipo);
 
     const base = window.location.origin + '/api/api_relatorio_acessos_pdf.php';
     window.open(base + '?' + params.toString(), '_blank');
@@ -715,6 +734,8 @@ function limparFiltros() {
     setChecked('tipoMorador', true);
     setChecked('tipoVisitante', true);
     setChecked('tipoPrestador', true);
+    setChecked('tipoEntregadorAutorizado', true);
+    setChecked('tipoFamiliar', true);
     setChecked('incluirOcupantes', false);
     setChecked('apenasLiberados', false);
 

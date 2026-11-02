@@ -161,8 +161,15 @@ const AppRouter = {
 
             // 7. Atualizar URL (se solicitado)
             if (updateHistory) {
-                const newUrl = `?page=${pageName}`;
-                history.pushState({ page: pageName }, '', newUrl);
+                const urlParams = new URLSearchParams({ page: pageName });
+                if (pageName === 'registro') {
+                    const abaSolicitada = new URLSearchParams(window.location.search).get('aba');
+                    if (abaSolicitada === 'manual' || abaSolicitada === 'convidados') {
+                        urlParams.set('aba', abaSolicitada);
+                    }
+                }
+                const newUrl = `?${urlParams.toString()}`;
+                history.pushState({ page: pageName, aba: urlParams.get('aba') || null }, '', newUrl);
                 console.log(`[Router] URL atualizada: ${newUrl}`);
             }
 

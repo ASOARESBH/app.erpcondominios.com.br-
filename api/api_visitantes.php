@@ -159,16 +159,26 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'upload') {
 if ($metodo === 'GET' && isset($_GET['documento'])) {
     $doc = sanitizar($conexao, trim($_GET['documento']));
     $doc_limpo = preg_replace('/[^0-9A-Za-z]/', '', $doc);
+    $tipo_documento = strtoupper(trim((string)($_GET['tipo_documento'] ?? '')));
+    if ($tipo_documento !== '' && !in_array($tipo_documento, ['CPF', 'RG'], true)) {
+        retornar_json(false, 'Tipo de documento inválido.');
+    }
+    $filtro_tipo_documento = $tipo_documento !== '' ? ' AND tipo_documento = ?' : '';
 
     $stmt = $conexao->prepare(
         "SELECT id, nome_completo, documento, tipo_documento, telefone, celular, telefone_contato,
                 placa_veiculo, foto, documento_arquivo, observacao, ativo,
                 cadastrado_por_nome, cadastrado_por_tipo, cadastrado_por_usuario_id, cadastrado_por_morador_id
-         FROM visitantes WHERE tenant_id = $tenant_id AND REPLACE(REPLACE(REPLACE(documento, '.', ''), '-', ''), '/', '') = ?
-            OR documento = ?
+         FROM visitantes WHERE tenant_id = ? AND ativo = 1
+            AND (REPLACE(REPLACE(REPLACE(REPLACE(UPPER(documento), '.', ''), '-', ''), '/', ''), ' ', '') = UPPER(?)
+                 OR documento = ?){$filtro_tipo_documento}
          LIMIT 1"
     );
-    $stmt->bind_param("ss", $doc_limpo, $doc);
+    if ($tipo_documento !== '') {
+        $stmt->bind_param('isss', $tenant_id, $doc_limpo, $doc, $tipo_documento);
+    } else {
+        $stmt->bind_param('iss', $tenant_id, $doc_limpo, $doc);
+    }
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
@@ -182,7 +192,7 @@ if ($metodo === 'GET' && isset($_GET['documento'])) {
 
 // ========== RELATÓRIO ANALÍTICO DE ACESSOS ==========
 // Fonte: registros_acesso. O relatório usa somente eventos do tenant autenticado,
-// com Visitante e Prestador registrados pelo controle de acesso manual.
+// com Visitante, Prestador, Entregador Autorizado e Familiar registrados.
 if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
     $dataInicio = trim((string)($_GET['data_inicio'] ?? date('Y-m-01')));
     $dataFim = trim((string)($_GET['data_fim'] ?? date('Y-m-d')));
@@ -190,7 +200,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
     if (!preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $dataFim)) $dataFim = date('Y-m-d');
     if ($dataInicio > $dataFim) retornar_json(false, 'A data inicial não pode ser posterior à data final.');
 
-    $wherePeriodo = "tenant_id = ? AND data_hora >= ? AND data_hora < DATE_ADD(?, INTERVAL 1 DAY) AND tipo IN ('Visitante', 'Prestador')";
+    $wherePeriodo = "tenant_id = ? AND data_hora >= ? AND data_hora < DATE_ADD(?, INTERVAL 1 DAY) AND tipo IN ('Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar')";
     $tiposPeriodo = 'iss';
     $paramsPeriodo = [$tenant_id, $dataInicio, $dataFim];
 
@@ -199,6 +209,8 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
         COUNT(*) AS total_acessos,
         SUM(tipo = 'Visitante') AS visitantes,
         SUM(tipo = 'Prestador') AS prestadores,
+        SUM(tipo = 'Entregador Autorizado') AS entregadores_autorizados,
+        SUM(tipo = 'Familiar') AS familiares,
         SUM(tipo_acesso = 'Entrada') AS entradas,
         SUM(tipo_acesso = 'Saída') AS saidas,
         SUM(liberado = 1) AS liberados,
@@ -210,7 +222,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
     $stmtResumo->execute();
     $resumo = $stmtResumo->get_result()->fetch_assoc() ?: [];
     $stmtResumo->close();
-    foreach (['total_acessos', 'visitantes', 'prestadores', 'entradas', 'saidas', 'liberados', 'pendentes'] as $campo) {
+    foreach (['total_acessos', 'visitantes', 'prestadores', 'entregadores_autorizados', 'familiares', 'entradas', 'saidas', 'liberados', 'pendentes'] as $campo) {
         $resumo[$campo] = (int)($resumo[$campo] ?? 0);
     }
 
@@ -219,7 +231,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
                 FROM registros_acesso
                 WHERE tenant_id = ?
                   AND data_hora >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-                  AND tipo IN ('Visitante', 'Prestador')
+                  AND tipo IN ('Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar')
                 GROUP BY HOUR(data_hora)
                 ORDER BY total DESC, hora ASC
                 LIMIT 1";
@@ -240,7 +252,7 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
                       FROM registros_acesso
                       WHERE tenant_id = ?
                         AND data_hora >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-                        AND tipo IN ('Visitante', 'Prestador')
+                        AND tipo IN ('Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar')
                       GROUP BY HOUR(data_hora)
                       ORDER BY hora ASC";
     $stmtHistograma = $conexao->prepare($sqlHistograma);
@@ -258,7 +270,9 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
     $sqlUnidades = "SELECT COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado') AS unidade,
                            COUNT(*) AS total,
                            SUM(tipo = 'Visitante') AS visitantes,
-                           SUM(tipo = 'Prestador') AS prestadores
+                           SUM(tipo = 'Prestador') AS prestadores,
+                           SUM(tipo = 'Entregador Autorizado') AS entregadores_autorizados,
+                           SUM(tipo = 'Familiar') AS familiares
                     FROM registros_acesso
                     WHERE $wherePeriodo
                     GROUP BY COALESCE(NULLIF(TRIM(unidade_destino), ''), 'Não informado')
@@ -275,6 +289,8 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
             'total' => (int)$linha['total'],
             'visitantes' => (int)$linha['visitantes'],
             'prestadores' => (int)$linha['prestadores'],
+            'entregadores_autorizados' => (int)$linha['entregadores_autorizados'],
+            'familiares' => (int)$linha['familiares'],
         ];
     }
     $stmtUnidades->close();
@@ -303,7 +319,9 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
     $sqlTendencia = "SELECT DATE(data_hora) AS data_ordem, DATE_FORMAT(data_hora, '%d/%m') AS data,
                             COUNT(*) AS total,
                             SUM(tipo = 'Visitante') AS visitantes,
-                            SUM(tipo = 'Prestador') AS prestadores
+                            SUM(tipo = 'Prestador') AS prestadores,
+                            SUM(tipo = 'Entregador Autorizado') AS entregadores_autorizados,
+                            SUM(tipo = 'Familiar') AS familiares
                      FROM registros_acesso
                      WHERE $wherePeriodo
                      GROUP BY DATE(data_hora), DATE_FORMAT(data_hora, '%d/%m')
@@ -320,6 +338,8 @@ if ($metodo === 'GET' && ($_GET['acao'] ?? '') === 'analitico_acessos') {
             'total' => (int)$linha['total'],
             'visitantes' => (int)$linha['visitantes'],
             'prestadores' => (int)$linha['prestadores'],
+            'entregadores_autorizados' => (int)$linha['entregadores_autorizados'],
+            'familiares' => (int)$linha['familiares'],
         ];
     }
     $stmtTendencia->close();
