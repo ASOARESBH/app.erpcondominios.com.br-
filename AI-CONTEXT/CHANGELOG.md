@@ -2,6 +2,10 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.6] - 2026-10-31
+### Planejado
+- **Lista de Convidados no Registro de Acesso**: analisados `registro.html`/`registro.js`, `api_registros.php`, `api_visitantes.php`, `api_acessos_visitantes.php`, `api_portal_morador.php`, RBAC e app Flutter para especificar uma nova aba "Lista de Convidados" (cadastro pela portaria e pelo morador, herança de visitante por CPF/RG, tipos Entregador Autorizado e Familiar, data prevista, dias de permanência, controle de entradas único/múltiplos de 2/indeterminado, origem do cadastro, autoria Usuário/Morador/Dependente e navegação por data). Decisões registradas: não reutilizar `acessos_visitantes` (regra de 1 acesso ativo por visitante é incompatível); `registros_acesso.tipo` é ENUM e precisa de migration + atualização de todas as whitelists; dependente não possui login hoje, então a autoria `DEPENDENTE` fica preparada mas não é gravada. Nenhuma alteração de código feita nesta tarefa — apenas análise e prompt em `PROMPT_LISTA_CONVIDADOS_20261031.md`.
+
 ## [2.1.5] - 2026-08-13
 ### Investigado
 - **Módulo Vigilante/Rondas — mapeamento para o Portal do Colaborador (mobile)**: analisado por completo o módulo administrativo já existente (`api/api_rondas_vigilante.php`, `frontend/pages/rondas_vigilante.html`), incluindo tabelas (`ronda_rotas`, `ronda_pontos`, `ronda_vigilantes`, `ronda_registros`, `ronda_auditoria` — nenhuma documentada antes em `DATABASE.md`), regra de ciclo/SLA e deduplicação por `ciclo_chave`. Confirmado que os endpoints de leitura de QR (`qr_detalhe`, `registrar_leitura`) já existem e funcionam, mas **nenhum cliente os utiliza hoje** — não há tela de "bate-ponto" nem no painel web nem no app. Identificado um gap crítico de identidade: o Portal do Colaborador mobile autentica contra `usuarios`, enquanto `ronda_vigilantes` referencia `rh_colaboradores` — tabelas sem vínculo direto, só ponte possível via e-mail. Nenhuma alteração de código feita nesta tarefa — apenas análise e prompt para o Manus implementar o novo menu "Vigilante" no app. Detalhe completo em `ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md`.

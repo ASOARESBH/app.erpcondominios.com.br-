@@ -19,6 +19,9 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **Regras de Negócio por Tela**: [APP_MOBILE_BUSINESS_RULES.md](APP_MOBILE_BUSINESS_RULES.md)
 - **Análise do Vigilante/Rondas Mobile**: [ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md](ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md)
 
+## 📋 3.1 Prompts de Implementação Planejados
+- **Lista de Convidados (aba no Registro de Acesso)**: [PROMPT_LISTA_CONVIDADOS_20261031.md](PROMPT_LISTA_CONVIDADOS_20261031.md)
+
 ## 🎨 4. Interface e Estilos
 - **Guia CSS & Temas**: [CSS_GUIDE.md](CSS_GUIDE.md)
 - **Guia JavaScript**: [JS_GUIDE.md](JS_GUIDE.md)
