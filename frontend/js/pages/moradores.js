@@ -57,6 +57,7 @@ let _depTotalPaginas = 1;
 let _depTotal = 0;
 let _depTermoBusca = '';  // termo em uso na paginação de dependentes
 let _permissoesMoradores = null;
+let _permissoesFalhaAvisada = false;
 
 // O frontend apenas antecipa o bloqueio; as APIs também validam estas ações.
 // Dependentes, anexos e relatórios fazem parte do módulo RBAC "moradores".
@@ -104,6 +105,7 @@ export function init() {
         pm.invalidarCache?.();
         pm.carregarPermissoes(_aplicarPermissoesMoradores);
     } else {
+        _aplicarPermissoesMoradores({ carregamento_falhou: true, permissoes: {} });
         log('Permissões indisponíveis; operações de escrita bloqueadas.');
     }
 
@@ -245,26 +247,35 @@ async function _carregarConfiguracaoMoradores() {
     }
 }
 
-function _aplicarPermissoesMoradores(perms) {
-    _permissoesMoradores = perms;
-    const modulo = perms?.is_admin ? null : (perms?.permissoes?.moradores || {});
-    const pode = acao => perms?.is_admin || Boolean(modulo?.[`pode_${acao}`]);
-    const ocultar = (seletor, permitido) => {
-        document.querySelectorAll(seletor).forEach(el => {
-            el.style.display = permitido ? '' : 'none';
-            el.setAttribute('aria-hidden', permitido ? 'false' : 'true');
-            if (!permitido) el.setAttribute('disabled', 'disabled');
-        });
-    };
+function aplicarEstadoPermissao(el, permitido) {
+    el.style.display = permitido ? '' : 'none';
+    el.setAttribute('aria-hidden', permitido ? 'false' : 'true');
+    if (permitido) {
+        if (el.dataset.permBloqueado === '1') {
+            el.removeAttribute('disabled');
+            delete el.dataset.permBloqueado;
+        }
+    } else if ('disabled' in el && !el.disabled) {
+        el.dataset.permBloqueado = '1';
+        el.setAttribute('disabled', 'disabled');
+    }
+}
 
-    if (!perms || (!perms.is_admin && !perms.permissoes)) return;
+function _aplicarPermissoesMoradores(perms) {
+    const falhaCarregamento = !perms || perms.carregamento_falhou === true;
+    _permissoesMoradores = falhaCarregamento
+        ? { is_admin: false, permissoes: {}, carregamento_falhou: true }
+        : perms;
+    const modulo = _permissoesMoradores.is_admin ? null : (_permissoesMoradores.permissoes?.moradores || {});
+    const pode = acao => !falhaCarregamento && (_permissoesMoradores.is_admin || Boolean(modulo?.[`pode_${acao}`]));
+    const ocultar = (seletor, permitido) => {
+        document.querySelectorAll(seletor).forEach(el => aplicarEstadoPermissao(el, permitido));
+    };
     document.querySelectorAll('[data-mor-perm]').forEach(el => {
         const permitido = el.dataset.morPerm === 'visualizar'
             ? pode('acessar')
             : pode(el.dataset.morPerm);
-        el.style.display = permitido ? '' : 'none';
-        el.setAttribute('aria-hidden', permitido ? 'false' : 'true');
-        if (!permitido) el.setAttribute('disabled', 'disabled');
+        aplicarEstadoPermissao(el, permitido);
     });
 
     // Controles sem data-mor-perm próprio.
@@ -278,6 +289,14 @@ function _aplicarPermissoesMoradores(perms) {
     });
     const uploadBox = document.querySelector('#modal-anexos .mor-upload-box');
     if (uploadBox) uploadBox.style.display = pode('criar') ? '' : 'none';
+    if (falhaCarregamento) {
+        if (!_permissoesFalhaAvisada && !document.getElementById('pm-load-error-message')) {
+            _toast('Não foi possível carregar as permissões. As operações de escrita estão bloqueadas; atualize a página ou contate o administrador.', 'error');
+        }
+        _permissoesFalhaAvisada = true;
+    } else {
+        _permissoesFalhaAvisada = false;
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

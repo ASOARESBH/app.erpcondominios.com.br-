@@ -48,3 +48,7 @@ Antes de gerar o `.zip` final, certifique-se de que nenhum caminho absoluto (ex:
 ## 8. Alertas da Unidade — erro 500 ao salvar
 - A reprodução do `INSERT` de `alertas_unidade` usou o helper real `au_query` e uma tabela descartável com o contrato de 24 colunas. A assinatura antiga tinha 23 tipos e lançou `ArgumentCountError`; a corrigida passou a inserir e recuperar os valores, incluindo `NULL` para dependente e chave de idempotência. `php -l` e `git diff --check` passaram.
 - A captura também mostra HTTP 422 em uma tentativa; sem o corpo da resposta da Network não é possível identificar qual validação específica a produziu. Não houve acesso aos logs nem à base de produção, nem teste autenticado, deploy ou migration.
+
+## 9. Moradores — bloqueio e restauração de controles RBAC
+- Harness local de DOM simulado confirmou que a resposta efetiva de administrador reabilita controles desabilitados pelo bloqueio provisório; controles já `disabled` por outro fluxo permanecem desabilitados; perfil somente leitura não recupera ações de edição; falha ao carregar permissões bloqueia escrita e apresenta aviso.
+- `node --check frontend/js/pages/moradores.js`, `php -l api/api_moradores.php` e `git diff --check` passaram. Não houve sessão autenticada/browser, chamada direta com cookie real, deploy ou teste em produção.

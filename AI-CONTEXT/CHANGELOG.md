@@ -2,6 +2,14 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.16] - 2026-11-03
+### Corrigido
+- **Moradores — permissões de edição**: a aplicação das permissões agora marca quais controles foram desabilitados pelo RBAC e remove `disabled` somente desses controles quando a resposta efetiva permite a ação. Estados `disabled` próprios de fluxos, como a cascata de Unidade → Morador, são preservados.
+- Em falha ao carregar permissões, Moradores mantém as ações de escrita bloqueadas e exibe aviso ao usuário, sem conceder acesso por fallback.
+### Validado
+- `node --check frontend/js/pages/moradores.js`, `php -l api/api_moradores.php` e `git diff --check` passaram. Harness local confirmou reversão do bloqueio provisório para administrador, permanência do `disabled` preexistente, bloqueio de usuário somente leitura e aviso em falha de carregamento.
+- Não houve teste autenticado no navegador nem validação em produção; a Parte 2 da auditoria RBAC permanece separada.
+
 ## [2.1.15] - 2026-11-03
 ### Corrigido
 - **Alertas da Unidade — cadastro**: o `INSERT` de `alertas_unidade` possuía 24 parâmetros e placeholders, mas a assinatura de tipos mysqli tinha 23 caracteres. O mismatch lançava `ArgumentCountError`, revertia a transação e devolvia HTTP 500. Corrigida a assinatura para cobrir os 24 campos.
