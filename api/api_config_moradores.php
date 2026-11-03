@@ -30,7 +30,7 @@ $metodo = $_SERVER['REQUEST_METHOD'];
 $rbacAtivo = rbacTabelasDisponiveis($conexao);
 
 if ($metodo === 'GET') {
-    if ($rbacAtivo) rbacExigir($conexao, 'sistema', 'visualizar');
+    if ($rbacAtivo) rbacExigir($conexao, 'moradores', 'visualizar');
     else verificarPermissao('admin');
 } else {
     if ($rbacAtivo) rbacExigir($conexao, 'sistema', 'configurar');

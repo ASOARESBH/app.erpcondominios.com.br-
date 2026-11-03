@@ -2,6 +2,10 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.9] - 2026-11-03
+### Corrigido
+- **Moradores e Alertas da Unidade**: a leitura das regras de campos agora exige `moradores.visualizar`, enquanto alterações continuam exigindo `sistema.configurar`. O painel Alertas usa as permissões específicas retornadas pelo backend, oculta ações de escrita para visualizadores e não mantém o detalhe aberto quando a API não retorna um alerta válido. A avaliação operacional dos alertas continua no lançamento manual de entrada.
+
 ## [2.1.8] - 2026-11-03
 ### Corrigido
 - **Protocolos de Mercadorias**: removida a dependência da listagem global de usuários, que retornava 403 para funcionários sem `usuarios.visualizar`. O campo Recebedor (Portaria) passa a exibir o operador autenticado; a API grava esse nome a partir da sessão e preserva a autoria na edição. Escritas passam a exigir permissões RBAC do módulo Protocolos.

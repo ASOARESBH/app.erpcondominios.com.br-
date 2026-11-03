@@ -138,17 +138,8 @@ function normalizePermissions(perms) {
     return { known: true, values: result };
 }
 
-function readCachedPermissions() {
-    try {
-        const cached = JSON.parse(sessionStorage.getItem('_perm_v2') || 'null');
-        return cached && typeof cached === 'object' ? cached : null;
-    } catch (_) {
-        return null;
-    }
-}
-
 function hasPermission(action) {
-    if (state.permissions?.is_admin) return true;
+    if (state.permissionsKnown && normalizeBool(state.permissions?.is_admin)) return true;
     // Sem o objeto específico, não se presume autorização para mutações.
     if (!state.permissionsKnown) return action === 'visualizar';
     return Boolean(state.permissions?.values?.[action]);
@@ -166,7 +157,7 @@ function applyPermissionVisibility() {
         element.setAttribute('aria-hidden', allowed ? 'false' : 'true');
     });
     const form = byId('alertas-form');
-    if (form) form.hidden = !hasPermission('criar') && !state.editingId;
+    if (form) form.hidden = !hasPermission(state.editingId ? 'editar' : 'criar');
 }
 
 function showFeedback(type, message) {
@@ -361,7 +352,7 @@ async function loadOptions() {
         if (data.permissoes && typeof data.permissoes === 'object') {
             const normalized = normalizePermissions(data.permissoes);
             state.permissionsKnown = normalized.known;
-            state.permissions = { ...(state.permissions || {}), values: normalized.values };
+            state.permissions = { values: normalized.values };
             applyPermissionVisibility();
         }
         state.optionsLoaded = true;
@@ -1076,6 +1067,10 @@ async function openDetail(id) {
     try {
         const data = unwrap(await requestJson('detalhe', { params: { id } })) || {};
         const alert = data.alerta || data;
+        const alertaId = Number(alert?.id);
+        if (!alert || typeof alert !== 'object' || !Number.isFinite(alertaId) || alertaId <= 0 || !String(alert.titulo || '').trim() || !String(alert.mensagem || '').trim()) {
+            throw new Error('A API não retornou os dados do alerta. Atualize a lista e tente novamente.');
+        }
         setText('alertas-detalhe-titulo', alert.titulo || 'Detalhes do alerta');
         setText('alertas-detalhe-mensagem', alert.mensagem || '—');
         setText('alertas-detalhe-unidade', alert.unidade || alert.unidade_nome);
@@ -1248,21 +1243,7 @@ export function init() {
     renderTargets();
     applyPermissionVisibility();
 
-    const permissionManager = window.PermissoesModulos;
-    if (permissionManager?.carregarPermissoes) {
-        permissionManager.carregarPermissoes(perms => {
-            if (!state.initialized) return;
-            const normalized = normalizePermissions(perms);
-            state.permissionsKnown = normalized.known;
-            state.permissions = { ...perms, values: normalized.values };
-            applyPermissionVisibility();
-        });
-    } else {
-        const normalized = normalizePermissions(readCachedPermissions());
-        state.permissionsKnown = normalized.known;
-        state.permissions = { values: normalized.values };
-        applyPermissionVisibility();
-    }
+    applyPermissionVisibility();
 
     const requestedTab = new URLSearchParams(window.location.search).get('aba');
     if (requestedTab === 'alertas' || root.classList.contains('active')) loadAll();

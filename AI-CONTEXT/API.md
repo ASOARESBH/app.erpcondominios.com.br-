@@ -125,7 +125,7 @@ criar, editar ou excluir.
 
 ## 12. Parâmetros de Moradores e Dependentes
 
-- `GET /api/api_config_moradores.php`: retorna, para o tenant da sessão, os campos configuráveis de `moradores` e `dependentes`, além das regras operacionais. A ação exige `sistema.visualizar` no RBAC.
+- `GET /api/api_config_moradores.php`: retorna, para o tenant da sessão, os campos configuráveis de `moradores` e `dependentes`, além das regras operacionais, para que a tela aplique os campos obrigatórios. A leitura exige `moradores.visualizar`; usuários somente leitura não recebem autorização para alterar cadastros nem parâmetros.
 - `PUT /api/api_config_moradores.php`: grava somente as chaves do catálogo oficial, sem aceitar `tenant_id` do cliente. A ação exige `sistema.configurar` e registra auditoria quando o RBAC está instalado.
 - Campos estruturais (`moradores.nome`, `moradores.cpf`, `moradores.unidade`, `dependentes.morador_id` e `dependentes.nome_completo`) permanecem obrigatórios e não podem ser desativados. Os demais campos são aplicados pelo backend de Moradores e Dependentes.
 - A opção `dependente_multiplos_veiculos` controla `POST /api/api_veiculos.php`: desativada, preserva o limite legado de um veículo por dependente; ativada, permite vários veículos do mesmo dependente. A unicidade de placa e TAG por tenant continua valendo.

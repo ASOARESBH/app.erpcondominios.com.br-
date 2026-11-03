@@ -1180,7 +1180,8 @@
 .page-moradores .alertas-modal[hidden],
 .page-moradores .alertas-state[hidden],
 .page-moradores .alertas-table-container[hidden],
-.page-moradores .alertas-cards[hidden] {
+.page-moradores .alertas-cards[hidden],
+.page-moradores [data-alerta-perm][hidden] {
     display: none !important;
 }
 
