@@ -33,7 +33,8 @@ function au_api_erro($mensagem, $status = 422, $codigo = null, $dados = []) {
     au_api_responder(false, $mensagem, $dados, $status, $codigo);
 }
 set_exception_handler(function (Throwable $erro) {
-    error_log('[AlertasUnidade] erro interno não exposto ao cliente.');
+    $detalhe = preg_replace('/[\r\n\t]+/', ' ', (string)$erro->getMessage());
+    error_log('[AlertasUnidade] ' . get_class($erro) . ' código=' . (int)$erro->getCode() . ': ' . substr($detalhe, 0, 500));
     au_api_responder(false, 'Não foi possível concluir a operação de alertas. Tente novamente.', [], 500, 'INTERNAL_ERROR');
 });
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
@@ -476,7 +477,7 @@ if ($acao === 'salvar' && $metodo === 'POST') {
         } else {
             $sql = 'INSERT INTO alertas_unidade (tenant_id,unidade,titular_tipo,morador_id,dependente_id,titulo,mensagem,nivel,acao,publico,abrangencia,vigencia_inicio,vigencia_fim,dias_semana,hora_inicio,hora_fim,instrucao_operador,telefone_contato,status,origem,criado_por_tipo,criado_por_usuario_id,idempotency_key,idempotency_payload_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
             $params = [$tenantId,$entrada['unidade'],$entrada['titular_tipo'],$entrada['morador_id'],$entrada['dependente_id'],$entrada['titulo'],$entrada['mensagem'],$entrada['nivel'],$entrada['acao'],$entrada['publico'],$entrada['abrangencia'],$entrada['vigencia_inicio'],$entrada['vigencia_fim'],$entrada['dias_semana'],$entrada['hora_inicio'],$entrada['hora_fim'],$entrada['instrucao_operador'],$entrada['telefone_contato'],'ATIVO','SISTEMA','USUARIO',$uid,$entrada['idempotency_key'],$payloadHash];
-            $stmt = au_query($conexao, $sql, 'issiisssssssssssssssiss', $params);
+            $stmt = au_query($conexao, $sql, 'issiissssssssssssssssiss', $params);
             $id = (int)$conexao->insert_id; $stmt->close();
             $operacao = 'CRIAR';
         }

@@ -2,6 +2,15 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.15] - 2026-11-03
+### Corrigido
+- **Alertas da Unidade — cadastro**: o `INSERT` de `alertas_unidade` possuía 24 parâmetros e placeholders, mas a assinatura de tipos mysqli tinha 23 caracteres. O mismatch lançava `ArgumentCountError`, revertia a transação e devolvia HTTP 500. Corrigida a assinatura para cobrir os 24 campos.
+- O handler global de exceções agora registra classe, código e mensagem sanitizada no log PHP, mantendo ao cliente a resposta JSON genérica sem detalhes internos.
+### Validado
+- `php -l api/api_alertas_unidade.php` e `git diff --check` passaram. Com o helper `au_query` real e schema descartável, o bind antigo foi reproduzido como `ArgumentCountError`; a assinatura corrigida inseriu e recuperou os 24 parâmetros, incluindo campos `NULL` e chave de idempotência.
+- A assinatura de UPDATE continua com 20 tipos para 20 parâmetros. Não houve teste autenticado no navegador, consulta ao log de produção, migration ou deploy.
+- O HTTP 422 também mostrado na captura não foi atribuído a um campo específico porque o corpo JSON da resposta não estava disponível; ele pode ser uma tentativa distinta rejeitada por validação de negócio.
+
 ## [2.1.14] - 2026-11-03
 ### Alterado
 - **Moradores — Lista de Moradores**: adicionado filtro de Unidade à barra, opções sem quantitativos em ordem natural e busca automática por texto/unidade/ordenação. O botão Buscar foi substituído por Limpar, que restaura a lista e ordenação padrão.
