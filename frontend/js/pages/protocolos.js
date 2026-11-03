@@ -10,7 +10,7 @@
 const _state = {
     protocolos: [],       // cache completo
     unidades: [],
-    usuarios: [],
+    operadorAtual: '',
     paginaAtual: 1,
     itensPorPagina: 15,
     filtroStatus: '',
@@ -21,6 +21,7 @@ const _state = {
 
 // Referências nomeadas para removeEventListener
 const _listeners = [];
+let _operatorLoadToken = 0;
 
 // Base URL absoluta — elimina ambiguidade de path relativo
 const API_BASE = window.location.origin + '/api';
@@ -30,7 +31,7 @@ export function init() {
     console.log('[Protocolos] Inicializando módulo v2.0...');
 
     _carregarUnidades();
-    _carregarUsuarios();
+    _carregarOperadorAtual();
     _carregarProtocolos();
     _definirDataHoraAtual();
     _setupTabs();
@@ -58,6 +59,7 @@ export function init() {
 // ========== EXPORT: DESTROY ==========
 export function destroy() {
     console.log('[Protocolos] Destruindo módulo...');
+    _operatorLoadToken++;
 
     // Limpar interval
     if (_state.refreshInterval) {
@@ -77,7 +79,7 @@ export function destroy() {
     // Resetar estado
     _state.protocolos = [];
     _state.unidades = [];
-    _state.usuarios = [];
+    _state.operadorAtual = '';
     _state.editandoId = null;
 
     console.log('[Protocolos] Módulo destruído.');
@@ -316,25 +318,45 @@ function _carregarMoradores() {
         });
 }
 
-function _carregarUsuarios() {
-    console.log('[Protocolos] Carregando usuários...');
-    fetch(`${API_BASE}/api_usuarios.php`, { credentials: 'include' })
-        .then(r => r.json())
+function _carregarOperadorAtual() {
+    const token = ++_operatorLoadToken;
+    const campo = document.getElementById('recebedorPortaria');
+    const btnSalvar = document.getElementById('btnSalvarProtocolo');
+    if (campo) {
+        campo.value = '';
+        campo.placeholder = 'Carregando operador...';
+    }
+    if (btnSalvar) btnSalvar.disabled = true;
+
+    fetch(`${API_BASE}/api_protocolos.php?acao=operador_atual`, { credentials: 'include' })
+        .then(async resposta => {
+            const data = await resposta.json();
+            if (!resposta.ok || !data.sucesso) throw new Error(data.mensagem || 'Não foi possível identificar o operador');
+            return data;
+        })
         .then(data => {
-            if (!data.sucesso) throw new Error(data.mensagem);
-            _state.usuarios = data.dados.filter(u => u.ativo == 1);
-            const sel = document.getElementById('recebedorPortaria');
-            if (sel) {
-                sel.innerHTML = '<option value="">Selecione o porteiro...</option>';
-                _state.usuarios.forEach(u => {
-                    const funcao = u.funcao ? ` — ${u.funcao}` : '';
-                    sel.innerHTML += `<option value="${_esc(u.nome)}">${_esc(u.nome)}${_esc(funcao)}</option>`;
-                });
+            if (token !== _operatorLoadToken) return;
+            const nome = String(data.dados?.nome || '').trim();
+            if (!nome) throw new Error('A sessão não retornou um operador ativo');
+            _state.operadorAtual = nome;
+            const editando = Boolean(document.getElementById('protocoloId')?.value);
+            if (campo && !editando) {
+                campo.value = nome;
+                campo.placeholder = '';
             }
-            console.log(`[Protocolos] ${_state.usuarios.length} usuários carregados.`);
+            if (btnSalvar) btnSalvar.disabled = false;
+            console.log('[Protocolos] Operador autenticado carregado.');
         })
         .catch(err => {
-            console.error('[Protocolos] Erro ao carregar usuários:', err);
+            if (token !== _operatorLoadToken) return;
+            _state.operadorAtual = '';
+            if (campo) {
+                if (!document.getElementById('protocoloId')?.value) campo.value = '';
+                campo.placeholder = 'Operador não disponível';
+            }
+            if (btnSalvar && document.getElementById('protocoloId')?.value) btnSalvar.disabled = false;
+            console.error('[Protocolos] Erro ao carregar operador autenticado:', err);
+            _toast('Não foi possível identificar o operador da sessão. Atualize a página ou entre novamente.', 'error');
         });
 }
 
@@ -661,6 +683,7 @@ function _salvarProtocolo() {
     };
 
     // Validações básicas
+    if (!idValido && !_state.operadorAtual) { _toast('Não foi possível identificar o operador da sessão.', 'error'); return; }
     if (!dados.unidade_id) { _toast('Selecione a unidade', 'warning'); return; }
     if (!dados.morador_id) { _toast('Selecione o morador', 'warning'); return; }
     if (!dados.descricao_mercadoria) { _toast('Informe a descrição da mercadoria', 'warning'); return; }
@@ -941,6 +964,8 @@ function _fecharModalDetalhes() {
 function _limparFormulario() {
     const form = document.getElementById('formProtocolo');
     if (form) form.reset();
+    const recebedor = document.getElementById('recebedorPortaria');
+    if (recebedor) recebedor.value = _state.operadorAtual;
     const idEl = document.getElementById('protocoloId');
     if (idEl) idEl.value = '';
     const moradorSel = document.getElementById('moradorId');

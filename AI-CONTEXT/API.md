@@ -162,3 +162,9 @@ Os novos tipos `Entregador Autorizado` e `Familiar` são aceitos pela escrita e 
 - A criação de QR existente em `api/api_acessos_visitantes.php` mantém escopo tenant-aware. O Portal consulta alertas antes da criação e o leitor Console reavalia no momento real da entrada. Sem a migration completa, as entradas que exigem enforcement retornam HTTP 503 com `MIGRATION_ALERTAS_PENDENTE`, em vez de falhar abertas.
 - Se a importação da migration for interrompida, ela pode ser reaplicada integralmente: os checks de tabela/coluna/índice são idempotentes e comparam metadados sem depender da collation padrão do banco. O gate administrativo continua retornando 503 até encontrar todas as tabelas obrigatórias e registra no `error_log` qual tabela está ausente; o nome não é exposto na resposta HTTP.
 - O domínio `alertas_unidade` é diferente de `alertas_acesso`: o primeiro é prevenção/ciente e regras da unidade; o segundo permanece no fluxo administrativo de detecção pós-evento.
+
+## 16. Protocolos de Mercadorias
+
+- `api/api_protocolos.php?acao=operador_atual` exige sessão e `protocolos.visualizar`, localiza o usuário ativo pelo ID e tenant da sessão e retorna somente seu nome para preencher Recebedor (Portaria). Não consulta a lista administrativa de usuários nem exige `usuarios.visualizar`.
+- A criação exige `protocolos.criar` quando RBAC está ativo e grava `recebedor_portaria` a partir do usuário autenticado no servidor; o valor enviado pelo navegador não define autoria. Edição exige `protocolos.editar` e preserva o recebedor original. Registrar retirada usa `protocolos.aprovar`; exclusão usa `protocolos.excluir`. Antes da migration RBAC, mantém-se a hierarquia legada.
+- Todos os protocolos, moradores e usuários resolvidos nessa API ficam limitados ao `tenant_id` da sessão.

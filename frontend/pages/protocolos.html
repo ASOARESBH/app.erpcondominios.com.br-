@@ -97,9 +97,8 @@
                     </div>
                     <div class="form-group">
                         <label for="recebedorPortaria">Recebedor (Portaria) *</label>
-                        <select id="recebedorPortaria" required>
-                            <option value="">Selecione o porteiro...</option>
-                        </select>
+                        <input type="text" id="recebedorPortaria" readonly required placeholder="Carregando operador..." autocomplete="off">
+                        <span class="form-hint">Preenchido automaticamente com o usuário conectado.</span>
                     </div>
                 </div>
                 <div class="form-group form-group-full">

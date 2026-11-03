@@ -51,21 +51,69 @@ if (!function_exists('retornar_json')) {
     }
 }
 
+function protocolos_obter_operador_sessao(mysqli $conexao, int $tenantId): ?array {
+    $usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
+    if ($usuarioId <= 0 || $tenantId <= 0) return null;
+
+    $stmt = $conexao->prepare("SELECT nome FROM usuarios WHERE tenant_id = ? AND id = ? AND ativo = 1 AND LOWER(COALESCE(permissao, '')) <> 'super_admin' LIMIT 1");
+    if (!$stmt) {
+        error_log('[Protocolos] Falha ao preparar resolução do operador da sessão. MySQL errno=' . (int)$conexao->errno);
+        return null;
+    }
+    $stmt->bind_param('ii', $tenantId, $usuarioId);
+    if (!$stmt->execute()) {
+        error_log('[Protocolos] Falha ao resolver operador da sessão. MySQL errno=' . (int)$stmt->errno);
+        $stmt->close();
+        return null;
+    }
+    $operador = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$operador || trim((string)($operador['nome'] ?? '')) === '') return null;
+    return ['nome' => trim((string)$operador['nome'])];
+}
+
 // Verificar autenticação
-verificarAutenticacao(true, 'operador');
+verificarAutenticacao(true);
 $tenant_id = exigirTenantId();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $conexao = conectar_banco();
+$rbac_ativo = rbacTabelasDisponiveis($conexao);
+$dados_requisicao = null;
+if (in_array($metodo, ['POST', 'PUT', 'DELETE'], true)) {
+    $dados_requisicao = json_decode(file_get_contents('php://input'), true);
+}
 
-// Para operações de escrita, verificar permissão de admin
-if ($metodo !== 'GET') {
+if ($rbac_ativo) {
+    $acao_permissao = null;
+    if ($metodo === 'GET') $acao_permissao = 'visualizar';
+    elseif ($metodo === 'POST') $acao_permissao = 'criar';
+    elseif ($metodo === 'PUT') $acao_permissao = (($dados_requisicao['acao'] ?? '') === 'entregar') ? 'aprovar' : 'editar';
+    elseif ($metodo === 'DELETE') $acao_permissao = 'excluir';
+
+    if ($acao_permissao === null) {
+        http_response_code(405);
+        retornar_json(false, 'Método não permitido');
+    }
+    rbacExigir($conexao, 'protocolos', $acao_permissao, ['submodulo_chave' => 'protocolos']);
+} elseif ($metodo !== 'GET') {
     verificarPermissao('admin');
+} else {
+    verificarPermissao('operador');
 }
 
 try {
     // ========== LISTAR PROTOCOLOS ==========
     if ($metodo === 'GET') {
+        if (($_GET['acao'] ?? '') === 'operador_atual') {
+            $operador = protocolos_obter_operador_sessao($conexao, (int)$tenant_id);
+            if (!$operador) {
+                http_response_code(403);
+                retornar_json(false, 'Não foi possível identificar um operador ativo nesta sessão.');
+            }
+            retornar_json(true, 'Operador autenticado carregado', ['nome' => $operador['nome']]);
+        }
+
         if (isset($_GET['id'])) {
             // Buscar protocolo específico
             $id = intval($_GET['id']);
@@ -136,7 +184,7 @@ try {
     
     // ========== CRIAR PROTOCOLO ==========
     if ($metodo === 'POST') {
-        $dados = json_decode(file_get_contents('php://input'), true);
+        $dados = $dados_requisicao;
         
         if (!is_array($dados)) {
             retornar_json(false, "Dados inválidos. Esperado JSON válido");
@@ -148,7 +196,12 @@ try {
         $codigo_nf = sanitizar($conexao, $dados['codigo_nf'] ?? '');
         $pagina = isset($dados['pagina']) ? intval($dados['pagina']) : null;
         $data_hora_recebimento = sanitizar($conexao, $dados['data_hora_recebimento'] ?? '');
-        $recebedor_portaria = sanitizar($conexao, $dados['recebedor_portaria'] ?? '');
+        $operador = protocolos_obter_operador_sessao($conexao, (int)$tenant_id);
+        if (!$operador) {
+            http_response_code(403);
+            retornar_json(false, 'Não foi possível identificar um operador ativo nesta sessão.');
+        }
+        $recebedor_portaria = $operador['nome'];
         $observacao = sanitizar($conexao, $dados['observacao'] ?? '');
         
         // Validações
@@ -257,7 +310,7 @@ try {
     
     // ========== ATUALIZAR PROTOCOLO ==========
     if ($metodo === 'PUT') {
-        $dados = json_decode(file_get_contents('php://input'), true);
+        $dados = $dados_requisicao;
         
         if (!is_array($dados)) {
             retornar_json(false, "Dados inválidos. Esperado JSON válido");
@@ -340,7 +393,6 @@ try {
             $codigo_nf = sanitizar($conexao, $dados['codigo_nf'] ?? '');
             $pagina = isset($dados['pagina']) ? intval($dados['pagina']) : null;
             $data_hora_recebimento = sanitizar($conexao, $dados['data_hora_recebimento'] ?? '');
-            $recebedor_portaria = sanitizar($conexao, $dados['recebedor_portaria'] ?? '');
             $observacao = sanitizar($conexao, $dados['observacao'] ?? '');
             
             // Verificar se já foi entregue
@@ -371,21 +423,19 @@ try {
                         codigo_nf = ?, 
                         pagina = ?,
                         data_hora_recebimento = ?,
-                        recebedor_portaria = ?,
                         observacao = ? WHERE tenant_id = $tenant_id AND id = ? AND status = 'pendente'");
                 
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar update: " . $conexao->error);
                 }
                 
-                $stmt->bind_param('iississsi', 
+                $stmt->bind_param('iississi',
                     $unidade_id, 
                     $morador_id, 
                     $descricao_mercadoria, 
                     $codigo_nf, 
                     $pagina, 
                     $data_hora_recebimento, 
-                    $recebedor_portaria,
                     $observacao, 
                     $id
                 );
@@ -396,27 +446,26 @@ try {
                         descricao_mercadoria = ?, 
                         codigo_nf = ?,
                         data_hora_recebimento = ?,
-                        recebedor_portaria = ?,
                         observacao = ? WHERE tenant_id = $tenant_id AND id = ? AND status = 'pendente'");
                 
                 if (!$stmt) {
                     throw new Exception("Erro ao preparar update: " . $conexao->error);
                 }
                 
-                $stmt->bind_param('iisssssi', 
+                $stmt->bind_param('iissssi',
                     $unidade_id, 
                     $morador_id, 
                     $descricao_mercadoria, 
                     $codigo_nf, 
                     $data_hora_recebimento, 
-                    $recebedor_portaria,
                     $observacao, 
                     $id
                 );
             }
             
             if ($stmt->execute()) {
-                registrar_log('PROTOCOLO_ATUALIZADO', "Protocolo atualizado (ID: $id)", $recebedor_portaria);
+                $operador_log = trim((string)($_SESSION['usuario_nome'] ?? 'Operador'));
+                registrar_log('PROTOCOLO_ATUALIZADO', "Protocolo atualizado (ID: $id)", $operador_log !== '' ? $operador_log : 'Operador');
                 retornar_json(true, "Protocolo atualizado com sucesso");
             } else {
                 throw new Exception("Erro ao atualizar protocolo: " . $stmt->error);
@@ -427,7 +476,7 @@ try {
     
     // ========== EXCLUIR PROTOCOLO ==========
     if ($metodo === 'DELETE') {
-        $dados = json_decode(file_get_contents('php://input'), true);
+        $dados = $dados_requisicao;
         $id = intval($dados['id'] ?? 0);
         
         if ($id <= 0) {
