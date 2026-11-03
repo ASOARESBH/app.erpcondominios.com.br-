@@ -2,6 +2,19 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.12] - 2026-11-03
+### Corrigido
+- **Alertas da Unidade (Moradores › Alertas da Unidade)**:
+  - **Ordem das unidades**: `api/api_alertas_unidade.php` (`acao=opcoes`) ordenava com `ORDER BY unidade` textual, o que colocava "Gleba 10" antes de "Gleba 2". Agora a lista é deduplicada por `TRIM`/caixa e ordenada em ordem natural (`strnatcasecmp`). O frontend reaplica `Intl.Collator('pt-BR', {numeric:true})`. Resultado: `200, ADMINISTRATIVO, Gleba 1, Gleba 2, … Gleba 10 … Gleba 100`. Vale para o filtro da lista e para o modal.
+  - **Cascata Unidade → Morador titular → Dependente** (`frontend/js/pages/moradores-alertas.js`): o select de unidade não tinha evento, e o modal listava todos os moradores e dependentes do tenant. Agora:
+    - o morador fica desabilitado até escolher a unidade e mostra só os moradores ativos dela (comparação `TRIM`/caixa); com um único morador, ele é pré-selecionado;
+    - o dependente só fica habilitado quando o tipo do titular é "Dependente" e lista só os dependentes da unidade ou do morador escolhido; com tipo "Morador", fica desabilitado e não é enviado (a API recusa `dependente_id` nesse caso — `TITULAR_INVALIDO`);
+    - escolher o dependente antes do titular preenche o morador responsável;
+    - editar e duplicar reconstroem a cascata antes de aplicar os valores;
+    - mensagens de validação para unidade e dependente ausentes.
+  - A comparação de unidade divergente em `au_api_validar_titular()` passou a ignorar espaços e caixa, porque a lista agora usa a unidade com `TRIM`. O backend continua revalidando morador/dependente no tenant da sessão.
+- **Testes**: `php -l` OK. Simulação em navegador (Playwright) da ordenação e da cascata (troca de unidade, unidade sem moradores, morador único, titular Morador × Dependente, dependente antes do morador, payload final) OK. Pendente: validação manual no ambiente com sessão real.
+
 ## [2.1.11] - 2026-11-03
 ### Implementado — web/backend
 - **Ordens de Serviço**: adicionados filtros exatos de Unidade e Morador encadeados, chip de unidade/contagem, querystring restaurável ao atualizar/compartilhar e atalho clicável/acessível pelo ranking. A listagem continua cumulativa com tenant, RBAC, departamentos e Restritividade O.S.; sem permissão `moradores.visualizar`, apenas o seletor de morador fica indisponível.

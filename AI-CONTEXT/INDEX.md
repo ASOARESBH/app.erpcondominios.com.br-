@@ -23,6 +23,8 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **Lista de Convidados (aba no Registro de Acesso)**: [PROMPT_LISTA_CONVIDADOS_20261031.md](PROMPT_LISTA_CONVIDADOS_20261031.md)
 - **Debug — erro 500 na listagem de convidados**: [DEBUG_LISTA_CONVIDADOS_500_20261102.md](DEBUG_LISTA_CONVIDADOS_500_20261102.md)
 - **O.S. — filtro por Unidade e Morador**: [PROMPT_OS_FILTRO_UNIDADE_MORADOR_20261103.md](PROMPT_OS_FILTRO_UNIDADE_MORADOR_20261103.md)
+- **Manus — Alertas da Unidade (ordem + cascata)**: [PROMPT_MANUS_ALERTAS_UNIDADE_CASCATA_20261103.md](PROMPT_MANUS_ALERTAS_UNIDADE_CASCATA_20261103.md)
+- **Manus — O.S. filtro de unidade sem quantitativos**: [PROMPT_MANUS_OS_UNIDADE_SEM_CONTAGEM_20261103.md](PROMPT_MANUS_OS_UNIDADE_SEM_CONTAGEM_20261103.md)
 - **Alertas da Unidade (aba em Moradores + pré-validação na portaria)**: [PROMPT_MODULO_ALERTAS_20261102.md](PROMPT_MODULO_ALERTAS_20261102.md)
 
 ## 🎨 4. Interface e Estilos

@@ -315,37 +315,104 @@ function optionLabel(item, fallback = '') {
     return item.nome ?? item.nome_completo ?? item.descricao ?? item.label ?? item.unidade ?? String(optionValue(item, fallback));
 }
 
+// Ordenação natural das unidades: "Gleba 2" antes de "Gleba 10", sem diferenciar maiúsculas.
+const unitCollator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+
+function normalizeUnit(value) {
+    return String(value ?? '').trim().toUpperCase();
+}
+
+function compareUnits(a, b) {
+    return unitCollator.compare(String(optionLabel(a)).trim(), String(optionLabel(b)).trim());
+}
+
+function moradorOwnerId(item) {
+    return String(item?.morador_id ?? item?.id_morador ?? item?.titular_id ?? '');
+}
+
+function moradoresDaUnidade(unidade) {
+    const alvo = normalizeUnit(unidade);
+    if (!alvo) return [];
+    return state.options.moradores.filter(item => normalizeUnit(item?.unidade) === alvo);
+}
+
 function populateOptions() {
     populateSelect(byId('alertas-filtro-unidade'), state.options.unidades, 'Todas as unidades', optionValue, optionLabel);
     const filtroUnidade = byId('alertas-filtro-unidade');
     if (state.pendingSavedUnit && filtroUnidade && Array.from(filtroUnidade.options).some(option => option.value === state.pendingSavedUnit)) filtroUnidade.value = state.pendingSavedUnit;
     state.pendingSavedUnit = '';
     populateSelect(byId('alertas-form-unidade'), state.options.unidades, 'Selecione a unidade', optionValue, optionLabel);
-    populateSelect(byId('alertas-form-morador'), state.options.moradores, 'Selecione o morador titular', optionValue, optionLabel);
+    updateMoradorOptions();
+}
+
+// Cascata do formulário: Unidade → Morador titular → Dependente.
+// O backend continua revalidando unidade, morador e dependente no tenant da sessão.
+function updateMoradorOptions() {
+    const select = byId('alertas-form-morador');
+    if (!select) return;
+    const unidade = byId('alertas-form-unidade')?.value || '';
+    if (!unidade) {
+        populateSelect(select, [], 'Selecione a unidade primeiro', optionValue, optionLabel);
+        select.value = '';
+        select.disabled = true;
+    } else {
+        const items = moradoresDaUnidade(unidade);
+        populateSelect(select, items, items.length ? 'Selecione o morador titular' : 'Nenhum morador ativo nesta unidade', optionValue, optionLabel);
+        select.disabled = items.length === 0;
+        if (items.length === 1 && !select.value) select.value = String(optionValue(items[0]));
+    }
     updateDependenteOptions();
 }
 
 function updateDependenteOptions() {
     const select = byId('alertas-form-dependente');
     if (!select) return;
-    const moradorId = byId('alertas-form-morador')?.value;
-    const items = state.options.dependentes.filter(item => {
-        if (!moradorId) return true;
-        const owner = item?.morador_id ?? item?.id_morador ?? item?.titular_id;
-        return owner == null || String(owner) === String(moradorId);
+    const tipo = byId('alertas-form-titular-tipo')?.value || 'MORADOR';
+    if (tipo !== 'DEPENDENTE') {
+        populateSelect(select, [], 'Não se aplica — titular é o morador', optionValue, optionLabel);
+        select.value = '';
+        select.disabled = true;
+        select.required = false;
+        return;
+    }
+    const unidade = byId('alertas-form-unidade')?.value || '';
+    const moradorId = byId('alertas-form-morador')?.value || '';
+    const moradoresIds = new Set(moradoresDaUnidade(unidade).map(item => String(optionValue(item))));
+    const items = !unidade ? [] : state.options.dependentes.filter(item => {
+        const owner = moradorOwnerId(item);
+        return moradorId ? owner === String(moradorId) : moradoresIds.has(owner);
     });
-    populateSelect(select, items, 'Selecione o dependente', optionValue, item => {
+    let placeholder = 'Selecione o dependente';
+    if (!unidade) placeholder = 'Selecione a unidade primeiro';
+    else if (!items.length) placeholder = moradorId ? 'Nenhum dependente ativo para este morador' : 'Nenhum dependente ativo nesta unidade';
+    populateSelect(select, items, placeholder, optionValue, item => {
         const name = optionLabel(item);
         const owner = item?.morador_nome || item?.morador;
-        return owner ? `${name} — ${owner}` : name;
+        return owner && !moradorId ? `${name} — ${owner}` : name;
     });
+    select.required = true;
+    select.disabled = items.length === 0;
+}
+
+// Ao escolher o dependente antes do titular, o morador responsável é preenchido automaticamente.
+function handleDependenteChange() {
+    const dependenteId = byId('alertas-form-dependente')?.value || '';
+    const moradorSelect = byId('alertas-form-morador');
+    if (!dependenteId || !moradorSelect || moradorSelect.value) return;
+    const dependente = state.options.dependentes.find(item => String(optionValue(item)) === String(dependenteId));
+    const owner = moradorOwnerId(dependente);
+    if (owner && Array.from(moradorSelect.options).some(option => option.value === owner)) {
+        moradorSelect.value = owner;
+        updateDependenteOptions();
+        byId('alertas-form-dependente').value = dependenteId;
+    }
 }
 
 async function loadOptions() {
     try {
         const data = unwrap(await requestJson('opcoes')) || {};
         state.options = {
-            unidades: Array.isArray(data.unidades) ? data.unidades : [],
+            unidades: Array.isArray(data.unidades) ? [...data.unidades].sort(compareUnits) : [],
             moradores: Array.isArray(data.moradores) ? data.moradores : [],
             dependentes: Array.isArray(data.dependentes) ? data.dependentes : [],
         };
@@ -639,7 +706,7 @@ function resetForm() {
     byId('alertas-form-idempotency').value = generateKey();
     setText('alertas-modal-title', 'Novo alerta da unidade');
     setText('alertas-form-submit-label', 'Salvar alerta');
-    byId('alertas-form-dependente').disabled = false;
+    updateMoradorOptions();
     renderTargets();
     applyPermissionVisibility();
     const modelo = byId('alertas-form-modelo');
@@ -675,7 +742,7 @@ function readForm() {
     const horaFim = value('alertas-form-hora-fim');
     const instrucao = value('alertas-form-instrucao');
     const telefone = value('alertas-form-telefone');
-    if (dependenteId) payload.dependente_id = Number(dependenteId);
+    if (dependenteId && payload.titular_tipo === 'DEPENDENTE') payload.dependente_id = Number(dependenteId);
     if (days.length) payload.dias_semana = days;
     if (horaInicio) payload.hora_inicio = horaInicio;
     if (horaFim) payload.hora_fim = horaFim;
@@ -690,8 +757,16 @@ function validateForm(payload) {
         form?.reportValidity();
         return false;
     }
+    if (!payload.unidade) {
+        showFeedback('error', 'Selecione a unidade do alerta.');
+        return false;
+    }
     if (!payload.morador_id || Number.isNaN(payload.morador_id)) {
         showFeedback('error', 'Selecione o morador titular do alerta.');
+        return false;
+    }
+    if (payload.titular_tipo === 'DEPENDENTE' && !payload.dependente_id) {
+        showFeedback('error', 'Selecione o dependente titular do alerta.');
         return false;
     }
     if (payload.vigencia_inicio && payload.vigencia_fim && payload.vigencia_fim < payload.vigencia_inicio) {
@@ -945,6 +1020,7 @@ async function openEdit(id) {
         setFormValue('alertas-form-id', id);
         setFormValue('alertas-form-unidade', alert.unidade ?? alert.unidade_id);
         setFormValue('alertas-form-titular-tipo', alert.titular_tipo || 'MORADOR');
+        updateMoradorOptions();
         setFormValue('alertas-form-morador', alert.morador_id);
         updateDependenteOptions();
         setFormValue('alertas-form-dependente', alert.dependente_id);
@@ -980,6 +1056,7 @@ async function openDuplicate(id) {
         resetForm();
         setFormValue('alertas-form-unidade', alert.unidade ?? alert.unidade_id);
         setFormValue('alertas-form-titular-tipo', alert.titular_tipo || 'MORADOR');
+        updateMoradorOptions();
         setFormValue('alertas-form-morador', alert.morador_id);
         updateDependenteOptions();
         setFormValue('alertas-form-dependente', alert.dependente_id);
@@ -1163,7 +1240,10 @@ function handleClick(event) {
 
 function handleFormChange(event) {
     if (event.target?.id === 'alertas-form-modelo') applyQuickModel(event.target.value);
+    if (event.target?.id === 'alertas-form-unidade') updateMoradorOptions();
+    if (event.target?.id === 'alertas-form-titular-tipo') updateDependenteOptions();
     if (event.target?.id === 'alertas-form-morador') updateDependenteOptions();
+    if (event.target?.id === 'alertas-form-dependente') handleDependenteChange();
     if (event.target?.id === 'alertas-form-abrangencia') {
         const targets = byId('alertas-targets-wrap');
         if (targets) targets.hidden = event.target.value !== 'ESPECIFICO';
@@ -1202,7 +1282,6 @@ function bindEvents() {
     bind(root.querySelector('#alertas-filtros'), 'submit', event => { event.preventDefault(); persistCurrentFilters(); loadList(1); });
     bind(root.querySelector('#alertas-filtros'), 'reset', () => setTimeout(() => { persistCurrentFilters(); loadList(1); }, 0));
     bind(root.querySelector('#alertas-form'), 'submit', saveAlert);
-    bind(root.querySelector('#alertas-form-morador'), 'change', updateDependenteOptions);
     bind(root.querySelector('#alertas-alvo-buscar'), 'click', searchTarget);
     bind(root.querySelector('#alertas-alvo-busca'), 'keydown', event => { if (event.key === 'Enter') { event.preventDefault(); searchTarget(); } });
     bind(root.querySelector('#alertas-detalhe-editar'), 'click', event => {

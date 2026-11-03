@@ -138,7 +138,7 @@ function au_api_buscar_morador(mysqli $c, $tenantId, $id) {
 function au_api_validar_titular(mysqli $c, $tenantId, array $dados) {
     $morador = au_api_buscar_morador($c, $tenantId, (int)($dados['morador_id'] ?? 0));
     $unidadeInformada = trim((string)($dados['unidade'] ?? ''));
-    if ($unidadeInformada !== '' && $unidadeInformada !== (string)$morador['unidade']) au_api_erro('A unidade não corresponde ao cadastro oficial do morador.', 422, 'UNIDADE_DIVERGENTE');
+    if ($unidadeInformada !== '' && strcasecmp($unidadeInformada, trim((string)$morador['unidade'])) !== 0) au_api_erro('A unidade não corresponde ao cadastro oficial do morador.', 422, 'UNIDADE_DIVERGENTE');
     $titularTipo = strtoupper(trim((string)($dados['titular_tipo'] ?? 'MORADOR')));
     if (!in_array($titularTipo, ['MORADOR', 'DEPENDENTE'], true)) au_api_erro('O tipo de titular é inválido.', 422, 'TITULAR_INVALIDO');
     $dependenteId = null;
@@ -374,8 +374,14 @@ if ($acao === 'opcoes') {
     au_api_rbac($conexao, $tenantId, 'visualizar');
     $stmt = au_query($conexao, 'SELECT DISTINCT unidade FROM moradores WHERE tenant_id=? AND ativo=1 AND unidade IS NOT NULL AND unidade<>? ORDER BY unidade', 'is', [$tenantId, '']);
     $unidades = [];
-    foreach (au_rows($stmt) as $item) $unidades[] = $item['unidade'];
+    foreach (au_rows($stmt) as $item) {
+        $unidade = trim((string)$item['unidade']);
+        if ($unidade !== '' && !isset($unidades[strtoupper($unidade)])) $unidades[strtoupper($unidade)] = $unidade;
+    }
     $stmt->close();
+    // Ordenação natural (Gleba 2 antes de Gleba 10), sem duplicar unidades que só diferem por espaço/caixa.
+    $unidades = array_values($unidades);
+    usort($unidades, function ($a, $b) { return strnatcasecmp($a, $b); });
     $stmt = au_query($conexao, 'SELECT id,nome,unidade FROM moradores WHERE tenant_id=? AND ativo=1 ORDER BY nome', 'i', [$tenantId]);
     $moradores = au_rows($stmt); $stmt->close();
     $stmt = au_query($conexao, 'SELECT d.id,d.morador_id,d.nome_completo,m.nome morador_nome FROM dependentes d INNER JOIN moradores m ON m.tenant_id=d.tenant_id AND m.id=d.morador_id WHERE d.tenant_id=? AND d.ativo=1 AND m.ativo=1 ORDER BY d.nome_completo', 'i', [$tenantId]);
