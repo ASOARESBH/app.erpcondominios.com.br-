@@ -5,12 +5,13 @@
 // =====================================================
 // Endpoints (acao via GET ou JSON body):
 //   migration           — cria/verifica tabelas
-//   listar              — lista OS com filtros
+//   listar              — lista OS com filtros (inclui unidade exata e morador)
 //   criar               — cria nova OS
 //   editar              — edita OS existente
 //   excluir             — exclui OS
 //   buscar              — busca OS por número/assunto
 //   dashboard_kpis      — KPIs para o dashboard
+//   unidades_com_os     — contagem por unidade no escopo visível do usuário
 //   listar_interacoes   — interações de uma OS
 //   adicionar_interacao — adiciona interação (muda status p/ andamento)
 //   finalizar           — finaliza OS (horas_totais opcional)
@@ -340,7 +341,7 @@ function os_exigir_acao_departamento(string $departamento, string $acao): void {
     retornar_json(false, 'Você não possui permissão para esta ação no departamento informado.');
 }
 
-function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, status, departamento, criado_por_id, atendente_id, atendente_nome'): ?array {
+function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, status, departamento, criado_por_id, atendente_id, atendente_nome, morador_id, morador_unidade'): ?array {
     global $tenant_id;
     if ($id <= 0) return null;
     if (os_tem_coluna_assumido($conn) && strpos($campos, 'assumido_por_id') === false) {
@@ -390,6 +391,22 @@ function os_resolver_atendente_tenant(mysqli $conn, int $usuarioId): ?array {
     $usuario = $res ? ($res->fetch_assoc() ?: null) : null;
     $stmt->close();
     return $usuario;
+}
+
+function os_resolver_morador_tenant(mysqli $conn, int $moradorId): ?array {
+    global $tenant_id;
+    if ($moradorId <= 0) return null;
+    $stmt = $conn->prepare('SELECT id, nome, unidade FROM moradores WHERE tenant_id = ? AND id = ? LIMIT 1');
+    if (!$stmt) return null;
+    $stmt->bind_param('ii', $tenant_id, $moradorId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return null;
+    }
+    $res = $stmt->get_result();
+    $morador = $res ? ($res->fetch_assoc() ?: null) : null;
+    $stmt->close();
+    return $morador;
 }
 
 function os_exigir_gestor(): void {
@@ -444,12 +461,52 @@ os_log('info', 'Requisição recebida', ['metodo' => $metodo, 'acao' => $acao, '
 // =====================================================
 // MIGRATION — CRIAR TABELAS
 // =====================================================
+function _os_garantir_indice_unidade($conn): bool {
+    $colunas = $conn->query(
+        "SELECT COUNT(DISTINCT COLUMN_NAME) AS total
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'os_chamados'
+           AND COLUMN_NAME IN ('tenant_id', 'morador_unidade')"
+    );
+    if (!$colunas || (int)$colunas->fetch_assoc()['total'] !== 2) return false;
+
+    $indice = $conn->query(
+        "SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'os_chamados'
+           AND INDEX_NAME = 'idx_os_tenant_unidade'"
+    );
+    if (!$indice) return false;
+    if ((int)$indice->fetch_assoc()['total'] > 0) return true;
+
+    try {
+        if ($conn->query(
+            'ALTER TABLE `os_chamados` ADD INDEX `idx_os_tenant_unidade` (`tenant_id`, `morador_unidade`)'
+        )) return true;
+    } catch (Throwable $e) {
+        // Outra requisição pode ter criado o mesmo índice em paralelo.
+    }
+
+    // Se outra requisição criou o índice entre a leitura do metadata e o ALTER,
+    // trate a corrida como sucesso idempotente.
+    try {
+        $indice_final = $conn->query(
+            "SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'os_chamados'
+               AND INDEX_NAME = 'idx_os_tenant_unidade'"
+        );
+    } catch (Throwable $e) {
+        return false;
+    }
+    return $indice_final && (int)$indice_final->fetch_assoc()['total'] > 0;
+}
+
 function _os_garantir_tabelas($conn) {
     $sqls = [];
 
     // Tabela principal de OS
     $sqls[] = "CREATE TABLE IF NOT EXISTS os_chamados (
         id              INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id       INT NOT NULL DEFAULT 1,
         numero          VARCHAR(20) NOT NULL UNIQUE COMMENT 'Ex: OS-2024-0001',
         titulo          VARCHAR(255) NOT NULL,
         assunto_id      INT DEFAULT NULL,
@@ -481,6 +538,7 @@ function _os_garantir_tabelas($conn) {
         INDEX idx_departamento (departamento),
         INDEX idx_data_abertura (data_abertura),
         INDEX idx_morador_id (morador_id),
+        INDEX idx_os_tenant_unidade (tenant_id, morador_unidade),
         INDEX idx_atendente_id (atendente_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
@@ -550,6 +608,9 @@ function _os_garantir_tabelas($conn) {
         if (!$conn->query($sql)) {
             $erros[] = $conn->error;
         }
+    }
+    if (!_os_garantir_indice_unidade($conn)) {
+        $erros[] = 'Não foi possível garantir o índice idx_os_tenant_unidade em os_chamados';
     }
     return $erros;
 }
@@ -1036,14 +1097,18 @@ switch ($acao) {
         $kpis['por_departamento'] = $por_departamento;
 
         // Top 5 unidades com mais chamados (todos os status)
+        $os_scope_unidades = os_escopo_sql('o');
         $res = $conn->query("
-            SELECT TRIM(morador_unidade) as unidade,
+            SELECT MIN(TRIM(COALESCE(NULLIF(TRIM(o.morador_unidade), ''), NULLIF(TRIM(m.unidade), '')))) AS unidade,
                    COUNT(*) as total,
-                   SUM(status IN ('aberto','andamento')) as abertas,
-                   SUM(status = 'finalizado') as finalizadas,
-                   SUM(status = 'cancelado') as canceladas
-            FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND morador_unidade IS NOT NULL AND TRIM(morador_unidade) != ''
-            GROUP BY TRIM(morador_unidade)
+                   SUM(o.status IN ('aberto','andamento')) as abertas,
+                   SUM(o.status = 'finalizado') as finalizadas,
+                   SUM(o.status = 'cancelado') as canceladas
+            FROM os_chamados o
+            LEFT JOIN moradores m ON m.tenant_id = o.tenant_id AND m.id = o.morador_id
+            WHERE o.tenant_id = $tenant_id AND $os_scope_unidades
+              AND COALESCE(NULLIF(TRIM(o.morador_unidade), ''), NULLIF(TRIM(m.unidade), '')) IS NOT NULL
+            GROUP BY UPPER(TRIM(COALESCE(NULLIF(TRIM(o.morador_unidade), ''), NULLIF(TRIM(m.unidade), ''))))
             ORDER BY total DESC
             LIMIT 5
         ");
@@ -1063,6 +1128,39 @@ switch ($acao) {
         $kpis['top_unidades'] = $top_unidades;
 
         retornar_json(true, 'KPIs carregados', $kpis);
+        break;
+
+    // ─────────────────────────────────────────────────
+    case 'unidades_com_os':
+        $escopo = os_escopo_sql('o');
+        $stmt = $conn->prepare(
+            "SELECT MIN(TRIM(COALESCE(NULLIF(TRIM(o.morador_unidade), ''), NULLIF(TRIM(m.unidade), '')))) AS unidade,
+                    COUNT(*) AS total
+             FROM os_chamados o
+             LEFT JOIN moradores m ON m.tenant_id = o.tenant_id AND m.id = o.morador_id
+             WHERE o.tenant_id = ? AND ($escopo)
+               AND COALESCE(NULLIF(TRIM(o.morador_unidade), ''), NULLIF(TRIM(m.unidade), '')) IS NOT NULL
+             GROUP BY UPPER(TRIM(COALESCE(NULLIF(TRIM(o.morador_unidade), ''), NULLIF(TRIM(m.unidade), ''))))
+             ORDER BY unidade ASC
+             LIMIT 1000"
+        );
+        if (!$stmt) {
+            os_log('erro', 'Falha ao preparar contagem de O.S. por unidade', ['tenant_id' => $tenant_id]);
+            retornar_json(false, 'Não foi possível carregar o resumo de unidades');
+        }
+        $stmt->bind_param('i', $tenant_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            os_log('erro', 'Falha ao consultar contagem de O.S. por unidade', ['tenant_id' => $tenant_id]);
+            retornar_json(false, 'Não foi possível carregar o resumo de unidades');
+        }
+        $res_unidades_os = $stmt->get_result();
+        $unidades_os = [];
+        while ($res_unidades_os && ($row = $res_unidades_os->fetch_assoc())) {
+            $unidades_os[] = ['unidade' => $row['unidade'], 'total' => (int)$row['total']];
+        }
+        $stmt->close();
+        retornar_json(true, 'Resumo de unidades carregado', $unidades_os);
         break;
 
     // ─────────────────────────────────────────────────
@@ -1250,6 +1348,27 @@ switch ($acao) {
         $busca        = trim($_GET['busca']        ?? $body['busca']        ?? '');
         $data_ini     = trim($_GET['data_ini']     ?? $body['data_ini']     ?? '');
         $data_fim     = trim($_GET['data_fim']     ?? $body['data_fim']     ?? '');
+        $unidade_raw = $_GET['unidade'] ?? $body['unidade'] ?? '';
+        if (!is_scalar($unidade_raw)) retornar_json(false, 'Unidade inválida');
+        $unidade = trim((string)$unidade_raw);
+        $morador_id_raw = $_GET['morador_id'] ?? $body['morador_id'] ?? '';
+        if (!is_scalar($morador_id_raw)) retornar_json(false, 'Identificador de morador inválido');
+        $morador_id = $morador_id_raw === '' ? 0 : filter_var($morador_id_raw, FILTER_VALIDATE_INT);
+        if ($morador_id === false || ($morador_id_raw !== '' && $morador_id <= 0)) {
+            retornar_json(false, 'Identificador de morador inválido');
+        }
+        $morador_id = (int)$morador_id;
+        if (strlen($unidade) > 200) retornar_json(false, 'Unidade deve ter até 50 caracteres');
+        $unidade_tamanho = preg_match_all('/./us', $unidade, $unidade_caracteres);
+        if ($unidade_tamanho === false || $unidade_tamanho > 50) {
+            retornar_json(false, 'Unidade deve ter até 50 caracteres');
+        }
+        if ($morador_id > 0 && $unidade === '') {
+            retornar_json(false, 'Selecione a unidade antes do morador');
+        }
+        if ($morador_id > 0 && rbacTabelasDisponiveis($conn)) {
+            rbacExigir($conn, 'moradores', 'visualizar', ['submodulo_chave' => 'filtro_ordens_servico']);
+        }
         $pagina       = max(1, (int)($_GET['pagina']     ?? 1));
         $por_pagina   = max(1, min(100, (int)($_GET['por_pagina'] ?? 25)));
         $offset       = ($pagina - 1) * $por_pagina;
@@ -1273,6 +1392,47 @@ switch ($acao) {
             $where[] = 'o.departamento = ?';
             $params[] = $departamento;
             $types .= 's';
+        }
+        if ($unidade !== '') {
+            $where[] = '((o.morador_unidade = ? OR UPPER(TRIM(o.morador_unidade)) = UPPER(TRIM(?)))'
+                . ' OR ((o.morador_unidade IS NULL OR TRIM(o.morador_unidade) = \'\')'
+                . ' AND o.morador_id IN ('
+                . 'SELECT m.id FROM moradores m WHERE m.tenant_id = ?'
+                . ' AND UPPER(TRIM(m.unidade)) = UPPER(TRIM(?)))))';
+            $params[] = $unidade;
+            $types .= 's';
+            $params[] = $unidade;
+            $types .= 's';
+            $params[] = (int)$tenant_id;
+            $types .= 'i';
+            $params[] = $unidade;
+            $types .= 's';
+            if ($morador_id > 0) {
+                $stmt_morador = $conn->prepare(
+                    "SELECT id,
+                            (UPPER(TRIM(COALESCE(unidade, ''))) = UPPER(TRIM(?))) AS unidade_compativel
+                     FROM moradores WHERE tenant_id = ? AND id = ? LIMIT 1"
+                );
+                if (!$stmt_morador) {
+                    os_log('erro', 'Falha ao preparar validação de morador no filtro de O.S.', ['tenant_id' => $tenant_id]);
+                    retornar_json(false, 'Não foi possível validar o morador selecionado');
+                }
+                $stmt_morador->bind_param('sii', $unidade, $tenant_id, $morador_id);
+                if (!$stmt_morador->execute()) {
+                    $stmt_morador->close();
+                    os_log('erro', 'Falha ao validar morador no filtro de O.S.', ['tenant_id' => $tenant_id]);
+                    retornar_json(false, 'Não foi possível validar o morador selecionado');
+                }
+                $morador_validado = $stmt_morador->get_result()->fetch_assoc() ?: null;
+                $stmt_morador->close();
+                if (!$morador_validado || (int)$morador_validado['unidade_compativel'] !== 1) {
+                    $where[] = '1 = 0';
+                } else {
+                    $where[] = 'o.morador_id = ?';
+                    $params[] = $morador_id;
+                    $types .= 'i';
+                }
+            }
         }
         if ($busca !== '') {
             // Busca ampla: número, título, morador (nome), unidade do morador,
@@ -1300,6 +1460,11 @@ switch ($acao) {
 
         $where_sql = implode(' AND ', $where);
 
+        if (strlen($types) !== count($params)) {
+            os_log('erro', 'Divergência entre tipos e parâmetros da listagem de O.S.', ['tipos' => strlen($types), 'parametros' => count($params)]);
+            retornar_json(false, 'Não foi possível aplicar os filtros das O.S.');
+        }
+
         // Contar total (LEFT JOIN necessário para busca em assunto)
         $sql_count = "SELECT COUNT(*) as total FROM os_chamados o LEFT JOIN os_assuntos a ON o.assunto_id = a.id AND a.tenant_id = o.tenant_id WHERE $where_sql";
         if (!empty($params)) {
@@ -1326,6 +1491,11 @@ switch ($acao) {
         $params[] = $por_pagina;
         $params[] = $offset;
         $types .= 'ii';
+
+        if (strlen($types) !== count($params)) {
+            os_log('erro', 'Divergência entre tipos e parâmetros da página de O.S.', ['tipos' => strlen($types), 'parametros' => count($params)]);
+            retornar_json(false, 'Não foi possível carregar a página de O.S.');
+        }
 
         $stmt = $conn->prepare($sql);
         $stmt->bind_param($types, ...$params);
@@ -1439,6 +1609,14 @@ switch ($acao) {
         if (empty($titulo)) retornar_json(false, 'Título é obrigatório');
         if (!in_array($prioridade, ['baixa','media','alta','urgente'])) $prioridade = 'media';
         os_exigir_acao_departamento($departamento, 'criar');
+        if ($morador_id) {
+            $morador = os_resolver_morador_tenant($conn, $morador_id);
+            if (!$morador) retornar_json(false, 'Morador não encontrado no condomínio atual');
+            $morador_nome = trim((string)$morador['nome']);
+            $morador_unidade = trim((string)($morador['unidade'] ?? ''));
+        } else {
+            $morador_unidade = trim($morador_unidade);
+        }
         if ($os_pai_id) os_exigir_acesso($os_pai_id, 'OS pai não encontrada');
 
         if (!$os_eh_gestor) {
@@ -1624,6 +1802,23 @@ switch ($acao) {
 
         if (empty($titulo)) retornar_json(false, 'Título é obrigatório');
         os_exigir_acao_departamento($departamento, 'editar');
+        if ($morador_id) {
+            $morador = os_resolver_morador_tenant($conn, $morador_id);
+            if (!$morador) retornar_json(false, 'Morador não encontrado no condomínio atual');
+            $morador_nome = trim((string)$morador['nome']);
+            $morador_anterior_id = (int)($os_anterior['morador_id'] ?? 0);
+            if ($morador_id === $morador_anterior_id) {
+                // Uma edição sem troca de morador não pode reescrever o
+                // snapshot da unidade só porque o cadastro atual mudou.
+                $morador_unidade = array_key_exists('morador_unidade', $os_anterior)
+                    ? $os_anterior['morador_unidade']
+                    : '';
+            } else {
+                $morador_unidade = trim((string)($morador['unidade'] ?? ''));
+            }
+        } else {
+            $morador_unidade = trim($morador_unidade);
+        }
 
         if (!$os_eh_gestor) {
             $atendente_id = !empty($os_anterior['atendente_id']) ? (int)$os_anterior['atendente_id'] : null;

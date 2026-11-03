@@ -8,6 +8,7 @@
 // ─── Configuração ─────────────────────────────────────────────────────
 const API                = window.location.origin + '/api/api_ordens_servico.php';
 const API_MORADORES      = window.location.origin + '/api/api_moradores.php';
+const API_UNIDADES       = window.location.origin + '/api/api_unidades.php';
 const API_RH             = window.location.origin + '/api/api_rh_colaboradores.php';
 const API_ESTOQUE        = window.location.origin + '/api/api_estoque.php';
 const API_USUARIO_LOGADO = window.location.origin + '/api/api_usuario_logado.php';
@@ -16,13 +17,15 @@ const API_USUARIO_LOGADO = window.location.origin + '/api/api_usuario_logado.php
 const state = {
     abaAtiva: 'dashboard',
     paginaAtual: 1,
-    filtros: { status: '', prioridade: '', departamento: '', busca: '', data_ini: '', data_fim: '' },
+    filtros: { status: '', prioridade: '', departamento: '', busca: '', data_ini: '', data_fim: '', unidade: '', morador_id: '' },
     osAtual: null,          // O.S aberta no modal de detalhe
     rhSelecionados: [],     // Colaboradores selecionados no form de nova O.S
     relDados: [],           // Dados do relatório gerado
     relColunas: [],         // Colunas do relatório atual
     relTipo: 'listagem_geral', // Tipo de relatório selecionado
     departamentos: [],      // Cache de departamentos
+    unidadesFiltro: [],     // Unidades ativas disponíveis para filtrar O.S.
+    moradoresFiltroAbort: null,
     assuntos: [],           // Cache de assuntos
     usuarios: [],           // Cache de usuários
     usuarioLogado: null,    // Usuário logado (para auto-preencher atendente)
@@ -220,6 +223,7 @@ function initAbas() {
             const content = document.getElementById('os-tab-' + tab);
             if (content) content.classList.add('active');
             state.abaAtiva = tab;
+            atualizarURLFiltrosOS(tab);
             if (tab === 'dashboard')     carregarDashboard();
             if (tab === 'chamados')      carregarChamados();
             if (tab === 'configuracoes') carregarConfiguracoes();
@@ -294,10 +298,11 @@ async function carregarDashboard() {
         const medals  = ['os-rank-ouro','os-rank-prata','os-rank-bronze'];
         rankEl.innerHTML = rankData.map((u, i) => {
             const pct = Math.round((u.total / maxRank) * 100);
-            return `<div class="os-rank-item">
+            const unidadeHtml = escaparHtml(u.unidade);
+            return `<div class="os-rank-item" role="button" tabindex="0" data-os-unidade="${unidadeHtml}" aria-label="Filtrar chamados da unidade ${unidadeHtml}" title="Filtrar chamados desta unidade">
                 <div class="os-rank-pos ${medals[i] || 'os-rank-comum'}">${i + 1}</div>
                 <div class="os-rank-info">
-                    <div class="os-rank-nome" title="${u.unidade}">${u.unidade}</div>
+                    <div class="os-rank-nome" title="${unidadeHtml}">${unidadeHtml}</div>
                     <div class="os-rank-bar-track">
                         <div class="os-rank-bar-fill ${medals[i] || 'os-rank-comum'}" data-w="${pct}" style="width:0"></div>
                     </div>
@@ -310,6 +315,18 @@ async function carregarDashboard() {
                 <div class="os-rank-total">${u.total}</div>
             </div>`;
         }).join('');
+        const filtrarDoRanking = event => {
+            const linha = event.target.closest('[data-os-unidade]');
+            if (linha) filtrarChamadosPorUnidade(linha.dataset.osUnidade);
+        };
+        rankEl.onclick = filtrarDoRanking;
+        rankEl.onkeydown = event => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            const linha = event.target.closest('[data-os-unidade]');
+            if (!linha) return;
+            event.preventDefault();
+            filtrarChamadosPorUnidade(linha.dataset.osUnidade);
+        };
         requestAnimationFrame(() => requestAnimationFrame(() => {
             rankEl.querySelectorAll('.os-rank-bar-fill').forEach(el => {
                 el.style.width = el.dataset.w + '%';
@@ -340,6 +357,7 @@ async function carregarDashboard() {
 // ─── CHAMADOS ─────────────────────────────────────────────────────────────
 async function carregarChamados(pagina = 1) {
     state.paginaAtual = pagina;
+    atualizarURLFiltrosOS();
     const params = {
         pagina,
         por_pagina: 20,
@@ -349,16 +367,20 @@ async function carregarChamados(pagina = 1) {
         busca:        state.filtros.busca,
         data_ini:     state.filtros.data_ini,
         data_fim:     state.filtros.data_fim,
+        unidade:      state.filtros.unidade,
+        morador_id:   state.filtros.morador_id,
     };
     const res = await _get('listar', params);
     const tbody = document.getElementById('tbody-os');
     if (!res.sucesso) {
+        atualizarResumoUnidade(0, false);
         tbody.innerHTML = `<tr><td colspan="9" class="os-loading-text">Erro: ${res.mensagem}</td></tr>`;
         return;
     }
     const lista = res.dados.lista || [];
+    atualizarResumoUnidade(Number(res.dados.total || 0), true);
     if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="os-loading-text">Nenhuma OS encontrada</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="9" class="os-loading-text">${state.filtros.unidade ? 'Nenhuma O.S. encontrada para os filtros selecionados' : 'Nenhuma OS encontrada'}</td></tr>`;
         document.getElementById('os-paginacao').innerHTML = '';
         return;
     }
@@ -402,6 +424,24 @@ async function carregarChamados(pagina = 1) {
 
     // Paginação
     renderizarPaginacao(res.dados.total, res.dados.por_pagina, pagina);
+}
+
+async function filtrarChamadosPorUnidade(nome) {
+    const unidade = garantirUnidadeFiltroOption(nome);
+    if (!unidade) return;
+    const sel = document.getElementById('filtro-unidade');
+    if (sel) sel.value = unidade;
+    state.filtros.unidade = unidade;
+    state.filtros.morador_id = '';
+    await carregarMoradoresFiltro(unidade);
+    _coletarFiltros();
+    _renderChipsAtivos();
+    const abaChamados = document.querySelector('.os-tab-btn[data-tab="chamados"]');
+    if (abaChamados && !abaChamados.classList.contains('active')) {
+        abaChamados.click();
+    } else {
+        carregarChamados(1);
+    }
 }
 
 function renderizarPaginacao(total, porPagina, atual) {
@@ -469,6 +509,37 @@ function _coletarFiltros() {
     state.filtros.busca        = document.getElementById('filtro-busca')?.value.trim() || '';
     state.filtros.data_ini     = document.getElementById('filtro-data-ini')?.value    || '';
     state.filtros.data_fim     = document.getElementById('filtro-data-fim')?.value    || '';
+    state.filtros.unidade      = document.getElementById('filtro-unidade')?.value     || '';
+    state.filtros.morador_id   = document.getElementById('filtro-morador')?.value     || '';
+}
+
+function atualizarURLFiltrosOS(aba = 'chamados') {
+    const params = new URLSearchParams(window.location.search);
+    params.set('page', 'ordens_servico');
+    params.set('aba', aba);
+    ['status', 'prioridade', 'departamento', 'busca', 'data_ini', 'data_fim', 'unidade', 'morador_id'].forEach(chave => {
+        const valor = String(state.filtros[chave] || '').trim();
+        if (valor) params.set(chave, valor);
+        else params.delete(chave);
+    });
+    const url = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    window.history.replaceState({ ...(window.history.state || {}), page: 'ordens_servico', aba }, '', url);
+}
+
+function atualizarResumoUnidade(total, sucesso) {
+    const el = document.getElementById('os-lista-resumo');
+    if (!el) return;
+    if (!sucesso || !state.filtros.unidade) {
+        el.textContent = '';
+        el.style.display = 'none';
+        return;
+    }
+    const moradorSelect = document.getElementById('filtro-morador');
+    const morador = moradorSelect?.selectedOptions?.[0]?.textContent || '';
+    const unidade = state.filtros.unidade;
+    const recorte = state.filtros.morador_id && morador ? ` para ${morador}` : '';
+    el.textContent = `${total} O.S. da unidade ${unidade}${recorte}`;
+    el.style.display = 'block';
 }
 
 function _renderChipsAtivos() {
@@ -485,16 +556,44 @@ function _renderChipsAtivos() {
     if (state.filtros.busca)        chips.push({ campo: 'busca',        label: '🔍 ' + state.filtros.busca });
     if (state.filtros.data_ini)     chips.push({ campo: 'data_ini',     label: 'De: ' + state.filtros.data_ini.split('-').reverse().join('/') });
     if (state.filtros.data_fim)     chips.push({ campo: 'data_fim',     label: 'Até: ' + state.filtros.data_fim.split('-').reverse().join('/') });
+    if (state.filtros.unidade)      chips.push({ campo: 'unidade',      label: 'Unidade: ' + state.filtros.unidade });
+    if (state.filtros.morador_id) {
+        const morador = document.getElementById('filtro-morador')?.selectedOptions?.[0]?.textContent || 'Morador selecionado';
+        chips.push({ campo: 'morador_id', label: 'Morador: ' + morador });
+    }
 
     if (!chips.length) {
         container.style.display = 'none';
-        container.innerHTML = '';
+        container.replaceChildren();
         return;
     }
     container.style.display = 'flex';
-    container.innerHTML = '<span class="os-chips-label">Filtros ativos:</span>'
-        + chips.map(c => `<span class="os-chip" data-campo="${c.campo}">${c.label} <button onclick="osRemoverChip('${c.campo}')" title="Remover filtro">×</button></span>`).join('')
-        + `<button class="os-chip-limpar-todos" onclick="osLimparFiltros()"><i class="fas fa-times"></i> Limpar todos</button>`;
+    container.replaceChildren();
+    const titulo = document.createElement('span');
+    titulo.className = 'os-chips-label';
+    titulo.textContent = 'Filtros ativos:';
+    container.appendChild(titulo);
+    chips.forEach(chip => {
+        const item = document.createElement('span');
+        item.className = 'os-chip';
+        item.dataset.campo = chip.campo;
+        const texto = document.createElement('span');
+        texto.textContent = chip.label;
+        const remover = document.createElement('button');
+        remover.type = 'button';
+        remover.title = 'Remover filtro';
+        remover.setAttribute('aria-label', `Remover filtro ${chip.label}`);
+        remover.textContent = '×';
+        remover.addEventListener('click', () => window.osRemoverChip(chip.campo));
+        item.append(texto, remover);
+        container.appendChild(item);
+    });
+    const limpar = document.createElement('button');
+    limpar.type = 'button';
+    limpar.className = 'os-chip-limpar-todos';
+    limpar.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i> Limpar todos';
+    limpar.addEventListener('click', window.osLimparFiltros);
+    container.appendChild(limpar);
 }
 
 function initFiltros() {
@@ -550,6 +649,22 @@ function initFiltros() {
         });
     });
 
+    document.getElementById('filtro-unidade')?.addEventListener('change', async event => {
+        const unidade = event.currentTarget.value || '';
+        state.filtros.unidade = unidade;
+        state.filtros.morador_id = '';
+        await carregarMoradoresFiltro(unidade);
+        if (document.getElementById('filtro-unidade')?.value !== unidade) return;
+        _coletarFiltros();
+        _renderChipsAtivos();
+        carregarChamados(1);
+    });
+    document.getElementById('filtro-morador')?.addEventListener('change', () => {
+        _coletarFiltros();
+        _renderChipsAtivos();
+        carregarChamados(1);
+    });
+
     // Datas disparam filtro ao sair do campo
     ['filtro-data-ini', 'filtro-data-fim'].forEach(id => {
         document.getElementById(id)?.addEventListener('change', () => {
@@ -570,9 +685,15 @@ window.osRemoverChip = function(campo) {
         busca:        'filtro-busca',
         data_ini:     'filtro-data-ini',
         data_fim:     'filtro-data-fim',
+        unidade:      'filtro-unidade',
+        morador_id:   'filtro-morador',
     };
     const el = document.getElementById(elMap[campo]);
     if (el) el.value = '';
+    if (campo === 'unidade') {
+        state.filtros.morador_id = '';
+        carregarMoradoresFiltro('');
+    }
     if (campo === 'busca') {
         const btn = document.getElementById('btnLimparBusca');
         if (btn) btn.style.display = 'none';
@@ -582,13 +703,14 @@ window.osRemoverChip = function(campo) {
 };
 
 window.osLimparFiltros = function() {
-    ['filtro-status', 'filtro-prioridade', 'filtro-departamento', 'filtro-busca', 'filtro-data-ini', 'filtro-data-fim'].forEach(id => {
+    ['filtro-status', 'filtro-prioridade', 'filtro-departamento', 'filtro-busca', 'filtro-data-ini', 'filtro-data-fim', 'filtro-unidade'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
+    carregarMoradoresFiltro('');
     const btnLimpar = document.getElementById('btnLimparBusca');
     if (btnLimpar) btnLimpar.style.display = 'none';
-    state.filtros = { status: '', prioridade: '', departamento: '', busca: '', data_ini: '', data_fim: '' };
+    state.filtros = { status: '', prioridade: '', departamento: '', busca: '', data_ini: '', data_fim: '', unidade: '', morador_id: '' };
     _renderChipsAtivos();
     carregarChamados(1);
 };
@@ -1548,6 +1670,186 @@ function preencherSelect(id, lista, valKey, labelKey, placeholder) {
     if (atual) sel.value = atual;
 }
 
+function preencherSelectFiltro(sel, placeholder, itens = [], obterValor = item => item.id, obterRotulo = item => item.nome) {
+    if (!sel) return;
+    sel.replaceChildren();
+    const opcaoInicial = document.createElement('option');
+    opcaoInicial.value = '';
+    opcaoInicial.textContent = placeholder;
+    sel.appendChild(opcaoInicial);
+    itens.forEach(item => {
+        const opcao = document.createElement('option');
+        opcao.value = String(obterValor(item) ?? '');
+        opcao.textContent = String(obterRotulo(item) ?? '');
+        sel.appendChild(opcao);
+    });
+}
+
+function garantirUnidadeFiltroOption(nome) {
+    const sel = document.getElementById('filtro-unidade');
+    const unidade = String(nome || '').trim();
+    if (!unidade) return '';
+    const existe = sel && Array.from(sel.options).find(opcao =>
+        opcao.value.toLocaleUpperCase('pt-BR') === unidade.toLocaleUpperCase('pt-BR'));
+    if (existe) return existe.value;
+    if (sel) {
+        const opcao = document.createElement('option');
+        opcao.value = unidade;
+        opcao.textContent = unidade;
+        sel.appendChild(opcao);
+    }
+    return unidade;
+}
+
+async function carregarUnidadesFiltro() {
+    const sel = document.getElementById('filtro-unidade');
+    if (!sel) return false;
+    try {
+        const [resposta, resumo] = await Promise.all([
+            fetch(`${API_UNIDADES}?acao=select`, { credentials: 'include' }),
+            _get('unidades_com_os'),
+        ]);
+        const json = await resposta.json();
+        if (!resposta.ok || !json.sucesso || !Array.isArray(json.dados)) {
+            throw new Error(json.mensagem || `HTTP ${resposta.status}`);
+        }
+        state.unidadesFiltro = json.dados;
+        const contagens = new Map();
+        if (resumo.sucesso && Array.isArray(resumo.dados)) {
+            resumo.dados.forEach(item => contagens.set(String(item.unidade).trim().toLocaleUpperCase('pt-BR'), Number(item.total) || 0));
+        }
+        preencherSelectFiltro(sel, 'Todas', state.unidadesFiltro,
+            unidade => unidade.nome,
+            unidade => {
+                const nome = String(unidade.nome ?? '');
+                const total = contagens.get(nome.trim().toLocaleUpperCase('pt-BR')) || 0;
+                return total ? `${nome} (${total} O.S.)` : nome;
+            });
+        return true;
+    } catch (erro) {
+        log('Falha ao carregar unidades para o filtro de O.S.', erro);
+        preencherSelectFiltro(sel, 'Unidades indisponíveis');
+        sel.disabled = true;
+        return false;
+    }
+}
+
+async function carregarMoradoresFiltro(unidade, moradorSelecionado = '') {
+    const sel = document.getElementById('filtro-morador');
+    if (!sel) return false;
+    state.moradoresFiltroAbort?.abort();
+    state.moradoresFiltroAbort = null;
+    if (!unidade) {
+        preencherSelectFiltro(sel, 'Selecione a unidade');
+        sel.disabled = true;
+        return true;
+    }
+
+    const controller = new AbortController();
+    state.moradoresFiltroAbort = controller;
+    preencherSelectFiltro(sel, 'Carregando moradores…');
+    sel.disabled = true;
+    try {
+        const query = new URLSearchParams({ acao: 'select_por_unidade', unidade });
+        const resposta = await fetch(`${API_MORADORES}?${query.toString()}`, {
+            credentials: 'include',
+            signal: controller.signal,
+        });
+        const json = await resposta.json();
+        if (state.moradoresFiltroAbort !== controller) return false;
+        if (!resposta.ok || !json.sucesso) {
+            const erroResposta = new Error(json.mensagem || `HTTP ${resposta.status}`);
+            erroResposta.status = resposta.status;
+            throw erroResposta;
+        }
+        const moradores = Array.isArray(json.dados) ? json.dados.slice() : [];
+        const moradorSelecionadoExiste = moradorSelecionado && moradores.some(m => String(m.id) === String(moradorSelecionado));
+        if (moradorSelecionado && !moradorSelecionadoExiste) {
+            moradores.push({ id: moradorSelecionado, nome: 'Morador não vinculado a esta unidade' });
+        }
+        if (!moradores.length) {
+            preencherSelectFiltro(sel, 'Nenhum morador ativo — todas as O.S. da unidade');
+            sel.disabled = true;
+            return true;
+        }
+        preencherSelectFiltro(sel, 'Todos os moradores da unidade', moradores,
+            morador => morador.id, morador => morador.nome);
+        sel.disabled = false;
+        if (moradorSelecionado) {
+            sel.value = String(moradorSelecionado);
+        }
+        return true;
+    } catch (erro) {
+        if (erro.name === 'AbortError') return false;
+        log('Falha ao carregar moradores do filtro de O.S.', { unidade, erro });
+        const semPermissao = Number(erro.status) === 403;
+        const itens = moradorSelecionado && !semPermissao
+            ? [{ id: moradorSelecionado, nome: 'Morador filtrado (cadastro não disponível)' }]
+            : [];
+        preencherSelectFiltro(sel, semPermissao ? 'Moradores sem permissão' : 'Moradores indisponíveis', itens,
+            morador => morador.id, morador => morador.nome);
+        if (semPermissao) {
+            state.filtros.morador_id = '';
+            sel.value = '';
+        } else if (moradorSelecionado) {
+            sel.value = String(moradorSelecionado);
+        }
+        sel.disabled = true;
+        return false;
+    } finally {
+        if (state.moradoresFiltroAbort === controller) state.moradoresFiltroAbort = null;
+    }
+}
+
+async function restaurarFiltrosURL() {
+    const params = new URLSearchParams(window.location.search);
+    const ids = {
+        status: 'filtro-status',
+        prioridade: 'filtro-prioridade',
+        departamento: 'filtro-departamento',
+        busca: 'filtro-busca',
+        data_ini: 'filtro-data-ini',
+        data_fim: 'filtro-data-fim',
+    };
+    Object.entries(ids).forEach(([chave, id]) => {
+        const el = document.getElementById(id);
+        const valor = params.get(chave) || '';
+        if (el && Array.from(el.options || []).some(opcao => opcao.value === valor)) el.value = valor;
+        else if (el && el.tagName === 'INPUT') el.value = valor;
+    });
+    const btnLimparBusca = document.getElementById('btnLimparBusca');
+    const inputBusca = document.getElementById('filtro-busca');
+    if (btnLimparBusca && inputBusca) btnLimparBusca.style.display = inputBusca.value ? 'flex' : 'none';
+
+    const unidadeInformada = (params.get('unidade') || '').trim();
+    const moradorIdInformado = (params.get('morador_id') || '').trim();
+    const moradorIdNumero = Number(moradorIdInformado);
+    const moradorId = Number.isSafeInteger(moradorIdNumero) && moradorIdNumero > 0 && moradorIdNumero <= 2147483647
+        ? String(moradorIdNumero)
+        : '';
+    const unidadeSelect = document.getElementById('filtro-unidade');
+    if (unidadeInformada && unidadeSelect) {
+        const unidade = garantirUnidadeFiltroOption(unidadeInformada);
+        unidadeSelect.value = unidade;
+        await carregarMoradoresFiltro(unidade, moradorId);
+    } else if (unidadeSelect) {
+        unidadeSelect.value = '';
+        await carregarMoradoresFiltro('');
+    }
+
+    _coletarFiltros();
+    if (!state.filtros.unidade) state.filtros.morador_id = '';
+    _renderChipsAtivos();
+    const abaURL = params.get('aba') || '';
+    if ((moradorIdInformado && !moradorId) || (moradorId && !state.filtros.morador_id)) {
+        atualizarURLFiltrosOS(['dashboard', 'chamados', 'configuracoes', 'relatorios'].includes(abaURL) ? abaURL : 'chamados');
+    }
+    return {
+        aba: ['dashboard', 'chamados', 'configuracoes', 'relatorios'].includes(abaURL) ? abaURL : '',
+        possuiFiltro: Object.values(state.filtros).some(Boolean),
+    };
+}
+
 // ─── CONFIGURAÇÕES ────────────────────────────────────────────────────────
 async function carregarConfiguracoes() {
     carregarAssuntos();
@@ -2472,18 +2774,25 @@ function init_modulo() {
             log('Erro ao buscar usuário logado', e);
             aplicarPoliticaInterfaceOS();
         })
-        .finally(() => {
-            carregarSelects().then(() => {
+        .finally(async () => {
+            await carregarSelects();
+            await carregarUnidadesFiltro();
+            const filtrosURL = await restaurarFiltrosURL();
                 // Após carregar selects, auto-preencher o atendente no select
-                if (state.usuarioLogado) {
-                    const sel = document.getElementById('os-atendente');
-                    if (sel) {
-                        const opt = Array.from(sel.options).find(o => o.value == state.usuarioLogado.id);
-                        if (opt) sel.value = opt.value;
-                    }
+            if (state.usuarioLogado) {
+                const sel = document.getElementById('os-atendente');
+                if (sel) {
+                    const opt = Array.from(sel.options).find(o => o.value == state.usuarioLogado.id);
+                    if (opt) sel.value = opt.value;
                 }
-                carregarDashboard();
-            });
+            }
+            let abaInicial = filtrosURL.aba || (filtrosURL.possuiFiltro ? 'chamados' : 'dashboard');
+            if (abaInicial === 'configuracoes' && !usuarioEhGestorOS()) {
+                abaInicial = filtrosURL.possuiFiltro ? 'chamados' : 'dashboard';
+            }
+            const abaBtn = document.querySelector(`.os-tab-btn[data-tab="${abaInicial}"]`);
+            if (abaBtn) abaBtn.click();
+            else carregarDashboard();
         });
 
     log('Módulo Ordens de Serviço inicializado');
@@ -2496,6 +2805,10 @@ init_modulo();
 }
 export function destroy() {
 log('Destruindo módulo Ordens de Serviço');
+if (state.moradoresFiltroAbort) {
+    state.moradoresFiltroAbort.abort();
+    state.moradoresFiltroAbort = null;
+}
 // Remover globals expostos
 ['osPaginar','osVerDetalhe','osAbrirEditar','osExcluir','osRemoverMaterial',
  'osRemoverRH','osEditarAssunto','osExcluirAssunto','osEditarConfigHH','osExcluirConfigHH',

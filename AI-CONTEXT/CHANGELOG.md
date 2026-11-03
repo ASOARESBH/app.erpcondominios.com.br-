@@ -2,6 +2,14 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.11] - 2026-11-03
+### Implementado — web/backend
+- **Ordens de Serviço**: adicionados filtros exatos de Unidade e Morador encadeados, chip de unidade/contagem, querystring restaurável ao atualizar/compartilhar e atalho clicável/acessível pelo ranking. A listagem continua cumulativa com tenant, RBAC, departamentos e Restritividade O.S.; sem permissão `moradores.visualizar`, apenas o seletor de morador fica indisponível.
+- A API usa prepared statements para filtrar pela unidade snapshot da O.S. e só consulta `moradores.unidade` no fallback de registros legados sem unidade persistida. Criar/editar resolve nome/unidade pelo `morador_id` e tenant autenticado; ao editar o mesmo morador preserva o snapshot antigo, e só grava outra unidade em troca explícita do vínculo. O fluxo do Portal do Morador não foi modificado.
+- **Moradores**: a listagem GET e sua contagem aplicam obrigatoriamente `tenant_id` da sessão antes dos filtros opcionais, fechando uma consulta que podia retornar registros de outros tenants.
+- O filtro de O.S. usa `GET api/api_moradores.php?acao=select_por_unidade`, que retorna apenas ID/nome de moradores ativos e mantém o RBAC `moradores.visualizar` já exigido pelo endpoint.
+- Adicionada migration MySQL/MariaDB 5.7 idempotente para `idx_os_tenant_unidade` e script somente leitura `sql/diagnostico_os_unidade_divergente.sql`; a migration não foi aplicada em produção.
+
 ## [2.1.10] - 2026-11-03
 ### Corrigido
 - **Ordens de Serviço**: o formulário operacional passa a usar a identidade do usuário autenticado como atendente, sem depender da API global de usuários. Gestores recebem uma lista mínima de atendentes ativos do próprio tenant; o backend valida o tenant e impede atribuições novas a usuários inativos ou de outra empresa.

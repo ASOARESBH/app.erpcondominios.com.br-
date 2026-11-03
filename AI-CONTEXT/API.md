@@ -104,6 +104,10 @@ As páginas de Manutenção (`hidrometro`, `leitura`, `relatorios_hidrometro`, `
 
 Sem restritividade, o usuário pode consultar as próprias O.S., as atribuídas/assumidas por ele e as dos departamentos marcados. O atendente comum é identificado pela sessão; ao criar uma O.S., o backend atribui o próprio usuário e, ao editar, preserva o responsável existente. A API também valida a ação do departamento na criação, edição, exclusão, interação, finalização, materiais, projetos, documentos e impressão; autoria, atribuição ou assunção não concedem escrita por si sós, e esconder botões no frontend não é considerado autorização. A ausência de configuração mantém a compatibilidade do legado, sem abrir dados entre tenants.
 
+`GET api/api_ordens_servico.php?acao=listar` aceita `unidade` (igualdade exata normalizada com `UPPER(TRIM())`, nunca busca parcial) e `morador_id` opcional, além dos filtros existentes. A unidade é acrescentada ao tenant e ao escopo RBAC/por departamento já aplicado; quando também há morador, ele precisa pertencer ao mesmo tenant/unidade, e uma combinação inválida retorna lista vazia. O filtro considera a unidade copiada na O.S.; somente em registros legados sem unidade gravada usa `moradores.unidade` dentro do mesmo tenant. O parâmetro `morador_id` sem `unidade` é rejeitado e seu uso também exige `moradores.visualizar` no servidor. `GET ...?acao=unidades_com_os` retorna contagens agrupadas somente pelas O.S. visíveis ao usuário; o seletor de unidades usa `api/api_unidades.php?acao=select`, e o seletor dependente usa `GET api/api_moradores.php?acao=select_por_unidade&unidade=...`, que retorna somente `id` e `nome` de moradores ativos da unidade e do tenant da sessão, sob `moradores.visualizar`. Sem essa permissão, o seletor de morador fica indisponível; a URL não mantém `morador_id` e continua aplicando apenas os demais filtros, sem abrir acesso adicional a O.S.
+
+Ao criar ou editar uma O.S. com `morador_id`, o backend resolve `nome` e `unidade` diretamente de `moradores` pelo ID e `tenant_id` da sessão; os valores correspondentes enviados pelo navegador são ignorados. Na edição, se o `morador_id` permanecer igual, `morador_unidade` mantém o snapshot original mesmo que o cadastro atual tenha mudado; uma troca explícita de morador grava o snapshot do novo vínculo. Não há reescrita automática em massa de O.S. antigas. A API do Portal do Morador e o lançamento de O.S. pelo Portal não são alterados por esse filtro.
+
 ## 10.2 Projetos — URL pública personalizada por tenant
 
 Projetos continuam sendo O.S. marcadas com `os_chamados.projeto_publico=1`; não existe um cadastro paralelo. A aba Empresa usa `api/api_empresa.php` com `action=validar_projetos_slug` (GET) e `action=salvar_projetos_slug` (POST) para validar e gravar `tenants.projetos_slug` no tenant da sessão. O identificador é normalizado para letras minúsculas, números e hífens, precisa ser único entre tenants e pode ser removido para retornar à rota legada.
@@ -114,6 +118,11 @@ As rotas públicas `/projetos/{slug}` e `/projetos/{slug}/{id}` encaminham o slu
 
 `api/api_moradores.php` e `api/api_dependentes.php` usam a chave RBAC `moradores`: `GET`
 exige `visualizar`, `POST` exige `criar`, `PUT` exige `editar` e `DELETE` exige `excluir`.
+Na listagem de `api/api_moradores.php`, tanto o `COUNT` quanto os itens são sempre
+limitados a `tenant_id` obtido da sessão, mesmo quando a busca não informa filtros.
+`GET api/api_moradores.php?acao=select_por_unidade&unidade=...` é uma consulta compacta
+para selects: retorna somente `id` e `nome` de moradores ativos daquela unidade e tenant,
+usando a mesma exigência `moradores.visualizar`.
 Dependentes são um subrecurso do módulo Moradores e não possuem uma permissão paralela.
 
 `api/api_moradores_anexos.php` aplica `visualizar` para listar/consultar/download,

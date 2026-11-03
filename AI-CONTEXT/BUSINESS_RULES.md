@@ -26,6 +26,16 @@
   mas não concede escrita: alterações continuam sujeitas ao RBAC e às permissões de ação
   por departamento. A validação vale também para dashboard, relatórios, interações,
   materiais, projetos, documentos, impressão e imagens.
+- Na aba Chamados da listagem interna, `Unidade` é um filtro exato e cumulativo com os demais filtros e com
+  todo o escopo de tenant/RBAC/departamento. O seletor opcional de Morador depende da Unidade
+  e da permissão existente `moradores.visualizar`; selecionar unidade não concede leitura
+  nem escrita adicionais e nunca permite editar O.S. fora das ações de departamento. O
+  ranking usa os mesmos dados já visíveis ao usuário e funciona como atalho para esse filtro.
+- A unidade persistida em uma O.S. é o snapshot associado ao morador quando o chamado foi
+  aberto. O filtro preserva esse vínculo histórico; para registros legados sem unidade
+  persistida, consulta a unidade atual do morador no mesmo tenant. A divergência entre
+  snapshot e cadastro atual pode ser investigada por `sql/diagnostico_os_unidade_divergente.sql`,
+  que é somente leitura e não altera registros.
 
 ## 5. Documentos (GED)
 - Documentos podem ter visibilidade: `todos`, `moradores`, `usuarios` ou `unidades_especificas`.

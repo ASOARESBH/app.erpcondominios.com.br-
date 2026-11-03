@@ -61,8 +61,14 @@ aceitam `tenant_id` vindo do navegador.
 A tabela central `departamentos` deve possuir `tenant_id` e a chave única
 `(tenant_id, nome)`. A API corrige a chave histórica global `uk_nome` antes de listar ou
 salvar a matriz, permitindo que condomínios diferentes usem departamentos com o mesmo
-nome. O escopo aplicado às consultas de `os_chamados` combina autoria própria com
-departamentos autorizados; a restritividade reduz o conjunto à autoria.
+nome. O escopo aplicado às consultas de `os_chamados` combina autoria própria, atribuição
+como atendente e assunção no Portal com os departamentos autorizados; a restritividade
+reduz o conjunto a esses vínculos pessoais. A unidade `morador_unidade` é o snapshot da O.S.
+e o índice composto `idx_os_tenant_unidade (tenant_id, morador_unidade)` atende à listagem
+por unidade. A migration idempotente MySQL/MariaDB 5.7 é
+`sql/migration_os_indice_unidade_mysql57.sql`; a API também garante o índice no bootstrap.
+O diagnóstico de divergências com a unidade atual do morador fica em
+`sql/diagnostico_os_unidade_divergente.sql` e é somente leitura.
 
 ## 9. URL pública de Projetos
 

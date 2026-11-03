@@ -325,6 +325,12 @@
     gap: 5px;
     min-width: 140px;
 }
+.page-ordens-servico .os-lista-resumo {
+    margin: -0.5rem 0 1rem;
+    color: var(--os-gray);
+    font-size: .84rem;
+    font-weight: 600;
+}
 .page-ordens-servico .os-filtro-group.os-filtro-busca { flex: 1; min-width: 200px; }
 .page-ordens-servico .os-filtro-group label {
     font-size: 0.78rem;
@@ -1020,8 +1026,13 @@
     display: flex; align-items: center; gap: 12px;
     padding: 10px 0;
     border-bottom: 1px solid var(--os-border);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background .15s, padding .15s;
 }
 .page-ordens-servico .os-rank-item:last-child { border-bottom: none; }
+.page-ordens-servico .os-rank-item:hover { background: var(--os-bg); padding-left: 6px; }
+.page-ordens-servico .os-rank-item:focus-visible { outline: 2px solid var(--os-primary); outline-offset: 2px; }
 
 .page-ordens-servico .os-rank-pos {
     width: 28px; height: 28px; flex-shrink: 0;
@@ -1645,6 +1656,50 @@
 @media (max-width: 768px) {
     .page-ordens-servico .os-filtro-group.os-filtro-data { min-width: 100%; max-width: 100%; }
     .page-ordens-servico .os-filtros-acoes { flex-direction: row; }
+}
+@media (min-width: 1200px) and (max-width: 1366px) {
+    .page-ordens-servico .os-filtros {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        align-items: end;
+    }
+    .page-ordens-servico .os-filtro-group { min-width: 0; }
+    .page-ordens-servico .os-filtro-group.os-filtro-busca {
+        grid-column: span 2;
+        min-width: 0;
+    }
+    .page-ordens-servico .os-filtro-group select,
+    .page-ordens-servico .os-filtro-group input { width: 100%; }
+    .page-ordens-servico .os-filtros-acoes {
+        flex-direction: row;
+        align-self: end;
+    }
+}
+@media (min-width: 769px) and (max-width: 1199px) {
+    .page-ordens-servico .os-filtros {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: end;
+    }
+    .page-ordens-servico .os-filtro-group { min-width: 0; }
+    .page-ordens-servico .os-filtro-group.os-filtro-busca {
+        grid-column: span 2;
+        min-width: 0;
+    }
+    .page-ordens-servico .os-filtro-group select,
+    .page-ordens-servico .os-filtro-group input { width: 100%; }
+    .page-ordens-servico .os-filtros-acoes {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        justify-content: flex-end;
+    }
+}
+@media (max-width: 768px) {
+    .page-ordens-servico .os-filtros { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .page-ordens-servico .os-filtro-group { min-width: 0; }
+    .page-ordens-servico .os-filtro-group select,
+    .page-ordens-servico .os-filtro-group input { width: 100%; }
+    .page-ordens-servico .os-filtros-acoes { justify-content: flex-start; }
 }
 
 /* ── Matriz de acesso de O.S. ─────────────────────────────────────────── */

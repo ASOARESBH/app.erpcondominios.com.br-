@@ -138,6 +138,39 @@ $tenant_id = exigirTenantId();
     
     // ========== LISTAR MORADORES ==========
     if ($metodo === 'GET') {
+        $acao_get_raw = $_GET['acao'] ?? 'listar';
+        if (!is_scalar($acao_get_raw)) retornar_json(false, 'Ação inválida');
+        $acao_get = trim((string)$acao_get_raw);
+        if ($acao_get === 'select_por_unidade') {
+            $unidade_raw = $_GET['unidade'] ?? '';
+            if (!is_scalar($unidade_raw)) retornar_json(false, 'Unidade inválida');
+            $unidade = trim((string)$unidade_raw);
+            if (strlen($unidade) > 200) retornar_json(false, 'Informe uma unidade válida');
+            $unidade_tamanho = preg_match_all('/./us', $unidade, $unidade_caracteres);
+            if ($unidade === '' || $unidade_tamanho === false || $unidade_tamanho > 50) {
+                retornar_json(false, 'Informe uma unidade válida');
+            }
+
+            $stmt_select = $conexao->prepare(
+                'SELECT id, nome FROM moradores
+                 WHERE tenant_id = ? AND UPPER(TRIM(unidade)) = UPPER(TRIM(?)) AND ativo = 1
+                 ORDER BY nome ASC, id ASC'
+            );
+            if (!$stmt_select) throw new Exception('Não foi possível preparar a lista de moradores da unidade');
+            $stmt_select->bind_param('is', $tenant_id, $unidade);
+            if (!$stmt_select->execute()) {
+                $stmt_select->close();
+                throw new Exception('Não foi possível carregar moradores da unidade');
+            }
+            $resultado_select = $stmt_select->get_result();
+            $itens_select = array();
+            while ($row = $resultado_select->fetch_assoc()) {
+                $itens_select[] = array('id' => (int)$row['id'], 'nome' => (string)$row['nome']);
+            }
+            $stmt_select->close();
+            retornar_json(true, 'Moradores da unidade listados', $itens_select);
+        }
+
         // Obter filtros de busca
         $filtro_unidade = isset($_GET['unidade']) ? trim($_GET['unidade']) : '';
         $filtro_nome    = isset($_GET['nome'])    ? trim($_GET['nome'])    : '';
@@ -170,9 +203,11 @@ $tenant_id = exigirTenantId();
         }
 
         // ── Montar cláusula WHERE ──────────────────────────────────────
-        $where       = "WHERE 1=1";
-        $tipos_param = "";
-        $params      = array();
+        // O tenant é obrigatório e vem da sessão; filtros do navegador só
+        // podem restringir ainda mais a listagem, nunca trocar o tenant.
+        $where       = "WHERE tenant_id = ?";
+        $tipos_param = "i";
+        $params      = array((int)$tenant_id);
 
         if ($filtro_unidade) {
             $where .= " AND unidade = ?";

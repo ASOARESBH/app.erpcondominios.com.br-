@@ -195,11 +195,19 @@
                 <label>Até</label>
                 <input type="date" id="filtro-data-fim" title="Data de abertura final">
             </div>
+            <div class="os-filtro-group">
+                <label for="filtro-unidade">Unidade</label>
+                <select id="filtro-unidade"><option value="">Todas</option></select>
+            </div>
+            <div class="os-filtro-group">
+                <label for="filtro-morador">Morador</label>
+                <select id="filtro-morador" disabled><option value="">Selecione a unidade</option></select>
+            </div>
             <div class="os-filtro-group os-filtro-busca">
-                <label>Buscar <span class="os-filtro-hint">número · título · morador · unidade · atendente · descrição</span></label>
+                <label for="filtro-busca">Buscar <span class="os-filtro-hint">número · título · morador · atendente · descrição</span></label>
                 <div class="os-busca-wrapper">
                     <i class="fas fa-search os-busca-icon"></i>
-                    <input type="text" id="filtro-busca" placeholder="Ex: Gleba 93, João Silva, elétrica, #O.S-2026-0037..." autocomplete="off">
+                    <input type="text" id="filtro-busca" placeholder="Para unidade exata, use o filtro Unidade" autocomplete="off">
                     <button class="os-busca-limpar" id="btnLimparBusca" title="Limpar busca" style="display:none">×</button>
                 </div>
             </div>
@@ -214,6 +222,7 @@
         </div>
         <!-- Chips de filtros ativos -->
         <div class="os-chips-ativos" id="osChipsAtivos" style="display:none"></div>
+        <div class="os-lista-resumo" id="os-lista-resumo" style="display:none" aria-live="polite"></div>
 
         <!-- Tabela de OS -->
         <div class="os-table-wrapper">
