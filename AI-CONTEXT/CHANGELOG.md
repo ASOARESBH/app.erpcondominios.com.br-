@@ -2,6 +2,11 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.10] - 2026-11-03
+### Corrigido
+- **Ordens de Serviço**: o formulário operacional passa a usar a identidade do usuário autenticado como atendente, sem depender da API global de usuários. Gestores recebem uma lista mínima de atendentes ativos do próprio tenant; o backend valida o tenant e impede atribuições novas a usuários inativos ou de outra empresa.
+- O usuário comum não consegue reatribuir O.S. ao editar; o responsável anterior é preservado. A Restritividade O.S. inclui ordens criadas, atribuídas ou assumidas pelo usuário, respeitando o tenant e o esquema antigo sem a coluna opcional `assumido_por_id`. O vínculo pessoal não concede escrita sem as permissões aplicáveis.
+
 ## [2.1.9] - 2026-11-03
 ### Corrigido
 - **Moradores e Alertas da Unidade**: a leitura das regras de campos agora exige `moradores.visualizar`, enquanto alterações continuam exigindo `sistema.configurar`. O painel Alertas usa as permissões específicas retornadas pelo backend, oculta ações de escrita para visualizadores e não mantém o detalhe aberto quando a API não retorna um alerta válido. A avaliação operacional dos alertas continua no lançamento manual de entrada.

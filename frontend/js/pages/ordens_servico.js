@@ -8,7 +8,6 @@
 // ─── Configuração ─────────────────────────────────────────────────────
 const API                = window.location.origin + '/api/api_ordens_servico.php';
 const API_MORADORES      = window.location.origin + '/api/api_moradores.php';
-const API_USUARIOS       = window.location.origin + '/api/api_usuarios.php';
 const API_RH             = window.location.origin + '/api/api_rh_colaboradores.php';
 const API_ESTOQUE        = window.location.origin + '/api/api_estoque.php';
 const API_USUARIO_LOGADO = window.location.origin + '/api/api_usuario_logado.php';
@@ -595,18 +594,21 @@ window.osLimparFiltros = function() {
 };
 
 // ─── MODAL: NOVA / EDITAR OS ──────────────────────────────────────────────
+function selecionarAtendenteOS(id, nome, bloqueado = false) {
+    const sel = document.getElementById('os-atendente');
+    if (!sel) return;
+    if (id && !Array.from(sel.options).some(opt => Number(opt.value) === Number(id))) {
+        sel.add(new Option(nome || 'Atendente vinculado à O.S.', String(id)));
+    }
+    sel.value = id ? String(id) : '';
+    sel.disabled = bloqueado;
+}
+
 function abrirModalNova() {
     limparFormOS();
     document.getElementById('modal-os-titulo').innerHTML = '<i class="fas fa-plus-circle"></i> Nova Ordem de Serviço';
     document.getElementById('row-numero').style.display = 'none';
-    // Auto-preencher atendente com o usuário logado
-    if (state.usuarioLogado) {
-        const sel = document.getElementById('os-atendente');
-        if (sel) {
-            const opt = Array.from(sel.options).find(o => o.value == state.usuarioLogado.id);
-            if (opt) sel.value = opt.value;
-        }
-    }
+    selecionarAtendenteOS(state.usuarioLogado?.id, state.usuarioLogado?.nome, !usuarioEhGestorOS());
     document.getElementById('modal-os').style.display = 'flex';
 }
 
@@ -615,7 +617,7 @@ async function abrirEditar(id) {
     if (!res.sucesso) { toast('Erro ao carregar OS', 'erro'); return; }
     const os = res.dados;
     if (!usuarioPodeEditarOS(os)) {
-        toast('Você só pode editar Ordens de Serviço abertas por você', 'erro');
+        toast('Você não possui permissão para editar esta O.S.', 'erro');
         return;
     }
     limparFormOS();
@@ -629,7 +631,7 @@ async function abrirEditar(id) {
     document.getElementById('os-departamento').value = os.departamento || '';
     document.getElementById('os-horas-estimadas').value = os.horas_estimadas || '';
     document.getElementById('os-data-previsao').value = os.data_previsao || '';
-    document.getElementById('os-atendente').value = os.atendente_id || '';
+    selecionarAtendenteOS(os.atendente_id, os.atendente_nome, !usuarioEhGestorOS());
     document.getElementById('os-descricao').innerHTML = os.descricao || '';
     document.getElementById('os-projeto-publico').checked = !!(os.projeto_publico && Number(os.projeto_publico) === 1);
     _atualizarCamposProjetoOS(os.projeto_etapa_id, os.projeto_percentual);
@@ -661,6 +663,7 @@ function limparFormOS() {
     document.getElementById('os-horas-estimadas').value = '';
     document.getElementById('os-data-previsao').value = '';
     document.getElementById('os-atendente').value = '';
+    document.getElementById('os-atendente').disabled = false;
     document.getElementById('os-descricao').innerHTML = '';
     document.getElementById('os-morador-id').value = '';
     document.getElementById('os-morador-nome').value = '';
@@ -1510,14 +1513,30 @@ async function carregarSelects() {
         preencherSelect('assunto-departamento', opts, 'id', 'nome', '— Todos —');
     } catch (e) { log('Erro ao carregar departamentos', e); }
 
-    // Usuários (atendentes)
-    try {
-        const resU = await fetch(`${API_USUARIOS}`, { credentials: 'include' });
-        const jsonU = await resU.json();
-        state.usuarios = jsonU.dados || [];
-        preencherSelect('os-atendente', state.usuarios, 'id', 'nome', '— Selecione —');
-        preencherSelect('os-permissao-usuario', state.usuarios, 'id', 'nome', '— Selecione um usuário —');
-    } catch (e) { log('Erro ao carregar usuários', e); }
+    const usuarioAtual = state.usuarioLogado && Number(state.usuarioLogado.id) > 0
+        ? [{ id: Number(state.usuarioLogado.id), nome: state.usuarioLogado.nome || 'Usuário logado' }]
+        : [];
+    state.usuarios = usuarioAtual;
+    preencherSelect('os-atendente', usuarioAtual, 'id', 'nome', '— Selecione —');
+    preencherSelect('os-permissao-usuario', [], 'id', 'nome', '— Selecione um usuário —');
+
+    // A lista do tenant só é necessária na configuração administrativa da O.S.
+    // O atendente comum usa a própria identidade da sessão, sem consultar api_usuarios.
+    if (usuarioEhGestorOS()) {
+        const resU = await _get('listar_atendentes');
+        if (resU.sucesso) {
+            const porId = new Map(usuarioAtual.map(u => [Number(u.id), u]));
+            (resU.dados || []).forEach(u => porId.set(Number(u.id), u));
+            state.usuarios = Array.from(porId.values());
+            preencherSelect('os-atendente', state.usuarios, 'id', 'nome', '— Selecione —');
+            preencherSelect('os-permissao-usuario', state.usuarios, 'id', 'nome', '— Selecione um usuário —');
+        } else {
+            log('Não foi possível carregar a lista administrativa de atendentes', resU.mensagem);
+        }
+    }
+
+    const atendente = document.getElementById('os-atendente');
+    if (atendente && usuarioAtual.length && !atendente.value) atendente.value = String(usuarioAtual[0].id);
 }
 
 function preencherSelect(id, lista, valKey, labelKey, placeholder) {

@@ -21,8 +21,11 @@
 - O solicitante (morador) recebe notificação push ao abrir e ao finalizar a O.S.
 - O acesso às O.S. pode ser configurado por usuário e departamento, separando `Visualizar`,
   `Criar`, `Editar` e `Excluir`. A restritividade, quando marcada, permite ao usuário
-  consultar somente as O.S. abertas por ele; a validação vale também para dashboard,
-  relatórios, interações, materiais, projetos, documentos, impressão e imagens.
+  consultar as O.S. abertas por ele, atribuídas a ele como atendente ou assumidas por ele
+  no Portal, quando esse vínculo existir no esquema. O vínculo pessoal permite leitura,
+  mas não concede escrita: alterações continuam sujeitas ao RBAC e às permissões de ação
+  por departamento. A validação vale também para dashboard, relatórios, interações,
+  materiais, projetos, documentos, impressão e imagens.
 
 ## 5. Documentos (GED)
 - Documentos podem ter visibilidade: `todos`, `moradores`, `usuarios` ou `unidades_especificas`.

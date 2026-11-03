@@ -25,6 +25,7 @@
 //   adicionar_material  — adiciona material a uma OS
 //   remover_material    — remove material de uma OS
 //   baixar_estoque_os   — abate estoque ao finalizar OS
+//   listar_atendentes   — lista usuários ativos do tenant (gestores)
 // =====================================================
 
 // ─── Handler de erro fatal ───────────────────────────
@@ -238,8 +239,8 @@ $tenant_id = exigirTenantId();
 // ─── Escopo de acesso às O.S. ─────────────────────────
 // Gestores sem matriz específica preservam o acesso legado ao tenant. Quando
 // existe uma matriz, a consulta combina autoria própria com departamentos
-// liberados; a Restritividade O.S. reduz a consulta à autoria. O filtro é
-// sempre aplicado no servidor; o frontend apenas reflete esta regra.
+// liberados; a Restritividade O.S. reduz a consulta às O.S. próprias ou
+// atribuídas/assumidas pelo usuário. O filtro é sempre aplicado no servidor.
 $os_usuario_atual = obterUsuarioAutenticado();
 $os_usuario_id = (int)($os_usuario_atual['id'] ?? 0);
 $os_permissao_atual = strtolower(trim((string)($os_usuario_atual['permissao'] ?? $_SESSION['usuario_permissao'] ?? 'operador')));
@@ -298,12 +299,26 @@ function os_carregar_politica_usuario(mysqli $conn): void {
     $os_pode_ver_todas = $os_eh_gestor && !$os_restritivo && !$os_politica_departamentos_ativa;
 }
 
+function os_tem_coluna_assumido(mysqli $conn): bool {
+    static $disponivel = null;
+    if ($disponivel !== null) return $disponivel;
+    $res = @$conn->query("SHOW COLUMNS FROM `os_chamados` LIKE 'assumido_por_id'");
+    $disponivel = $res && $res->num_rows > 0;
+    return $disponivel;
+}
+
 function os_escopo_sql(string $alias = ''): string {
-    global $os_pode_ver_todas, $os_usuario_id, $tenant_id, $os_restritivo;
+    global $conn, $os_pode_ver_todas, $os_usuario_id, $tenant_id, $os_restritivo;
     if ($os_pode_ver_todas) return '1=1';
     $prefixo = $alias !== '' ? $alias . '.' : '';
-    if ($os_restritivo) return $prefixo . 'criado_por_id = ' . (int)$os_usuario_id;
-    return '(' . $prefixo . 'criado_por_id = ' . (int)$os_usuario_id
+    $escopo_proprio = $prefixo . 'criado_por_id = ' . (int)$os_usuario_id
+        . ' OR ' . $prefixo . 'atendente_id = ' . (int)$os_usuario_id;
+    if (os_tem_coluna_assumido($conn)) {
+        $escopo_proprio .= ' OR ' . $prefixo . 'assumido_por_id = ' . (int)$os_usuario_id;
+    }
+    $escopo_proprio = '(' . $escopo_proprio . ')';
+    if ($os_restritivo) return $escopo_proprio;
+    return '(' . $escopo_proprio
         . ' OR UPPER(TRIM(COALESCE(' . $prefixo . 'departamento, \'\'))) IN ('
         . 'SELECT UPPER(TRIM(p.departamento)) FROM os_permissoes_departamento p '
         . 'WHERE p.tenant_id = ' . (int)$tenant_id
@@ -325,9 +340,12 @@ function os_exigir_acao_departamento(string $departamento, string $acao): void {
     retornar_json(false, 'Você não possui permissão para esta ação no departamento informado.');
 }
 
-function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, status, departamento, criado_por_id'): ?array {
+function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, status, departamento, criado_por_id, atendente_id, atendente_nome'): ?array {
     global $tenant_id;
     if ($id <= 0) return null;
+    if (os_tem_coluna_assumido($conn) && strpos($campos, 'assumido_por_id') === false) {
+        $campos .= ', assumido_por_id';
+    }
     $escopo = os_escopo_sql();
     $stmt = $conn->prepare("SELECT $campos FROM os_chamados WHERE tenant_id = ? AND id = ? AND ($escopo) LIMIT 1");
     if (!$stmt) return null;
@@ -347,15 +365,31 @@ function os_exigir_acesso(int $id, string $mensagem = 'OS não encontrada'): arr
 
 function os_exigir_acao_os(int $id, string $acao, string $mensagem = 'OS não encontrada'): array {
     $os = os_exigir_acesso($id, $mensagem);
-    // A Restritividade O.S. garante que o autor continue podendo consultar a
-    // própria ordem, mesmo que nenhum departamento tenha sido marcado. As
-    // ações de alteração continuam sujeitas à matriz do departamento.
     global $os_usuario_id;
-    if ($acao === 'visualizar' && (int)($os['criado_por_id'] ?? 0) === $os_usuario_id) return $os;
+    $vinculado_ao_usuario = (int)($os['criado_por_id'] ?? 0) === $os_usuario_id
+        || (int)($os['atendente_id'] ?? 0) === $os_usuario_id
+        || (int)($os['assumido_por_id'] ?? 0) === $os_usuario_id;
+    if ($acao === 'visualizar' && $vinculado_ao_usuario) return $os;
     if (!os_pode_acao_departamento((string)($os['departamento'] ?? ''), $acao)) {
         retornar_json(false, 'Você não possui a permissão necessária para esta ação no departamento da O.S.');
     }
     return $os;
+}
+
+function os_resolver_atendente_tenant(mysqli $conn, int $usuarioId): ?array {
+    global $tenant_id;
+    if ($usuarioId <= 0) return null;
+    $stmt = $conn->prepare('SELECT id, nome FROM usuarios WHERE tenant_id = ? AND id = ? AND ativo = 1 LIMIT 1');
+    if (!$stmt) return null;
+    $stmt->bind_param('ii', $tenant_id, $usuarioId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return null;
+    }
+    $res = $stmt->get_result();
+    $usuario = $res ? ($res->fetch_assoc() ?: null) : null;
+    $stmt->close();
+    return $usuario;
 }
 
 function os_exigir_gestor(): void {
@@ -1407,6 +1441,18 @@ switch ($acao) {
         os_exigir_acao_departamento($departamento, 'criar');
         if ($os_pai_id) os_exigir_acesso($os_pai_id, 'OS pai não encontrada');
 
+        if (!$os_eh_gestor) {
+            if ($os_usuario_id <= 0) retornar_json(false, 'Sessão de usuário inválida');
+            $atendente_id = $os_usuario_id;
+            $atendente_nome = (string)($os_usuario_atual['nome'] ?? $_SESSION['usuario_nome'] ?? '');
+        } elseif ($atendente_id) {
+            $atendente = os_resolver_atendente_tenant($conn, $atendente_id);
+            if (!$atendente) retornar_json(false, 'Atendente ativo não encontrado no condomínio atual');
+            $atendente_nome = (string)$atendente['nome'];
+        } else {
+            $atendente_nome = '';
+        }
+
         // Gerar número sequencial único: OS-YYYY-NNNN
         $ano = date('Y');
         // Busca tanto o formato antigo (OS-) quanto o novo (O.S-) para não repetir sequencial
@@ -1578,6 +1624,22 @@ switch ($acao) {
 
         if (empty($titulo)) retornar_json(false, 'Título é obrigatório');
         os_exigir_acao_departamento($departamento, 'editar');
+
+        if (!$os_eh_gestor) {
+            $atendente_id = !empty($os_anterior['atendente_id']) ? (int)$os_anterior['atendente_id'] : null;
+            $atendente_nome = (string)($os_anterior['atendente_nome'] ?? '');
+        } elseif ($atendente_id) {
+            $atendente_anterior_id = (int)($os_anterior['atendente_id'] ?? 0);
+            if ($atendente_id === $atendente_anterior_id) {
+                $atendente_nome = (string)($os_anterior['atendente_nome'] ?? '');
+            } else {
+                $atendente = os_resolver_atendente_tenant($conn, $atendente_id);
+                if (!$atendente) retornar_json(false, 'Atendente ativo não encontrado no condomínio atual');
+                $atendente_nome = (string)$atendente['nome'];
+            }
+        } else {
+            $atendente_nome = '';
+        }
 
         $stmt = $conn->prepare(
             "UPDATE os_chamados SET
@@ -2037,6 +2099,35 @@ switch ($acao) {
         if ($r_dept) while ($row = $r_dept->fetch_assoc()) $todos[] = $row['nome'];
         $st_dept->close();
         retornar_json(true, 'Departamentos carregados', $todos);
+        break;
+
+    // ─────────────────────────────────────────────────
+    case 'listar_atendentes':
+        os_exigir_gestor();
+        $stmt = $conn->prepare(
+            "SELECT id, nome FROM usuarios
+             WHERE tenant_id = ? AND ativo = 1
+               AND LOWER(COALESCE(permissao, '')) <> 'super_admin'
+             ORDER BY nome ASC"
+        );
+        if (!$stmt) {
+            os_log('erro', 'Falha ao preparar lista de atendentes');
+            retornar_json(false, 'Não foi possível carregar os atendentes');
+        }
+        $stmt->bind_param('i', $tenant_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            os_log('erro', 'Falha ao executar lista de atendentes');
+            retornar_json(false, 'Não foi possível carregar os atendentes');
+        }
+        $res_atendentes = $stmt->get_result();
+        $atendentes = [];
+        while ($res_atendentes && ($usuario = $res_atendentes->fetch_assoc())) {
+            $atendentes[] = ['id' => (int)$usuario['id'], 'nome' => $usuario['nome']];
+        }
+        $stmt->close();
+        os_log('info', 'Lista administrativa de atendentes carregada', ['total' => count($atendentes)]);
+        retornar_json(true, 'Atendentes carregados', $atendentes);
         break;
 
     // ─────────────────────────────────────────────────

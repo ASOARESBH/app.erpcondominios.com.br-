@@ -32,3 +32,8 @@ Antes de gerar o `.zip` final, certifique-se de que nenhum caminho absoluto (ex:
 - Em MariaDB descartável, tanto grupo personalizado com somente `moradores.visualizar` quanto `compat-visualizador`, mesmo associados também a `compat-operador`, mantiveram a leitura e receberam `NEGAR` efetivo para criar, editar, excluir e exportar. O usuário apenas `compat-operador` manteve as permissões usuais.
 - O mesmo teste alterou uma permissão após cache e confirmou invalidação por revisão; também confirmou a criação da linha de revisão quando ela ainda não existia.
 - Para validação manual após deploy: manter listagem/consulta disponíveis, confirmar ausência/bloqueio de formulários de escrita e respostas 403 em POST/PUT/DELETE. Os Alertas operacionais devem continuar sendo avaliados no lançamento manual de entrada, não na simples consulta de Moradores.
+
+## 6. Ordens de Serviço — atendente e escopo pessoal
+- `php -l api/api_ordens_servico.php`, `node --check frontend/js/pages/ordens_servico.js` e `git diff --check` passaram; a tela não mantém chamada para `api_usuarios.php`.
+- Em MariaDB descartável, Restritividade O.S. retornou somente ordens criadas, atribuídas ou assumidas pelo usuário dentro do tenant; sem restritividade, somou departamentos explicitamente permitidos sem cruzar tenant. O schema legado sem `assumido_por_id` continuou consultável. A consulta de atendentes foi validada quanto a tenant, usuário ativo e exclusão de `super_admin`.
+- Não executados: browser autenticado, deploy ou teste no banco de produção. Após publicação, validar com operador o próprio nome no atendente e as O.S. criadas/atribuídas/assumidas; confirmar com gestor a lista de atendentes ativos do tenant.
