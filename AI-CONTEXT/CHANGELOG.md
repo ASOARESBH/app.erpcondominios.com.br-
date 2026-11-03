@@ -5,6 +5,10 @@ Registro de alterações significativas no ERP.
 ## [2.1.9] - 2026-11-03
 ### Corrigido
 - **Moradores e Alertas da Unidade**: a leitura das regras de campos agora exige `moradores.visualizar`, enquanto alterações continuam exigindo `sistema.configurar`. O painel Alertas usa as permissões específicas retornadas pelo backend, oculta ações de escrita para visualizadores e não mantém o detalhe aberto quando a API não retorna um alerta válido. A avaliação operacional dos alertas continua no lançamento manual de entrada.
+- **RBAC de Moradores**: grupo personalizado ou `compat-visualizador` que concede somente `moradores.visualizar` agora nega explicitamente permissões herdadas de escrita, inclusive de `compat-operador`; a revisão do tenant é criada/incrementada ao alterar políticas, invalidando caches de sessões ativas.
+
+### Validado
+- Teste em MariaDB descartável confirmou que grupo customizado somente leitura e `compat-visualizador` mantêm `moradores.visualizar` e negam criar/editar/excluir/exportar apesar do `compat-operador`; o operador compatível sem grupo somente leitura preserva edição. Invalidação de cache e criação da revisão RBAC ausente também passaram. `php -l`, `node --check` e `git diff --check` passaram.
 
 ## [2.1.8] - 2026-11-03
 ### Corrigido

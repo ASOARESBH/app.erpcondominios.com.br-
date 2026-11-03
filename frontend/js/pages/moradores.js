@@ -51,10 +51,11 @@ let _permissoesMoradores = null;
 // O frontend apenas antecipa o bloqueio; as APIs também validam estas ações.
 // Dependentes, anexos e relatórios fazem parte do módulo RBAC "moradores".
 function _temPermissaoMoradores(acao) {
-    const pm = window.PermissoesModulos;
-    if (!pm || typeof pm.temPermissao !== 'function') return true;
+    const permissoes = _permissoesMoradores;
+    if (!permissoes || permissoes.carregamento_falhou) return false;
+    if (permissoes.is_admin) return true;
     const chave = acao === 'visualizar' ? 'pode_acessar' : `pode_${acao}`;
-    return pm.temPermissao('moradores', chave);
+    return Boolean(permissoes.permissoes?.moradores?.[chave]);
 }
 
 function _exigirPermissaoMoradores(acao, mensagem) {
@@ -85,8 +86,12 @@ export function init() {
     // dinamicamente nesta página. Reaplicar aqui cobre formulários, modais,
     // tabelas, anexos e relatórios.
     const pm = window.PermissoesModulos;
+    _aplicarPermissoesMoradores({ is_admin: false, permissoes: {} });
     if (pm && typeof pm.carregarPermissoes === 'function') {
+        pm.invalidarCache?.();
         pm.carregarPermissoes(_aplicarPermissoesMoradores);
+    } else {
+        log('Permissões indisponíveis; operações de escrita bloqueadas.');
     }
 
     window.MoradoresPage = {

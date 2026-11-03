@@ -36,6 +36,10 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - `api_moradores.php`, `api_dependentes.php`, `api_moradores_anexos.php`, o PDF de
   moradores e o conteúdo privado de `api_arquivos_tenant.php` devem validar a ação no
   backend. Esconder botões no frontend não é suficiente.
+- Grupo personalizado ou `compat-visualizador` que conceda somente `moradores.visualizar`
+  deve aplicar `NEGAR` às demais ações herdadas, inclusive de `compat-operador`; o cálculo efetivo prioriza
+  negações. A alteração de políticas sempre incrementa/cria a revisão do tenant para
+  que sessões com permissões cacheadas refaçam a consulta.
 
 ## 6. Escopo de Ordens de Serviço
 - A matriz `os_permissoes_departamento` é tenant-aware e controla visualização, criação,

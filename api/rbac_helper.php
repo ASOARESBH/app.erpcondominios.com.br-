@@ -120,8 +120,17 @@ if (!function_exists('rbacTabelasDisponiveis')) {
     }
 
     function rbacInvalidarCache($conexao, $tenantId) {
-        $st = $conexao->prepare('UPDATE rbac_configuracoes SET revisao_permissoes = revisao_permissoes + 1 WHERE tenant_id = ?');
-        if ($st) { $st->bind_param('i', $tenantId); $st->execute(); $st->close(); }
+        $tenantId = (int)$tenantId;
+        if ($tenantId > 0) {
+            $st = $conexao->prepare('INSERT INTO rbac_configuracoes (tenant_id, revisao_permissoes) VALUES (?, 1) ON DUPLICATE KEY UPDATE revisao_permissoes = revisao_permissoes + 1, atualizado_em = NOW()');
+            if ($st) {
+                $st->bind_param('i', $tenantId);
+                if (!$st->execute()) error_log('[RBAC] Falha ao invalidar revisão de permissões do tenant ' . $tenantId);
+                $st->close();
+            } else {
+                error_log('[RBAC] Falha ao preparar invalidação de revisão do tenant ' . $tenantId);
+            }
+        }
         unset($_SESSION['_rbac_cache']);
     }
 
@@ -225,12 +234,12 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         if (!rbacTabelasDisponiveis($conexao)) return ['modo_compatibilidade' => true, 'is_super_admin' => rbacUsuarioEhSuperAdmin(), 'is_admin_total' => rbacUsuarioTemAcessoTotal(), 'permitidas' => [], 'detalhes' => []];
         $revisao = rbacObterRevisao($conexao, $tenantId);
         $cache = $_SESSION['_rbac_cache'] ?? null;
-        if (!$forcarAtualizacao && is_array($cache) && (int)($cache['usuario_id'] ?? 0) === (int)$usuarioId && (int)($cache['tenant_id'] ?? 0) === (int)$tenantId && (int)($cache['revisao'] ?? -1) === $revisao) return $cache;
+        if (!$forcarAtualizacao && $revisao > 0 && is_array($cache) && (int)($cache['usuario_id'] ?? 0) === (int)$usuarioId && (int)($cache['tenant_id'] ?? 0) === (int)$tenantId && (int)($cache['revisao'] ?? -1) === $revisao) return $cache;
 
         $efetivas = [];
         $detalhes = [];
         $grupos = [];
-        $st = $conexao->prepare('SELECT g.id,g.nome FROM rbac_usuario_grupos ug INNER JOIN rbac_grupos g ON g.id=ug.grupo_id WHERE ug.usuario_id=? AND ug.tenant_id=? AND ug.ativo=1 AND ug.removido_em IS NULL AND g.ativo=1 AND g.excluido_em IS NULL');
+        $st = $conexao->prepare('SELECT g.id,g.slug,g.nome,g.protegido FROM rbac_usuario_grupos ug INNER JOIN rbac_grupos g ON g.id=ug.grupo_id WHERE ug.usuario_id=? AND ug.tenant_id=? AND ug.ativo=1 AND ug.removido_em IS NULL AND g.ativo=1 AND g.excluido_em IS NULL');
         if ($st) {
             $st->bind_param('ii', $usuarioId, $tenantId);
             $st->execute();
@@ -244,11 +253,36 @@ if (!function_exists('rbacTabelasDisponiveis')) {
             $st->bind_param('i', $grupo['id']);
             $st->execute();
             $rs = $st->get_result();
+            $permissoesGrupoPorModulo = [];
             while ($linha = $rs->fetch_assoc()) {
                 $chave = $linha['chave'] . '.' . $linha['acao'];
                 $detalhes[$chave][] = ['origem' => 'grupo:' . $grupo['nome'], 'efeito' => $linha['efeito'], 'escopo' => $linha['escopo_dados']];
+                if ($linha['efeito'] === 'PERMITIR') $permissoesGrupoPorModulo[$linha['chave']][] = $linha['acao'];
             }
             $st->close();
+
+            foreach ($permissoesGrupoPorModulo as $moduloChave => $acoesGrupo) {
+                $grupoSomenteLeitura = (int)$grupo['protegido'] !== 1 || (string)$grupo['slug'] === 'compat-visualizador';
+                if (!$grupoSomenteLeitura || $moduloChave !== 'moradores' || count($acoesGrupo) !== 1 || $acoesGrupo[0] !== 'visualizar') continue;
+                $stAcoes = $conexao->prepare("SELECT p.acao FROM rbac_permissoes p INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE m.chave=? AND m.ativo=1 AND p.ativo=1 AND p.acao <> 'visualizar'");
+                $acoesNegadas = ['criar', 'editar', 'excluir', 'exportar', 'imprimir', 'importar', 'aprovar', 'executar', 'configurar', 'bloquear', 'desbloquear'];
+                if ($stAcoes) {
+                    $stAcoes->bind_param('s', $moduloChave);
+                    if ($stAcoes->execute()) {
+                        $rsAcoes = $stAcoes->get_result();
+                        $acoesNegadas = [];
+                        while ($acaoLinha = $rsAcoes->fetch_assoc()) $acoesNegadas[] = $acaoLinha['acao'];
+                    } else {
+                        error_log('[RBAC] Falha ao carregar ações herdadas do módulo Moradores.');
+                    }
+                    $stAcoes->close();
+                } else {
+                    error_log('[RBAC] Falha ao preparar ações herdadas do módulo Moradores.');
+                }
+                foreach ($acoesNegadas as $acaoNegada) {
+                    $detalhes[$moduloChave . '.' . $acaoNegada][] = ['origem' => 'grupo:' . $grupo['nome'] . ' (somente visualizar)', 'efeito' => 'NEGAR', 'escopo' => 'GLOBAL'];
+                }
+            }
         }
         $st = $conexao->prepare('SELECT m.chave,p.acao,up.efeito,up.escopo_dados FROM rbac_usuario_permissoes up INNER JOIN rbac_permissoes p ON p.id=up.permissao_id INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE up.usuario_id=? AND up.tenant_id=? AND up.revogado_em IS NULL AND p.ativo=1 AND m.ativo=1');
         if ($st) {
@@ -271,7 +305,8 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         }
         $alvoAcessoTotal = rbacUsuarioAlvoTemAcessoTotal($conexao, $usuarioId, $tenantId);
         $resultado = ['modo_compatibilidade' => false, 'is_super_admin' => $alvoAcessoTotal, 'is_admin_total' => $alvoAcessoTotal, 'usuario_id' => (int)$usuarioId, 'tenant_id' => (int)$tenantId, 'revisao' => $revisao, 'grupos' => $grupos, 'permitidas' => $efetivas, 'detalhes' => $detalhes];
-        $_SESSION['_rbac_cache'] = $resultado;
+        if ($revisao > 0) $_SESSION['_rbac_cache'] = $resultado;
+        else unset($_SESSION['_rbac_cache']);
         return $resultado;
     }
 
