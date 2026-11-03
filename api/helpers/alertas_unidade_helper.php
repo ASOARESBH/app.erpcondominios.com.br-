@@ -95,11 +95,24 @@ if (!function_exists('alertas_unidade_usuario_pode_override')) {
 if (!function_exists('alertas_unidade_migration_instalada')) {
     function alertas_unidade_migration_instalada(mysqli $db): bool {
         $tabelas = ['alertas_unidade','alertas_unidade_alvos','alertas_unidade_acionamentos','alertas_unidade_ciencia_tokens','alertas_unidade_ciencias','alertas_unidade_historico','alertas_unidade_rate_limits','alertas_unidade_notificacoes','alertas_unidade_lembretes','alertas_unidade_preferencias','alertas_unidade_cache_ids'];
-        $stmt = $db->prepare('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? LIMIT 1');
-        if (!$stmt) return false;
+        $stmt = $db->prepare('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE BINARY TABLE_SCHEMA=BINARY DATABASE() AND BINARY TABLE_NAME=BINARY ? LIMIT 1');
+        if (!$stmt) {
+            error_log('Alertas da Unidade: não foi possível preparar a verificação da migration. MySQL errno=' . (int)$db->errno);
+            return false;
+        }
         foreach ($tabelas as $tabela) {
             $stmt->bind_param('s', $tabela);
-            if (!$stmt->execute() || !$stmt->get_result()->fetch_row()) { $stmt->close(); return false; }
+            if (!$stmt->execute()) {
+                error_log('Alertas da Unidade: falha ao verificar migration. MySQL errno=' . (int)$stmt->errno);
+                $stmt->close();
+                return false;
+            }
+            $resultado = $stmt->get_result();
+            if (!$resultado || !$resultado->fetch_row()) {
+                error_log('Alertas da Unidade: tabela obrigatória ausente na migration: ' . $tabela);
+                $stmt->close();
+                return false;
+            }
         }
         $stmt->close();
         return true;

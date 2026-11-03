@@ -10,6 +10,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 -- MySQL 5.7 não aceita ADD COLUMN IF NOT EXISTS. Estes procedimentos usam
 -- INFORMATION_SCHEMA e PREPARE para que a migration possa ser reaplicada.
+-- Comparações binárias evitam conflito entre a collation do schema e a metadata.
 DROP PROCEDURE IF EXISTS au_add_column_if_missing;
 DELIMITER $$
 CREATE PROCEDURE au_add_column_if_missing(IN p_table VARCHAR(64), IN p_column VARCHAR(64), IN p_definition TEXT)
@@ -315,8 +316,8 @@ BEGIN
   DECLARE v_rbac_completo INT DEFAULT 0;
   SELECT COUNT(*) INTO v_rbac_completo
     FROM INFORMATION_SCHEMA.TABLES
-   WHERE TABLE_SCHEMA=DATABASE()
-     AND TABLE_NAME IN ('rbac_modulos','rbac_permissoes','rbac_politicas_api');
+   WHERE BINARY TABLE_SCHEMA=BINARY DATABASE()
+     AND BINARY TABLE_NAME IN ('rbac_modulos','rbac_permissoes','rbac_politicas_api');
   IF v_rbac_completo = 3 THEN
     SELECT id INTO v_parent FROM rbac_modulos WHERE chave='moradores' LIMIT 1;
     IF v_parent IS NOT NULL AND v_parent > 0 THEN
@@ -352,7 +353,7 @@ CREATE PROCEDURE au_seed_rbac_compat()
 BEGIN
   DECLARE v_count INT DEFAULT 0;
   SELECT COUNT(*) INTO v_count FROM INFORMATION_SCHEMA.TABLES
-   WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('rbac_grupos','rbac_grupo_permissoes','rbac_permissoes','rbac_modulos');
+   WHERE BINARY TABLE_SCHEMA=BINARY DATABASE() AND BINARY TABLE_NAME IN ('rbac_grupos','rbac_grupo_permissoes','rbac_permissoes','rbac_modulos');
   IF v_count = 4 THEN
     INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
     SELECT g.id,p.id,'PERMITIR','GLOBAL'
@@ -375,7 +376,7 @@ CREATE PROCEDURE au_seed_push_alertas()
 BEGIN
   DECLARE v_pwa INT DEFAULT 0;
   SELECT COUNT(*) INTO v_pwa FROM INFORMATION_SCHEMA.TABLES
-   WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pwa_configuracoes';
+   WHERE BINARY TABLE_SCHEMA=BINARY DATABASE() AND BINARY TABLE_NAME=BINARY 'pwa_configuracoes';
   IF v_pwa=1 THEN
     INSERT INTO pwa_configuracoes (tenant_id,chave,valor,descricao)
     SELECT DISTINCT tenant_id,'push_alertas_unidade_ativo','1','Enviar notificações push de Alertas da Unidade'

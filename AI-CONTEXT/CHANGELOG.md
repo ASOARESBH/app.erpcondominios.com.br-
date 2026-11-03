@@ -13,6 +13,7 @@ Registro de alterações significativas no ERP.
 - Teste sintético local confirmou migration gate, isolamento de tenant, avaliação de regra, bloqueio automático, máscara de documento e atualização de contador.
 - Teste MariaDB descartável do cron confirmou expiração no tenant A, preservação do alerta futuro no tenant B e reexecução sem duplicar lembrete, inbox ou histórico.
 - Testes descartáveis também cobriram cache de 30s com invalidação, preferência push por morador/tenant, match de Familiar em `CONVIDADOS` e contagem de 30 alertas vigentes por unidade.
+- Corrigidos os checks de metadata da migration e o gate HTTP 503 para não comparar strings com collations implícitas incompatíveis. Reaplicação local em MariaDB descartável com collations mistas passou duas vezes, incluindo backfill da sessão Portal; produção não foi alterada.
 ### Pendente
 - Não foram executados teste de browser autenticado, hardware físico, deploy ou migration de produção. A migration `sql/migration_alertas_unidade_mysql57.sql` precisa de backup e aplicação autorizada antes do uso em produção.
 
