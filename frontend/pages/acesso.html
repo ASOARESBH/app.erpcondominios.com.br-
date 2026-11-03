@@ -81,13 +81,32 @@
                     Som de feedback
                 </label>
             </div>
-        </form>
+	        </form>
 
-        <div id="mensagemAcesso" class="mensagem-box" style="display:none;"></div>
-        <div id="infoAcesso" class="info-morador" style="display:none;"></div>
-    </div>
+		<div id="acessoCienciaBanner" class="ciencia-banner" hidden role="status" aria-live="polite" aria-atomic="false"></div>
 
-    <div class="page-card ultimos-acessos-card">
+	        <div id="mensagemAcesso" class="mensagem-box" style="display:none;"></div>
+	        <div id="infoAcesso" class="info-morador" style="display:none;"></div>
+	    </div>
+
+	<div id="acessoCienciaModal" class="ciencia-modal" hidden role="dialog" aria-modal="true" aria-labelledby="acessoCienciaTitulo" aria-describedby="acessoCienciaDescricao">
+	    <div class="ciencia-modal__dialog" role="document">
+	        <div class="ciencia-modal__header">
+	            <div><span class="ciencia-modal__eyebrow"><i class="fas fa-shield-alt"></i> Pré-validação de acesso</span><h2 id="acessoCienciaTitulo">Ciência necessária</h2></div>
+	        </div>
+	        <div class="ciencia-modal__body">
+	            <p id="acessoCienciaDescricao" class="ciencia-modal__description"></p>
+	            <div id="acessoCienciaAlertas" class="ciencia-alert-list"></div>
+	            <div id="acessoCienciaErro" class="ciencia-modal__error" role="alert" hidden></div>
+	        </div>
+	        <div class="ciencia-modal__footer">
+	            <button type="button" class="btn-secondary-modern" id="btnAcessoCienciaCancelar">Não continuar</button>
+	            <button type="button" class="btn-primary-modern" id="btnAcessoCienciaConfirmar"><i class="fas fa-check"></i> Registrar ciência e continuar</button>
+	        </div>
+	    </div>
+	</div>
+
+	    <div class="page-card ultimos-acessos-card">
         <div class="table-header-actions">
             <h2>Ultimos Acessos Liberados</h2>
             <div class="table-tools">

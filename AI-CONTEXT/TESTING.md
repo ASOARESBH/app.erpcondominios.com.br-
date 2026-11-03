@@ -14,3 +14,15 @@ O sistema não possui testes automatizados (Jest/PHPUnit). Os testes são manuai
 
 ## 3. Validação de Entrega
 Antes de gerar o `.zip` final, certifique-se de que nenhum caminho absoluto (ex: `C:/Users/...` ou `/home/ubuntu/...`) foi hardcoded no código.
+
+
+## 4. Alertas da Unidade — QA desta implementação web/backend
+- Executado `php -l` nos endpoints/helper PHP alterados, `node --check` nos módulos JavaScript alterados e `git diff --check` após correção de whitespace.
+- Em MariaDB descartável local, `migration_alertas_unidade_mysql57.sql` foi aplicada duas vezes; foram confirmadas as tabelas tenant-aware, o ENUM com decisões automáticas e a atualização de `sessoes_portal.tenant_id`.
+- Teste sintético do helper confirmou migration gate, isolamento tenant A/B, match da regra, inserção `BLOQUEADO_AUTOMATICO`, máscara do documento e incremento do contador.
+- Teste MariaDB descartável adicional confirmou 30 regras vigentes contadas somente no tenant/unidade correspondente e matching de `FAMILIAR` no contexto `CONVIDADOS`; nenhum alerta do tenant A foi retornado para o tenant B.
+- Migration executada novamente duas vezes em schema temporário com `alertas_unidade_preferencias`; preferência desligada no tenant A suprimiu push apenas para A, enquanto tenant B sem linha manteve o padrão habilitado. O teste confirmou também o gate completo.
+- Teste do cache descartável confirmou resposta inicial, hit dentro de 30 segundos, visibilidade de novo alerta após invalidação e nenhum resultado cruzado para tenant B.
+- Teste MariaDB descartável da nova rotina: tenant A expirou um alerta vencido e recebeu um lembrete único; alerta futuro do tenant B permaneceu ativo; segunda execução não duplicou evento, inbox, histórico nem lembrete. O teste também cobriu `notificacoes_morador` sem a coluna opcional `alerta_unidade_id`.
+- Verificados localmente `php -l` nos PHP alterados e cron, `node --check` nos módulos e script inline do Portal e `git diff --check` após a implementação de KPIs, abas de detalhe, filtros por usuário, exportação por período, modelos, prévia, duplicação e preflight de convidados.
+- Não executados: end-to-end em browser autenticado, hardware/Console físico, Flutter, FCM real ou migration/deploy/agendamento no banco/servidor de produção. O cron e a migration precisam ser implantados e ativados pela operação após backup autorizado.

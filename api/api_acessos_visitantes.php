@@ -26,10 +26,9 @@ $_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (preg_match('/^https?:\/\/([a-z0-9\-]+\.)?erpcondominios\.com\.br$/', $_mt_origin) ||
     preg_match('/^https?:\/\/localhost(:\d+)?$/', $_mt_origin)) {
     header('Access-Control-Allow-Origin: ' . $_mt_origin);
-} else {
-    header('Access-Control-Allow-Origin: *');
+    header('Vary: Origin');
+    header('Access-Control-Allow-Credentials: true');
 }
-header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
@@ -45,6 +44,8 @@ $action = $_GET['action'] ?? '';
 
 // ── Verificar se é requisição do Portal do Morador (token Bearer) ──
 $portal_morador_id = null;
+$portal_morador_unidade = null;
+$tenant_id = 0;
 $auth_header_av = '';
 if (function_exists('getallheaders')) {
     $hdrs_av = getallheaders();
@@ -56,23 +57,43 @@ if (empty($auth_header_av)) {
 if (preg_match('/Bearer\s+(.+)$/i', $auth_header_av, $m_av)) {
     $bearer_av = trim($m_av[1]);
     $cx_av = conectar_banco();
-    $st_av = $cx_av->prepare("SELECT morador_id FROM sessoes_portal WHERE tenant_id = $tenant_id AND token = ? AND ativo = 1 AND data_expiracao > NOW() LIMIT 1");
+    $st_tenant_av = $cx_av->prepare("SELECT COUNT(*) total FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sessoes_portal' AND COLUMN_NAME='tenant_id'");
+    $st_tenant_av->execute();
+    $tem_tenant_sessao_av = (int)($st_tenant_av->get_result()->fetch_assoc()['total'] ?? 0) > 0;
+    $st_tenant_av->close();
+    $sql_sessao_av = $tem_tenant_sessao_av
+        ? "SELECT sp.morador_id,m.tenant_id,m.unidade FROM sessoes_portal sp INNER JOIN moradores m ON m.id=sp.morador_id AND m.ativo=1 AND (sp.tenant_id IS NULL OR m.tenant_id=sp.tenant_id) WHERE sp.token=? AND sp.ativo=1 AND sp.data_expiracao>NOW() LIMIT 1"
+        : "SELECT sp.morador_id,m.tenant_id,m.unidade FROM sessoes_portal sp INNER JOIN moradores m ON m.id=sp.morador_id AND m.ativo=1 WHERE sp.token=? AND sp.ativo=1 AND sp.data_expiracao>NOW() LIMIT 1";
+    $st_av = $cx_av->prepare($sql_sessao_av);
     $st_av->bind_param('s', $bearer_av);
     $st_av->execute();
     $rr_av = $st_av->get_result();
     if ($rr_av->num_rows > 0) {
-        $portal_morador_id = (int)$rr_av->fetch_assoc()['morador_id'];
+        $sessao_portal_av = $rr_av->fetch_assoc();
+        $portal_morador_id = (int)$sessao_portal_av['morador_id'];
+        $tenant_id = (int)$sessao_portal_av['tenant_id'];
+        $portal_morador_unidade = (string)$sessao_portal_av['unidade'];
     }
     $st_av->close();
     fechar_conexao($cx_av);
 }
 
-if ($metodo !== 'GET' && !$portal_morador_id) {
+if (!$portal_morador_id) {
     verificarAutenticacao(true, 'operador');
-$tenant_id = exigirTenantId();
+    $tenant_id = (int)exigirTenantId();
 }
 
 $conexao = conectar_banco();
+
+function av_coluna_existe(mysqli $conexao, string $tabela, string $coluna): bool {
+    $stmt = $conexao->prepare('SELECT COUNT(*) total FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?');
+    if (!$stmt) return false;
+    $stmt->bind_param('ss', $tabela, $coluna);
+    $stmt->execute();
+    $existe = (int)($stmt->get_result()->fetch_assoc()['total'] ?? 0) > 0;
+    $stmt->close();
+    return $existe;
+}
 
 // ========================================
 // LISTAR ACESSOS (portal do morador por morador_id)
@@ -87,11 +108,11 @@ if ($metodo === 'GET' && empty($action)) {
         $morador_id_get = $portal_morador_id;
         $sql = "SELECT a.*, v.nome_completo as visitante_nome, v.documento
                 FROM acessos_visitantes a
-                INNER JOIN visitantes v ON a.visitante_id = v.id
-                WHERE a.morador_id = ?
+                INNER JOIN visitantes v ON a.visitante_id = v.id AND v.tenant_id=a.tenant_id
+                WHERE a.tenant_id = ? AND a.morador_id = ?
                 ORDER BY a.data_cadastro DESC";
         $stmt = $conexao->prepare($sql);
-        $stmt->bind_param('i', $morador_id_get);
+        $stmt->bind_param('ii', $tenant_id, $morador_id_get);
         $stmt->execute();
         $resultado = $stmt->get_result();
         $acessos = [];
@@ -106,13 +127,14 @@ if ($metodo === 'GET' && empty($action)) {
     
     $sql = "SELECT a.*, v.nome_completo as visitante_nome, v.documento
             FROM acessos_visitantes a
-            INNER JOIN visitantes v ON a.visitante_id = v.id";
+            INNER JOIN visitantes v ON a.visitante_id = v.id AND v.tenant_id=a.tenant_id
+            WHERE a.tenant_id = ?";
     
-    $params = [];
-    $types = "";
+    $params = [$tenant_id];
+    $types = "i";
     
     if ($visitante_id) {
-        $sql .= " WHERE a.visitante_id = ?";
+        $sql .= " AND a.visitante_id = ?";
         $params[] = $visitante_id;
         $types .= "i";
     }
@@ -150,10 +172,10 @@ if ($metodo === 'GET' && $action === 'obter') {
     $stmt = $conexao->prepare("
         SELECT a.*, v.nome_completo as visitante_nome, v.documento
         FROM acessos_visitantes a
-        INNER JOIN visitantes v ON a.visitante_id = v.id
-        WHERE a.id = ?
+        INNER JOIN visitantes v ON a.visitante_id = v.id AND v.tenant_id=a.tenant_id
+        WHERE a.tenant_id = ? AND a.id = ?
     ");
-    $stmt->bind_param("i", $id);
+    $stmt->bind_param("ii", $tenant_id, $id);
     $stmt->execute();
     $resultado = $stmt->get_result();
     
@@ -175,7 +197,8 @@ if ($metodo === 'POST') {
     }
     $dados = json_decode(file_get_contents('php://input'), true);
     
-    $visitante_id = $dados['visitante_id'] ?? 0;
+    if (!is_array($dados)) retornar_json(false, 'Envie um JSON válido.');
+    $visitante_id = (int)($dados['visitante_id'] ?? 0);
     $data_inicial = $dados['data_inicial'] ?? '';
     $data_final = $dados['data_final'] ?? '';
     $tipo_acesso = $dados['tipo_acesso'] ?? '';
@@ -183,26 +206,51 @@ if ($metodo === 'POST') {
     $modelo = $dados['modelo'] ?? null;
     $cor = $dados['cor'] ?? null;
     $tipo_visitante = $dados['tipo_visitante'] ?? 'visitante';
-    $morador_id = $dados['morador_id'] ?? null;
-    $unidade_destino = $dados['unidade_destino'] ?? null;
+    $morador_id = $portal_morador_id ?: (int)($dados['morador_id'] ?? 0);
+    $unidade_destino = $portal_morador_id ? $portal_morador_unidade : trim((string)($dados['unidade_destino'] ?? ''));
     
     // Validações
     if (!$visitante_id || !$data_inicial || !$data_final || !$tipo_acesso) {
         retornar_json(false, "Todos os campos são obrigatórios");
     }
     
-    // REGRA: 1 visitante = 1 acesso no sistema todo
-    // Verificar se visitante já possui acesso ativo em qualquer unidade
+    $vinculos_visitante = [];
+    $params_visitante = [$tenant_id, $visitante_id];
+    $tipos_visitante = 'ii';
+    if ($portal_morador_id) {
+        if (av_coluna_existe($conexao, 'visitantes', 'morador_id')) { $vinculos_visitante[] = 'morador_id=?'; $params_visitante[] = $portal_morador_id; $tipos_visitante .= 'i'; }
+        if (av_coluna_existe($conexao, 'visitantes', 'cadastrado_por_morador_id')) { $vinculos_visitante[] = 'cadastrado_por_morador_id=?'; $params_visitante[] = $portal_morador_id; $tipos_visitante .= 'i'; }
+        if (!$vinculos_visitante) retornar_json(false, 'O Portal ainda não está configurado para restringir visitantes à unidade autenticada.');
+    }
+    $sql_visitante_validar = 'SELECT id FROM visitantes WHERE tenant_id=? AND id=? AND ativo=1' . ($vinculos_visitante ? ' AND (' . implode(' OR ', $vinculos_visitante) . ')' : '') . ' LIMIT 1';
+    $stmt_visitante_validar = $conexao->prepare($sql_visitante_validar);
+    if (!$stmt_visitante_validar) retornar_json(false, 'Não foi possível validar o visitante.');
+    $bind_visitante = [$tipos_visitante];
+    foreach ($params_visitante as $i => &$valor_visitante) $bind_visitante[] = &$valor_visitante;
+    call_user_func_array([$stmt_visitante_validar, 'bind_param'], $bind_visitante);
+    $stmt_visitante_validar->execute();
+    $visitanteValido = $stmt_visitante_validar->get_result()->fetch_assoc();
+    $stmt_visitante_validar->close();
+    if (!$visitanteValido) retornar_json(false,'O visitante não pertence a este condomínio ou está inativo.');
+    $stmt_morador_validar = $conexao->prepare('SELECT unidade FROM moradores WHERE tenant_id=? AND id=? AND ativo=1 LIMIT 1');
+    $stmt_morador_validar->bind_param('ii',$tenant_id,$morador_id);
+    $stmt_morador_validar->execute();
+    $moradorValido = $stmt_morador_validar->get_result()->fetch_assoc();
+    $stmt_morador_validar->close();
+    if (!$moradorValido) retornar_json(false,'O morador anfitrião não pertence a este condomínio ou está inativo.');
+    $unidade_destino = (string)$moradorValido['unidade'];
+
+    // Um visitante só pode ter um acesso ativo por vez dentro do mesmo tenant.
     $stmt_check = $conexao->prepare("
         SELECT a.id, a.unidade_destino, v.nome_completo
         FROM acessos_visitantes a
-        INNER JOIN visitantes v ON a.visitante_id = v.id
-        WHERE a.visitante_id = ?
+        INNER JOIN visitantes v ON a.visitante_id = v.id AND v.tenant_id=a.tenant_id
+        WHERE a.tenant_id = ? AND a.visitante_id = ?
         AND a.data_final >= CURDATE()
         AND a.ativo = 1
         LIMIT 1
     ");
-    $stmt_check->bind_param("i", $visitante_id);
+    $stmt_check->bind_param("ii", $tenant_id, $visitante_id);
     $stmt_check->execute();
     $acesso_existente = $stmt_check->get_result()->fetch_assoc();
     
@@ -241,22 +289,23 @@ if ($metodo === 'POST') {
     // Inserir no banco
     $stmt = $conexao->prepare("
         INSERT INTO acessos_visitantes 
-        (visitante_id, data_inicial, data_final, dias_permanencia, tipo_acesso, placa, modelo, cor, tipo_visitante, temporario, hora_inicial, hora_final, morador_id, unidade_destino, qr_code, token_acesso)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (tenant_id, visitante_id, data_inicial, data_final, dias_permanencia, tipo_acesso, placa, modelo, cor, tipo_visitante, temporario, hora_inicial, hora_final, morador_id, unidade_destino, qr_code, token_acesso)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
-    $stmt->bind_param("issississississs", $visitante_id, $data_inicial, $data_final, $dias_permanencia, $tipo_acesso, $placa, $modelo, $cor, $tipo_visitante, $temporario, $hora_inicial, $hora_final, $morador_id, $unidade_destino, $qr_code, $token_acesso);
+    $stmt->bind_param("iississsssississs", $tenant_id, $visitante_id, $data_inicial, $data_final, $dias_permanencia, $tipo_acesso, $placa, $modelo, $cor, $tipo_visitante, $temporario, $hora_inicial, $hora_final, $morador_id, $unidade_destino, $qr_code, $token_acesso);
     
     if ($stmt->execute()) {
         $acesso_id = $conexao->insert_id;
         
         // Buscar dados do visitante para log
-        $stmt_visitante = $conexao->prepare("SELECT nome_completo FROM visitantes WHERE tenant_id = $tenant_id AND id = ?");
-        $stmt_visitante->bind_param("i", $visitante_id);
+        $stmt_visitante = $conexao->prepare("SELECT nome_completo FROM visitantes WHERE tenant_id = ? AND id = ?");
+        $stmt_visitante->bind_param("ii", $tenant_id, $visitante_id);
         $stmt_visitante->execute();
         $visitante = $stmt_visitante->get_result()->fetch_assoc();
         
         // Registrar no controle de acesso
         $registro_acesso_id = registrarControleAcesso($conexao, [
+            'tenant_id' => $tenant_id,
             'placa' => $placa,
             'modelo' => $modelo,
             'cor' => $cor,
@@ -273,8 +322,8 @@ if ($metodo === 'POST') {
         // Atualizar acesso com ID do registro
         $notificacao_acesso = ['sucesso' => false, 'motivo' => 'registro_nao_criado'];
         if ($registro_acesso_id) {
-            $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET registro_acesso_id = ? WHERE tenant_id = $tenant_id AND id = ?");
-            $stmt_update->bind_param("ii", $registro_acesso_id, $acesso_id);
+            $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET registro_acesso_id = ? WHERE tenant_id = ? AND id = ?");
+            $stmt_update->bind_param("iii", $registro_acesso_id, $tenant_id, $acesso_id);
             $stmt_update->execute();
 
             // Evento complementar; falhas de push não afetam a autorização já criada.
@@ -316,7 +365,8 @@ if ($metodo === 'POST') {
             'alertas_acesso' => $alertas_disparados
         ]);
     } else {
-        retornar_json(false, "Erro ao cadastrar acesso: " . $stmt->error);
+        error_log('[AcessoVisitantes] Falha interna ao cadastrar autorização QR.');
+        retornar_json(false, "Não foi possível cadastrar o acesso.");
     }
 }
 
@@ -390,10 +440,12 @@ if ($metodo === 'PUT') {
     $valores[] = $ativo;
     $types .= "i";
     
+    $valores[] = $tenant_id;
+    $types .= "i";
     $valores[] = $id;
     $types .= "i";
     
-    $sql = "UPDATE acessos_visitantes SET " . implode(", ", $campos) . " WHERE tenant_id = $tenant_id AND id = ?";
+    $sql = "UPDATE acessos_visitantes SET " . implode(", ", $campos) . " WHERE tenant_id = ? AND id = ?";
     $stmt = $conexao->prepare($sql);
     $stmt->bind_param($types, ...$valores);
     
@@ -401,7 +453,8 @@ if ($metodo === 'PUT') {
         registrar_log('ACESSO_ATUALIZADO', "Acesso atualizado", "ID: {$id}");
         retornar_json(true, "Acesso atualizado com sucesso");
     } else {
-        retornar_json(false, "Erro ao atualizar acesso: " . $stmt->error);
+        error_log('[AcessoVisitantes] Falha interna ao atualizar autorização QR.');
+        retornar_json(false, "Não foi possível atualizar o acesso.");
     }
 }
 
@@ -423,10 +476,10 @@ if ($metodo === 'DELETE') {
     $stmt = $conexao->prepare("
         SELECT a.*, v.nome_completo 
         FROM acessos_visitantes a
-        INNER JOIN visitantes v ON a.visitante_id = v.id
-        WHERE a.id = ?
+        INNER JOIN visitantes v ON a.visitante_id = v.id AND v.tenant_id=a.tenant_id
+        WHERE a.tenant_id = ? AND a.id = ?
     ");
-    $stmt->bind_param("i", $id);
+    $stmt->bind_param("ii", $tenant_id, $id);
     $stmt->execute();
     $acesso = $stmt->get_result()->fetch_assoc();
     
@@ -441,14 +494,15 @@ if ($metodo === 'DELETE') {
     }
     
     // Excluir
-    $stmt = $conexao->prepare("DELETE FROM acessos_visitantes WHERE tenant_id = $tenant_id AND id = ?");
-    $stmt->bind_param("i", $id);
+    $stmt = $conexao->prepare("DELETE FROM acessos_visitantes WHERE tenant_id = ? AND id = ?");
+    $stmt->bind_param("ii", $tenant_id, $id);
     
     if ($stmt->execute()) {
         registrar_log('ACESSO_EXCLUIDO', "Acesso excluído", "Visitante: {$acesso['nome_completo']}, Tipo: {$acesso['tipo_acesso']}");
         retornar_json(true, "Acesso excluído com sucesso");
     } else {
-        retornar_json(false, "Erro ao excluir acesso: " . $stmt->error);
+        error_log('[AcessoVisitantes] Falha interna ao excluir autorização QR.');
+        retornar_json(false, "Não foi possível excluir o acesso.");
     }
 }
 
@@ -468,13 +522,13 @@ if ($metodo === 'GET' && $action === 'gerar_qrcode') {
     
     // Buscar dados do acesso
     error_log("[DEBUG QR] Buscando dados do acesso no banco");
-    $stmt = $conexao->prepare("
-        SELECT a.*, v.nome_completo, v.documento
-        FROM acessos_visitantes a
-        INNER JOIN visitantes v ON a.visitante_id = v.id
-        WHERE a.id = ?
-    ");
-    $stmt->bind_param("i", $id);
+    if ($portal_morador_id) {
+        $stmt = $conexao->prepare("SELECT a.*,v.nome_completo,v.documento FROM acessos_visitantes a INNER JOIN visitantes v ON a.visitante_id=v.id AND v.tenant_id=a.tenant_id WHERE a.tenant_id=? AND a.id=? AND a.morador_id=?");
+        $stmt->bind_param('iii',$tenant_id,$id,$portal_morador_id);
+    } else {
+        $stmt = $conexao->prepare("SELECT a.*,v.nome_completo,v.documento FROM acessos_visitantes a INNER JOIN visitantes v ON a.visitante_id=v.id AND v.tenant_id=a.tenant_id WHERE a.tenant_id=? AND a.id=?");
+        $stmt->bind_param('ii',$tenant_id,$id);
+    }
     $stmt->execute();
     $acesso = $stmt->get_result()->fetch_assoc();
     
@@ -545,8 +599,8 @@ if ($metodo === 'GET' && $action === 'gerar_qrcode') {
     
     // Salvar no banco (opcional)
     error_log("[DEBUG QR] Salvando QR Code no banco de dados...");
-    $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET qr_code_imagem = ? WHERE tenant_id = $tenant_id AND id = ?");
-    $stmt_update->bind_param("si", $qr_base64, $id);
+    $stmt_update = $conexao->prepare("UPDATE acessos_visitantes SET qr_code_imagem = ? WHERE tenant_id = ? AND id = ?");
+    $stmt_update->bind_param("sii", $qr_base64, $tenant_id, $id);
     
     if (!$stmt_update->execute()) {
         error_log("[DEBUG QR] AVISO: Falha ao salvar QR Code no banco: " . $stmt_update->error);
@@ -648,7 +702,9 @@ if ($metodo === 'GET' && $action === 'calcular_dias') {
 // ========================================
 function registrarControleAcesso($conexao, $dados) {
     try {
-        $data_hora = date('Y-m-d H:i:s');
+        $tenantId = (int)($dados['tenant_id'] ?? 0);
+        if ($tenantId <= 0) return null;
+        $data_hora = $dados['data_hora'] ?? date('Y-m-d H:i:s');
         $placa = $dados['placa'] ?? null;
         $modelo = $dados['modelo'] ?? null;
         $cor = $dados['cor'] ?? null;
@@ -660,36 +716,21 @@ function registrarControleAcesso($conexao, $dados) {
         $status = $dados['status'] ?? 'Aguardando';
         $liberado = $dados['liberado'] ?? 0;
         $observacao = $dados['observacao'] ?? null;
-        
         $stmt = $conexao->prepare("
             INSERT INTO registros_acesso 
-            (data_hora, placa, modelo, cor, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (tenant_id, data_hora, placa, modelo, cor, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        
-        $stmt->bind_param(
-            "ssssissisiss",
-            $data_hora,
-            $placa,
-            $modelo,
-            $cor,
-            $tipo,
-            $morador_id,
-            $nome_visitante,
-            $unidade_destino,
-            $dias_permanencia,
-            $status,
-            $liberado,
-            $observacao
-        );
+        if (!$stmt) return null;
+        $stmt->bind_param('isssssissisis',$tenantId,$data_hora,$placa,$modelo,$cor,$tipo,$morador_id,$nome_visitante,$unidade_destino,$dias_permanencia,$status,$liberado,$observacao);
         
         if ($stmt->execute()) {
             return $conexao->insert_id;
         }
         
         return null;
-    } catch (Exception $e) {
-        error_log("Erro ao registrar controle de acesso: " . $e->getMessage());
+    } catch (Throwable $e) {
+        error_log('[AcessoVisitantes] Falha interna ao registrar controle de acesso.');
         return null;
     }
 }

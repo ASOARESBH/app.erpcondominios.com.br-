@@ -12,8 +12,10 @@ ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
+require_once __DIR__ . '/rbac_helper.php';
 require_once __DIR__ . '/helpers/access_control_notification_helper.php';
 require_once __DIR__ . '/helpers/alertas_acesso_helper.php';
+require_once __DIR__ . '/helpers/alertas_unidade_helper.php';
 require_once __DIR__ . '/helpers/visitantes_config_helper.php';
 
 ob_end_clean();
@@ -453,6 +455,15 @@ if ($metodo === 'GET') {
     $where = ['r.tenant_id = ?'];
     $params = [$tenant_id];
     $types = 'i';
+    $registroIdParam = trim((string)($_GET['registro_id'] ?? ''));
+    if ($registroIdParam !== '') {
+        if (!ctype_digit($registroIdParam) || (int)$registroIdParam <= 0) {
+            http_response_code(422);
+            retornar_json(false, 'Identificador de registro inválido.', []);
+        }
+        $where[] = 'r.id = ?'; $params[] = (int)$registroIdParam; $types .= 'i';
+        $limite = 1;
+    }
 
     $dataInicio = trim((string)($_GET['data_inicio'] ?? ''));
     $dataFim = trim((string)($_GET['data_fim'] ?? ''));
@@ -881,6 +892,7 @@ if ($metodo === 'POST') {
     $conexao->begin_transaction();
     $id_inserido = 0;
     $ocupantesRegistrados = [];
+    $notificacoesAlertas = [];
     try {
         if ($convidado_id !== null) {
             $stmtLockConvidado = $conexao->prepare(
@@ -1011,6 +1023,55 @@ if ($metodo === 'POST') {
                 $stmtSaida->close();
             }
         }
+
+        if ($convidado_id === null && $idempotency_key !== null) {
+            $campoConvidadoSelect = $tem_convidado_id ? 'convidado_id' : '0 AS convidado_id';
+            $stmtReplay = $conexao->prepare(
+                "SELECT id,data_hora,placa,modelo,cor,tipo,morador_id,nome_visitante,unidade_destino,dias_permanencia,status,liberado,observacao,tipo_acesso,dependente_id,visitante_id,documento_visitante,modo_registro,vestimenta,$campoConvidadoSelect
+                 FROM registros_acesso WHERE tenant_id=? AND idempotency_key=? LIMIT 1 FOR UPDATE"
+            );
+            if (!$stmtReplay) throw new RuntimeException('Não foi possível validar a chave de idempotência.');
+            $stmtReplay->bind_param('is', $tenant_id, $idempotency_key);
+            if (!$stmtReplay->execute()) { $stmtReplay->close(); throw new RuntimeException('Não foi possível validar a chave de idempotência.'); }
+            $registroReplay = $stmtReplay->get_result()->fetch_assoc();
+            $stmtReplay->close();
+            if ($registroReplay) {
+                if (!_registro_idempotente_coincide($registroReplay, $esperadoIdempotencia)) throw new DomainException('A chave de idempotência já foi usada para outro registro.');
+                $conexao->rollback();
+                retornar_json(true, 'Acesso já havia sido registrado.', ['id'=>(int)$registroReplay['id'],'liberado'=>(int)$registroReplay['liberado'],'status'=>$registroReplay['status'],'tipo_acesso'=>$registroReplay['tipo_acesso'],'modo_registro'=>$registroReplay['modo_registro'],'vestimenta'=>$registroReplay['vestimenta'],'ocupantes_registrados'=>[],'idempotente'=>true]);
+            }
+        }
+
+        $contextoAlerta = null;
+        $alertasAtuais = [];
+        $cienciaToken = trim((string)($dados['ciencia_token'] ?? ''));
+        if ($tipo_acesso === 'Entrada') {
+            if (!alertas_unidade_migration_instalada($conexao)) {
+                $conexao->rollback();
+                http_response_code(503);
+                retornar_json(false, 'A integração de Alertas da Unidade ainda não foi instalada. Aplique a migration do módulo antes de registrar novas entradas.', ['codigo'=>'MIGRATION_ALERTAS_PENDENTE']);
+            }
+            $contextoAlerta = alertas_unidade_construir_contexto_registro($conexao, $tenant_id, [
+                'contexto'=>'REGISTRO_MANUAL','data_hora'=>$data_hora,'tipo_pessoa'=>$tipo,
+                'morador_id'=>$morador_id,'dependente_id'=>$dependente_id,'unidade'=>$unidade_destino,
+                'visitante_id'=>$visitante_id,'documento'=>$documento,
+                'tipo_documento'=>$tipo_documento_informado ?: ($visitante['tipo_documento'] ?? ($convidado['tipo_documento'] ?? '')),
+                'placa'=>$placa,'tipo_acesso'=>$tipo_acesso,'pessoa_nome'=>$nome_visitante,
+            ]);
+            $contextoAlerta['_usuario_nome'] = (string)($_SESSION['usuario_nome'] ?? 'Usuário autenticado');
+            $alertasAtuais = alertas_unidade_avaliar($conexao, $tenant_id, $contextoAlerta, true);
+            $exigeCiencia = false;
+            foreach ($alertasAtuais as $alertaAtual) if (($alertaAtual['acao'] ?? '') !== 'APENAS_AVISAR') $exigeCiencia = true;
+            if ($exigeCiencia && $cienciaToken === '') {
+                $conexao->rollback();
+                http_response_code(409);
+                $alertasResposta = [];
+                foreach ($alertasAtuais as $alertaAtual) $alertasResposta[] = ['id'=>(int)$alertaAtual['id'],'titulo'=>$alertaAtual['titulo'],'mensagem'=>$alertaAtual['mensagem'],'nivel'=>$alertaAtual['nivel'],'acao'=>$alertaAtual['acao'],'unidade'=>$alertaAtual['unidade'],'instrucao_operador'=>$alertaAtual['instrucao_operador'],'telefone_contato'=>$alertaAtual['telefone_contato'],'divergencia_unidade'=>!empty($alertaAtual['divergencia_unidade'])];
+                $podeOverride = alertas_unidade_usuario_pode_override($conexao,(int)($_SESSION['usuario_id']??0),$tenant_id);
+                retornar_json(false, 'Há alertas que exigem ciência antes de registrar a entrada.', ['codigo'=>'ALERTA_PENDENTE','alertas'=>$alertasResposta,'pode_override'=>$podeOverride]);
+            }
+        }
+
         // Registro titular
         $papel_veiculo_titular = 'TITULAR';
         $registro_titular_id_nulo = null;
@@ -1082,6 +1143,24 @@ if ($metodo === 'POST') {
         $id_inserido = $conexao->insert_id;
         $stmt->close();
 
+        if ($contextoAlerta !== null) {
+            $usuarioIdAlerta = (int)($_SESSION['usuario_id'] ?? 0);
+            if ($cienciaToken !== '') {
+                $resultadoCiencia = alertas_unidade_validar_consumir_token($conexao, $tenant_id, $usuarioIdAlerta, $contextoAlerta, $cienciaToken, (int)$id_inserido);
+                if (empty($resultadoCiencia['sucesso'])) {
+                    $conexao->rollback();
+                    http_response_code(409);
+                    $alertasResposta = [];
+                    foreach (($resultadoCiencia['alertas'] ?? $alertasAtuais) as $alertaAtual) $alertasResposta[] = ['id'=>(int)$alertaAtual['id'],'titulo'=>$alertaAtual['titulo'],'mensagem'=>$alertaAtual['mensagem'],'nivel'=>$alertaAtual['nivel'],'acao'=>$alertaAtual['acao'],'unidade'=>$alertaAtual['unidade'],'instrucao_operador'=>$alertaAtual['instrucao_operador'],'telefone_contato'=>$alertaAtual['telefone_contato'],'divergencia_unidade'=>!empty($alertaAtual['divergencia_unidade'])];
+                    $podeOverride = alertas_unidade_usuario_pode_override($conexao,$usuarioIdAlerta,$tenant_id);
+                    retornar_json(false, $resultadoCiencia['mensagem'] ?? 'Os alertas mudaram. Revise a ciência antes de continuar.', ['codigo'=>'ALERTA_PENDENTE','alertas'=>$alertasResposta,'pode_override'=>$podeOverride]);
+                }
+                $notificacoesAlertas = $resultadoCiencia['notificacoes'] ?? [];
+            } else {
+                $notificacoesAlertas = alertas_unidade_registrar_avisos($conexao, $tenant_id, $contextoAlerta, (int)$id_inserido, $alertasAtuais, $usuarioIdAlerta, (string)($contextoAlerta['_usuario_nome'] ?? 'Usuário autenticado'));
+            }
+        }
+
         // Registros dos ocupantes — mesmo veículo/horário, cada um com seu próprio visitante_id.
         foreach ($ocupantesValidados as $ocupante) {
             $ocNome        = $ocupante['nome_completo'];
@@ -1125,6 +1204,31 @@ if ($metodo === 'POST') {
         $erroEsperado = $erroTransacao instanceof DomainException;
         log_registro('ERRO transacao registro+ocupantes', ['erro' => $erroTransacao->getMessage(), 'codigo' => (int)$erroTransacao->getCode()]);
         retornar_json(false, $erroEsperado ? $erroTransacao->getMessage() : 'Não foi possível registrar o acesso.');
+    }
+
+    foreach ($notificacoesAlertas as $notificacaoAlerta) {
+        if (!is_array($notificacaoAlerta) || empty($notificacaoAlerta['alerta']) || (int)($notificacaoAlerta['morador_id'] ?? 0) <= 0) continue;
+        alertas_unidade_notificar_morador($conexao, $tenant_id, $notificacaoAlerta['alerta'], (int)$notificacaoAlerta['morador_id'], (int)$id_inserido, $contextoAlerta ?? [], (string)($notificacaoAlerta['decisao'] ?? 'CIENTE_LIBERADO'));
+    }
+    try {
+        $stmtOverrides = $conexao->prepare('SELECT c.alerta_id,a.titulo FROM alertas_unidade_ciencias c INNER JOIN alertas_unidade a ON a.tenant_id=c.tenant_id AND a.id=c.alerta_id WHERE c.tenant_id=? AND c.registro_acesso_id=? AND c.decisao=\'OVERRIDE_SUPERVISOR\'');
+        if ($stmtOverrides) {
+            $stmtOverrides->bind_param('ii', $tenant_id, $id_inserido);
+            if ($stmtOverrides->execute()) {
+                $resOverrides = $stmtOverrides->get_result();
+                while ($override = $resOverrides->fetch_assoc()) {
+                    alertas_acesso_processar_evento($conexao, (int)$tenant_id, 'alerta_unidade_override', [
+                        'placa'=>$placa,'modelo'=>$modelo,'cor'=>$cor,'pessoa_nome'=>$nome_visitante,
+                        'pessoa_cpf'=>$documento,'unidade'=>$unidade_destino,
+                        'observacao'=>'Override de supervisor em alerta crítico da unidade: ' . (string)$override['titulo'],
+                        'tipo_acesso'=>$tipo_acesso,
+                    ], 'alerta_unidade_override_' . (int)$id_inserido . '_' . (int)$override['alerta_id']);
+                }
+            }
+            $stmtOverrides->close();
+        }
+    } catch (Throwable $erroOverride) {
+        log_registro('ALERTA DE OVERRIDE FALHOU (não bloqueante)', ['registro_id'=>$id_inserido]);
     }
 
     log_registro('INSERT OK', ['id' => $id_inserido, 'status' => $status, 'tipo_acesso' => $tipo_acesso, 'ocupantes' => count($ocupantesRegistrados)]);

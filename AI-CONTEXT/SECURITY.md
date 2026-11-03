@@ -45,3 +45,10 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
   projetos, documentos, impressão e imagens devem aplicar o mesmo escopo server-side.
 - Uma URL direta, um botão oculto ou um departamento enviado no payload nunca substitui
   a resolução do departamento armazenado na O.S. e a validação da sessão autenticada.
+
+
+## 7. Alertas da Unidade e QR
+- APIs administrativas derivam `tenant_id` da sessão e aplicam RBAC (`moradores`, `registro`, `acesso`); APIs do Portal resolvem tenant/unidade/morador pelo Bearer validado contra `sessoes_portal` e morador ativo. O Console deriva tenant do dispositivo ativo autenticado no banco; tenant nunca vem do payload.
+- Consultas e gravações de alertas, alvos, convites, registros e acionamentos devem permanecer no mesmo tenant. Documentos são normalizados para comparação e mascarados nos logs/listagens; a ciência guarda somente documento mascarado.
+- Tokens de ciência são opacos, contextualizados, de uso único e revalidados sob transação. Não aceitar decisão, alerta ou supervisor escolhidos pelo cliente sem validação server-side/RBAC.
+- Entradas falham fechadas se as tabelas requeridas da migration estiverem ausentes, retornando `MIGRATION_ALERTAS_PENDENTE`; não liberar acesso por fallback sem política carregada. QR do Portal deve enviar Bearer e só pode consultar/alterar recursos do próprio tenant/morador.

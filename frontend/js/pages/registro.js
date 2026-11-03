@@ -13,6 +13,7 @@ const API_MORADORES   = '../api/api_moradores.php';
 const API_DEPENDENTES = '../api/api_dependentes.php';
 const API_UNIDADES    = '../api/api_unidades.php';
 const API_CONVIDADOS = '../api/api_convidados.php';
+const API_ALERTAS_UNIDADE = '../api/api_alertas_unidade.php';
 const REGISTRO_FEEDBACK_STORAGE_KEY = 'registro_manual_feedback';
 
 let registrosCache = [];
@@ -26,6 +27,13 @@ let politicaVisitantes = null;
 let registroLifecycleToken = 0;
 let documentoBuscaToken = 0;
 let convidadoSelecaoToken = 0;
+let registroCienciaTimer = null;
+let registroCienciaController = null;
+let registroCienciaVersion = 0;
+let registroCienciaState = { chave: '', contexto: null, resultado: null, token: '' };
+let registroCienciaListeners = [];
+let registroCienciaModalResolver = null;
+let registroCienciaModalPreviousFocus = null;
 
 function gerarIdempotencyKey() {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -47,6 +55,7 @@ function garantirIdempotencyKey() {
 function assinaturaRegistro(payload) {
     const dados = { ...payload };
     delete dados.idempotency_key;
+    delete dados.ciencia_token;
     return JSON.stringify(dados);
 }
 
@@ -63,6 +72,7 @@ export function init() {
     _setupTipoAcesso();
     _setupModoRegistro();
     _setupForm();
+    _setupCienciaRegistro();
     _setupBusca();
     _setupActions();
     _setupMascaraDocumento();
@@ -94,6 +104,7 @@ export function destroy() {
     registroLifecycleToken += 1;
     documentoBuscaToken += 1;
     convidadoSelecaoToken += 1;
+    _destroyCienciaRegistro();
     if (moduloConvidados?.destroy) {
         try { moduloConvidados.destroy(); } catch (error) { console.warn('[Registro][Convidados] Falha ao destruir módulo:', error); }
     }
@@ -882,6 +893,398 @@ function _setupForm() {
     if (tipo) tipo.addEventListener('change', onTipoChange);
 }
 
+// ── Pré-validação e ciência de alertas ────────────────────────────────────────
+function _setupCienciaRegistro() {
+    const ids = [
+        'tipoRegistro', 'tipoDocRegistro', 'documentoRegistro', 'placaRegistro',
+        'unidadeMoradorRegistro', 'moradorSelecionadoRegistro', 'checkDependente',
+        'dependenteSelecionadoRegistro', 'unidadeDestinoRegistro', 'moradorDestinoRegistro', 'dataHoraRegistro'
+    ];
+    ids.forEach((id) => {
+        const elemento = document.getElementById(id);
+        if (!elemento) return;
+        const evento = elemento.tagName === 'INPUT' && ['text', 'checkbox'].includes(elemento.type) ? 'input' : 'change';
+        const handler = () => {
+            if (id === 'checkDependente' && elemento.type === 'checkbox') {
+                _invalidarCienciaRegistro();
+            } else {
+                _invalidarCienciaRegistro();
+            }
+            _agendarPreflightCienciaRegistro();
+        };
+        elemento.addEventListener(evento, handler);
+        registroCienciaListeners.push({ elemento, evento, handler });
+    });
+
+    document.querySelectorAll('input[name="tipo_acesso"]').forEach((elemento) => {
+        const handler = () => {
+            _invalidarCienciaRegistro();
+            _agendarPreflightCienciaRegistro();
+        };
+        elemento.addEventListener('change', handler);
+        registroCienciaListeners.push({ elemento, evento: 'change', handler });
+    });
+
+    const modal = document.getElementById('registroCienciaModal');
+    const cancelar = document.getElementById('btnRegistroCienciaCancelar');
+    const confirmar = document.getElementById('btnRegistroCienciaConfirmar');
+    const onCancelar = () => _resolverModalCiencia({ continuar: false });
+    if (cancelar) {
+        cancelar.addEventListener('click', onCancelar);
+        registroCienciaListeners.push({ elemento: cancelar, evento: 'click', handler: onCancelar });
+    }
+    if (confirmar) {
+        confirmar.addEventListener('click', _confirmarModalCiencia);
+        registroCienciaListeners.push({ elemento: confirmar, evento: 'click', handler: _confirmarModalCiencia });
+    }
+    if (modal) {
+        const handler = (evento) => {
+            if (evento.target === modal) evento.preventDefault();
+        };
+        modal.addEventListener('click', handler);
+        registroCienciaListeners.push({ elemento: modal, evento: 'click', handler });
+    }
+    document.addEventListener('keydown', _onCienciaRegistroKeydown);
+    registroCienciaListeners.push({ elemento: document, evento: 'keydown', handler: _onCienciaRegistroKeydown });
+}
+
+function _destroyCienciaRegistro() {
+    if (registroCienciaTimer) clearTimeout(registroCienciaTimer);
+    registroCienciaTimer = null;
+    registroCienciaController?.abort();
+    registroCienciaController = null;
+    registroCienciaListeners.forEach(({ elemento, evento, handler }) => elemento.removeEventListener(evento, handler));
+    registroCienciaListeners = [];
+    _resolverModalCiencia({ continuar: false });
+    registroCienciaVersion += 1;
+    registroCienciaState = { chave: '', contexto: null, resultado: null, token: '' };
+    _renderBannerCienciaRegistro(null);
+}
+
+function _invalidarCienciaRegistro() {
+    registroCienciaVersion += 1;
+    if (registroCienciaTimer) clearTimeout(registroCienciaTimer);
+    registroCienciaTimer = null;
+    registroCienciaController?.abort();
+    registroCienciaController = null;
+    registroCienciaState = { chave: '', contexto: null, resultado: null, token: '' };
+    _resolverModalCiencia({ continuar: false });
+    _renderBannerCienciaRegistro(null);
+}
+
+function _agendarPreflightCienciaRegistro() {
+    if (registroCienciaTimer) clearTimeout(registroCienciaTimer);
+    const versao = registroCienciaVersion;
+    registroCienciaTimer = setTimeout(() => {
+        registroCienciaTimer = null;
+        void _executarPreflightCienciaRegistro(versao);
+    }, 450);
+}
+
+function _obterContextoCienciaRegistro() {
+    const tipo = String(document.getElementById('tipoRegistro')?.value || '').trim();
+    const tipoAcesso = _getTipoAcesso();
+    if (!tipo || tipoAcesso === 'Saída') return null;
+
+    const eVisitante = _tipoExigeDocumento(tipo);
+    const unidade = eVisitante
+        ? (document.getElementById('unidadeDestinoRegistro')?.value || '').trim()
+        : (document.getElementById('unidadeMoradorRegistro')?.value || '').trim();
+    const moradorId = eVisitante
+        ? (document.getElementById('moradorDestinoRegistro')?.value || '')
+        : (document.getElementById('moradorId')?.value || document.getElementById('moradorSelecionadoRegistro')?.value || '');
+    const dependenteEl = document.getElementById('dependenteSelecionadoRegistro');
+    const dependenteId = !eVisitante && document.getElementById('checkDependente')?.checked
+        ? (dependenteEl?.value || '')
+        : '';
+    const dataHoraRegistro = document.getElementById('dataHoraRegistro')?.value || '';
+    const contexto = {
+        contexto: 'REGISTRO_MANUAL',
+        unidade,
+        morador_id: moradorId ? Number(moradorId) || moradorId : null,
+        dependente_id: dependenteId ? Number(dependenteId) || dependenteId : null,
+        tipo_pessoa: tipo,
+        visitante_id: eVisitante ? ((document.getElementById('visitanteIdRegistro')?.value || '').trim() || null) : null,
+        documento: eVisitante ? ((document.getElementById('documentoRegistro')?.value || '').trim() || null) : null,
+        tipo_documento: eVisitante ? (document.getElementById('tipoDocRegistro')?.value || null) : null,
+        placa: _isPedestre() ? null : (normalizarPlaca(document.getElementById('placaRegistro')?.value || '') || null),
+        tipo_acesso: tipoAcesso,
+        data_hora: dataHoraRegistro ? dataHoraRegistro.replace('T', ' ') + ':00' : null
+    };
+    if (!contexto.unidade || !contexto.morador_id || (eVisitante && !contexto.visitante_id)) return null;
+    if (!eVisitante && contexto.dependente_id && !document.getElementById('dependenteSelecionadoRegistro')?.value) return null;
+    return contexto;
+}
+
+function _chaveContextoCiencia(contexto) {
+    return contexto ? JSON.stringify(contexto) : '';
+}
+
+async function _executarPreflightCienciaRegistro(versao = registroCienciaVersion) {
+    const contexto = _obterContextoCienciaRegistro();
+    if (!contexto || versao !== registroCienciaVersion || !registroEstaAtivo()) return null;
+    const chave = _chaveContextoCiencia(contexto);
+    registroCienciaController?.abort();
+    const controller = new AbortController();
+    registroCienciaController = controller;
+    try {
+        const resposta = await _solicitarCienciaRegistro('verificar', contexto, controller.signal);
+        if (versao !== registroCienciaVersion || controller.signal.aborted || !registroEstaAtivo()) return null;
+        registroCienciaState = { chave, contexto, resultado: resposta.data, token: '' };
+        _renderBannerCienciaRegistro(resposta.data);
+        return resposta.data;
+    } catch (error) {
+        if (error?.name === 'AbortError' || controller.signal.aborted) return null;
+        console.warn('[Registro][Alertas] Falha no preflight:', error);
+        _renderBannerCienciaRegistro(null);
+        return null;
+    } finally {
+        if (registroCienciaController === controller) registroCienciaController = null;
+    }
+}
+
+async function _solicitarCienciaRegistro(acao, corpo, signal) {
+    const url = `${API_ALERTAS_UNIDADE}?acao=${encodeURIComponent(acao === 'verificar' ? 'verificar' : 'registrar_ciencia')}`;
+    const response = await fetch(url, {
+        method: 'POST', credentials: 'include', signal,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(corpo)
+    });
+    const texto = await response.text();
+    let data;
+    try { data = texto ? JSON.parse(texto) : {}; } catch (_) { throw new Error(`A API de alertas não retornou JSON válido (HTTP ${response.status}).`); }
+    if (!response.ok && response.status !== 409) throw new Error(data.mensagem || `Não foi possível validar alertas (HTTP ${response.status}).`);
+    return { response, data };
+}
+
+function _dadosCiencia(data) {
+    return data?.dados && typeof data.dados === 'object' ? data.dados : {};
+}
+
+function _alertasCiencia(data) {
+    const alertas = _dadosCiencia(data).alertas;
+    return Array.isArray(alertas) ? alertas : [];
+}
+
+function _acaoAlertaCiencia(alerta) {
+    return String(alerta?.acao || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+}
+
+function _alertaExigeDecisao(alerta) {
+    return ['EXIGIR_CIENTE', 'CONTATAR_MORADOR', 'BLOQUEAR'].includes(_acaoAlertaCiencia(alerta));
+}
+
+function _resultadoExigeCiencia(data) {
+    return _alertasCiencia(data).some(_alertaExigeDecisao);
+}
+
+function _renderBannerCienciaRegistro(data) {
+    const banner = document.getElementById('registroCienciaBanner');
+    if (!banner) return;
+    const alertas = _alertasCiencia(data).filter(Boolean);
+    if (!alertas.length) { banner.hidden = true; banner.innerHTML = ''; return; }
+    banner.innerHTML = `<div class="ciencia-banner__heading"><i class="fas fa-shield-alt"></i><span>Pré-validação do acesso</span></div>
+        ${alertas.map((alerta) => `<div class="ciencia-banner__item"><strong>${_esc(alerta.titulo || 'Alerta de acesso')}</strong>
+            <span> · Nível: ${_esc(alerta.nivel || 'AVISO')} · Ação: ${_esc(alerta.acao || 'APENAS_AVISAR')}</span>
+            <div>${_esc(alerta.mensagem || '')}</div>
+            ${alerta.instrucao_operador ? `<div><strong>Orientação:</strong> ${_esc(alerta.instrucao_operador)}</div>` : ''}</div>`).join('')}`;
+    banner.hidden = false;
+}
+
+function _renderModalCienciaRegistro(data) {
+    const alertas = _alertasCiencia(data);
+    const modal = document.getElementById('registroCienciaModal');
+    const lista = document.getElementById('registroCienciaAlertas');
+    const descricao = document.getElementById('registroCienciaDescricao');
+    const erro = document.getElementById('registroCienciaErro');
+    const confirmar = document.getElementById('btnRegistroCienciaConfirmar');
+    const decisivos = alertas.filter(_alertaExigeDecisao);
+    const bloqueioSemOverride = decisivos.some((alerta) => _acaoAlertaCiencia(alerta) === 'BLOQUEAR') && !_dadosCiencia(data).pode_override;
+    if (!modal || !lista || !descricao || !confirmar) return false;
+    descricao.textContent = bloqueioSemOverride
+        ? 'Há um bloqueio de acesso e este operador não possui permissão para override. A entrada não poderá continuar.'
+        : 'Leia os alertas e registre uma decisão explícita para continuar. Alertas informativos não exigem decisão.';
+    lista.innerHTML = alertas.map((alerta, index) => {
+        const acao = _acaoAlertaCiencia(alerta);
+        const classe = acao === 'BLOQUEAR' ? 'ciencia-alert--bloquear' : acao === 'CONTATAR_MORADOR' ? 'ciencia-alert--contatar' : '';
+        let decisao = '';
+        if (acao === 'EXIGIR_CIENTE') {
+            decisao = `<div class="ciencia-decision"><label><input type="checkbox" data-ciencia-decisao="ciente" data-ciencia-index="${index}"> Confirmo que li este alerta e estou ciente das condições para liberar.</label>${String(alerta.nivel || '').toUpperCase() === 'CRITICO' ? `<textarea class="ciencia-justificativa" data-ciencia-justificativa="${index}" minlength="10" maxlength="500" placeholder="Justificativa obrigatória (mínimo de 10 caracteres)"></textarea>` : ''}</div>`;
+        } else if (acao === 'CONTATAR_MORADOR') {
+            decisao = `<div class="ciencia-decision"><strong>Após contatar o morador:</strong>
+                <label><input type="radio" name="ciencia-contato-${index}" value="autoriza" data-ciencia-decisao="contato" data-ciencia-index="${index}"> Morador autorizou a liberação</label>
+                <label><input type="radio" name="ciencia-contato-${index}" value="nega" data-ciencia-decisao="contato" data-ciencia-index="${index}"> Morador negou a liberação</label></div>`;
+        } else if (acao === 'BLOQUEAR' && _dadosCiencia(data).pode_override) {
+            decisao = `<div class="ciencia-decision"><strong>Override de supervisor</strong>
+                <label><input type="checkbox" data-ciencia-decisao="override" data-ciencia-index="${index}"> Confirmo que tenho permissão de supervisor para sobrescrever o bloqueio.</label>
+                <textarea class="ciencia-justificativa" data-ciencia-justificativa="${index}" minlength="10" maxlength="1000" placeholder="Justificativa obrigatória (mínimo de 10 caracteres)"></textarea></div>`;
+        }
+        return `<article class="ciencia-alert ${classe}"><div class="ciencia-alert__meta"><span>Nível: ${_esc(alerta.nivel || 'AVISO')}</span><span>Ação: ${_esc(alerta.acao || 'APENAS_AVISAR')}</span></div>
+            <strong class="ciencia-alert__title">${_esc(alerta.titulo || 'Alerta de acesso')}</strong><p class="ciencia-alert__message">${_esc(alerta.mensagem || '')}</p>
+            ${alerta.instrucao_operador ? `<p class="ciencia-alert__instruction">Orientação: ${_esc(alerta.instrucao_operador)}</p>` : ''}
+            ${alerta.telefone_contato ? `<p class="ciencia-alert__instruction">Contato: ${_esc(alerta.telefone_contato)}</p>` : ''}${decisao}</article>`;
+    }).join('') + (decisivos.some((alerta) => _acaoAlertaCiencia(alerta) === 'BLOQUEAR') && _dadosCiencia(data).pode_override
+        ? '<div class="ciencia-decision"><label for="registroCienciaSenhaSupervisor">Confirme sua senha de supervisor</label><input id="registroCienciaSenhaSupervisor" type="password" autocomplete="current-password" maxlength="1024" required></div>'
+        : '');
+    if (erro) { erro.hidden = true; erro.textContent = ''; }
+    confirmar.disabled = bloqueioSemOverride;
+    return true;
+}
+
+function _onCienciaRegistroKeydown(evento) {
+    const modal = document.getElementById('registroCienciaModal');
+    if (!modal || modal.hidden) return;
+    if (evento.key === 'Escape') {
+        evento.preventDefault();
+        evento.stopPropagation();
+        return;
+    }
+    if (evento.key !== 'Tab') return;
+    const focaveis = [...modal.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], select:not([disabled])')]
+        .filter((elemento) => elemento.offsetParent !== null);
+    if (!focaveis.length) return;
+    const primeiro = focaveis[0];
+    const ultimo = focaveis[focaveis.length - 1];
+    if (evento.shiftKey && document.activeElement === primeiro) {
+        evento.preventDefault();
+        ultimo.focus();
+    } else if (!evento.shiftKey && document.activeElement === ultimo) {
+        evento.preventDefault();
+        primeiro.focus();
+    }
+}
+
+function _abrirModalCienciaRegistro(data) {
+    const modal = document.getElementById('registroCienciaModal');
+    if (!modal || !_renderModalCienciaRegistro(data)) return Promise.resolve({ continuar: false });
+    registroCienciaState.modalData = data;
+    registroCienciaModalPreviousFocus = document.activeElement;
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    document.getElementById('btnRegistroCienciaConfirmar')?.focus();
+    return new Promise((resolve) => { registroCienciaModalResolver = resolve; });
+}
+
+function _resolverModalCiencia(resultado) {
+    const resolver = registroCienciaModalResolver;
+    registroCienciaModalResolver = null;
+    const modal = document.getElementById('registroCienciaModal');
+    if (modal) { modal.hidden = true; modal.setAttribute('aria-hidden', 'true'); }
+    const senha = document.getElementById('registroCienciaSenhaSupervisor');
+    if (senha) senha.value = '';
+    if (resolver) resolver(resultado || { continuar: false });
+    if (registroCienciaModalPreviousFocus?.isConnected) registroCienciaModalPreviousFocus.focus();
+    registroCienciaModalPreviousFocus = null;
+}
+
+function _mostrarErroModalCiencia(mensagem) {
+    const erro = document.getElementById('registroCienciaErro');
+    if (erro) { erro.textContent = mensagem; erro.hidden = false; }
+}
+
+async function _confirmarModalCiencia() {
+    const data = registroCienciaState.modalData;
+    if (!data) return;
+    const alertas = _alertasCiencia(data);
+    const decisoes = [];
+    let negado = false;
+    let senhaSupervisor = '';
+    for (let index = 0; index < alertas.length; index += 1) {
+        const alerta = alertas[index];
+        const acao = _acaoAlertaCiencia(alerta);
+        if (!_alertaExigeDecisao(alerta)) continue;
+        if (!alerta.id) { _mostrarErroModalCiencia('O alerta não possui identificador para registrar a ciência. Entrada bloqueada por segurança.'); return; }
+        if (acao === 'EXIGIR_CIENTE') {
+            if (!document.querySelector(`[data-ciencia-decisao="ciente"][data-ciencia-index="${index}"]`)?.checked) { _mostrarErroModalCiencia('Marque a confirmação explícita para cada alerta que exige ciência.'); return; }
+            const justificativa = document.querySelector(`[data-ciencia-justificativa="${index}"]`)?.value.trim() || '';
+            if (String(alerta.nivel || '').toUpperCase() === 'CRITICO' && justificativa.length < 10) { _mostrarErroModalCiencia('A justificativa para liberar um alerta crítico deve ter pelo menos 10 caracteres.'); return; }
+            decisoes.push({ alerta_id: alerta.id, decisao: 'CIENTE_LIBERADO', ...(justificativa ? { justificativa } : {}) });
+        } else if (acao === 'CONTATAR_MORADOR') {
+            const escolha = document.querySelector(`input[name="ciencia-contato-${index}"]:checked`)?.value;
+            if (!escolha) { _mostrarErroModalCiencia('Informe se o morador autorizou ou negou a liberação.'); return; }
+            const decisao = escolha === 'autoriza' ? 'CONTATO_MORADOR_AUTORIZOU' : 'CONTATO_MORADOR_NEGOU';
+            decisoes.push({ alerta_id: alerta.id, decisao });
+            negado = negado || decisao === 'CONTATO_MORADOR_NEGOU';
+        } else if (acao === 'BLOQUEAR') {
+            if (!_dadosCiencia(data).pode_override) { _mostrarErroModalCiencia('Este bloqueio não permite override para o operador atual.'); return; }
+            if (!document.querySelector(`[data-ciencia-decisao="override"][data-ciencia-index="${index}"]`)?.checked) { _mostrarErroModalCiencia('Confirme a permissão de supervisor para sobrescrever o bloqueio.'); return; }
+            const justificativa = document.querySelector(`[data-ciencia-justificativa="${index}"]`)?.value.trim() || '';
+            if (justificativa.length < 10) { _mostrarErroModalCiencia('A justificativa do override deve ter pelo menos 10 caracteres.'); return; }
+            senhaSupervisor = document.getElementById('registroCienciaSenhaSupervisor')?.value || '';
+            if (!senhaSupervisor) { _mostrarErroModalCiencia('Informe a senha do supervisor para confirmar o override.'); return; }
+            decisoes.push({ alerta_id: alerta.id, decisao: 'OVERRIDE_SUPERVISOR', justificativa });
+        }
+    }
+    const botao = document.getElementById('btnRegistroCienciaConfirmar');
+    if (botao) { botao.disabled = true; botao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando ciência...'; }
+    try {
+        const resposta = await _solicitarCienciaRegistro('registrar', { ...registroCienciaState.contexto, decisoes, ...(senhaSupervisor ? { senha_supervisor: senhaSupervisor } : {}) });
+        if (negado && resposta.data?.codigo === 'ACESSO_NEGADO_ALERTA') {
+            _resolverModalCiencia({ continuar: false, negado: true });
+            return;
+        }
+        const token = _dadosCiencia(resposta.data).ciencia_token;
+        if (!token || typeof token !== 'string') throw new Error('A API não retornou um token de ciência válido. Entrada bloqueada.');
+        const resultado = negado ? { continuar: false, negado: true } : { continuar: true, token };
+        _resolverModalCiencia(resultado);
+    } catch (error) {
+        _mostrarErroModalCiencia(error?.message || 'Não foi possível registrar a ciência. Entrada bloqueada.');
+        if (botao) { botao.disabled = false; botao.innerHTML = '<i class="fas fa-check"></i> Registrar ciência e continuar'; }
+    }
+}
+
+async function _garantirCienciaRegistro(contexto, lifecycleToken) {
+    if (!contexto || contexto.tipo_acesso === 'Saída') return { continuar: true, token: '' };
+    const versao = registroCienciaVersion;
+    let resposta;
+    try {
+        resposta = await _solicitarCienciaRegistro('verificar', contexto);
+    } catch (error) {
+        if (registroEstaAtivo(lifecycleToken)) mostrarAlerta('error', error?.message || 'Não foi possível validar os alertas do acesso. Entrada bloqueada.');
+        return { continuar: false };
+    }
+    if (!registroEstaAtivo(lifecycleToken) || versao !== registroCienciaVersion) return { continuar: false };
+    const data = resposta.data;
+    const chave = _chaveContextoCiencia(contexto);
+    registroCienciaState = { chave, contexto, resultado: data, token: '', modalData: data };
+    _renderBannerCienciaRegistro(data);
+    if (resposta.response.status === 409) {
+        mostrarAlerta('error', 'Os alertas do acesso mudaram. Revise a ciência antes de continuar.');
+        return { continuar: false };
+    }
+    if (_dadosCiencia(data).bloqueado && !_resultadoExigeCiencia(data)) {
+        mostrarAlerta('error', 'A entrada está bloqueada e não há fluxo de override disponível.');
+        return { continuar: false };
+    }
+    if (!_resultadoExigeCiencia(data)) return { continuar: true, token: '' };
+    const decisao = await _abrirModalCiencia(data);
+    if (!decisao.continuar) {
+        if (decisao.negado) mostrarAlerta('warning', 'O morador negou a liberação. A entrada não foi registrada.');
+        return { continuar: false };
+    }
+    return { continuar: true, token: decisao.token };
+}
+
+async function _resolverAlertaPendenteRegistro(data, contexto, lifecycleToken) {
+    const alertas = Array.isArray(data?.dados?.alertas) ? data.dados.alertas : [];
+    if (!contexto || !alertas.length || !registroEstaAtivo(lifecycleToken)) {
+        mostrarAlerta('error', 'A API sinalizou um alerta pendente sem contexto suficiente. Entrada bloqueada por segurança.');
+        return { continuar: false };
+    }
+    const pendente = {
+        sucesso: false,
+        dados: { ...(data.dados || {}), alertas, precisa_ciencia: true, pode_override: data.dados?.pode_override === true }
+    };
+    registroCienciaState = { chave: _chaveContextoCiencia(contexto), contexto, resultado: pendente, token: '', modalData: pendente };
+    _renderBannerCienciaRegistro(pendente);
+    const decisao = await _abrirModalCiencia(pendente);
+    if (!decisao.continuar) {
+        if (decisao.negado) mostrarAlerta('warning', 'O morador negou a liberação. A entrada não foi registrada.');
+        return { continuar: false };
+    }
+    return { continuar: true, token: decisao.token };
+}
+
 function _setupBusca() {
     const input = document.getElementById('buscaRegistro');
     if (!input) return;
@@ -1290,14 +1693,29 @@ async function carregarVeiculos() {
 async function carregarRegistros() {
     const lifecycleToken = registroLifecycleToken;
     const tbody = document.querySelector('#tabelaRegistros tbody');
+    const paramsUrl = new URLSearchParams(window.location.search);
+    const registroIdDireto = Number(paramsUrl.get('registro_id'));
+    const query = new URLSearchParams({ limite: '100' });
+    if (Number.isSafeInteger(registroIdDireto) && registroIdDireto > 0) {
+        query.set('registro_id', String(registroIdDireto));
+        query.set('limite', '1');
+    }
     setLoading(true);
     try {
-        const response = await fetch(`${API_REGISTROS}?limite=100`, { credentials: 'include' });
+        const response = await fetch(`${API_REGISTROS}?${query.toString()}`, { credentials: 'include' });
         const data = await response.json();
         if (!registroEstaAtivo(lifecycleToken)) return;
         if (!data.sucesso) { renderMensagemTabela(tbody, data.mensagem || 'Erro ao carregar registros.'); return; }
         registrosCache = data.dados || [];
         renderRegistros(registrosCache);
+        if (Number.isSafeInteger(registroIdDireto) && registroIdDireto > 0) {
+            const linha = document.getElementById(`registro-${registroIdDireto}`);
+            if (linha) {
+                linha.classList.add('registro-destacado');
+                linha.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                linha.focus({ preventScroll: true });
+            }
+        }
     } catch (error) {
         if (!registroEstaAtivo(lifecycleToken)) return;
         console.error('[Registro] Erro ao carregar registros:', error);
@@ -1356,7 +1774,7 @@ function renderRegistros(registros) {
             : '—';
 
         return `
-            <tr>
+            <tr id="registro-${Number.isSafeInteger(Number(id)) && Number(id) > 0 ? Number(id) : ''}" tabindex="-1">
                 <td data-label="Data/Hora">${dataHora}</td>
                 <td data-label="Placa"><span class="plate-badge">${placa}</span></td>
                 <td data-label="Modelo">${modelo}</td>
@@ -1480,6 +1898,11 @@ async function salvarRegistro() {
             }
         }
 
+        const contextoCiencia = _obterContextoCienciaRegistro();
+        const cienciaInicial = await _garantirCienciaRegistro(contextoCiencia, lifecycleToken);
+        if (!registroEstaAtivo(lifecycleToken) || !cienciaInicial.continuar) return;
+        if (cienciaInicial.token) payload.ciencia_token = cienciaInicial.token;
+
         const assinaturaAtual = assinaturaRegistro(payload);
         const campoIdempotency = document.getElementById('idempotencyKeyRegistro');
         if (ultimoEnvioRegistro
@@ -1498,6 +1921,7 @@ async function salvarRegistro() {
             ocupantes: Array.isArray(payload.ocupantes) ? payload.ocupantes.length : 0
         });
 
+        let retryAlertaPendente = false;
         let response = await fetch(API_REGISTROS, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1508,7 +1932,23 @@ async function salvarRegistro() {
         let data = await response.json();
         if (!registroEstaAtivo(lifecycleToken)) return;
 
-        if (!data.sucesso && data.dados?.codigo === 'IDEMPOTENCY_CONFLICT') {
+        if (!data.sucesso && (data.codigo === 'ALERTA_PENDENTE' || data.dados?.codigo === 'ALERTA_PENDENTE')) {
+            retryAlertaPendente = true;
+            const novaCiencia = await _resolverAlertaPendenteRegistro(data, contextoCiencia, lifecycleToken);
+            if (!registroEstaAtivo(lifecycleToken) || !novaCiencia.continuar) return;
+            if (novaCiencia.token) payload.ciencia_token = novaCiencia.token;
+            response = await fetch(API_REGISTROS, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload)
+            });
+            if (!registroEstaAtivo(lifecycleToken)) return;
+            data = await response.json();
+            if (!registroEstaAtivo(lifecycleToken)) return;
+        }
+
+        if (!retryAlertaPendente && !data.sucesso && data.dados?.codigo === 'IDEMPOTENCY_CONFLICT') {
             const campo = document.getElementById('idempotencyKeyRegistro');
             const novaChave = gerarIdempotencyKey();
             if (campo) campo.value = novaChave;

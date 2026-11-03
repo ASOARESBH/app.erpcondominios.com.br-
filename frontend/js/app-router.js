@@ -162,11 +162,18 @@ const AppRouter = {
             // 7. Atualizar URL (se solicitado)
             if (updateHistory) {
                 const urlParams = new URLSearchParams({ page: pageName });
-                if (pageName === 'registro') {
+                if (pageName === 'registro' || pageName === 'moradores') {
                     const abaSolicitada = new URLSearchParams(window.location.search).get('aba');
-                    if (abaSolicitada === 'manual' || abaSolicitada === 'convidados') {
+                    const abasPermitidas = pageName === 'registro'
+                        ? ['manual', 'convidados']
+                        : ['alertas'];
+                    if (abasPermitidas.includes(abaSolicitada)) {
                         urlParams.set('aba', abaSolicitada);
                     }
+                }
+                if (pageName === 'registro') {
+                    const registroId = new URLSearchParams(window.location.search).get('registro_id') || '';
+                    if (/^\d+$/.test(registroId) && Number(registroId) > 0) urlParams.set('registro_id', registroId);
                 }
                 const newUrl = `?${urlParams.toString()}`;
                 history.pushState({ page: pageName, aba: urlParams.get('aba') || null }, '', newUrl);

@@ -11,6 +11,8 @@
  * =====================================================
  */
 
+import * as MoradoresAlertas from './moradores-alertas.js';
+
 const DEBUG = true;
 const log = (...args) => DEBUG && console.log('[Moradores]', ...args);
 
@@ -68,6 +70,7 @@ function _exigirPermissaoMoradores(acao, mensagem) {
 export function init() {
     log('Inicializando módulo...');
     _setupTabs();
+    MoradoresAlertas.init();
     _setupValidacaoCPF();
     _setupValidacaoCPFDependente();
     _setupCascataUnidadeDependente();
@@ -157,11 +160,18 @@ export function init() {
     // Debounce nos filtros de relatórios
     _setupRelatoriosDebounce();
 
+    // Deep-link da nova aba: ?page=moradores&aba=alertas.
+    const abaSolicitada = new URLSearchParams(window.location.search).get('aba');
+    if (abaSolicitada === 'alertas') {
+        document.querySelector('.tab-button[data-tab="alertas"]')?.click();
+    }
+
     log('Módulo inicializado. window.MoradoresPage exposto.');
 }
 
 export function destroy() {
     log('Destruindo módulo...');
+    MoradoresAlertas.destroy();
     delete window.MoradoresPage;
     _configMoradores = null;
 }

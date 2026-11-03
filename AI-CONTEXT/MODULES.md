@@ -44,3 +44,8 @@ A rota SPA `config_moradores` pertence ao módulo protegido `sistema` e é acess
 A aba Lista de Convidados é parte da rota SPA `registro` e usa `api/api_convidados.php` para previsão, busca por documento, histórico, cancelamento e autoria. O Registro Manual vincula o acesso ao convite e atualiza entradas/status na mesma transação. A migration é `sql/migration_lista_convidados_mysql57.sql`. A gestão de convites pelo Portal do Morador ("Meus Convidados"), o app Flutter e integrações de hardware permanecem fora desta entrega; o Portal existente apenas ganhou suporte aos filtros de histórico para Entregador Autorizado e Familiar.
 
 Os tipos `Entregador Autorizado` e `Familiar` são categorias próprias nos registros e estão incluídos nos filtros/contadores de `relatorios`, CSV, PDFs gerais/ramificados e ranking, além do histórico do Portal do Morador.
+
+
+## 9. Alertas da Unidade
+
+A aba Alertas pertence à rota Moradores e ao RBAC `moradores`; suas APIs e dados vivem no domínio `alertas_unidade`. Regras são avaliadas em Registro Manual, Controle de Acesso e leitura de QR do Console, com ciência humana, bloqueio automático e histórico de acionamentos. O Portal web possui Meus Alertas e preflight de convites QR. Não confundir com `alertas_acesso`, que continua sendo o motor administrativo de detecção pós-evento. O app Flutter permanece fora do escopo autorizado nesta etapa.

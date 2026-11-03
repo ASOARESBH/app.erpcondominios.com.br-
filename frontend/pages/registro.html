@@ -19,6 +19,7 @@
 
     <div id="tab-registro-manual" class="tab-content active" role="tabpanel" aria-labelledby="tab-button-manual">
     <div id="alertBox"></div>
+    <div id="registroCienciaBanner" class="ciencia-banner" hidden role="status" aria-live="polite" aria-atomic="false"></div>
 
     <div class="page-card">
         <h2><i class="fas fa-plus-circle"></i> Registrar Acesso</h2>
@@ -278,6 +279,23 @@
                 </button>
             </div>
         </form>
+    </div>
+
+    <div id="registroCienciaModal" class="ciencia-modal" hidden role="dialog" aria-modal="true" aria-labelledby="registroCienciaTitulo" aria-describedby="registroCienciaDescricao">
+        <div class="ciencia-modal__dialog" role="document">
+            <div class="ciencia-modal__header">
+                <div><span class="ciencia-modal__eyebrow"><i class="fas fa-shield-alt"></i> Pré-validação de acesso</span><h2 id="registroCienciaTitulo">Ciência necessária</h2></div>
+            </div>
+            <div class="ciencia-modal__body">
+                <p id="registroCienciaDescricao" class="ciencia-modal__description"></p>
+                <div id="registroCienciaAlertas" class="ciencia-alert-list"></div>
+                <div id="registroCienciaErro" class="ciencia-modal__error" role="alert" hidden></div>
+            </div>
+            <div class="ciencia-modal__footer">
+                <button type="button" class="btn-secondary-modern" id="btnRegistroCienciaCancelar">Não continuar</button>
+                <button type="button" class="btn-primary-modern" id="btnRegistroCienciaConfirmar"><i class="fas fa-check"></i> Registrar ciência e continuar</button>
+            </div>
+        </div>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════

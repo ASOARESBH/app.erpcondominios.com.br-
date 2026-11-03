@@ -25,6 +25,7 @@ require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
 require_once 'funcoes_log.php';
 require_once __DIR__ . '/helpers/access_control_notification_helper.php';
+require_once __DIR__ . '/helpers/alertas_unidade_helper.php';
 
 // Função auxiliar para retornar JSON
 function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -39,6 +40,9 @@ function retornar_json($sucesso, $mensagem, $dados = null) {
 // Obter método e ação
 $metodo = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
+$conexao = conectar_banco();
+$tenant_id = 0;
+if (!$conexao) { http_response_code(500); retornar_json(false, 'Serviço de acesso temporariamente indisponível.'); }
 
 // ========================================
 // VALIDAR QR CODE
@@ -64,7 +68,7 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
     
     // Verificar se o dispositivo existe e está ativo
     $stmt_dispositivo = $conexao->prepare("
-        SELECT id, nome_dispositivo, ativo, total_acessos
+        SELECT id, tenant_id, nome_dispositivo, ativo, total_acessos
         FROM dispositivos_console
         WHERE token_acesso = ?
     ");
@@ -82,6 +86,12 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
         registrar_log('ACESSO_NEGADO', "Dispositivo inativo", "Dispositivo: {$dispositivo['nome_dispositivo']}, QR Code: {$qr_code}");
         retornar_json(false, "Dispositivo não autorizado: Dispositivo inativo");
     }
+
+    $tenant_id = (int)($dispositivo['tenant_id'] ?? 0);
+    if ($tenant_id <= 0 || !alertas_unidade_migration_instalada($conexao)) {
+        http_response_code(503);
+        retornar_json(false, 'O controle de alertas não está disponível para esta unidade. Aplique a migration do módulo antes de liberar acessos.', ['codigo'=>'MIGRATION_ALERTAS_PENDENTE']);
+    }
     
     // Atualizar último acesso e total de validações do dispositivo
     $novo_total = $dispositivo['total_acessos'] + 1;
@@ -90,10 +100,10 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
         SET data_ultimo_acesso = NOW(), 
             total_acessos = ?,
             ip_ultimo_acesso = ?
-        WHERE id = ?
+        WHERE tenant_id = ? AND id = ?
     ");
     $ip_validacao_temp = $_SERVER['REMOTE_ADDR'] ?? '';
-    $stmt_update_disp->bind_param("isi", $novo_total, $ip_validacao_temp, $dispositivo['id']);
+    $stmt_update_disp->bind_param("isii", $novo_total, $ip_validacao_temp, $tenant_id, $dispositivo['id']);
     $stmt_update_disp->execute();
     $stmt_update_disp->close();
     
@@ -115,15 +125,16 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
             a.*,
             v.nome_completo AS visitante_nome,
             v.documento AS visitante_documento,
+            v.tipo_documento AS visitante_tipo_documento,
             m.nome AS morador_nome,
             m.unidade AS morador_unidade,
             m.tenant_id AS morador_tenant_id
         FROM acessos_visitantes a
-        INNER JOIN visitantes v ON a.visitante_id = v.id
-        LEFT JOIN moradores m ON a.morador_id = m.id
-        WHERE a.qr_code = ? AND a.ativo = 1
+        INNER JOIN visitantes v ON a.visitante_id = v.id AND v.tenant_id = a.tenant_id
+        LEFT JOIN moradores m ON a.morador_id = m.id AND m.tenant_id = a.tenant_id
+        WHERE a.tenant_id = ? AND a.qr_code = ? AND a.ativo = 1
     ");
-    $stmt->bind_param("s", $qr_code);
+    $stmt->bind_param("is", $tenant_id, $qr_code);
     $stmt->execute();
     $acesso = $stmt->get_result()->fetch_assoc();
     
@@ -157,11 +168,30 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
             }
         }
         
-        // ACESSO PERMITIDO
-        registrarValidacao($conexao, 'visitante', $acesso['id'], null, $qr_code, $acesso['token_acesso'], 'permitido', null, $data_hora, $ip_validacao, $user_agent, $console_usuario, $dispositivo_id);
-        
-        // Registrar no controle de acesso
-        $registro_console_id = registrarControleAcessoValidacao($conexao, [
+        $conexao->begin_transaction();
+        try {
+        $tipoPessoaAlerta = alertas_unidade_mapear_tipo($acesso['tipo_visitante'] ?? '') ?: 'VISITANTE';
+        $contextoAlerta = alertas_unidade_construir_contexto_registro($conexao,$tenant_id,[
+            'contexto'=>'CONVIDADOS','data_hora'=>$data_hora,'tipo_pessoa'=>$tipoPessoaAlerta,
+            'morador_id'=>(int)($acesso['morador_id']??0),'unidade'=>$acesso['unidade_destino']?:($acesso['morador_unidade']??''),
+            'visitante_id'=>(int)$acesso['visitante_id'],'documento'=>$acesso['visitante_documento'],
+            'tipo_documento'=>$acesso['visitante_tipo_documento'],'placa'=>$acesso['placa']??'',
+            'tipo_acesso'=>'Entrada','pessoa_nome'=>$acesso['visitante_nome'],
+        ]);
+        $alertasUnidade = alertas_unidade_avaliar($conexao,$tenant_id,$contextoAlerta,true);
+        $bloqueadoPorAlerta = false;
+        foreach($alertasUnidade as $alertaUnidade) if(($alertaUnidade['acao']??'')==='BLOQUEAR') $bloqueadoPorAlerta=true;
+        $nomeOperadorConsole = 'Dispositivo: ' . (string)$dispositivo_nome;
+            if($bloqueadoPorAlerta){
+                alertas_unidade_registrar_automaticos($conexao,$tenant_id,$contextoAlerta,0,$alertasUnidade,0,$nomeOperadorConsole,true);
+                registrarValidacao($conexao,'visitante',$acesso['id'],null,$qr_code,$acesso['token_acesso'],'negado','Bloqueado por alerta da unidade',$data_hora,$ip_validacao,$user_agent,$console_usuario,$dispositivo_id);
+                $conexao->commit();
+                retornar_json(false,'Acesso bloqueado por alerta da unidade.',['codigo'=>'ACESSO_BLOQUEADO_ALERTA','alertas'=>$alertasUnidade]);
+            }
+
+            $registro_console_id = registrarControleAcessoValidacao($conexao, [
+            'tenant_id' => $tenant_id,
+            'data_hora' => $data_hora,
             'placa' => $acesso['placa'],
             'modelo' => $acesso['modelo'],
             'cor' => $acesso['cor'],
@@ -172,8 +202,21 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
             'dias_permanencia' => $acesso['dias_permanencia'],
             'status' => 'Acesso liberado via QR Code',
             'liberado' => 1,
-            'observacao' => $acesso['temporario'] == 1 ? "Acesso temporário: {$acesso['hora_inicial']} - {$acesso['hora_final']}" : "Tipo de acesso: {$acesso['tipo_acesso']}"
-        ]);
+            'observacao' => $acesso['temporario'] == 1 ? "Acesso temporário: {$acesso['hora_inicial']} - {$acesso['hora_final']}" : "Tipo de acesso: {$acesso['tipo_acesso']}",
+            'visitante_id' => (int)$acesso['visitante_id'],
+            'documento_visitante' => $acesso['visitante_documento'],
+            'usuario_liberou' => $console_usuario
+            ]);
+            if(!$registro_console_id) throw new RuntimeException('Não foi possível gravar o acesso validado.');
+            registrarValidacao($conexao,'visitante',$acesso['id'],null,$qr_code,$acesso['token_acesso'],'permitido',null,$data_hora,$ip_validacao,$user_agent,$console_usuario,$dispositivo_id);
+            alertas_unidade_registrar_automaticos($conexao,$tenant_id,$contextoAlerta,(int)$registro_console_id,$alertasUnidade,0,$nomeOperadorConsole,false);
+            $conexao->commit();
+        } catch(Throwable $erroAcesso){
+            try{$conexao->rollback();}catch(Throwable $erroRollback){}
+            error_log('[ConsoleAcesso] Falha ao concluir validação de QR.');
+            http_response_code(500);
+            retornar_json(false,'Não foi possível concluir a validação do acesso.');
+        }
         $notificacao_console = ['sucesso' => false, 'motivo' => 'registro_nao_criado'];
         if ($registro_console_id && !empty($acesso['morador_tenant_id'])) {
             try {
@@ -210,7 +253,8 @@ if ($metodo === 'POST' && $action === 'validar_qrcode') {
             'temporario' => $acesso['temporario'] == 1,
             'horario' => $acesso['temporario'] == 1 ? "{$acesso['hora_inicial']} - {$acesso['hora_final']}" : null,
             'veiculo' => $acesso['placa'] ? "{$acesso['placa']} - {$acesso['modelo']} {$acesso['cor']}" : null,
-            'valido_ate' => $acesso['temporario'] == 1 ? $acesso['data_acesso'] : $acesso['data_final']
+            'valido_ate' => $acesso['temporario'] == 1 ? $acesso['data_acesso'] : $acesso['data_final'],
+            'alertas_unidade' => $alertasUnidade
         ]);
     }
     
@@ -417,13 +461,14 @@ function validarToken($token, $data_validade) {
 }
 
 function registrarValidacao($conexao, $tipo, $acesso_id, $qrcode_temp_id, $qr_code, $token, $resultado, $motivo, $data_hora, $ip, $user_agent, $console_usuario, $dispositivo_id = null) {
+    global $tenant_id;
     try {
         $stmt = $conexao->prepare("
             INSERT INTO validacoes_acesso 
-            (tipo_validacao, acesso_id, qrcode_temporario_id, qr_code, token, resultado, motivo, data_hora, ip_validacao, user_agent, console_usuario, dispositivo_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (tenant_id, tipo_validacao, acesso_id, qrcode_temporario_id, qr_code, token, resultado, motivo, data_hora, ip_validacao, user_agent, console_usuario, dispositivo_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        $stmt->bind_param("siissssssssi", $tipo, $acesso_id, $qrcode_temp_id, $qr_code, $token, $resultado, $motivo, $data_hora, $ip, $user_agent, $console_usuario, $dispositivo_id);
+        $stmt->bind_param("isiissssssssi", $tenant_id, $tipo, $acesso_id, $qrcode_temp_id, $qr_code, $token, $resultado, $motivo, $data_hora, $ip, $user_agent, $console_usuario, $dispositivo_id);
         $stmt->execute();
         return true;
     } catch (Exception $e) {
@@ -434,7 +479,9 @@ function registrarValidacao($conexao, $tipo, $acesso_id, $qrcode_temp_id, $qr_co
 
 function registrarControleAcessoValidacao($conexao, $dados) {
     try {
-        $data_hora = date('Y-m-d H:i:s');
+        $tenantId = (int)($dados['tenant_id'] ?? 0);
+        if ($tenantId <= 0) return null;
+        $data_hora = $dados['data_hora'] ?? date('Y-m-d H:i:s');
         $placa = $dados['placa'] ?? null;
         $modelo = $dados['modelo'] ?? null;
         $cor = $dados['cor'] ?? null;
@@ -449,16 +496,14 @@ function registrarControleAcessoValidacao($conexao, $dados) {
         
         $stmt = $conexao->prepare("
             INSERT INTO registros_acesso 
-            (data_hora, placa, modelo, cor, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (tenant_id, data_hora, placa, modelo, cor, tipo, morador_id, nome_visitante, unidade_destino, dias_permanencia, status, liberado, observacao, tipo_acesso, visitante_id, documento_visitante, usuario_liberou)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        
-        $stmt->bind_param(
-            "ssssissisiss",
-            $data_hora, $placa, $modelo, $cor, $tipo, $morador_id,
-            $nome_visitante, $unidade_destino, $dias_permanencia,
-            $status, $liberado, $observacao
-        );
+        $tipo_acesso = 'Entrada';
+        $visitante_id = $dados['visitante_id'] ?? null;
+        $documento = $dados['documento_visitante'] ?? null;
+        $usuario_liberou = $dados['usuario_liberou'] ?? null;
+        $stmt->bind_param('isssssissisississ',$tenantId,$data_hora,$placa,$modelo,$cor,$tipo,$morador_id,$nome_visitante,$unidade_destino,$dias_permanencia,$status,$liberado,$observacao,$tipo_acesso,$visitante_id,$documento,$usuario_liberou);
         
         $stmt->execute();
         return $conexao->insert_id;

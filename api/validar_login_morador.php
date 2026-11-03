@@ -50,11 +50,22 @@ try {
     // Conectar ao banco de dados
     $conexao = conectar_banco();
     
-    // Buscar morador removendo formatação do CPF no banco também
+    // O contexto tenant é lido do cadastro do morador, nunca do formulário.
+    // Em esquemas legados sem tenant_id, a instalação é tratada como tenant 1.
+    $stmtTenantMorador = $conexao->prepare("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='moradores' AND COLUMN_NAME='tenant_id' LIMIT 1");
+    $temTenantMorador = false;
+    if ($stmtTenantMorador) {
+        $stmtTenantMorador->execute();
+        $temTenantMorador = (bool)$stmtTenantMorador->get_result()->fetch_row();
+        $stmtTenantMorador->close();
+    }
+    $campoTenantMorador = $temTenantMorador ? 'tenant_id' : '1 AS tenant_id';
+
+    // Buscar morador removendo formatação do CPF no banco também.
     $stmt = $conexao->prepare("
-        SELECT id, nome, cpf, senha, unidade, email, ativo 
-        FROM moradores 
-        WHERE REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? 
+        SELECT id, nome, cpf, senha, unidade, email, ativo, $campoTenantMorador
+        FROM moradores
+        WHERE REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?
         LIMIT 1
     ");
     $stmt->bind_param("s", $cpf);
@@ -78,6 +89,11 @@ try {
     // Obter dados do morador
     $morador = $resultado->fetch_assoc();
     $stmt->close();
+    $tenant_id = (int)($morador['tenant_id'] ?? 0);
+    if ($tenant_id <= 0) {
+        fechar_conexao($conexao);
+        retornar_json(false, 'Não foi possível identificar o condomínio deste morador. Entre em contato com a administração.');
+    }
     
     // Verificar se o morador está ativo
     if ($morador['ativo'] != 1) {
@@ -144,15 +160,34 @@ try {
     }
     
     if ($tabela_existe) {
-        // Limpar tokens antigos do morador
-        $stmt_limpar = $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ?");
-        $stmt_limpar->bind_param("i", $morador['id']);
+        $stmtTenantSessao = $conexao->prepare("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sessoes_portal' AND COLUMN_NAME='tenant_id' LIMIT 1");
+        $temTenantSessao = false;
+        if ($stmtTenantSessao) {
+            $stmtTenantSessao->execute();
+            $temTenantSessao = (bool)$stmtTenantSessao->get_result()->fetch_row();
+            $stmtTenantSessao->close();
+        }
+
+        // Limpar tokens antigos apenas no contexto do tenant, quando disponível.
+        if ($temTenantSessao) {
+            $stmt_limpar = $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ? AND tenant_id = ?");
+            $stmt_limpar->bind_param("ii", $morador['id'], $tenant_id);
+        } else {
+            $stmt_limpar = $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ?");
+            $stmt_limpar->bind_param("i", $morador['id']);
+        }
         $stmt_limpar->execute();
         $stmt_limpar->close();
-        
-        // Salvar nova sessão com token
-        $stmt_sessao = $conexao->prepare("INSERT INTO sessoes_portal (morador_id, token, ip_address, user_agent, data_expiracao) VALUES (?, ?, ?, ?, ?)");
-        $stmt_sessao->bind_param("issss", $morador['id'], $token, $ip_address, $user_agent, $data_expiracao);
+
+        // Persistir explicitamente tenant_id para que o Bearer possa ser
+        // revalidado por tenant nas APIs do Portal.
+        if ($temTenantSessao) {
+            $stmt_sessao = $conexao->prepare("INSERT INTO sessoes_portal (morador_id, tenant_id, token, ip_address, user_agent, data_expiracao) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt_sessao->bind_param("iissss", $morador['id'], $tenant_id, $token, $ip_address, $user_agent, $data_expiracao);
+        } else {
+            $stmt_sessao = $conexao->prepare("INSERT INTO sessoes_portal (morador_id, token, ip_address, user_agent, data_expiracao) VALUES (?, ?, ?, ?, ?)");
+            $stmt_sessao->bind_param("issss", $morador['id'], $token, $ip_address, $user_agent, $data_expiracao);
+        }
         $stmt_sessao->execute();
         $stmt_sessao->close();
     }
@@ -164,12 +199,19 @@ try {
     $_SESSION['morador_unidade'] = $morador['unidade'];
     $_SESSION['morador_email'] = $morador['email'];
     $_SESSION['morador_logado'] = true;
+    $_SESSION['tenant_id'] = $tenant_id;
+    $_SESSION['morador_portal_token'] = $token;
     $_SESSION['login_timestamp'] = time();
     $_SESSION['tipo_usuario'] = 'morador';
     
     // Atualizar último acesso do morador
-    $stmt_update = $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW(), data_atualizacao = NOW() WHERE id = ?");
-    $stmt_update->bind_param("i", $morador['id']);
+    if ($temTenantMorador) {
+        $stmt_update = $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW(), data_atualizacao = NOW() WHERE id = ? AND tenant_id = ?");
+        $stmt_update->bind_param("ii", $morador['id'], $tenant_id);
+    } else {
+        $stmt_update = $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW(), data_atualizacao = NOW() WHERE id = ?");
+        $stmt_update->bind_param("i", $morador['id']);
+    }
     $stmt_update->execute();
     $stmt_update->close();
     

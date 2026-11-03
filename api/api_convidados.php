@@ -5,6 +5,7 @@ require_once __DIR__ . '/auth_helper.php';
 require_once __DIR__ . '/tenant_helper.php';
 require_once __DIR__ . '/helpers/cpf_helper.php';
 require_once __DIR__ . '/helpers/visitantes_config_helper.php';
+require_once __DIR__ . '/helpers/alertas_unidade_helper.php';
 ob_end_clean();
 date_default_timezone_set('America/Sao_Paulo');
 
@@ -45,7 +46,7 @@ function convidados_erro($mensagem, $status = 400, $codigo = null, $dados = null
 }
 
 set_exception_handler(function (Throwable $erro) {
-    error_log('[Convidados][Uncaught] ' . $erro->getMessage());
+    error_log('[Convidados][Uncaught] classe=' . get_class($erro) . ' codigo=' . (int)$erro->getCode());
     convidados_responder(false, 'Não foi possível concluir a operação de convidados. Tente novamente ou contate o administrador.', null, 500);
 });
 
@@ -532,6 +533,46 @@ function convidados_politica_visitantes(mysqli $conexao, $tenantId) {
     ]);
 }
 
+function convidados_verificar_alertas(mysqli $conexao, $tenantId, array $dados) {
+    $entrada = convidados_dados_entrada($conexao, $tenantId, $dados, 'criar');
+    if (!function_exists('alertas_unidade_migration_instalada') || !alertas_unidade_migration_instalada($conexao)) {
+        convidados_responder(true, 'Verificação de alertas indisponível; a portaria revalidará no momento da entrada.', [
+            'verificacao_disponivel' => false,
+            'alertas' => [],
+        ]);
+    }
+    $dataHora = $entrada['data_prevista_chegada'] . ' 12:00:00';
+    $contexto = [
+        'contexto' => 'CONVIDADOS',
+        'unidade' => $entrada['unidade'],
+        'morador_id' => $entrada['morador_id'],
+        'dependente_id' => $entrada['anfitriao_tipo'] === 'DEPENDENTE' ? $entrada['dependente_id'] : 0,
+        'visitante_id' => $entrada['visitante_id'] ?? 0,
+        'tipo_pessoa' => $entrada['tipo_convidado'],
+        'documento' => $entrada['documento'],
+        'tipo_documento' => $entrada['tipo_documento'],
+        'pessoa_nome' => $entrada['nome'],
+        'tipo_acesso' => 'Entrada',
+        'data_hora' => $dataHora,
+    ];
+    $alertas = alertas_unidade_avaliar($conexao, $tenantId, $contexto);
+    $resumo = [];
+    foreach ($alertas as $alerta) {
+        $resumo[] = [
+            'id' => (int)$alerta['id'],
+            'titulo' => (string)$alerta['titulo'],
+            'nivel' => (string)$alerta['nivel'],
+            'acao' => (string)$alerta['acao'],
+        ];
+    }
+    convidados_responder(true, 'Verificação de alertas concluída.', [
+        'verificacao_disponivel' => true,
+        'data_hora_verificada' => $dataHora,
+        'aviso_horario' => 'O convite informa apenas a data; a verificação usa 12h (horário local). A portaria revalidará os alertas no horário real da entrada.',
+        'alertas' => $resumo,
+    ]);
+}
+
 function convidados_criar(mysqli $conexao, $auth, $tenantId, array $dados) {
     $entrada = convidados_dados_entrada($conexao, $tenantId, $dados, 'criar');
     $entrada['idempotency_key'] = convidados_validar_chave_idempotencia($entrada['idempotency_key']);
@@ -709,7 +750,7 @@ try {
     $conexao = conectar_banco();
     $rbacAtivo = rbacTabelasDisponiveis($conexao);
     $acaoRbac = 'visualizar';
-    if ($metodo === 'POST' && $acao === 'criar') $acaoRbac = 'criar';
+    if ($metodo === 'POST' && in_array($acao, ['criar', 'verificar_alertas'], true)) $acaoRbac = 'criar';
     elseif ($metodo === 'PUT' && $acao === 'editar') $acaoRbac = 'editar';
     elseif ($metodo === 'POST' && $acao === 'cancelar') $acaoRbac = 'excluir';
     elseif ($metodo !== 'GET') convidados_erro('Método não permitido.', 405);
@@ -723,11 +764,12 @@ try {
     if ($metodo === 'GET' && $acao === 'obter') convidados_obter($conexao, $tenantId, (int)($_GET['id'] ?? 0), $_GET['data'] ?? null);
     if ($metodo === 'GET' && $acao === 'buscar_documento') convidados_buscar_documento($conexao, $tenantId);
     if ($metodo === 'GET' && $acao === 'politica_visitantes') convidados_politica_visitantes($conexao, $tenantId);
+    if ($metodo === 'POST' && $acao === 'verificar_alertas') convidados_verificar_alertas($conexao, $tenantId, $dados);
     if ($metodo === 'POST' && $acao === 'criar') convidados_criar($conexao, $auth, $tenantId, $dados);
     if ($metodo === 'PUT' && $acao === 'editar') convidados_editar($conexao, $auth, $tenantId, $dados);
     if ($metodo === 'POST' && $acao === 'cancelar') convidados_cancelar($conexao, $auth, $tenantId, $dados);
     convidados_erro('Ação ou método não permitido para a Lista de Convidados.', 405, 'ACAO_NAO_PERMITIDA');
 } catch (Throwable $erro) {
-    error_log('[Convidados][Fatal] tenant=' . (int)($tenantId ?? 0) . ' acao=' . $acao . ' erro=' . $erro->getMessage());
+    error_log('[Convidados][Fatal] tenant=' . (int)($tenantId ?? 0) . ' acao=' . $acao . ' classe=' . get_class($erro) . ' codigo=' . (int)$erro->getCode());
     convidados_responder(false, 'Não foi possível concluir a operação de convidados. Tente novamente ou contate o administrador.', null, 500);
 }

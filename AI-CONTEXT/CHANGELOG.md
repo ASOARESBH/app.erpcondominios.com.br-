@@ -3,8 +3,18 @@
 Registro de alterações significativas no ERP.
 
 ## [2.1.7] - 2026-11-02
-### Planejado
-- **Módulo Alertas da Unidade (Moradores → aba Alertas)**: analisados `pages/moradores.html` (abas), `registro.js`, `registro-convidados.js`, `acesso.js`, `api_alertas_acesso.php` + `helpers/alertas_acesso_helper.php`, `api_registros.php`, `api_acessos_visitantes.php`, `api_rfid.php`, `api_portal_morador.php`, `api_portal_dependentes.php`, RBAC e app Flutter. Especificado o módulo de avisos/restrições de portaria cadastrados por morador (Portal/App) ou operador, com público-alvo (todos/visitante/prestador/entregador/familiar/placa, geral ou específico), níveis (informativo/atenção/crítico), ações (avisar/exigir ciente/contatar morador/bloquear), vigência e recorrência, ciência com token de uso único revalidada no servidor e log imutável. Decisões: não reutilizar as tabelas `alertas_acesso_*` (motor de detecção pós-evento, conceito distinto) — criar domínio `alertas_unidade`; override de crítico pode alimentar o motor existente; dependente sem login → autoria `DEPENDENTE` só preparada. Achado: `registro.js` hoje ignora o campo `alertas_acesso` retornado por `api_registros.php`. Nenhuma alteração de código — apenas análise e prompt em `PROMPT_MODULO_ALERTAS_20261102.md`.
+### Implementado — web/backend
+- **Alertas da Unidade**: criada aba Alertas em Moradores, APIs administrativas e Portal web, tabelas tenant-aware, alvos específicos, histórico, eventos automáticos e notificação pós-ciência humana. O domínio novo permanece separado do motor `alertas_acesso` de detecção pós-evento.
+- Registro Manual e Controle de Acesso reavaliam alertas no servidor; ciência contextual tem token de uso único e gravação transacional. Leituras automáticas de QR/RFID bloqueiam `BLOQUEAR` e registram eventos não atribuídos a operador.
+- Portal e painel administrativo podem usar modelos rápidos e prévias/resumos operacionais, detalhes com histórico em abas, duplicação e exportação CSV/impressão filtrada a 90 dias. KPIs incluem ativos/críticos/pendentes, expiração em 7 dias, acionamentos do dia e overrides no mês. `verificar` usa rate limit e cache de IDs de 30s invalidado em mutações; a gravação final reavalia regras sob lock. Limite server-side de 30 regras simultaneamente vigentes por unidade é aplicado na criação e retomada. O Portal cria/edita/pausa/cancela regras próprias, vê acionamentos e busca visitantes vinculados à sessão com documento mascarado; verifica conflitos antes de emitir QR e controla preferência individual de push, sem suprimir o inbox interno. Convites verificam alertas na data prevista (12h local) antes da confirmação de cadastro; a portaria reavalia no horário real. O QR permanece restrito ao mesmo tenant/morador. Override de supervisor é reenviado ao motor `alertas_acesso` após o commit. Aplicativo Flutter ficou explicitamente fora do escopo.
+- Criado cron CLI idempotente de 10 minutos para expirar alertas e gerar inbox/lembrete aproximadamente 24h antes do fim da vigência. O código não configura o agendamento no cPanel.
+### Validado
+- `php -l` e `node --check` dos arquivos alterados, `git diff --check` e migration executada duas vezes em MariaDB descartável.
+- Teste sintético local confirmou migration gate, isolamento de tenant, avaliação de regra, bloqueio automático, máscara de documento e atualização de contador.
+- Teste MariaDB descartável do cron confirmou expiração no tenant A, preservação do alerta futuro no tenant B e reexecução sem duplicar lembrete, inbox ou histórico.
+- Testes descartáveis também cobriram cache de 30s com invalidação, preferência push por morador/tenant, match de Familiar em `CONVIDADOS` e contagem de 30 alertas vigentes por unidade.
+### Pendente
+- Não foram executados teste de browser autenticado, hardware físico, deploy ou migration de produção. A migration `sql/migration_alertas_unidade_mysql57.sql` precisa de backup e aplicação autorizada antes do uso em produção.
 
 ## [2.1.6] - 2026-10-31
 ### Planejado

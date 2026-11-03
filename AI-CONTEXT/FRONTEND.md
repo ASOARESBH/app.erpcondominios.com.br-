@@ -37,3 +37,12 @@ export function destroy() {
 - **Modais**: Usar as classes padronizadas `.modal-overlay`, `.modal-content`.
 - **Botões**: `.btn-primary-modern`, `.btn-secondary-modern`.
 - **Tabelas**: `.table-responsive`, `.data-table`.
+
+
+## 6. Alertas da Unidade (web)
+
+- A rota `moradores` inclui a aba `Alertas`, carregada pelo módulo `frontend/js/pages/moradores-alertas.js`; o ciclo `init()`/`destroy()` limpa listeners e respostas obsoletas. O deep-link `?page=moradores&aba=alertas` é preservado pelo roteador. Filtros são persistidos por usuário em `localStorage` com falha não bloqueante; exportação CSV e impressão/PDF do log de ciências respeitam a permissão `moradores.exportar`.
+- KPIs ficam limitados ao tenant autenticado. O detalhe de alerta é dividido em Visão geral, Acionamentos/Ciências e Histórico, com tablist acessível por teclado. A timeline mostra operador, decisão, justificativa, pessoa e link para a linha de `registros_acesso`; o GET de Registro a filtra por ID sob RBAC/tenant e a destaca após abertura. Alertas podem ser duplicados somente por usuário com permissão de criar e editar.
+- Registro Manual e Controle de Acesso exibem alertas antes de confirmar Entrada e retomam a gravação somente após ciência/token válido. Leitura automática via QR devolve eventos/decisão ao console; `BLOQUEAR` retorna negação explícita.
+- O Portal do Morador inclui Meus Alertas e consulta `api_portal_alertas.php` com Bearer; o formulário de QR verifica conflito antes de gerar e exige confirmação do usuário. A busca de alvos só lista visitantes vinculados ao morador e mascara documentos; o formulário oferece modelos rápidos e resumo natural. O detalhe exibe timeline de acionamentos do mesmo tenant/unidade. Uma opção individual controla push de acionamentos/lembretes; desativá-la preserva a notificação interna na caixa do Portal. Ao criar convite pela Lista de Convidados, um preflight usa a data prevista às 12h locais, pede confirmação se houver alerta e esclarece que a portaria reavalia no horário efetivo.
+- A implementação é somente web/backend. Telas e providers Flutter não foram alterados.

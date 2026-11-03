@@ -6,8 +6,10 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once __DIR__ . '/rbac_helper.php';
 require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/alertas_acesso_helper.php';
+require_once __DIR__ . '/helpers/alertas_unidade_helper.php';
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -44,6 +46,8 @@ _garantir_coluna($conexao, 'registros_acesso', 'usuario_liberou', "VARCHAR(150) 
 
 // ========== VERIFICAR TAG RFID ==========
 if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_tag') {
+    if (function_exists('rbacTabelasDisponiveis') && rbacTabelasDisponiveis($conexao)) rbacExigir($conexao, 'acesso', 'executar');
+    else verificarPermissao('operador');
     $dados = json_decode(file_get_contents('php://input'), true);
     $tag = sanitizar($conexao, $dados['tag'] ?? $dados['identificador'] ?? '');
     $identificador = strtoupper(trim((string)($dados['identificador'] ?? $tag)));
@@ -59,7 +63,7 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
                               d.id as dependente_id_check, d.nome_completo as dependente_nome
                               FROM veiculos v
                               INNER JOIN moradores m ON v.morador_id = m.id
-                              LEFT JOIN dependentes d ON v.dependente_id = d.id
+                              LEFT JOIN dependentes d ON v.dependente_id = d.id AND d.tenant_id = v.tenant_id
                               WHERE v.tenant_id = ? AND m.tenant_id = ?
                                 AND (v.tag = ? OR REPLACE(REPLACE(UPPER(v.placa), '-', ''), ' ', '') = ?)
                                 AND v.ativo = 1 AND m.ativo = 1");
@@ -71,7 +75,10 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
     if ($resultado->num_rows > 0) {
         $veiculo = $resultado->fetch_assoc();
         
-            $data_hora = date('Y-m-d H:i:s');
+        $data_hora = trim((string)($dados['data_hora'] ?? ''));
+        if ($data_hora === '') $data_hora = date('Y-m-d H:i:s');
+        $dataObjeto = au_now($data_hora);
+        $data_hora = $dataObjeto ? $dataObjeto->format('Y-m-d H:i:s') : date('Y-m-d H:i:s');
         $tipo_acesso = in_array(($dados['tipo_acesso'] ?? 'Entrada'), ['Entrada', 'Saída'], true) ? $dados['tipo_acesso'] : 'Entrada';
         $placa = $veiculo['placa'];
         $modelo = $veiculo['modelo'];
@@ -94,20 +101,86 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
         $liberado = 1;
         $usuario_liberou = trim((string)($_SESSION['usuario_nome'] ?? ''));
         if ($usuario_liberou === '') $usuario_liberou = null;
-        
-        $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso 
-                                           (data_hora, placa, modelo, cor, tag, tipo, morador_id, 
-                                            unidade_destino, status, liberado, tipo_acesso, usuario_liberou)
-                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        
-        $stmt_registro->bind_param("ssssssississ",
-            $data_hora, $placa, $modelo, $cor, $tag, $tipo, $morador_id, $unidade, $status, $liberado, $tipo_acesso, $usuario_liberou
-        );
-        
-        $stmt_registro->execute();
-        $stmt_registro->close();
-        
         $nome_acesso = $veiculo['dependente_nome'] ?? $veiculo['morador_nome'];
+        $contextoAlerta = null;
+        $alertasUnidadeResposta = [];
+        $notificacoesAlertas = [];
+        $registroAcessoId = 0;
+        $cienciaToken = trim((string)($dados['ciencia_token'] ?? ''));
+        if ($tipo_acesso === 'Entrada' && (!alertas_unidade_migration_instalada($conexao) || !_tem_coluna($conexao, 'registros_acesso', 'tenant_id') || !function_exists('alertas_unidade_avaliar'))) {
+            http_response_code(503);
+            retornar_json(false, 'A integração de Alertas da Unidade ainda não foi instalada. Aplique a migration do módulo antes de registrar novas entradas.', ['codigo'=>'MIGRATION_ALERTAS_PENDENTE']);
+        }
+        if ($tipo_acesso === 'Entrada' && _tem_coluna($conexao, 'registros_acesso', 'tenant_id') && function_exists('alertas_unidade_avaliar')) {
+            $tabelaAlertas = $conexao->query("SHOW TABLES LIKE 'alertas_unidade'");
+            $featureAtivo = $tabelaAlertas && $tabelaAlertas->num_rows > 0;
+            if ($tabelaAlertas) $tabelaAlertas->free();
+            if ($featureAtivo) {
+                $contextoAlerta = alertas_unidade_construir_contexto_registro($conexao, (int)$tenant_id, [
+                    'contexto'=>'CONTROLE_ACESSO','data_hora'=>$data_hora,'tipo_pessoa'=>$tipo,
+                    'morador_id'=>$morador_id,'dependente_id'=>$dependente_id,'unidade'=>$unidade,
+                    'placa'=>$placa,'tipo_acesso'=>$tipo_acesso,'pessoa_nome'=>$nome_acesso,
+                ]);
+                $contextoAlerta['_usuario_nome'] = (string)($_SESSION['usuario_nome'] ?? 'Usuário autenticado');
+                $conexao->begin_transaction();
+                try {
+                    $alertasAtuais = alertas_unidade_avaliar($conexao, (int)$tenant_id, $contextoAlerta, true);
+                    foreach ($alertasAtuais as $alertaAtual) $alertasUnidadeResposta[] = ['id'=>(int)$alertaAtual['id'],'titulo'=>$alertaAtual['titulo'],'mensagem'=>$alertaAtual['mensagem'],'nivel'=>$alertaAtual['nivel'],'acao'=>$alertaAtual['acao'],'unidade'=>$alertaAtual['unidade'],'instrucao_operador'=>$alertaAtual['instrucao_operador'],'telefone_contato'=>$alertaAtual['telefone_contato'],'divergencia_unidade'=>!empty($alertaAtual['divergencia_unidade'])];
+                    $exigeCiencia = false;
+                    foreach ($alertasAtuais as $alertaAtual) if (($alertaAtual['acao'] ?? '') !== 'APENAS_AVISAR') $exigeCiencia = true;
+                    if ($exigeCiencia && $cienciaToken === '') {
+                        $conexao->rollback();
+                        http_response_code(409);
+                        $alertasResposta = [];
+                        foreach ($alertasAtuais as $alertaAtual) $alertasResposta[] = ['id'=>(int)$alertaAtual['id'],'titulo'=>$alertaAtual['titulo'],'mensagem'=>$alertaAtual['mensagem'],'nivel'=>$alertaAtual['nivel'],'acao'=>$alertaAtual['acao'],'unidade'=>$alertaAtual['unidade'],'instrucao_operador'=>$alertaAtual['instrucao_operador'],'telefone_contato'=>$alertaAtual['telefone_contato'],'divergencia_unidade'=>!empty($alertaAtual['divergencia_unidade'])];
+                        $podeOverride = alertas_unidade_usuario_pode_override($conexao,(int)($_SESSION['usuario_id']??0),(int)$tenant_id);
+                        retornar_json(false,'Há alertas que exigem ciência antes de registrar o acesso.',['codigo'=>'ALERTA_PENDENTE','alertas'=>$alertasResposta,'pode_override'=>$podeOverride,'contexto_seguro'=>array_merge($contextoAlerta,['data_hora'=>$data_hora])]);
+                    }
+                    $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso
+                        (tenant_id,data_hora,placa,modelo,cor,tag,tipo,morador_id,unidade_destino,status,liberado,tipo_acesso,usuario_liberou,dependente_id)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    if (!$stmt_registro) throw new RuntimeException('Falha ao preparar o registro RFID.');
+                    $stmt_registro->bind_param('issssssississi',$tenant_id,$data_hora,$placa,$modelo,$cor,$tag,$tipo,$morador_id,$unidade,$status,$liberado,$tipo_acesso,$usuario_liberou,$dependente_id);
+                    if (!$stmt_registro->execute()) { $stmt_registro->close(); throw new RuntimeException('Falha ao gravar o registro RFID.'); }
+                    $registroAcessoId = (int)$conexao->insert_id;
+                    $stmt_registro->close();
+                    if ($cienciaToken !== '') {
+                        $resultadoCiencia = alertas_unidade_validar_consumir_token($conexao,(int)$tenant_id,(int)($_SESSION['usuario_id']??0),$contextoAlerta,$cienciaToken,$registroAcessoId);
+                        if (empty($resultadoCiencia['sucesso'])) {
+                            $conexao->rollback();
+                            http_response_code(409);
+                            $alertasResposta = [];
+                            foreach (($resultadoCiencia['alertas'] ?? $alertasAtuais) as $alertaAtual) $alertasResposta[] = ['id'=>(int)$alertaAtual['id'],'titulo'=>$alertaAtual['titulo'],'mensagem'=>$alertaAtual['mensagem'],'nivel'=>$alertaAtual['nivel'],'acao'=>$alertaAtual['acao'],'unidade'=>$alertaAtual['unidade'],'instrucao_operador'=>$alertaAtual['instrucao_operador'],'telefone_contato'=>$alertaAtual['telefone_contato'],'divergencia_unidade'=>!empty($alertaAtual['divergencia_unidade'])];
+                            $podeOverride = alertas_unidade_usuario_pode_override($conexao,(int)($_SESSION['usuario_id']??0),(int)$tenant_id);
+                            retornar_json(false,$resultadoCiencia['mensagem']??'Os alertas mudaram. Revise a ciência antes de continuar.',['codigo'=>'ALERTA_PENDENTE','alertas'=>$alertasResposta,'pode_override'=>$podeOverride,'contexto_seguro'=>array_merge($contextoAlerta,['data_hora'=>$data_hora])]);
+                        }
+                        $notificacoesAlertas = $resultadoCiencia['notificacoes'] ?? [];
+                    } else {
+                        $notificacoesAlertas = alertas_unidade_registrar_avisos($conexao,(int)$tenant_id,$contextoAlerta,$registroAcessoId,$alertasAtuais,(int)($_SESSION['usuario_id']??0),(string)($contextoAlerta['_usuario_nome']??'Usuário autenticado'));
+                    }
+                    $conexao->commit();
+                } catch (Throwable $erroAcesso) {
+                    try { $conexao->rollback(); } catch (Throwable $erroRollback) {}
+                    error_log('[api_rfid] Falha no registro autenticado de acesso.');
+                    http_response_code(500);
+                    retornar_json(false,'Não foi possível registrar o acesso RFID.');
+                }
+            }
+        }
+        if ($registroAcessoId === 0) {
+            $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso
+                (tenant_id,data_hora,placa,modelo,cor,tag,tipo,morador_id,unidade_destino,status,liberado,tipo_acesso,usuario_liberou,dependente_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            if (!$stmt_registro) { http_response_code(500); retornar_json(false,'Falha ao preparar o registro RFID.'); }
+            $stmt_registro->bind_param('issssssississi',$tenant_id,$data_hora,$placa,$modelo,$cor,$tag,$tipo,$morador_id,$unidade,$status,$liberado,$tipo_acesso,$usuario_liberou,$dependente_id);
+            if (!$stmt_registro->execute()) { $stmt_registro->close(); http_response_code(500); retornar_json(false,'Falha ao gravar o registro RFID.'); }
+            $registroAcessoId = (int)$conexao->insert_id;
+            $stmt_registro->close();
+        }
+        foreach ($notificacoesAlertas as $notificacaoAlerta) {
+            if (!is_array($notificacaoAlerta) || empty($notificacaoAlerta['alerta']) || (int)($notificacaoAlerta['morador_id']??0)<=0) continue;
+            alertas_unidade_notificar_morador($conexao,(int)$tenant_id,$notificacaoAlerta['alerta'],(int)$notificacaoAlerta['morador_id'],$registroAcessoId,$contextoAlerta??[],(string)($notificacaoAlerta['decisao']??'CIENTE_LIBERADO'));
+        }
         registrar_log('ACESSO_RFID', "Acesso via RFID: $placa (TAG RFID: $tag) - " . $nome_acesso);
         $alertas_disparados = alertas_acesso_processar_evento($conexao, (int)$tenant_id, 'rfid', [
             'placa' => $placa, 'modelo' => $modelo, 'cor' => $cor,
@@ -127,7 +200,8 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'verificar_t
             'tipo_acesso' => $tipo_acesso,
             'ultimo_acesso' => date('d/m/Y H:i:s', strtotime($data_hora)),
             'mensagem' => strtoupper($tipo_acesso) . ' — ' . $mensagem,
-            'alertas' => $alertas_disparados
+            'alertas' => $alertas_disparados,
+            'alertas_unidade' => $alertasUnidadeResposta
         ));
         
     } else {
@@ -147,7 +221,7 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
     $dados = json_decode(file_get_contents('php://input'), true);
     
     $tag = sanitizar($conexao, $dados['tag'] ?? $dados['card'] ?? $dados['rfid'] ?? '');
-    $timestamp = $dados['timestamp'] ?? date('Y-m-d H:i:s');
+    $timestamp = date('Y-m-d H:i:s');
     $tipo_acesso = in_array(($dados['tipo_acesso'] ?? 'Entrada'), ['Entrada', 'Saída'], true) ? $dados['tipo_acesso'] : 'Entrada';
     
     if (empty($tag)) {
@@ -159,11 +233,11 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
                               m.id as morador_id, m.nome as morador_nome, m.unidade as morador_unidade,
                               d.id as dependente_id_check, d.nome_completo as dependente_nome
                               FROM veiculos v
-                              INNER JOIN moradores m ON v.morador_id = m.id
-                              LEFT JOIN dependentes d ON v.dependente_id = d.id
-                              WHERE v.tag = ? AND v.ativo = 1 AND m.ativo = 1");
+                              INNER JOIN moradores m ON v.morador_id = m.id AND m.tenant_id=v.tenant_id
+                              LEFT JOIN dependentes d ON v.dependente_id = d.id AND d.tenant_id=v.tenant_id
+                              WHERE v.tenant_id = ? AND v.tag = ? AND v.ativo = 1 AND m.ativo = 1");
     
-    $stmt->bind_param("s", $tag);
+    $stmt->bind_param("is", $tenant_id, $tag);
     $stmt->execute();
     $resultado = $stmt->get_result();
     
@@ -175,9 +249,11 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
         $cor = $veiculo['cor'];
         $morador_id = $veiculo['morador_id'];
         $dependente_id = $veiculo['dependente_id'] ?? null;
+        $tipoAlerta = 'MORADOR';
         
         if (!empty($dependente_id) && !empty($veiculo['dependente_nome'])) {
-            $tipo = 'Dependente';
+            $tipo = 'Morador';
+            $tipoAlerta = 'DEPENDENTE';
             $status = "✅ Acesso liberado via RFID - " . $veiculo['dependente_nome'] . " (dependente de " . $veiculo['morador_nome'] . ")";
         } else {
             $tipo = 'Morador';
@@ -187,19 +263,57 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
         $unidade = $veiculo['morador_unidade'];
         $liberado = 1;
         
-        $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso 
-                                           (data_hora, placa, modelo, cor, tag, tipo, morador_id, 
-                                            unidade_destino, status, liberado, tipo_acesso)
-                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        
-        $stmt_registro->bind_param("ssssssisssi",
-            $timestamp, $placa, $modelo, $cor, $tag, $tipo, $morador_id, $unidade, $status, $liberado, $tipo_acesso
-        );
-        
-        $stmt_registro->execute();
-        $stmt_registro->close();
-        
         $nome_acesso = $veiculo['dependente_nome'] ?? $veiculo['morador_nome'];
+        $alertasUnidade = [];
+        $registroId = 0;
+        if ($tipo_acesso === 'Entrada') {
+            if (!alertas_unidade_migration_instalada($conexao)) {
+                http_response_code(503);
+                retornar_json(false, 'O controle de alertas não está disponível. Aplique a migration do módulo antes de liberar acessos.', ['codigo'=>'MIGRATION_ALERTAS_PENDENTE','action'=>'deny']);
+            }
+            $conexao->begin_transaction();
+            try {
+                $contextoAlerta = alertas_unidade_construir_contexto_registro($conexao,$tenant_id,[
+                    'contexto'=>'RFID','data_hora'=>$timestamp,'tipo_pessoa'=>$tipoAlerta,
+                    'morador_id'=>(int)$morador_id,'dependente_id'=>$dependente_id ? (int)$dependente_id : null,
+                    'unidade'=>$unidade,'placa'=>$placa,'tipo_acesso'=>'Entrada','pessoa_nome'=>$nome_acesso,
+                ]);
+                $alertasUnidade = alertas_unidade_avaliar($conexao,(int)$tenant_id,$contextoAlerta,true);
+                $bloqueado = false;
+                foreach ($alertasUnidade as $alertaUnidade) if (($alertaUnidade['acao']??'') === 'BLOQUEAR') $bloqueado = true;
+                if ($bloqueado) {
+                    alertas_unidade_registrar_automaticos($conexao,(int)$tenant_id,$contextoAlerta,0,$alertasUnidade,0,'Leitor RFID',true);
+                    $conexao->commit();
+                    retornar_json(false,'Acesso bloqueado por alerta da unidade.',[
+                        'liberado'=>false,'action'=>'deny','codigo'=>'ACESSO_BLOQUEADO_ALERTA',
+                        'mensagem'=>'Acesso bloqueado por alerta da unidade.','alertas_unidade'=>$alertasUnidade
+                    ]);
+                }
+                $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso (tenant_id,data_hora,placa,modelo,cor,tag,tipo,morador_id,unidade_destino,status,liberado,tipo_acesso,dependente_id,usuario_liberou) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                if (!$stmt_registro) throw new RuntimeException('Não foi possível preparar o registro RFID.');
+                $dependenteRegistro = $dependente_id ? (int)$dependente_id : null;
+                $usuarioLiberou = 'Leitor RFID';
+                $stmt_registro->bind_param('issssssissisis',$tenant_id,$timestamp,$placa,$modelo,$cor,$tag,$tipo,$morador_id,$unidade,$status,$liberado,$tipo_acesso,$dependenteRegistro,$usuarioLiberou);
+                if (!$stmt_registro->execute()) { $stmt_registro->close(); throw new RuntimeException('Não foi possível gravar o registro RFID.'); }
+                $registroId = (int)$conexao->insert_id;
+                $stmt_registro->close();
+                alertas_unidade_registrar_automaticos($conexao,(int)$tenant_id,$contextoAlerta,$registroId,$alertasUnidade,0,'Leitor RFID',false);
+                $conexao->commit();
+            } catch (Throwable $erroRfid) {
+                try{$conexao->rollback();}catch(Throwable $erroRollback){}
+                error_log('[WebhookRFID] Falha interna ao concluir leitura.');
+                http_response_code(500);
+                retornar_json(false,'Não foi possível concluir a leitura RFID.',['action'=>'deny']);
+            }
+        } else {
+            $stmt_registro = $conexao->prepare("INSERT INTO registros_acesso (tenant_id,data_hora,placa,modelo,cor,tag,tipo,morador_id,unidade_destino,status,liberado,tipo_acesso,dependente_id,usuario_liberou) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            $dependenteRegistro = $dependente_id ? (int)$dependente_id : null;
+            $usuarioLiberou = 'Leitor RFID';
+            $stmt_registro->bind_param('issssssissisis',$tenant_id,$timestamp,$placa,$modelo,$cor,$tag,$tipo,$morador_id,$unidade,$status,$liberado,$tipo_acesso,$dependenteRegistro,$usuarioLiberou);
+            $stmt_registro->execute();
+            $registroId = (int)$conexao->insert_id;
+            $stmt_registro->close();
+        }
         registrar_log('WEBHOOK_RFID_SUCESSO', "Webhook RFID: $placa (TAG RFID: $tag) - " . $nome_acesso);
         $alertas_disparados = alertas_acesso_processar_evento($conexao, (int)$tenant_id, 'rfid_webhook', [
             'placa' => $placa, 'modelo' => $modelo, 'cor' => $cor,
@@ -211,7 +325,8 @@ if ($metodo === 'POST' && isset($_GET['acao']) && $_GET['acao'] === 'webhook') {
             'action' => 'open_gate',
             'duration' => 5,
             'message' => "Bem-vindo, " . ($veiculo['dependente_nome'] ?? $veiculo['morador_nome']),
-            'alertas' => $alertas_disparados
+            'alertas' => $alertas_disparados,
+            'alertas_unidade' => $alertasUnidade
         ));
         
     } else {

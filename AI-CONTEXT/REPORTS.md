@@ -22,3 +22,5 @@ O sistema possui relatórios em PDF (gerados pelo PHP) e relatórios na tela (HT
 - **Relatório de Abastecimento**: a observação opcional de cada lançamento aparece como coluna própria no histórico, no relatório em tela, no CSV e no PDF. O relatório JSON e o PDF aplicam `tenant_id` também nos lançamentos, veículos e operadores, evitando mistura de dados entre condomínios.
 
 - **Tipos de acesso de convidados**: `Entregador Autorizado` e `Familiar` permanecem categorias próprias e estão nos filtros/contadores de Relatórios simples e ramificados, CSV, PDF geral, PDF de ocupantes, ranking de veículos e histórico do Portal do Morador. O relatório analítico da aba Visitantes também os inclui em seus KPIs, rankings, tendência diária e CSV/PDF; todas as consultas respeitam o tenant da sessão.
+
+- **Alertas e Ciências**: a aba Moradores → Relatórios oferece período rápido de 7/30 dias ou intervalo de até 90 dias, exportação CSV e impressão/PDF do log de decisões; a API escopa pelo tenant e exige `moradores.exportar`.

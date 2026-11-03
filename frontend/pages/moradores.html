@@ -25,6 +25,9 @@
         <button class="tab-button" data-tab="dependentes">
             <i class="fas fa-user-friends"></i> Dependentes
         </button>
+        <button class="tab-button" data-tab="alertas">
+            <i class="fas fa-bell"></i> Alertas da Unidade
+        </button>
         <button class="tab-button" data-tab="relatorios">
             <i class="fas fa-chart-bar"></i> Relatórios
         </button>
@@ -228,9 +231,180 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════
+         TAB: ALERTAS DA UNIDADE
+    ══════════════════════════════════════════════════════ -->
+    <div id="tab-alertas" class="tab-content">
+        <div id="alertas-feedback" class="alertas-feedback" role="status" aria-live="polite" hidden></div>
+
+        <div class="alertas-kpi-grid" aria-label="Indicadores de alertas">
+            <div class="alertas-kpi-card">
+                <span class="alertas-kpi-icon info"><i class="fas fa-bell"></i></span>
+                <span class="alertas-kpi-copy"><span>Total de alertas</span><strong id="alertas-kpi-total">—</strong></span>
+            </div>
+            <div class="alertas-kpi-card">
+                <span class="alertas-kpi-icon success"><i class="fas fa-check-circle"></i></span>
+                <span class="alertas-kpi-copy"><span>Ativos</span><strong id="alertas-kpi-ativos">—</strong></span>
+            </div>
+            <div class="alertas-kpi-card">
+                <span class="alertas-kpi-icon danger"><i class="fas fa-exclamation-triangle"></i></span>
+                <span class="alertas-kpi-copy"><span>Críticos</span><strong id="alertas-kpi-criticos">—</strong></span>
+            </div>
+            <div class="alertas-kpi-card">
+                <span class="alertas-kpi-icon warning"><i class="fas fa-pause-circle"></i></span>
+                <span class="alertas-kpi-copy"><span>Pausados</span><strong id="alertas-kpi-pausados">—</strong></span>
+            </div>
+            <div class="alertas-kpi-card">
+                <span class="alertas-kpi-icon purple"><i class="fas fa-clipboard-check"></i></span>
+                <span class="alertas-kpi-copy"><span>Pendentes de ciência</span><strong id="alertas-kpi-ciencia">—</strong></span>
+            </div>
+            <div class="alertas-kpi-card">
+                <span class="alertas-kpi-icon warning"><i class="fas fa-hourglass-half"></i></span>
+                <span class="alertas-kpi-copy"><span>Expiram em 7 dias</span><strong id="alertas-kpi-expiram">—</strong></span>
+            </div>
+            <div class="alertas-kpi-card">
+                <span class="alertas-kpi-icon info"><i class="fas fa-history"></i></span>
+                <span class="alertas-kpi-copy"><span>Acionamentos hoje</span><strong id="alertas-kpi-acionamentos">—</strong></span>
+            </div>
+            <div class="alertas-kpi-card">
+                <span class="alertas-kpi-icon danger"><i class="fas fa-user-shield"></i></span>
+                <span class="alertas-kpi-copy"><span>Overrides no mês</span><strong id="alertas-kpi-overrides">—</strong></span>
+            </div>
+        </div>
+
+        <div class="page-card alertas-toolbar-card">
+            <div class="alertas-section-heading">
+                <div>
+                    <h2><i class="fas fa-shield-alt"></i> Alertas da Unidade</h2>
+                    <p>Gerencie avisos operacionais e regras de acesso vinculadas aos moradores.</p>
+                </div>
+                <div class="alertas-header-actions">
+                    <button type="button" class="btn-secondary-modern" data-alerta-action="exportar-csv" data-alerta-perm="exportar">
+                        <i class="fas fa-file-csv" aria-hidden="true"></i> Exportar ciências CSV
+                    </button>
+                    <button type="button" class="btn-secondary-modern" data-alerta-action="exportar-pdf" data-alerta-perm="exportar">
+                        <i class="fas fa-file-pdf" aria-hidden="true"></i> Imprimir ciências
+                    </button>
+                    <button type="button" class="btn-primary-modern" data-alerta-action="novo" data-alerta-perm="criar">
+                        <i class="fas fa-plus" aria-hidden="true"></i> Novo alerta
+                    </button>
+                </div>
+            </div>
+
+            <form id="alertas-filtros" class="alertas-filtros" novalidate>
+                <div class="alertas-filtro-grupo">
+                    <label for="alertas-filtro-unidade">Unidade</label>
+                    <select id="alertas-filtro-unidade"><option value="">Todas as unidades</option></select>
+                </div>
+                <div class="alertas-filtro-grupo">
+                    <label for="alertas-filtro-nivel">Nível</label>
+                    <select id="alertas-filtro-nivel">
+                        <option value="">Todos os níveis</option>
+                        <option value="INFORMATIVO">Informativo</option>
+                        <option value="ATENCAO">Atenção</option>
+                        <option value="CRITICO">Crítico</option>
+                    </select>
+                </div>
+                <div class="alertas-filtro-grupo">
+                    <label for="alertas-filtro-publico">Público</label>
+                    <select id="alertas-filtro-publico">
+                        <option value="">Todos os públicos</option>
+                        <option value="TODOS">Todos</option>
+                        <option value="VISITANTE">Visitante</option>
+                        <option value="PRESTADOR">Prestador</option>
+                        <option value="ENTREGADOR_AUTORIZADO">Entregador autorizado</option>
+                        <option value="FAMILIAR">Familiar</option>
+                        <option value="VEICULO">Veículo</option>
+                    </select>
+                </div>
+                <div class="alertas-filtro-grupo">
+                    <label for="alertas-filtro-status">Status</label>
+                    <select id="alertas-filtro-status">
+                        <option value="">Todos os status</option>
+                        <option value="ATIVO">Ativo</option>
+                        <option value="AGENDADO">Agendado</option>
+                        <option value="PAUSADO">Pausado</option>
+                        <option value="CANCELADO">Cancelado</option>
+                        <option value="EXPIRADO">Expirado</option>
+                        <option value="ENCERRADO">Encerrado</option>
+                    </select>
+                </div>
+                <div class="alertas-filtro-grupo">
+                    <label for="alertas-filtro-origem">Origem</label>
+                    <select id="alertas-filtro-origem">
+                        <option value="">Todas as origens</option>
+                        <option value="PAINEL">Painel</option>
+                        <option value="REGISTRO">Registro</option>
+                        <option value="AUTOMATICO">Automático</option>
+                        <option value="INTEGRACAO">Integração</option>
+                    </select>
+                </div>
+                <div class="alertas-filtro-grupo alertas-filtro-busca">
+                    <label for="alertas-filtro-busca">Busca</label>
+                    <input id="alertas-filtro-busca" type="search" placeholder="Título, mensagem ou morador">
+                </div>
+                <div class="alertas-filtro-grupo">
+                    <label for="alertas-filtro-data-inicio">Vigência inicial</label>
+                    <input id="alertas-filtro-data-inicio" type="date">
+                </div>
+                <div class="alertas-filtro-grupo">
+                    <label for="alertas-filtro-data-fim">Vigência final</label>
+                    <input id="alertas-filtro-data-fim" type="date">
+                </div>
+                <div class="alertas-filtro-acoes">
+                    <button type="submit" class="btn-primary-modern"><i class="fas fa-search"></i> Filtrar</button>
+                    <button type="reset" class="btn-secondary-modern"><i class="fas fa-undo"></i> Limpar</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="alertas-loading" class="alertas-state" hidden aria-live="polite">
+            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Carregando alertas...</p>
+        </div>
+        <div id="alertas-error" class="alertas-state alertas-state-error" hidden role="alert">
+            <i class="fas fa-exclamation-circle" aria-hidden="true"></i><p id="alertas-error-message">Não foi possível carregar os alertas.</p>
+            <button type="button" class="btn-secondary-modern" data-alerta-action="recarregar"><i class="fas fa-redo"></i> Tentar novamente</button>
+        </div>
+        <div id="alertas-empty" class="alertas-state" hidden>
+            <i class="fas fa-bell-slash" aria-hidden="true"></i><p>Nenhum alerta encontrado para os filtros atuais.</p>
+        </div>
+
+        <div id="alertas-table-container" class="page-card table-container alertas-table-container" hidden>
+            <table id="alertas-tabela">
+                <caption class="sr-only">Lista de alertas da unidade</caption>
+                <thead><tr>
+                    <th>ID</th><th>Título</th><th>Unidade</th><th>Nível</th><th>Público</th><th>Status</th><th>Início</th><th>Fim</th><th>Ações</th>
+                </tr></thead>
+                <tbody id="alertas-tbody"></tbody>
+            </table>
+        </div>
+        <div id="alertas-cards" class="alertas-cards" hidden></div>
+        <div id="alertas-paginacao" class="paginacao-moradores alertas-paginacao"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
          TAB: RELATÓRIOS
     ══════════════════════════════════════════════════════ -->
     <div id="tab-relatorios" class="tab-content">
+
+        <section class="page-card alertas-relatorio-card" aria-labelledby="alertas-relatorio-titulo">
+            <div class="alertas-section-heading">
+                <div>
+                    <h2 id="alertas-relatorio-titulo"><i class="fas fa-clipboard-list" aria-hidden="true"></i> Alertas e Ciências</h2>
+                    <p>Exporte o histórico de decisões da portaria por período. Intervalo máximo: 90 dias.</p>
+                </div>
+                <div class="alertas-header-actions">
+                    <button type="button" class="btn-secondary-modern" data-alerta-action="relatorio-7-dias" data-alerta-perm="exportar">Últimos 7 dias</button>
+                    <button type="button" class="btn-secondary-modern" data-alerta-action="relatorio-30-dias" data-alerta-perm="exportar">Últimos 30 dias</button>
+                </div>
+            </div>
+            <div class="alertas-report-filters">
+                <div><label for="alertas-relatorio-inicio">Data inicial</label><input id="alertas-relatorio-inicio" type="date"></div>
+                <div><label for="alertas-relatorio-fim">Data final</label><input id="alertas-relatorio-fim" type="date"></div>
+                <button type="button" class="btn-secondary-modern" data-alerta-action="relatorio-csv" data-alerta-perm="exportar"><i class="fas fa-file-csv" aria-hidden="true"></i> Exportar CSV</button>
+                <button type="button" class="btn-primary-modern" data-alerta-action="relatorio-pdf" data-alerta-perm="exportar"><i class="fas fa-file-pdf" aria-hidden="true"></i> Imprimir / PDF</button>
+            </div>
+            <p id="alertas-relatorio-feedback" class="alertas-form-preview" role="status" aria-live="polite">Selecione o período e exporte o relatório de ciências.</p>
+        </section>
 
         <!-- ── KPIs rápidos ─────────────────────────────────────── -->
         <div class="rel-kpi-grid">
@@ -410,6 +584,202 @@
         </div>
 
     </div><!-- /#tab-relatorios -->
+
+    <!-- ══════════════════════════════════════════════════════
+         MODAL: NOVO / EDITAR ALERTA
+    ══════════════════════════════════════════════════════ -->
+    <div id="alertas-form-modal" class="mor-modal-overlay alertas-modal" role="dialog" aria-modal="true" aria-labelledby="alertas-modal-title" hidden>
+        <div class="mor-modal mor-modal-lg alertas-modal-dialog">
+            <div class="mor-modal-header">
+                <h3 id="alertas-modal-title"><i class="fas fa-bell"></i> Novo alerta da unidade</h3>
+                <button type="button" class="mor-modal-close" data-alerta-close="alertas-form-modal" aria-label="Fechar formulário"><i class="fas fa-times" aria-hidden="true"></i></button>
+            </div>
+            <form id="alertas-form" class="mor-modal-body alertas-form" novalidate>
+                <input type="hidden" id="alertas-form-id">
+                <input type="hidden" id="alertas-form-idempotency">
+                <div class="alertas-form-note"><i class="fas fa-info-circle"></i> O alerta será validado novamente pela API conforme suas permissões.</div>
+                <div class="alertas-modelo-rapido">
+                    <label for="alertas-form-modelo">Modelo rápido (opcional)</label>
+                    <select id="alertas-form-modelo">
+                        <option value="">Selecione um modelo para preencher o formulário</option>
+                        <option value="temporario">Autorização temporária</option>
+                        <option value="restricao">Restrição específica</option>
+                        <option value="entrega">Entrega autorizada</option>
+                        <option value="contato">Contato obrigatório</option>
+                        <option value="critico">Alerta crítico / bloqueio</option>
+                    </select>
+                </div>
+                <div id="alertas-form-preview" class="alertas-form-preview" role="status" aria-live="polite">Preencha o formulário para visualizar o resumo operacional.</div>
+                <div class="form-grid">
+                    <div>
+                        <label for="alertas-form-unidade">Unidade *</label>
+                        <select id="alertas-form-unidade" required><option value="">Carregando unidades...</option></select>
+                    </div>
+                    <div>
+                        <label for="alertas-form-titular-tipo">Tipo do titular *</label>
+                        <select id="alertas-form-titular-tipo" required>
+                            <option value="MORADOR">Morador</option>
+                            <option value="DEPENDENTE">Dependente</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="alertas-form-morador">Morador titular *</label>
+                        <select id="alertas-form-morador" required><option value="">Carregando moradores...</option></select>
+                    </div>
+                    <div>
+                        <label for="alertas-form-dependente">Dependente</label>
+                        <select id="alertas-form-dependente"><option value="">Opcional</option></select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label for="alertas-form-titulo">Título *</label>
+                        <input id="alertas-form-titulo" type="text" maxlength="180" required placeholder="Ex.: Acesso autorizado somente com documento">
+                    </div>
+                    <div>
+                        <label for="alertas-form-nivel">Nível *</label>
+                        <select id="alertas-form-nivel" required>
+                            <option value="INFORMATIVO">Informativo</option>
+                            <option value="ATENCAO">Atenção</option>
+                            <option value="CRITICO">Crítico</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="alertas-form-mensagem">Mensagem *</label>
+                    <textarea id="alertas-form-mensagem" rows="4" maxlength="5000" required placeholder="Descreva o aviso ou a orientação para a portaria."></textarea>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label for="alertas-form-acao">Ação operacional *</label>
+                        <select id="alertas-form-acao" required>
+                            <option value="APENAS_AVISAR">Apenas avisar</option>
+                            <option value="EXIGIR_CIENTE">Exigir ciência</option>
+                            <option value="CONTATAR_MORADOR">Contatar morador</option>
+                            <option value="BLOQUEAR">Bloquear</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="alertas-form-publico">Público *</label>
+                        <select id="alertas-form-publico" required>
+                            <option value="TODOS">Todos</option>
+                            <option value="VISITANTE">Visitante</option>
+                            <option value="PRESTADOR">Prestador</option>
+                            <option value="ENTREGADOR_AUTORIZADO">Entregador autorizado</option>
+                            <option value="FAMILIAR">Familiar</option>
+                            <option value="VEICULO">Veículo</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="alertas-form-abrangencia">Abrangência *</label>
+                        <select id="alertas-form-abrangencia" required>
+                            <option value="TODOS_DO_TIPO">Todos do tipo</option>
+                            <option value="ESPECIFICO">Alvos específicos</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label for="alertas-form-inicio">Início da vigência *</label>
+                        <input id="alertas-form-inicio" type="datetime-local" required>
+                    </div>
+                    <div>
+                        <label for="alertas-form-fim">Fim da vigência</label>
+                        <input id="alertas-form-fim" type="datetime-local">
+                    </div>
+                    <div>
+                        <label for="alertas-form-hora-inicio">Hora inicial</label>
+                        <input id="alertas-form-hora-inicio" type="time">
+                    </div>
+                    <div>
+                        <label for="alertas-form-hora-fim">Hora final</label>
+                        <input id="alertas-form-hora-fim" type="time">
+                    </div>
+                </div>
+                <fieldset id="alertas-form-dias" class="alertas-dias-fieldset">
+                    <legend>Dias da semana (opcional)</legend>
+                    <label><input type="checkbox" value="SEGUNDA"> Seg</label>
+                    <label><input type="checkbox" value="TERCA"> Ter</label>
+                    <label><input type="checkbox" value="QUARTA"> Qua</label>
+                    <label><input type="checkbox" value="QUINTA"> Qui</label>
+                    <label><input type="checkbox" value="SEXTA"> Sex</label>
+                    <label><input type="checkbox" value="SABADO"> Sáb</label>
+                    <label><input type="checkbox" value="DOMINGO"> Dom</label>
+                </fieldset>
+                <div id="alertas-targets-wrap" class="alertas-targets-wrap">
+                    <h4>Alvos específicos</h4>
+                    <p class="field-help">Use a busca somente para localizar visitantes ou veículos que a API disponibilizar para operadores autorizados.</p>
+                    <div class="alertas-target-search">
+                        <input id="alertas-alvo-busca" type="search" placeholder="Nome, documento ou placa" autocomplete="off">
+                        <button type="button" id="alertas-alvo-buscar" class="btn-secondary-modern"><i class="fas fa-search"></i> Buscar alvo</button>
+                    </div>
+                    <select id="alertas-alvo-resultados" class="alertas-target-results" aria-label="Resultados de busca de alvos" hidden><option value="">Selecione um resultado para adicionar</option></select>
+                    <div id="alertas-alvos-list" class="alertas-alvos-list"></div>
+                </div>
+                <div class="form-grid">
+                    <div>
+                        <label for="alertas-form-telefone">Telefone de contato</label>
+                        <input id="alertas-form-telefone" type="tel" maxlength="40" placeholder="(00) 00000-0000">
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <label for="alertas-form-instrucao">Instrução ao operador</label>
+                        <input id="alertas-form-instrucao" type="text" maxlength="500" placeholder="Orientação interna para a portaria">
+                    </div>
+                </div>
+            </form>
+            <div class="mor-modal-footer">
+                <button type="button" class="btn-secondary-modern" data-alerta-close="alertas-form-modal"><i class="fas fa-times"></i> Cancelar</button>
+                <button type="submit" form="alertas-form" id="alertas-form-submit" class="btn-primary-modern" data-alerta-perm="criar"><i class="fas fa-save"></i> <span id="alertas-form-submit-label">Salvar alerta</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         MODAL: DETALHE DO ALERTA
+    ══════════════════════════════════════════════════════ -->
+    <div id="alertas-detalhe-modal" class="mor-modal-overlay alertas-modal" role="dialog" aria-modal="true" aria-labelledby="alertas-detalhe-titulo" hidden>
+        <div class="mor-modal mor-modal-lg alertas-modal-dialog">
+            <div class="mor-modal-header">
+                <h3 id="alertas-detalhe-titulo"><i class="fas fa-bell"></i> Detalhes do alerta</h3>
+                <button type="button" class="mor-modal-close" data-alerta-close="alertas-detalhe-modal" aria-label="Fechar detalhes"><i class="fas fa-times" aria-hidden="true"></i></button>
+            </div>
+            <div class="mor-modal-body alertas-detalhe-body">
+                <div class="alertas-detalhe-tabs" role="tablist" aria-label="Seções do detalhe do alerta">
+                    <button id="alertas-detalhe-tab-visao" type="button" role="tab" aria-controls="alertas-detalhe-panel-visao" aria-selected="true" data-alerta-detail-tab="visao">Visão geral</button>
+                    <button id="alertas-detalhe-tab-eventos" type="button" role="tab" aria-controls="alertas-detalhe-panel-eventos" aria-selected="false" data-alerta-detail-tab="eventos" tabindex="-1">Acionamentos e ciências</button>
+                    <button id="alertas-detalhe-tab-historico" type="button" role="tab" aria-controls="alertas-detalhe-panel-historico" aria-selected="false" data-alerta-detail-tab="historico" tabindex="-1">Histórico</button>
+                </div>
+                <section id="alertas-detalhe-panel-visao" role="tabpanel" aria-labelledby="alertas-detalhe-tab-visao" data-alerta-detail-panel="visao" tabindex="0">
+                    <p id="alertas-detalhe-mensagem" class="alertas-detalhe-mensagem">—</p>
+                    <dl class="alertas-detalhe-grid">
+                        <div><dt>Unidade</dt><dd id="alertas-detalhe-unidade">—</dd></div>
+                        <div><dt>Morador titular</dt><dd id="alertas-detalhe-titular">—</dd></div>
+                        <div><dt>Nível</dt><dd id="alertas-detalhe-nivel">—</dd></div>
+                        <div><dt>Status</dt><dd id="alertas-detalhe-status">—</dd></div>
+                        <div><dt>Ação</dt><dd id="alertas-detalhe-acao">—</dd></div>
+                        <div><dt>Público</dt><dd id="alertas-detalhe-publico">—</dd></div>
+                        <div><dt>Vigência</dt><dd id="alertas-detalhe-vigencia">—</dd></div>
+                    </dl>
+                    <section><h4>Alvos</h4><ul id="alertas-detalhe-alvos"></ul></section>
+                </section>
+                <section id="alertas-detalhe-panel-eventos" role="tabpanel" aria-labelledby="alertas-detalhe-tab-eventos" data-alerta-detail-panel="eventos" tabindex="0" hidden>
+                    <div class="alertas-detalhe-columns">
+                        <section><h4>Acionamentos</h4><ul id="alertas-detalhe-acionamentos"></ul></section>
+                        <section><h4>Ciências</h4><ul id="alertas-detalhe-ciencias"></ul></section>
+                    </div>
+                </section>
+                <section id="alertas-detalhe-panel-historico" role="tabpanel" aria-labelledby="alertas-detalhe-tab-historico" data-alerta-detail-panel="historico" tabindex="0" hidden>
+                    <div class="alertas-detalhe-columns">
+                        <section><h4>Histórico de alterações</h4><ul id="alertas-detalhe-historico"></ul></section>
+                    </div>
+                </section>
+            </div>
+            <div class="mor-modal-footer">
+                <button type="button" class="btn-secondary-modern" data-alerta-close="alertas-detalhe-modal">Fechar</button>
+                <button type="button" id="alertas-detalhe-editar" class="btn-primary-modern" data-alerta-perm="editar"><i class="fas fa-edit"></i> Editar</button>
+            </div>
+        </div>
+    </div>
 
     <!-- ══════════════════════════════════════════════════════
          MODAL: EDITAR MORADOR

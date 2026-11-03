@@ -1585,6 +1585,95 @@
         @media (max-width: 640px) { .ca-toolbar { display:grid; grid-template-columns:1fr 1fr; } .ca-toolbar .form-group:first-child { grid-column:1/-1; } .ca-toolbar-actions { grid-column:1/-1; } .ca-toolbar .btn { flex:1; justify-content:center; } .ca-card { padding:.85rem; } }
 
         /* ============================================================
+           MEUS ALERTAS DA UNIDADE — PORTAL DO MORADOR
+           ============================================================ */
+        .alertas-intro {
+            display:flex; align-items:flex-start; gap:1rem;
+            background:var(--info-bg); border:1px solid #bfdbfe;
+            border-radius:var(--radius-md); padding:1rem; color:var(--info-text);
+            margin-bottom:1rem; line-height:1.5;
+        }
+        .alertas-intro i { font-size:1.35rem; margin-top:.15rem; flex-shrink:0; }
+        .alertas-intro strong { display:block; margin-bottom:.2rem; }
+        .alertas-intro p { font-size:.86rem; color:inherit; }
+        .alertas-preferencia-push { margin:0 0 1rem; padding:.8rem 1rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg-card); }
+        .alertas-preferencia-push label { display:flex; align-items:center; gap:.55rem; font-weight:600; cursor:pointer; }
+        .alertas-preferencia-push input[type="checkbox"] { width:1rem; height:1rem; margin:0; flex:0 0 auto; }
+        .alertas-preferencia-push p { margin:.35rem 0 0 1.55rem; color:var(--text-secondary); font-size:.82rem; }
+        .alertas-toolbar {
+            display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;
+            margin-bottom:1rem;
+        }
+        .alertas-toolbar .form-group { margin:0; min-width:180px; flex:1 1 220px; }
+        .alertas-toolbar-actions { display:flex; gap:.5rem; align-items:center; }
+        .alertas-resumo { color:var(--text-secondary); font-size:.86rem; margin:.1rem 0 1rem; }
+        .alertas-list { display:grid; gap:.75rem; }
+        .alertas-card {
+            background:var(--bg-card); border:1px solid var(--border);
+            border-radius:var(--radius-md); box-shadow:var(--shadow-sm); padding:1rem;
+        }
+        .alertas-card-header {
+            display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem;
+        }
+        .alertas-card-title { min-width:0; flex:1; }
+        .alertas-card-title h3 { font-size:1rem; line-height:1.35; overflow-wrap:anywhere; }
+        .alertas-card-meta {
+            display:flex; flex-wrap:wrap; gap:.45rem .75rem; margin-top:.65rem;
+            color:var(--text-secondary); font-size:.8rem;
+        }
+        .alertas-card-meta span { display:inline-flex; align-items:center; gap:.3rem; }
+        .alertas-card-message {
+            margin-top:.75rem; color:var(--text-secondary); font-size:.88rem;
+            line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere;
+        }
+        .alertas-card-footer {
+            display:flex; align-items:center; justify-content:space-between; gap:.75rem;
+            flex-wrap:wrap; margin-top:.9rem; padding-top:.75rem; border-top:1px solid var(--border);
+        }
+        .alertas-card-actions { display:flex; gap:.45rem; flex-wrap:wrap; margin-left:auto; }
+        .alerta-nivel, .alerta-status {
+            display:inline-flex; align-items:center; gap:.3rem; border-radius:999px;
+            padding:.28rem .62rem; font-size:.74rem; font-weight:700; white-space:nowrap;
+        }
+        .alerta-nivel-informativo { background:var(--info-bg); color:var(--info-text); }
+        .alerta-nivel-atencao { background:var(--warning-bg); color:var(--warning-text); }
+        .alerta-nivel-critico { background:var(--danger-bg); color:var(--danger-text); }
+        .alerta-status-ativo { background:var(--success-bg); color:var(--success-text); }
+        .alerta-status-pausado { background:var(--warning-bg); color:var(--warning-text); }
+        .alerta-status-expirado, .alerta-status-cancelado { background:#f1f5f9; color:#64748b; }
+        .alertas-empty { text-align:center; padding:2.5rem 1rem; color:var(--text-secondary); }
+        .alertas-empty i { display:block; font-size:2.2rem; color:var(--text-muted); margin-bottom:.7rem; }
+        .alertas-detalhe { margin-top:1rem; }
+        .alertas-detalhe-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.75rem; margin-top:1rem; }
+        .alertas-detalhe .info-item { min-width:0; }
+        .alertas-detail-message {
+            margin-top:1rem; padding:1rem; background:var(--bg-subtle);
+            border:1px solid var(--border); border-radius:var(--radius-md);
+            white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.55;
+        }
+        .alertas-form-note { color:var(--text-muted); font-size:.8rem; margin-top:-.35rem; margin-bottom:1rem; }
+        .alertas-alvo-wrap { display:none; }
+        .alertas-alvo-wrap.show { display:block; }
+        .alertas-visitante-resultados { display:grid; gap:.35rem; margin-top:.5rem; }
+        .alertas-visitante-resultados:empty { display:none; }
+        .alertas-visitante-option { width:100%; text-align:left; padding:.6rem .75rem; border:1px solid var(--border); border-radius:.5rem; background:var(--bg-card); color:var(--text-primary); cursor:pointer; }
+        .alertas-visitante-option:hover, .alertas-visitante-option:focus-visible { border-color:var(--primary); outline:2px solid color-mix(in srgb, var(--primary) 25%, transparent); }
+        .alertas-visitante-selecionados { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.5rem; }
+        .alertas-visitante-chip { display:inline-flex; align-items:center; gap:.45rem; padding:.3rem .55rem; border-radius:999px; background:var(--bg-subtle); border:1px solid var(--border); font-size:.82rem; max-width:100%; }
+        .alertas-visitante-chip button { border:0; background:transparent; color:var(--danger-text); cursor:pointer; font-weight:700; padding:0 .1rem; }
+        @media (max-width: 640px) {
+            .alertas-toolbar { display:grid; grid-template-columns:1fr; }
+            .alertas-toolbar .form-group { min-width:0; }
+            .alertas-toolbar-actions { width:100%; }
+            .alertas-toolbar-actions .btn { flex:1; }
+            .alertas-card { padding:.85rem; }
+            .alertas-card-header { display:block; }
+            .alertas-card-header > .alerta-status { margin-top:.55rem; }
+            .alertas-card-actions { width:100%; margin-left:0; }
+            .alertas-card-actions .btn { flex:1; }
+        }
+
+        /* ============================================================
            PRINT
            ============================================================ */
         @media print {
@@ -1649,6 +1738,10 @@
         <button class="nav-tab" onclick="abrirAba('dependentes', this)" aria-label="Dependentes">
             <i class="fas fa-people-arrows" aria-hidden="true"></i>
             <span>Dependentes</span>
+        </button>
+        <button class="nav-tab" onclick="abrirAba('alertas', this)" aria-label="Meus Alertas">
+            <i class="fas fa-bell" aria-hidden="true"></i>
+            <span>Meus Alertas</span>
         </button>
         <button class="nav-tab" onclick="abrirAba('protocolos', this)" aria-label="Protocolos">
             <i class="fas fa-box" aria-hidden="true"></i>
@@ -1723,6 +1816,11 @@
             onclick="abrirAbaMobile('dependentes', 'fa-people-arrows', 'Dependentes', this)" role="menuitem">
             <i class="fas fa-people-arrows" aria-hidden="true"></i>
             <span>Dependentes</span>
+        </button>
+        <button class="mobile-menu-item" id="mmi-alertas"
+            onclick="abrirAbaMobile('alertas', 'fa-bell', 'Meus Alertas', this)" role="menuitem">
+            <i class="fas fa-bell" aria-hidden="true"></i>
+            <span>Meus Alertas</span>
         </button>
         <button class="mobile-menu-item" id="mmi-protocolos"
             onclick="abrirAbaMobile('protocolos', 'fa-box', 'Protocolos', this)" role="menuitem">
@@ -2104,6 +2202,180 @@
             <div id="listaDependentes">
                 <div class="empty-state"><i class="fas fa-users"></i><p>Carregando dependentes...</p></div>
             </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         ABA: MEUS ALERTAS DA UNIDADE
+         ============================================================ -->
+    <div id="panel-alertas" class="tab-panel" role="tabpanel" aria-labelledby="mmi-alertas">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-header-icon"><i class="fas fa-bell" aria-hidden="true"></i></div>
+                <div>
+                    <h2>Meus Alertas da Unidade</h2>
+                    <p>Crie avisos para a portaria e acompanhe os alertas da sua unidade.</p>
+                </div>
+            </div>
+            <div class="alertas-intro" role="note">
+                <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                <div>
+                    <strong>Privacidade e segurança</strong>
+                    <p>A unidade é definida pela sua sessão. Alertas do Sistema são somente para leitura; ações de pausa e cancelamento aparecem apenas quando autorizadas.</p>
+                </div>
+            </div>
+            <div class="alertas-preferencia-push">
+                <label for="alertasPushAtivo"><input id="alertasPushAtivo" type="checkbox" checked disabled onchange="alertasSalvarPreferenciaPush()"> Receber notificações push de acionamentos e lembretes</label>
+                <p>Desativar o push não remove as notificações internas da sua caixa do Portal.</p>
+            </div>
+            <form id="formAlertaUnidade" onsubmit="alertasSalvar(event)" novalidate>
+                <div id="alertasFormFeedback" class="alert alert-error" role="alert" aria-live="polite"></div>
+                <div class="form-group">
+                    <label for="alertaModeloRapido">Modelo rápido (opcional)</label>
+                    <select id="alertaModeloRapido">
+                        <option value="">Escolha um modelo para preencher o formulário</option>
+                        <option value="NAO_RECEBER_VISITAS">Não receber visitantes</option>
+                        <option value="ENTREGAS_PORTARIA">Entregas na portaria</option>
+                        <option value="PRESTADOR_CIENTE">Prestador sujeito à confirmação</option>
+                        <option value="NAO_LIBERAR_PESSOA">Não liberar pessoa específica</option>
+                        <option value="VIAGEM_UNIDADE">Viagem — unidade vazia</option>
+                        <option value="LIGAR_ANTES">Ligar antes de liberar</option>
+                    </select>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="alertaTitularTipo">Alerta de *</label>
+                        <select id="alertaTitularTipo" required onchange="alertasAtualizarDependente()">
+                            <option value="MORADOR">Morador</option>
+                            <option value="DEPENDENTE">Dependente</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="alertaDependenteGroup" style="display:none;">
+                        <label for="alertaDependente">Dependente *</label>
+                        <select id="alertaDependente">
+                            <option value="">Carregando dependentes...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="alertaTitulo">Título *</label>
+                        <input type="text" id="alertaTitulo" maxlength="120" required placeholder="Ex.: Não liberar visitas durante a viagem" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="alertaNivel">Nível *</label>
+                        <select id="alertaNivel" required>
+                            <option value="INFORMATIVO">Informativo</option>
+                            <option value="ATENCAO">Atenção</option>
+                            <option value="CRITICO">Crítico</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="alertaMensagem">Mensagem para a portaria *</label>
+                    <textarea id="alertaMensagem" rows="3" maxlength="1000" required placeholder="Explique o aviso de forma objetiva."></textarea>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="alertaInstrucaoOperador">Instrução para a portaria (opcional)</label>
+                        <textarea id="alertaInstrucaoOperador" rows="2" maxlength="500" placeholder="Ex.: ligar para o morador antes de liberar."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="alertaTelefoneContato">Telefone de contato (opcional)</label>
+                        <input type="tel" id="alertaTelefoneContato" maxlength="30" inputmode="tel" placeholder="(31) 99999-9999">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="alertaAcao">Ação na portaria *</label>
+                        <select id="alertaAcao" required>
+                            <option value="APENAS_AVISAR">Apenas avisar</option>
+                            <option value="EXIGIR_CIENTE">Exigir ciente</option>
+                            <option value="CONTATAR_MORADOR">Contatar o morador antes</option>
+                            <option value="BLOQUEAR">Bloquear entrada</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="alertaPublico">Público *</label>
+                        <select id="alertaPublico" required>
+                            <option value="TODOS">Todos os acessos</option>
+                            <option value="VISITANTE">Visitante</option>
+                            <option value="PRESTADOR">Prestador</option>
+                            <option value="ENTREGADOR_AUTORIZADO">Entregador autorizado</option>
+                            <option value="FAMILIAR">Familiar</option>
+                            <option value="VEICULO">Veículo (placa)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="alertaAbrangencia">Alcance *</label>
+                        <select id="alertaAbrangencia" required onchange="alertasAtualizarAlvos()">
+                            <option value="TODOS_DO_TIPO">Todos do tipo</option>
+                            <option value="ESPECIFICO">Alvo específico</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="alertasAlvoWrap" class="alertas-alvo-wrap">
+                    <div class="form-group" id="alertaVisitanteBuscaWrap" hidden>
+                        <label for="alertaVisitanteBusca">Buscar visitante já cadastrado</label>
+                        <input type="search" id="alertaVisitanteBusca" maxlength="120" autocomplete="off" placeholder="Digite ao menos 3 caracteres do nome ou documento">
+                        <div id="alertaVisitanteResultados" class="alertas-visitante-resultados" role="listbox" aria-label="Visitantes vinculados à sua unidade"></div>
+                        <div id="alertaVisitanteSelecionados" class="alertas-visitante-selecionados" aria-live="polite"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="alertaAlvos">Alvos específicos *</label>
+                        <textarea id="alertaAlvos" rows="3" maxlength="4000" placeholder="Veículo: ABC-1234. Pessoa: João Silva | CPF | 123.456.789-00 (uma por linha)."></textarea>
+                        <p class="alertas-form-note">Para veículos, informe uma placa por linha. Para pessoas, informe nome, tipo de documento e número separados por |. O documento não aparece nas listagens.</p>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="alertaVigenciaInicio">Início da vigência *</label>
+                        <input type="datetime-local" id="alertaVigenciaInicio" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="alertaVigenciaFim">Fim da vigência *</label>
+                        <input type="datetime-local" id="alertaVigenciaFim" required>
+                    </div>
+                </div>
+                <p class="alertas-form-note">A vigência de um alerta criado pelo morador deve ter data final.</p>
+                <div id="alertaPreviaResumo" class="alertas-resumo" role="status" aria-live="polite">O resumo do alerta aparecerá aqui conforme os campos forem preenchidos.</div>
+                <button type="submit" class="btn btn-primary" id="btnSalvarAlerta">
+                    <i class="fas fa-bell" aria-hidden="true"></i> Criar alerta
+                </button>
+                <button type="button" class="btn btn-secondary" id="btnCancelarEdicaoAlerta" onclick="alertasCancelarEdicao()" hidden>
+                    <i class="fas fa-times" aria-hidden="true"></i> Cancelar edição
+                </button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-header-icon"><i class="fas fa-list-ul" aria-hidden="true"></i></div>
+                <div>
+                    <h2>Alertas da sua unidade</h2>
+                    <p>Ativos, pausados, expirados e cancelados, conforme sua sessão.</p>
+                </div>
+            </div>
+            <div class="alertas-toolbar">
+                <div class="form-group">
+                    <label for="alertasFiltroStatus">Filtrar por status</label>
+                    <select id="alertasFiltroStatus" onchange="alertasRenderizarLista()">
+                        <option value="">Todos</option>
+                        <option value="ATIVO">Ativos</option>
+                        <option value="PAUSADO">Pausados</option>
+                        <option value="EXPIRADO">Expirados</option>
+                        <option value="CANCELADO">Cancelados</option>
+                    </select>
+                </div>
+                <div class="alertas-toolbar-actions">
+                    <button type="button" class="btn btn-secondary" onclick="alertasCarregar()">
+                        <i class="fas fa-sync-alt" aria-hidden="true"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+            <div id="alertasResumo" class="alertas-resumo" aria-live="polite"></div>
+            <div id="listaAlertas" class="alertas-list" aria-live="polite">
+                <div class="alertas-empty"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Carregando alertas...</p></div>
+            </div>
+            <div id="alertaDetalhe" class="alertas-detalhe" hidden aria-live="polite"></div>
         </div>
     </div>
 
@@ -2945,6 +3217,7 @@ function abrirAba(aba, btnEl) {
         visitantes:  () => carregarVisitantes(),
         acessos:     () => { carregarVisitantesSelect(); carregarAcessos(); },
         dependentes: carregarDependentes,
+        alertas:     alertasInicializar,
         protocolos:  () => carregarProtocolos(''),
         hidrometro:  carregarHidrometro,
         veiculos:    carregarVeiculos,
@@ -3022,6 +3295,7 @@ const ABAS_INFO = {
     visitantes:  { icon: 'fa-users',         label: 'Visitantes'  },
     acessos:     { icon: 'fa-qrcode',        label: 'Acessos'     },
     dependentes: { icon: 'fa-people-arrows', label: 'Dependentes' },
+    alertas:     { icon: 'fa-bell',          label: 'Meus Alertas' },
     protocolos:  { icon: 'fa-box',           label: 'Protocolos'  },
     hidrometro:  { icon: 'fa-tint',          label: 'Hidrômetro'  },
     veiculos:    { icon: 'fa-car',           label: 'Veículos'    },
@@ -3422,7 +3696,7 @@ function selecionarTipoAcesso(tipo) {
     });
 }
 
-function salvarAcesso(e) {
+async function salvarAcesso(e) {
     e.preventDefault();
     const visitanteId = document.getElementById('acessoVisitante').value;
     const tipoAcesso  = document.querySelector('[name="acessoTipoAcesso"]:checked')?.value;
@@ -3449,13 +3723,32 @@ function salvarAcesso(e) {
         unidade_destino: Portal.moradorUnidade
     };
 
-    fetch(window.location.origin + '/api/api_acessos_visitantes.php', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + Portal.token, 'Content-Type': 'application/json' },
-        body: JSON.stringify(dados)
-    })
-    .then(r => r.json())
-    .then(data => {
+    try {
+        const preflightResponse = await fetch(window.location.origin + '/api/api_portal_alertas.php?acao=verificar_convite', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + Portal.token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                visitante_id: Number(visitanteId),
+                tipo_visitante: dados.tipo_visitante,
+                data_inicial: dados.data_inicial,
+                placa: dados.placa
+            })
+        });
+        const preflight = await preflightResponse.json().catch(() => null);
+        if (!preflightResponse.ok || !preflight?.sucesso) throw new Error(preflight?.mensagem || 'Não foi possível verificar os alertas da unidade.');
+        const alertasConflitantes = Array.isArray(preflight.dados?.alertas) ? preflight.dados.alertas : [];
+        if (alertasConflitantes.length) {
+            const resumo = alertasConflitantes.map(alerta => `[${alerta.nivel || 'AVISO'}] ${alerta.titulo || 'Alerta da unidade'}: ${alerta.mensagem || ''}`).join('\n\n');
+            if (!window.confirm(`Há alertas ativos que podem afetar este acesso. O convidado poderá ser impedido de entrar após a avaliação da portaria.\n\n${resumo}\n\nDeseja continuar e gerar o QR Code?`)) return;
+        }
+
+        const response = await fetch(window.location.origin + '/api/api_acessos_visitantes.php', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + Portal.token, 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data) throw new Error(data?.mensagem || 'Não foi possível gerar o acesso.');
         mostrarAlerta(data.mensagem, data.sucesso ? 'success' : 'error');
         if (data.sucesso) {
             document.getElementById('formAcesso').reset();
@@ -3466,12 +3759,12 @@ function salvarAcesso(e) {
             });
             carregarAcessos();
         }
-    })
-    .catch(() => mostrarAlerta('Erro ao gerar acesso.', 'error'))
-    .finally(() => {
+    } catch (error) {
+        mostrarAlerta(error.message || 'Erro ao gerar acesso.', 'error');
+    } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-qrcode"></i> Gerar QR Code';
-    });
+    }
 }
 
 function carregarAcessos() {
@@ -3541,8 +3834,29 @@ function carregarAcessos() {
     });
 }
 
-function gerarQRCode(id) {
-    window.open(window.location.origin + `/api/api_acessos_visitantes.php?action=gerar_qrcode&id=${id}`, '_blank');
+async function gerarQRCode(id) {
+    const janela = window.open('about:blank', '_blank');
+    try {
+        const response = await fetch(window.location.origin + `/api/api_acessos_visitantes.php?action=gerar_qrcode&id=${encodeURIComponent(id)}`, {
+            headers: { 'Authorization': 'Bearer ' + Portal.token }
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.sucesso) throw new Error(data?.mensagem || 'Não foi possível gerar o QR Code para este acesso.');
+        const imagem = String(data?.dados?.qr_code_imagem || '');
+        if (!imagem.startsWith('data:image/')) throw new Error('A resposta do servidor não contém uma imagem QR válida.');
+        if (!janela) throw new Error('Permita a abertura da nova janela para exibir o QR Code.');
+        janela.document.title = 'QR Code do acesso';
+        const img = janela.document.createElement('img');
+        img.src = imagem;
+        img.alt = 'QR Code do acesso autorizado';
+        img.style.cssText = 'display:block;max-width:min(90vw,560px);height:auto;margin:5vh auto';
+        janela.document.body.style.margin = '0';
+        janela.document.body.style.background = '#fff';
+        janela.document.body.replaceChildren(img);
+    } catch (error) {
+        if (janela) janela.close();
+        mostrarAlerta(error.message || 'Erro ao gerar QR Code.', 'error');
+    }
 }
 
 function excluirAcesso(id) {
@@ -5402,6 +5716,733 @@ function caCard(acesso) {
             ${status ? `<div class="ca-status">${escHtml(status)}</div>` : ''}
         </div>
     </article>`;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   MEUS ALERTAS DA UNIDADE — PORTAL DO MORADOR
+   ────────────────────────────────────────────────────────────────── */
+const AlertasPortal = {
+    API: window.location.origin + '/api/api_portal_alertas.php',
+    lista: [],
+    dependentes: [],
+    visitantesResultados: [],
+    visitantesSelecionados: [],
+    buscaVisitanteTimer: null,
+    buscaVisitanteToken: 0,
+    carregado: false,
+    dependentesCarregados: false,
+    eventosPreparados: false,
+    preferenciaPushCarregada: false,
+    editandoId: null
+};
+
+const ALERTAS_LABELS = {
+    nivel: {
+        INFORMATIVO: 'Informativo', ATENCAO: 'Atenção', CRITICO: 'Crítico'
+    },
+    acao: {
+        APENAS_AVISAR: 'Apenas avisar', EXIGIR_CIENTE: 'Exigir ciente',
+        CONTATAR_MORADOR: 'Contatar o morador antes', BLOQUEAR: 'Bloquear entrada'
+    },
+    publico: {
+        TODOS: 'Todos os acessos', VISITANTE: 'Visitante', PRESTADOR: 'Prestador',
+        ENTREGADOR_AUTORIZADO: 'Entregador autorizado', FAMILIAR: 'Familiar', VEICULO: 'Veículo'
+    },
+    abrangencia: { TODOS_DO_TIPO: 'Todos do tipo', ESPECIFICO: 'Alvo específico' },
+    status: { ATIVO: 'Ativo', PAUSADO: 'Pausado', EXPIRADO: 'Expirado', CANCELADO: 'Cancelado' },
+    origem: { SISTEMA: 'Sistema', PORTAL: 'Portal', APP: 'App' }
+};
+
+function alertasNormalizarEnum(valor) {
+    return String(valor == null ? '' : valor).trim().toUpperCase();
+}
+
+function alertasIdSeguro(valor) {
+    const id = Number(valor);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function alertasPodeEditar(alerta) {
+    const valor = alerta && alerta.pode_editar;
+    return valor === true || valor === 1 || valor === '1' || String(valor).toLowerCase() === 'true';
+}
+
+function alertasApiUrl(acao, params) {
+    const query = new URLSearchParams({ acao });
+    Object.entries(params || {}).forEach(([chave, valor]) => {
+        if (valor !== undefined && valor !== null && valor !== '') query.set(chave, String(valor));
+    });
+    return AlertasPortal.API + '?' + query.toString();
+}
+
+async function alertasApi(acao, options = {}, params = {}) {
+    const headers = Object.assign({ 'Authorization': 'Bearer ' + Portal.token }, options.headers || {});
+    const fetchOptions = Object.assign({}, options, { headers });
+    const response = await fetch(alertasApiUrl(acao, params), fetchOptions);
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || !data.sucesso) {
+        throw new Error((data && data.mensagem) || 'Não foi possível concluir a operação.');
+    }
+    return data;
+}
+
+async function alertasCarregarPreferenciaPush() {
+    const checkbox = document.getElementById('alertasPushAtivo');
+    if (!checkbox) return;
+    AlertasPortal.preferenciaPushCarregada = false;
+    checkbox.disabled = true;
+    try {
+        const resposta = await alertasApi('preferencia_push');
+        checkbox.checked = resposta.dados?.push_ativo !== false && resposta.dados?.push_ativo !== 0;
+        AlertasPortal.preferenciaPushCarregada = true;
+        checkbox.disabled = false;
+    } catch (error) {
+        alertasMostrarAviso(error.message || 'Não foi possível carregar sua preferência de notificações.', 'error');
+    }
+}
+
+async function alertasSalvarPreferenciaPush() {
+    const checkbox = document.getElementById('alertasPushAtivo');
+    if (!checkbox || !AlertasPortal.preferenciaPushCarregada) return;
+    const valorAnterior = !checkbox.checked;
+    checkbox.disabled = true;
+    try {
+        const resposta = await alertasApi('preferencia_push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ push_ativo: checkbox.checked })
+        });
+        checkbox.checked = resposta.dados?.push_ativo !== false && resposta.dados?.push_ativo !== 0;
+        alertasMostrarAviso('Preferência de notificações atualizada.', 'success');
+    } catch (error) {
+        checkbox.checked = valorAnterior;
+        alertasMostrarAviso(error.message || 'Não foi possível salvar sua preferência de notificações.', 'error');
+    } finally {
+        checkbox.disabled = false;
+    }
+}
+
+function alertasMensagemSeguro(valor, fallback) {
+    const mensagem = String(valor == null ? '' : valor).trim();
+    return mensagem || fallback;
+}
+
+function alertasMostrarAviso(mensagem, tipo) {
+    mostrarAlerta(escHtml(alertasMensagemSeguro(mensagem, 'Não foi possível concluir a operação.')), tipo || 'error');
+}
+
+function alertasFormFeedback(mensagem) {
+    const el = document.getElementById('alertasFormFeedback');
+    if (!el) return;
+    if (mensagem) {
+        el.textContent = alertasMensagemSeguro(mensagem, 'Revise os campos do formulário.');
+        el.classList.add('show');
+    } else {
+        el.textContent = '';
+        el.classList.remove('show');
+    }
+}
+
+function alertasInicializar() {
+    alertasPrepararEventos();
+    alertasAtualizarDependente();
+    alertasAtualizarAlvos();
+    alertasAtualizarPrevia();
+    alertasCarregarPreferenciaPush();
+    if (!AlertasPortal.dependentesCarregados) alertasCarregarDependentes();
+    if (!AlertasPortal.carregado) alertasCarregar();
+}
+
+function alertasAplicarModeloRapido(chave) {
+    const modelos = {
+        NAO_RECEBER_VISITAS: { titulo: 'Não receber visitantes', mensagem: 'Não autorizo a entrada de visitantes durante o período informado.', nivel: 'CRITICO', acao: 'BLOQUEAR', publico: 'VISITANTE', abrangencia: 'TODOS_DO_TIPO' },
+        ENTREGAS_PORTARIA: { titulo: 'Entregas na portaria', mensagem: 'Deixar a entrega na portaria sem interfonar para a unidade.', nivel: 'INFORMATIVO', acao: 'APENAS_AVISAR', publico: 'ENTREGADOR_AUTORIZADO', abrangencia: 'TODOS_DO_TIPO' },
+        PRESTADOR_CIENTE: { titulo: 'Prestador sujeito à confirmação', mensagem: 'Confirme que a portaria leu este alerta antes de liberar o prestador.', nivel: 'ATENCAO', acao: 'EXIGIR_CIENTE', publico: 'PRESTADOR', abrangencia: 'TODOS_DO_TIPO' },
+        NAO_LIBERAR_PESSOA: { titulo: 'Não liberar pessoa específica', mensagem: 'Não autorizo a entrada da pessoa identificada nos alvos deste alerta.', nivel: 'CRITICO', acao: 'BLOQUEAR', publico: 'VISITANTE', abrangencia: 'ESPECIFICO' },
+        VIAGEM_UNIDADE: { titulo: 'Viagem — unidade vazia', mensagem: 'A unidade estará vazia durante o período. Não liberar visitantes sem autorização do morador.', nivel: 'CRITICO', acao: 'BLOQUEAR', publico: 'TODOS', abrangencia: 'TODOS_DO_TIPO' },
+        LIGAR_ANTES: { titulo: 'Ligar antes de liberar', mensagem: 'Entre em contato com o morador antes de autorizar a entrada.', nivel: 'ATENCAO', acao: 'CONTATAR_MORADOR', publico: 'VISITANTE', abrangencia: 'TODOS_DO_TIPO' }
+    };
+    const modelo = modelos[chave];
+    if (!modelo) return;
+    const atribuir = (id, valor) => { const campo = document.getElementById(id); if (campo) campo.value = valor; };
+    atribuir('alertaTitulo', modelo.titulo);
+    atribuir('alertaMensagem', modelo.mensagem);
+    atribuir('alertaNivel', modelo.nivel);
+    atribuir('alertaAcao', modelo.acao);
+    atribuir('alertaPublico', modelo.publico);
+    atribuir('alertaAbrangencia', modelo.abrangencia);
+    const inicio = new Date();
+    const fim = new Date(inicio.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const paraCampo = data => `${data.getFullYear()}-${String(data.getMonth()+1).padStart(2,'0')}-${String(data.getDate()).padStart(2,'0')}T${String(data.getHours()).padStart(2,'0')}:${String(data.getMinutes()).padStart(2,'0')}`;
+    atribuir('alertaVigenciaInicio', paraCampo(inicio));
+    atribuir('alertaVigenciaFim', paraCampo(fim));
+    atribuir('alertaModeloRapido', '');
+    alertasAtualizarAlvos();
+    alertasAtualizarPrevia();
+}
+
+function alertasAtualizarPrevia() {
+    const previa = document.getElementById('alertaPreviaResumo');
+    if (!previa) return;
+    const titulo = document.getElementById('alertaTitulo')?.value.trim() || '';
+    const nivel = alertasNormalizarEnum(document.getElementById('alertaNivel')?.value);
+    const acao = alertasNormalizarEnum(document.getElementById('alertaAcao')?.value);
+    const publico = alertasNormalizarEnum(document.getElementById('alertaPublico')?.value);
+    const abrangencia = alertasNormalizarEnum(document.getElementById('alertaAbrangencia')?.value);
+    const inicio = alertasDataLocal(document.getElementById('alertaVigenciaInicio')?.value);
+    const fim = alertasDataLocal(document.getElementById('alertaVigenciaFim')?.value);
+    if (!titulo || !inicio || !fim) {
+        previa.textContent = 'Preencha título e vigência para visualizar o resumo do alerta.';
+        return;
+    }
+    const rotulos = {
+        nivel: { INFORMATIVO: 'informativo', ATENCAO: 'de atenção', CRITICO: 'crítico' },
+        acao: { APENAS_AVISAR: 'apenas avisará a portaria', EXIGIR_CIENTE: 'exigirá ciência da portaria', CONTATAR_MORADOR: 'exigirá contato com o morador', BLOQUEAR: 'bloqueará a entrada' },
+        publico: { TODOS: 'todos os acessos', VISITANTE: 'visitantes', PRESTADOR: 'prestadores', ENTREGADOR_AUTORIZADO: 'entregadores autorizados', FAMILIAR: 'familiares', VEICULO: 'veículos' }
+    };
+    const formatarDia = data => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' }).format(data);
+    const alvo = abrangencia === 'ESPECIFICO' ? 'os alvos específicos cadastrados' : rotulos.publico[publico] || 'o público selecionado';
+    const unidade = Portal.moradorUnidade ? ` da unidade ${Portal.moradorUnidade}` : ' da sua unidade';
+    previa.textContent = `Alerta “${titulo}”, ${rotulos.nivel[nivel] || 'de atenção'}, para ${alvo}${unidade}; ${rotulos.acao[acao] || 'será avaliado pela portaria'} entre ${formatarDia(inicio)} e ${formatarDia(fim)}.`;
+}
+
+function alertasRenderizarVisitantesSelecionados() {
+    const wrap = document.getElementById('alertaVisitanteSelecionados');
+    if (!wrap) return;
+    wrap.innerHTML = AlertasPortal.visitantesSelecionados.map(item => `<span class="alertas-visitante-chip">${escHtml(item.nome_completo)}${item.documento_mascarado ? ` · ${escHtml(item.documento_mascarado)}` : ''}<button type="button" data-remover-visitante="${alertasIdSeguro(item.id)}" aria-label="Remover ${escHtml(item.nome_completo)}">×</button></span>`).join('');
+}
+
+function alertasSelecionarVisitante(id) {
+    const visitanteId = alertasIdSeguro(id);
+    const visitante = AlertasPortal.visitantesResultados.find(item => alertasIdSeguro(item.id) === visitanteId);
+    if (!visitante || AlertasPortal.visitantesSelecionados.some(item => alertasIdSeguro(item.id) === visitanteId)) return;
+    if (AlertasPortal.visitantesSelecionados.length >= 20) { alertasFormFeedback('Informe no máximo 20 alvos específicos.'); return; }
+    AlertasPortal.visitantesSelecionados.push(visitante);
+    alertasRenderizarVisitantesSelecionados();
+    const resultados = document.getElementById('alertaVisitanteResultados');
+    if (resultados) resultados.replaceChildren();
+    const busca = document.getElementById('alertaVisitanteBusca');
+    if (busca) busca.value = '';
+    alertasAtualizarPrevia();
+}
+
+async function alertasBuscarVisitantes(termo) {
+    const resultados = document.getElementById('alertaVisitanteResultados');
+    const valor = String(termo || '').trim();
+    const token = ++AlertasPortal.buscaVisitanteToken;
+    if (AlertasPortal.buscaVisitanteTimer) clearTimeout(AlertasPortal.buscaVisitanteTimer);
+    if (!resultados) return;
+    if (valor.length < 3) { resultados.replaceChildren(); AlertasPortal.visitantesResultados = []; return; }
+    resultados.textContent = 'Pesquisando visitantes vinculados à sua unidade…';
+    AlertasPortal.buscaVisitanteTimer = setTimeout(async () => {
+        try {
+            const data = await alertasApi('buscar_visitante', {}, { q: valor });
+            if (token !== AlertasPortal.buscaVisitanteToken) return;
+            const visitantes = Array.isArray(data?.dados?.visitantes) ? data.dados.visitantes : [];
+            AlertasPortal.visitantesResultados = visitantes.filter(item => alertasIdSeguro(item.id));
+            resultados.innerHTML = AlertasPortal.visitantesResultados.length
+                ? AlertasPortal.visitantesResultados.map(item => `<button type="button" class="alertas-visitante-option" role="option" data-selecionar-visitante="${alertasIdSeguro(item.id)}"><strong>${escHtml(item.nome_completo || 'Visitante')}</strong><br><small>${escHtml(item.documento_mascarado || 'Documento cadastrado')}</small></button>`).join('')
+                : '<p class="alertas-form-note">Nenhum visitante vinculado encontrado. Você ainda pode informar nome e documento abaixo.</p>';
+        } catch (error) {
+            if (token !== AlertasPortal.buscaVisitanteToken) return;
+            resultados.textContent = alertasMensagemSeguro(error.message, 'Não foi possível pesquisar visitantes.');
+        }
+    }, 300);
+}
+
+function alertasPrepararEventos() {
+    if (AlertasPortal.eventosPreparados) return;
+    const lista = document.getElementById('listaAlertas');
+    const detalhe = document.getElementById('alertaDetalhe');
+    const form = document.getElementById('formAlertaUnidade');
+    if (!lista || !detalhe || !form) return;
+
+    form.addEventListener('input', alertasAtualizarPrevia);
+    const buscaVisitante = document.getElementById('alertaVisitanteBusca');
+    buscaVisitante?.addEventListener('input', event => alertasBuscarVisitantes(event.target.value));
+    document.getElementById('alertaVisitanteResultados')?.addEventListener('click', event => {
+        const botao = event.target.closest('[data-selecionar-visitante]');
+        if (botao) alertasSelecionarVisitante(botao.dataset.selecionarVisitante);
+    });
+    document.getElementById('alertaVisitanteSelecionados')?.addEventListener('click', event => {
+        const botao = event.target.closest('[data-remover-visitante]');
+        if (!botao) return;
+        const id = alertasIdSeguro(botao.dataset.removerVisitante);
+        AlertasPortal.visitantesSelecionados = AlertasPortal.visitantesSelecionados.filter(item => alertasIdSeguro(item.id) !== id);
+        alertasRenderizarVisitantesSelecionados();
+        alertasAtualizarPrevia();
+    });
+    form.addEventListener('change', event => {
+        if (event.target?.id === 'alertaModeloRapido') alertasAplicarModeloRapido(event.target.value);
+        else if (event.target?.id === 'alertaPublico') alertasAtualizarAlvos();
+        else alertasAtualizarPrevia();
+    });
+
+    lista.addEventListener('click', event => {
+        const botao = event.target.closest('[data-alerta-acao]');
+        if (!botao || !lista.contains(botao)) return;
+        const id = alertasIdSeguro(botao.dataset.alertaId);
+        if (!id) return;
+        const acao = botao.dataset.alertaAcao;
+        if (acao === 'detalhe') alertasAbrirDetalhe(id);
+        if (acao === 'editar') alertasPrepararEdicao(id);
+        if (acao === 'pausar') alertasAlterarStatus(id, 'PAUSAR');
+        if (acao === 'retomar') alertasAlterarStatus(id, 'RETOMAR');
+        if (acao === 'cancelar') alertasAlterarStatus(id, 'CANCELAR');
+    });
+    detalhe.addEventListener('click', event => {
+        const botao = event.target.closest('[data-alerta-detalhe-fechar]');
+        if (botao) alertasFecharDetalhe();
+        const acaoBotao = event.target.closest('[data-alerta-acao]');
+        if (!acaoBotao || !detalhe.contains(acaoBotao)) return;
+        const id = alertasIdSeguro(acaoBotao.dataset.alertaId);
+        if (!id) return;
+        const acao = acaoBotao.dataset.alertaAcao;
+        if (acao === 'editar') alertasPrepararEdicao(id);
+        if (acao === 'pausar') alertasAlterarStatus(id, 'PAUSAR');
+        if (acao === 'retomar') alertasAlterarStatus(id, 'RETOMAR');
+        if (acao === 'cancelar') alertasAlterarStatus(id, 'CANCELAR');
+    });
+    AlertasPortal.eventosPreparados = true;
+}
+
+async function alertasCarregarDependentes() {
+    const select = document.getElementById('alertaDependente');
+    try {
+        const data = await alertasApi('opcoes');
+        const dependentes = data && data.dados && Array.isArray(data.dados.dependentes) ? data.dados.dependentes : [];
+        AlertasPortal.dependentes = dependentes.filter(dep => alertasIdSeguro(dep && dep.id));
+        AlertasPortal.dependentesCarregados = true;
+        if (select) {
+            select.replaceChildren();
+            const vazio = document.createElement('option');
+            vazio.value = '';
+            vazio.textContent = AlertasPortal.dependentes.length ? 'Selecione um dependente' : 'Nenhum dependente cadastrado';
+            select.appendChild(vazio);
+            AlertasPortal.dependentes.forEach(dep => {
+                const option = document.createElement('option');
+                option.value = String(alertasIdSeguro(dep.id));
+                option.textContent = String(dep.nome_completo || dep.nome || 'Dependente');
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('[AlertasPortal] Erro ao carregar dependentes:', error);
+        if (select) {
+            select.replaceChildren();
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Não foi possível carregar';
+            select.appendChild(option);
+        }
+    }
+}
+
+function alertasAtualizarDependente() {
+    const tipo = document.getElementById('alertaTitularTipo');
+    const grupo = document.getElementById('alertaDependenteGroup');
+    const select = document.getElementById('alertaDependente');
+    if (!tipo || !grupo || !select) return;
+    const dependente = tipo.value === 'DEPENDENTE';
+    grupo.style.display = dependente ? '' : 'none';
+    select.required = dependente;
+}
+
+function alertasAtualizarAlvos() {
+    const alcance = document.getElementById('alertaAbrangencia');
+    const wrap = document.getElementById('alertasAlvoWrap');
+    const campo = document.getElementById('alertaAlvos');
+    const publico = document.getElementById('alertaPublico');
+    const buscaVisitante = document.getElementById('alertaVisitanteBuscaWrap');
+    if (!alcance || !wrap || !campo) return;
+    const especifico = alcance.value === 'ESPECIFICO';
+    wrap.classList.toggle('show', especifico);
+    campo.required = especifico;
+    if (buscaVisitante) buscaVisitante.hidden = !(especifico && publico?.value === 'VISITANTE');
+    alertasRenderizarVisitantesSelecionados();
+    alertasAtualizarPrevia();
+}
+
+function alertasExtrairLista(data) {
+    if (Array.isArray(data && data.dados)) return data.dados;
+    if (data && data.dados && Array.isArray(data.dados.alertas)) return data.dados.alertas;
+    if (data && data.dados && Array.isArray(data.dados.lista)) return data.dados.lista;
+    return [];
+}
+
+async function alertasCarregar() {
+    const listaEl = document.getElementById('listaAlertas');
+    const resumoEl = document.getElementById('alertasResumo');
+    if (!listaEl) return;
+    listaEl.innerHTML = '<div class="alertas-empty"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Carregando alertas...</p></div>';
+    if (resumoEl) resumoEl.textContent = '';
+    try {
+        const data = await alertasApi('listar');
+        AlertasPortal.lista = alertasExtrairLista(data);
+        AlertasPortal.carregado = true;
+        alertasRenderizarLista();
+    } catch (error) {
+        AlertasPortal.carregado = false;
+        listaEl.innerHTML = `<div class="alertas-empty"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i><p>${escHtml(alertasMensagemSeguro(error.message, 'Não foi possível carregar os alertas.'))}</p><button type="button" class="btn btn-secondary" onclick="alertasCarregar()"><i class="fas fa-sync-alt" aria-hidden="true"></i> Tentar novamente</button></div>`;
+    }
+}
+
+function alertasFormatarData(valor) {
+    if (!valor) return 'Não informada';
+    const bruto = String(valor).trim();
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(bruto);
+    if (!match) return bruto;
+    const hora = match[4] ? ` às ${match[4]}:${match[5]}` : '';
+    return `${match[3]}/${match[2]}/${match[1]}${hora}`;
+}
+
+function alertasStatusClasse(status) {
+    return ({ ATIVO: 'ativo', PAUSADO: 'pausado', EXPIRADO: 'expirado', CANCELADO: 'cancelado' })[status] || 'cancelado';
+}
+
+function alertasNivelClasse(nivel) {
+    return ({ INFORMATIVO: 'informativo', ATENCAO: 'atencao', CRITICO: 'critico' })[nivel] || 'informativo';
+}
+
+function alertasValorLabel(grupo, valor, fallback) {
+    const chave = alertasNormalizarEnum(valor);
+    return (ALERTAS_LABELS[grupo] && ALERTAS_LABELS[grupo][chave]) || fallback || chave || '—';
+}
+
+function alertasRenderizarLista() {
+    const listaEl = document.getElementById('listaAlertas');
+    const resumoEl = document.getElementById('alertasResumo');
+    const filtroEl = document.getElementById('alertasFiltroStatus');
+    if (!listaEl) return;
+    const filtro = filtroEl ? alertasNormalizarEnum(filtroEl.value) : '';
+    const lista = AlertasPortal.lista.filter(alerta => !filtro || alertasNormalizarEnum(alerta.status) === filtro);
+    if (resumoEl) resumoEl.textContent = `${lista.length} alerta${lista.length === 1 ? '' : 's'} encontrado${lista.length === 1 ? '' : 's'}.`;
+    if (!lista.length) {
+        listaEl.innerHTML = '<div class="alertas-empty"><i class="fas fa-bell-slash" aria-hidden="true"></i><p>Nenhum alerta encontrado para este filtro.</p></div>';
+        return;
+    }
+    listaEl.innerHTML = lista.map(alertasRenderizarCard).filter(Boolean).join('') || '<div class="alertas-empty"><i class="fas fa-bell-slash" aria-hidden="true"></i><p>Nenhum alerta disponível.</p></div>';
+}
+
+function alertasRenderizarCard(alerta) {
+    const id = alertasIdSeguro(alerta && alerta.id);
+    if (!id) return '';
+    const status = alertasNormalizarEnum(alerta.status);
+    const nivel = alertasNormalizarEnum(alerta.nivel);
+    const origem = alertasNormalizarEnum(alerta.origem);
+    const podeEditar = alertasPodeEditar(alerta) && origem !== 'SISTEMA';
+    const statusLabel = alertasValorLabel('status', status, 'Status não informado');
+    const nivelLabel = alertasValorLabel('nivel', nivel, 'Nível não informado');
+    const publicoLabel = alertasValorLabel('publico', alerta.publico, 'Público não informado');
+    const titularLabel = alertasNormalizarEnum(alerta.titular_tipo) === 'DEPENDENTE' ? 'Dependente' : 'Morador';
+    const actions = [
+        `<button type="button" class="btn btn-secondary btn-sm" data-alerta-acao="detalhe" data-alerta-id="${id}"><i class="fas fa-eye" aria-hidden="true"></i> Detalhes</button>`
+    ];
+    if (podeEditar && ['ATIVO', 'PAUSADO'].includes(status)) {
+        actions.push(`<button type="button" class="btn btn-secondary btn-sm" data-alerta-acao="editar" data-alerta-id="${id}"><i class="fas fa-edit" aria-hidden="true"></i> Editar</button>`);
+    }
+    if (podeEditar && status === 'ATIVO') {
+        actions.push(`<button type="button" class="btn btn-secondary btn-sm" data-alerta-acao="pausar" data-alerta-id="${id}"><i class="fas fa-pause" aria-hidden="true"></i> Pausar</button>`);
+    }
+    if (podeEditar && status === 'PAUSADO') {
+        actions.push(`<button type="button" class="btn btn-secondary btn-sm" data-alerta-acao="retomar" data-alerta-id="${id}"><i class="fas fa-play" aria-hidden="true"></i> Retomar</button>`);
+    }
+    if (podeEditar && ['ATIVO', 'PAUSADO'].includes(status)) {
+        actions.push(`<button type="button" class="btn btn-danger btn-sm" data-alerta-acao="cancelar" data-alerta-id="${id}"><i class="fas fa-times" aria-hidden="true"></i> Cancelar</button>`);
+    }
+    return `<article class="alertas-card">
+        <div class="alertas-card-header">
+            <div class="alertas-card-title"><h3>${escHtml(alerta.titulo || 'Alerta sem título')}</h3></div>
+            <span class="alerta-status alerta-status-${alertasStatusClasse(status)}"><i class="fas fa-circle" aria-hidden="true"></i> ${escHtml(statusLabel)}</span>
+        </div>
+        <div style="display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.55rem;">
+            <span class="alerta-nivel alerta-nivel-${alertasNivelClasse(nivel)}"><i class="fas fa-exclamation-circle" aria-hidden="true"></i> ${escHtml(nivelLabel)}</span>
+            <span class="badge badge-secondary"><i class="fas fa-${origem === 'SISTEMA' ? 'cogs' : 'user'}" aria-hidden="true"></i> ${escHtml(alertasValorLabel('origem', origem, 'Origem não informada'))}</span>
+        </div>
+        <div class="alertas-card-meta">
+            <span><i class="fas fa-user-tag" aria-hidden="true"></i>${escHtml(titularLabel)}</span>
+            <span><i class="fas fa-users" aria-hidden="true"></i>${escHtml(publicoLabel)}</span>
+            <span><i class="far fa-calendar-alt" aria-hidden="true"></i>${escHtml(alertasFormatarData(alerta.vigencia_inicio))} — ${escHtml(alertasFormatarData(alerta.vigencia_fim))}</span>
+        </div>
+        <p class="alertas-card-message">${escHtml(alerta.mensagem || 'Sem mensagem informada.')}</p>
+        <div class="alertas-card-footer"><span style="font-size:.78rem;color:var(--text-muted);">${escHtml(alertasValorLabel('acao', alerta.acao, 'Ação não informada'))}</span><div class="alertas-card-actions">${actions.join('')}</div></div>
+    </article>`;
+}
+
+async function alertasAbrirDetalhe(id) {
+    const detalhe = document.getElementById('alertaDetalhe');
+    if (!detalhe) return;
+    detalhe.hidden = false;
+    detalhe.innerHTML = '<div class="alertas-empty"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Carregando detalhe...</p></div>';
+    try {
+        const data = await alertasApi('detalhe', {}, { id });
+        const alerta = data && data.dados && data.dados.alerta ? data.dados.alerta : (data && data.dados ? data.dados : null);
+        if (!alerta || !alertasIdSeguro(alerta.id || id)) throw new Error('Alerta não encontrado.');
+        const status = alertasNormalizarEnum(alerta.status);
+        const nivel = alertasNormalizarEnum(alerta.nivel);
+        const origem = alertasNormalizarEnum(alerta.origem);
+        const podeEditar = alertasPodeEditar(alerta) && origem !== 'SISTEMA';
+        const acionamentos = Array.isArray(data?.dados?.acionamentos) ? data.dados.acionamentos : [];
+        const timeline = acionamentos.length
+            ? `<ol class="alertas-timeline">${acionamentos.map(item => `<li><strong>${escHtml(alertasNormalizarEnum(item.decisao) || 'ACIONAMENTO')}</strong><span>${escHtml(item.usuario_nome || 'Portaria/controle automático')} · ${escHtml(item.pessoa_nome || 'Pessoa não identificada')} · ${escHtml(item.pessoa_documento_mascarado || 'Documento não informado')}</span><time>${escHtml(alertasFormatarData(item.criado_em))}</time></li>`).join('')}</ol>`
+            : '<p class="alertas-card-message">Ainda não há acionamentos registrados.</p>';
+        const acoes = [];
+        if (podeEditar && ['ATIVO', 'PAUSADO'].includes(status)) acoes.push(`<button type="button" class="btn btn-secondary" data-alerta-acao="editar" data-alerta-id="${alertasIdSeguro(alerta.id || id)}"><i class="fas fa-edit" aria-hidden="true"></i> Editar</button>`);
+        if (podeEditar && status === 'ATIVO') acoes.push(`<button type="button" class="btn btn-secondary" data-alerta-acao="pausar" data-alerta-id="${alertasIdSeguro(alerta.id || id)}"><i class="fas fa-pause" aria-hidden="true"></i> Pausar</button>`);
+        if (podeEditar && status === 'PAUSADO') acoes.push(`<button type="button" class="btn btn-secondary" data-alerta-acao="retomar" data-alerta-id="${alertasIdSeguro(alerta.id || id)}"><i class="fas fa-play" aria-hidden="true"></i> Retomar</button>`);
+        if (podeEditar && ['ATIVO', 'PAUSADO'].includes(status)) acoes.push(`<button type="button" class="btn btn-danger" data-alerta-acao="cancelar" data-alerta-id="${alertasIdSeguro(alerta.id || id)}"><i class="fas fa-times" aria-hidden="true"></i> Cancelar</button>`);
+        detalhe.innerHTML = `<div class="card" style="margin-bottom:0;">
+            <div class="card-header"><div class="card-header-icon"><i class="fas fa-bell" aria-hidden="true"></i></div><div><h2>${escHtml(alerta.titulo || 'Detalhe do alerta')}</h2><p>Informações retornadas pela API para sua unidade</p></div><button type="button" class="btn btn-secondary btn-sm" data-alerta-detalhe-fechar aria-label="Fechar detalhe"><i class="fas fa-times" aria-hidden="true"></i></button></div>
+            <div class="alertas-detalhe-grid">
+                <div class="info-item"><div class="info-label">Status</div><div class="info-value">${escHtml(alertasValorLabel('status', status, '—'))}</div></div>
+                <div class="info-item"><div class="info-label">Nível</div><div class="info-value">${escHtml(alertasValorLabel('nivel', nivel, '—'))}</div></div>
+                <div class="info-item"><div class="info-label">Ação</div><div class="info-value">${escHtml(alertasValorLabel('acao', alerta.acao, '—'))}</div></div>
+                <div class="info-item"><div class="info-label">Público</div><div class="info-value">${escHtml(alertasValorLabel('publico', alerta.publico, '—'))}</div></div>
+                <div class="info-item"><div class="info-label">Vigência</div><div class="info-value">${escHtml(alertasFormatarData(alerta.vigencia_inicio))} — ${escHtml(alertasFormatarData(alerta.vigencia_fim))}</div></div>
+                <div class="info-item"><div class="info-label">Origem</div><div class="info-value">${escHtml(alertasValorLabel('origem', origem, '—'))}</div></div>
+            </div>
+            <div class="alertas-detail-message">${escHtml(alerta.mensagem || 'Sem mensagem informada.')}</div>
+            <section aria-label="Histórico de acionamentos"><h3>Histórico de acionamentos</h3>${timeline}</section>
+            <div class="form-actions" style="margin-top:1rem;display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap;">${acoes.join('')}<button type="button" class="btn btn-secondary" data-alerta-detalhe-fechar>Fechar</button></div>
+        </div>`;
+        detalhe.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+        detalhe.innerHTML = `<div class="alertas-empty"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i><p>${escHtml(alertasMensagemSeguro(error.message, 'Não foi possível carregar o detalhe.'))}</p><button type="button" class="btn btn-secondary" data-alerta-detalhe-fechar>Fechar</button></div>`;
+    }
+}
+
+function alertasFecharDetalhe() {
+    const detalhe = document.getElementById('alertaDetalhe');
+    if (detalhe) { detalhe.hidden = true; detalhe.replaceChildren(); }
+}
+function alertasCancelarEdicao() {
+    AlertasPortal.editandoId = null;
+    AlertasPortal.visitantesSelecionados = [];
+    AlertasPortal.visitantesResultados = [];
+    AlertasPortal.buscaVisitanteToken += 1;
+    if (AlertasPortal.buscaVisitanteTimer) clearTimeout(AlertasPortal.buscaVisitanteTimer);
+    const form = document.getElementById('formAlertaUnidade');
+    form?.reset();
+    const buscaVisitante = document.getElementById('alertaVisitanteBusca');
+    if (buscaVisitante) buscaVisitante.value = '';
+    const resultadosVisitante = document.getElementById('alertaVisitanteResultados');
+    if (resultadosVisitante) resultadosVisitante.replaceChildren();
+    alertasRenderizarVisitantesSelecionados();
+    const tipo = document.getElementById('alertaTitularTipo');
+    if (tipo) tipo.value = 'MORADOR';
+    const submit = document.getElementById('btnSalvarAlerta');
+    if (submit) submit.innerHTML = '<i class="fas fa-bell" aria-hidden="true"></i> Criar alerta';
+    const cancel = document.getElementById('btnCancelarEdicaoAlerta');
+    if (cancel) cancel.hidden = true;
+    const modelo = document.getElementById('alertaModeloRapido');
+    if (modelo) modelo.value = '';
+    alertasFormFeedback('');
+    alertasAtualizarDependente();
+    alertasAtualizarAlvos();
+    alertasAtualizarPrevia();
+}
+async function alertasPrepararEdicao(id) {
+    const alertaId = alertasIdSeguro(id);
+    if (!alertaId) return;
+    try {
+        const data = await alertasApi('detalhe', {}, { id: alertaId });
+        const pacote = data && data.dados && data.dados.alerta ? data.dados : { alerta: data && data.dados };
+        const alerta = pacote.alerta;
+        if (!alerta || !alertasPodeEditar(alerta) || alertasNormalizarEnum(alerta.origem) === 'SISTEMA') {
+            throw new Error('Este alerta não pode ser editado por esta sessão.');
+        }
+        if (!AlertasPortal.dependentesCarregados) await alertasCarregarDependentes();
+        AlertasPortal.editandoId = alertaId;
+        const tipo = document.getElementById('alertaTitularTipo');
+        const dependencia = document.getElementById('alertaDependente');
+        const titulo = document.getElementById('alertaTitulo');
+        const mensagem = document.getElementById('alertaMensagem');
+        const nivel = document.getElementById('alertaNivel');
+        const acao = document.getElementById('alertaAcao');
+        const publico = document.getElementById('alertaPublico');
+        const abrangencia = document.getElementById('alertaAbrangencia');
+        const inicio = document.getElementById('alertaVigenciaInicio');
+        const fim = document.getElementById('alertaVigenciaFim');
+        const instrucao = document.getElementById('alertaInstrucaoOperador');
+        const telefone = document.getElementById('alertaTelefoneContato');
+        if (tipo) tipo.value = alertasNormalizarEnum(alerta.titular_tipo) === 'DEPENDENTE' ? 'DEPENDENTE' : 'MORADOR';
+        if (dependencia) dependencia.value = String(alertasIdSeguro(alerta.dependente_id) || '');
+        if (titulo) titulo.value = String(alerta.titulo || '');
+        if (mensagem) mensagem.value = String(alerta.mensagem || '');
+        if (nivel) nivel.value = alertasNormalizarEnum(alerta.nivel);
+        if (acao) acao.value = alertasNormalizarEnum(alerta.acao);
+        if (publico) publico.value = alertasNormalizarEnum(alerta.publico);
+        if (abrangencia) abrangencia.value = alertasNormalizarEnum(alerta.abrangencia) || 'TODOS_DO_TIPO';
+        const modelo = document.getElementById('alertaModeloRapido');
+        if (modelo) modelo.value = '';
+        if (inicio) inicio.value = String(alerta.vigencia_inicio || '').replace(' ', 'T').slice(0, 16);
+        if (fim) fim.value = String(alerta.vigencia_fim || '').replace(' ', 'T').slice(0, 16);
+        if (instrucao) instrucao.value = String(alerta.instrucao_operador || '');
+        if (telefone) telefone.value = String(alerta.telefone_contato || '');
+        const alvos = Array.isArray(pacote.alvos) ? pacote.alvos : (Array.isArray(alerta.alvos) ? alerta.alvos : []);
+        AlertasPortal.visitantesSelecionados = [];
+        const referencias = alvos.map(alvo => {
+            if (alertasNormalizarEnum(alvo.tipo_alvo || alvo.tipo) === 'PLACA') return String(alvo.placa || '');
+            if (alertasNormalizarEnum(alvo.tipo_alvo || alvo.tipo) === 'VISITANTE' && alertasIdSeguro(alvo.visitante_id)) {
+                AlertasPortal.visitantesSelecionados.push({ id: alertasIdSeguro(alvo.visitante_id), nome_completo: String(alvo.nome_referencia || 'Visitante'), documento_mascarado: String(alvo.documento_mascarado || '') });
+                return '';
+            }
+            const documento = String(alvo.documento_edicao || '');
+            if (!documento) throw new Error('Este alerta contém alvo não editável no Portal. Solicite apoio à administração.');
+            return `${String(alvo.nome_referencia || alvo.nome || 'Pessoa')} | ${String(alvo.tipo_documento || 'OUTRO')} | ${documento}`;
+        }).filter(Boolean);
+        const campoAlvos = document.getElementById('alertaAlvos');
+        if (campoAlvos) campoAlvos.value = referencias.join('\n');
+        alertasAtualizarDependente();
+        alertasAtualizarAlvos();
+        alertasAtualizarPrevia();
+        const submit = document.getElementById('btnSalvarAlerta');
+        if (submit) submit.innerHTML = '<i class="fas fa-save" aria-hidden="true"></i> Salvar alterações';
+        const cancel = document.getElementById('btnCancelarEdicaoAlerta');
+        if (cancel) cancel.hidden = false;
+        alertasFormFeedback('');
+        alertasFecharDetalhe();
+        document.getElementById('formAlertaUnidade')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+        alertasMostrarAviso(error.message || 'Não foi possível carregar o alerta para edição.', 'error');
+    }
+}
+async function alertasAlterarStatus(id, operacao) {
+    const alertaId = alertasIdSeguro(id);
+    if (!alertaId || !['PAUSAR', 'RETOMAR', 'CANCELAR'].includes(operacao)) return;
+    let motivo = '';
+    if (operacao === 'CANCELAR') {
+        if (!window.confirm('Deseja realmente cancelar este alerta? Esta ação não poderá ser desfeita.')) return;
+        const resposta = window.prompt('Motivo do cancelamento (opcional):', '');
+        if (resposta === null) return;
+        motivo = resposta.trim().slice(0, 500);
+    }
+    try {
+        const corpo = { id: alertaId, operacao };
+        if (operacao === 'CANCELAR' && motivo) corpo.motivo = motivo;
+        const data = await alertasApi('alterar_status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(corpo)
+        });
+        alertasMostrarAviso(data.mensagem || 'Status do alerta atualizado.', 'success');
+        alertasFecharDetalhe();
+        await alertasCarregar();
+    } catch (error) {
+        alertasMostrarAviso(error.message, 'error');
+    }
+}
+
+function alertasDataLocal(valor) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(valor || ''));
+    if (!match) return null;
+    const data = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), 0, 0);
+    if (data.getFullYear() !== Number(match[1]) || data.getMonth() !== Number(match[2]) - 1 || data.getDate() !== Number(match[3]) || data.getHours() !== Number(match[4]) || data.getMinutes() !== Number(match[5])) return null;
+    return data;
+}
+
+function alertasDataParaApi(valor) {
+    return String(valor || '').replace('T', ' ') + ':00';
+}
+
+function alertasNovaChave() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'alerta-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
+
+function alertasNormalizarPlaca(valor) {
+    return String(valor || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function alertasMontarAlvos(publico, abrangencia, campo) {
+    if (abrangencia !== 'ESPECIFICO') return [];
+    const linhas = String(campo || '').split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+    const visitantes = publico === 'VISITANTE' ? AlertasPortal.visitantesSelecionados.map(item => ({
+        tipo_alvo: 'VISITANTE', visitante_id: alertasIdSeguro(item.id), nome_referencia: String(item.nome_completo || '').replace(/[<>]/g, '')
+    })) : [];
+    if (!linhas.length && !visitantes.length) throw new Error('Informe ou selecione pelo menos um alvo específico.');
+    if (linhas.length + visitantes.length > 20) throw new Error('Informe no máximo 20 alvos específicos.');
+    const livres = linhas.map(item => {
+        if (publico === 'VEICULO') {
+            const placa = alertasNormalizarPlaca(item);
+            if (!/^(?:[A-Z]{3}[0-9]{4}|[A-Z]{3}[0-9][A-Z][0-9]{2})$/.test(placa)) throw new Error('Informe placas válidas no formato ABC-1234 ou ABC1D23.');
+            return { tipo_alvo: 'PLACA', placa_normalizada: placa };
+        }
+        const partes = item.split('|').map(parte => parte.trim());
+        if (partes.length !== 3 || partes[0].length < 2 || partes[0].length > 150) throw new Error('Para cada pessoa, informe Nome | CPF, RG ou OUTRO | Documento.');
+        const tipoDocumento = alertasNormalizarEnum(partes[1]);
+        if (!['CPF', 'RG', 'OUTRO'].includes(tipoDocumento) || partes[2].length < 3 || partes[2].length > 20) throw new Error('O tipo ou número de documento do alvo é inválido.');
+        return { tipo_alvo: 'DOCUMENTO', nome_referencia: partes[0].replace(/[<>]/g, ''), tipo_documento: tipoDocumento, documento: partes[2] };
+    });
+    return [...visitantes, ...livres];
+}
+
+async function alertasSalvar(event) {
+    event.preventDefault();
+    const btn = document.getElementById('btnSalvarAlerta');
+    alertasFormFeedback('');
+    const titularTipo = document.getElementById('alertaTitularTipo').value;
+    const dependenteId = alertasIdSeguro(document.getElementById('alertaDependente').value);
+    const titulo = document.getElementById('alertaTitulo').value.trim();
+    const mensagem = document.getElementById('alertaMensagem').value.trim();
+    const nivel = alertasNormalizarEnum(document.getElementById('alertaNivel').value);
+    const acao = alertasNormalizarEnum(document.getElementById('alertaAcao').value);
+    const publico = alertasNormalizarEnum(document.getElementById('alertaPublico').value);
+    const abrangencia = alertasNormalizarEnum(document.getElementById('alertaAbrangencia').value);
+    const inicioCampo = document.getElementById('alertaVigenciaInicio').value;
+    const fimCampo = document.getElementById('alertaVigenciaFim').value;
+    try {
+        if (!['MORADOR', 'DEPENDENTE'].includes(titularTipo)) throw new Error('Selecione quem será o titular do alerta.');
+        if (titularTipo === 'DEPENDENTE' && !dependenteId) throw new Error('Selecione um dependente válido.');
+        if (titulo.length < 3 || titulo.length > 120) throw new Error('O título deve ter entre 3 e 120 caracteres.');
+        if (!mensagem || mensagem.length > 1000) throw new Error('Informe uma mensagem de até 1.000 caracteres.');
+        if (!Object.prototype.hasOwnProperty.call(ALERTAS_LABELS.nivel, nivel) || !Object.prototype.hasOwnProperty.call(ALERTAS_LABELS.acao, acao) || !Object.prototype.hasOwnProperty.call(ALERTAS_LABELS.publico, publico) || !Object.prototype.hasOwnProperty.call(ALERTAS_LABELS.abrangencia, abrangencia)) throw new Error('Há uma opção inválida no formulário.');
+        if (acao === 'APENAS_AVISAR' && nivel !== 'INFORMATIVO') throw new Error('A ação “Apenas avisar” só pode ser usada com nível Informativo.');
+        if (acao === 'BLOQUEAR' && nivel !== 'CRITICO') throw new Error('A ação “Bloquear entrada” exige nível Crítico.');
+        const inicio = alertasDataLocal(inicioCampo);
+        const fim = alertasDataLocal(fimCampo);
+        if (!inicio || !fim) throw new Error('Informe datas de vigência válidas.');
+        if (fim < inicio) throw new Error('O fim da vigência deve ser posterior ao início.');
+        if ((fim - inicio) > 365 * 24 * 60 * 60 * 1000) throw new Error('A vigência do alerta não pode ultrapassar 365 dias.');
+        const alvos = alertasMontarAlvos(publico, abrangencia, document.getElementById('alertaAlvos').value);
+        const corpo = {
+            titular_tipo: titularTipo,
+            titulo,
+            mensagem,
+            nivel,
+            acao,
+            publico,
+            abrangencia,
+            vigencia_inicio: alertasDataParaApi(inicioCampo),
+            vigencia_fim: alertasDataParaApi(fimCampo),
+            instrucao_operador: document.getElementById('alertaInstrucaoOperador').value.trim(),
+            telefone_contato: document.getElementById('alertaTelefoneContato').value.trim(),
+            alvos,
+            idempotency_key: alertasNovaChave()
+        };
+        if (AlertasPortal.editandoId) corpo.id = AlertasPortal.editandoId;
+        if (titularTipo === 'DEPENDENTE') corpo.dependente_id = dependenteId;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Salvando...';
+        const data = await alertasApi('salvar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(corpo)
+        });
+        const editou = Boolean(AlertasPortal.editandoId);
+        alertasCancelarEdicao();
+        alertasMostrarAviso(data.mensagem || (editou ? 'Alerta atualizado com sucesso.' : 'Alerta criado com sucesso.'), 'success');
+        await alertasCarregar();
+    } catch (error) {
+        alertasFormFeedback(error.message || 'Revise os campos do formulário.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = AlertasPortal.editandoId
+                ? '<i class="fas fa-save" aria-hidden="true"></i> Salvar alterações'
+                : '<i class="fas fa-bell" aria-hidden="true"></i> Criar alerta';
+        }
+    }
 }
 
 /* ──────────────────────────────────────────────────────────────────

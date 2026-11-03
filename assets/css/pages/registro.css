@@ -296,6 +296,50 @@
     border: 1px solid #fbbf24;
 }
 
+.page-registro .ciencia-banner,
+.page-registro .ciencia-modal { box-sizing: border-box; }
+.page-registro .ciencia-banner[hidden],
+.page-registro .ciencia-modal[hidden] { display: none !important; }
+.page-registro .ciencia-banner {
+    margin: 0 0 18px; padding: 14px 16px; border: 1px solid #fbbf24; border-radius: 10px;
+    background: #fffbeb; color: #78350f; font-size: 13px; line-height: 1.45;
+}
+.page-registro .ciencia-banner__heading { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 800; }
+.page-registro .ciencia-banner__item { padding-top: 8px; margin-top: 8px; border-top: 1px solid rgba(180, 83, 9, .2); }
+.page-registro .ciencia-banner__item strong { color: #451a03; }
+.page-registro .ciencia-modal {
+    position: fixed; inset: 0; z-index: 11000; display: flex; align-items: center; justify-content: center;
+    padding: 16px; background: rgba(15, 23, 42, .62); backdrop-filter: blur(2px);
+}
+.page-registro .ciencia-modal__dialog { width: min(700px, 100%); max-height: min(90vh, 760px); overflow: auto; border-radius: 16px; background: #fff; box-shadow: 0 24px 80px rgba(15, 23, 42, .28); }
+.page-registro .ciencia-modal__header { padding: 20px 22px 14px; border-bottom: 1px solid #eef2f7; }
+.page-registro .ciencia-modal__eyebrow { color: #2563eb; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.page-registro .ciencia-modal__header h2 { margin: 7px 0 0; color: #1e293b; font-size: 21px; }
+.page-registro .ciencia-modal__body { padding: 20px 22px; }
+.page-registro .ciencia-modal__description { margin: 0 0 14px; color: #475569; line-height: 1.5; }
+.page-registro .ciencia-alert-list { display: grid; gap: 10px; }
+.page-registro .ciencia-alert { padding: 12px 14px; border: 1px solid #dbe3ee; border-left: 4px solid #f59e0b; border-radius: 9px; background: #f8fafc; }
+.page-registro .ciencia-alert--bloquear { border-left-color: #dc2626; background: #fff7f7; }
+.page-registro .ciencia-alert--contatar { border-left-color: #2563eb; background: #f5f9ff; }
+.page-registro .ciencia-alert__meta { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 5px; font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748b; }
+.page-registro .ciencia-alert__title { display: block; margin-bottom: 4px; color: #1e293b; font-size: 14px; }
+.page-registro .ciencia-alert__message { margin: 0; color: #475569; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+.page-registro .ciencia-alert__instruction { margin: 8px 0 0; color: #92400e; font-size: 12px; font-weight: 700; }
+.page-registro .ciencia-decision { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
+.page-registro .ciencia-decision label { display: flex; align-items: flex-start; gap: 8px; margin: 7px 0 0; color: #334155; font-size: 13px; font-weight: 600; cursor: pointer; }
+.page-registro .ciencia-decision input[type="checkbox"],
+.page-registro .ciencia-decision input[type="radio"] { width: auto; margin-top: 2px; accent-color: #2563eb; }
+.page-registro .ciencia-justificativa { width: 100%; min-height: 78px; box-sizing: border-box; margin-top: 8px; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 8px; resize: vertical; color: #1e293b; font: inherit; font-size: 13px; }
+.page-registro .ciencia-modal__error { margin-top: 14px; padding: 10px 12px; border: 1px solid #fecaca; border-radius: 8px; background: #fef2f2; color: #991b1b; font-size: 13px; font-weight: 700; }
+.page-registro .ciencia-modal__footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px 20px; border-top: 1px solid #eef2f7; }
+.page-registro .ciencia-modal__footer .btn-primary-modern:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 600px) {
+    .page-registro .ciencia-modal { align-items: flex-end; padding: 0; }
+    .page-registro .ciencia-modal__dialog { max-height: 94vh; border-radius: 16px 16px 0 0; }
+    .page-registro .ciencia-modal__footer { flex-direction: column-reverse; }
+    .page-registro .ciencia-modal__footer button { width: 100%; justify-content: center; }
+}
+
 @media (max-width: 768px) {
     .page-registro .search-box {
         flex-direction: column;
@@ -650,6 +694,11 @@
     cursor: pointer;
 }
 .page-registro .btn-vincular-convidado:disabled { opacity: .6; cursor: wait; }
+.page-registro #tabelaRegistros tr.registro-destacado {
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
+    background: #eff6ff;
+}
 
 @media (max-width: 768px) {
     .page-registro .table-container { overflow: visible; border: 0; }

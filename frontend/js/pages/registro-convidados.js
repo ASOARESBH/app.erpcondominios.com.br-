@@ -916,6 +916,24 @@ async function submitGuest(event) {
     setFormBusy(true);
     try {
         const editing = Number.isFinite(state.editingId) && state.editingId > 0;
+        if (!editing) {
+            const preview = await requestJson(API_CONVIDADOS, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ acao: 'verificar_alertas', ...payload })
+            });
+            throwIfRootStale(root);
+            const dadosPreview = preview.dados || {};
+            const alertas = Array.isArray(dadosPreview.alertas) ? dadosPreview.alertas : [];
+            let mensagem = '';
+            if (dadosPreview.verificacao_disponivel === false) {
+                mensagem = `${preview.mensagem || 'Não foi possível verificar os alertas.'}\n\nA portaria revalidará as regras no momento da entrada. Deseja continuar com o convite?`;
+            } else if (alertas.length) {
+                const resumo = alertas.map(alerta => `• ${alerta.titulo} (${alerta.nivel} — ${alerta.acao})`).join('\n');
+                mensagem = `Há alerta(s) potencialmente conflitante(s) para a data prevista ${payload.data_prevista_chegada}:\n\n${resumo}\n\nA portaria verificará novamente no horário real. Deseja continuar com o convite?`;
+            }
+            if (mensagem && !window.confirm(mensagem)) return;
+        }
         const body = editing ? { acao: 'editar', id: state.editingId, ...payload } : { acao: 'criar', ...payload };
         const data = await requestJson(API_CONVIDADOS, {
             method: editing ? 'PUT' : 'POST',
