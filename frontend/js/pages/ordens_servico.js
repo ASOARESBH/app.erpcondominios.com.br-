@@ -12,6 +12,8 @@ const API_UNIDADES       = window.location.origin + '/api/api_unidades.php';
 const API_RH             = window.location.origin + '/api/api_rh_colaboradores.php';
 const API_ESTOQUE        = window.location.origin + '/api/api_estoque.php';
 const API_USUARIO_LOGADO = window.location.origin + '/api/api_usuario_logado.php';
+const collatorUnidades = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+const compararUnidades = (a, b) => collatorUnidades.compare(String(a?.nome ?? a ?? '').trim(), String(b?.nome ?? b ?? '').trim());
 
 // Estado global do módulo
 const state = {
@@ -1696,7 +1698,9 @@ function garantirUnidadeFiltroOption(nome) {
         const opcao = document.createElement('option');
         opcao.value = unidade;
         opcao.textContent = unidade;
-        sel.appendChild(opcao);
+        const proxima = Array.from(sel.options).slice(1).find(item => compararUnidades(unidade, item.textContent) < 0);
+        if (proxima) sel.insertBefore(opcao, proxima);
+        else sel.appendChild(opcao);
     }
     return unidade;
 }
@@ -1705,26 +1709,24 @@ async function carregarUnidadesFiltro() {
     const sel = document.getElementById('filtro-unidade');
     if (!sel) return false;
     try {
-        const [resposta, resumo] = await Promise.all([
-            fetch(`${API_UNIDADES}?acao=select`, { credentials: 'include' }),
-            _get('unidades_com_os'),
-        ]);
+        const resposta = await fetch(`${API_UNIDADES}?acao=select`, { credentials: 'include' });
         const json = await resposta.json();
         if (!resposta.ok || !json.sucesso || !Array.isArray(json.dados)) {
             throw new Error(json.mensagem || `HTTP ${resposta.status}`);
         }
-        state.unidadesFiltro = json.dados;
-        const contagens = new Map();
-        if (resumo.sucesso && Array.isArray(resumo.dados)) {
-            resumo.dados.forEach(item => contagens.set(String(item.unidade).trim().toLocaleUpperCase('pt-BR'), Number(item.total) || 0));
-        }
+        const unidadesVistas = new Set();
+        state.unidadesFiltro = json.dados.reduce((unidades, item) => {
+            const nome = String(item?.nome ?? '').trim();
+            if (!nome) return unidades;
+            const chave = nome.toLocaleUpperCase('pt-BR');
+            if (unidadesVistas.has(chave)) return unidades;
+            unidadesVistas.add(chave);
+            unidades.push({ ...item, nome });
+            return unidades;
+        }, []).sort(compararUnidades);
         preencherSelectFiltro(sel, 'Todas', state.unidadesFiltro,
             unidade => unidade.nome,
-            unidade => {
-                const nome = String(unidade.nome ?? '');
-                const total = contagens.get(nome.trim().toLocaleUpperCase('pt-BR')) || 0;
-                return total ? `${nome} (${total} O.S.)` : nome;
-            });
+            unidade => unidade.nome);
         return true;
     } catch (erro) {
         log('Falha ao carregar unidades para o filtro de O.S.', erro);

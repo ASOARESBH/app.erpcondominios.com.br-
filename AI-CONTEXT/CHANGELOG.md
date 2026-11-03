@@ -2,6 +2,16 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.13] - 2026-11-03
+### Alterado
+- **Ordens de Serviço — Chamados**: o select Unidade agora exibe somente o nome e ordena as opções naturalmente no frontend, eliminando duplicatas por trim/caixa. A aba não consulta mais `unidades_com_os`, removendo uma requisição; deep-links e o ranking inserem unidades ausentes em sua posição natural. O contador da lista filtrada e os filtros cumulativos permanecem inalterados.
+- `unidades_com_os` foi mantida no backend e documentada como ação tenant-safe/RBAC sem consumidor ativo identificado, candidata a remoção futura.
+### Validado
+- `node --check frontend/js/pages/ordens_servico.js` e `git diff --check` passaram.
+- Harness local confirmou nomes sem quantitativos, ordem natural, deduplicação, placeholder `Todas`, inserção ordenada por URL/ranking e apenas uma chamada à API de unidades, sem request `unidades_com_os`. A ligação já existente Unidade → moradores e atualização dos filtros/lista foi revisada sem alteração.
+### Pendente
+- Não foi executado browser autenticado/DevTools; fluxos reais de deep-link, ranking, limpeza e regressão visual de Dashboard/Relatórios/impressão ainda precisam de confirmação no navegador.
+
 ## [2.1.12] - 2026-11-03
 ### Corrigido
 - **Alertas da Unidade (Moradores › Alertas da Unidade)**:
