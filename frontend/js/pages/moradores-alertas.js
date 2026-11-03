@@ -1,5 +1,10 @@
 const API_ALERTAS = '../api/api_alertas_unidade.php';
 const PAGE_SIZE = 10;
+const unitCollator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+
+function compareUnits(a, b) {
+    return unitCollator.compare(String(a ?? ''), String(b ?? ''));
+}
 
 const LABELS = {
     nivel: {
@@ -315,37 +320,110 @@ function optionLabel(item, fallback = '') {
     return item.nome ?? item.nome_completo ?? item.descricao ?? item.label ?? item.unidade ?? String(optionValue(item, fallback));
 }
 
+function normalizeUnit(value) {
+    return String(value ?? '').trim().toUpperCase();
+}
+
+function moradorOwnerId(item) {
+    const id = item?.morador_id ?? item?.id_morador ?? item?.titular_id;
+    return id == null || id === '' ? null : String(id);
+}
+
+function moradoresDaUnidade(unidade) {
+    const unidadeNormalizada = normalizeUnit(unidade);
+    if (!unidadeNormalizada) return [];
+    return state.options.moradores.filter(morador => normalizeUnit(morador?.unidade) === unidadeNormalizada);
+}
+
 function populateOptions() {
     populateSelect(byId('alertas-filtro-unidade'), state.options.unidades, 'Todas as unidades', optionValue, optionLabel);
     const filtroUnidade = byId('alertas-filtro-unidade');
     if (state.pendingSavedUnit && filtroUnidade && Array.from(filtroUnidade.options).some(option => option.value === state.pendingSavedUnit)) filtroUnidade.value = state.pendingSavedUnit;
     state.pendingSavedUnit = '';
     populateSelect(byId('alertas-form-unidade'), state.options.unidades, 'Selecione a unidade', optionValue, optionLabel);
-    populateSelect(byId('alertas-form-morador'), state.options.moradores, 'Selecione o morador titular', optionValue, optionLabel);
+    updateMoradorOptions();
+}
+
+function updateMoradorOptions() {
+    const select = byId('alertas-form-morador');
+    if (!select) return;
+    const unidade = byId('alertas-form-unidade')?.value || '';
+    if (!unidade) {
+        populateSelect(select, [], 'Selecione a unidade primeiro', optionValue, optionLabel);
+        select.disabled = true;
+        updateDependenteOptions();
+        return;
+    }
+
+    const moradores = moradoresDaUnidade(unidade);
+    populateSelect(select, moradores, moradores.length ? 'Selecione o morador titular' : 'Nenhum morador ativo nesta unidade', optionValue, optionLabel);
+    select.disabled = moradores.length === 0;
+    if (moradores.length === 1) select.value = String(optionValue(moradores[0]));
     updateDependenteOptions();
 }
 
 function updateDependenteOptions() {
     const select = byId('alertas-form-dependente');
     if (!select) return;
-    const moradorId = byId('alertas-form-morador')?.value;
-    const items = state.options.dependentes.filter(item => {
-        if (!moradorId) return true;
-        const owner = item?.morador_id ?? item?.id_morador ?? item?.titular_id;
-        return owner == null || String(owner) === String(moradorId);
+    const titularTipo = byId('alertas-form-titular-tipo')?.value || 'MORADOR';
+    const unidade = byId('alertas-form-unidade')?.value || '';
+    const moradorId = byId('alertas-form-morador')?.value || '';
+    const label = state.root?.querySelector('label[for="alertas-form-dependente"]');
+
+    if (titularTipo !== 'DEPENDENTE') {
+        populateSelect(select, [], 'Não se aplica — titular é o morador', optionValue, optionLabel);
+        select.value = '';
+        select.disabled = true;
+        select.required = false;
+        if (label) label.textContent = 'Dependente';
+        return;
+    }
+
+    select.required = true;
+    if (!unidade) {
+        populateSelect(select, [], 'Selecione a unidade primeiro', optionValue, optionLabel);
+        select.value = '';
+        select.disabled = true;
+        if (label) label.textContent = moradorId ? 'Dependente' : 'Dependente — Morador';
+        return;
+    }
+
+    const moradores = moradoresDaUnidade(unidade);
+    const moradoresDaLista = new Set(moradores.map(morador => String(optionValue(morador))));
+    const dependentes = state.options.dependentes.filter(item => {
+        const ownerId = moradorOwnerId(item);
+        if (!ownerId || !moradoresDaLista.has(ownerId)) return false;
+        return !moradorId || ownerId === String(moradorId);
     });
-    populateSelect(select, items, 'Selecione o dependente', optionValue, item => {
+    const placeholder = dependentes.length
+        ? 'Selecione o dependente'
+        : moradorId ? 'Nenhum dependente ativo para este morador' : 'Nenhum dependente ativo nesta unidade';
+    populateSelect(select, dependentes, placeholder, optionValue, item => {
         const name = optionLabel(item);
-        const owner = item?.morador_nome || item?.morador;
+        const owner = item?.morador_nome || item?.morador || state.options.moradores.find(morador => String(optionValue(morador)) === moradorOwnerId(item))?.nome;
         return owner ? `${name} — ${owner}` : name;
     });
+    select.disabled = dependentes.length === 0;
+    if (label) label.textContent = moradorId ? 'Dependente' : 'Dependente — Morador';
+}
+
+function handleDependenteChange() {
+    const dependenteId = byId('alertas-form-dependente')?.value || '';
+    const moradorSelect = byId('alertas-form-morador');
+    if (!dependenteId || !moradorSelect || moradorSelect.value) return;
+    const dependente = state.options.dependentes.find(item => String(optionValue(item)) === String(dependenteId));
+    const ownerId = moradorOwnerId(dependente);
+    if (!ownerId || !Array.from(moradorSelect.options).some(option => option.value === ownerId)) return;
+    moradorSelect.value = ownerId;
+    updateDependenteOptions();
+    byId('alertas-form-dependente').value = String(dependenteId);
 }
 
 async function loadOptions() {
     try {
         const data = unwrap(await requestJson('opcoes')) || {};
         state.options = {
-            unidades: Array.isArray(data.unidades) ? data.unidades : [],
+            unidades: (Array.isArray(data.unidades) ? data.unidades.slice() : []).sort((a, b) => compareUnits(optionLabel(a), optionLabel(b))),
             moradores: Array.isArray(data.moradores) ? data.moradores : [],
             dependentes: Array.isArray(data.dependentes) ? data.dependentes : [],
         };
@@ -639,11 +717,11 @@ function resetForm() {
     byId('alertas-form-idempotency').value = generateKey();
     setText('alertas-modal-title', 'Novo alerta da unidade');
     setText('alertas-form-submit-label', 'Salvar alerta');
-    byId('alertas-form-dependente').disabled = false;
     renderTargets();
     applyPermissionVisibility();
     const modelo = byId('alertas-form-modelo');
     if (modelo) modelo.value = '';
+    updateMoradorOptions();
     updateFormPreview();
 }
 
@@ -675,7 +753,7 @@ function readForm() {
     const horaFim = value('alertas-form-hora-fim');
     const instrucao = value('alertas-form-instrucao');
     const telefone = value('alertas-form-telefone');
-    if (dependenteId) payload.dependente_id = Number(dependenteId);
+    if (payload.titular_tipo === 'DEPENDENTE' && dependenteId) payload.dependente_id = Number(dependenteId);
     if (days.length) payload.dias_semana = days;
     if (horaInicio) payload.hora_inicio = horaInicio;
     if (horaFim) payload.hora_fim = horaFim;
@@ -686,12 +764,20 @@ function readForm() {
 
 function validateForm(payload) {
     const form = byId('alertas-form');
-    if (!form?.checkValidity()) {
-        form?.reportValidity();
+    if (!payload.unidade) {
+        showFeedback('error', 'Selecione a unidade do alerta.');
         return false;
     }
     if (!payload.morador_id || Number.isNaN(payload.morador_id)) {
         showFeedback('error', 'Selecione o morador titular do alerta.');
+        return false;
+    }
+    if (payload.titular_tipo === 'DEPENDENTE' && !payload.dependente_id) {
+        showFeedback('error', 'Selecione o dependente titular do alerta.');
+        return false;
+    }
+    if (!form?.checkValidity()) {
+        form?.reportValidity();
         return false;
     }
     if (payload.vigencia_inicio && payload.vigencia_fim && payload.vigencia_fim < payload.vigencia_inicio) {
@@ -731,6 +817,14 @@ async function saveAlert(event) {
 function setFormValue(id, value) {
     const element = byId(id);
     if (element) element.value = value == null ? '' : String(value);
+}
+
+function setUnitFormValue(value) {
+    const select = byId('alertas-form-unidade');
+    if (!select) return;
+    const unidadeNormalizada = normalizeUnit(value);
+    const option = Array.from(select.options).find(item => normalizeUnit(item.value) === unidadeNormalizada);
+    select.value = option ? option.value : '';
 }
 
 function renderTargets() {
@@ -943,8 +1037,9 @@ async function openEdit(id) {
         setText('alertas-modal-title', 'Editar alerta da unidade');
         setText('alertas-form-submit-label', 'Salvar alterações');
         setFormValue('alertas-form-id', id);
-        setFormValue('alertas-form-unidade', alert.unidade ?? alert.unidade_id);
+        setUnitFormValue(alert.unidade ?? alert.unidade_id);
         setFormValue('alertas-form-titular-tipo', alert.titular_tipo || 'MORADOR');
+        updateMoradorOptions();
         setFormValue('alertas-form-morador', alert.morador_id);
         updateDependenteOptions();
         setFormValue('alertas-form-dependente', alert.dependente_id);
@@ -978,8 +1073,9 @@ async function openDuplicate(id) {
         const data = unwrap(await requestJson('detalhe', { params: { id, modo: 'edicao' } })) || {};
         const alert = data.alerta || data;
         resetForm();
-        setFormValue('alertas-form-unidade', alert.unidade ?? alert.unidade_id);
+        setUnitFormValue(alert.unidade ?? alert.unidade_id);
         setFormValue('alertas-form-titular-tipo', alert.titular_tipo || 'MORADOR');
+        updateMoradorOptions();
         setFormValue('alertas-form-morador', alert.morador_id);
         updateDependenteOptions();
         setFormValue('alertas-form-dependente', alert.dependente_id);
@@ -1163,7 +1259,13 @@ function handleClick(event) {
 
 function handleFormChange(event) {
     if (event.target?.id === 'alertas-form-modelo') applyQuickModel(event.target.value);
+    if (event.target?.id === 'alertas-form-unidade') {
+        setFormValue('alertas-form-morador', '');
+        updateMoradorOptions();
+    }
+    if (event.target?.id === 'alertas-form-titular-tipo') updateDependenteOptions();
     if (event.target?.id === 'alertas-form-morador') updateDependenteOptions();
+    if (event.target?.id === 'alertas-form-dependente') handleDependenteChange();
     if (event.target?.id === 'alertas-form-abrangencia') {
         const targets = byId('alertas-targets-wrap');
         if (targets) targets.hidden = event.target.value !== 'ESPECIFICO';
@@ -1202,7 +1304,6 @@ function bindEvents() {
     bind(root.querySelector('#alertas-filtros'), 'submit', event => { event.preventDefault(); persistCurrentFilters(); loadList(1); });
     bind(root.querySelector('#alertas-filtros'), 'reset', () => setTimeout(() => { persistCurrentFilters(); loadList(1); }, 0));
     bind(root.querySelector('#alertas-form'), 'submit', saveAlert);
-    bind(root.querySelector('#alertas-form-morador'), 'change', updateDependenteOptions);
     bind(root.querySelector('#alertas-alvo-buscar'), 'click', searchTarget);
     bind(root.querySelector('#alertas-alvo-busca'), 'keydown', event => { if (event.key === 'Enter') { event.preventDefault(); searchTarget(); } });
     bind(root.querySelector('#alertas-detalhe-editar'), 'click', event => {

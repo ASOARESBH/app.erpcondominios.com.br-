@@ -2,6 +2,18 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.12] - 2026-11-03
+### Corrigido
+- **Alertas da Unidade**: unidades do filtro/modal são deduplicadas após trim e comparação case-insensitive, e ordenadas naturalmente; o titular Morador agora é filtrado pela unidade escolhida e o Dependente pela unidade e, opcionalmente, pelo morador.
+- No formulário, titular do tipo Morador desabilita o Dependente e não envia `dependente_id`. Titular do tipo Dependente exige dependente; escolha antecipada do dependente preenche o morador responsável.
+- A edição/duplicação reconstrói as opções na ordem Unidade → tipo titular → Morador → Dependente. A API compara unidade ignorando caixa/espaços externos e continua persistindo a grafia oficial do cadastro tenant-local.
+### Validado
+- `php -l api/api_alertas_unidade.php`, `node --check frontend/js/pages/moradores-alertas.js` e `git diff --check` passaram.
+- Testes locais confirmaram ordenação natural/deduplicação backend e frontend, normalização de caixa/espaços na unidade e cascata simulada: morador limitado à unidade, dependente limitado à unidade/morador, dependente bloqueado para titular Morador, seleção do morador responsável ao escolher Dependente primeiro, pré-seleção de morador único e opção vazia quando não há moradores.
+- Fixture MariaDB descartável confirmou o resultado tenant-scoped `200, ADMINISTRATIVO, Gleba 1, Gleba 2, Gleba 10, Gleba 100`, sem unidade vazia/duplicada; comparação aceita `Gleba 10 ` sem alterar o valor oficial armazenado.
+### Pendente
+- Não executados: browser autenticado, gravação real do alerta via API, teste em produção, Portal do Morador, Registro Manual e Console. Nenhuma migration/deploy de produção foi realizado.
+
 ## [2.1.11] - 2026-11-03
 ### Implementado — web/backend
 - **Ordens de Serviço**: adicionados filtros exatos de Unidade e Morador encadeados, chip de unidade/contagem, querystring restaurável ao atualizar/compartilhar e atalho clicável/acessível pelo ranking. A listagem continua cumulativa com tenant, RBAC, departamentos e Restritividade O.S.; sem permissão `moradores.visualizar`, apenas o seletor de morador fica indisponível.

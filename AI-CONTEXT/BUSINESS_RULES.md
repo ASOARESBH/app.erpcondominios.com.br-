@@ -85,6 +85,8 @@ O Registro Manual pode lançar acessos em dois modos: `VEICULO`, quando a placa 
 
 ## 12. Alertas da Unidade
 
+- No painel, as unidades aparecem sem duplicatas por variação de caixa/espaços e em ordem natural (`Gleba 2` antes de `Gleba 10`). A seleção do formulário segue Unidade → Morador titular → Dependente: o morador só pode ser escolhido depois da unidade, e o dependente só é habilitado para titular do tipo Dependente, limitado à unidade e, quando selecionado, ao morador. Titular do tipo Morador não envia `dependente_id`.
+- A unidade enviada pelo formulário é comparada após remover espaços externos e ignorar diferença de caixa, mas o backend continua persistindo o valor oficial obtido do cadastro tenant-local do morador.
 - `alertas_unidade` registra avisos/restrições por tenant, unidade, titular morador/dependente, público, alvo, vigência e recorrência. Dependente é titular de regra, não autoria autenticada; no Portal a unidade/morador/dependente são derivados da sessão Bearer.
 - Para controle de abuso, cada unidade pode manter no máximo 30 alertas simultaneamente vigentes. O limite é aplicado pelo servidor nas criações web do painel e Portal e também ao retomar um alerta pausado.
 - `TODOS` abrange entradas de moradores, dependentes, visitantes, prestadores, entregadores autorizados e familiares da unidade. `APENAS_AVISAR` não bloqueia; `EXIGIR_CIENTE`, `CONTATAR_MORADOR` e `BLOQUEAR` exigem decisão operacional na entrada web. `BLOQUEAR` não pode ser liberado por operador comum; override requer permissão `moradores.aprovar`, reautenticação com a senha atual da conta ativa no tenant e justificativa registrada. Moradores podem criar bloqueios Críticos limitados à própria unidade, mas não aprovar override.
