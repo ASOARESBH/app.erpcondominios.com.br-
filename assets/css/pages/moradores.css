@@ -802,7 +802,9 @@
     .rel-contador,
     .rel-grafico-card,
     .btn-primary-modern,
-    .btn-secondary-modern {
+    .btn-secondary-modern,
+    .page-moradores .moradores-search-box,
+    .page-moradores .moradores-filter-summary {
         display: none !important;
     }
 
@@ -853,7 +855,41 @@
     max-width: 240px;
 }
 
-@media (max-width: 640px) {
+.page-moradores .moradores-search-box #filtroUnidadeMorador {
+    flex: 0 1 200px;
+    width: auto;
+    min-width: 180px;
+    max-width: 260px;
+}
+
+.page-moradores .moradores-search-box .btn-limpar-filtros {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    padding: 10px 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #334155;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.page-moradores .moradores-search-box .btn-limpar-filtros:hover {
+    background: #f8fafc;
+}
+
+.page-moradores .moradores-filter-summary {
+    margin: -10px 0 18px;
+    color: #475569;
+    font-size: .9rem;
+    font-weight: 600;
+}
+
+@media (min-width: 769px) and (max-width: 1279px) {
     .page-moradores .moradores-search-box {
         flex-wrap: wrap;
     }
@@ -862,10 +898,33 @@
         flex: 1 1 100%;
     }
 
-    .page-moradores .moradores-search-box select,
-    .page-moradores .moradores-search-box .btn-primary-modern {
-        flex: 1 1 160px;
+    .page-moradores .moradores-search-box #filtroUnidadeMorador,
+    .page-moradores .moradores-search-box #ordenarMoradores,
+    .page-moradores .moradores-search-box .btn-limpar-filtros {
+        flex: 1 1 180px;
         min-width: 0;
+        width: auto;
+        max-width: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-moradores .moradores-search-box {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-moradores .moradores-search-box #searchMorador {
+        flex: 1 1 auto;
+        width: 100%;
+    }
+
+    .page-moradores .moradores-search-box select,
+    .page-moradores .moradores-search-box .btn-limpar-filtros {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
     }
 }
 

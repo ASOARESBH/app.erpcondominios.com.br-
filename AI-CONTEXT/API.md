@@ -127,6 +127,8 @@ para selects: retorna somente `id` e `nome` de moradores ativos daquela unidade 
 usando a mesma exigência `moradores.visualizar`.
 Dependentes são um subrecurso do módulo Moradores e não possuem uma permissão paralela.
 
+Na lista paginada, `GET api/api_moradores.php?unidade=...&unidade_exata=1` compara a unidade por `UPPER(TRIM(...))`; sem `unidade_exata=1`, `unidade` mantém a igualdade legada. `ordenacao=unidade_asc|unidade_desc` usa ordenação numérica natural no SQL. Busca textual, unidade, tenant da sessão e RBAC são cumulativos. Chamadas existentes de Registro, Hidrômetros, Dependentes e outros módulos não recebem a nova flag e continuam com a comparação legada.
+
 `api/api_moradores_anexos.php` aplica `visualizar` para listar/consultar/download,
 `criar` para upload e `excluir` para remoção. O PDF de Moradores e o conteúdo privado de
 `api/api_arquivos_tenant.php` também exigem `moradores.visualizar` e filtram os dados pelo

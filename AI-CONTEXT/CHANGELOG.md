@@ -2,6 +2,18 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.14] - 2026-11-03
+### Alterado
+- **Moradores — Lista de Moradores**: adicionado filtro de Unidade à barra, opções sem quantitativos em ordem natural e busca automática por texto/unidade/ordenação. O botão Buscar foi substituído por Limpar, que restaura a lista e ordenação padrão.
+- A unidade pode ser combinada com texto como condição AND e usa `unidade_exata=1` com igualdade case/space-insensitive; chamadas legadas sem essa flag preservam o filtro antigo. Ordenações Unidade ascendente/descendente agora usam número natural no backend.
+- Buscas concorrentes cancelam a requisição anterior e somente a resposta mais recente renderiza. Busca, unidade, ordenação e página são restauradas pela URL. Cadastro, edição, exclusão e operações de anexos recarregam a mesma consulta/página; se uma exclusão esvaziar a última página, a listagem recua.
+### Validado
+- `php -l api/api_moradores.php`, `node --check frontend/js/pages/moradores.js` e `git diff --check` passaram.
+- Fixture MariaDB descartável confirmou igualdade normalizada sem incluir Gleba 10/100 ao filtrar Gleba 1, combinação AND, ordenação natural até Gleba 100 em páginas distintas, compatibilidade da consulta legada e busca de CPF mascarado.
+- Harness local da tela confirmou `unidade_exata=1`, filtros combinados, cancelamento/latest-only, recuo de página, restauração de querystring, Limpar, mensagem de zero resultados, ordenação/deduplicação natural e inserção ordenada de unidade de deep-link. Revisão estática confirmou as chamadas de recarga da mesma página nos handlers de cadastro, edição, exclusão e anexos.
+### Pendente
+- Não houve teste autenticado no navegador/produção; as regressões visuais mobile e as chamadas de outros módulos à API permanecem sem validação ponta a ponta. Nenhuma migration foi criada/aplicada.
+
 ## [2.1.13] - 2026-11-03
 ### Alterado
 - **Ordens de Serviço — Chamados**: o select Unidade agora exibe somente o nome e ordena as opções naturalmente no frontend, eliminando duplicatas por trim/caixa. A aba não consulta mais `unidades_com_os`, removendo uma requisição; deep-links e o ranking inserem unidades ausentes em sua posição natural. O contador da lista filtrada e os filtros cumulativos permanecem inalterados.

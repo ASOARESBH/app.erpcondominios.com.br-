@@ -94,6 +94,10 @@
             <h2><i class="fas fa-list"></i> Lista de Moradores</h2>
             <div class="search-box moradores-search-box">
                 <input type="text" id="searchMorador" placeholder="Pesquisar por nome, CPF ou unidade...">
+                <label for="filtroUnidadeMorador" class="sr-only">Filtrar por unidade</label>
+                <select id="filtroUnidadeMorador" aria-label="Filtrar por unidade" disabled>
+                    <option value="">Todas as unidades</option>
+                </select>
                 <label for="ordenarMoradores" class="sr-only">Ordenar moradores por</label>
                 <select id="ordenarMoradores" aria-label="Ordenar moradores por">
                     <option value="nome_asc" selected>Nome (A→Z)</option>
@@ -103,10 +107,11 @@
                     <option value="id_asc">ID (crescente)</option>
                     <option value="id_desc">ID (decrescente)</option>
                 </select>
-                <button class="btn-primary-modern" onclick="window.MoradoresPage?.buscar()">
-                    <i class="fas fa-search"></i> Buscar
+                <button type="button" id="limparFiltrosMoradores" class="btn-limpar-filtros" aria-label="Limpar filtros de moradores">
+                    <i class="fas fa-eraser" aria-hidden="true"></i> Limpar
                 </button>
             </div>
+            <div id="resumoBuscaMoradores" class="moradores-filter-summary" role="status" aria-live="polite" hidden></div>
             <div id="loadingMoradores" class="loading" style="display:none;">
                 <i class="fas fa-spinner fa-spin"></i>
                 <p>Carregando dados...</p>

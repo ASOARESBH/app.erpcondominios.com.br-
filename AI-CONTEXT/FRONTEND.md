@@ -46,3 +46,8 @@ export function destroy() {
 - Registro Manual e Controle de Acesso exibem alertas antes de confirmar Entrada e retomam a gravação somente após ciência/token válido. Leitura automática via QR devolve eventos/decisão ao console; `BLOQUEAR` retorna negação explícita.
 - O Portal do Morador inclui Meus Alertas e consulta `api_portal_alertas.php` com Bearer; o formulário de QR verifica conflito antes de gerar e exige confirmação do usuário. A busca de alvos só lista visitantes vinculados ao morador e mascara documentos; o formulário oferece modelos rápidos e resumo natural. O detalhe exibe timeline de acionamentos do mesmo tenant/unidade. Uma opção individual controla push de acionamentos/lembretes; desativá-la preserva a notificação interna na caixa do Portal. Ao criar convite pela Lista de Convidados, um preflight usa a data prevista às 12h locais, pede confirmação se houver alerta e esclarece que a portaria reavalia no horário efetivo.
 - A implementação é somente web/backend. Telas e providers Flutter não foram alterados.
+
+## 7. Lista principal de Moradores
+
+- A barra da Lista de Moradores combina busca textual, unidade e ordenação sem botão de envio: texto usa debounce de 350 ms, unidade/ordenação são imediatas e o botão Limpar restaura nome crescente e lista completa. As opções de unidade são deduplicadas e ordenadas naturalmente no frontend.
+- A lista paginada envia `unidade_exata=1` apenas junto ao filtro de unidade. Requisições anteriores são abortadas e a sequência garante que apenas a última resposta atualize o DOM. Busca, unidade, ordenação e página ficam na querystring para restauração no refresh; após mutações, recarrega a mesma posição, recuando se a página removida ficar fora do total.

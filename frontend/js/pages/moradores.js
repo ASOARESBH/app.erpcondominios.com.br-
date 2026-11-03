@@ -21,6 +21,8 @@ const API_DEPENDENTES = '../api/api_dependentes.php';
 const API_ANEXOS      = '../api/api_moradores_anexos.php';
 const API_UNIDADES    = '../api/api_unidades.php';
 const API_CONFIG_MORADORES = '../api/api_config_moradores.php';
+const _collatorUnidadesMoradores = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+const _ordenacoesMoradoresValidas = new Set(['nome_asc', 'nome_desc', 'unidade_asc', 'unidade_desc', 'id_asc', 'id_desc']);
 
 // ── Estado interno ─────────────────────────────────────────────────────────────
 let _currentTab = 'moradores';
@@ -39,7 +41,15 @@ let _paginaAtual = 1;
 let _totalPaginas = 1;
 let _totalMoradores = 0;
 let _termoBusca = '';  // termo em uso na paginação atual
+let _unidadeFiltro = '';
 let _ordenacaoAtual = 'nome_asc'; // critério enviado ao backend paginado
+let _moradoresFetchController = null;
+let _moradoresFetchSeq = 0;
+let _unidadesMoradoresFetchController = null;
+let _unidadesMoradoresFetchSeq = 0;
+let _buscaMoradoresTimer = null;
+let _moradoresModuloAtivo = false;
+let _moradoresInitSeq = 0;
 // Paginação de dependentes
 const DEP_POR_PAGINA = 25;
 let _depPaginaAtual = 1;
@@ -70,6 +80,9 @@ function _exigirPermissaoMoradores(acao, mensagem) {
 
 export function init() {
     log('Inicializando módulo...');
+    _moradoresModuloAtivo = true;
+    const initSeq = ++_moradoresInitSeq;
+    const paginaInicial = _restaurarEstadoListaMoradores();
     _setupTabs();
     MoradoresAlertas.init();
     _setupValidacaoCPF();
@@ -78,8 +91,8 @@ export function init() {
     _setupForms();
     _setupFileDrop();
     _carregarConfiguracaoMoradores();
-    _carregarUnidades();
-    _carregarMoradores();
+    const buscaInicialSeq = _moradoresFetchSeq;
+    const unidadesCarregadas = _carregarUnidades();
     _carregarDependentes();
 
     // O seletor genérico do shell não alcança os botões .action-btn criados
@@ -128,15 +141,18 @@ export function init() {
     // Debounce no campo de busca de moradores
     const inputBuscaMor = document.getElementById('searchMorador');
     if (inputBuscaMor) {
-        let _debounceTimerMor = null;
         inputBuscaMor.addEventListener('input', () => {
-            clearTimeout(_debounceTimerMor);
-            _debounceTimerMor = setTimeout(() => _buscarMoradores(), 350);
+            clearTimeout(_buscaMoradoresTimer);
+            _cancelarCarregamentoMoradores();
+            _buscaMoradoresTimer = setTimeout(() => _buscarMoradores(), 350);
         });
         inputBuscaMor.addEventListener('keydown', e => {
-            if (e.key === 'Enter') { clearTimeout(_debounceTimerMor); _buscarMoradores(); }
+            if (e.key === 'Enter') { clearTimeout(_buscaMoradoresTimer); _buscarMoradores(); }
         });
     }
+
+    document.getElementById('filtroUnidadeMorador')?.addEventListener('change', () => _buscarMoradores());
+    document.getElementById('limparFiltrosMoradores')?.addEventListener('click', _limparFiltrosMoradores);
 
     // A ordenação é aplicada no servidor para permanecer contínua entre páginas.
     const selectOrdenacao = document.getElementById('ordenarMoradores');
@@ -145,9 +161,14 @@ export function init() {
         selectOrdenacao.addEventListener('change', () => {
             _ordenacaoAtual = selectOrdenacao.value || 'nome_asc';
             log('Ordenação de moradores alterada:', _ordenacaoAtual);
-            _carregarMoradores(1);
+            _buscarMoradores();
         });
     }
+
+    unidadesCarregadas.then(() => {
+        if (!_moradoresModuloAtivo || initSeq !== _moradoresInitSeq || buscaInicialSeq !== _moradoresFetchSeq) return;
+        _carregarMoradores(paginaInicial);
+    });
 
     // Debounce no campo de busca de dependentes
     const inputBuscaDep = document.getElementById('searchDependente');
@@ -176,6 +197,16 @@ export function init() {
 
 export function destroy() {
     log('Destruindo módulo...');
+    _moradoresModuloAtivo = false;
+    _moradoresInitSeq++;
+    clearTimeout(_buscaMoradoresTimer);
+    _buscaMoradoresTimer = null;
+    _moradoresFetchController?.abort();
+    _moradoresFetchController = null;
+    _unidadesMoradoresFetchController?.abort();
+    _unidadesMoradoresFetchController = null;
+    _moradoresFetchSeq++;
+    _unidadesMoradoresFetchSeq++;
     MoradoresAlertas.destroy();
     delete window.MoradoresPage;
     _configMoradores = null;
@@ -297,24 +328,82 @@ function _toast(msg, tipo = 'success') {
 
 function _carregarUnidades() {
     log('Carregando lista de unidades para selects...');
-    fetch(`${API_UNIDADES}?acao=select&_ts=${Date.now()}`, { credentials: 'include', cache: 'no-store' })
+    _unidadesMoradoresFetchController?.abort();
+    const controller = new AbortController();
+    _unidadesMoradoresFetchController = controller;
+    const sequencia = ++_unidadesMoradoresFetchSeq;
+    return fetch(`${API_UNIDADES}?acao=select&_ts=${Date.now()}`, {
+        credentials: 'include',
+        cache: 'no-store',
+        signal: controller.signal,
+    })
         .then(r => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return r.json();
         })
         .then(data => {
+            if (!_moradoresModuloAtivo || sequencia !== _unidadesMoradoresFetchSeq || controller.signal.aborted) return false;
             if (!data.sucesso) throw new Error(data.mensagem || 'Resposta inválida da API de unidades');
             const unidades = Array.isArray(data.dados) ? data.dados : (data.dados?.itens || []);
             log('Unidades carregadas:', unidades.length);
             _popularSelectUnidades(unidades);
+            _popularFiltroUnidadeMorador(unidades, true);
+            return true;
         })
         .catch(err => {
+            if (err.name === 'AbortError' || !_moradoresModuloAtivo || sequencia !== _unidadesMoradoresFetchSeq) return false;
             log('Erro ao carregar unidades:', err);
             ['unidade', 'edit-morador-unidade'].forEach(id => {
                 const sel = document.getElementById(id);
                 if (sel) sel.innerHTML = '<option value="">Não foi possível carregar as unidades</option>';
             });
+            _popularFiltroUnidadeMorador([], false);
+            return false;
+        })
+        .finally(() => {
+            if (_unidadesMoradoresFetchController === controller) _unidadesMoradoresFetchController = null;
         });
+}
+
+function _normalizarUnidadesMoradores(unidades) {
+    const vistas = new Set();
+    return (Array.isArray(unidades) ? unidades : []).reduce((resultado, item) => {
+        const nome = String(item?.nome ?? item?.unidade ?? item?.descricao ?? '').trim();
+        if (!nome) return resultado;
+        const chave = nome.toLocaleUpperCase('pt-BR');
+        if (vistas.has(chave)) return resultado;
+        vistas.add(chave);
+        resultado.push({ ...item, nome });
+        return resultado;
+    }, []).sort((a, b) => _collatorUnidadesMoradores.compare(a.nome, b.nome));
+}
+
+function _popularFiltroUnidadeMorador(unidades, disponivel = true) {
+    const sel = document.getElementById('filtroUnidadeMorador');
+    if (!sel) return;
+    const lista = _normalizarUnidadesMoradores(unidades);
+    sel.innerHTML = '<option value="">Todas as unidades</option>';
+    lista.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.nome;
+        opt.textContent = item.nome;
+        sel.appendChild(opt);
+    });
+    if (_unidadeFiltro && !lista.some(item => item.nome.toLocaleUpperCase('pt-BR') === _unidadeFiltro.toLocaleUpperCase('pt-BR'))) {
+        const opt = document.createElement('option');
+        opt.value = _unidadeFiltro;
+        opt.textContent = _unidadeFiltro;
+        const proxima = Array.from(sel.options).slice(1).find(item =>
+            _collatorUnidadesMoradores.compare(_unidadeFiltro, item.textContent) < 0);
+        if (proxima) sel.insertBefore(opt, proxima);
+        else sel.appendChild(opt);
+    }
+    const selecionada = lista.find(item => item.nome.toLocaleUpperCase('pt-BR') === _unidadeFiltro.toLocaleUpperCase('pt-BR'));
+    if (_unidadeFiltro) {
+        _unidadeFiltro = selecionada?.nome || _unidadeFiltro;
+        sel.value = _unidadeFiltro;
+    }
+    sel.disabled = !disponivel;
 }
 
 function _popularSelectUnidades(unidades) {
@@ -352,44 +441,137 @@ function _setupForms() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function _carregarMoradores(pagina = 1) {
-    log('Carregando lista de moradores:', { pagina, busca: _termoBusca, ordenacao: _ordenacaoAtual });
-    _paginaAtual = pagina;
+    const paginaSolicitada = Math.max(1, Number(pagina) || 1);
+    log('Carregando lista de moradores:', { pagina: paginaSolicitada, busca: _termoBusca, unidade: _unidadeFiltro, ordenacao: _ordenacaoAtual });
+    _paginaAtual = paginaSolicitada;
+    _sincronizarURLMoradores();
+
+    _moradoresFetchController?.abort();
+    const controller = new AbortController();
+    _moradoresFetchController = controller;
+    const sequencia = ++_moradoresFetchSeq;
 
     const loading = document.getElementById('loadingMoradores');
     if (loading) loading.style.display = 'block';
 
     const params = new URLSearchParams({
-        pagina,
-        por_pagina: POR_PAGINA,
+        pagina: String(paginaSolicitada),
+        por_pagina: String(POR_PAGINA),
         ordenacao: _ordenacaoAtual,
     });
-    if (_termoBusca) params.set('busca', _termoBusca); // busca em nome, CPF e unidade (OR)
+    if (_termoBusca) params.set('busca', _termoBusca);
+    if (_unidadeFiltro) {
+        params.set('unidade', _unidadeFiltro);
+        params.set('unidade_exata', '1');
+    }
 
-    fetch(`${API_MORADORES}?${params}`, { credentials: 'include' })
+    fetch(`${API_MORADORES}?${params}`, { credentials: 'include', signal: controller.signal })
         .then(r => r.json())
         .then(data => {
-            if (loading) loading.style.display = 'none';
+            if (sequencia !== _moradoresFetchSeq || controller.signal.aborted || !_moradoresModuloAtivo) return;
             log('Resposta moradores:', data);
             if (data.sucesso) {
                 const d = data.dados;
-                _totalMoradores = d.total ?? 0;
-                _totalPaginas   = d.total_paginas ?? 1;
-                _paginaAtual    = d.pagina ?? 1;
+                _totalMoradores = Number(d.total) || 0;
+                _totalPaginas = Math.max(1, Number(d.total_paginas) || 1);
+                const paginaResposta = Math.max(1, Number(d.pagina) || 1);
+                if (paginaResposta > _totalPaginas) {
+                    _carregarMoradores(_totalPaginas);
+                    return;
+                }
+                _paginaAtual = paginaResposta;
                 _listaMoradores = d.itens || [];
                 _renderMoradores(_listaMoradores);
+                _renderResumoBuscaMoradores();
                 if (_permissoesMoradores) _aplicarPermissoesMoradores(_permissoesMoradores);
                 _renderPaginacaoMoradores();
-                // O cadastro de dependentes usa a cascata Unidade → Morador;
-                // não preencher aqui a lista global de moradores.
             } else {
                 _toast('Erro ao carregar moradores: ' + (data.mensagem || ''), 'error');
             }
         })
         .catch(err => {
-            if (loading) loading.style.display = 'none';
+            if (err.name === 'AbortError' || sequencia !== _moradoresFetchSeq || !_moradoresModuloAtivo) return;
             log('Erro ao carregar moradores:', err);
             _toast('Falha de comunicação ao carregar moradores', 'error');
+        })
+        .finally(() => {
+            if (sequencia === _moradoresFetchSeq && loading) loading.style.display = 'none';
+            if (_moradoresFetchController === controller) _moradoresFetchController = null;
         });
+}
+
+function _cancelarCarregamentoMoradores() {
+    _moradoresFetchController?.abort();
+    _moradoresFetchController = null;
+    _moradoresFetchSeq++;
+    const loading = document.getElementById('loadingMoradores');
+    if (loading) loading.style.display = 'none';
+}
+
+function _renderResumoBuscaMoradores() {
+    const resumo = document.getElementById('resumoBuscaMoradores');
+    if (!resumo) return;
+    const filtrosAtivos = Boolean(_termoBusca || _unidadeFiltro);
+    if (!filtrosAtivos) {
+        resumo.hidden = true;
+        resumo.textContent = '';
+        return;
+    }
+    resumo.hidden = false;
+    resumo.textContent = _totalMoradores === 0
+        ? 'Nenhum morador encontrado para os filtros informados'
+        : `${_totalMoradores} ${_totalMoradores === 1 ? 'morador' : 'moradores'}`;
+}
+
+function _sincronizarURLMoradores() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('page', params.get('page') || 'moradores');
+    const filtros = {
+        busca: _termoBusca,
+        unidade: _unidadeFiltro,
+        ordem: _ordenacaoAtual === 'nome_asc' ? '' : _ordenacaoAtual,
+        pg: _paginaAtual > 1 ? String(_paginaAtual) : '',
+    };
+    Object.entries(filtros).forEach(([chave, valor]) => {
+        if (valor) params.set(chave, valor);
+        else params.delete(chave);
+    });
+    const url = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    window.history.replaceState({ ...(window.history.state || {}), page: 'moradores' }, '', url);
+}
+
+function _restaurarEstadoListaMoradores() {
+    const params = new URLSearchParams(window.location.search);
+    _termoBusca = (params.get('busca') || '').trim();
+    _unidadeFiltro = (params.get('unidade') || '').trim();
+    const ordem = params.get('ordem') || 'nome_asc';
+    _ordenacaoAtual = _ordenacoesMoradoresValidas.has(ordem) ? ordem : 'nome_asc';
+    const pg = Number(params.get('pg'));
+    const pagina = Number.isSafeInteger(pg) && pg > 0 && pg <= 1000000 ? pg : 1;
+
+    const busca = document.getElementById('searchMorador');
+    if (busca) busca.value = _termoBusca;
+    const unidade = document.getElementById('filtroUnidadeMorador');
+    if (unidade) unidade.value = _unidadeFiltro;
+    const ordenacao = document.getElementById('ordenarMoradores');
+    if (ordenacao) ordenacao.value = _ordenacaoAtual;
+    return pagina;
+}
+
+function _limparFiltrosMoradores() {
+    clearTimeout(_buscaMoradoresTimer);
+    _buscaMoradoresTimer = null;
+    const busca = document.getElementById('searchMorador');
+    const unidade = document.getElementById('filtroUnidadeMorador');
+    const ordenacao = document.getElementById('ordenarMoradores');
+    if (busca) busca.value = '';
+    if (unidade) unidade.value = '';
+    if (ordenacao) ordenacao.value = 'nome_asc';
+    _termoBusca = '';
+    _unidadeFiltro = '';
+    _ordenacaoAtual = 'nome_asc';
+    _paginaAtual = 1;
+    _carregarMoradores(1);
 }
 
 // Cascata do cadastro de dependentes: Unidade → Morador.
@@ -485,7 +667,10 @@ function _renderMoradores(lista) {
     if (!tbody) return;
 
     if (!lista || lista.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.6;">Nenhum morador encontrado</td></tr>';
+        const mensagem = _termoBusca || _unidadeFiltro
+            ? 'Nenhum morador encontrado para os filtros informados'
+            : 'Nenhum morador encontrado';
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;opacity:.6;">${mensagem}</td></tr>`;
         _renderPaginacaoMoradores();
         return;
     }
@@ -720,7 +905,7 @@ function _salvarMorador() {
             if (data.sucesso) {
                 _toast('<i class="fas fa-check-circle"></i> Morador cadastrado com sucesso!', 'success');
                 document.getElementById('moradorForm')?.reset();
-                _carregarMoradores();
+                _carregarMoradores(_paginaAtual);
             } else {
                 _toast('Erro: ' + (data.mensagem || 'Erro desconhecido'), 'error');
             }
@@ -732,8 +917,13 @@ function _salvarMorador() {
 }
 
 function _buscarMoradores() {
+    clearTimeout(_buscaMoradoresTimer);
+    _buscaMoradoresTimer = null;
     _termoBusca = document.getElementById('searchMorador')?.value?.trim() || '';
-    log('Buscando moradores com termo:', _termoBusca);
+    const unidade = document.getElementById('filtroUnidadeMorador');
+    if (unidade && !unidade.disabled) _unidadeFiltro = unidade.value?.trim() || '';
+    _ordenacaoAtual = document.getElementById('ordenarMoradores')?.value || 'nome_asc';
+    log('Buscando moradores:', { busca: _termoBusca, unidade: _unidadeFiltro, ordenacao: _ordenacaoAtual });
     _carregarMoradores(1); // volta para a página 1 ao buscar
 }
 
@@ -752,7 +942,7 @@ function _excluirMorador(id) {
             log('Resposta excluir morador:', data);
             if (data.sucesso) {
                 _toast('<i class="fas fa-check-circle"></i> Morador excluído com sucesso!', 'success');
-                _carregarMoradores();
+                _carregarMoradores(_paginaAtual);
             } else {
                 _toast('Erro ao excluir: ' + (data.mensagem || ''), 'error');
             }
@@ -849,7 +1039,7 @@ function _salvarEdicaoMorador() {
             if (data.sucesso) {
                 _toast('<i class="fas fa-check-circle"></i> Morador atualizado com sucesso!', 'success');
                 _fecharModalMorador();
-                _carregarMoradores();
+                _carregarMoradores(_paginaAtual);
             } else {
                 _toast('Erro: ' + (data.mensagem || 'Erro desconhecido'), 'error');
             }
@@ -1400,6 +1590,7 @@ function _enviarAnexo() {
                 const label = document.getElementById('mor-file-name');
                 if (label) label.textContent = '';
                 _carregarAnexos(moradorId);
+                _carregarMoradores(_paginaAtual);
             } else {
                 _toast('Erro: ' + (data.mensagem || 'Erro desconhecido'), 'error');
             }
@@ -1436,6 +1627,7 @@ function _excluirAnexo(id) {
             if (data.sucesso) {
                 _toast('<i class="fas fa-check-circle"></i> Documento removido!', 'success');
                 if (moradorId) _carregarAnexos(moradorId);
+                _carregarMoradores(_paginaAtual);
             } else {
                 _toast('Erro ao remover: ' + (data.mensagem || ''), 'error');
             }

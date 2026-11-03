@@ -172,7 +172,11 @@ $tenant_id = exigirTenantId();
         }
 
         // Obter filtros de busca
-        $filtro_unidade = isset($_GET['unidade']) ? trim($_GET['unidade']) : '';
+        $unidade_raw = $_GET['unidade'] ?? '';
+        if (!is_scalar($unidade_raw)) retornar_json(false, 'Unidade inválida');
+        $filtro_unidade = trim((string)$unidade_raw);
+        $unidade_exata_raw = $_GET['unidade_exata'] ?? '';
+        $unidade_exata = is_scalar($unidade_exata_raw) && (string)$unidade_exata_raw === '1';
         $filtro_nome    = isset($_GET['nome'])    ? trim($_GET['nome'])    : '';
         $filtro_email   = isset($_GET['email'])   ? trim($_GET['email'])   : '';
         $filtro_cpf     = isset($_GET['cpf'])     ? trim($_GET['cpf'])     : '';
@@ -190,8 +194,8 @@ $tenant_id = exigirTenantId();
         $mapa_ordenacao = array(
             'nome_asc'     => 'nome ASC',
             'nome_desc'    => 'nome DESC',
-            'unidade_asc'  => 'unidade ASC',
-            'unidade_desc' => 'unidade DESC',
+            'unidade_asc'  => "CAST(SUBSTRING_INDEX(TRIM(m.unidade), ' ', -1) AS UNSIGNED) ASC, m.unidade ASC, m.nome ASC",
+            'unidade_desc' => "CAST(SUBSTRING_INDEX(TRIM(m.unidade), ' ', -1) AS UNSIGNED) DESC, m.unidade DESC, m.nome ASC",
             'id_asc'       => 'id ASC',
             'id_desc'      => 'id DESC',
         );
@@ -209,8 +213,11 @@ $tenant_id = exigirTenantId();
         $tipos_param = "i";
         $params      = array((int)$tenant_id);
 
-        if ($filtro_unidade) {
-            $where .= " AND unidade = ?";
+        $aplicar_filtro_unidade = $unidade_exata ? $filtro_unidade !== '' : (bool)$filtro_unidade;
+        if ($aplicar_filtro_unidade) {
+            $where .= $unidade_exata
+                ? " AND UPPER(TRIM(unidade)) = UPPER(TRIM(?))"
+                : " AND unidade = ?";
             $tipos_param .= "s";
             $params[] = $filtro_unidade;
         }
@@ -256,6 +263,7 @@ $tenant_id = exigirTenantId();
         $sql_count = "SELECT COUNT(*) AS total FROM moradores $where";
         $stmt_c = $conexao->prepare($sql_count);
         if (!$stmt_c) throw new Exception("Erro ao preparar contagem: " . $conexao->error);
+        if (strlen($tipos_param) !== count($params)) throw new Exception("Parâmetros inconsistentes na contagem de moradores");
         if (count($params) > 0) $stmt_c->bind_param($tipos_param, ...$params);
         if (!$stmt_c->execute()) throw new Exception("Erro ao executar contagem: " . $stmt_c->error);
         $res_c = $stmt_c->get_result();
@@ -302,6 +310,7 @@ $tenant_id = exigirTenantId();
 
         $stmt = $conexao->prepare($sql);
         if (!$stmt) throw new Exception("Erro ao preparar query: " . $conexao->error);
+        if (strlen($tipos_pag) !== count($params_pag)) throw new Exception("Parâmetros inconsistentes na listagem de moradores");
         if (count($params_pag) > 0) $stmt->bind_param($tipos_pag, ...$params_pag);
         if (!$stmt->execute()) throw new Exception("Erro ao executar query: " . $stmt->error);
 
