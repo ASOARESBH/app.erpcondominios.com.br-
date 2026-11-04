@@ -1,0 +1,7 @@
+SET NAMES utf8mb4;
+CREATE TABLE moradores (id INT AUTO_INCREMENT PRIMARY KEY, tenant_id INT NOT NULL, nome VARCHAR(200), cpf VARCHAR(14), unidade VARCHAR(50), email VARCHAR(200), ativo TINYINT(1) DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE dependentes (id INT AUTO_INCREMENT PRIMARY KEY, tenant_id INT NOT NULL, morador_id INT NOT NULL, nome_completo VARCHAR(200), ativo TINYINT(1) DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE visitantes (id INT AUTO_INCREMENT PRIMARY KEY, tenant_id INT NOT NULL, nome_completo VARCHAR(200), tipo_documento VARCHAR(20), documento VARCHAR(30), morador_id INT NULL, cadastrado_por_morador_id INT NULL, ativo TINYINT(1) DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE acessos_visitantes (id INT AUTO_INCREMENT PRIMARY KEY, tenant_id INT NOT NULL, visitante_id INT, morador_id INT) ENGINE=InnoDB;
+CREATE TABLE sessoes_portal (id INT AUTO_INCREMENT PRIMARY KEY, tenant_id INT NULL, morador_id INT NOT NULL, token VARCHAR(255), ativo TINYINT(1) DEFAULT 1, data_expiracao DATETIME) ENGINE=InnoDB;
+CREATE TABLE registros_acesso (id INT AUTO_INCREMENT PRIMARY KEY, tenant_id INT NOT NULL, data_hora DATETIME, tipo_acesso VARCHAR(20), tipo ENUM('Morador','Visitante','Prestador') NOT NULL, placa VARCHAR(10), nome_visitante VARCHAR(200), documento_visitante VARCHAR(30), morador_id INT, dependente_id INT, unidade_destino VARCHAR(50), status VARCHAR(20), liberado TINYINT, usuario_liberou VARCHAR(100), observacao TEXT, modo_registro VARCHAR(20)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

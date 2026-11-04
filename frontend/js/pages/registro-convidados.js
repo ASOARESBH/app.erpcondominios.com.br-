@@ -17,8 +17,12 @@ const ORIGEM_LABELS = {
     WHATSAPP: 'WhatsApp',
     PRESENCIAL: 'Presencial',
     ADMINISTRATIVO: 'Administrativo',
-    PORTAL_MORADOR: 'Portal do morador'
+    PORTAL_MORADOR: 'Portal do morador',
+    APP_MORADOR: 'App do morador'
 };
+
+/** Origens geradas pelo pré-cadastro do morador (Portal/App) — definidas pelo servidor, nunca escolhidas no painel. */
+const ORIGENS_MORADOR = ['PORTAL_MORADOR', 'APP_MORADOR'];
 
 const STATUS_LABELS = {
     PREVISTO: 'Previsto',
@@ -38,7 +42,7 @@ const state = {
     root: null,
     selectedDate: '',
     activeTab: 'manual',
-    filters: { unidade: '', tipo: '', status: '', busca: '' },
+    filters: { unidade: '', tipo: '', status: '', busca: '', origem: '' },
     guests: [],
     summary: {},
     listController: null,
@@ -150,6 +154,17 @@ function typeLabel(type) {
 function originLabel(origin) {
     const key = String(origin || '').toUpperCase();
     return ORIGEM_LABELS[key] || String(origin || '—');
+}
+
+function isResidentPreRegistration(guest) {
+    return ORIGENS_MORADOR.includes(String(guest?.origem_cadastro || '').toUpperCase());
+}
+
+/** Origem com destaque para pré-cadastros feitos pelo morador (adiantam a portaria). */
+function originCell(guest) {
+    const label = esc(originLabel(guest?.origem_cadastro));
+    if (!isResidentPreRegistration(guest)) return label;
+    return `<span class="guest-author-badge morador" title="Pré-cadastro feito pelo próprio morador">Pré-cadastro</span> <span>${label}</span>`;
 }
 
 function authorTypeLabel(type) {
@@ -429,7 +444,7 @@ function renderGuestRows(guests) {
             <td>${esc(formatDateOnly(guest.data_prevista_chegada))}</td>
             <td>${esc(permanenceLabel(guest))}</td>
             <td>${esc(entriesLabel(guest))}</td>
-            <td>${esc(originLabel(guest.origem_cadastro))}</td>
+            <td>${originCell(guest)}</td>
             <td class="guest-author-cell">${guestAuthor(guest)}</td>
             <td>${statusBadge(statusOf(guest))}</td>
             <td>${actionButtons(guest)}</td>
@@ -448,7 +463,7 @@ function renderGuestRows(guests) {
                 <div><dt>Chegada prevista</dt><dd>${esc(formatDateOnly(guest.data_prevista_chegada))}</dd></div>
                 <div><dt>Permanência</dt><dd>${esc(permanenceLabel(guest))}</dd></div>
                 <div><dt>Entradas</dt><dd>${esc(entriesLabel(guest))}</dd></div>
-                <div><dt>Origem</dt><dd>${esc(originLabel(guest.origem_cadastro))}</dd></div>
+                <div><dt>Origem</dt><dd>${originCell(guest)}</dd></div>
             </dl>
             <div class="guest-card-author">${guestAuthor(guest)}</div>
             <div class="guest-card-actions">${Number.isFinite(id) ? actionButtons(guest) : ''}</div>
@@ -781,9 +796,24 @@ function ensureOption(select, value, label = value) {
     select.value = String(value);
 }
 
+/**
+ * Pré-cadastro do morador: a origem é exibida, mas não pode ser alterada pela portaria
+ * (o servidor também a preserva). Para convites do painel, o select volta ao normal.
+ */
+function setOriginLocked(origin) {
+    const select = byId('convidadoOrigem');
+    if (!select) return;
+    [...select.options].filter(option => ORIGENS_MORADOR.includes(option.value)).forEach(option => option.remove());
+    const locked = ORIGENS_MORADOR.includes(String(origin || '').toUpperCase());
+    select.disabled = locked;
+    select.title = locked ? 'Origem definida pelo pré-cadastro do morador' : '';
+    if (locked) ensureOption(select, origin, originLabel(origin));
+}
+
 function resetForm() {
     const form = byId('formConvidado');
     if (form) form.reset();
+    setOriginLocked('');
     state.editingId = null;
     const title = byId('convidadoModalTitle');
     if (title) title.textContent = 'Novo Convidado';
@@ -848,7 +878,8 @@ async function openEditGuest(id) {
         setFormValue('convidadoDias', guest.dias_permanencia || 1);
         const limit = guest.limite_entradas === null || typeof guest.limite_entradas === 'undefined' ? 'INDETERMINADO' : Number(guest.limite_entradas) === 1 ? 'UNICO' : `MULTIPLO_${guest.limite_entradas}`;
         setFormValue('convidadoModalidade', limit);
-        setFormValue('convidadoOrigem', guest.origem_cadastro || 'ADMINISTRATIVO');
+        setOriginLocked(guest.origem_cadastro);
+        if (!isResidentPreRegistration(guest)) setFormValue('convidadoOrigem', guest.origem_cadastro || 'ADMINISTRATIVO');
         setFormValue('convidadoObservacao', guest.observacao || '');
         setFormValue('convidadoId', id);
         setFormValue('convidadoVisitanteId', guest.visitante_id || '');
@@ -1118,6 +1149,7 @@ function setupEvents() {
     listen(byId('filtroConvidadosTipo'), 'change', event => { state.filters.tipo = event.target.value; scheduleList(); });
     listen(byId('filtroConvidadosStatus'), 'change', event => { state.filters.status = event.target.value; scheduleList(); });
     listen(byId('filtroConvidadosBusca'), 'input', event => { state.filters.busca = event.target.value; scheduleList(); });
+    listen(byId('filtroConvidadosOrigem'), 'change', event => { state.filters.origem = event.target.value; scheduleList(); });
     listen(byId('formConvidado'), 'submit', submitGuest);
     listen(byId('formCancelarConvidado'), 'submit', submitCancel);
     listen(byId('convidadoUnidade'), 'change', event => { void loadMoradores(event.target.value); });
@@ -1176,7 +1208,7 @@ export function destroy() {
     state.root = null;
     state.guests = [];
     state.summary = {};
-    state.filters = { unidade: '', tipo: '', status: '', busca: '' };
+    state.filters = { unidade: '', tipo: '', status: '', busca: '', origem: '' };
     state.permissionsReady = false;
     state.unitsPromise = null;
     state.initialized = false;

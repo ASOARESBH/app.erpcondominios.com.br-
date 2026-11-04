@@ -89,7 +89,10 @@ Em acesso de Dependente, a API confirma em qualquer movimento que o dependente p
 - Familiar significa parente visitante sem residência na unidade; não substitui o fluxo de Dependente. Entregador Autorizado e Familiar seguem o fluxo de Visitante/Prestador para cadastro, documento, destino e ocupantes.
 - O cadastro completo de Visitante pode ser realizado na chegada e segue as mesmas regras de campos/anexos configuradas em Sistema > Visitantes; a política nunca é duplicada ou afrouxada pela Lista de Convidados.
 - Entregador Autorizado e Familiar são tipos distintos em `registros_acesso`; precisam permanecer selecionáveis nos filtros simples/ramificados, contadores e exportações (CSV/PDF) e no histórico do Portal do Morador, sempre dentro do tenant autenticado.
-
+- **Pré-cadastro pelo morador (2026-11-04)**: o morador cadastra convidados no Portal do Morador e no app (menu **Convidados**) com os mesmos campos e regras da portaria. A origem é preenchida automaticamente (`PORTAL_MORADOR`/`APP_MORADOR`) e a autoria é `MORADOR`; morador e unidade vêm da sessão. O convite aparece na aba Convidados da portaria, que segue o fluxo normal de entrada/saída.
+- O morador vê todos os convites em que é anfitrião (inclusive os criados pela portaria), mas só edita os que ele próprio cadastrou; pode cancelar qualquer convite PREVISTO dele (motivo obrigatório). A portaria pode editar pré-cadastros, sem alterar a origem.
+- Antes de cadastrar, o morador é avisado se houver alerta ativo da própria unidade que afete a entrada (ex.: "não receber visitas"); a portaria continua seguindo o alerta na chegada.
+- Limite de 100 pré-cadastros PREVISTO por morador.
 
 ## 12. Alertas da Unidade
 

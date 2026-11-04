@@ -56,3 +56,7 @@ export function destroy() {
 
 - A barra da Lista de Moradores combina busca textual, unidade e ordenação sem botão de envio: texto usa debounce de 350 ms, unidade/ordenação são imediatas e o botão Limpar restaura nome crescente e lista completa. As opções de unidade são deduplicadas e ordenadas naturalmente no frontend.
 - A lista paginada envia `unidade_exata=1` apenas junto ao filtro de unidade. Requisições anteriores são abortadas e a sequência garante que apenas a última resposta atualize o DOM. Busca, unidade, ordenação e página ficam na querystring para restauração no refresh; após mutações, recarrega a mesma posição, recuando se a página removida ficar fora do total.
+
+## 8. Convidados (Portal do Morador e painel)
+- Portal: aba `convidados` em `frontend/portal_morador.html` (botão em `#mainNav`, item `#mmi-convidados`, `ABAS_INFO`, loader `convidadosInicializar`). Painel `#panel-convidados` com formulário (visitante da unidade opcional, máscara/validação de CPF, prévia da validade), lista Ativos/Histórico com paginação "Carregar mais", modais `#modalConvidadoCancelar` e `#modalConvidadoDetalhe`. Estado em `ConvidadosPortal`; CSS com prefixo `.conv-`.
+- Painel: `frontend/js/pages/registro-convidados.js` — `ORIGENS_MORADOR`, `originCell()` (selo "Pré-cadastro"), `setOriginLocked()` (origem travada ao editar pré-cadastro), filtro `#filtroConvidadosOrigem` em `frontend/pages/registro.html`.

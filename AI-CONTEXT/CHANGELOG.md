@@ -2,6 +2,20 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.21] - 2026-11-04
+### Adicionado
+- **Convidados — pré-cadastro do morador (Portal do Morador + aplicativo)**: nova aba/tela **CONVIDADOS** no `frontend/portal_morador.html` e no app Flutter (`lib/presentation/screens/guests/guests_screen.dart`, rota `/home/guests`, item no menu lateral e card no início). O morador cadastra o convidado com os mesmos campos da Lista de Convidados (anfitrião morador/dependente, visitante já cadastrado da unidade ou CPF/RG + nome, tipo Visitante/Prestador/Entregador autorizado/Familiar, data prevista, dias de permanência, entradas únicas/múltiplas/livres, observação). O convite cai na tabela `convidados` e aparece imediatamente em **Registro > Convidados** para a portaria.
+- Novo endpoint `api/api_portal_convidados.php` (Bearer `sessoes_portal`): `opcoes`, `listar` (`filtro=ativos|historico`), `obter`, `verificar_alertas`, `criar`, `editar`, `cancelar`. Morador, unidade, tenant e **origem** são definidos pelo servidor: `PORTAL_MORADOR` (portal) ou `APP_MORADOR` (`canal=app`); autoria `cadastrado_por_tipo=MORADOR`.
+- Novo helper `api/helpers/convidados_core_helper.php`: validação, normalização, duplicidade, idempotência e persistência (`convidados_dados_entrada`, `convidados_persistir_novo`, `convidados_atualizar_existente`, `convidados_cancelar_existente`) compartilhados entre painel e portal/app — regra única, sem duplicação.
+- Migration `sql/migration_convidados_pre_cadastro_morador_mysql57.sql` (idempotente): acrescenta `APP_MORADOR` ao ENUM `convidados.origem_cadastro` e o índice `idx_conv_tenant_autor_morador`. Sem ela, o app grava `PORTAL_MORADOR` (detecção do ENUM em tempo de execução) — nada quebra.
+- Painel (Registro > Convidados): selo **Pré-cadastro** na origem, filtro **Origem** (inclui "Pré-cadastro do morador (Portal/App)", `GET listar&origem=MORADOR`), contador `resumo.pre_cadastros_morador`; na edição de um pré-cadastro a origem fica travada e é preservada pelo servidor.
+- Testes de integração versionados em `tests/convidados_pre_cadastro/` (65 casos).
+### Corrigido
+- **Lista de Convidados do painel retornava HTTP 500 ao listar**: `convidados_sql_base()` declarava `array &$tipos`, mas recebia a string de tipos do `bind_param` → `TypeError` em toda chamada de `GET api_convidados.php?acao=listar`. Assinatura corrigida para `&$tipos`. Sem a correção, a portaria não veria nenhum convite (nem os pré-cadastros do morador).
+- Edição de convite criado pelo morador no painel falharia: o select de origem do painel não possuía `PORTAL_MORADOR` e a API recusava a origem. Agora a origem do morador é preservada.
+### Segurança
+- Morador só lista/obtém/edita/cancela convites com `morador_id` = sessão; edita apenas os que ele mesmo cadastrou (convites da portaria são somente cancelamento); visitante vinculado precisa pertencer à unidade (`pvu_condicao_visitante_unidade`); documento completo só retorna ao próprio autor; `verificar_alertas` do portal devolve somente alertas da própria unidade (alertas de outra unidade que casam pelo documento não são expostos); limite de 100 pré-cadastros PREVISTO por morador (HTTP 429).
+
 ## [2.1.20] - 2026-11-04
 ### Corrigido
 - **App/Portal do Morador — Visitantes por Gleba**: `GET api/api_portal_morador.php?action=visitantes` filtrava `morador_id = morador da sessão`, ocultando visitantes cadastrados por outros moradores da mesma unidade e visitantes da base geral autorizados para a Gleba. A lista agora usa o escopo da unidade do morador autenticado (moradores ativos da mesma unidade, mesmo tenant), por `morador_id`, `cadastrado_por_morador_id` ou autorização em `acessos_visitantes`. Novo helper `api/helpers/portal_visitantes_unidade_helper.php`.

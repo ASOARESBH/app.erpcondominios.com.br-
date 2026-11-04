@@ -64,3 +64,9 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - Consultas e gravações de alertas, alvos, convites, registros e acionamentos devem permanecer no mesmo tenant. Documentos são normalizados para comparação e mascarados nos logs/listagens; a ciência guarda somente documento mascarado.
 - Tokens de ciência são opacos, contextualizados, de uso único e revalidados sob transação. Não aceitar decisão, alerta ou supervisor escolhidos pelo cliente sem validação server-side/RBAC.
 - Entradas falham fechadas se as tabelas requeridas da migration estiverem ausentes, retornando `MIGRATION_ALERTAS_PENDENTE`; não liberar acesso por fallback sem política carregada. QR do Portal deve enviar Bearer e só pode consultar/alterar recursos do próprio tenant/morador.
+
+## 8. Convidados — escopo do morador (Portal/App)
+- `api/api_portal_convidados.php` exige Bearer válido de `sessoes_portal` com morador ativo; tenant, morador e unidade vêm da sessão. `morador_id`, `unidade` e `origem_cadastro` do payload são ignorados.
+- Toda consulta filtra `tenant_id` + `morador_id` da sessão (outro morador ou outro condomínio recebe 404). Visitante vinculado precisa pertencer à unidade (`pvu_condicao_visitante_unidade`); dependente precisa pertencer ao morador.
+- Documento completo só é devolvido ao próprio autor do convite; listas usam documento mascarado. `verificar_alertas` não expõe alertas de outras unidades.
+- Proteção contra abuso: máximo de 100 convites PREVISTO por morador (429) e chave de idempotência.

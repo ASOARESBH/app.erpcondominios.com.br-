@@ -45,6 +45,7 @@ A aba Lista de Convidados é parte da rota SPA `registro` e usa `api/api_convida
 
 Os tipos `Entregador Autorizado` e `Familiar` são categorias próprias nos registros e estão incluídos nos filtros/contadores de `relatorios`, CSV, PDFs gerais/ramificados e ranking, além do histórico do Portal do Morador.
 
+Pré-cadastro do morador: aba **Convidados** no Portal do Morador e tela **Convidados** no app, via `api/api_portal_convidados.php`. Regras compartilhadas em `api/helpers/convidados_core_helper.php`.
 
 ## 9. Alertas da Unidade
 

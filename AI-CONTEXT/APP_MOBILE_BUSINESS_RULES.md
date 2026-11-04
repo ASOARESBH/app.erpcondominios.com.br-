@@ -21,6 +21,7 @@ Todas as respostas seguem o padrão `{sucesso, mensagem, dados}` (ver [API.md](A
 | Controle de Acesso (histórico) | `endpointPortal` | `api_portal_morador.php` | `action=controle_acesso` (`limite`, `tipo`, `data_inicio`, `data_fim`) |
 | Acessos (gerar/revogar QR) | `endpointAcessos` | `api_acessos_visitantes.php` | GET lista por `morador_id`; POST cria; DELETE `id`; QR gerado client-side apontando para `action=gerar_qrcode&id=` |
 | Dependentes | `endpointDependentes` | `api_portal_dependentes.php` | `action=listar` / `action=criar` / `action=excluir` |
+| Convidados | `endpointConvidados` | `api_portal_convidados.php` | `acao=opcoes` / `listar` (`filtro`, `pagina`) / `obter&id=` / POST `verificar_alertas`, `criar`, `editar`, `cancelar` — sempre com `canal=app` |
 | Hidrômetro (somente leitura) | `endpointHidrometro` | `api_morador_hidrometro.php` | GET sem parâmetros — retorna `{hidrometro, leituras}` |
 | Documentos | `endpointDocumentos` | `api_portal_documentos.php` | ⚠ ver bug documentado em `DEBUG_DOCUMENTOS_PORTAL_VAZIO_20260813.md` |
 | Projetos (somente leitura) | `endpointProjetos` | `api_portal_projetos.php` | `acao=listar` / `acao=detalhe&id=` |
@@ -119,3 +120,8 @@ Desde 2026-11-04 a lista mostra **todos os visitantes da Gleba** do morador aute
 **Vigilante/Rondas** (`employee_vigilante_screen.dart`): o atalho abre uma tela-hub. O botão principal reutiliza o scanner genérico e aceita somente token QR hexadecimal de 64 caracteres. Após a validação, um diálogo apresenta ponto, local, rota, janela e instruções. O colaborador confirma antes de gravar. Caso o e-mail da sessão não esteja associado de forma única a `rh_colaboradores`, a API oferece as opções opacas de vigilante vinculadas à rota; o app não recebe nem envia ID de colaborador cru.
 
 O resultado mostra SLA em verde para `no_prazo` e laranja para `atrasado`, incluindo atraso em minutos. Erros do backend — QR de outro condomínio, rota fora do dia/janela, vínculo ausente e duplicidade do mesmo ponto no ciclo — são exibidos textualmente. A tela mantém o histórico de hoje e permite atualização por pull-to-refresh. Não há GPS na primeira versão; a ausência de localização não impede o registro.
+
+## 6. Convidados (pré-cadastro do morador) — app
+- Arquivos: `lib/domain/entities/guest_entity.dart`, `lib/data/datasources/remote/guests_remote_datasource.dart`, `lib/presentation/screens/guests/guests_screen.dart`; rota `AppRoutes.guests` (`/home/guests`); item "Convidados" no drawer e card no Dashboard.
+- O datasource envia `canal=app` em todas as chamadas: o servidor grava a origem `APP_MORADOR` (ou `PORTAL_MORADOR` se a migration do ENUM não foi aplicada). O app nunca envia morador, unidade ou origem.
+- Tela: chips Ativos/Histórico com contadores, cards (status, período, entradas usadas, anfitrião, origem/autoria), detalhe com entradas/saídas da portaria, editar (só cadastros próprios PREVISTO), cancelar com motivo. Formulário em bottom sheet com visitante já cadastrado da unidade (opcional), validação de CPF, data/dias com prévia da validade, entradas (único/2–10/livres) e aviso de alerta ativo da unidade antes de criar. Idempotência via `uuid` v4 por envio.

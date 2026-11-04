@@ -1674,6 +1674,46 @@
         }
 
         /* ============================================================
+           CONVIDADOS — PRÉ-CADASTRO DO MORADOR (Lista de Convidados da portaria)
+           ============================================================ */
+        .conv-intro { display:flex; gap:.75rem; align-items:flex-start; margin:0 0 1rem; padding:.85rem 1rem; border-radius:var(--radius-md); background:var(--info-bg); color:var(--info-text); }
+        .conv-intro i { font-size:1.3rem; margin-top:.1rem; flex-shrink:0; }
+        .conv-intro strong { display:block; margin-bottom:.15rem; }
+        .conv-intro p { font-size:.85rem; color:inherit; margin:0; }
+        .conv-hidden { display:none !important; }
+        .conv-validade { margin:-.25rem 0 1rem; padding:.6rem .85rem; border-radius:.5rem; background:var(--bg-subtle); border:1px dashed var(--border); font-size:.86rem; color:var(--text-secondary); }
+        .conv-validade strong { color:var(--text-primary); }
+        .conv-editando { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:1rem; padding:.6rem .85rem; border-radius:.5rem; background:var(--warning-bg); color:var(--warning-text); font-size:.86rem; }
+        .conv-form-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
+        .conv-filtros { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+        .conv-filtro { display:inline-flex; align-items:center; gap:.4rem; padding:.45rem .85rem; border-radius:999px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-secondary); font-weight:600; font-size:.84rem; cursor:pointer; font-family:inherit; }
+        .conv-filtro .conv-contador { min-width:1.4rem; padding:0 .35rem; border-radius:999px; background:var(--bg-subtle); font-size:.75rem; text-align:center; }
+        .conv-filtro.active { background:var(--primary); border-color:var(--primary); color:#fff; }
+        .conv-filtro.active .conv-contador { background:rgba(255,255,255,.25); color:#fff; }
+        .conv-lista { display:grid; gap:.75rem; }
+        .conv-card { border:1px solid var(--border); border-radius:var(--radius-md); padding:1rem; background:var(--bg-card); }
+        .conv-card-header { display:flex; justify-content:space-between; gap:.75rem; align-items:flex-start; }
+        .conv-card-header h3 { font-size:1rem; line-height:1.35; overflow-wrap:anywhere; margin:0; }
+        .conv-card-header small { color:var(--text-secondary); font-size:.8rem; }
+        .conv-card-dados { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.5rem .9rem; margin:.75rem 0 0; font-size:.84rem; }
+        .conv-card-dados dt { color:var(--text-muted); font-size:.74rem; text-transform:uppercase; letter-spacing:.02em; }
+        .conv-card-dados dd { margin:0; color:var(--text-primary); font-weight:500; overflow-wrap:anywhere; }
+        .conv-card-footer { display:flex; justify-content:space-between; align-items:center; gap:.75rem; flex-wrap:wrap; margin-top:.85rem; padding-top:.75rem; border-top:1px solid var(--border); font-size:.8rem; color:var(--text-secondary); }
+        .conv-card-actions { display:flex; gap:.45rem; flex-wrap:wrap; margin-left:auto; }
+        .conv-origem { display:inline-flex; align-items:center; gap:.3rem; }
+        .conv-mais { display:flex; justify-content:center; margin-top:1rem; }
+        .conv-mov { list-style:none; padding:0; margin:.5rem 0 0; display:grid; gap:.4rem; }
+        .conv-mov li { display:flex; justify-content:space-between; gap:.75rem; padding:.5rem .75rem; border-radius:.5rem; background:var(--bg-subtle); font-size:.85rem; }
+        @media (max-width: 768px) {
+            .conv-card { padding:.85rem; }
+            .conv-card-header { flex-direction:column; }
+            .conv-card-actions { width:100%; margin-left:0; }
+            .conv-card-actions .btn { flex:1; }
+            .conv-form-actions .btn { flex:1; }
+        }
+
+
+        /* ============================================================
            PRINT
            ============================================================ */
         @media print {
@@ -1738,6 +1778,10 @@
         <button class="nav-tab" onclick="abrirAba('dependentes', this)" aria-label="Dependentes">
             <i class="fas fa-people-arrows" aria-hidden="true"></i>
             <span>Dependentes</span>
+        </button>
+        <button class="nav-tab" onclick="abrirAba('convidados', this)" aria-label="Convidados">
+            <i class="fas fa-user-check" aria-hidden="true"></i>
+            <span>Convidados</span>
         </button>
         <button class="nav-tab" onclick="abrirAba('alertas', this)" aria-label="Meus Alertas">
             <i class="fas fa-bell" aria-hidden="true"></i>
@@ -1816,6 +1860,11 @@
             onclick="abrirAbaMobile('dependentes', 'fa-people-arrows', 'Dependentes', this)" role="menuitem">
             <i class="fas fa-people-arrows" aria-hidden="true"></i>
             <span>Dependentes</span>
+        </button>
+        <button class="mobile-menu-item" id="mmi-convidados"
+            onclick="abrirAbaMobile('convidados', 'fa-user-check', 'Convidados', this)" role="menuitem">
+            <i class="fas fa-user-check" aria-hidden="true"></i>
+            <span>Convidados</span>
         </button>
         <button class="mobile-menu-item" id="mmi-alertas"
             onclick="abrirAbaMobile('alertas', 'fa-bell', 'Meus Alertas', this)" role="menuitem">
@@ -2201,6 +2250,122 @@
             </div>
             <div id="listaDependentes">
                 <div class="empty-state"><i class="fas fa-users"></i><p>Carregando dependentes...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         ABA: CONVIDADOS — pré-cadastro do morador
+         Integra com Registro > Convidados (portaria) via api/api_portal_convidados.php.
+         Morador, unidade e origem (PORTAL_MORADOR) são definidos pelo servidor.
+         ============================================================ -->
+    <div id="panel-convidados" class="tab-panel" role="tabpanel" aria-labelledby="mmi-convidados">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-header-icon"><i class="fas fa-user-check" aria-hidden="true"></i></div>
+                <div>
+                    <h2 id="convFormTitulo">Pré-cadastrar Convidado</h2>
+                    <p>Adiante a portaria: seu convidado já aparece na Lista de Convidados.</p>
+                </div>
+            </div>
+            <div class="conv-intro" role="note">
+                <i class="fas fa-door-open" aria-hidden="true"></i>
+                <div>
+                    <strong>Como funciona</strong>
+                    <p>Cadastre quem você espera. Na chegada, a portaria confere o documento e registra a entrada dentro do período e do número de entradas que você definiu.</p>
+                </div>
+            </div>
+            <form id="formConvidado" onsubmit="convidadosSalvar(event)" novalidate>
+                <div id="convFormFeedback" class="alert alert-error" role="alert" aria-live="polite"></div>
+                <div id="convEditando" class="conv-editando conv-hidden">
+                    <span><i class="fas fa-pen" aria-hidden="true"></i> Editando o convite de <strong id="convEditandoNome"></strong></span>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="convidadosLimparFormulario()">Cancelar edição</button>
+                </div>
+                <input type="hidden" id="convId" value="">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="convAnfitriao">Convidado de *</label>
+                        <select id="convAnfitriao" required onchange="convidadosAtualizarAnfitriao()">
+                            <option value="MORADOR">Mim (titular)</option>
+                            <option value="DEPENDENTE">Um dependente</option>
+                        </select>
+                    </div>
+                    <div class="form-group conv-hidden" id="convDependenteGroup">
+                        <label for="convDependente">Dependente *</label>
+                        <select id="convDependente"><option value="">Carregando...</option></select>
+                    </div>
+                    <div class="form-group" id="convVisitanteGroup">
+                        <label for="convVisitante">Visitante já cadastrado</label>
+                        <select id="convVisitante" onchange="convidadosAtualizarVisitante()">
+                            <option value="">Informar os dados manualmente</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="convTipo">Tipo *</label>
+                        <select id="convTipo" required><option value="VISITANTE">Visitante</option></select>
+                    </div>
+                </div>
+                <div class="form-grid" id="convDadosPessoa">
+                    <div class="form-group">
+                        <label for="convTipoDocumento">Documento *</label>
+                        <select id="convTipoDocumento" onchange="convidadosAplicarMascaraDocumento()">
+                            <option value="CPF">CPF</option>
+                            <option value="RG">RG</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="convDocumento">Número do documento *</label>
+                        <input type="text" id="convDocumento" maxlength="20" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" oninput="convidadosAplicarMascaraDocumento()">
+                    </div>
+                    <div class="form-group">
+                        <label for="convNome">Nome completo *</label>
+                        <input type="text" id="convNome" maxlength="200" autocomplete="off" placeholder="Nome do convidado">
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="convData">Data prevista de chegada *</label>
+                        <input type="date" id="convData" required onchange="convidadosAtualizarValidade()">
+                    </div>
+                    <div class="form-group">
+                        <label for="convDias">Dias de permanência *</label>
+                        <input type="number" id="convDias" min="1" max="365" value="1" required inputmode="numeric" oninput="convidadosAtualizarValidade()">
+                    </div>
+                    <div class="form-group">
+                        <label for="convEntradas">Entradas permitidas *</label>
+                        <select id="convEntradas" required><option value="UNICO|1">Acesso único</option></select>
+                    </div>
+                </div>
+                <div class="conv-validade" id="convValidade" aria-live="polite"></div>
+                <div class="form-group">
+                    <label for="convObservacao">Observação para a portaria (opcional)</label>
+                    <textarea id="convObservacao" rows="2" maxlength="500" placeholder="Ex.: chega de carro, trazer encomenda até o apartamento..."></textarea>
+                </div>
+                <div class="conv-form-actions">
+                    <button type="submit" class="btn btn-primary" id="btnSalvarConvidado">
+                        <i class="fas fa-user-plus" aria-hidden="true"></i> <span>Cadastrar convidado</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-header-icon"><i class="fas fa-list-check" aria-hidden="true"></i></div>
+                <div>
+                    <h2>Meus Convidados</h2>
+                    <p>Convites da sua unidade, inclusive os registrados pela portaria</p>
+                </div>
+            </div>
+            <div class="conv-filtros" role="tablist" aria-label="Filtrar convidados">
+                <button type="button" class="conv-filtro active" data-conv-filtro="ativos" role="tab" aria-selected="true" onclick="convidadosFiltrar('ativos')">Ativos <span class="conv-contador" id="convContAtivos">0</span></button>
+                <button type="button" class="conv-filtro" data-conv-filtro="historico" role="tab" aria-selected="false" onclick="convidadosFiltrar('historico')">Histórico <span class="conv-contador" id="convContHistorico">0</span></button>
+            </div>
+            <div id="convLista" class="conv-lista" aria-live="polite">
+                <div class="empty-state"><i class="fas fa-user-check"></i><p>Carregando convidados...</p></div>
+            </div>
+            <div class="conv-mais conv-hidden" id="convMais">
+                <button type="button" class="btn btn-secondary" onclick="convidadosCarregar(true)">Carregar mais</button>
             </div>
         </div>
     </div>
@@ -2768,6 +2933,38 @@
 <!-- ================================================================
      MODAL: NOVO CHAMADO (Ordem de Serviço pelo Portal)
      ================================================================ -->
+<!-- Convidados: cancelar convite -->
+<div class="modal-overlay" id="modalConvidadoCancelar" role="dialog" aria-modal="true" aria-labelledby="modalConvidadoCancelarTitle">
+    <div class="modal" style="max-width:min(480px, 100%);">
+        <div class="modal-header">
+            <h3 class="modal-title" id="modalConvidadoCancelarTitle"><i class="fas fa-ban"></i> Cancelar convite</h3>
+            <button class="modal-close" onclick="convidadosFecharModal('modalConvidadoCancelar')" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom:.75rem;">Cancelar o convite de <strong id="convCancelarNome"></strong>? A portaria deixará de liberar a entrada por este convite.</p>
+            <div class="form-group">
+                <label for="convCancelarMotivo">Motivo *</label>
+                <textarea id="convCancelarMotivo" rows="2" maxlength="255" placeholder="Ex.: visita desmarcada"></textarea>
+            </div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" onclick="convidadosFecharModal('modalConvidadoCancelar')">Voltar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarCancelarConvidado" onclick="convidadosConfirmarCancelamento()"><i class="fas fa-ban"></i> Cancelar convite</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Convidados: detalhes e movimentações -->
+<div class="modal-overlay" id="modalConvidadoDetalhe" role="dialog" aria-modal="true" aria-labelledby="modalConvidadoDetalheTitle">
+    <div class="modal" style="max-width:min(560px, 100%);">
+        <div class="modal-header">
+            <h3 class="modal-title" id="modalConvidadoDetalheTitle"><i class="fas fa-user-check"></i> Detalhes do convite</h3>
+            <button class="modal-close" onclick="convidadosFecharModal('modalConvidadoDetalhe')" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="modal-body" id="convDetalheConteudo"></div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modalNovaOS" role="dialog" aria-modal="true" aria-labelledby="modalNovaOSTitle">
     <div class="modal" style="max-width:min(560px, 100%);">
         <div class="modal-header">
@@ -3217,6 +3414,7 @@ function abrirAba(aba, btnEl) {
         visitantes:  () => carregarVisitantes(),
         acessos:     () => { carregarVisitantesSelect(); carregarAcessos(); },
         dependentes: carregarDependentes,
+        convidados:  convidadosInicializar,
         alertas:     alertasInicializar,
         protocolos:  () => carregarProtocolos(''),
         hidrometro:  carregarHidrometro,
@@ -3295,6 +3493,7 @@ const ABAS_INFO = {
     visitantes:  { icon: 'fa-users',         label: 'Visitantes'  },
     acessos:     { icon: 'fa-qrcode',        label: 'Acessos'     },
     dependentes: { icon: 'fa-people-arrows', label: 'Dependentes' },
+    convidados:  { icon: 'fa-user-check',    label: 'Convidados'  },
     alertas:     { icon: 'fa-bell',          label: 'Meus Alertas' },
     protocolos:  { icon: 'fa-box',           label: 'Protocolos'  },
     hidrometro:  { icon: 'fa-tint',          label: 'Hidrômetro'  },
@@ -6444,6 +6643,469 @@ async function alertasSalvar(event) {
                 : '<i class="fas fa-bell" aria-hidden="true"></i> Criar alerta';
         }
     }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   CONVIDADOS — pré-cadastro do morador
+   API: /api/api_portal_convidados.php (token Bearer do portal).
+   O servidor define morador, unidade, origem (PORTAL_MORADOR) e autoria.
+   ────────────────────────────────────────────────────────────────── */
+const ConvidadosPortal = {
+    API: window.location.origin + '/api/api_portal_convidados.php',
+    opcoes: null,
+    filtro: 'ativos',
+    pagina: 1,
+    totalPaginas: 1,
+    lista: [],
+    carregando: false,
+    salvando: false,
+    cancelarId: null,
+    chaveIdempotencia: null,
+    eventosPreparados: false
+};
+
+const CONV_TIPO_LABELS = { VISITANTE: 'Visitante', PRESTADOR: 'Prestador', ENTREGADOR_AUTORIZADO: 'Entregador autorizado', FAMILIAR: 'Familiar' };
+const CONV_STATUS = {
+    PREVISTO:   { label: 'Previsto',   classe: 'badge-primary' },
+    PRESENTE:   { label: 'No condomínio', classe: 'badge-success' },
+    FINALIZADO: { label: 'Finalizado', classe: 'badge-secondary' },
+    CANCELADO:  { label: 'Cancelado',  classe: 'badge-danger' },
+    EXPIRADO:   { label: 'Expirado',   classe: 'badge-warning' }
+};
+const CONV_ORIGEM_LABELS = {
+    PORTAL_MORADOR: 'Portal do morador', APP_MORADOR: 'Aplicativo',
+    EMAIL: 'Portaria (e-mail)', WHATSAPP: 'Portaria (WhatsApp)', PRESENCIAL: 'Portaria (presencial)', ADMINISTRATIVO: 'Administração'
+};
+
+async function convidadosApi(acao, options = {}, params = {}) {
+    const query = new URLSearchParams({ acao });
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') query.set(k, String(v)); });
+    const headers = Object.assign({ 'Authorization': 'Bearer ' + Portal.token }, options.headers || {});
+    const resposta = await fetch(ConvidadosPortal.API + '?' + query.toString(), Object.assign({}, options, { headers }));
+    const dados = await resposta.json().catch(() => null);
+    if (resposta.status === 401) {
+        throw new Error((dados && dados.mensagem) || 'Sessão expirada. Faça login novamente.');
+    }
+    if (!resposta.ok || !dados || !dados.sucesso) {
+        const erro = new Error((dados && dados.mensagem) || 'Não foi possível concluir a operação.');
+        erro.codigo = dados && dados.dados ? dados.dados.codigo : null;
+        erro.status = resposta.status;
+        throw erro;
+    }
+    return dados;
+}
+
+function convidadosHoje() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function convidadosFormatarData(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : '—';
+}
+
+function convidadosFormatarDataHora(valor) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(valor || ''));
+    return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : '—';
+}
+
+function convidadosNovaChave() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'conv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
+
+function convidadosFeedback(mensagem) {
+    const el = document.getElementById('convFormFeedback');
+    if (!el) return;
+    if (!mensagem) { el.classList.remove('show'); el.textContent = ''; return; }
+    el.innerHTML = '<i class="fas fa-exclamation-circle" aria-hidden="true"></i><span></span>';
+    el.querySelector('span').textContent = mensagem;
+    el.classList.add('show');
+}
+
+async function convidadosInicializar() {
+    const data = document.getElementById('convData');
+    if (data) {
+        data.min = convidadosHoje();
+        if (!data.value) data.value = convidadosHoje();
+    }
+    if (!ConvidadosPortal.opcoes) await convidadosCarregarOpcoes();
+    convidadosAtualizarValidade();
+    convidadosCarregar(false);
+}
+
+async function convidadosCarregarOpcoes() {
+    try {
+        const resposta = await convidadosApi('opcoes');
+        const op = resposta.dados || {};
+        ConvidadosPortal.opcoes = op;
+
+        const tipo = document.getElementById('convTipo');
+        tipo.innerHTML = (op.tipos || []).map(t => `<option value="${escHtml(t.valor)}">${escHtml(t.rotulo)}</option>`).join('');
+
+        const entradas = document.getElementById('convEntradas');
+        entradas.innerHTML = (op.modalidades || []).map(m =>
+            `<option value="${escHtml(m.valor + '|' + (m.limite_entradas === null ? '' : m.limite_entradas))}">${escHtml(m.rotulo)}</option>`).join('');
+
+        const dep = document.getElementById('convDependente');
+        const deps = op.dependentes || [];
+        dep.innerHTML = deps.length
+            ? '<option value="">Selecione o dependente</option>' + deps.map(d => `<option value="${d.id}">${escHtml(d.nome)}</option>`).join('')
+            : '<option value="">Nenhum dependente ativo</option>';
+        const anf = document.getElementById('convAnfitriao');
+        const optDep = anf.querySelector('option[value="DEPENDENTE"]');
+        if (optDep) optDep.disabled = deps.length === 0;
+
+        const vis = document.getElementById('convVisitante');
+        const visitantes = op.visitantes || [];
+        vis.innerHTML = '<option value="">Informar os dados manualmente</option>' +
+            visitantes.map(v => `<option value="${v.id}">${escHtml(v.nome)} — ${escHtml(v.tipo_documento)} ${escHtml(v.documento_mascarado)}</option>`).join('');
+        document.getElementById('convVisitanteGroup').classList.toggle('conv-hidden', visitantes.length === 0);
+
+        const dias = document.getElementById('convDias');
+        if (dias && op.dias_permanencia_max) dias.max = op.dias_permanencia_max;
+        const data = document.getElementById('convData');
+        if (data && op.data_minima) data.min = op.data_minima;
+    } catch (erro) {
+        convidadosFeedback(erro.message);
+    }
+}
+
+function convidadosAtualizarAnfitriao() {
+    const dependente = document.getElementById('convAnfitriao').value === 'DEPENDENTE';
+    document.getElementById('convDependenteGroup').classList.toggle('conv-hidden', !dependente);
+    if (!dependente) document.getElementById('convDependente').value = '';
+}
+
+function convidadosAtualizarVisitante() {
+    const usandoCadastro = document.getElementById('convVisitante').value !== '';
+    document.getElementById('convDadosPessoa').classList.toggle('conv-hidden', usandoCadastro);
+}
+
+function convidadosAplicarMascaraDocumento() {
+    const tipo = document.getElementById('convTipoDocumento').value;
+    const campo = document.getElementById('convDocumento');
+    if (tipo === 'CPF') {
+        campo.setAttribute('inputmode', 'numeric');
+        campo.placeholder = '000.000.000-00';
+        const d = campo.value.replace(/\D/g, '').slice(0, 11);
+        campo.value = d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
+    } else {
+        campo.setAttribute('inputmode', 'text');
+        campo.placeholder = 'Número do RG';
+        campo.value = campo.value.toUpperCase().replace(/[^0-9A-Z.\-\/ ]/g, '').slice(0, 20);
+    }
+}
+
+function convidadosCpfValido(valor) {
+    const c = String(valor || '').replace(/\D/g, '');
+    if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+    for (let t = 9; t < 11; t++) {
+        let soma = 0;
+        for (let i = 0; i < t; i++) soma += Number(c[i]) * (t + 1 - i);
+        const dv = ((soma * 10) % 11) % 10;
+        if (Number(c[t]) !== dv) return false;
+    }
+    return true;
+}
+
+function convidadosAtualizarValidade() {
+    const alvo = document.getElementById('convValidade');
+    const data = document.getElementById('convData').value;
+    const dias = parseInt(document.getElementById('convDias').value, 10);
+    if (!alvo) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !dias || dias < 1) { alvo.textContent = 'Informe a data de chegada e os dias de permanência.'; return; }
+    const [a, m, d] = data.split('-').map(Number);
+    const fim = new Date(a, m - 1, d);
+    fim.setDate(fim.getDate() + dias - 1);
+    const fimIso = fim.getFullYear() + '-' + String(fim.getMonth() + 1).padStart(2, '0') + '-' + String(fim.getDate()).padStart(2, '0');
+    alvo.innerHTML = dias === 1
+        ? `Válido somente em <strong>${convidadosFormatarData(data)}</strong>.`
+        : `Válido de <strong>${convidadosFormatarData(data)}</strong> até <strong>${convidadosFormatarData(fimIso)}</strong> (${dias} dias).`;
+}
+
+function convidadosMontarPayload() {
+    const [modalidade, limite] = document.getElementById('convEntradas').value.split('|');
+    const visitanteId = document.getElementById('convVisitante').value;
+    const payload = {
+        anfitriao_tipo: document.getElementById('convAnfitriao').value,
+        dependente_id: document.getElementById('convDependente').value || null,
+        tipo_convidado: document.getElementById('convTipo').value,
+        data_prevista_chegada: document.getElementById('convData').value,
+        dias_permanencia: parseInt(document.getElementById('convDias').value, 10) || 0,
+        modalidade_entradas: modalidade,
+        limite_entradas: limite === '' || limite === undefined ? null : parseInt(limite, 10),
+        observacao: document.getElementById('convObservacao').value.trim()
+    };
+    if (visitanteId) {
+        payload.visitante_id = parseInt(visitanteId, 10);
+    } else {
+        payload.tipo_documento = document.getElementById('convTipoDocumento').value;
+        payload.documento = document.getElementById('convDocumento').value.trim();
+        payload.nome = document.getElementById('convNome').value.trim();
+    }
+    return payload;
+}
+
+function convidadosValidar(p) {
+    if (p.anfitriao_tipo === 'DEPENDENTE' && !p.dependente_id) return 'Selecione o dependente.';
+    if (!p.visitante_id) {
+        if (!p.documento) return 'Informe o documento do convidado.';
+        if (p.tipo_documento === 'CPF' && !convidadosCpfValido(p.documento)) return 'CPF inválido. Confira os números.';
+        if (!p.nome || p.nome.length < 3) return 'Informe o nome completo do convidado.';
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.data_prevista_chegada)) return 'Informe a data prevista de chegada.';
+    if (!document.getElementById('convId').value && p.data_prevista_chegada < convidadosHoje()) return 'A data de chegada não pode estar no passado.';
+    if (p.dias_permanencia < 1 || p.dias_permanencia > 365) return 'Os dias de permanência devem estar entre 1 e 365.';
+    return null;
+}
+
+async function convidadosSalvar(evento) {
+    evento.preventDefault();
+    if (ConvidadosPortal.salvando) return;
+    convidadosFeedback('');
+    const payload = convidadosMontarPayload();
+    const erro = convidadosValidar(payload);
+    if (erro) { convidadosFeedback(erro); return; }
+
+    const id = document.getElementById('convId').value;
+    const botao = document.getElementById('btnSalvarConvidado');
+    ConvidadosPortal.salvando = true;
+    botao.disabled = true;
+    try {
+        if (!id) {
+            // Avisa sobre alertas ativos da própria unidade (ex.: "não receber visitas").
+            try {
+                const verif = await convidadosApi('verificar_alertas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const alertas = (verif.dados && verif.dados.alertas) || [];
+                if (alertas.length) {
+                    const titulos = alertas.map(a => '• ' + a.titulo).join('\n');
+                    const seguir = window.confirm('Há alerta ativo na sua unidade que pode impedir esta entrada:\n\n' + titulos + '\n\nA portaria seguirá o alerta na chegada. Deseja cadastrar o convidado mesmo assim?');
+                    if (!seguir) return;
+                }
+            } catch (erroVerificacao) {
+                // Erro de validação (4xx) interrompe e mostra o motivo; indisponibilidade da verificação
+                // (5xx/rede) não bloqueia o cadastro — a portaria revalida os alertas na chegada.
+                if (erroVerificacao.status && erroVerificacao.status < 500) {
+                    convidadosFeedback(erroVerificacao.message);
+                    return;
+                }
+            }
+            if (!ConvidadosPortal.chaveIdempotencia) ConvidadosPortal.chaveIdempotencia = convidadosNovaChave();
+            payload.idempotency_key = ConvidadosPortal.chaveIdempotencia;
+            const resposta = await convidadosApi('criar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            mostrarAlerta(escHtml(resposta.mensagem || 'Convidado cadastrado.'), 'success');
+        } else {
+            payload.id = parseInt(id, 10);
+            const resposta = await convidadosApi('editar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            mostrarAlerta(escHtml(resposta.mensagem || 'Convidado atualizado.'), 'success');
+        }
+        convidadosLimparFormulario();
+        convidadosFiltrar('ativos');
+    } catch (erroSalvar) {
+        convidadosFeedback(erroSalvar.message);
+    } finally {
+        ConvidadosPortal.salvando = false;
+        botao.disabled = false;
+    }
+}
+
+function convidadosLimparFormulario() {
+    const form = document.getElementById('formConvidado');
+    if (form) form.reset();
+    document.getElementById('convId').value = '';
+    document.getElementById('convData').value = convidadosHoje();
+    document.getElementById('convDias').value = 1;
+    document.getElementById('convEditando').classList.add('conv-hidden');
+    document.getElementById('convFormTitulo').textContent = 'Pré-cadastrar Convidado';
+    document.querySelector('#btnSalvarConvidado span').textContent = 'Cadastrar convidado';
+    document.getElementById('convVisitante').disabled = false;
+    ConvidadosPortal.chaveIdempotencia = null;
+    convidadosFeedback('');
+    convidadosAtualizarAnfitriao();
+    convidadosAtualizarVisitante();
+    convidadosAplicarMascaraDocumento();
+    convidadosAtualizarValidade();
+}
+
+function convidadosFiltrar(filtro) {
+    ConvidadosPortal.filtro = filtro;
+    document.querySelectorAll('[data-conv-filtro]').forEach(b => {
+        const ativo = b.dataset.convFiltro === filtro;
+        b.classList.toggle('active', ativo);
+        b.setAttribute('aria-selected', ativo ? 'true' : 'false');
+    });
+    convidadosCarregar(false);
+}
+
+async function convidadosCarregar(maisPaginas) {
+    if (ConvidadosPortal.carregando) return;
+    const lista = document.getElementById('convLista');
+    ConvidadosPortal.carregando = true;
+    if (!maisPaginas) {
+        ConvidadosPortal.pagina = 1;
+        ConvidadosPortal.lista = [];
+        lista.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Carregando convidados...</p></div>';
+    } else {
+        ConvidadosPortal.pagina += 1;
+    }
+    try {
+        const resposta = await convidadosApi('listar', {}, { filtro: ConvidadosPortal.filtro, pagina: ConvidadosPortal.pagina, limite: 20 });
+        const d = resposta.dados || {};
+        ConvidadosPortal.lista = ConvidadosPortal.lista.concat(d.convidados || []);
+        ConvidadosPortal.totalPaginas = d.total_paginas || 1;
+        const resumo = d.resumo || {};
+        document.getElementById('convContAtivos').textContent = (resumo.previstos || 0) + (resumo.presentes || 0);
+        document.getElementById('convContHistorico').textContent = resumo.historico || 0;
+        convidadosRenderizar();
+    } catch (erro) {
+        lista.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>${escHtml(erro.message)}</p></div>`;
+    } finally {
+        ConvidadosPortal.carregando = false;
+    }
+}
+
+function convidadosEntradasTexto(c) {
+    if (c.limite_entradas === null || c.limite_entradas === undefined) return `${c.entradas_utilizadas} (livres no período)`;
+    return `${c.entradas_utilizadas} de ${c.limite_entradas}`;
+}
+
+function convidadosRenderizar() {
+    const lista = document.getElementById('convLista');
+    const itens = ConvidadosPortal.lista;
+    document.getElementById('convMais').classList.toggle('conv-hidden', ConvidadosPortal.pagina >= ConvidadosPortal.totalPaginas);
+    if (!itens.length) {
+        lista.innerHTML = ConvidadosPortal.filtro === 'ativos'
+            ? '<div class="empty-state"><i class="fas fa-user-check"></i><p>Nenhum convidado previsto. Use o formulário acima para adiantar a portaria.</p></div>'
+            : '<div class="empty-state"><i class="fas fa-history"></i><p>Nenhum convite no histórico.</p></div>';
+        return;
+    }
+    lista.innerHTML = itens.map(c => {
+        const st = CONV_STATUS[c.status_exibicao] || { label: c.status_exibicao, classe: 'badge-secondary' };
+        const periodo = c.dias_permanencia > 1
+            ? `${convidadosFormatarData(c.data_prevista_chegada)} a ${convidadosFormatarData(c.validade_fim)}`
+            : convidadosFormatarData(c.data_prevista_chegada);
+        const anfitriao = c.anfitriao_tipo === 'DEPENDENTE' ? `Dependente · ${c.anfitriao_nome || ''}` : 'Você';
+        const autor = c.cadastro_proprio ? 'Cadastrado por você' : `Registrado pela portaria${c.cadastrado_por_nome ? ' (' + c.cadastrado_por_nome + ')' : ''}`;
+        const acoes = [
+            `<button type="button" class="btn btn-secondary btn-sm" onclick="convidadosDetalhe(${c.id})"><i class="fas fa-eye"></i> Detalhes</button>`,
+            c.pode_editar ? `<button type="button" class="btn btn-secondary btn-sm" onclick="convidadosEditar(${c.id})"><i class="fas fa-pen"></i> Editar</button>` : '',
+            c.pode_cancelar ? `<button type="button" class="btn btn-danger btn-sm" onclick="convidadosAbrirCancelamento(${c.id})"><i class="fas fa-ban"></i> Cancelar</button>` : ''
+        ].join('');
+        return `<article class="conv-card">
+            <div class="conv-card-header">
+                <div><h3>${escHtml(c.nome)}</h3><small>${escHtml(CONV_TIPO_LABELS[c.tipo_convidado] || c.tipo_convidado)} · ${escHtml(c.tipo_documento)} ${escHtml(c.documento_mascarado)}</small></div>
+                <span class="badge ${st.classe}">${escHtml(st.label)}</span>
+            </div>
+            <dl class="conv-card-dados">
+                <div><dt>Período</dt><dd>${escHtml(periodo)}</dd></div>
+                <div><dt>Entradas</dt><dd>${escHtml(convidadosEntradasTexto(c))}</dd></div>
+                <div><dt>Convidado de</dt><dd>${escHtml(anfitriao)}</dd></div>
+                ${c.observacao ? `<div><dt>Observação</dt><dd>${escHtml(c.observacao)}</dd></div>` : ''}
+            </dl>
+            <div class="conv-card-footer">
+                <span class="conv-origem"><i class="fas fa-${c.cadastro_proprio ? 'user' : 'concierge-bell'}" aria-hidden="true"></i> ${escHtml(autor)} · ${escHtml(CONV_ORIGEM_LABELS[c.origem_cadastro] || c.origem_cadastro)}</span>
+                <div class="conv-card-actions">${acoes}</div>
+            </div>
+        </article>`;
+    }).join('');
+}
+
+async function convidadosEditar(id) {
+    try {
+        const resposta = await convidadosApi('obter', {}, { id });
+        const c = resposta.dados;
+        if (!c.pode_editar) { mostrarAlerta('Este convite não pode mais ser editado.', 'warning'); return; }
+        convidadosLimparFormulario();
+        document.getElementById('convId').value = c.id;
+        document.getElementById('convAnfitriao').value = c.anfitriao_tipo;
+        convidadosAtualizarAnfitriao();
+        if (c.dependente_id) document.getElementById('convDependente').value = String(c.dependente_id);
+        // Na edição os dados da pessoa ficam visíveis (o documento é revalidado pelo servidor).
+        document.getElementById('convVisitante').value = '';
+        document.getElementById('convVisitante').disabled = true;
+        convidadosAtualizarVisitante();
+        document.getElementById('convTipoDocumento').value = c.tipo_documento;
+        document.getElementById('convDocumento').value = c.documento || '';
+        convidadosAplicarMascaraDocumento();
+        document.getElementById('convNome').value = c.nome;
+        document.getElementById('convTipo').value = c.tipo_convidado;
+        document.getElementById('convData').value = c.data_prevista_chegada;
+        document.getElementById('convDias').value = c.dias_permanencia;
+        const valorEntradas = c.modalidade_entradas + '|' + (c.limite_entradas === null ? '' : c.limite_entradas);
+        document.getElementById('convEntradas').value = valorEntradas;
+        document.getElementById('convObservacao').value = c.observacao || '';
+        document.getElementById('convEditandoNome').textContent = c.nome;
+        document.getElementById('convEditando').classList.remove('conv-hidden');
+        document.getElementById('convFormTitulo').textContent = 'Editar Convidado';
+        document.querySelector('#btnSalvarConvidado span').textContent = 'Salvar alterações';
+        convidadosAtualizarValidade();
+        document.getElementById('formConvidado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (erro) {
+        mostrarAlerta(escHtml(erro.message), 'error');
+    }
+}
+
+function convidadosAbrirCancelamento(id) {
+    const c = ConvidadosPortal.lista.find(item => item.id === id);
+    ConvidadosPortal.cancelarId = id;
+    document.getElementById('convCancelarNome').textContent = c ? c.nome : '';
+    document.getElementById('convCancelarMotivo').value = '';
+    document.getElementById('modalConvidadoCancelar').classList.add('show');
+    setTimeout(() => document.getElementById('convCancelarMotivo').focus(), 50);
+}
+
+async function convidadosConfirmarCancelamento() {
+    const motivo = document.getElementById('convCancelarMotivo').value.trim();
+    if (!motivo) { document.getElementById('convCancelarMotivo').focus(); mostrarAlerta('Informe o motivo do cancelamento.', 'warning'); return; }
+    const botao = document.getElementById('btnConfirmarCancelarConvidado');
+    botao.disabled = true;
+    try {
+        const resposta = await convidadosApi('cancelar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ConvidadosPortal.cancelarId, motivo }) });
+        convidadosFecharModal('modalConvidadoCancelar');
+        mostrarAlerta(escHtml(resposta.mensagem || 'Convite cancelado.'), 'success');
+        if (String(ConvidadosPortal.cancelarId) === document.getElementById('convId').value) convidadosLimparFormulario();
+        convidadosCarregar(false);
+    } catch (erro) {
+        mostrarAlerta(escHtml(erro.message), 'error');
+    } finally {
+        botao.disabled = false;
+    }
+}
+
+async function convidadosDetalhe(id) {
+    const alvo = document.getElementById('convDetalheConteudo');
+    alvo.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Carregando...</p></div>';
+    document.getElementById('modalConvidadoDetalhe').classList.add('show');
+    try {
+        const c = (await convidadosApi('obter', {}, { id })).dados;
+        const st = CONV_STATUS[c.status_exibicao] || { label: c.status_exibicao, classe: 'badge-secondary' };
+        const movs = (c.movimentacoes || []).map(m =>
+            `<li><span><i class="fas fa-${m.tipo_acesso === 'Saída' || m.tipo_acesso === 'Saida' ? 'sign-out-alt' : 'sign-in-alt'}"></i> ${escHtml(m.tipo_acesso)}</span><span>${escHtml(convidadosFormatarDataHora(m.data_hora))}</span></li>`).join('');
+        alvo.innerHTML = `
+            <div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;">
+                <div><h3 style="margin:0;">${escHtml(c.nome)}</h3><small style="color:var(--text-secondary);">${escHtml(CONV_TIPO_LABELS[c.tipo_convidado] || c.tipo_convidado)} · ${escHtml(c.tipo_documento)} ${escHtml(c.documento_mascarado)}</small></div>
+                <span class="badge ${st.classe}">${escHtml(st.label)}</span>
+            </div>
+            <dl class="conv-card-dados">
+                <div><dt>Chegada prevista</dt><dd>${escHtml(convidadosFormatarData(c.data_prevista_chegada))}</dd></div>
+                <div><dt>Válido até</dt><dd>${escHtml(convidadosFormatarData(c.validade_fim))}</dd></div>
+                <div><dt>Entradas</dt><dd>${escHtml(convidadosEntradasTexto(c))}</dd></div>
+                <div><dt>Origem</dt><dd>${escHtml(CONV_ORIGEM_LABELS[c.origem_cadastro] || c.origem_cadastro)}</dd></div>
+                <div><dt>Cadastrado em</dt><dd>${escHtml(convidadosFormatarDataHora(c.criado_em))}</dd></div>
+                ${c.motivo_cancelamento ? `<div><dt>Motivo do cancelamento</dt><dd>${escHtml(c.motivo_cancelamento)}</dd></div>` : ''}
+            </dl>
+            <h4 style="margin:1rem 0 0;">Entradas e saídas na portaria</h4>
+            ${movs ? `<ul class="conv-mov">${movs}</ul>` : '<p style="color:var(--text-secondary);font-size:.86rem;margin:.4rem 0 0;">Nenhuma movimentação registrada ainda.</p>'}`;
+    } catch (erro) {
+        alvo.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>${escHtml(erro.message)}</p></div>`;
+    }
+}
+
+function convidadosFecharModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.remove('show');
 }
 
 /* ──────────────────────────────────────────────────────────────────

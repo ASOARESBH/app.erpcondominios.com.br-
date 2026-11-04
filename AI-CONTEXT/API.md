@@ -165,7 +165,7 @@ A data operacional é calculada no fuso `America/Sao_Paulo`. Convidados PREVISTO
 
 Antes de criar um convite, o frontend envia `POST acao=verificar_alertas` à mesma API com o formulário; o servidor resolve novamente anfitrião/unidade dentro do tenant e retorna somente resumos de alertas aplicáveis. Como o convite informa a data, não a hora, essa checagem usa 12h locais e avisa que a portaria revalidará no instante real. A confirmação não substitui nem libera a ciência exigida no Registro Manual.
 
-O POST de `api/api_registros.php` aceita `convidado_id` opcional. Se informado, bloqueia o convite, revalida tenant, documento, tipo, anfitrião, status, validade e limite de entradas, alterna Entrada/Saída e grava a movimentação no mesmo transaction do acesso. Uma falha de negócio desfaz ambos os registros; uma falha técnica não expõe erro SQL ao cliente. O módulo SPA é composto por `frontend/pages/registro.html`, `frontend/js/pages/registro.js`, `frontend/js/pages/registro-convidados.js` e `assets/css/pages/registro.css`; o aplicativo Flutter permanece fora do escopo, enquanto o Portal do Morador aceita filtrar o histórico pelos novos tipos.
+O POST de `api/api_registros.php` aceita `convidado_id` opcional. Se informado, bloqueia o convite, revalida tenant, documento, tipo, anfitrião, status, validade e limite de entradas, alterna Entrada/Saída e grava a movimentação no mesmo transaction do acesso. Uma falha de negócio desfaz ambos os registros; uma falha técnica não expõe erro SQL ao cliente. O módulo SPA é composto por `frontend/pages/registro.html`, `frontend/js/pages/registro.js`, `frontend/js/pages/registro-convidados.js` e `assets/css/pages/registro.css`; o Portal do Morador e o aplicativo Flutter fazem o pré-cadastro de convidados por `api/api_portal_convidados.php` (ver §18), e o Portal aceita filtrar o histórico pelos novos tipos.
 
 Os novos tipos `Entregador Autorizado` e `Familiar` são aceitos pela escrita e pelos filtros do GET principal; a tela de Relatórios inclui ambos nos filtros simples, ramificados, contadores, CSV, PDF geral, PDF de ocupantes e ranking. O Portal do Morador aceita esses valores no filtro do histórico. O PDF de ranking e as consultas de relatório limitam registros e joins ao tenant autenticado.
 
@@ -197,3 +197,18 @@ Os novos tipos `Entregador Autorizado` e `Familiar` são aceitos pela escrita e 
 - `DELETE ...&id=` continua restrito a `morador_id = sessão`; visitantes de outros moradores da Gleba vêm com `pode_excluir=false`.
 - `POST api/api_acessos_visitantes.php` com Bearer do portal valida o visitante com o mesmo helper (`pvu_condicao_visitante_unidade`) e exige `ativo=1`.
 - Helper: `api/helpers/portal_visitantes_unidade_helper.php` (`pvu_unidade_morador`, `pvu_condicao_visitante_unidade`, `pvu_bind`).
+
+## 18. Convidados — pré-cadastro do morador (Portal/App)
+
+`api/api_portal_convidados.php`, autenticado por Bearer de `sessoes_portal` (o tenant vem de `moradores.tenant_id` da sessão; `sessoes_portal.tenant_id`, quando existe, precisa coincidir). Ações via `acao=`:
+- `GET opcoes` → `{morador{id,nome,unidade}, dependentes[{id,nome}], visitantes[{id,nome,tipo_documento,documento_mascarado}] (somente da unidade, CPF/RG), tipos[], modalidades[{valor,rotulo,limite_entradas}], dias_permanencia_max, data_minima, limite_ativos}`.
+- `GET listar&filtro=ativos|historico|todos&pagina=&limite=` (máx. 50) → `{convidados[], resumo{previstos,presentes,historico}, total, pagina, total_paginas}`. Sem documento completo.
+- `GET obter&id=` → detalhe + `movimentacoes[{data_hora,tipo_acesso}]`; `documento` completo só quando `cadastro_proprio=true`.
+- `POST verificar_alertas` (mesmo corpo do criar) → `{verificacao_disponivel, alertas[{id,titulo,nivel,acao}], aviso}` — filtrado para a unidade do morador.
+- `POST criar` → 201 `{id, origem_cadastro, validade_fim}`; aceita `idempotency_key` (ou `X-Idempotency-Key`), repetição idêntica → 200 `idempotente=true`; mesma chave com dados diferentes → 409.
+- `POST|PUT editar` `{id,...}` → só PREVISTO e cadastrado pelo próprio morador (403 `EDICAO_NAO_PERMITIDA` para convite da portaria).
+- `POST cancelar` `{id, motivo}` → só PREVISTO do próprio morador (409 `STATUS_NAO_CANCELAVEL`).
+
+Corpo de criar/editar: `anfitriao_tipo` (MORADOR|DEPENDENTE), `dependente_id`, `visitante_id` **ou** `tipo_documento`+`documento`+`nome`, `tipo_convidado`, `data_prevista_chegada`, `dias_permanencia`, `modalidade_entradas`, `limite_entradas`, `observacao`. Campos `morador_id`, `unidade` e `origem_cadastro` enviados pelo cliente são ignorados. `canal=app` (query ou corpo) gera `APP_MORADOR`.
+
+O painel (`api/api_convidados.php`) passou a aceitar `GET listar&origem=MORADOR|EMAIL|WHATSAPP|PRESENCIAL|ADMINISTRATIVO|PORTAL_MORADOR|APP_MORADOR` e devolve `resumo.pre_cadastros_morador`. O painel continua sem poder criar com origem de morador (400). Ambos usam `api/helpers/convidados_core_helper.php`.
