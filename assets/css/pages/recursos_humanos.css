@@ -678,3 +678,65 @@
     .page-recursos-humanos .tabs-container { gap: 0; }
     .page-recursos-humanos .tab-btn { padding: 0.75rem 1rem; font-size: 0.8rem; }
 }
+
+.bh-reg-preview {
+    margin-top: 10px;
+    padding: 9px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 12px;
+}
+.bh-reg-preview.is-negative { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+.bh-reg-preview.is-positive { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
+.bh-modal-overlay {
+    position: fixed; inset: 0; z-index: 10050; display: flex;
+    align-items: center; justify-content: center; padding: 16px;
+    background: rgba(15, 23, 42, .62);
+}
+.bh-modal-content {
+    width: min(100%, 520px); padding: 22px; border-radius: 14px;
+    background: #fff; box-shadow: 0 24px 80px rgba(15,23,42,.28);
+}
+.bh-modal-content h3 { margin: 0 0 14px; color: #92400e; font-size: 17px; }
+.bh-modal-resumo { padding: 12px; border-radius: 8px; background: #f8fafc; line-height: 1.8; }
+.bh-modal-resumo .negativo { color: #dc2626; font-weight: 800; }
+.bh-modal-aviso { margin: 12px 0; color: #475569; font-size: 13px; line-height: 1.55; }
+.bh-modal-content > label:not(.bh-modal-checkbox) { display: block; margin: 10px 0 5px; color: #334155; font-size: 12px; font-weight: 700; }
+.bh-modal-content textarea { display: block; width: 100%; padding: 9px; border: 1px solid #cbd5e1; border-radius: 7px; resize: vertical; font: inherit; }
+.bh-modal-checkbox { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: #334155; font-size: 12px; }
+.bh-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.bh-tipo-desconhecido { color: #64748b; cursor: help; }
+.bh-reprocessar-content { width: min(100%, 1120px); max-height: 92vh; overflow: auto; }
+.bh-reprocessar-content h3 { color: #1e3a8a; }
+.bh-reprocessar-kpis { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 8px; margin: 12px 0; }
+.bh-reprocessar-kpi { border: 1px solid #dbeafe; border-radius: 9px; background: #eff6ff; padding: 10px 12px; }
+.bh-reprocessar-kpi span { display: block; color: #475569; font-size: 11px; }
+.bh-reprocessar-kpi strong { display: block; margin-top: 3px; color: #1e3a8a; font-size: 15px; }
+.bh-reprocessar-alertas { margin: 10px 0; color: #92400e; font-size: 12px; }
+.bh-reprocessar-alertas:empty { display: none; }
+.bh-reprocessar-progresso { min-height: 18px; margin: 8px 0; color: #475569; font-size: 12px; }
+.bh-reprocessar-tabela { max-height: 38vh; overflow: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.bh-reprocessar-tabela table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.bh-reprocessar-tabela th,.bh-reprocessar-tabela td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; white-space: nowrap; }
+.bh-reprocessar-tabela th { position: sticky; top: 0; z-index: 1; background: #f8fafc; color: #334155; }
+.bh-reprocessar-tabela tr.is-divergent { background: #fff7ed; }
+.bh-reprocessar-tabela tr.is-ignored { color: #64748b; background: #f8fafc; }
+.bh-reprocessar-tabela .bh-diff-positive { color: #15803d; font-weight: 700; }
+.bh-reprocessar-tabela .bh-diff-negative { color: #b91c1c; font-weight: 700; }
+.bh-reprocessar-tabela .bh-status { color: #475569; font-weight: 700; }
+.bh-reprocessar-tabela .bh-status-DIVERGENTE,.bh-reprocessar-tabela .bh-status-SEM_BANCO { color: #b45309; }
+.bh-reprocessar-tabela .bh-status-OK { color: #15803d; }
+.bh-reprocessar-tabela .bh-status-PERIODO_FECHADO,.bh-reprocessar-tabela .bh-status-SEM_ESCALA_BH { color: #64748b; }
+.bh-selo-desatualizado { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid #fbbf24; border-radius: 999px; background: #fffbeb; color: #92400e; font-size: 11px; font-weight: 700; }
+.bh-reprocess-historico { margin-top: 14px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+.bh-reprocess-historico summary { cursor: pointer; color: #334155; font-size: 12px; font-weight: 700; }
+.bh-reprocess-historico .table-container { max-width: 100%; overflow: auto; margin-top: 8px; }
+.bh-selo-desatualizado[role="button"],button.bh-selo-desatualizado { cursor: pointer; }
+@media (max-width: 520px) {
+    .bh-modal-content { padding: 16px; }
+    .bh-reprocessar-content { max-height: 95vh; }
+    .bh-reprocessar-tabela { max-height: 32vh; }
+    .bh-modal-actions { flex-direction: column-reverse; }
+}

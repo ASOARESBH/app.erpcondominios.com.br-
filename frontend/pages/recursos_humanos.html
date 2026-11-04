@@ -576,12 +576,34 @@
                 <i class="fas fa-piggy-bank"></i> Habilitar Banco de Horas
               </div>
               <div style="font-size:11px;color:#166534;margin-top:3px;line-height:1.5;">
-                Horas extras são creditadas no banco (máx. 2h/dia — CLT Art. 59, §2°).
+                Horas extras são apuradas integralmente por padrão. O limite diário serve como alerta; excedentes não são descartados.
                 Atrasos e faltas geram débito automático.
                 Gerencie saldo, abatimentos e pagamentos em <strong>Relatórios → Banco de Horas</strong>.
               </div>
             </div>
           </label>
+          <div style="margin:12px 0 0 26px;max-width:260px;">
+            <label for="escala-politica-extra" style="display:block;font-size:11px;font-weight:600;color:#166534;">Política de horas extras</label>
+            <select id="escala-politica-extra" style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid #bbf7d0;border-radius:6px;">
+              <option value="CREDITAR_TUDO">Creditar tudo (padrão)</option>
+              <option value="LIMITAR_E_SEPARAR">Limitar crédito e separar excedente</option>
+            </select>
+            <small style="font-size:10px;color:#166534;">O excedente separado não integra o saldo; fica visível para decisão do RH.</small>
+          </div>
+          <div style="margin:12px 0 0 26px;max-width:260px;">
+            <label for="escala-limite-extra-diario" style="display:block;font-size:11px;font-weight:600;color:#166534;">Limite diário informativo (minutos)</label>
+            <input type="number" id="escala-limite-extra-diario" min="1" max="2147483647" step="1" value="120"
+              style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid #bbf7d0;border-radius:6px;">
+            <small style="font-size:10px;color:#166534;">Acima desse limite, o dia recebe alerta; não há descarte automático.</small>
+          </div>
+          <div style="margin:12px 0 0 26px;max-width:260px;">
+            <label for="escala-limite-saldo-negativo" style="display:block;font-size:11px;font-weight:600;color:#166534;">
+              Limite de saldo devedor (minutos)
+            </label>
+            <input type="number" id="escala-limite-saldo-negativo" min="0" max="2147483647" step="1" placeholder="Sem limite"
+              style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid #bbf7d0;border-radius:6px;">
+            <small style="font-size:10px;color:#166534;">Vazio = sem limite. Ex.: 600 permite até 10h negativas.</small>
+          </div>
         </div>
 
         <!-- ── BLOCO ESCALA ALTERNADA (visível apenas quando tipo=alternada) ── -->
@@ -754,9 +776,14 @@
         </div>
         <div>
           <label>Colaborador (espelho / banco)</label>
-          <select id="rel-colaborador-id">
-            <option value="">Selecione para espelho</option>
-          </select>
+          <div style="display:flex;gap:7px;align-items:center;">
+            <select id="rel-colaborador-id" style="flex:1;min-width:160px;">
+              <option value="">Selecione para espelho</option>
+            </select>
+            <button type="button" class="btn-primary-modern" id="btn-bh-reprocessar" title="Reprocessar o banco de horas do período com a regra atual" style="display:none;white-space:nowrap;">
+              <i class="fas fa-rotate"></i> Gerar
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -822,9 +849,10 @@
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;">
-          <label style="font-size:11px;font-weight:600;color:#64748b;">Minutos</label>
-          <input type="number" id="bh-reg-minutos" min="1" placeholder="ex: 120"
+          <label style="font-size:11px;font-weight:600;color:#64748b;">Duração</label>
+          <input type="text" id="bh-reg-minutos" inputmode="numeric" autocomplete="off" placeholder="480 ou 08:00"
             style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:100px;">
+          <small style="font-size:10px;color:#64748b;">minutos ou HH:MM</small>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;">
           <label style="font-size:11px;font-weight:600;color:#64748b;">Data</label>
@@ -836,11 +864,55 @@
           <input type="text" id="bh-reg-descricao" placeholder="ex: Compensação — dia 15/06"
             style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:100%;">
         </div>
-        <button onclick="window.ModuleRH.registrarBH()"
+        <button id="btn-bh-registrar" onclick="window.ModuleRH.registrarBH()"
           style="padding:8px 18px;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;
                  border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
           <i class="fas fa-plus"></i> Registrar
         </button>
+      </div>
+      <div id="bh-reg-preview" class="bh-reg-preview" aria-live="polite" style="display:none;"></div>
+      <div id="bh-reg-pagamento-aviso" style="display:none;margin-top:8px;color:#b45309;font-size:12px;">
+        Pagamento maior que o saldo disponível. Para compensar com folga, use Abatimento.
+      </div>
+    </div>
+
+    <div id="bh-negativo-modal" class="bh-modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="bh-negativo-titulo">
+      <div class="bh-modal-content">
+        <h3 id="bh-negativo-titulo"><i class="fas fa-triangle-exclamation"></i> Confirmar saldo negativo</h3>
+        <div id="bh-negativo-resumo" class="bh-modal-resumo"></div>
+        <p id="bh-negativo-aviso" class="bh-modal-aviso"></p>
+        <label for="bh-negativo-justificativa">Justificativa da compensação antecipada *</label>
+        <textarea id="bh-negativo-justificativa" minlength="10" maxlength="500" rows="3"
+          placeholder="Descreva o motivo (mínimo de 10 caracteres)"></textarea>
+        <label class="bh-modal-checkbox">
+          <input type="checkbox" id="bh-negativo-confirmar-checkbox">
+          Confirmo o lançamento com saldo negativo
+        </label>
+        <div class="bh-modal-actions">
+          <button type="button" class="btn-secondary-modern" id="bh-negativo-cancelar">Cancelar</button>
+          <button type="button" class="btn-primary-modern" id="bh-negativo-confirmar">Confirmar abatimento</button>
+        </div>
+      </div>
+    </div>
+    <div id="bh-reprocessar-modal" class="bh-modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="bh-reprocessar-titulo">
+      <div class="bh-modal-content bh-reprocessar-content">
+        <h3 id="bh-reprocessar-titulo"><i class="fas fa-arrows-rotate"></i> Prévia — Banco de Horas</h3>
+        <p id="bh-reprocessar-subtitulo" class="bh-modal-aviso"></p>
+        <div id="bh-reprocessar-kpis" class="bh-reprocessar-kpis"></div>
+        <div id="bh-reprocessar-alertas" class="bh-reprocessar-alertas" aria-live="polite"></div>
+        <label class="bh-modal-checkbox"><input type="checkbox" id="bh-reprocessar-so-divergencias"> Mostrar somente divergências</label>
+        <label id="bh-reprocessar-fechados-wrap" class="bh-modal-checkbox" style="display:none;">
+          <input type="checkbox" id="bh-reprocessar-incluir-fechados"> Incluir períodos fechados (administrador; ação auditada)
+        </label>
+        <div id="bh-reprocessar-progresso" class="bh-reprocessar-progresso" role="status" aria-live="polite"></div>
+        <div id="bh-reprocessar-tabela" class="bh-reprocessar-tabela"></div>
+        <label for="bh-reprocessar-motivo">Motivo do reprocessamento *</label>
+        <textarea id="bh-reprocessar-motivo" minlength="10" maxlength="500" rows="3" placeholder="Explique o motivo (10–500 caracteres)"></textarea>
+        <label class="bh-modal-checkbox"><input type="checkbox" id="bh-reprocessar-revisei"> Revisei as diferenças desta prévia</label>
+        <div class="bh-modal-actions">
+          <button type="button" class="btn-secondary-modern" id="bh-reprocessar-cancelar">Cancelar</button>
+          <button type="button" class="btn-primary-modern" id="bh-reprocessar-aplicar" disabled><i class="fas fa-check"></i> Aplicar lote</button>
+        </div>
       </div>
     </div>
   </div>

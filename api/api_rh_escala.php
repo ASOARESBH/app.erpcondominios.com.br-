@@ -16,9 +16,13 @@ require_once 'error_logger.php';
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
-$allowed = ['https://app.erpcondominios.com.br','http://app.erpcondominios.com.br','https://erpcondominios.com.br','http://erpcondominios.com.br','http://localhost','http://127.0.0.1'];
-$origin  = $_SERVER['HTTP_ORIGIN'] ?? '';
-header('Access-Control-Allow-Origin: ' . (in_array($origin, $allowed) ? $origin : 'https://app.erpcondominios.com.br'));
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$origensPermitidas = ['https://app.erpcondominios.com.br','http://app.erpcondominios.com.br','https://erpcondominios.com.br','http://erpcondominios.com.br'];
+$origemLocal = preg_match('/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i', $origin) === 1;
+if ($origin !== '' && (in_array($origin, $origensPermitidas, true) || $origemLocal)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -68,122 +72,52 @@ if (!$conn) {
 
 rh_log('INFO', "Requisição recebida", ['metodo' => $metodo, 'acao' => $acao, 'ip' => $_SERVER['REMOTE_ADDR'] ?? '']);
 
-// ── Auto-migração: colunas v2 + banco_horas_ativo + ENUM tipo ────────────────
-_migrar_rh_escala($conn);
+// DDL e correções de dados são exclusivas das migrations de deploy.
+try { _migrar_rh_escala($conn); }
+catch (Throwable $e) { error_log('[RH Escala] Schema pendente; tenant='.(int)$tenant_id.'; erro='.$e->getMessage()); fechar_conexao($conn); http_response_code(503); retornar_json(false,'Estrutura de escalas pendente. Aplique as migrations RH antes de continuar.'); }
 
 function _migrar_rh_escala(mysqli $conn): void {
-    try {
-        // Verifica se a tabela existe antes de qualquer coisa
-        $check = $conn->query("SHOW TABLES LIKE 'rh_escala'");
-        if (!$check || $check->num_rows === 0) return;
+    $res=$conn->query('SHOW COLUMNS FROM rh_escala');
+    if(!$res)throw new RuntimeException('Não foi possível verificar rh_escala.');
+    $cols=[];$types=[];while($row=$res->fetch_assoc()){$cols[]=$row['Field'];if($row['Field']==='tipo')$types[]=(string)$row['Type'];}$res->free();
+    foreach(['tenant_id','colaborador_id','carga_horaria_mensal_min','descanso_interjornada_min','regime_12x36','banco_horas_ativo','limite_saldo_negativo_min','politica_extra_excedente','limite_extra_diario_min','escala_manual_semana'] as $required) if(!in_array($required,$cols,true))throw new RuntimeException('Coluna ausente: '.$required);
+    if(!$types||strpos($types[0],"'escala_manual'")===false)throw new RuntimeException('ENUM de jornada pendente.');
+}
 
-        // Colunas que devem existir (nome => DDL sem a vírgula inicial)
-        $colunas = [
-            'carga_horaria_mensal_min'  => "ADD COLUMN carga_horaria_mensal_min INT UNSIGNED DEFAULT 0",
-            'descanso_interjornada_min' => "ADD COLUMN descanso_interjornada_min INT UNSIGNED DEFAULT 0",
-            'regime_12x36'              => "ADD COLUMN regime_12x36 TINYINT(1) NOT NULL DEFAULT 0",
-            'banco_horas_ativo'         => "ADD COLUMN banco_horas_ativo TINYINT(1) NOT NULL DEFAULT 0",
-        ];
-
-        foreach ($colunas as $col => $ddl) {
-            try {
-                $r = $conn->query("SHOW COLUMNS FROM rh_escala LIKE '{$col}'");
-                if ($r && $r->num_rows === 0) {
-                    $conn->query("ALTER TABLE rh_escala {$ddl}");
-                }
-            } catch (Throwable $e) {
-                // coluna já existe ou outro erro DDL — ignora
-            }
-        }
-
-        // Migrar ENUM tipo para incluir os novos valores de jornada
-        try {
-            $colTipo = $conn->query("SHOW COLUMNS FROM rh_escala LIKE 'tipo'");
-            if ($colTipo && ($row = $colTipo->fetch_assoc())) {
-                if (strpos($row['Type'], 'jornada_44h') === false) {
-                    $conn->query(
-                        "ALTER TABLE rh_escala MODIFY COLUMN tipo " .
-                        "ENUM('livre','controle_jornada','alternada','jornada_44h','jornada_40h','jornada_36h') " .
-                        "NOT NULL DEFAULT 'livre'"
-                    );
-                }
-            }
-        } catch (Throwable $e) {
-            // tipo já atualizado ou erro DDL — ignora
-        }
-
-        // Adiciona coluna escala_manual_semana (se não existir)
-        try {
-            $r = $conn->query("SHOW COLUMNS FROM rh_escala LIKE 'escala_manual_semana'");
-            if ($r && $r->num_rows === 0) {
-                $conn->query("ALTER TABLE rh_escala ADD COLUMN escala_manual_semana TEXT NULL DEFAULT NULL");
-            }
-        } catch (Throwable $e) { }
-
-        // Adiciona 'escala_manual' ao ENUM tipo se ainda não consta
-        try {
-            $colTipo2 = $conn->query("SHOW COLUMNS FROM rh_escala LIKE 'tipo'");
-            if ($colTipo2 && ($rowT = $colTipo2->fetch_assoc())) {
-                if (strpos($rowT['Type'], 'escala_manual') === false) {
-                    $conn->query(
-                        "ALTER TABLE rh_escala MODIFY COLUMN tipo " .
-                        "ENUM('livre','controle_jornada','alternada','jornada_44h','jornada_40h','jornada_36h','escala_manual') " .
-                        "NOT NULL DEFAULT 'livre'"
-                    );
-                }
-            }
-        } catch (Throwable $e) { }
-
-        // Corrige carga_horaria_diaria_min de escalas CLT existentes que ainda usam o
-        // divisor matemático (44÷6 = 440 min) em vez das horas programadas reais.
-        // Executa apenas uma vez por registro desatualizado: recalcula a partir do horário.
-        try {
-            $resJorn = $conn->query(
-                "SELECT id, tipo, hora_entrada, hora_saida, intervalo_almoco_min, carga_horaria_diaria_min
-                 FROM rh_escala WHERE tenant_id = $tenant_id AND tipo IN ('jornada_44h','jornada_40h','jornada_36h') AND ativo = 1"
-            );
-            if ($resJorn) {
-                while ($jr = $resJorn->fetch_assoc()) {
-                    $pE = explode(':', $jr['hora_entrada'] ?? '');
-                    $pS = explode(':', $jr['hora_saida']   ?? '');
-                    if (count($pE) < 2 || count($pS) < 2) continue;
-                    $entM = intval($pE[0]) * 60 + intval($pE[1]);
-                    $saiM = intval($pS[0]) * 60 + intval($pS[1]);
-                    $intM = intval($jr['intervalo_almoco_min'] ?? 60);
-                    $calc = $saiM - $entM - $intM;
-                    if ($calc > 60 && $calc !== intval($jr['carga_horaria_diaria_min'])) {
-                        $idJ = intval($jr['id']);
-                        $conn->query("UPDATE rh_escala SET carga_horaria_diaria_min = $calc WHERE tenant_id = $tenant_id AND id = $idJ");
-                    }
-                }
-            }
-        } catch (Throwable $e) { }
-    } catch (Throwable $e) {
-        // Migração falhou (ex: tabela não existe) — continua sem interromper a requisição
-    }
+function rh_escala_exigir_rbac(mysqli $conn,string $acao):void {
+    if(function_exists('rbacTabelasDisponiveis')&&rbacTabelasDisponiveis($conn)){rbacExigir($conn,'recursos_humanos',$acao,['registro_tipo'=>'rh_escala']);return;}
+    verificarPermissao($acao==='visualizar'?'visualizador':'gerente');
 }
 
 // ── LISTAR ────────────────────────────────────────────────────────────────────
 if ($acao === 'listar') {
+    rh_escala_exigir_rbac($conn,'visualizar');
     $colab_id = intval($_GET['colaborador_id'] ?? 0);
     if ($colab_id <= 0) {
         rh_log('AVISO', 'listar: colaborador_id não informado');
         retornar_json(false, 'colaborador_id obrigatório');
     }
+    $stColab = $conn->prepare('SELECT id FROM rh_colaboradores WHERE tenant_id=? AND id=? LIMIT 1');
+    if (!$stColab) { fechar_conexao($conn); retornar_json(false, 'Não foi possível validar o colaborador.'); }
+    $stColab->bind_param('ii', $tenant_id, $colab_id);
+    if (!$stColab->execute()) { $stColab->close(); fechar_conexao($conn); retornar_json(false, 'Não foi possível validar o colaborador.'); }
+    $colabExiste = $stColab->get_result()->num_rows > 0;
+    $stColab->close();
+    if (!$colabExiste) { fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Colaborador não encontrado.'); }
 
     try {
         $stmt = $conn->prepare(
             "SELECT e.*, c.nome as colaborador_nome
              FROM rh_escala e
-             JOIN rh_colaboradores c ON c.id = e.colaborador_id
-             WHERE e.colaborador_id = ? AND e.ativo = 1
+             JOIN rh_colaboradores c ON c.id = e.colaborador_id AND c.tenant_id = e.tenant_id
+             WHERE e.tenant_id = ? AND e.colaborador_id = ? AND e.ativo = 1
              ORDER BY e.nome_escala ASC"
         );
         if (!$stmt) {
             rh_log('ERRO', 'listar: prepare falhou', ['mysql_error' => $conn->error]);
-            retornar_json(false, 'Erro ao consultar escalas: ' . $conn->error);
+            fechar_conexao($conn); retornar_json(false, 'Não foi possível consultar escalas.');
         }
-        $stmt->bind_param('i', $colab_id);
+        $stmt->bind_param('ii', $tenant_id, $colab_id);
         $stmt->execute();
         $list = [];
         $res = $stmt->get_result();
@@ -193,12 +127,13 @@ if ($acao === 'listar') {
         retornar_json(true, 'OK', $list);
     } catch (Throwable $e) {
         rh_log('ERRO', 'listar: exceção', ['msg' => $e->getMessage()]);
-        retornar_json(false, 'Erro ao listar escalas: ' . $e->getMessage());
+        fechar_conexao($conn); retornar_json(false, 'Não foi possível listar escalas.');
     }
 }
 
 // ── OBTER ─────────────────────────────────────────────────────────────────────
 if ($acao === 'obter') {
+    rh_escala_exigir_rbac($conn,'visualizar');
     $id = intval($_GET['id'] ?? 0);
     if ($id <= 0) {
         rh_log('AVISO', 'obter: ID inválido', ['id' => $_GET['id'] ?? 'vazio']);
@@ -209,14 +144,14 @@ if ($acao === 'obter') {
         $stmt = $conn->prepare(
             "SELECT e.*, c.nome as colaborador_nome
              FROM rh_escala e
-             JOIN rh_colaboradores c ON c.id = e.colaborador_id
-             WHERE e.id = ?"
+             JOIN rh_colaboradores c ON c.id = e.colaborador_id AND c.tenant_id = e.tenant_id
+             WHERE e.tenant_id = ? AND e.id = ?"
         );
         if (!$stmt) {
             rh_log('ERRO', 'obter: prepare falhou', ['mysql_error' => $conn->error]);
-            retornar_json(false, 'Erro ao obter escala: ' . $conn->error);
+            fechar_conexao($conn); retornar_json(false, 'Não foi possível consultar a escala.');
         }
-        $stmt->bind_param('i', $id);
+        $stmt->bind_param('ii', $tenant_id, $id);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close(); fechar_conexao($conn);
@@ -227,12 +162,13 @@ if ($acao === 'obter') {
         retornar_json(true, 'OK', $row);
     } catch (Throwable $e) {
         rh_log('ERRO', 'obter: exceção', ['msg' => $e->getMessage()]);
-        retornar_json(false, 'Erro ao obter escala: ' . $e->getMessage());
+        fechar_conexao($conn); retornar_json(false, 'Não foi possível consultar a escala.');
     }
 }
 
 // ── CRIAR ─────────────────────────────────────────────────────────────────────
 if ($acao === 'criar' && $metodo === 'POST') {
+    rh_escala_exigir_rbac($conn,'criar');
     rh_log('INFO', 'criar: iniciando', ['body_keys' => array_keys($body)]);
 
     $d = _extrair_escala($body);
@@ -241,6 +177,13 @@ if ($acao === 'criar' && $metodo === 'POST') {
         rh_log('AVISO', 'criar: colaborador_id ausente', $d);
         retornar_json(false, 'colaborador_id obrigatório');
     }
+    $stColab = $conn->prepare('SELECT id FROM rh_colaboradores WHERE tenant_id=? AND id=? LIMIT 1');
+    if (!$stColab) { fechar_conexao($conn); retornar_json(false, 'Não foi possível validar o colaborador.'); }
+    $stColab->bind_param('ii', $tenant_id, $d['colaborador_id']);
+    if (!$stColab->execute()) { $stColab->close(); fechar_conexao($conn); retornar_json(false, 'Não foi possível validar o colaborador.'); }
+    $colabExiste = $stColab->get_result()->num_rows > 0;
+    $stColab->close();
+    if (!$colabExiste) { fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Colaborador não encontrado.'); }
 
     // Validações por tipo de jornada
     $validacao = _validar_regras_jornada($d);
@@ -251,7 +194,7 @@ if ($acao === 'criar' && $metodo === 'POST') {
 
     // Impede escala duplicada: colaborador já tem escala ativa
     $stmtChk = $conn->prepare("SELECT COUNT(*) FROM rh_escala WHERE tenant_id = $tenant_id AND colaborador_id = ? AND ativo = 1");
-    if (!$stmtChk) { retornar_json(false, 'Erro interno: ' . $conn->error); }
+    if (!$stmtChk) { rh_log('ERRO', 'criar: verificação de escala falhou', ['tenant_id' => $tenant_id, 'errno' => $conn->errno]); fechar_conexao($conn); retornar_json(false, 'Não foi possível validar a escala.'); }
     $stmtChk->bind_param('i', $d['colaborador_id']);
     $stmtChk->execute();
     $stmtChk->bind_result($qtdExistente);
@@ -272,19 +215,21 @@ if ($acao === 'criar' && $metodo === 'POST') {
     if ($temColunasExtras) {
         $stmt = $conn->prepare(
             "INSERT INTO rh_escala
-             (colaborador_id, nome_escala, tipo, carga_horaria_diaria_min, dias_trabalho,
+             (tenant_id, colaborador_id, nome_escala, tipo, carga_horaria_diaria_min, dias_trabalho,
               hora_entrada, hora_almoco_saida, hora_almoco_retorno, hora_saida,
               tolerancia_minutos, intervalo_almoco_min,
               alternada_ativa, alternada_dia_inicio, alternada_semana_a, alternada_semana_b, alternada_tipo_folga,
-              carga_horaria_mensal_min, descanso_interjornada_min, regime_12x36, banco_horas_ativo)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+              carga_horaria_mensal_min, descanso_interjornada_min, regime_12x36, banco_horas_ativo,
+              limite_saldo_negativo_min,politica_extra_excedente,limite_extra_diario_min)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
         if (!$stmt) {
             rh_log('ERRO', 'criar: prepare falhou', ['mysql_error' => $conn->error]);
-            retornar_json(false, 'Erro ao preparar query: ' . $conn->error);
+            retornar_json(false, 'Não foi possível preparar o cadastro da escala.');
         }
-        // 20 params: i ss i sssss iii ssss iiii
-        $stmt->bind_param('ississsssiiissssiiii',
+        // 22 params: tenant, colaborador e campos da escala
+        $stmt->bind_param('iississsssiiissssiiiiisi',
+            $tenant_id,
             $d['colaborador_id'],
             $d['nome_escala'],
             $d['tipo'],
@@ -304,24 +249,28 @@ if ($acao === 'criar' && $metodo === 'POST') {
             $d['carga_horaria_mensal_min'],
             $d['descanso_interjornada_min'],
             $d['regime_12x36'],
-            $d['banco_horas_ativo']
+            $d['banco_horas_ativo'],
+            $d['limite_saldo_negativo_min'],
+            $d['politica_extra_excedente'],
+            $d['limite_extra_diario_min']
         );
     } else {
         // Fallback: colunas antigas apenas (sem as novas)
         $stmt = $conn->prepare(
             "INSERT INTO rh_escala
-             (colaborador_id, nome_escala, tipo, carga_horaria_diaria_min, dias_trabalho,
+             (tenant_id, colaborador_id, nome_escala, tipo, carga_horaria_diaria_min, dias_trabalho,
               hora_entrada, hora_almoco_saida, hora_almoco_retorno, hora_saida,
               tolerancia_minutos, intervalo_almoco_min,
               alternada_ativa, alternada_dia_inicio, alternada_semana_a, alternada_semana_b, alternada_tipo_folga)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
         if (!$stmt) {
             rh_log('ERRO', 'criar: prepare (fallback) falhou', ['mysql_error' => $conn->error]);
-            retornar_json(false, 'Erro ao preparar query: ' . $conn->error);
+            fechar_conexao($conn); retornar_json(false, 'Não foi possível preparar o cadastro da escala.');
         }
-        // 16 parâmetros: i s s i s  s s s s  i i  i s s s s
-        $stmt->bind_param('issississsiissss',
+        // 17 parâmetros incluindo tenant autenticado
+        $stmt->bind_param('iississsssiiissss',
+            $tenant_id,
             $d['colaborador_id'],
             $d['nome_escala'],
             $d['tipo'],
@@ -345,7 +294,7 @@ if ($acao === 'criar' && $metodo === 'POST') {
         $erro = $conn->error;
         $stmt->close(); fechar_conexao($conn);
         rh_log('ERRO', 'criar: execute falhou', ['mysql_error' => $erro, 'tipo' => $d['tipo']]);
-        retornar_json(false, 'Erro ao criar escala: ' . $erro);
+        retornar_json(false, 'Não foi possível criar a escala.');
     }
     $novo_id = $conn->insert_id;
     $stmt->close();
@@ -363,6 +312,7 @@ if ($acao === 'criar' && $metodo === 'POST') {
 
 // ── ATUALIZAR ─────────────────────────────────────────────────────────────────
 if ($acao === 'atualizar' && $metodo === 'POST') {
+    rh_escala_exigir_rbac($conn,'editar');
     $id = intval($_GET['id'] ?? $body['id'] ?? 0);
     if ($id <= 0) {
         rh_log('AVISO', 'atualizar: ID inválido', ['id' => $_GET['id'] ?? $body['id'] ?? 'vazio']);
@@ -370,6 +320,15 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
     }
 
     $d = _extrair_escala($body);
+
+    if ($d['colaborador_id'] <= 0) { fechar_conexao($conn); http_response_code(422); retornar_json(false, 'colaborador_id obrigatório'); }
+    $stColab = $conn->prepare('SELECT id FROM rh_colaboradores WHERE tenant_id=? AND id=? LIMIT 1');
+    if (!$stColab) { fechar_conexao($conn); retornar_json(false, 'Não foi possível validar o colaborador.'); }
+    $stColab->bind_param('ii', $tenant_id, $d['colaborador_id']);
+    if (!$stColab->execute()) { $stColab->close(); fechar_conexao($conn); retornar_json(false, 'Não foi possível validar o colaborador.'); }
+    $colabExiste = $stColab->get_result()->num_rows > 0;
+    $stColab->close();
+    if (!$colabExiste) { fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Colaborador não encontrado.'); }
 
     $validacao = _validar_regras_jornada($d);
     if ($validacao !== true) {
@@ -390,14 +349,15 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
              hora_entrada=?, hora_almoco_saida=?, hora_almoco_retorno=?, hora_saida=?,
              tolerancia_minutos=?, intervalo_almoco_min=?,
              alternada_ativa=?, alternada_dia_inicio=?, alternada_semana_a=?, alternada_semana_b=?, alternada_tipo_folga=?,
-             carga_horaria_mensal_min=?, descanso_interjornada_min=?, regime_12x36=?, banco_horas_ativo=? WHERE tenant_id = $tenant_id AND id=?"
+             carga_horaria_mensal_min=?, descanso_interjornada_min=?, regime_12x36=?, banco_horas_ativo=?,
+             limite_saldo_negativo_min=?,politica_extra_excedente=?,limite_extra_diario_min=? WHERE tenant_id = $tenant_id AND id=?"
         );
         if (!$stmt) {
             rh_log('ERRO', 'atualizar: prepare falhou', ['mysql_error' => $conn->error]);
-            retornar_json(false, 'Erro ao preparar query: ' . $conn->error);
+            retornar_json(false, 'Não foi possível preparar a atualização da escala.');
         }
-        // 20 params: ss i sssss iii ssss iiiii (último i = WHERE id)
-        $stmt->bind_param('ssisssssiiissssiiiii',
+        // 21 params: campos escala + limite negativo opcional + id
+        $stmt->bind_param('ssisssssiiissssiiiiisii',
             $d['nome_escala'],
             $d['tipo'],
             $d['carga_horaria_diaria_min'],
@@ -417,6 +377,9 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
             $d['descanso_interjornada_min'],
             $d['regime_12x36'],
             $d['banco_horas_ativo'],
+            $d['limite_saldo_negativo_min'],
+            $d['politica_extra_excedente'],
+            $d['limite_extra_diario_min'],
             $id
         );
     } else {
@@ -425,14 +388,14 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
              nome_escala=?, tipo=?, carga_horaria_diaria_min=?, dias_trabalho=?,
              hora_entrada=?, hora_almoco_saida=?, hora_almoco_retorno=?, hora_saida=?,
              tolerancia_minutos=?, intervalo_almoco_min=?,
-             alternada_ativa=?, alternada_dia_inicio=?, alternada_semana_a=?, alternada_semana_b=?, alternada_tipo_folga=? WHERE tenant_id = $tenant_id AND id=?"
+             alternada_ativa=?, alternada_dia_inicio=?, alternada_semana_a=?, alternada_semana_b=?, alternada_tipo_folga=? WHERE tenant_id=? AND id=?"
         );
         if (!$stmt) {
             rh_log('ERRO', 'atualizar: prepare (fallback) falhou', ['mysql_error' => $conn->error]);
-            retornar_json(false, 'Erro ao preparar query: ' . $conn->error);
+            retornar_json(false, 'Não foi possível preparar a atualização da escala.');
         }
-        // 16 parâmetros: s s i s  s s s s  i i  i s s s s  i
-        $stmt->bind_param('ssississsiissssi',
+        // 17 parâmetros: s s i s  s s s s  i i  i s s s s  i i
+        $stmt->bind_param('ssisssssiiissssii',
             $d['nome_escala'],
             $d['tipo'],
             $d['carga_horaria_diaria_min'],
@@ -448,6 +411,7 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
             $semA_json2,
             $semB_json2,
             $d['alternada_tipo_folga'],
+            $tenant_id,
             $id
         );
     }
@@ -456,7 +420,7 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
         $erro = $conn->error;
         $stmt->close(); fechar_conexao($conn);
         rh_log('ERRO', 'atualizar: execute falhou', ['mysql_error' => $erro, 'id' => $id]);
-        retornar_json(false, 'Erro ao atualizar escala: ' . $erro);
+        retornar_json(false, 'Não foi possível atualizar a escala.');
     }
     $stmt->close();
     // Para escala_manual: atualiza o horário por dia (coluna separada)
@@ -473,6 +437,7 @@ if ($acao === 'atualizar' && $metodo === 'POST') {
 
 // ── EXCLUIR (soft delete) ─────────────────────────────────────────────────────
 if ($metodo === 'DELETE') {
+    rh_escala_exigir_rbac($conn,'excluir');
     $body2 = json_decode(file_get_contents('php://input'), true) ?? [];
     $id    = intval($body2['id'] ?? $_GET['id'] ?? 0);
     if ($id <= 0) {
@@ -507,6 +472,17 @@ function _verificar_colunas_extras(mysqli $conn): bool {
  */
 function _validar_regras_jornada(array $d) {
     $tipo = $d['tipo'];
+
+    if (!in_array($d['politica_extra_excedente'], ['CREDITAR_TUDO', 'LIMITAR_E_SEPARAR'], true)) {
+        return 'Política de excedente inválida.';
+    }
+    if ($d['limite_extra_diario_min'] < 1 || $d['limite_extra_diario_min'] > 2147483647) {
+        return 'O limite diário deve ser um inteiro de minutos entre 1 e 2.147.483.647.';
+    }
+
+    if ($d['limite_saldo_negativo_min'] !== null && ($d['limite_saldo_negativo_min'] < 0 || $d['limite_saldo_negativo_min'] > 2147483647)) {
+        return 'O limite de saldo negativo deve ser um número inteiro de minutos entre 0 e 2.147.483.647, ou ficar vazio para sem limite.';
+    }
 
     // ── Escala Alternada ──────────────────────────────────────────────────────
     // Suporta qualquer carga diária — não restrita a 12h.
@@ -577,6 +553,14 @@ function _jornadas_clt(): array {
 
 function _extrair_escala(array $b): array {
     $n = fn($k, $def=null) => isset($b[$k]) && $b[$k] !== '' ? $b[$k] : $def;
+    $limiteNegativoRaw = $n('limite_saldo_negativo_min', null);
+    $limiteNegativo = $limiteNegativoRaw === null
+        ? null
+        : (is_scalar($limiteNegativoRaw) && preg_match('/^\d+$/', (string)$limiteNegativoRaw) ? (int)$limiteNegativoRaw : -1);
+    $politicaExtra = (string)$n('politica_extra_excedente', 'CREDITAR_TUDO');
+    $limiteExtraRaw = $n('limite_extra_diario_min', 120);
+    $limiteExtra = is_scalar($limiteExtraRaw) && preg_match('/^\d+$/', (string)$limiteExtraRaw)
+        ? (int)$limiteExtraRaw : -1;
 
     $tipo        = $n('tipo', 'livre');
     $isAlternada = ($tipo === 'alternada');
@@ -677,6 +661,9 @@ function _extrair_escala(array $b): array {
         'descanso_interjornada_min'=> $descanso,
         'regime_12x36'             => $is12x36 ? 1 : 0,
         'banco_horas_ativo'        => (($isControle || $isJornada || $isManual) && !empty($n('banco_horas_ativo'))) ? 1 : 0,
+        'limite_saldo_negativo_min' => $limiteNegativo,
+        'politica_extra_excedente' => $politicaExtra,
+        'limite_extra_diario_min' => $limiteExtra,
         // Escala manual
         'escala_manual_semana'     => $manualSemana,
     ];

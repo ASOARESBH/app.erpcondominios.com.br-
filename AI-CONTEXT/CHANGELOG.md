@@ -2,6 +2,19 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.22] - 2026-11-04
+### Corrigido e adicionado
+- **RH — Banco de Horas**: removido o descarte silencioso de extras acima de 120 minutos; `bh_apurar_dia()` aplica `CREDITAR_TUDO` ou separa excedente conforme a política da escala.
+- Adicionados mapeamento diário, hash da prévia/entrada, botão Gerar, confirmação, aplicação auditada em lotes de 20, histórico, bloqueio por colaborador, tratamento de períodos fechados e relatório individual/departamental com CSV/PDF.
+- Reprocessamento altera somente linhas automáticas do tenant autenticado, preserva abatimentos/pagamentos manuais e não modifica as horas apuradas por mero limite diário. Escritas de Ponto, Abono e DSR compartilham lock/transação com o ledger; falta abonada preserva o DSR. RBAC foi aplicado a leituras RH/PDF, Abono, escala e lançamentos manuais.
+- Abatimento acima do saldo exige confirmação explícita e justificativa, pode gerar saldo negativo auditado e respeita limite devedor opcional; pagamento continua limitado ao saldo positivo. Foram centralizados sinal, cálculo e formatação e corrigidos os filtros/gravações multi-tenant, idempotência, sincronização, relatórios e PDF. Exclusão manual requer permissão, motivo e auditoria; lançamentos automáticos não podem ser excluídos manualmente.
+- A migration MySQL/MariaDB 5.7 corrige tenant histórico pela relação com o colaborador, adiciona campos/índices e apenas diagnostica `tipo=''`; não corrige tipos vazios. Após o phpMyAdmin retornar #1044, foi removida a dependência de `INFORMATION_SCHEMA`; a idempotência ignora somente coluna/índice duplicados.
+- Aviso departamental indica cobertura parcial dos lotes; renderers escapam conteúdo dinâmico e fotos ficam restritas à mesma origem.
+### Validado
+- Migrations aplicadas duas vezes em MariaDB QA descartável, inclusive reaplicação após existir `excedente`; fixture sintética validou extras de 03:17 e totais de 07:09, além de política limitada de 02:00 + 01:17 excedente.
+- Fixtures confirmaram isolamento tenant, preservação de lançamentos manuais, idempotência/replay, lock, lotes 20+2, DSR/falta abonada, períodos fechados, invalidação por alteração pós-prévia e consultas individuais/departamentais.
+- `php -l`, `node --check` e `git diff --check` passaram. Não houve endpoint autenticado, renderização visual de PDF, consulta/correção/migration em produção ou deploy.
+
 ## [2.1.21] - 2026-11-04
 ### Adicionado
 - **Convidados — pré-cadastro do morador (Portal do Morador + aplicativo)**: nova aba/tela **CONVIDADOS** no `frontend/portal_morador.html` e no app Flutter (`lib/presentation/screens/guests/guests_screen.dart`, rota `/home/guests`, item no menu lateral e card no início). O morador cadastra o convidado com os mesmos campos da Lista de Convidados (anfitrião morador/dependente, visitante já cadastrado da unidade ou CPF/RG + nome, tipo Visitante/Prestador/Entregador autorizado/Familiar, data prevista, dias de permanência, entradas únicas/múltiplas/livres, observação). O convite cai na tabela `convidados` e aparece imediatamente em **Registro > Convidados** para a portaria.
@@ -22,7 +35,7 @@ Registro de alterações significativas no ERP.
 - A resposta passou a trazer `cadastrado_por_nome`, `proprio` e `pode_excluir`; `ativo`/`id` são inteiros. A exclusão continua restrita ao autor (`morador_id` da sessão).
 - `POST api/api_acessos_visitantes.php` (geração de QR pelo portal/app) usa o mesmo escopo de unidade; antes recusava visitantes da Gleba cadastrados por outro morador.
 - App Flutter (`aplicativoerpcondominios`): `visitors_screen.dart` exibe "Visitantes da Unidade", contador, autor do cadastro e só mostra excluir quando `pode_excluir`; `access_screen.dart` lista apenas visitantes ativos no seletor do QR. `frontend/portal_morador.html` recebeu o mesmo tratamento de autor/exclusão.
-- **App Flutter — build Android após atualização do Flutter SDK (3.47.1)**: `flutter run` falhava com "Gradle 8.12.0 is lower than Flutter's minimum supported version of 8.14.0". O Flutter 3.47.1 exige Gradle ≥ 8.14, AGP ≥ 8.11.1, Kotlin ≥ 2.2.20 e Java 17. Atualizados em `aplicativoerpcondominios/android`: wrapper Gradle 8.12 → 8.14, AGP 8.7.3 → 8.13.1, Kotlin 2.1.0 → 2.3.20, `compileOptions` Java 11 → 17 e `kotlinOptions` (erro no Kotlin 2.2+) substituído por `kotlin { compilerOptions { jvmTarget = JVM_17 } }`. Mantido AGP 8.x (sem migrar para AGP 9/newDsl) com `android.newDsl=false` e `android.builtInKotlin=false` gravados pelo migrador do Flutter. Versões escolhidas já presentes no cache Gradle local.
+- **App Flutter — build Android após atualização do Flutter SDK (3.47.1)**: `flutter run` falhava com "Gradle 8.12.0 is lower than Flutter's minimum supported version of 8.14.0". Atualizados wrapper Gradle 8.12 → 8.14, AGP 8.7.3 → 8.13.1, Kotlin 2.1.0 → 2.3.20 e Java 11 → 17, mantendo AGP 8.x.
 ### Validado
 - `php -l` nos três PHP tocados; MariaDB descartável executando o endpoint real com fixture de duas Glebas, ex-morador inativo, Gleba 13/1330, unidade sem prefixo e outro tenant. Detalhes em `DEBUG_VISITANTES_APP_GLEBA_20261104.md`.
 

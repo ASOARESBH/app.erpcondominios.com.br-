@@ -10,6 +10,8 @@ ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';;
+require_once __DIR__ . '/helpers/rh_banco_horas_helper.php';
+require_once __DIR__ . '/rh_ponto_core.php';
 ob_end_clean();
 
 try { verificarAutenticacao(true, 'operador');
@@ -22,31 +24,27 @@ catch (Exception $e) {
 $conn = conectar_banco();
 if (!$conn) { echo '<h2>Erro ao conectar ao banco.</h2>'; exit; }
 
-// Garante colunas de abono na tabela de ponto (migração automática)
-(function() use ($conn) {
-    $res = $conn->query("SHOW COLUMNS FROM rh_ponto_lancamento");
-    if (!$res) return;
-    $cols = [];
-    while ($r = $res->fetch_assoc()) $cols[] = $r['Field'];
-    $add = [];
-    if (!in_array('abono_extras',        $cols)) $add[] = "ADD COLUMN abono_extras ENUM('nenhum','total','parcial') NOT NULL DEFAULT 'nenhum'";
-    if (!in_array('abono_extras_min',    $cols)) $add[] = "ADD COLUMN abono_extras_min INT NOT NULL DEFAULT 0";
-    if (!in_array('abono_falta',         $cols)) $add[] = "ADD COLUMN abono_falta TINYINT(1) NOT NULL DEFAULT 0";
-    if (!in_array('abono_atraso',        $cols)) $add[] = "ADD COLUMN abono_atraso ENUM('nenhum','total','parcial') NOT NULL DEFAULT 'nenhum'";
-    if (!in_array('abono_atraso_min',    $cols)) $add[] = "ADD COLUMN abono_atraso_min INT NOT NULL DEFAULT 0";
-    if (!in_array('abono_justificativa', $cols)) $add[] = "ADD COLUMN abono_justificativa TEXT NULL";
-    if (!in_array('abono_usuario',       $cols)) $add[] = "ADD COLUMN abono_usuario VARCHAR(100) NULL";
-    if (!in_array('abono_data',          $cols)) $add[] = "ADD COLUMN abono_data DATETIME NULL";
-    if ($add) $conn->query("ALTER TABLE rh_ponto_lancamento " . implode(', ', $add));
-})();
+if (function_exists('rbacTabelasDisponiveis') && rbacTabelasDisponiveis($conn)) rbacExigir($conn, 'recursos_humanos', 'visualizar', ['registro_tipo'=>'rh_relatorio_pdf']);
+else verificarPermissao('visualizador');
+try { _abono_garantir_colunas($conn); _ponto_garantir_colunas($conn); }
+catch (Throwable $e) { error_log('[RH PDF] Schema Ponto/Abono pendente; tenant='.(int)$tenant_id.'; erro='.$e->getMessage()); fechar_conexao($conn); http_response_code(503); echo '<h2>Estrutura de RH pendente. Aplique as migrations antes de gerar o PDF.</h2>'; exit; }
 
 // ── Parâmetros ───────────────────────────────────────────────────────────────
-$tipo      = trim($_GET['tipo']            ?? '');
-$dept      = trim($_GET['departamento']    ?? '');
-$colab_id  = intval($_GET['colaborador_id'] ?? 0);
+$rawTipo = $_GET['tipo'] ?? '';
+$rawDept = $_GET['departamento'] ?? '';
+$rawColab = $_GET['colaborador_id'] ?? '';
+if (!is_string($rawTipo) || !is_string($rawDept) || !is_string($rawColab)) { http_response_code(422); echo '<h2>Parâmetros de relatório inválidos.</h2>'; exit; }
+$tipo = trim($rawTipo);
+$dept = trim($rawDept);
+$parsedColab = $rawColab === '' ? 0 : filter_var($rawColab, FILTER_VALIDATE_INT);
+if ($parsedColab === false || ($parsedColab !== 0 && (int)$parsedColab <= 0) || bh_tamanho_texto($dept) > 100) { http_response_code(422); echo '<h2>Parâmetros de relatório inválidos.</h2>'; exit; }
+$colab_id = (int)$parsedColab;
 
-$data_inicio_raw = trim($_GET['data_inicio'] ?? '');
-$data_fim_raw    = trim($_GET['data_fim']    ?? '');
+$rawDataInicio = $_GET['data_inicio'] ?? '';
+$rawDataFim = $_GET['data_fim'] ?? '';
+if (!is_string($rawDataInicio) || !is_string($rawDataFim)) { http_response_code(422); echo '<h2>Período do relatório inválido.</h2>'; exit; }
+$data_inicio_raw = trim($rawDataInicio);
+$data_fim_raw    = trim($rawDataFim);
 $mes_raw         = intval($_GET['mes']       ?? 0);
 $ano_raw         = intval($_GET['ano']       ?? 0);
 
@@ -93,9 +91,9 @@ switch ($tipo) {
                            COALESCE(SUM(l.tipo_dia='folga'),0)       as folgas,
                            'personalizado' as status
                     FROM rh_colaboradores c
-                    LEFT JOIN rh_ponto_lancamento l ON l.colaborador_id = c.id AND l.data BETWEEN ? AND ?
-                    WHERE c.ativo=1";
-            $params = [$data_inicio, $data_fim]; $types = 'ss';
+                    LEFT JOIN rh_ponto_lancamento l ON l.tenant_id=c.tenant_id AND l.colaborador_id = c.id AND l.data BETWEEN ? AND ?
+                    WHERE c.tenant_id=? AND c.ativo=1";
+            $params = [$data_inicio, $data_fim, $tenant_id]; $types = 'ssi';
         } else {
             $sql = "SELECT c.nome, c.cargo, c.departamento, c.tipo_contrato,
                            COALESCE(p.total_horas_trabalhadas_min,0) as trab,
@@ -105,9 +103,9 @@ switch ($tipo) {
                            COALESCE(p.total_folgas,0)                 as folgas,
                            COALESCE(p.status,'—')                     as status
                     FROM rh_colaboradores c
-                    LEFT JOIN rh_ponto_periodo p ON p.colaborador_id=c.id AND p.mes=? AND p.ano=?
-                    WHERE c.ativo=1";
-            $params = [$mes_raw, $ano_raw]; $types = 'ii';
+                    LEFT JOIN rh_ponto_periodo p ON p.tenant_id=c.tenant_id AND p.colaborador_id=c.id AND p.mes=? AND p.ano=?
+                    WHERE c.tenant_id=? AND c.ativo=1";
+            $params = [$mes_raw, $ano_raw, $tenant_id]; $types = 'iii';
         }
         if ($dept) { $sql .= ' AND c.departamento=?'; $params[] = $dept; $types .= 's'; }
         $sql .= ($tipo_periodo === 'personalizado' ? ' GROUP BY c.id' : '') . ' ORDER BY c.departamento,c.nome';
@@ -145,10 +143,12 @@ switch ($tipo) {
         $tipos_pt = ['normal'=>'Normal','folga'=>'Folga','falta'=>'Falta','feriado'=>'Feriado',
                      'meio_periodo'=>'Meio Per.','afastamento'=>'Afastamento','horas_extras'=>'Hrs. Extras'];
 
-        $sc = $conn->prepare("SELECT nome,cargo,departamento,tipo_contrato FROM rh_colaboradores WHERE id=?");
-        $sc->bind_param('i', $colab_id); $sc->execute();
+        $sc = $conn->prepare("SELECT nome,cargo,departamento,tipo_contrato FROM rh_colaboradores WHERE tenant_id=? AND id=?");
+        $sc->bind_param('ii', $tenant_id, $colab_id); $sc->execute();
         $colab = $sc->get_result()->fetch_assoc(); $sc->close();
+        if (!$colab) { http_response_code(404); echo '<h2>Colaborador não encontrado.</h2>'; exit; }
         $subtitulo = ($colab['nome']??'') . ' · ' . ($colab['cargo']??'') . ' · ' . $label_periodo;
+        $escalaEspelho = _buscar_escala($conn, (int)$colab_id, (int)$tenant_id);
 
         // Totalizadores para o espelho
         $esp_total_trab  = 0;
@@ -163,17 +163,18 @@ switch ($tipo) {
                     TIME_FORMAT(hora_almoco_saida,'%H:%i') as has,
                     TIME_FORMAT(hora_almoco_retorno,'%H:%i') as har,
                     TIME_FORMAT(hora_saida,'%H:%i') as hs,
-                    horas_trabalhadas_min, horas_extras_min, atraso_min, tipo_dia, observacoes,
+                    data, horas_trabalhadas_min, horas_extras_min, atraso_min, saida_antecipada_min, tipo_dia, observacoes,
                     abono_extras, abono_extras_min, abono_falta,
                     abono_atraso, abono_atraso_min, abono_justificativa, abono_usuario
-             FROM rh_ponto_lancamento WHERE colaborador_id=? AND data BETWEEN ? AND ? ORDER BY data"
+             FROM rh_ponto_lancamento WHERE tenant_id=? AND colaborador_id=? AND data BETWEEN ? AND ? ORDER BY data"
         );
-        $st->bind_param('iss', $colab_id, $data_inicio, $data_fim); $st->execute();
+        $st->bind_param('iiss', $tenant_id, $colab_id, $data_inicio, $data_fim); $st->execute();
         $res = $st->get_result();
         while ($r = $res->fetch_assoc()) {
             $trab  = (int)$r['horas_trabalhadas_min'];
             $extra = (int)$r['horas_extras_min'];
             $atr   = (int)$r['atraso_min'];
+            $apuraDia = bh_apurar_dia(['extras'=>$extra,'atraso'=>$atr,'saida_antecipada'=>(int)($r['saida_antecipada_min']??0)], $r, $escalaEspelho??[], (string)$r['data']);
             $esp_total_trab  += $trab;
             $esp_total_extra += $extra;
             $esp_total_atr   += $atr;
@@ -220,7 +221,7 @@ switch ($tipo) {
                 $r['har'] ?: '—',
                 $r['hs']  ?: '—',
                 $trab  > 0 ? _min_h($trab)  : '—',
-                $extra > 0 ? '<span style="color:#16a34a;font-weight:600;">'._min_h($extra).'</span>' : '—',
+                $extra > 0 ? '<span style="color:#16a34a;font-weight:600;">'._min_h($extra).'</span>'.(!empty($apuraDia['alertas']) ? ' <span title="Extra acima do limite diário informativo; nenhum minuto foi descartado." style="color:#b45309;">⚠</span>' : '') : '—',
                 $atr   > 0 ? '<span style="color:#dc2626;font-weight:600;">'._min_h($atr).'</span>'   : '—',
                 htmlspecialchars($r['observacoes']??''),
                 $abono_cell,
@@ -237,9 +238,9 @@ switch ($tipo) {
         $sql = "SELECT c.nome, c.cargo, c.departamento,
                        DATE_FORMAT(l.data,'%d/%m/%Y') as d, l.tipo_dia, l.observacoes
                 FROM rh_ponto_lancamento l
-                JOIN rh_colaboradores c ON c.id=l.colaborador_id
-                WHERE l.data BETWEEN ? AND ? AND l.tipo_dia IN ('falta','afastamento') AND c.ativo=1";
-        $params = [$data_inicio, $data_fim]; $types = 'ss';
+                JOIN rh_colaboradores c ON c.id=l.colaborador_id AND c.tenant_id=l.tenant_id
+                WHERE l.tenant_id=? AND c.tenant_id=? AND l.data BETWEEN ? AND ? AND l.tipo_dia IN ('falta','afastamento') AND c.ativo=1";
+        $params = [$tenant_id, $tenant_id, $data_inicio, $data_fim]; $types = 'iiss';
         if ($dept) { $sql .= ' AND c.departamento=?'; $params[] = $dept; $types .= 's'; }
         $sql .= ' ORDER BY c.nome,l.data';
         $st = $conn->prepare($sql); $st->bind_param($types, ...$params); $st->execute();
@@ -257,9 +258,9 @@ switch ($tipo) {
         $sql = "SELECT c.nome, c.cargo, c.departamento,
                        SUM(l.horas_extras_min) as extra, SUM(l.horas_trabalhadas_min) as trab
                 FROM rh_ponto_lancamento l
-                JOIN rh_colaboradores c ON c.id=l.colaborador_id
-                WHERE l.data BETWEEN ? AND ? AND l.horas_extras_min>0 AND c.ativo=1";
-        $params = [$data_inicio, $data_fim]; $types = 'ss';
+                JOIN rh_colaboradores c ON c.id=l.colaborador_id AND c.tenant_id=l.tenant_id
+                WHERE l.tenant_id=? AND c.tenant_id=? AND l.data BETWEEN ? AND ? AND l.horas_extras_min>0 AND c.ativo=1";
+        $params = [$tenant_id, $tenant_id, $data_inicio, $data_fim]; $types = 'iiss';
         if ($dept) { $sql .= ' AND c.departamento=?'; $params[] = $dept; $types .= 's'; }
         $sql .= ' GROUP BY c.id ORDER BY extra DESC';
         $he_total_extra = 0;
@@ -285,9 +286,9 @@ switch ($tipo) {
                        DATE_FORMAT(l.data,'%d/%m/%Y') as d,
                        TIME_FORMAT(l.hora_entrada,'%H:%i') as he, l.atraso_min
                 FROM rh_ponto_lancamento l
-                JOIN rh_colaboradores c ON c.id=l.colaborador_id
-                WHERE l.data BETWEEN ? AND ? AND l.atraso_min>0 AND c.ativo=1";
-        $params = [$data_inicio, $data_fim]; $types = 'ss';
+                JOIN rh_colaboradores c ON c.id=l.colaborador_id AND c.tenant_id=l.tenant_id
+                WHERE l.tenant_id=? AND c.tenant_id=? AND l.data BETWEEN ? AND ? AND l.atraso_min>0 AND c.ativo=1";
+        $params = [$tenant_id, $tenant_id, $data_inicio, $data_fim]; $types = 'iiss';
         if ($dept) { $sql .= ' AND c.departamento=?'; $params[] = $dept; $types .= 's'; }
         $sql .= ' ORDER BY c.nome,l.data';
         $st = $conn->prepare($sql); $st->bind_param($types, ...$params); $st->execute();
@@ -304,44 +305,109 @@ switch ($tipo) {
     // dados que a tela mostra — e só cai no agregado legado (rh_ponto_periodo)
     // como fallback, para quando a tabela ledger ainda não foi criada.
     case 'banco_horas':
-        if ($colab_id <= 0) { echo '<h2>colaborador_id obrigatório.</h2>'; exit; }
+        $validarDataPdf = static function (string $valor): bool {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor)) return false;
+            $dt = DateTime::createFromFormat('!Y-m-d', $valor);
+            return $dt instanceof DateTime && $dt->format('Y-m-d') === $valor;
+        };
+        if (!$validarDataPdf($data_inicio) || !$validarDataPdf($data_fim) || $data_inicio > $data_fim) {
+            http_response_code(422); echo '<h2>Período do relatório inválido.</h2>'; exit;
+        }
+        if ($colab_id <= 0) {
+            if ($dept === '') { http_response_code(422); echo '<h2>Colaborador ou departamento obrigatório.</h2>'; exit; }
+            try { bh_garantir_tabela($conn); }
+            catch (Throwable $e) { error_log('[RH PDF] Schema de Banco de Horas indisponível; tenant=' . (int)$tenant_id . '; erro=' . $e->getMessage()); http_response_code(503); echo '<h2>Banco de Horas temporariamente indisponível.</h2>'; exit; }
+            $colunas=['Colaborador','Departamento','Crédito período','Débito período','Excedente','Saldo período','Saldo global'];
+            $stDept=$conn->prepare(
+                "SELECT c.nome,c.departamento,
+                        COALESCE(SUM(CASE WHEN b.tipo='credito' THEN b.minutos ELSE 0 END),0) credito,
+                        COALESCE(SUM(CASE WHEN b.tipo IN ('debito','abatimento','pagamento') THEN b.minutos ELSE 0 END),0) debito,
+                        COALESCE(SUM(CASE WHEN b.tipo='excedente' THEN b.minutos ELSE 0 END),0) excedente,
+                        COALESCE(SUM(CASE WHEN b.tipo='credito' THEN b.minutos WHEN b.tipo IN ('debito','abatimento','pagamento') THEN -b.minutos ELSE 0 END),0) saldo_periodo,
+                        COALESCE((SELECT SUM(CASE WHEN g.tipo='credito' THEN g.minutos WHEN g.tipo IN ('debito','abatimento','pagamento') THEN -g.minutos ELSE 0 END) FROM rh_banco_horas g WHERE g.tenant_id=c.tenant_id AND g.colaborador_id=c.id AND g.tipo IN ('credito','debito','abatimento','pagamento')),0) saldo_global
+                 FROM rh_colaboradores c LEFT JOIN rh_banco_horas b ON b.tenant_id=c.tenant_id AND b.colaborador_id=c.id AND b.data BETWEEN ? AND ?
+                 WHERE c.tenant_id=? AND c.ativo=1 AND c.departamento=? AND EXISTS(SELECT 1 FROM rh_escala e WHERE e.tenant_id=c.tenant_id AND e.colaborador_id=c.id AND e.ativo=1 AND e.banco_horas_ativo=1)
+                 GROUP BY c.id,c.tenant_id,c.nome,c.departamento ORDER BY c.nome,c.id"
+            );
+            if(!$stDept){error_log('[RH PDF] Falha ao preparar resumo departamental; tenant='.(int)$tenant_id);http_response_code(500);echo '<h2>Não foi possível gerar o relatório.</h2>';exit;}
+            $stDept->bind_param('ssis',$data_inicio,$data_fim,$tenant_id,$dept);
+            if(!$stDept->execute()){error_log('[RH PDF] Falha no resumo departamental; tenant='.(int)$tenant_id.'; errno='.(int)$stDept->errno);$stDept->close();http_response_code(500);echo '<h2>Não foi possível gerar o relatório.</h2>';exit;}
+            foreach($stDept->get_result()->fetch_all(MYSQLI_ASSOC) as $row){$global=(int)$row['saldo_global'];$bh_saldo_total=($bh_saldo_total??0)+$global;$dados[]=[htmlspecialchars($row['nome']??'',ENT_QUOTES,'UTF-8'),htmlspecialchars($row['departamento']??'',ENT_QUOTES,'UTF-8'),bh_fmt((int)$row['credito']),bh_fmt((int)$row['debito']),bh_fmt((int)$row['excedente']),bh_fmt((int)$row['saldo_periodo']),'<span style="color:'.($global<0?'#dc2626':'#16a34a').';">'.bh_fmt($global).'</span>'];}
+            $stDept->close();$titulo='Banco de Horas';$subtitulo='Departamento '.$dept.' · '.$label_periodo;$colab=['nome'=>'Departamento '.$dept];
+            break;
+        }
+        try {
+            bh_garantir_tabela($conn);
+        } catch (Throwable $e) {
+            error_log('[RH PDF] Schema de Banco de Horas indisponível; tenant=' . (int)$tenant_id . '; erro=' . $e->getMessage());
+            http_response_code(503);
+            echo '<h2>Banco de Horas temporariamente indisponível.</h2>';
+            exit;
+        }
         $titulo   = 'Banco de Horas';
-        $sc = $conn->prepare("SELECT nome,cargo,departamento FROM rh_colaboradores WHERE id=?");
-        $sc->bind_param('i', $colab_id); $sc->execute();
+        $sc = $conn->prepare("SELECT nome,cargo,departamento FROM rh_colaboradores WHERE tenant_id=? AND id=?");
+        if (!$sc) { error_log('[RH PDF] Falha ao preparar validação de colaborador; tenant=' . (int)$tenant_id); http_response_code(500); echo '<h2>Não foi possível gerar o relatório.</h2>'; exit; }
+        $sc->bind_param('ii', $tenant_id, $colab_id);
+        if (!$sc->execute()) { error_log('[RH PDF] Falha ao consultar colaborador; tenant=' . (int)$tenant_id . '; errno=' . (int)$sc->errno); $sc->close(); http_response_code(500); echo '<h2>Não foi possível gerar o relatório.</h2>'; exit; }
         $colab = $sc->get_result()->fetch_assoc(); $sc->close();
+        if (!$colab) { http_response_code(404); echo '<h2>Colaborador não encontrado.</h2>'; exit; }
         $subtitulo = ($colab['nome']??'') . ' · ' . $label_periodo;
 
         $bh_tabela_existe = $conn->query("SHOW TABLES LIKE 'rh_banco_horas'")->num_rows > 0;
 
         if ($bh_tabela_existe) {
-            $colunas = ['Data','Tipo','Minutos','Descrição','Saldo Corrente','Usuário'];
-            $typeLabelPdf = ['credito'=>'Crédito Extra','debito'=>'Débito','abatimento'=>'Abatimento','pagamento'=>'Pagamento'];
-            $typeColorPdf = ['credito'=>'#16a34a','debito'=>'#dc2626','abatimento'=>'#7c3aed','pagamento'=>'#0369a1'];
+            $colunas = ['Data','Tipo','Minutos','Descrição','Saldo Corrente','Usuário','Auditoria'];
+            $typeLabelPdf = ['credito'=>'Crédito Extra','debito'=>'Débito','abatimento'=>'Abatimento','pagamento'=>'Pagamento','excedente'=>'Excedente — decisão RH'];
+            $typeColorPdf = ['credito'=>'#16a34a','debito'=>'#dc2626','abatimento'=>'#7c3aed','pagamento'=>'#0369a1','excedente'=>'#64748b'];
 
             $st = $conn->prepare(
-                "SELECT DATE_FORMAT(data,'%d/%m/%Y') as data_fmt, tipo, minutos, descricao, usuario
-                 FROM rh_banco_horas WHERE colaborador_id=? ORDER BY data ASC, id ASC"
+                "SELECT DATE_FORMAT(data,'%d/%m/%Y') as data_fmt, tipo, minutos, descricao, usuario,
+                        minutos_apurados,limite_aplicado_min,regra_aplicada,versao_calculo,
+                        saldo_negativo_confirmado, justificativa_saldo_negativo
+                 FROM rh_banco_horas
+                 WHERE tenant_id=? AND colaborador_id=? AND data BETWEEN ? AND ?
+                 ORDER BY data ASC, id ASC"
             );
-            $st->bind_param('i', $colab_id);
-            $st->execute();
+            if (!$st) { error_log('[RH PDF] Falha ao preparar consulta do ledger; tenant=' . (int)$tenant_id); http_response_code(500); echo '<h2>Não foi possível gerar o relatório.</h2>'; exit; }
+            $st->bind_param('iiss', $tenant_id, $colab_id, $data_inicio, $data_fim);
+            if (!$st->execute()) { error_log('[RH PDF] Falha ao consultar ledger; tenant=' . (int)$tenant_id . '; errno=' . (int)$st->errno); $st->close(); http_response_code(500); echo '<h2>Não foi possível gerar o relatório.</h2>'; exit; }
             $res = $st->get_result();
-            $bh_saldo = 0; $bh_credito = 0; $bh_debito = 0;
+            $bh_saldo = 0;
             while ($r = $res->fetch_assoc()) {
                 $min = (int)$r['minutos'];
-                if ($r['tipo'] === 'credito') { $bh_saldo += $min; $bh_credito += $min; $sinal = '+'; }
-                else                          { $bh_saldo -= $min; $bh_debito  += $min; $sinal = '-'; }
-                $cor = $typeColorPdf[$r['tipo']] ?? '#334155';
+                $tipoLinha = (string)($r['tipo'] ?? '');
+                $sinalValor = bh_sinal($tipoLinha);
+                if ($sinalValor !== null) $bh_saldo += $sinalValor * $min;
+                $sinal = $sinalValor === null ? '' : ($sinalValor > 0 ? '+' : '-');
+                $cor = $typeColorPdf[$tipoLinha] ?? '#64748b';
+                $rotulo = $typeLabelPdf[$tipoLinha] ?? 'Não classificado';
+                $auditoria = !empty($r['saldo_negativo_confirmado'])
+                    ? '<strong style="color:#b45309;">⚠ Confirmado</strong><br><small>' .
+                        htmlspecialchars(trim((string)($r['usuario'] ?? 'Usuário não identificado')) ?: 'Usuário não identificado', ENT_QUOTES, 'UTF-8') .
+                        ' — ' . htmlspecialchars((string)($r['justificativa_saldo_negativo'] ?? ''), ENT_QUOTES, 'UTF-8') . '</small>'
+                    : '—';
+                $descricaoPdf = htmlspecialchars($r['descricao'] ?? '', ENT_QUOTES, 'UTF-8');
+                if (in_array($tipoLinha, ['credito','excedente'], true) && $r['minutos_apurados'] !== null) {
+                    $detalhe = 'Apurado ' . bh_fmt((int)$r['minutos_apurados']) . ' · Regra ' . (string)($r['regra_aplicada'] ?? '—') . ' · v' . (string)($r['versao_calculo'] ?? '—');
+                    $descricaoPdf .= '<br><small title="' . htmlspecialchars($detalhe, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($detalhe, ENT_QUOTES, 'UTF-8') . '</small>';
+                }
                 $dados[] = [
                     $r['data_fmt'],
-                    '<span style="color:'.$cor.';font-weight:600;">'.($typeLabelPdf[$r['tipo']] ?? $r['tipo']).'</span>',
-                    '<span style="color:'.$cor.';">'.$sinal._min_h($min).'</span>',
-                    htmlspecialchars($r['descricao'] ?? ''),
-                    '<strong style="color:'.($bh_saldo>=0?'#16a34a':'#dc2626').';">'.($bh_saldo<0?'-':'')._min_h(abs($bh_saldo)).'</strong>',
-                    htmlspecialchars($r['usuario'] ?? 'Sistema'),
+                    '<span style="color:'.$cor.';font-weight:600;">'.htmlspecialchars($rotulo, ENT_QUOTES, 'UTF-8').'</span>',
+                    '<span style="color:'.$cor.';">'.$sinal.bh_fmt($min).'</span>',
+                    $descricaoPdf,
+                    '<strong style="color:'.($bh_saldo>=0?'#16a34a':'#dc2626').';">'.bh_fmt($bh_saldo).'</strong>',
+                    htmlspecialchars($r['usuario'] ?? 'Sistema', ENT_QUOTES, 'UTF-8'),
+                    $auditoria,
                 ];
             }
             $st->close();
-            $bh_saldo_total = $bh_credito - $bh_debito;
+            try {
+                $bh_saldo_total = bh_obter_saldo($conn, (int)$tenant_id, $colab_id)['saldo'];
+            } catch (Throwable $e) {
+                error_log('[RH PDF] Falha ao calcular saldo total; tenant=' . (int)$tenant_id . '; erro=' . $e->getMessage());
+                http_response_code(500); echo '<h2>Não foi possível gerar o relatório.</h2>'; exit;
+            }
         } else {
             // Fallback: agrega por mês a partir de rh_ponto_periodo (comportamento legado)
             $colunas    = ['Mês/Ano','Trabalhado','Extra','Atraso','Saldo Mês','Acumulado'];
@@ -349,13 +415,13 @@ switch ($tipo) {
 
             $st = $conn->prepare(
                 "SELECT mes, ano, total_horas_trabalhadas_min, total_horas_extras_min, total_atraso_min
-                 FROM rh_ponto_periodo WHERE colaborador_id=? AND
+                 FROM rh_ponto_periodo WHERE tenant_id=? AND colaborador_id=? AND
                  (ano > ? OR (ano=? AND mes>=?)) AND (ano < ? OR (ano=? AND mes<=?))
                  ORDER BY ano,mes"
             );
             $ano_i = (int)substr($data_inicio,0,4); $mes_i = (int)substr($data_inicio,5,2);
             $ano_f = (int)substr($data_fim,0,4);    $mes_f = (int)substr($data_fim,5,2);
-            $st->bind_param('iiiiiii', $colab_id, $ano_i, $ano_i, $mes_i, $ano_f, $ano_f, $mes_f);
+            $st->bind_param('iiiiiiii', $tenant_id, $colab_id, $ano_i, $ano_i, $mes_i, $ano_f, $ano_f, $mes_f);
             $st->execute();
             $res = $st->get_result(); $total = 0;
             while ($r = $res->fetch_assoc()) {
@@ -363,11 +429,11 @@ switch ($tipo) {
                 $total += $saldo;
                 $dados[] = [
                     $meses_nome[$r['mes']].'/'.$r['ano'],
-                    _min_h((int)$r['total_horas_trabalhadas_min']),
-                    '<span style="color:#16a34a;">'._min_h((int)$r['total_horas_extras_min']).'</span>',
-                    '<span style="color:#dc2626;">'._min_h((int)$r['total_atraso_min']).'</span>',
-                    '<span style="color:'.($saldo>=0?'#16a34a':'#dc2626').';font-weight:600;">'.($saldo<0?'-':'')._min_h(abs($saldo)).'</span>',
-                    '<strong style="color:'.($total>=0?'#1e3a8a':'#dc2626').';">'.($total<0?'-':'')._min_h(abs($total)).'</strong>'
+                    bh_fmt((int)$r['total_horas_trabalhadas_min']),
+                    '<span style="color:#16a34a;">'.bh_fmt((int)$r['total_horas_extras_min']).'</span>',
+                    '<span style="color:#dc2626;">'.bh_fmt((int)$r['total_atraso_min']).'</span>',
+                    '<span style="color:'.($saldo>=0?'#16a34a':'#dc2626').';font-weight:600;">'.bh_fmt($saldo).'</span>',
+                    '<strong style="color:'.($total>=0?'#1e3a8a':'#dc2626').';">'.bh_fmt($total).'</strong>'
                 ];
             }
             $st->close();
@@ -385,9 +451,9 @@ switch ($tipo) {
         $st = $conn->prepare(
             "SELECT nome,cargo,departamento,DATE_FORMAT(data_nascimento,'%d/%m/%Y') as dn,
                     DATE_FORMAT(data_nascimento,'%d/%m') as aniv
-             FROM rh_colaboradores WHERE MONTH(data_nascimento)=? AND ativo=1 ORDER BY DAY(data_nascimento),nome"
+             FROM rh_colaboradores WHERE tenant_id=? AND MONTH(data_nascimento)=? AND ativo=1 ORDER BY DAY(data_nascimento),nome"
         );
-        $st->bind_param('i', $mes_aniv); $st->execute();
+        $st->bind_param('ii', $tenant_id, $mes_aniv); $st->execute();
         $res = $st->get_result();
         while ($r = $res->fetch_assoc())
             $dados[] = [$r['nome'],$r['cargo']??'—',$r['departamento']??'—',$r['dn'],'🎂 '.$r['aniv']];
@@ -400,7 +466,7 @@ switch ($tipo) {
 
 // Busca dados completos da empresa para cabeçalho/rodapé/assinatura
 $empresa_info = ['razao_social'=>'','nome_fantasia'=>'','cnpj'=>'','telefone'=>'','email_principal'=>'','endereco_rua'=>'','endereco_cidade'=>'','endereco_estado'=>''];
-$_tenant_id_rel = $_SESSION["tenant_id"] ?? 1;
+$_tenant_id_rel = (int)$tenant_id;
 $_stmt_emp = $conn->prepare("SELECT e.razao_social, e.nome_fantasia, e.cnpj, e.telefone, e.email_principal, e.endereco_rua, e.endereco_cidade, e.endereco_estado, t.logo_url FROM empresa e JOIN tenants t ON t.id = e.tenant_id WHERE e.tenant_id = ? LIMIT 1");
 $_stmt_emp->bind_param("i", $_tenant_id_rel);
 $_stmt_emp->execute();
@@ -608,7 +674,7 @@ header('Content-Type: text/html; charset=utf-8');
 <div class="kpis">
   <?php if ($tipo === 'banco_horas'): ?>
   <div class="kpi">
-    <div class="kpi-label">Colaborador</div>
+    <div class="kpi-label"><?= $colab_id > 0 ? 'Colaborador' : 'Departamento' ?></div>
     <div class="kpi-value" style="font-size:14px;"><?= htmlspecialchars($colab['nome'] ?? '—') ?></div>
   </div>
   <div class="kpi">
@@ -616,9 +682,9 @@ header('Content-Type: text/html; charset=utf-8');
     <div class="kpi-value"><?= $total_registros ?></div>
   </div>
   <div class="kpi">
-    <div class="kpi-label">Saldo Atual</div>
+    <div class="kpi-label"><?= $colab_id > 0 ? 'Saldo Atual' : 'Saldo global agregado' ?></div>
     <div class="kpi-value" style="color:<?= ($bh_saldo_total ?? 0) >= 0 ? '#16a34a' : '#dc2626' ?>;">
-      <?= (($bh_saldo_total ?? 0) < 0 ? '-' : '') . _min_h(abs($bh_saldo_total ?? 0)) ?>
+      <?= htmlspecialchars(bh_fmt((int)($bh_saldo_total ?? 0)), ENT_QUOTES, 'UTF-8') ?>
     </div>
   </div>
   <?php else: ?>

@@ -70,3 +70,14 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - Toda consulta filtra `tenant_id` + `morador_id` da sessão (outro morador ou outro condomínio recebe 404). Visitante vinculado precisa pertencer à unidade (`pvu_condicao_visitante_unidade`); dependente precisa pertencer ao morador.
 - Documento completo só é devolvido ao próprio autor do convite; listas usam documento mascarado. `verificar_alertas` não expõe alertas de outras unidades.
 - Proteção contra abuso: máximo de 100 convites PREVISTO por morador (429) e chave de idempotência.
+
+## 9. RH — Banco de Horas
+- A identidade e o `tenant_id` vêm da sessão autenticada. Toda leitura/gravação/exclusão do ledger usa o tenant preparado e valida o colaborador em `rh_colaboradores` no mesmo tenant; IDs de outro condomínio retornam 404.
+- Lançamentos manuais são serializados por lock `(tenant, colaborador)` e transação; retries usam chave única por tenant. Confirmação de saldo negativo exige flag explícita correspondente ao checkbox da interface e justificativa, e registra saldo anterior/posterior, usuário, IP e justificativa.
+- Exclusão exige motivo, `recursos_humanos.excluir` no RBAC (ou gerente no modo legado), filtro de tenant e auditoria na mesma transação. Registros com `lancamento_id` não podem ser excluídos manualmente. Não confiar em botão oculto no frontend.
+- SQL não é interpolado para valores; erros técnicos ficam no `error_log`. `tipo=''` histórico é apenas reportado para investigação, sem correção automática nem atribuição presumida.
+- Mapear, simular, histórico e aplicação filtram tenant da sessão; departamento/colaborador e offsets são validados e os valores seguem bind preparado. A API exige `recursos_humanos.editar` para simular/aplicar e `visualizar` para somente ler; esconder o botão no cliente nunca substitui autorização server-side.
+- Aplicar bloqueia cada colaborador com o mesmo named lock compartilhado pelo ledger, usa uma transação para o lote e compara hash da prévia/entrada antes de qualquer gravação. Mudança concorrente em espelho, escala, abono ou ledger invalida a prévia (409). A chave/replay não autoriza trocar filtros, tenant ou hashes.
+- A opção de incluir período fechado exige administrador validado e é persistida no histórico junto a autor, nome, motivo, período, totais, status, hashes e IP. A migration de reprocessamento é aditiva/idempotente; não altera dados de produção automaticamente.
+- Gravação/exclusão de Ponto, alteração de Abono, DSR e sincronização do ledger usam o mesmo lock tenant/colaborador; período é relido sob `FOR UPDATE` antes da escrita, e uma falha de sincronização desfaz a transação em vez de retornar sucesso parcial. Abono não altera período fechado.
+- Leituras de relatórios RH/PDF exigem `recursos_humanos.visualizar`; configuração de escala aplica RBAC por ação. CORS das APIs RH que foram ajustadas valida origem permitida com credenciais, sem wildcard de subdomínio.

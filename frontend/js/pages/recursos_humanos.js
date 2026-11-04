@@ -14,6 +14,18 @@ let _state = {
     demissaoConfirmada  : false,
 };
 
+let _bhSaldoGlobal = 0;
+let _bhRequestKey = null;
+let _bhRequestSignature = null;
+let _bhPendingRequest = null;
+let _bhSubmitting = false;
+let _bhReprocessPreview = null;
+let _bhReprocessApplying = false;
+let _bhReprocessProgress = null;
+let _bhServerCanEdit = null;
+let _bhServerIsAdmin = null;
+let _bhPermissionRequest = null;
+
 const RH_DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110' viewBox='0 0 110 110'%3E%3Ccircle cx='55' cy='55' r='55' fill='%23e2e8f0'/%3E%3Ccircle cx='55' cy='42' r='18' fill='%2394a3b8'/%3E%3Cellipse cx='55' cy='85' rx='28' ry='20' fill='%2394a3b8'/%3E%3C/svg%3E";
 
 // ── Ciclo de vida ─────────────────────────────────────────────────────────────
@@ -26,6 +38,8 @@ export async function init() {
     _setupRelatorios();
     _setupAbono();
     _popularSelects();
+    window.addEventListener('permissoesAtualizadas', _atualizarBtnBHReprocessar);
+    _atualizarBtnBHReprocessar();
 
     window.ModuleRH = {
         editarColaborador : _editarColaborador,
@@ -38,10 +52,16 @@ export async function init() {
         editarEscala      : _editarEscala,
         excluirEscala     : _excluirEscala,
         registrarBH       : _registrarBH,
+        reprocessarBH     : _iniciarReprocessamentoBH,
     };
 }
 
 export function destroy() {
+    document.removeEventListener('keydown', _bhEscapeListener);
+    document.removeEventListener('keydown', _bhReprocessEscapeListener);
+    window.removeEventListener('permissoesAtualizadas', _atualizarBtnBHReprocessar);
+    _fecharReprocessamentoBH();
+    _fecharBHModal();
     delete window.ModuleRH;
     delete window.ModuleRHDefaultAvatar;
 }
@@ -195,7 +215,7 @@ async function _carregarColaboradores() {
         if (!d.sucesso) throw new Error(d.mensagem);
         _renderColaboradores(d.dados ?? []);
     } catch (err) {
-        wrap.innerHTML = `<p style="color:#dc2626;padding:16px;"><i class="fas fa-exclamation-triangle"></i> ${err.message}</p>`;
+        wrap.innerHTML = `<p style="color:#dc2626;padding:16px;"><i class="fas fa-exclamation-triangle"></i> ${_esc(err.message)}</p>`;
     }
 }
 
@@ -203,10 +223,23 @@ function _renderColaboradores(list) {
     const wrap = document.getElementById('rh-lista-colaboradores');
     if (!list.length) { wrap.innerHTML = '<p style="padding:16px;color:var(--text-secondary,#64748b);">Nenhum colaborador encontrado.</p>'; return; }
 
-    wrap.innerHTML = list.map(c => `
+    wrap.onclick = event => {
+        const button = event.target.closest('[data-rh-colab-action]');
+        if (!button || !wrap.contains(button)) return;
+        const id = Number.parseInt(button.dataset.id || '', 10);
+        if (!Number.isSafeInteger(id) || id <= 0) return;
+        const nome = button.dataset.nome || '';
+        if (button.dataset.rhColabAction === 'ponto') _abrirPontoColab(id, nome);
+        else if (button.dataset.rhColabAction === 'editar') _editarColaborador(id);
+        else if (button.dataset.rhColabAction === 'excluir') _excluirColaborador(id, nome);
+    };
+    wrap.innerHTML = list.map(c => {
+        const id = Number.parseInt(c.id, 10);
+        if (!Number.isSafeInteger(id) || id <= 0) return '';
+        return `
         <div class="rh-colab-card">
             <img class="rh-colab-avatar"
-                 src="${c.foto_path ? c.foto_path : RH_DEFAULT_AVATAR}"
+                 src="${_esc(_rhFotoUrl(c.foto_path))}"
                  alt="${_esc(c.nome)}"
                  onerror="this.onerror=null;this.src=window.ModuleRHDefaultAvatar||''">
             <div class="rh-colab-info">
@@ -215,18 +248,19 @@ function _renderColaboradores(list) {
             </div>
             <span class="rh-badge ${c.ativo == 1 ? 'rh-badge-ativo' : 'rh-badge-inativo'}">${c.ativo == 1 ? 'Ativo' : 'Inativo'}</span>
             <div style="display:flex;gap:6px;flex-shrink:0;">
-                <button class="action-btn" title="Registrar ponto" onclick='window.ModuleRH.abrirPontoColab(${c.id}, "${_escAttr(c.nome)}")'>
+                <button class="action-btn" type="button" title="Registrar ponto" data-rh-colab-action="ponto" data-id="${id}" data-nome="${_esc(c.nome)}">
                     <i class="fas fa-clock"></i>
                 </button>
-                <button class="action-btn" title="Editar" onclick="window.ModuleRH.editarColaborador(${c.id})">
+                <button class="action-btn" type="button" title="Editar" data-rh-colab-action="editar" data-id="${id}" data-nome="${_esc(c.nome)}">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="action-btn" title="Excluir" onclick='window.ModuleRH.excluirColaborador(${c.id}, "${_escAttr(c.nome)}")'>
+                <button class="action-btn" type="button" title="Excluir" data-rh-colab-action="excluir" data-id="${id}" data-nome="${_esc(c.nome)}">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 async function _editarColaborador(id) {
@@ -264,7 +298,7 @@ async function _editarColaborador(id) {
         document.getElementById('rh-pix').value           = c.pix ?? '';
         document.getElementById('rh-observacoes').value   = c.observacoes ?? '';
 
-        document.getElementById('rh-foto-preview').src = c.foto_path || RH_DEFAULT_AVATAR;
+        document.getElementById('rh-foto-preview').src = _rhFotoUrl(c.foto_path);
         _setFormStatus();
 
         document.getElementById('rh-form-titulo').innerHTML = '<i class="fas fa-edit"></i> Editar Colaborador';
@@ -538,7 +572,7 @@ async function _abrirPeriodo() {
                 const fmtDate = (iso) => { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
                 document.getElementById('ponto-header-nome').textContent = colaboradorNome;
                 document.getElementById('ponto-header-meta').innerHTML   =
-                    `${fmtDate(params.data_inicio)} – ${fmtDate(params.data_fim)} &nbsp;|&nbsp; <span class="status-aberto">Multi-mês</span>`;
+                    `${_esc(fmtDate(params.data_inicio))} – ${_esc(fmtDate(params.data_fim))} &nbsp;|&nbsp; <span class="status-aberto">Multi-mês</span>`;
                 document.getElementById('btnPontoFechar').style.display  = 'none'; // não aplica a multi-mês
                 document.getElementById('btnPontoReabrir').style.display = 'none';
 
@@ -629,8 +663,9 @@ async function _exibirFolha(periodo) {
     } else {
         periodoLabel = `${meses[periodo.mes]}/${periodo.ano}`;
     }
+    const statusSeguro = ['aberto', 'fechado'].includes(periodo.status) ? periodo.status : 'desconhecido';
     document.getElementById('ponto-header-meta').innerHTML  =
-        `${periodoLabel} &nbsp;|&nbsp; <span class="status-${periodo.status}">${periodo.status === 'fechado' ? 'Fechado' : 'Em aberto'}</span>`;
+        `${_esc(periodoLabel)} &nbsp;|&nbsp; <span class="status-${statusSeguro}">${statusSeguro === 'fechado' ? 'Fechado' : statusSeguro === 'aberto' ? 'Em aberto' : 'Status desconhecido'}</span>`;
 
     document.getElementById('btnPontoFechar').style.display    = periodo.status === 'aberto'  ? '' : 'none';
     document.getElementById('btnPontoReabrir').style.display   = periodo.status === 'fechado' ? '' : 'none';
@@ -677,38 +712,47 @@ function _renderLancamentos(readonly) {
 
     const TIPOS = ['normal','folga','falta','feriado','meio_periodo','afastamento','horas_extras'];
     const diasPt = { Monday:'Segunda', Tuesday:'Terça', Wednesday:'Quarta', Thursday:'Quinta', Friday:'Sexta', Saturday:'Sábado', Sunday:'Domingo' };
+    const inteiroSeguro = valor => { const n = Number(valor); return Number.isSafeInteger(n) && n >= 0 ? n : 0; };
+    const horaSegura = valor => { const h = String(valor ?? ''); return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(h) ? h : ''; };
+    const periodoId = inteiroSeguro(_state.periodoAtual?.id);
+    const colaboradorId = inteiroSeguro(_state.periodoAtual?.colaborador_id);
 
     tbody.innerHTML = _state.lancamentos.map(l => {
-        // horas_extras recebe classe visual diferenciada (verde claro)
-        const cls = l.tipo_dia === 'horas_extras' ? 'dia-horas-extras'
-                  : ['folga','falta','feriado'].includes(l.tipo_dia) ? `dia-${l.tipo_dia}` : '';
+        const id = inteiroSeguro(l.id);
+        if (!id || !colaboradorId || (!periodoId && !readonly)) return '';
+        const tipo = TIPOS.includes(l.tipo_dia) ? l.tipo_dia : 'normal';
+        const cls = tipo === 'horas_extras' ? 'dia-horas-extras'
+                  : ['folga','falta','feriado'].includes(tipo) ? `dia-${tipo}` : '';
         const dis  = readonly ? 'disabled' : '';
-        const trab = l.horas_trabalhadas_min > 0 ? `<span class="${l.horas_extras_min > 0 ? 'horas-extra' : ''}">${_minParaHoras(l.horas_trabalhadas_min)}</span>` : '—';
-        const ext  = l.horas_extras_min > 0 ? `<span class="horas-extra">${_minParaHoras(l.horas_extras_min)}</span>` : '—';
-        const atr  = l.atraso_min > 0 ? `<span class="horas-atraso">${_minParaHoras(l.atraso_min)}</span>` : '—';
-        const diaName = diasPt[l.dia_semana] ?? l.dia_semana ?? '';
-        // Indicador de DSR perdido: domingo marcado como falta (pela regra CLT)
-        const dsrBadge = (l.tipo_dia === 'falta' && l.dia_semana === 'Sunday')
+        const trabalhadas = inteiroSeguro(l.horas_trabalhadas_min);
+        const extras = inteiroSeguro(l.horas_extras_min);
+        const atraso = inteiroSeguro(l.atraso_min);
+        const trab = trabalhadas > 0 ? `<span class="${extras > 0 ? 'horas-extra' : ''}">${_minParaHoras(trabalhadas)}</span>` : '—';
+        const ext  = extras > 0 ? `<span class="horas-extra">${_minParaHoras(extras)}</span>` : '—';
+        const atr  = atraso > 0 ? `<span class="horas-atraso">${_minParaHoras(atraso)}</span>` : '—';
+        const diaSemana = String(l.dia_semana ?? '');
+        const diaName = diasPt[diaSemana] ?? diaSemana;
+        const dataFmt = _esc(l.data_fmt || '—');
+        const he = horaSegura(l.he), has = horaSegura(l.has), har = horaSegura(l.har), hs = horaSegura(l.hs);
+        const dsrBadge = (tipo === 'falta' && diaSemana === 'Sunday')
             ? '<span style="margin-left:4px;font-size:10px;background:#dc2626;color:#fff;padding:1px 4px;border-radius:3px;vertical-align:middle;" title="DSR perdido — houve falta injustificada nesta semana">DSR↓</span>'
-            : (l.tipo_dia === 'folga' && l.dia_semana === 'Sunday')
+            : (tipo === 'folga' && diaSemana === 'Sunday')
             ? '<span style="margin-left:4px;font-size:10px;background:#16a34a;color:#fff;padding:1px 4px;border-radius:3px;vertical-align:middle;" title="DSR ganho — semana completa">DSR✓</span>'
             : '';
-        // Indicador de turno que cruza meia-noite (12x36: saída < entrada = dia seguinte)
-        const cruzaMeiaNoite = l.he && l.hs && l.hs < l.he;
-        const badgeD1 = cruzaMeiaNoite ? ' <span class="badge-d1" title="Saída no dia seguinte">D+1</span>' : '';
+        const badgeD1 = he && hs && hs < he ? ' <span class="badge-d1" title="Saída no dia seguinte">D+1</span>' : '';
 
-        return `<tr class="${cls}" data-id="${l.id}" data-periodo="${_state.periodoAtual.id}" data-colab="${_state.periodoAtual.colaborador_id}">
-            <td>${l.data_fmt}</td>
-            <td class="dia-semana">${diaName}${dsrBadge}</td>
+        return `<tr class="${cls}" data-id="${id}" data-periodo="${periodoId}" data-colab="${colaboradorId}">
+            <td>${dataFmt}</td>
+            <td class="dia-semana">${_esc(diaName || '—')}${dsrBadge}</td>
             <td>
                 <select onchange="window.ModuleRH.salvarLinhaPonto(this)" data-campo="tipo_dia" ${dis}>
-                    ${TIPOS.map(t => `<option value="${t}" ${l.tipo_dia===t?'selected':''}>${_tipoDia(t)}</option>`).join('')}
+                    ${TIPOS.map(t => `<option value="${t}" ${tipo===t?'selected':''}>${_esc(_tipoDia(t))}</option>`).join('')}
                 </select>
             </td>
-            <td><input type="time" value="${l.he||''}" data-campo="hora_entrada" onchange="window.ModuleRH.salvarLinhaPonto(this)" ${dis}></td>
-            <td><input type="time" value="${l.has||''}" data-campo="hora_almoco_saida" onchange="window.ModuleRH.salvarLinhaPonto(this)" ${dis}></td>
-            <td><input type="time" value="${l.har||''}" data-campo="hora_almoco_retorno" onchange="window.ModuleRH.salvarLinhaPonto(this)" ${dis}></td>
-            <td style="white-space:nowrap;"><input type="time" value="${l.hs||''}" data-campo="hora_saida" onchange="window.ModuleRH.salvarLinhaPonto(this)" ${dis}>${badgeD1}</td>
+            <td><input type="time" value="${_esc(he)}" data-campo="hora_entrada" onchange="window.ModuleRH.salvarLinhaPonto(this)" ${dis}></td>
+            <td><input type="time" value="${_esc(has)}" data-campo="hora_almoco_saida" onchange="window.ModuleRH.salvarLinhaPonto(this)" ${dis}></td>
+            <td><input type="time" value="${_esc(har)}" data-campo="hora_almoco_retorno" onchange="window.ModuleRH.salvarLinhaPonto(this)" ${dis}></td>
+            <td style="white-space:nowrap;"><input type="time" value="${_esc(hs)}" data-campo="hora_saida" onchange="window.ModuleRH.salvarLinhaPonto(this)" ${dis}>${badgeD1}</td>
             <td>${trab}</td>
             <td>${ext}</td>
             <td>${atr}</td>
@@ -853,7 +897,7 @@ async function _carregarEscalas() {
         _state.escalaTotal = escalas.length;
         _atualizarBtnNovaEscala();
         _renderEscalas(escalas);
-    } catch (err) { list.innerHTML = `<p style="color:#dc2626;padding:16px;">${err.message}</p>`; }
+    } catch (err) { list.innerHTML = `<p style="color:#dc2626;padding:16px;">${_esc(err.message)}</p>`; }
 }
 
 function _atualizarBtnNovaEscala() {
@@ -871,79 +915,93 @@ function _renderEscalas(list) {
     const container = document.getElementById('escala-lista');
     if (!list.length) { container.innerHTML = '<p style="padding:16px;color:var(--text-secondary,#64748b);">Nenhuma escala cadastrada.</p>'; return; }
 
+    const diasPermitidos = ['seg','ter','qua','qui','sex','sab','dom'];
     const diasLabel = { seg:'Seg', ter:'Ter', qua:'Qua', qui:'Qui', sex:'Sex', sab:'Sáb', dom:'Dom' };
+    const tiposPermitidos = ['livre','controle_jornada','alternada','jornada_44h','jornada_40h','jornada_36h','escala_manual'];
     const tipoLabels = {
         livre:'Livre', controle_jornada:'Controle de Jornada', alternada:'Escala Alternada',
         jornada_44h:'44h/sem — 220h/mês', jornada_40h:'40h/sem — 200h/mês', jornada_36h:'36h/sem — 180h/mês',
+        escala_manual:'Escala Manual',
     };
+    const parseDias = valor => {
+        try {
+            const parsed = typeof valor === 'string' ? JSON.parse(valor || '[]') : valor;
+            return Array.isArray(parsed) ? parsed.filter(d => diasPermitidos.includes(d)) : [];
+        } catch { return []; }
+    };
+    const numero = valor => { const n = Number(valor); return Number.isSafeInteger(n) && n >= 0 ? n : 0; };
+    const hora = valor => { const h = String(valor ?? '').slice(0, 5); return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(h) ? _esc(h) : '—'; };
 
     container.innerHTML = list.map(e => {
-        const dias  = JSON.parse(e.dias_trabalho || '[]');
-        const tipoLabel = tipoLabels[e.tipo] ?? e.tipo;
-        const isAlt = e.tipo === 'alternada' || e.alternada_ativa;
+        const id = Number.parseInt(e.id, 10);
+        if (!Number.isSafeInteger(id) || id <= 0) return '';
+        const tipo = tiposPermitidos.includes(e.tipo) ? e.tipo : '';
+        const dias  = parseDias(e.dias_trabalho);
+        const tipoLabel = tipoLabels[tipo] ?? 'Não classificado';
+        const isAlt = tipo === 'alternada' || Number(e.alternada_ativa) === 1;
 
         // Bloco de semanas A e B para escala alternada
         let altHtml = '';
         if (isAlt) {
-            const semA = typeof e.alternada_semana_a === 'string' ? JSON.parse(e.alternada_semana_a || '[]') : (e.alternada_semana_a ?? []);
-            const semB = typeof e.alternada_semana_b === 'string' ? JSON.parse(e.alternada_semana_b || '[]') : (e.alternada_semana_b ?? []);
+            const semA = parseDias(e.alternada_semana_a);
+            const semB = parseDias(e.alternada_semana_b);
             altHtml = `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
                 <div>
                     <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">Semana A</div>
                     <div class="dias-semana-grid" style="pointer-events:none;">
-                        ${['seg','ter','qua','qui','sex','sab','dom'].map(d => `<span class="dia-tag ${semA.includes(d)?'ativo':''}">${diasLabel[d]}</span>`).join('')}
+                        ${diasPermitidos.map(d => `<span class="dia-tag ${semA.includes(d)?'ativo':''}">${_esc(diasLabel[d])}</span>`).join('')}
                     </div>
                 </div>
                 <div>
                     <div style="font-size:11px;font-weight:600;color:#7c3aed;margin-bottom:4px;">Semana B</div>
                     <div class="dias-semana-grid" style="pointer-events:none;">
-                        ${['seg','ter','qua','qui','sex','sab','dom'].map(d => `<span class="dia-tag ${semB.includes(d)?'ativo':''}">${diasLabel[d]}</span>`).join('')}
+                        ${diasPermitidos.map(d => `<span class="dia-tag ${semB.includes(d)?'ativo':''}">${_esc(diasLabel[d])}</span>`).join('')}
                     </div>
                 </div>
             </div>
             <div style="font-size:11px;color:#64748b;margin-top:4px;">
-                <i class="fas fa-calendar-day"></i> Início Semana A: <strong>${e.alternada_dia_inicio || '—'}</strong> &nbsp;|
-                Folga alternada: <strong>${e.alternada_tipo_folga || 'folga'}</strong>
+                <i class="fas fa-calendar-day"></i> Início Semana A: <strong>${_esc(e.alternada_dia_inicio || '—')}</strong> &nbsp;|
+                Folga alternada: <strong>${_esc(e.alternada_tipo_folga || 'folga')}</strong>
             </div>`;
         }
 
-        const preset = _CLT_JORNADAS[e.tipo] ?? null;
+        const preset = _CLT_JORNADAS[tipo] ?? null;
         const isJorn = !!preset;
         // Carga diária: para jornadas padrão mostra "7h20min", para outras arredonda
-        const cargaMin = parseInt(e.carga_horaria_diaria_min ?? 480);
+        const cargaMin = numero(e.carga_horaria_diaria_min ?? 480);
         const cargaLabel = isJorn
-            ? `${Math.floor(cargaMin/60)}h${cargaMin%60>0?String(cargaMin%60).padStart(2,'0')+'min':''}/${isJorn ? (e.carga_horaria_mensal_min ? Math.round(e.carga_horaria_mensal_min/60)+'h/mês' : preset.cargaMensalH+'h/mês') : ''}`
+            ? `${Math.floor(cargaMin/60)}h${cargaMin%60>0?String(cargaMin%60).padStart(2,'0')+'min':''}/${numero(e.carga_horaria_mensal_min) ? Math.round(numero(e.carga_horaria_mensal_min)/60)+'h/mês' : preset.cargaMensalH+'h/mês'}`
             : `${Math.floor(cargaMin/60)}h carga`;
         // DSR: dias que NÃO estão em dias_trabalho (exceto para alternada)
         const dsrLabel = !isAlt && isJorn
-            ? `DSR: ${['seg','ter','qua','qui','sex','sab','dom'].filter(d=>!dias.includes(d)).map(d=>diasLabel[d]).join(', ')||'—'}`
+            ? `DSR: ${diasPermitidos.filter(d=>!dias.includes(d)).map(d=>diasLabel[d]).join(', ')||'—'}`
             : '';
 
         return `
         <div class="escala-card">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
                 <div>
-                    <div style="font-weight:700;font-size:14px;">${_esc(e.nome_escala)}</div>
-                    <span class="escala-tipo escala-tipo-${e.tipo}">${tipoLabel}</span>
+                    <div style="font-weight:700;font-size:14px;">${_esc(e.nome_escala || 'Escala')}</div>
+                    <span class="escala-tipo escala-tipo-${tipo}">${_esc(tipoLabel)}</span>
                     ${isJorn ? `<span style="margin-left:6px;font-size:10px;font-weight:700;padding:2px 6px;background:#fde68a;color:#78350f;border-radius:4px;">CLT</span>` : ''}
                 </div>
                 <div style="display:flex;gap:6px;">
-                    <button class="action-btn" onclick="window.ModuleRH.editarEscala(${e.id})"><i class="fas fa-edit"></i></button>
-                    <button class="action-btn" onclick="window.ModuleRH.excluirEscala(${e.id})"><i class="fas fa-trash"></i></button>
+                    <button class="action-btn" type="button" onclick="window.ModuleRH.editarEscala(${id})"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn" type="button" onclick="window.ModuleRH.excluirEscala(${id})"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
             ${!isAlt ? `
             <div style="margin:6px 0 4px;font-size:12px;color:var(--text-secondary,#64748b);">Dias de trabalho:</div>
             <div class="dias-semana-grid" style="pointer-events:none;">
-                ${['seg','ter','qua','qui','sex','sab','dom'].map(d => `<span class="dia-tag ${dias.includes(d)?'ativo':''}" title="${!dias.includes(d)&&isJorn?'DSR – Descanso Semanal Remunerado':''}">${diasLabel[d]}</span>`).join('')}
+                ${diasPermitidos.map(d => `<span class="dia-tag ${dias.includes(d)?'ativo':''}" title="${!dias.includes(d)&&isJorn?'DSR – Descanso Semanal Remunerado':''}">${_esc(diasLabel[d])}</span>`).join('')}
             </div>
             ${dsrLabel ? `<div style="font-size:11px;color:#92400e;margin-top:4px;"><i class="fas fa-moon"></i> ${dsrLabel} — remunerado, sem débito de horas</div>` : ''}` : altHtml}
             <div class="escala-horarios" style="margin-top:8px;">
-                <span><i class="fas fa-sign-in-alt"></i> ${e.hora_entrada?.slice(0,5)||'—'}</span>
-                <span><i class="fas fa-utensils"></i> ${e.hora_almoco_saida?.slice(0,5)||'—'} – ${e.hora_almoco_retorno?.slice(0,5)||'—'}</span>
-                <span><i class="fas fa-sign-out-alt"></i> ${e.hora_saida?.slice(0,5)||'—'}</span>
-                <span><i class="fas fa-clock"></i> ${cargaLabel} / ${e.tolerancia_minutos??10}min tolerância</span>
+                <span><i class="fas fa-sign-in-alt"></i> ${hora(e.hora_entrada)}</span>
+                <span><i class="fas fa-utensils"></i> ${hora(e.hora_almoco_saida)} – ${hora(e.hora_almoco_retorno)}</span>
+                <span><i class="fas fa-sign-out-alt"></i> ${hora(e.hora_saida)}</span>
+                <span><i class="fas fa-clock"></i> ${_esc(cargaLabel)} / ${Math.min(1440, numero(e.tolerancia_minutos ?? 10))}min tolerância</span>
             </div>
         </div>`;
     }).join('');
@@ -1013,6 +1071,12 @@ async function _editarEscala(id) {
 
         const chkBH = document.getElementById('escala-banco-horas-ativo');
         if (chkBH) chkBH.checked = !!parseInt(e.banco_horas_ativo ?? 0);
+        const politicaExtra = document.getElementById('escala-politica-extra');
+        if (politicaExtra) politicaExtra.value = e.politica_extra_excedente || 'CREDITAR_TUDO';
+        const limiteExtra = document.getElementById('escala-limite-extra-diario');
+        if (limiteExtra) limiteExtra.value = e.limite_extra_diario_min ?? 120;
+        const limiteBH = document.getElementById('escala-limite-saldo-negativo');
+        if (limiteBH) limiteBH.value = e.limite_saldo_negativo_min ?? '';
 
         // Escala manual: popula a tabela por dia da semana
         if (e.tipo === 'escala_manual') {
@@ -1043,6 +1107,16 @@ async function _excluirEscala(id) {
 async function _salvarEscala(e) {
     e.preventDefault();
     if (_state.escalaSalvando) return;
+    const limiteNegativoRaw = document.getElementById('escala-limite-saldo-negativo')?.value ?? '';
+    if (limiteNegativoRaw !== '' && (!/^\d+$/.test(limiteNegativoRaw) || !Number.isSafeInteger(Number(limiteNegativoRaw)) || Number(limiteNegativoRaw) > 2147483647)) {
+        return _toast('Informe o limite negativo como minutos inteiros entre 0 e 2.147.483.647, ou deixe vazio.', 'error');
+    }
+    const limiteExtraRaw = document.getElementById('escala-limite-extra-diario')?.value ?? '120';
+    const politicaExtra = document.getElementById('escala-politica-extra')?.value ?? 'CREDITAR_TUDO';
+    if (!['CREDITAR_TUDO', 'LIMITAR_E_SEPARAR'].includes(politicaExtra) || !/^\d+$/.test(limiteExtraRaw) ||
+        !Number.isSafeInteger(Number(limiteExtraRaw)) || Number(limiteExtraRaw) < 1 || Number(limiteExtraRaw) > 2147483647) {
+        return _toast('Política ou limite diário de extras inválido.', 'error');
+    }
     _state.escalaSalvando = true;
     const btnSubmit = document.querySelector('#formEscala [type="submit"]');
     if (btnSubmit) { btnSubmit.disabled = true; btnSubmit.textContent = 'Salvando…'; }
@@ -1080,6 +1154,11 @@ async function _salvarEscala(e) {
             : Math.round(mensal_h * 60),
         // Banco de horas (controle_jornada e jornadas CLT padrão)
         banco_horas_ativo          : (document.getElementById('escala-banco-horas-ativo')?.checked && (tipo === 'controle_jornada' || !!_CLT_JORNADAS[tipo] || isManual)) ? 1 : 0,
+        limite_saldo_negativo_min : limiteNegativoRaw === ''
+            ? null
+            : Number.parseInt(limiteNegativoRaw, 10),
+        politica_extra_excedente  : politicaExtra,
+        limite_extra_diario_min   : Number.parseInt(limiteExtraRaw, 10),
     };
 
     // Campos de escala manual
@@ -1157,6 +1236,451 @@ function _setupRelatorios() {
             }
         });
     });
+    _setupBHPainel();
+    _setupBHReprocessar();
+}
+
+function _setupBHPainel() {
+    const input = document.getElementById('bh-reg-minutos');
+    const tipo = document.getElementById('bh-reg-tipo');
+    input?.addEventListener('input', _atualizarBHPrevia);
+    tipo?.addEventListener('change', _atualizarBHPrevia);
+    document.getElementById('bh-negativo-cancelar')?.addEventListener('click', _fecharBHModal);
+    document.getElementById('bh-negativo-confirmar')?.addEventListener('click', () => {
+        if (!_bhPendingRequest || _bhSubmitting) return;
+        const justificativa = document.getElementById('bh-negativo-justificativa')?.value?.trim() ?? '';
+        const marcado = document.getElementById('bh-negativo-confirmar-checkbox')?.checked === true;
+        if (justificativa.length < 10 || justificativa.length > 500) {
+            _toast('A justificativa deve ter entre 10 e 500 caracteres.', 'error');
+            return;
+        }
+        if (!marcado) {
+            _toast('Marque a confirmação do lançamento com saldo negativo.', 'error');
+            return;
+        }
+        _enviarBH(_bhPendingRequest, true, justificativa);
+    });
+    document.getElementById('bh-negativo-modal')?.addEventListener('click', event => {
+        if (event.target?.id === 'bh-negativo-modal') _fecharBHModal();
+    });
+    document.addEventListener('keydown', _bhEscapeListener);
+    _atualizarBHPrevia();
+}
+
+function _bhUsuarioAdminAtual() {
+    if (window.PermissoesModulos?.isAdmin?.()) return true;
+    if (typeof window.verificarPermissao === 'function') {
+        try { return window.verificarPermissao('admin') === true; } catch { return false; }
+    }
+    return _bhServerIsAdmin === true;
+}
+
+async function _bhCarregarPermissaoServidor() {
+    if (_bhPermissionRequest) return _bhPermissionRequest;
+    _bhPermissionRequest = (async () => {
+        try {
+            const response = await fetch('../api/api_rh_banco_horas.php?acao=permissao_reprocessar', { credentials: 'include', cache: 'no-store' });
+            const result = await response.json();
+            _bhServerCanEdit = response.ok && result?.sucesso ? result.dados?.pode_editar === true : false;
+            _bhServerIsAdmin = response.ok && result?.sucesso ? result.dados?.pode_admin === true : false;
+        } catch { _bhServerCanEdit = false; _bhServerIsAdmin = false; }
+        _bhPermissionRequest = null;
+        _atualizarBtnBHReprocessar();
+    })();
+    return _bhPermissionRequest;
+}
+
+function _setupBHReprocessar() {
+    const button = document.getElementById('btn-bh-reprocessar');
+    button?.addEventListener('click', _iniciarReprocessamentoBH);
+    document.getElementById('bh-reprocessar-aplicar')?.addEventListener('click', _aplicarReprocessamentoBH);
+    document.getElementById('bh-reprocessar-cancelar')?.addEventListener('click', _fecharReprocessamentoBH);
+    document.getElementById('bh-reprocessar-incluir-fechados')?.addEventListener('change', _bhRepreviewFechados);
+    document.getElementById('bh-reprocessar-modal')?.addEventListener('click', event => {
+        if (event.target?.id === 'bh-reprocessar-modal' && !_bhReprocessApplying) _fecharReprocessamentoBH();
+    });
+    document.getElementById('bh-reprocessar-so-divergencias')?.addEventListener('change', _renderBHReprocessTabela);
+    ['bh-reprocessar-motivo','bh-reprocessar-revisei'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', _atualizarEstadoAplicarBH);
+        document.getElementById(id)?.addEventListener('change', _atualizarEstadoAplicarBH);
+    });
+    ['rel-mes','rel-ano','rel-data-inicio','rel-data-fim','rel-departamento','rel-colaborador-id'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', _atualizarBtnBHReprocessar);
+        document.getElementById(id)?.addEventListener('input', _atualizarBtnBHReprocessar);
+    });
+    document.querySelectorAll('input[name="rel-tipo-periodo"]').forEach(el => el.addEventListener('change', _atualizarBtnBHReprocessar));
+    document.addEventListener('keydown', _bhReprocessEscapeListener);
+    const fechado = document.getElementById('bh-reprocessar-fechados-wrap');
+    if (fechado) fechado.style.display = _bhUsuarioAdminAtual() ? '' : 'none';
+    _atualizarBtnBHReprocessar();
+}
+
+function _atualizarBtnBHReprocessar() {
+    const btn = document.getElementById('btn-bh-reprocessar');
+    if (!btn) return;
+    const perms = window.PermissoesModulos;
+    const isAdmin = _bhUsuarioAdminAtual();
+    const fechado = document.getElementById('bh-reprocessar-fechados-wrap');
+    if (fechado) fechado.style.display = isAdmin ? '' : 'none';
+    const autorizado = isAdmin || _bhServerCanEdit === true || !!perms?.temPermissao?.('recursos_humanos', 'pode_editar');
+    if (_bhServerCanEdit === null) _bhCarregarPermissaoServidor();
+    const colab = document.getElementById('rel-colaborador-id')?.value || '';
+    const dept = document.getElementById('rel-departamento')?.value || '';
+    const personalizado = document.getElementById('rel-tipo-personalizado')?.checked === true;
+    const inicio = document.getElementById('rel-data-inicio')?.value || '';
+    const fim = document.getElementById('rel-data-fim')?.value || '';
+    const mes = Number(document.getElementById('rel-mes')?.value || 0);
+    const ano = Number(document.getElementById('rel-ano')?.value || 0);
+    const dataValida = personalizado ? /^\d{4}-\d{2}-\d{2}$/.test(inicio) && /^\d{4}-\d{2}-\d{2}$/.test(fim) && inicio <= fim : mes >= 1 && mes <= 12 && ano >= 2000 && ano <= 2099;
+    btn.style.display = autorizado ? '' : 'none';
+    btn.disabled = !autorizado || !dataValida || (!colab && !dept) || _bhReprocessApplying;
+    btn.title = !colab && !dept ? 'Selecione um colaborador ou departamento para habilitar' : 'Reprocessar o banco de horas do período com a regra atual';
+}
+
+function _bhReprocessEscapeListener(event) {
+    if (event.key === 'Escape' && document.getElementById('bh-reprocessar-modal')?.style.display !== 'none' && !_bhReprocessApplying) _fecharReprocessamentoBH();
+}
+
+async function _bhRepreviewFechados() {
+    if (!_bhReprocessPreview || _bhReprocessApplying) return;
+    const filters = _bhReprocessFiltros(Number(_bhReprocessPreview.lote?.offset || 0));
+    if (!filters) return;
+    const progress = document.getElementById('bh-reprocessar-progresso');
+    if (progress) progress.textContent = 'Atualizando a prévia para a opção de períodos fechados…';
+    try {
+        const preview = await _bhReprocessRequest('simular', filters);
+        if (_bhReprocessProgress) _bhReprocessProgress.motivo = document.getElementById('bh-reprocessar-motivo')?.value || '';
+        _mostrarPreviewBH(preview);
+    } catch (error) {
+        _toast(error.message, 'error');
+    }
+}
+
+function _bhReprocessFiltros(offset = 0) {
+    const periodo = _getRelPeriodoParams();
+    if (!periodo) return null;
+    const colab = document.getElementById('rel-colaborador-id')?.value || '';
+    const dept = document.getElementById('rel-departamento')?.value || '';
+    if (!colab && !dept) { _toast('Selecione um colaborador ou departamento.', 'error'); return null; }
+    return {
+        ...(periodo.tipo === 'personalizado'
+            ? { data_inicio: periodo.data_inicio, data_fim: periodo.data_fim }
+            : { mes: Number(periodo.mes), ano: Number(periodo.ano) }),
+        ...(colab ? { colaborador_id: Number(colab) } : { departamento: dept }),
+        offset,
+        incluir_fechados: document.getElementById('bh-reprocessar-incluir-fechados')?.checked === true,
+    };
+}
+
+async function _bhReprocessRequest(modo, payload) {
+    const response = await fetch('../api/api_rh_banco_horas.php?acao=reprocessar', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, modo }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result?.sucesso) {
+        const error = new Error(result?.mensagem || 'Não foi possível reprocessar o Banco de Horas.');
+        error.status = response.status;
+        error.codigo = result?.codigo;
+        throw error;
+    }
+    return result.dados || {};
+}
+
+function _bhSignedMinutes(value) {
+    const n = Number(value) || 0;
+    return `${n > 0 ? '+' : ''}${_bhFmt(n)}`;
+}
+
+function _bhReprocessFilterLabel(preview) {
+    const f = preview?.filtro || {};
+    const periodo = f.data_inicio && f.data_fim ? `${f.data_inicio} a ${f.data_fim}` : `${_nomeMes(String(f.mes))}/${f.ano}`;
+    const target = f.colaborador_id
+        ? (preview.colaboradores?.[0]?.nome || `Colaborador #${f.colaborador_id}`)
+        : `Departamento ${f.departamento || ''}`;
+    return `${target} · ${periodo}`;
+}
+
+function _mostrarPreviewBH(preview) {
+    _bhReprocessPreview = preview;
+    const modal = document.getElementById('bh-reprocessar-modal');
+    if (!modal) return;
+    const lote = preview.lote || {};
+    const start = Number(lote.offset || 0);
+    const done = Math.min(start + Number(lote.limite || 20), Number(lote.total_colaboradores || 0));
+    const progress = document.getElementById('bh-reprocessar-progresso');
+    if (progress) {
+        const total = Number(lote.total_colaboradores || 0);
+        progress.textContent = total > 20 || start > 0 ? `Lote ${Math.floor(start / 20) + 1} · colaboradores ${start + 1}–${done} de ${total}` : `${total} colaborador(es) no escopo`;
+    }
+    const subtitle = document.getElementById('bh-reprocessar-subtitulo');
+    if (subtitle) subtitle.textContent = `${_bhReprocessFilterLabel(preview)}. Esta prévia não alterou os dados.`;
+    const totals = preview.totais || {};
+    const kpis = [
+        ['Extras no espelho', _bhFmt(totals.extra_espelho)],
+        ['Abono de extras', `−${_bhFmt(totals.extra_abonado)}`],
+        ['Crédito atual → esperado', `${_bhFmt(totals.credito_atual)} → ${_bhFmt(totals.credito_esperado)}`],
+        ['Débito atual → esperado', `${_bhFmt(totals.debito_atual)} → ${_bhFmt(totals.debito_esperado)}`],
+        ['Excedente separado', `${_bhFmt(totals.excedente_atual)} → ${_bhFmt(totals.excedente_esperado)}`],
+        ['Saldo atual → após reprocessar', `${_bhFmt(totals.saldo_atual)} → ${_bhFmt(totals.saldo_apos_reprocessar)}`],
+    ];
+    const kpiEl = document.getElementById('bh-reprocessar-kpis');
+    if (kpiEl) kpiEl.innerHTML = kpis.map(([label, value]) => `<div class="bh-reprocessar-kpi"><span>${_esc(label)}</span><strong>${_esc(value)}</strong></div>`).join('');
+    const warnings = [];
+    const alertCount = (preview.lancamentos || []).reduce((sum, day) => sum + (day.alertas?.length || 0), 0);
+    if (alertCount) warnings.push(`${alertCount} dia(s) acima do limite diário configurado; nenhum minuto será descartado por esse alerta.`);
+    const closedCount = (preview.lancamentos || []).filter(day => day.status === 'PERIODO_FECHADO').length;
+    const noScaleCount = (preview.lancamentos || []).filter(day => day.status === 'SEM_ESCALA_BH').length;
+    if (closedCount) warnings.push(`${closedCount} dia(s) em período fechado serão ignorados por padrão.`);
+    if (noScaleCount) warnings.push(`${noScaleCount} dia(s) sem escala com Banco de Horas ativo não podem ser regerados.`);
+    if (preview.ignorados?.length) warnings.push(`${preview.ignorados.length} item(ns) ignorados ou sem período/escala, detalhados na tabela quando aplicável.`);
+    const alertEl = document.getElementById('bh-reprocessar-alertas');
+    if (alertEl) alertEl.textContent = warnings.join(' ');
+    const includeWrap = document.getElementById('bh-reprocessar-fechados-wrap');
+    if (includeWrap) includeWrap.style.display = _bhUsuarioAdminAtual() ? '' : 'none';
+    const includeClosed = document.getElementById('bh-reprocessar-incluir-fechados');
+    if (includeClosed) includeClosed.checked = preview.filtro?.incluir_fechados === true;
+    const onlyDiff = document.getElementById('bh-reprocessar-so-divergencias');
+    if (onlyDiff) onlyDiff.checked = true;
+    const reviewed = document.getElementById('bh-reprocessar-revisei');
+    if (reviewed) reviewed.checked = false;
+    const reason = document.getElementById('bh-reprocessar-motivo');
+    if (reason && !_bhReprocessProgress?.motivo) reason.value = '';
+    _renderBHReprocessTabela();
+    _atualizarEstadoAplicarBH();
+    modal.style.display = 'flex';
+}
+
+function _renderBHReprocessTabela() {
+    const host = document.getElementById('bh-reprocessar-tabela');
+    if (!host || !_bhReprocessPreview) return;
+    const onlyDiff = document.getElementById('bh-reprocessar-so-divergencias')?.checked === true;
+    const rows = _bhReprocessPreview.lancamentos || [];
+    const visible = rows.filter(row => !onlyDiff || row.status !== 'OK');
+    const dateFmt = value => {
+        const d = new Date(`${value}T00:00:00`);
+        return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString('pt-BR');
+    };
+    if (!visible.length) {
+        host.innerHTML = '<p style="padding:12px;color:#64748b;">Nenhuma divergência nesta prévia.</p>';
+        return;
+    }
+    host.innerHTML = `<table><thead><tr><th>Data / Colaborador</th><th>Tipo</th><th>Batidas</th><th>Carga</th><th>Trabalhado</th><th>Extra</th><th>Atraso</th><th>Abonos</th><th>Crédito atual → esperado</th><th>Débito atual → esperado</th><th>Excedente</th><th>Saldo Δ</th><th>Status</th></tr></thead><tbody>${visible.map(row => {
+        const status = String(row.status || 'DIVERGENTE');
+        const cls = status === 'OK' ? '' : (['PERIODO_FECHADO','SEM_ESCALA_BH'].includes(status) ? 'is-ignored' : 'is-divergent');
+        const type = row.tipo_dia || 'normal';
+        const delta = Number(row.diferenca) || 0;
+        const deltaClass = delta > 0 ? 'bh-diff-positive' : (delta < 0 ? 'bh-diff-negative' : '');
+        const warnings = (row.alertas || []).length ? ` · ${row.alertas.join(', ')}` : '';
+        const batidas = Object.values(row.batidas || {}).map(value => value || '—').join(' · ');
+        const abonos = [row.abonos?.extras && row.abonos.extras !== 'nenhum' && `Extras ${_bhFmt(row.abonos.extras_min)}`, row.abonos?.atraso && row.abonos.atraso !== 'nenhum' && `Atraso ${_bhFmt(row.abonos.atraso_min)}`, row.abonos?.falta ? 'Falta' : ''].filter(Boolean).join(' · ') || '—';
+        return `<tr class="${cls}">
+            <td>${_esc(dateFmt(row.data))}<br><small>${_esc(row.colaborador_nome || '')}</small></td>
+            <td>${_esc(type)}</td><td>${_esc(batidas)}</td><td>${_esc(_bhFmt(row.carga_prevista))}</td>
+            <td>${_esc(_bhFmt(row.trabalhado))}</td><td>${_esc(_bhFmt(row.extra_espelho))}</td><td>${_esc(_bhFmt(row.atraso_espelho))}</td><td>${_esc(abonos)}</td>
+            <td>${_esc(_bhFmt(row.credito_atual))} → ${_esc(_bhFmt(row.credito_esperado))}</td>
+            <td>${_esc(_bhFmt(row.debito_atual))} → ${_esc(_bhFmt(row.debito_esperado))}</td>
+            <td>${_esc(_bhFmt(row.excedente_atual))} → ${_esc(_bhFmt(row.excedente))}</td>
+            <td class="${deltaClass}">${_esc(_bhSignedMinutes(delta))}</td>
+            <td class="bh-status bh-status-${_esc(status)}" title="${_esc(`${row.regra_aplicada || ''}${warnings}`)}">${_esc(status)}${row.impacto_dsr_fora_periodo ? ' · DSR semanal' : ''}${warnings ? ' ⚠' : ''}</td>
+        </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+function _atualizarEstadoAplicarBH() {
+    const btn = document.getElementById('bh-reprocessar-aplicar');
+    if (!btn) return;
+    const motivo = document.getElementById('bh-reprocessar-motivo')?.value?.trim() || '';
+    const revisado = document.getElementById('bh-reprocessar-revisei')?.checked === true;
+    const divergencias = Number(_bhReprocessPreview?.totais?.dias_divergentes || 0);
+    const total = Number(_bhReprocessPreview?.lote?.total_colaboradores || 0);
+    btn.disabled = _bhReprocessApplying || !_bhReprocessPreview || !revisado || motivo.length < 10 || motivo.length > 500 || (divergencias === 0 && total === 0);
+    btn.innerHTML = _bhReprocessApplying ? '<i class="fas fa-spinner fa-spin"></i> Processando…' : (Number(_bhReprocessPreview?.lote?.offset || 0) > 0 ? '<i class="fas fa-check"></i> Aplicar próximo lote' : '<i class="fas fa-check"></i> Aplicar lote');
+}
+
+async function _iniciarReprocessamentoBH() {
+    if (_bhReprocessApplying) return;
+    const filtros = _bhReprocessFiltros(0);
+    if (!filtros) return;
+    const btn = document.getElementById('btn-bh-reprocessar');
+    if (btn) { btn.disabled = true; btn.dataset.loading = '1'; }
+    const progress = document.getElementById('bh-reprocessar-progresso');
+    if (progress) progress.textContent = 'Calculando prévia segura…';
+    try {
+        const preview = await _bhReprocessRequest('simular', filtros);
+        _bhReprocessProgress = { filtro: filtros, motivo: '', dias: 0, delta: 0, processados: 0, total: Number(preview.lote?.total_colaboradores || 0) };
+        _mostrarPreviewBH(preview);
+    } catch (error) {
+        _toast(error.message, error.status === 403 ? 'error' : 'error');
+    } finally {
+        if (btn) { delete btn.dataset.loading; _atualizarBtnBHReprocessar(); }
+    }
+}
+
+async function _aplicarReprocessamentoBH() {
+    if (_bhReprocessApplying || !_bhReprocessPreview || !_bhReprocessProgress) return;
+    const motivo = document.getElementById('bh-reprocessar-motivo')?.value?.trim() || '';
+    if (motivo.length < 10 || motivo.length > 500 || !document.getElementById('bh-reprocessar-revisei')?.checked) {
+        _toast('Revise a prévia, confirme o checkbox e informe o motivo (10–500 caracteres).', 'error');
+        return;
+    }
+    _bhReprocessProgress.motivo = motivo;
+    const payload = {
+        ..._bhReprocessPreview.filtro,
+        previsualizacao_id: _bhReprocessPreview.previsualizacao_id,
+        hash_previa: _bhReprocessPreview.hash_previa,
+        hash_entrada: _bhReprocessPreview.hash_entrada,
+        revisei_diferencas: true,
+        motivo,
+    };
+    _bhReprocessApplying = true;
+    const cancel = document.getElementById('bh-reprocessar-cancelar');
+    if (cancel) cancel.disabled = true;
+    _atualizarEstadoAplicarBH();
+    const progress = document.getElementById('bh-reprocessar-progresso');
+    if (progress) progress.textContent = `Aplicando colaboradores ${Number(_bhReprocessPreview.lote?.offset || 0) + 1}–${Math.min(Number(_bhReprocessPreview.lote?.offset || 0) + 20, _bhReprocessProgress.total)} de ${_bhReprocessProgress.total}…`;
+    try {
+        const result = await _bhReprocessRequest('aplicar', payload);
+        if (result.idempotente) {
+            _toast('Este lote já havia sido concluído; nenhum lançamento duplicado foi criado.', 'success');
+            _fecharReprocessamentoBH();
+            await _gerarRelatorio('banco_horas');
+            return;
+        }
+        _bhReprocessProgress.dias += Number(result.dias_alterados || 0);
+        _bhReprocessProgress.delta += Number(result.totais_depois?.saldo_apos_reprocessar || 0) - Number(result.totais_antes?.saldo_atual || 0);
+        _bhReprocessProgress.processados += Number(result.lote?.processados || 0);
+        const nextOffset = result.lote?.offset_proximo;
+        if (nextOffset !== null && nextOffset !== undefined) {
+            const nextFilter = { ..._bhReprocessProgress.filtro, offset: Number(nextOffset) };
+            const nextPreview = await _bhReprocessRequest('simular', nextFilter);
+            _bhReprocessProgress.filtro = nextFilter;
+            _bhReprocessPreview = nextPreview;
+            _mostrarPreviewBH(nextPreview);
+            const msg = document.getElementById('bh-reprocessar-progresso');
+            if (msg) msg.textContent = `Lote anterior aplicado. Próximo: colaboradores ${Number(nextPreview.lote.offset) + 1}–${Math.min(Number(nextPreview.lote.offset) + 20, _bhReprocessProgress.total)} de ${_bhReprocessProgress.total}. Revise antes de aplicar.`;
+            const reason = document.getElementById('bh-reprocessar-motivo');
+            if (reason) reason.value = motivo;
+            _atualizarEstadoAplicarBH();
+            return;
+        }
+        const dias = _bhReprocessProgress.dias;
+        const delta = _bhSignedMinutes(_bhReprocessProgress.delta);
+        _fecharReprocessamentoBH();
+        _toast(`Banco reprocessado: ${dias} dias ajustados, ${delta}.`, 'success');
+        await _gerarRelatorio('banco_horas');
+    } catch (error) {
+        if (error.status === 409 || error.codigo === 'ESPELHO_ALTERADO') {
+            const alert = document.getElementById('bh-reprocessar-alertas');
+            if (alert) alert.textContent = `${error.message} Gere uma nova prévia e revise novamente.`;
+            if (_bhReprocessProgress) {
+                const filters = _bhReprocessFiltros(Number(_bhReprocessPreview?.lote?.offset || 0));
+                if (filters) {
+                    try { _mostrarPreviewBH(await _bhReprocessRequest('simular', filters)); }
+                    catch (refreshError) { _toast(refreshError.message, 'error'); }
+                }
+            }
+        } else {
+            _toast(error.message, 'error');
+        }
+    } finally {
+        _bhReprocessApplying = false;
+        if (cancel) cancel.disabled = false;
+        _atualizarEstadoAplicarBH();
+        _atualizarBtnBHReprocessar();
+    }
+}
+
+function _fecharReprocessamentoBH() {
+    const modal = document.getElementById('bh-reprocessar-modal');
+    if (modal) modal.style.display = 'none';
+    if (_bhReprocessApplying) return;
+    _bhReprocessPreview = null;
+    _bhReprocessProgress = null;
+    const reason = document.getElementById('bh-reprocessar-motivo');
+    const reviewed = document.getElementById('bh-reprocessar-revisei');
+    const include = document.getElementById('bh-reprocessar-incluir-fechados');
+    if (reason) reason.value = '';
+    if (reviewed) reviewed.checked = false;
+    if (include) include.checked = false;
+}
+
+function _bhEscapeListener(event) {
+    if (event.key === 'Escape' && document.getElementById('bh-negativo-modal')?.style.display !== 'none') {
+        _fecharBHModal();
+    }
+}
+
+function _bhParseDuracao(valor) {
+    const texto = String(valor ?? '').trim();
+    if (!texto) return null;
+    if (/^\d+:\d{1,2}$/.test(texto)) {
+        const [horas, minutos] = texto.split(':').map(Number);
+        if (!Number.isSafeInteger(horas) || !Number.isSafeInteger(minutos) || horas < 0 || minutos < 0 || minutos > 59) return null;
+        const total = horas * 60 + minutos;
+        return total > 0 && total <= 2147483647 && Number.isSafeInteger(total) ? total : null;
+    }
+    if (!/^\d+$/.test(texto)) return null;
+    const total = Number(texto);
+    return Number.isSafeInteger(total) && total > 0 && total <= 2147483647 ? total : null;
+}
+
+function _bhFmt(minutos) {
+    const valor = Number.parseInt(minutos ?? 0, 10) || 0;
+    const abs = Math.abs(valor);
+    return `${valor < 0 ? '-' : ''}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+}
+
+function _atualizarBHPrevia() {
+    const preview = document.getElementById('bh-reg-preview');
+    const btn = document.getElementById('btn-bh-registrar');
+    const avisoPagamento = document.getElementById('bh-reg-pagamento-aviso');
+    if (!preview) return;
+
+    const minutos = _bhParseDuracao(document.getElementById('bh-reg-minutos')?.value);
+    const tipo = document.getElementById('bh-reg-tipo')?.value;
+    const saldo = Number(_bhSaldoGlobal) || 0;
+    const pagamentoExcede = tipo === 'pagamento' && minutos !== null && minutos > saldo;
+    if (btn) btn.disabled = !!pagamentoExcede || _bhSubmitting;
+    if (avisoPagamento) avisoPagamento.style.display = pagamentoExcede ? '' : 'none';
+
+    if (minutos === null) {
+        preview.style.display = 'none';
+        preview.textContent = '';
+        return;
+    }
+    const projetado = saldo - minutos;
+    preview.style.display = '';
+    preview.className = `bh-reg-preview ${projetado < 0 ? 'is-negative' : 'is-positive'}`;
+    preview.innerHTML = `Saldo atual <strong>${_esc(_bhFmt(saldo))}</strong> → após ${tipo === 'pagamento' ? 'pagamento' : 'abatimento'} <strong>${_esc(_bhFmt(projetado))}</strong>`;
+}
+
+function _abrirBHModal(dados, payload) {
+    _bhPendingRequest = payload;
+    const resumo = document.getElementById('bh-negativo-resumo');
+    const justificativa = document.getElementById('bh-negativo-justificativa');
+    const confirmar = document.getElementById('bh-negativo-confirmar-checkbox');
+    if (resumo) resumo.innerHTML = `Saldo atual <strong>${_esc(dados.saldo_atual_fmt || _bhFmt(dados.saldo_atual))}</strong><br>` +
+        `Abatimento <strong>${_esc(dados.minutos_fmt || _bhFmt(dados.minutos))}</strong><br>` +
+        `Saldo projetado <strong class="negativo">${_esc(dados.saldo_projetado_fmt || _bhFmt(dados.saldo_projetado))}</strong><br>` +
+        `Excedente sobre saldo positivo: <strong>${_esc(dados.excedente_fmt || _bhFmt(dados.excedente))}</strong>`;
+    const aviso = document.getElementById('bh-negativo-aviso');
+    const divida = Math.abs(Number(dados.saldo_projetado) || 0);
+    if (aviso) aviso.innerHTML = `O colaborador ficará devendo <strong>${_esc(_bhFmt(divida))}</strong>, que será compensado por futuros créditos.`;
+    if (confirmar) confirmar.checked = false;
+    const modal = document.getElementById('bh-negativo-modal');
+    if (modal) modal.style.display = 'flex';
+    justificativa?.focus();
+}
+
+function _fecharBHModal() {
+    const modal = document.getElementById('bh-negativo-modal');
+    if (modal) modal.style.display = 'none';
+    _bhPendingRequest = null;
+    const just = document.getElementById('bh-negativo-justificativa');
+    const check = document.getElementById('bh-negativo-confirmar-checkbox');
+    if (just) just.value = '';
+    if (check) check.checked = false;
 }
 
 // Retorna parâmetros de período para relatórios (mes/ano ou data_inicio/data_fim)
@@ -1193,6 +1717,7 @@ function _buildRelUrl(acao, params, extra = '') {
 let _ultimoRelTipo = null;
 let _ultimoRelDados = null;
 let _ultimoRelTitulo = null;
+let _ultimoRelFiltros = null;
 
 async function _gerarRelatorio(tipo) {
     const params    = _getRelPeriodoParams();
@@ -1203,6 +1728,18 @@ async function _gerarRelatorio(tipo) {
     const wrap   = document.getElementById('relatorio-resultado');
     const titulo = document.getElementById('relatorio-titulo');
     const body   = document.getElementById('relatorio-conteudo');
+    if (tipo === 'banco_horas' && !colab_id && !dept) {
+        wrap.style.display = '';
+        body.innerHTML = '<p style="color:#b91c1c;padding:16px;">Selecione um colaborador ou departamento para o Banco de Horas.</p>';
+        _toast('Selecione um colaborador ou departamento para o banco de horas', 'error');
+        return;
+    }
+    if (tipo === 'espelho_ponto' && !colab_id) {
+        wrap.style.display = '';
+        body.innerHTML = '<p style="color:#b91c1c;padding:16px;">Selecione um colaborador para o espelho de ponto.</p>';
+        _toast('Selecione um colaborador para o espelho', 'error');
+        return;
+    }
     wrap.style.display = '';
     body.innerHTML = '<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Gerando relatório...</div>';
 
@@ -1215,7 +1752,6 @@ async function _gerarRelatorio(tipo) {
             tituloText = `Totais de Horas — ${params.label}`;
             break;
         case 'espelho_ponto':
-            if (!colab_id) { _toast('Selecione um colaborador para o espelho', 'error'); return; }
             url = _buildRelUrl('espelho_ponto', params, `&colaborador_id=${colab_id}`);
             tituloText = `Espelho de Ponto — ${params.label}`;
             break;
@@ -1232,17 +1768,23 @@ async function _gerarRelatorio(tipo) {
             tituloText = `Atrasos — ${params.label}`;
             break;
         case 'banco_horas':
-            if (!colab_id) { _toast('Selecione um colaborador para o banco de horas', 'error'); return; }
+            {
+            let inicio, fim;
             if (params.tipo === 'personalizado') {
-                url = `../api/api_rh_relatorios.php?acao=banco_horas&colaborador_id=${colab_id}&data_inicio=${params.data_inicio}&data_fim=${params.data_fim}`;
+                inicio = params.data_inicio; fim = params.data_fim;
             } else {
-                url = `../api/api_rh_relatorios.php?acao=banco_horas&colaborador_id=${colab_id}&ate_mes=${params.mes}&ate_ano=${params.ano}`;
+                const mes = String(params.mes).padStart(2, '0');
+                inicio = `${params.ano}-${mes}-01`;
+                const fimDia = new Date(Number(params.ano), Number(params.mes), 0).getDate();
+                fim = `${params.ano}-${mes}-${String(fimDia).padStart(2, '0')}`;
             }
+            const alvo = colab_id ? `&colaborador_id=${encodeURIComponent(colab_id)}` : `&departamento=${encodeURIComponent(dept)}`;
+            url = `../api/api_rh_relatorios.php?acao=banco_horas${alvo}&data_inicio=${encodeURIComponent(inicio)}&data_fim=${encodeURIComponent(fim)}`;
             tituloText = `Banco de Horas — ${params.label}`;
-            // Mostra painel de registro de abatimento/pagamento
-            { const p = document.getElementById('bh-registrar-painel'); if (p) { p.style.display=''; p.dataset.colaboradorId = colab_id; } }
-            { const dtInp = document.getElementById('bh-reg-data'); if (dtInp && !dtInp.value) dtInp.value = new Date().toISOString().slice(0,10); }
+            const p = document.getElementById('bh-registrar-painel'); if (p) { p.style.display='none'; if (colab_id) p.dataset.colaboradorId = colab_id; }
+            if (colab_id) { const dtInp = document.getElementById('bh-reg-data'); if (dtInp && !dtInp.value) dtInp.value = new Date().toLocaleDateString('sv-SE'); }
             break;
+            }
         case 'aniversariantes':
             // Aniversariantes: usa mês (personalizado usa mês da data_inicio)
             const mesAniv = params.tipo === 'personalizado'
@@ -1258,16 +1800,88 @@ async function _gerarRelatorio(tipo) {
     _ultimoRelTipo   = tipo;
     _ultimoRelTitulo = tituloText;
     _ultimoRelDados  = null;
+    _ultimoRelFiltros = { periodo: { ...params }, departamento: String(dept || ''), colaboradorId: String(colab_id || '') };
 
     try {
         const r = await fetch(url, { credentials: 'include' });
         const d = await r.json();
         if (!d.sucesso) throw new Error(d.mensagem);
         _ultimoRelDados = d.dados;
+        const painelBH = document.getElementById('bh-registrar-painel');
+        if (painelBH && tipo === 'banco_horas') painelBH.style.display = d.dados?.modo === 'ledger' ? '' : 'none';
+        else if (painelBH) painelBH.style.display = 'none';
+        if (tipo === 'banco_horas' && d.dados?.modo === 'ledger') {
+            _bhSaldoGlobal = Number(d.dados.saldo_global) || 0;
+            _atualizarBHPrevia();
+        }
         body.innerHTML = _renderRelatorio(tipo, d.dados);
+        if (tipo === 'banco_horas' && ['ledger','departamento'].includes(d.dados?.modo)) {
+            await _bhAnexarStatusEHistorico(body, colab_id, params, colab_id ? '' : dept);
+        }
         wrap.scrollIntoView({ behavior: 'smooth' });
     } catch (err) {
-        body.innerHTML = `<p style="color:#dc2626;padding:16px;"><i class="fas fa-exclamation-triangle"></i> ${err.message}</p>`;
+        body.innerHTML = `<p style="color:#dc2626;padding:16px;"><i class="fas fa-exclamation-triangle"></i> ${_esc(err.message)}</p>`;
+    }
+}
+
+async function _bhAnexarStatusEHistorico(host, colaboradorId, periodo, departamento = '') {
+    const base = '../api/api_rh_banco_horas.php';
+    try {
+        const query = new URLSearchParams({ acao: 'mapear' });
+        if (colaboradorId) query.set('colaborador_id', String(colaboradorId));
+        else query.set('departamento', String(departamento));
+        if (periodo.tipo === 'personalizado') {
+            query.set('data_inicio', periodo.data_inicio); query.set('data_fim', periodo.data_fim);
+        } else {
+            query.set('mes', String(periodo.mes)); query.set('ano', String(periodo.ano));
+        }
+        const response = await fetch(`${base}?${query.toString()}`, { credentials: 'include' });
+        const result = await response.json();
+        if (response.ok && result?.sucesso) {
+            const map = result.dados;
+            const count = Number(map?.totais?.dias_divergentes || 0);
+            const lote = map?.lote || {};
+            const parcial = lote.offset_proximo !== null && lote.offset_proximo !== undefined;
+            if (count > 0 || parcial) {
+                const canEdit = _bhUsuarioAdminAtual() || window.PermissoesModulos?.temPermissao?.('recursos_humanos', 'pode_editar');
+                const badge = document.createElement(canEdit ? 'button' : 'div');
+                badge.className = 'bh-selo-desatualizado';
+                badge.type = canEdit ? 'button' : undefined;
+                badge.textContent = count > 0
+                    ? `Banco desatualizado · ${count} dia(s) divergente(s)${parcial ? ' no lote verificado' : ''}`
+                    : `Verificação parcial · ${Math.min(Number(lote.limite) || 20, Number(lote.total_colaboradores) || 0)} de ${Number(lote.total_colaboradores) || 0} colaboradores verificados`;
+                badge.setAttribute('aria-label', badge.textContent);
+                if (canEdit) badge.addEventListener('click', _iniciarReprocessamentoBH);
+                host.prepend(badge);
+            }
+        }
+    } catch (error) {
+        console.warn('[RH Banco de Horas] Não foi possível atualizar selo de divergência.', error);
+    }
+    try {
+        const query = new URLSearchParams({ acao: 'historico', limite: '10' });
+        if (colaboradorId) query.set('colaborador_id', String(colaboradorId));
+        else if (departamento) query.set('departamento', String(departamento));
+        const response = await fetch(`${base}?${query.toString()}`, { credentials: 'include' });
+        const result = await response.json();
+        if (!response.ok || !result?.sucesso || !Array.isArray(result.dados) || !result.dados.length) return;
+        const history = result.dados;
+        const section = document.createElement('section');
+        section.className = 'bh-reprocess-historico';
+        section.innerHTML = `<details><summary>Histórico de reprocessamentos (${history.length})</summary>
+            <div class="table-container"><table class="data-table"><thead><tr><th>Quando</th><th>Período</th><th>Usuário</th><th>Motivo</th><th>Saldo antes → depois</th><th>Fechados</th><th>Status</th></tr></thead>
+            <tbody>${history.map(item => {
+                const before = item.totais_antes || {};
+                const after = item.totais_depois || {};
+                return `<tr><td>${_esc(item.concluido_em || item.iniciado_em || '—')}</td>
+                    <td>${_esc(item.data_inicio)} a ${_esc(item.data_fim)}</td><td>${_esc(item.usuario_nome || item.usuario_id || '—')}</td>
+                    <td>${_esc(item.motivo || '—')}</td><td>${_esc(_bhFmt(before.saldo_atual))} → ${_esc(_bhFmt(after.saldo_apos_reprocessar ?? after.saldo_atual))}</td>
+                    <td>${Number(item.incluir_fechados) === 1 ? 'Sim (admin)' : 'Não'}</td>
+                    <td>${_esc(item.status || '—')}</td></tr>`;
+            }).join('')}</tbody></table></div></details>`;
+        host.appendChild(section);
+    } catch (error) {
+        console.warn('[RH Banco de Horas] Não foi possível carregar o histórico.', error);
     }
 }
 
@@ -1278,12 +1892,12 @@ function _renderRelatorio(tipo, dados) {
             <thead><tr><th>Nome</th><th>Cargo</th><th>Depto</th><th>Contrato</th><th>Trabalhado</th><th>Extra</th><th>Atraso</th><th>Faltas</th><th>Folgas</th><th>Status</th></tr></thead>
             <tbody>${dados.map(r => `<tr>
                 <td>${_esc(r.nome)}</td><td>${_esc(r.cargo||'—')}</td><td>${_esc(r.departamento||'—')}</td>
-                <td>${r.tipo_contrato?.toUpperCase()||'—'}</td>
-                <td>${r.total_horas_trabalhadas_fmt||'—'}</td>
-                <td style="color:#16a34a;">${r.total_horas_extras_fmt||'—'}</td>
-                <td style="color:#dc2626;">${r.total_atraso_fmt||'—'}</td>
-                <td>${r.total_faltas??'—'}</td><td>${r.total_folgas??'—'}</td>
-                <td>${r.periodo_status ? `<span class="status-${r.periodo_status}">${r.periodo_status}</span>` : '—'}</td>
+                <td>${_esc(r.tipo_contrato?.toUpperCase()||'—')}</td>
+                <td>${_esc(r.total_horas_trabalhadas_fmt||'—')}</td>
+                <td style="color:#16a34a;">${_esc(r.total_horas_extras_fmt||'—')}</td>
+                <td style="color:#dc2626;">${_esc(r.total_atraso_fmt||'—')}</td>
+                <td>${_esc(r.total_faltas??'—')}</td><td>${_esc(r.total_folgas??'—')}</td>
+                <td>${r.periodo_status ? `<span class="status-${_esc(String(r.periodo_status).replace(/[^a-zA-Z0-9_-]/g,''))}">${_esc(r.periodo_status)}</span>` : '—'}</td>
             </tr>`).join('')}</tbody></table></div>`;
     }
 
@@ -1294,11 +1908,11 @@ function _renderRelatorio(tipo, dados) {
         const info = `<div style="background:var(--bg-secondary,#f8fafc);border-radius:10px;padding:14px 18px;margin-bottom:14px;border:1px solid var(--border-color,#e2e8f0);">
             <strong>${_esc(c.nome)}</strong> · ${_esc(c.cargo||'—')} · ${_esc(c.departamento||'—')}
             <div style="margin-top:6px;font-size:12px;color:var(--text-secondary,#64748b);display:flex;gap:16px;flex-wrap:wrap;">
-                <span>Trabalhado: <strong>${c.total_horas_trabalhadas_fmt||'—'}</strong></span>
-                <span>Extra: <strong style="color:#16a34a;">${c.total_horas_extras_fmt||'—'}</strong></span>
-                <span>Atraso: <strong style="color:#dc2626;">${c.total_atraso_fmt||'—'}</strong></span>
-                <span>Faltas: <strong>${c.total_faltas||0}</strong></span>
-                <span>Folgas: <strong>${c.total_folgas||0}</strong></span>
+                <span>Trabalhado: <strong>${_esc(c.total_horas_trabalhadas_fmt||'—')}</strong></span>
+                <span>Extra: <strong style="color:#16a34a;">${_esc(c.total_horas_extras_fmt||'—')}</strong></span>
+                <span>Atraso: <strong style="color:#dc2626;">${_esc(c.total_atraso_fmt||'—')}</strong></span>
+                <span>Faltas: <strong>${_esc(c.total_faltas||0)}</strong></span>
+                <span>Folgas: <strong>${_esc(c.total_folgas||0)}</strong></span>
             </div></div>`;
         if (!l?.length) return info + '<p style="padding:16px;">Nenhum lançamento.</p>';
         return info + `<div class="table-container"><table class="data-table">
@@ -1309,16 +1923,36 @@ function _renderRelatorio(tipo, dados) {
                              : r.tipo_dia==='falta'  ? 'style="background:#fff1f2;"'
                              : r.tipo_dia==='feriado' ? 'style="background:#fef9c3;"' : '';
                 return `<tr ${rowCls}>
-                <td>${r.data_fmt}</td><td>${diaPt}</td><td>${_tipoDia(r.tipo_dia)}</td>
-                <td>${r.he||'—'}</td><td>${r.has||'—'}</td><td>${r.har||'—'}</td><td>${r.hs||'—'}</td>
-                <td>${r.horas_trab_fmt||'—'}</td>
-                <td style="color:#16a34a;font-weight:600;">${r.horas_extra_fmt && r.horas_extra_fmt!=='00:00' ? r.horas_extra_fmt : '—'}</td>
-                <td style="color:#dc2626;font-weight:600;">${r.atraso_fmt && r.atraso_fmt!=='00:00' ? r.atraso_fmt : '—'}</td>
+                <td>${_esc(r.data_fmt)}</td><td>${_esc(diaPt)}</td><td>${_esc(_tipoDia(r.tipo_dia))}</td>
+                <td>${_esc(r.he||'—')}</td><td>${_esc(r.has||'—')}</td><td>${_esc(r.har||'—')}</td><td>${_esc(r.hs||'—')}</td>
+                <td>${_esc(r.horas_trab_fmt||'—')}</td>
+                <td style="color:#16a34a;font-weight:600;">${r.horas_extra_fmt && r.horas_extra_fmt!=='00:00' ? _esc(r.horas_extra_fmt) : '—'}${r.alerta_extra_limite ? ` <span title="Extra acima do limite diário informativo de ${_esc(_bhFmt(r.limite_extra_diario_min))}; nenhum minuto foi descartado." aria-label="Extra acima do limite diário" style="color:#b45309;cursor:help;">⚠</span>` : ''}</td>
+                <td style="color:#dc2626;font-weight:600;">${_esc(r.atraso_fmt && r.atraso_fmt!=='00:00' ? r.atraso_fmt : '—')}</td>
                 <td>${_esc(r.observacoes||'')}</td>
             </tr>`;}).join('')}</tbody></table></div>`;
     }
 
     if (tipo === 'banco_horas') {
+        if (dados?.modo === 'departamento') {
+            const rows = dados.colaboradores || [];
+            const totals = dados.totais || {};
+            const cards = [
+                ['Crédito do período', totals.credito_periodo_fmt],
+                ['Débito do período', totals.debito_periodo_fmt],
+                ['Excedente separado', totals.excedente_periodo_fmt],
+                ['Saldo global agregado', totals.saldo_global_fmt],
+            ];
+            const resumoDept = `<div class="bh-reprocessar-kpis">${cards.map(([label, value]) => `<div class="bh-reprocessar-kpi"><span>${_esc(label)}</span><strong>${_esc(value || '00:00')}</strong></div>`).join('')}</div>`;
+            if (!rows.length) return resumoDept + '<p style="padding:16px;color:#64748b;">Nenhum colaborador ativo com Banco de Horas habilitado neste departamento.</p>';
+            return resumoDept + `<div class="table-container"><table class="data-table"><thead><tr><th>Colaborador</th><th>Departamento</th><th>Crédito período</th><th>Débito período</th><th>Excedente</th><th>Saldo período</th><th>Saldo global</th></tr></thead><tbody>${rows.map(row => `<tr>
+                <td>${_esc(row.nome || '')}</td><td>${_esc(row.departamento || '')}</td>
+                <td style="color:#16a34a;">+${_esc(row.credito_periodo_fmt || '00:00')}</td>
+                <td style="color:#dc2626;">-${_esc(row.debito_periodo_fmt || '00:00')}</td>
+                <td>${_esc(row.excedente_periodo_fmt || '00:00')}</td>
+                <td style="color:${Number(row.saldo_periodo) < 0 ? '#dc2626' : '#16a34a'};">${_esc(row.saldo_periodo_fmt || '00:00')}</td>
+                <td style="color:${Number(row.saldo_global) < 0 ? '#dc2626' : '#16a34a'};">${_esc(row.saldo_global_fmt || '00:00')}</td>
+            </tr>`).join('')}</tbody></table></div>`;
+        }
         // Modo ledger (novo — rh_banco_horas disponível)
         if (dados.modo === 'ledger') {
             const { linhas, saldo_global_fmt, saldo_global, total_credito_fmt, total_debito_fmt } = dados;
@@ -1326,34 +1960,46 @@ function _renderRelatorio(tipo, dados) {
             const resumo = `<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
                 <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 16px;min-width:140px;">
                     <div style="font-size:11px;color:#166534;font-weight:600;">CRÉDITO TOTAL</div>
-                    <div style="font-size:18px;font-weight:700;color:#16a34a;">+${total_credito_fmt}</div>
+                    <div style="font-size:18px;font-weight:700;color:#16a34a;">+${_esc(total_credito_fmt)}</div>
                 </div>
                 <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 16px;min-width:140px;">
                     <div style="font-size:11px;color:#991b1b;font-weight:600;">DÉBITO TOTAL</div>
-                    <div style="font-size:18px;font-weight:700;color:#dc2626;">-${total_debito_fmt}</div>
+                    <div style="font-size:18px;font-weight:700;color:#dc2626;">-${_esc(total_debito_fmt)}</div>
                 </div>
                 <div style="background:#f8faff;border:2px solid ${saldoCor};border-radius:8px;padding:10px 16px;min-width:140px;">
                     <div style="font-size:11px;color:#334155;font-weight:600;">SALDO ATUAL</div>
-                    <div style="font-size:18px;font-weight:700;color:${saldoCor};">${saldo_global_fmt}</div>
+                    <div style="font-size:18px;font-weight:700;color:${saldoCor};">${saldo_global < 0 ? `Saldo devedor ${_esc(saldo_global_fmt)}` : _esc(saldo_global_fmt)}</div>
                 </div>
             </div>`;
 
             if (!linhas?.length) return resumo + `<p style="padding:8px 0;color:#64748b;">Nenhum lançamento no período selecionado.<br>
                 <small>Ative o banco de horas na escala do colaborador e recalcule os lançamentos de ponto.</small></p>`;
 
-            const typeLabel = { credito:'Crédito Extra', debito:'Débito', abatimento:'Abatimento', pagamento:'Pagamento' };
-            const typeColor = { credito:'#16a34a', debito:'#dc2626', abatimento:'#7c3aed', pagamento:'#0369a1' };
+            const typeLabel = { credito:'Crédito Extra', debito:'Débito', abatimento:'Abatimento', pagamento:'Pagamento', excedente:'Excedente — decisão RH' };
+            const typeColor = { credito:'#16a34a', debito:'#dc2626', abatimento:'#7c3aed', pagamento:'#0369a1', excedente:'#64748b' };
 
             return resumo + `<div class="table-container"><table class="data-table">
                 <thead><tr><th>Data</th><th>Tipo</th><th>Minutos</th><th>Descrição</th><th>Saldo Corrente</th><th>Usuário</th></tr></thead>
-                <tbody>${linhas.map(l => `<tr>
+                <tbody>${linhas.map(l => {
+                    const conhecido = Object.prototype.hasOwnProperty.call(typeLabel, l.tipo);
+                    const cor = conhecido ? typeColor[l.tipo] : '#64748b';
+                    const label = conhecido ? typeLabel[l.tipo] : 'Não classificado';
+                    const tipoTitle = conhecido ? '' : ' title="Tipo histórico desconhecido; confira a origem do lançamento"';
+                    const confirmado = Number(l.saldo_negativo_confirmado) === 1;
+                    const auditoria = confirmado
+                        ? `Lançado com saldo negativo confirmado por ${l.usuario_confirmacao || l.usuario || 'Usuário não identificado'} — ${l.justificativa_saldo_negativo || 'justificativa não informada'}`
+                        : '';
+                    const calculoTitle = ['credito', 'excedente'].includes(l.tipo) && l.minutos_apurados !== null
+                        ? `Apurado ${_bhFmt(l.minutos_apurados)} · Regra ${l.regra_aplicada || '—'} · v${l.versao_calculo || '—'}`
+                        : '';
+                    return `<tr>
                     <td>${_esc(l.data_fmt)}</td>
-                    <td><span style="color:${typeColor[l.tipo]||'#334155'};font-weight:600;">${typeLabel[l.tipo]||l.tipo}</span></td>
-                    <td style="font-family:monospace;color:${typeColor[l.tipo]||'#334155'};">${l.sinal}${_esc(l.minutos_fmt)}</td>
+                    <td><span class="${conhecido ? '' : 'bh-tipo-desconhecido'}"${tipoTitle} ${calculoTitle ? `title="${_esc(calculoTitle)}"` : ''} style="color:${cor};font-weight:600;">${_esc(label)}</span></td>
+                    <td style="font-family:monospace;color:${cor};">${_esc(l.sinal)}${_esc(l.minutos_fmt)}</td>
                     <td>${_esc(l.descricao)}</td>
                     <td style="font-family:monospace;font-weight:600;color:${l.saldo_corrente>=0?'#16a34a':'#dc2626'};">${_esc(l.saldo_corrente_fmt)}</td>
-                    <td style="font-size:11px;color:#64748b;">${_esc(l.usuario||'Sistema')}</td>
-                </tr>`).join('')}</tbody>
+                    <td style="font-size:11px;color:#64748b;">${_esc(l.usuario||'Sistema')}${confirmado ? ` <span title="${_esc(auditoria)}" aria-label="${_esc(auditoria)}" style="color:#d97706;cursor:help;">⚠</span>` : ''}</td>
+                </tr>`;}).join('')}</tbody>
             </table></div>`;
         }
 
@@ -1363,16 +2009,16 @@ function _renderRelatorio(tipo, dados) {
         return `<div class="table-container"><table class="data-table">
             <thead><tr><th>Mês/Ano</th><th>Trabalhado</th><th>Extras</th><th>Atraso</th><th>Saldo</th><th>Acumulado</th></tr></thead>
             <tbody>${meses.map(m => `<tr>
-                <td>${_nomeMes(m.mes)}/${m.ano}</td>
-                <td>${_minParaHoras(m.total_horas_trabalhadas_min)}</td>
-                <td style="color:#16a34a;">${_minParaHoras(m.total_horas_extras_min)}</td>
-                <td style="color:#dc2626;">${_minParaHoras(m.total_atraso_min)}</td>
-                <td style="color:${m.saldo_min>=0?'#16a34a':'#dc2626'};">${m.saldo_fmt}</td>
-                <td style="color:${m.acumulado_min>=0?'#16a34a':'#dc2626'};font-weight:600;">${m.acumulado_fmt}</td>
+                <td>${_esc(_nomeMes(m.mes))}/${_esc(m.ano)}</td>
+                <td>${_esc(_minParaHoras(m.total_horas_trabalhadas_min))}</td>
+                <td style="color:#16a34a;">${_esc(_minParaHoras(m.total_horas_extras_min))}</td>
+                <td style="color:#dc2626;">${_esc(_minParaHoras(m.total_atraso_min))}</td>
+                <td style="color:${Number(m.saldo_min)>=0?'#16a34a':'#dc2626'};">${_esc(m.saldo_fmt)}</td>
+                <td style="color:${Number(m.acumulado_min)>=0?'#16a34a':'#dc2626'};font-weight:600;">${_esc(m.acumulado_fmt)}</td>
             </tr>`).join('')}
             <tr style="font-weight:700;border-top:2px solid var(--border-color,#e2e8f0);">
                 <td colspan="5" style="text-align:right;">Total acumulado:</td>
-                <td style="color:${total_acumulado_fmt?.startsWith('-')?'#dc2626':'#16a34a'};">${total_acumulado_fmt}</td>
+                <td style="color:${String(total_acumulado_fmt ?? '').startsWith('-')?'#dc2626':'#16a34a'};">${_esc(total_acumulado_fmt)}</td>
             </tr></tbody></table></div>`;
     }
 
@@ -1381,7 +2027,7 @@ function _renderRelatorio(tipo, dados) {
         return `<div class="table-container"><table class="data-table">
             <thead><tr><th>Data</th><th>Nome</th><th>Cargo</th><th>Departamento</th></tr></thead>
             <tbody>${dados.map(r => `<tr>
-                <td>🎂 ${r.aniversario}</td><td>${_esc(r.nome)}</td>
+                <td>🎂 ${_esc(r.aniversario)}</td><td>${_esc(r.nome)}</td>
                 <td>${_esc(r.cargo||'—')}</td><td>${_esc(r.departamento||'—')}</td>
             </tr>`).join('')}</tbody></table></div>`;
     }
@@ -1391,8 +2037,8 @@ function _renderRelatorio(tipo, dados) {
 
     const keys = Object.keys(dados[0]);
     return `<div class="table-container"><table class="data-table">
-        <thead><tr>${keys.map(k => `<th>${k}</th>`).join('')}</tr></thead>
-        <tbody>${dados.map(r => `<tr>${keys.map(k => `<td>${r[k]??'—'}</td>`).join('')}</tr>`).join('')}</tbody>
+        <thead><tr>${keys.map(k => `<th>${_esc(k)}</th>`).join('')}</tr></thead>
+        <tbody>${dados.map(r => `<tr>${keys.map(k => `<td>${_esc(r[k]??'—')}</td>`).join('')}</tr>`).join('')}</tbody>
         </table></div>`;
 }
 
@@ -1400,19 +2046,20 @@ function _gerarRelatorioPDF() {
     if (!_ultimoRelTipo || !_ultimoRelDados) {
         return _toast('Gere um relatório primeiro antes de exportar para PDF', 'info');
     }
-    const params   = _getRelPeriodoParams();
-    if (!params) return;
-    const dept     = document.getElementById('rel-departamento').value;
-    const colab_id = document.getElementById('rel-colaborador-id').value;
+    const filtros = _ultimoRelFiltros;
+    const params = filtros?.periodo;
+    if (!params) return _toast('Gere novamente o relatório antes de exportar para PDF.', 'info');
+    const dept = filtros.departamento;
+    const colab_id = filtros.colaboradorId;
 
     let url = `../api/api_rh_relatorio_pdf.php?tipo=${_ultimoRelTipo}`;
     if (params.tipo === 'personalizado') {
-        url += `&data_inicio=${params.data_inicio}&data_fim=${params.data_fim}`;
+        url += `&data_inicio=${encodeURIComponent(params.data_inicio)}&data_fim=${encodeURIComponent(params.data_fim)}`;
     } else {
-        url += `&mes=${params.mes}&ano=${params.ano}`;
+        url += `&mes=${encodeURIComponent(params.mes)}&ano=${encodeURIComponent(params.ano)}`;
     }
     if (dept)     url += `&departamento=${encodeURIComponent(dept)}`;
-    if (colab_id) url += `&colaborador_id=${colab_id}`;
+    if (colab_id) url += `&colaborador_id=${encodeURIComponent(colab_id)}`;
 
     window.open(url, '_blank');
 }
@@ -1441,6 +2088,16 @@ function _exportarRelatorioCSV() {
         csv += (Array.isArray(dados) ? dados : []).map(r =>
             `"${r.nome||''}";"${r.cargo||''}";"${r.departamento||''}";${r.data||''};"${r.tipo_dia||''}";"${r.horas_fmt||r.horas_extras_fmt||r.atraso_fmt||''}";"${(r.observacoes||'').replace(/"/g,"'")}"` 
         ).join('\n');
+    } else if (_ultimoRelTipo === 'banco_horas' && dados?.modo === 'ledger') {
+        const cell = value => `"${String(value ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ')}"`;
+        const labels = { credito:'Crédito Extra', debito:'Débito', abatimento:'Abatimento', pagamento:'Pagamento', excedente:'Excedente — decisão RH' };
+        csv = 'Data;Tipo;Minutos;Descrição;Saldo corrente;Usuário;Regra;Auditoria saldo negativo\n';
+        csv += (dados.linhas || []).map(row => [row.data_fmt, labels[row.tipo] || 'Não classificado', `${row.sinal || ''}${row.minutos_fmt || ''}`, row.descricao, row.saldo_corrente_fmt, row.usuario, row.regra_aplicada || '', Number(row.saldo_negativo_confirmado) === 1 ? row.justificativa_saldo_negativo : '']
+            .map(cell).join(';')).join('\n');
+    } else if (_ultimoRelTipo === 'banco_horas' && dados?.modo === 'departamento') {
+        csv = 'Colaborador;Departamento;Crédito período;Débito período;Excedente;Saldo período;Saldo global\n';
+        csv += (dados.colaboradores || []).map(r => [r.nome,r.departamento,r.credito_periodo_fmt,r.debito_periodo_fmt,r.excedente_periodo_fmt,r.saldo_periodo_fmt,r.saldo_global_fmt]
+            .map(v => `"${String(v ?? '').replace(/"/g, "'")}"`).join(';')).join('\n');
     } else {
         csv = Object.keys(dados?.[0] || dados?.lancamentos?.[0] || {}).join(';') + '\n';
         const arr = Array.isArray(dados) ? dados : (dados?.lancamentos || []);
@@ -1463,7 +2120,10 @@ async function _popularSelects() {
     try {
         const d = await _fetchJson('../api/api_rh_colaboradores.php?acao=listar&ativo=1', { credentials: 'include' });
         if (!d.sucesso) return;
-        const opts = d.dados.map(c => `<option value="${c.id}">${_esc(c.nome)}</option>`).join('');
+        const opts = (Array.isArray(d.dados) ? d.dados : []).map(c => {
+            const id = Number.parseInt(c.id, 10);
+            return Number.isSafeInteger(id) && id > 0 ? `<option value="${id}">${_esc(c.nome)}</option>` : '';
+        }).join('');
         ['ponto-colaborador-id','escala-colaborador-id','rel-colaborador-id','abono-colaborador-id'].forEach(id => {
             const sel = document.getElementById(id);
             if (!sel) return;
@@ -1487,12 +2147,15 @@ function _esc(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function _escAttr(str) {
-    return String(str ?? '')
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-        .replace(/\r?\n/g, ' ');
+function _rhFotoUrl(valor) {
+    const caminho = String(valor ?? '').trim();
+    if (!caminho) return RH_DEFAULT_AVATAR;
+    try {
+        const url = new URL(caminho, window.location.href);
+        return ['http:', 'https:'].includes(url.protocol) && url.origin === window.location.origin
+            ? url.href
+            : RH_DEFAULT_AVATAR;
+    } catch { return RH_DEFAULT_AVATAR; }
 }
 
 function _setSelect(id, val) {
@@ -1543,7 +2206,13 @@ function _renderEscalaManualRows(semana = {}) {
         const ativo = !!cfg.ativo;
         const dis   = ativo ? '' : 'disabled';
         const op    = ativo ? '1' : '0.55';
-        const cargaLabel = _emCargaCalc(cfg.hora_entrada, cfg.hora_saida, cfg.intervalo_min);
+        const normalizarHora = valor => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(valor ?? '')) ? String(valor) : '';
+        const horaEntrada = normalizarHora(cfg.hora_entrada);
+        const horaAlmocoSaida = normalizarHora(cfg.hora_almoco_saida);
+        const horaAlmocoRetorno = normalizarHora(cfg.hora_almoco_retorno);
+        const horaSaida = normalizarHora(cfg.hora_saida);
+        const intervaloMin = Math.max(0, Math.min(180, Number.parseInt(cfg.intervalo_min, 10) || 0));
+        const cargaLabel = _emCargaCalc(horaEntrada, horaSaida, intervaloMin);
 
         return `<tr data-dia="${dia}" style="border-bottom:1px solid #e9d5ff;opacity:${op};transition:opacity .2s;">
             <td style="padding:7px 10px;font-weight:600;font-size:12px;">${_DIAS_LABEL_EM[dia]}</td>
@@ -1552,11 +2221,11 @@ function _renderEscalaManualRows(semana = {}) {
                        style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;"
                        onchange="window._emToggleDia(this)">
             </td>
-            <td style="padding:3px 5px;"><input type="time" class="em-entrada" data-dia="${dia}" value="${cfg.hora_entrada||''}" ${dis} style="width:85px;font-size:12px;" oninput="window._emAtualizarCarga('${dia}')"></td>
-            <td style="padding:3px 5px;"><input type="time" class="em-als" data-dia="${dia}" value="${cfg.hora_almoco_saida||''}" ${dis} style="width:85px;font-size:12px;"></td>
-            <td style="padding:3px 5px;"><input type="time" class="em-alr" data-dia="${dia}" value="${cfg.hora_almoco_retorno||''}" ${dis} style="width:85px;font-size:12px;"></td>
-            <td style="padding:3px 5px;"><input type="time" class="em-saida" data-dia="${dia}" value="${cfg.hora_saida||''}" ${dis} style="width:85px;font-size:12px;" oninput="window._emAtualizarCarga('${dia}')"></td>
-            <td style="padding:3px 5px;"><input type="number" class="em-int" data-dia="${dia}" value="${cfg.intervalo_min??0}" min="0" max="180" ${dis} style="width:55px;font-size:12px;" oninput="window._emAtualizarCarga('${dia}')"></td>
+            <td style="padding:3px 5px;"><input type="time" class="em-entrada" data-dia="${dia}" value="${_esc(horaEntrada)}" ${dis} style="width:85px;font-size:12px;" oninput="window._emAtualizarCarga('${dia}')"></td>
+            <td style="padding:3px 5px;"><input type="time" class="em-als" data-dia="${dia}" value="${_esc(horaAlmocoSaida)}" ${dis} style="width:85px;font-size:12px;"></td>
+            <td style="padding:3px 5px;"><input type="time" class="em-alr" data-dia="${dia}" value="${_esc(horaAlmocoRetorno)}" ${dis} style="width:85px;font-size:12px;"></td>
+            <td style="padding:3px 5px;"><input type="time" class="em-saida" data-dia="${dia}" value="${_esc(horaSaida)}" ${dis} style="width:85px;font-size:12px;" oninput="window._emAtualizarCarga('${dia}')"></td>
+            <td style="padding:3px 5px;"><input type="number" class="em-int" data-dia="${dia}" value="${intervaloMin}" min="0" max="180" ${dis} style="width:55px;font-size:12px;" oninput="window._emAtualizarCarga('${dia}')"></td>
             <td style="padding:7px 10px;text-align:right;font-weight:700;color:#6d28d9;font-size:12px;" id="em-carga-${dia}">${cargaLabel}</td>
         </tr>`;
     }).join('');
@@ -1928,32 +2597,90 @@ function _setDiasAlternados(gridId, dias) {
 // BANCO DE HORAS — Registro manual de abatimento / pagamento
 // ────────────────────────────────────────────────────────────────────────────
 async function _registrarBH() {
-    const painel    = document.getElementById('bh-registrar-painel');
-    const colab_id  = painel?.dataset?.colaboradorId || document.getElementById('rel-colaborador-id')?.value;
-    const tipo      = document.getElementById('bh-reg-tipo')?.value;
-    const minutos   = parseInt(document.getElementById('bh-reg-minutos')?.value || '0');
-    const data      = document.getElementById('bh-reg-data')?.value;
+    if (_bhSubmitting) return;
+    const painel = document.getElementById('bh-registrar-painel');
+    const colabId = painel?.dataset?.colaboradorId || document.getElementById('rel-colaborador-id')?.value;
+    const tipo = document.getElementById('bh-reg-tipo')?.value;
+    const minutos = _bhParseDuracao(document.getElementById('bh-reg-minutos')?.value);
+    const data = document.getElementById('bh-reg-data')?.value;
     const descricao = document.getElementById('bh-reg-descricao')?.value?.trim();
 
-    if (!colab_id)  return _toast('Colaborador não identificado. Gere o relatório de banco de horas primeiro.', 'error');
-    if (!minutos || minutos <= 0) return _toast('Informe a quantidade de minutos.', 'error');
+    if (!colabId) return _toast('Colaborador não identificado. Gere o relatório de banco de horas primeiro.', 'error');
+    if (!minutos) return _toast('Informe uma duração válida em minutos ou HH:MM.', 'error');
     if (!descricao) return _toast('Informe uma descrição.', 'error');
+    if (tipo === 'pagamento' && minutos > _bhSaldoGlobal) {
+        _atualizarBHPrevia();
+        return _toast(`Pagamento maior que o saldo disponível (${_bhFmt(_bhSaldoGlobal)}). Para compensar com folga, use Abatimento.`, 'error');
+    }
 
+    const assinaturaPayload = JSON.stringify({ colaborador_id: Number.parseInt(colabId, 10), tipo, minutos, data, descricao });
+    if (!_bhRequestKey || _bhRequestSignature !== assinaturaPayload) {
+        _bhRequestKey = globalThis.crypto?.randomUUID?.() || `bh-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+        _bhRequestSignature = assinaturaPayload;
+    }
+    const payload = {
+        colaborador_id: Number.parseInt(colabId, 10),
+        tipo,
+        minutos,
+        data,
+        descricao,
+        idempotency_key: _bhRequestKey,
+    };
+    await _enviarBH(payload, false, '');
+}
+
+async function _enviarBH(payload, confirmarSaldoNegativo, justificativa) {
+    if (_bhSubmitting) return;
+    _bhSubmitting = true;
+    const btn = document.getElementById('btn-bh-registrar');
+    const btnConfirmar = document.getElementById('bh-negativo-confirmar');
+    const original = btn?.innerHTML ?? '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando…'; }
+    if (btnConfirmar) btnConfirmar.disabled = true;
+
+    const body = {
+        ...payload,
+        confirmar_saldo_negativo: !!confirmarSaldoNegativo,
+        justificativa_saldo_negativo: confirmarSaldoNegativo ? justificativa : '',
+    };
     try {
-        const r = await fetch('../api/api_rh_banco_horas.php?acao=registrar', {
-            method: 'POST', credentials: 'include',
+        const response = await fetch('../api/api_rh_banco_horas.php?acao=registrar', {
+            method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ colaborador_id: parseInt(colab_id), tipo, minutos, data, descricao }),
+            body: JSON.stringify(body),
         });
-        const d = await r.json();
-        _toast(d.mensagem, d.sucesso ? 'success' : 'error');
-        if (d.sucesso) {
-            document.getElementById('bh-reg-minutos').value  = '';
-            document.getElementById('bh-reg-descricao').value = '';
-            // Recarrega o relatório de banco de horas para mostrar o novo lançamento
-            _gerarRelatorio('banco_horas');
+        const result = await response.json();
+        if (response.status === 409 && result.codigo === 'CONFIRMAR_SALDO_NEGATIVO') {
+            _abrirBHModal(result.dados || {}, payload);
+            return;
         }
-    } catch (err) { _toast(err.message, 'error'); }
+        if (response.status === 409 && result.codigo === 'IDEMPOTENCY_CONFLICT') {
+            _bhRequestKey = null;
+            _bhRequestSignature = null;
+        }
+        if (!response.ok || !result.sucesso) {
+            throw new Error(result.mensagem || `Erro HTTP ${response.status}`);
+        }
+
+        _toast(result.mensagem || 'Lançamento registrado.', 'success');
+        _bhRequestKey = null;
+        _bhRequestSignature = null;
+        _fecharBHModal();
+        const inputMin = document.getElementById('bh-reg-minutos');
+        const inputDesc = document.getElementById('bh-reg-descricao');
+        if (inputMin) inputMin.value = '';
+        if (inputDesc) inputDesc.value = '';
+        _atualizarBHPrevia();
+        await _gerarRelatorio('banco_horas');
+    } catch (err) {
+        _toast(err.message || 'Falha ao registrar lançamento.', 'error');
+    } finally {
+        _bhSubmitting = false;
+        if (btn) { btn.innerHTML = original || '<i class="fas fa-plus"></i> Registrar'; btn.disabled = false; }
+        if (btnConfirmar) btnConfirmar.disabled = false;
+        _atualizarBHPrevia();
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -2018,7 +2745,12 @@ function _renderAbono(lista) {
         const temAtraso = parseInt(l.atraso_min || 0) > 0;
         const temFalta  = l.tipo_dia === 'falta';
         const temAbono  = temExtras || temAtraso || temFalta;
-        const id        = String(l.id);
+        const id        = Number.parseInt(l.id, 10);
+        if (!Number.isSafeInteger(id) || id <= 0) return '';
+        const extrasMin  = Math.max(0, Number.parseInt(l.horas_extras_min, 10) || 0);
+        const atrasoMin  = Math.max(0, Number.parseInt(l.atraso_min, 10) || 0);
+        const extrasAbonoMin = Math.max(0, Number.parseInt(l.abono_extras_min, 10) || 0);
+        const atrasoAbonoMin = Math.max(0, Number.parseInt(l.abono_atraso_min, 10) || 0);
 
         const jaAbonado = l.abono_justificativa ? true : false;
         const badgeAbonado = jaAbonado
@@ -2039,12 +2771,12 @@ function _renderAbono(lista) {
                   onchange="window.AbonoPage.toggleExtrasMin(this)"
                   style="padding:4px 6px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;">
                   <option value="nenhum" ${l.abono_extras === 'nenhum' ? 'selected' : ''}>Não abonar</option>
-                  <option value="total"  ${l.abono_extras === 'total'  ? 'selected' : ''}>Total (${_mh(l.horas_extras_min)})</option>
+                  <option value="total"  ${l.abono_extras === 'total'  ? 'selected' : ''}>Total (${_mh(extrasMin)})</option>
                   <option value="parcial"${l.abono_extras === 'parcial'? 'selected' : ''}>Parcial</option>
                 </select>
                 <input type="number" class="abono-extras-min-inp" data-id="${id}"
-                  placeholder="minutos" min="1" max="${parseInt(l.horas_extras_min || 0)}"
-                  value="${l.abono_extras_min || ''}"
+                  placeholder="minutos" min="1" max="${extrasMin}"
+                  value="${extrasAbonoMin || ''}"
                   style="display:${l.abono_extras === 'parcial' ? 'block' : 'none'};
                          width:80px;padding:3px 6px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;">
               </div>`;
@@ -2059,12 +2791,12 @@ function _renderAbono(lista) {
                   onchange="window.AbonoPage.toggleAtrasoMin(this)"
                   style="padding:4px 6px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;">
                   <option value="nenhum" ${l.abono_atraso === 'nenhum' ? 'selected' : ''}>Não abonar</option>
-                  <option value="total"  ${l.abono_atraso === 'total'  ? 'selected' : ''}>Total (${_mh(l.atraso_min)})</option>
+                  <option value="total"  ${l.abono_atraso === 'total'  ? 'selected' : ''}>Total (${_mh(atrasoMin)})</option>
                   <option value="parcial"${l.abono_atraso === 'parcial'? 'selected' : ''}>Parcial</option>
                 </select>
                 <input type="number" class="abono-atraso-min-inp" data-id="${id}"
-                  placeholder="minutos" min="1" max="${parseInt(l.atraso_min || 0)}"
-                  value="${l.abono_atraso_min || ''}"
+                  placeholder="minutos" min="1" max="${atrasoMin}"
+                  value="${atrasoAbonoMin || ''}"
                   style="display:${l.abono_atraso === 'parcial' ? 'block' : 'none'};
                          width:80px;padding:3px 6px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;">
               </div>`;
@@ -2091,7 +2823,7 @@ function _renderAbono(lista) {
 
         // ── Botão salvar ──────────────────────────────────────────────────────
         const btnSalvar = temAbono
-            ? `<button onclick="window.AbonoPage.salvar(${l.id})"
+            ? `<button type="button" onclick="window.AbonoPage.salvar(${id})"
                  style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;
                         padding:5px 11px;border-radius:5px;font-size:11px;cursor:pointer;
                         white-space:nowrap;font-weight:600;">

@@ -24,9 +24,13 @@ require_once 'rh_ponto_core.php';
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
-$allowed = ['https://app.erpcondominios.com.br','http://app.erpcondominios.com.br','https://erpcondominios.com.br','http://erpcondominios.com.br','http://localhost','http://127.0.0.1'];
-$origin  = $_SERVER['HTTP_ORIGIN'] ?? '';
-header('Access-Control-Allow-Origin: ' . (in_array($origin, $allowed) ? $origin : 'https://app.erpcondominios.com.br'));
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$origensPermitidas = ['https://app.erpcondominios.com.br','http://app.erpcondominios.com.br','https://erpcondominios.com.br','http://erpcondominios.com.br'];
+$origemLocal = preg_match('/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i', $origin) === 1;
+if ($origin !== '' && (in_array($origin, $origensPermitidas, true) || $origemLocal)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -53,107 +57,116 @@ $acao   = $_GET['acao'] ?? $body['acao'] ?? '';
 $conn   = conectar_banco();
 if (!$conn) retornar_json(false, 'Erro ao conectar ao banco');
 
-// Auto-migração aditiva: coluna de saída antecipada (lançamento + agregado do período)
-_ponto_garantir_colunas($conn);
+try { _ponto_garantir_colunas($conn); }
+catch (Throwable $e) { error_log('[RH Ponto] Schema pendente; tenant='.(int)$tenant_id.'; erro='.$e->getMessage()); fechar_conexao($conn); http_response_code(503); retornar_json(false,'Estrutura de Ponto pendente. Aplique as migrations RH antes de continuar.'); }
+
+if (!function_exists('ponto_exigir_rbac')) {
+    function ponto_exigir_rbac(mysqli $conn, string $acaoRbac, string $fallback = 'gerente'): void {
+        if (function_exists('rbacTabelasDisponiveis') && rbacTabelasDisponiveis($conn)) {
+            rbacExigir($conn, 'recursos_humanos', $acaoRbac, ['submodulo_chave'=>'ponto']);
+            return;
+        }
+        verificarPermissao($fallback);
+    }
+}
 
 // ── PERÍODOS ──────────────────────────────────────────────────────────────────
-
 if ($acao === 'listar_periodos') {
-    $colab_id = intval($_GET['colaborador_id'] ?? 0);
-    if ($colab_id <= 0) retornar_json(false, 'colaborador_id obrigatório');
-
+    ponto_exigir_rbac($conn, 'visualizar', 'visualizador');
+    $colab_id = filter_var($_GET['colaborador_id'] ?? null, FILTER_VALIDATE_INT);
+    if (!$colab_id || $colab_id <= 0) { fechar_conexao($conn); http_response_code(422); retornar_json(false, 'colaborador_id obrigatório.'); }
     $stmt = $conn->prepare(
-        "SELECT p.*, c.nome as colaborador_nome
-         FROM rh_ponto_periodo p
-         JOIN rh_colaboradores c ON c.id = p.colaborador_id
-         WHERE p.colaborador_id = ?
-         ORDER BY p.ano DESC, p.mes DESC"
+        'SELECT p.*, c.nome AS colaborador_nome FROM rh_ponto_periodo p
+         INNER JOIN rh_colaboradores c ON c.id=p.colaborador_id AND c.tenant_id=p.tenant_id
+         WHERE p.tenant_id=? AND c.tenant_id=? AND p.colaborador_id=? ORDER BY p.ano DESC,p.mes DESC'
     );
-    $stmt->bind_param('i', $colab_id);
-    $stmt->execute();
-    $list = [];
-    $res = $stmt->get_result();
-    while ($r = $res->fetch_assoc()) $list[] = $r;
-    $stmt->close(); fechar_conexao($conn);
-    retornar_json(true, 'OK', $list);
+    if (!$stmt) { fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar períodos.'); }
+    $stmt->bind_param('iii', $tenant_id, $tenant_id, $colab_id);
+    if (!$stmt->execute()) { $stmt->close(); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar períodos.'); }
+    $list = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close(); fechar_conexao($conn); retornar_json(true, 'OK', $list);
 }
 
 if ($acao === 'obter_periodo') {
-    $id = intval($_GET['id'] ?? 0);
-    if ($id <= 0) retornar_json(false, 'ID inválido');
-
+    ponto_exigir_rbac($conn, 'visualizar', 'visualizador');
+    $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT);
+    if (!$id || $id <= 0) { fechar_conexao($conn); http_response_code(422); retornar_json(false, 'ID inválido.'); }
     $stmt = $conn->prepare(
-        "SELECT p.*, c.nome as colaborador_nome, c.cargo, c.departamento
-         FROM rh_ponto_periodo p
-         JOIN rh_colaboradores c ON c.id = p.colaborador_id
-         WHERE p.id = ?"
+        'SELECT p.*,c.nome AS colaborador_nome,c.cargo,c.departamento FROM rh_ponto_periodo p
+         INNER JOIN rh_colaboradores c ON c.id=p.colaborador_id AND c.tenant_id=p.tenant_id
+         WHERE p.tenant_id=? AND p.id=? LIMIT 1'
     );
-    $stmt->bind_param('i', $id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    if (!$row) { fechar_conexao($conn); retornar_json(false, 'Período não encontrado'); }
-    fechar_conexao($conn);
+    if (!$stmt) { fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar o período.'); }
+    $stmt->bind_param('ii', $tenant_id, $id);
+    if (!$stmt->execute()) { $stmt->close(); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar o período.'); }
+    $row = $stmt->get_result()->fetch_assoc(); $stmt->close(); fechar_conexao($conn);
+    if (!$row) { http_response_code(404); retornar_json(false, 'Período não encontrado.'); }
     retornar_json(true, 'OK', $row);
 }
 
 if ($acao === 'criar_periodo' && $metodo === 'POST') {
-    $colab_id = intval($body['colaborador_id'] ?? 0);
-    $mes      = intval($body['mes'] ?? 0);
-    $ano      = intval($body['ano'] ?? 0);
-    if ($colab_id <= 0 || $mes < 1 || $mes > 12 || $ano < 2000) retornar_json(false, 'Dados inválidos');
-
-    // Verifica se já existe
-    $chk = $conn->prepare("SELECT id FROM rh_ponto_periodo WHERE colaborador_id=? AND mes=? AND ano=?");
-    $chk->bind_param('iii', $colab_id, $mes, $ano); $chk->execute(); $chk->store_result();
-    if ($chk->num_rows > 0) { $chk->close(); fechar_conexao($conn); retornar_json(false, 'Período já existe para este colaborador'); }
-    $chk->close();
-
-    $stmt = $conn->prepare("INSERT INTO rh_ponto_periodo (colaborador_id, mes, ano) VALUES (?,?,?)");
-    $stmt->bind_param('iii', $colab_id, $mes, $ano);
-    if (!$stmt->execute()) { $stmt->close(); fechar_conexao($conn); retornar_json(false, 'Erro ao criar período'); }
-    $novo_id = $conn->insert_id;
-    $stmt->close();
-
-    // Pré-preenche dias úteis do mês com tipo 'normal' (sem horários)
-    _gerar_dias_mes($conn, $novo_id, $colab_id, $mes, $ano);
-
-    fechar_conexao($conn);
-    retornar_json(true, 'Período criado', ['id' => $novo_id]);
+    ponto_exigir_rbac($conn, 'criar', 'gerente');
+    $colab_id = filter_var($body['colaborador_id'] ?? null, FILTER_VALIDATE_INT);
+    $mes = filter_var($body['mes'] ?? null, FILTER_VALIDATE_INT);
+    $ano = filter_var($body['ano'] ?? null, FILTER_VALIDATE_INT);
+    if (!$colab_id || $colab_id <= 0 || !$mes || $mes < 1 || $mes > 12 || !$ano || $ano < 2000 || $ano > 2099) {
+        fechar_conexao($conn); http_response_code(422); retornar_json(false, 'Dados do período inválidos.');
+    }
+    if (!bh_colaborador_pertence_tenant($conn, (int)$tenant_id, (int)$colab_id)) { fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Colaborador não encontrado.'); }
+    $chk = $conn->prepare('SELECT id FROM rh_ponto_periodo WHERE tenant_id=? AND colaborador_id=? AND mes=? AND ano=? LIMIT 1');
+    if (!$chk) { fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar período existente.'); }
+    $chk->bind_param('iiii', $tenant_id, $colab_id, $mes, $ano); $chk->execute(); $exists = $chk->get_result()->num_rows > 0; $chk->close();
+    if ($exists) { fechar_conexao($conn); http_response_code(409); retornar_json(false, 'Período já existe para este colaborador.'); }
+    $stmt = $conn->prepare('INSERT INTO rh_ponto_periodo (tenant_id,colaborador_id,mes,ano) VALUES (?,?,?,?)');
+    if (!$stmt) { fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível criar o período.'); }
+    $stmt->bind_param('iiii', $tenant_id, $colab_id, $mes, $ano);
+    if (!$stmt->execute()) { error_log('[RH Ponto] Falha ao criar período; errno='.(int)$stmt->errno); $stmt->close(); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível criar o período.'); }
+    $novo_id = (int)$conn->insert_id; $stmt->close();
+    _gerar_dias_mes($conn, $novo_id, (int)$colab_id, (int)$mes, (int)$ano, (int)$tenant_id);
+    fechar_conexao($conn); retornar_json(true, 'Período criado', ['id'=>$novo_id]);
 }
 
 if ($acao === 'fechar_periodo' && $metodo === 'POST') {
-    $id = intval($_GET['id'] ?? $body['id'] ?? 0);
-    if ($id <= 0) retornar_json(false, 'ID inválido');
-
-    // Recalcular totais antes de fechar
-    _recalcular_totais($conn, $id);
-
-    $stmt = $conn->prepare("UPDATE rh_ponto_periodo SET status='fechado' WHERE id=?");
-    $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close();
-    fechar_conexao($conn);
-    retornar_json(true, 'Período fechado');
+    ponto_exigir_rbac($conn, 'editar', 'gerente');
+    $id = filter_var($_GET['id'] ?? $body['id'] ?? null, FILTER_VALIDATE_INT);
+    if (!$id || $id <= 0) { fechar_conexao($conn); http_response_code(422); retornar_json(false, 'ID inválido.'); }
+    try {
+        if (!$conn->begin_transaction()) throw new RuntimeException('Falha transacional.');
+        $st = $conn->prepare('SELECT status FROM rh_ponto_periodo WHERE tenant_id=? AND id=? FOR UPDATE');
+        if (!$st) throw new RuntimeException('Falha ao consultar período.');
+        $st->bind_param('ii', $tenant_id, $id); $st->execute(); $p=$st->get_result()->fetch_assoc(); $st->close();
+        if (!$p) { $conn->rollback(); fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Período não encontrado.'); }
+        if (($p['status'] ?? '') === 'fechado') { $conn->commit(); fechar_conexao($conn); http_response_code(409); retornar_json(false, 'Período já está fechado.'); }
+        _recalcular_totais($conn, (int)$id, (int)$tenant_id);
+        $up=$conn->prepare("UPDATE rh_ponto_periodo SET status='fechado' WHERE tenant_id=? AND id=? AND status='aberto'");
+        if (!$up) throw new RuntimeException('Falha ao fechar período.');
+        $up->bind_param('ii',$tenant_id,$id); if (!$up->execute() || $up->affected_rows!==1) throw new RuntimeException('Falha ao fechar período.'); $up->close();
+        if (!$conn->commit()) throw new RuntimeException('Falha ao confirmar fechamento.');
+        fechar_conexao($conn); retornar_json(true, 'Período fechado');
+    } catch (Throwable $e) { $conn->rollback(); error_log('[RH Ponto] Falha ao fechar período; tenant='.(int)$tenant_id.'; erro='.$e->getMessage()); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível fechar o período.'); }
 }
 
 if ($acao === 'reabrir_periodo' && $metodo === 'POST') {
-    $id = intval($_GET['id'] ?? $body['id'] ?? 0);
-    if ($id <= 0) retornar_json(false, 'ID inválido');
-
-    $stmt = $conn->prepare("UPDATE rh_ponto_periodo SET status='aberto' WHERE id=?");
-    $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close();
-    fechar_conexao($conn);
+    ponto_exigir_rbac($conn, 'editar', 'gerente');
+    $id = filter_var($_GET['id'] ?? $body['id'] ?? null, FILTER_VALIDATE_INT);
+    if (!$id || $id <= 0) { fechar_conexao($conn); http_response_code(422); retornar_json(false, 'ID inválido.'); }
+    $stmt=$conn->prepare("UPDATE rh_ponto_periodo SET status='aberto' WHERE tenant_id=? AND id=? AND status='fechado'");
+    if (!$stmt) { fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível reabrir o período.'); }
+    $stmt->bind_param('ii',$tenant_id,$id); $ok=$stmt->execute(); $changed=$stmt->affected_rows; $stmt->close(); fechar_conexao($conn);
+    if (!$ok) { http_response_code(500); retornar_json(false, 'Não foi possível reabrir o período.'); }
+    if (!$changed) { http_response_code(404); retornar_json(false, 'Período fechado não encontrado.'); }
     retornar_json(true, 'Período reaberto');
 }
 
 if ($acao === 'excluir_periodo' && $metodo === 'DELETE') {
-    $body2 = json_decode(file_get_contents('php://input'), true) ?? [];
-    $id    = intval($body2['id'] ?? $_GET['id'] ?? 0);
-    if ($id <= 0) retornar_json(false, 'ID inválido');
-
-    $stmt = $conn->prepare("DELETE FROM rh_ponto_periodo WHERE id=?");
-    $stmt->bind_param('i', $id);
-    $ok = $stmt->execute(); $stmt->close(); fechar_conexao($conn);
-    retornar_json($ok, $ok ? 'Período excluído' : 'Erro ao excluir');
+    ponto_exigir_rbac($conn, 'excluir', 'admin');
+    $id=filter_var($body['id'] ?? $_GET['id'] ?? null,FILTER_VALIDATE_INT);
+    if (!$id || $id<=0) { fechar_conexao($conn); http_response_code(422); retornar_json(false,'ID inválido.'); }
+    $stmt=$conn->prepare('DELETE FROM rh_ponto_periodo WHERE tenant_id=? AND id=?');
+    if (!$stmt) { fechar_conexao($conn); http_response_code(500); retornar_json(false,'Não foi possível excluir o período.'); }
+    $stmt->bind_param('ii',$tenant_id,$id); $ok=$stmt->execute(); $changed=$stmt->affected_rows; $stmt->close(); fechar_conexao($conn);
+    if (!$ok) { http_response_code(500); retornar_json(false,'Não foi possível excluir o período.'); }
+    if (!$changed) { http_response_code(404); retornar_json(false,'Período não encontrado.'); }
+    retornar_json(true,'Período excluído');
 }
 
 // ── LANÇAMENTOS ───────────────────────────────────────────────────────────────
@@ -161,6 +174,7 @@ if ($acao === 'excluir_periodo' && $metodo === 'DELETE') {
 // Endpoint para período personalizado que pode cruzar múltiplos meses:
 // GET ?acao=listar_lancamentos_por_colaborador&colaborador_id=N&data_inicio=YYYY-MM-DD&data_fim=YYYY-MM-DD
 if ($acao === 'listar_lancamentos_por_colaborador') {
+    ponto_exigir_rbac($conn, 'visualizar', 'visualizador');
     $colab_id    = intval($_GET['colaborador_id'] ?? 0);
     $data_inicio = trim($_GET['data_inicio'] ?? '');
     $data_fim    = trim($_GET['data_fim']    ?? '');
@@ -183,12 +197,13 @@ if ($acao === 'listar_lancamentos_por_colaborador') {
                 DATE_FORMAT(l.data, '%d/%m/%Y')             as data_fmt,
                 DAYNAME(l.data)                             as dia_semana
          FROM rh_ponto_lancamento l
-         JOIN rh_ponto_periodo p ON p.id = l.periodo_id
-         WHERE l.colaborador_id = ?
+         JOIN rh_ponto_periodo p ON p.id = l.periodo_id AND p.tenant_id = l.tenant_id
+         JOIN rh_colaboradores c ON c.id = l.colaborador_id AND c.tenant_id = l.tenant_id
+         WHERE l.tenant_id = ? AND l.colaborador_id = ?
            AND l.data BETWEEN ? AND ?
          ORDER BY l.data ASC"
     );
-    $stmt->bind_param('iss', $colab_id, $data_inicio, $data_fim);
+    $stmt->bind_param('iiss', $tenant_id, $colab_id, $data_inicio, $data_fim);
     $stmt->execute();
     $list = [];
     $res  = $stmt->get_result();
@@ -198,6 +213,7 @@ if ($acao === 'listar_lancamentos_por_colaborador') {
 }
 
 if ($acao === 'listar_lancamentos') {
+    ponto_exigir_rbac($conn, 'visualizar', 'visualizador');
     $periodo_id  = intval($_GET['periodo_id'] ?? 0);
     if ($periodo_id <= 0) retornar_json(false, 'periodo_id obrigatório');
 
@@ -225,11 +241,11 @@ if ($acao === 'listar_lancamentos') {
                     TIME_FORMAT(l.hora_saida, '%H:%i')          as hs,
                     DATE_FORMAT(l.data, '%d/%m/%Y')             as data_fmt,
                     DAYNAME(l.data)                             as dia_semana
-             FROM rh_ponto_lancamento l WHERE tenant_id = $tenant_id AND l.periodo_id = ?
+             FROM rh_ponto_lancamento l WHERE tenant_id = ? AND l.periodo_id = ?
                AND l.data BETWEEN ? AND ?
              ORDER BY l.data ASC"
         );
-        $stmt->bind_param('iss', $periodo_id, $data_inicio, $data_fim);
+        $stmt->bind_param('iiss', $tenant_id, $periodo_id, $data_inicio, $data_fim);
     } else {
         // Período mensal: retorna todos os lançamentos do período
         $stmt = $conn->prepare(
@@ -240,10 +256,10 @@ if ($acao === 'listar_lancamentos') {
                     TIME_FORMAT(l.hora_saida, '%H:%i')          as hs,
                     DATE_FORMAT(l.data, '%d/%m/%Y')             as data_fmt,
                     DAYNAME(l.data)                             as dia_semana
-             FROM rh_ponto_lancamento l WHERE tenant_id = $tenant_id AND l.periodo_id = ?
+             FROM rh_ponto_lancamento l WHERE tenant_id = ? AND l.periodo_id = ?
              ORDER BY l.data ASC"
         );
-        $stmt->bind_param('i', $periodo_id);
+        $stmt->bind_param('ii', $tenant_id, $periodo_id);
     }
 
     $stmt->execute();
@@ -267,73 +283,117 @@ if ($acao === 'salvar_lancamento' && $metodo === 'POST') {
 
     if ($periodo_id <= 0 || $colab_id <= 0 || empty($data)) retornar_json(false, 'Dados obrigatórios incompletos');
 
+    $stContexto = $conn->prepare(
+         'SELECT p.id,p.status FROM rh_ponto_periodo p
+         INNER JOIN rh_colaboradores c ON c.id=p.colaborador_id AND c.tenant_id=p.tenant_id
+         WHERE p.tenant_id=? AND p.id=? AND p.colaborador_id=? LIMIT 1'
+    );
+    if (!$stContexto) { error_log('[RH Ponto] Falha ao preparar validação de período; tenant=' . (int)$tenant_id); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível validar o período do ponto.'); }
+    $stContexto->bind_param('iii', $tenant_id, $periodo_id, $colab_id);
+    if (!$stContexto->execute()) { error_log('[RH Ponto] Falha ao validar período; errno=' . (int)$stContexto->errno); $stContexto->close(); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível validar o período do ponto.'); }
+    $contexto = $stContexto->get_result()->fetch_assoc();
+    $stContexto->close();
+    if (!$contexto) { fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Colaborador ou período não encontrado.'); }
+    if (($contexto['status'] ?? '') !== 'aberto') { fechar_conexao($conn); http_response_code(409); retornar_json(false, 'Período fechado não permite alteração de ponto.'); }
+
     // Buscar escala para calcular (a resolução por dia-da-semana, inclusive para
     // escala_manual, acontece dentro de _calcular_minutos via _obter_parametros_jornada_dia)
-    $escala = _buscar_escala($conn, $colab_id);
+    $escala = _buscar_escala($conn, $colab_id, $tenant_id);
     $calc   = _calcular_minutos($he, $has, $har, $hs, $tipo_dia, $escala, $data);
 
+    // Serializa a origem do espelho contra Abono, lançamento manual e reprocessamento.
+    try {
+        if (!bh_obter_lock_colaborador($conn, (int)$tenant_id, (int)$colab_id)) throw new RuntimeException('Lock do colaborador indisponível.');
+        if (!$conn->begin_transaction()) { bh_liberar_lock_colaborador($conn, (int)$tenant_id, (int)$colab_id); throw new RuntimeException('Falha ao iniciar transação de Ponto.'); }
+        $stPeriodoLock = $conn->prepare('SELECT status FROM rh_ponto_periodo WHERE tenant_id=? AND id=? AND colaborador_id=? LIMIT 1 FOR UPDATE');
+        if (!$stPeriodoLock) throw new RuntimeException('Falha ao bloquear o período de Ponto.');
+        $stPeriodoLock->bind_param('iii', $tenant_id, $periodo_id, $colab_id);
+        if (!$stPeriodoLock->execute()) { $stPeriodoLock->close(); throw new RuntimeException('Falha ao bloquear o período de Ponto.'); }
+        $periodoAtual = $stPeriodoLock->get_result()->fetch_assoc(); $stPeriodoLock->close();
+        if (!$periodoAtual) throw new DomainException('PERIODO_NAO_ENCONTRADO');
+        if (($periodoAtual['status'] ?? '') !== 'aberto') throw new DomainException('PERIODO_FECHADO');
+    } catch (Throwable $e) {
+        if ($conn->errno || $conn->thread_id) $conn->rollback();
+        bh_liberar_lock_colaborador($conn, (int)$tenant_id, (int)$colab_id);
+        fechar_conexao($conn);
+        if ($e instanceof DomainException) { http_response_code($e->getMessage()==='PERIODO_FECHADO'?409:404); retornar_json(false, $e->getMessage()==='PERIODO_FECHADO'?'Período fechado não permite alteração de ponto.':'Colaborador ou período não encontrado.'); }
+        error_log('[RH Ponto] Falha ao iniciar gravação atômica; tenant='.(int)$tenant_id.'; colaborador='.(int)$colab_id.'; erro='.$e->getMessage());
+        http_response_code(503); retornar_json(false, 'Não foi possível iniciar a gravação do ponto.');
+    }
+
     // Verificar se já existe lançamento para esta data/período (UPSERT)
-    $existe = $conn->prepare("SELECT id FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND periodo_id=? AND data=?");
-    $existe->bind_param('is', $periodo_id, $data); $existe->execute();
+    $existe = $conn->prepare('SELECT id FROM rh_ponto_lancamento WHERE tenant_id=? AND periodo_id=? AND data=? LIMIT 1');
+    if (!$existe) { error_log('[RH Ponto] Falha ao verificar lançamento existente; tenant=' . (int)$tenant_id); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar o lançamento de ponto.'); }
+    $existe->bind_param('iis', $tenant_id, $periodo_id, $data);
+    if (!$existe->execute()) { error_log('[RH Ponto] Falha ao consultar lançamento existente; errno=' . (int)$existe->errno); $existe->close(); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar o lançamento de ponto.'); }
     $existe->store_result();
     $is_update = $existe->num_rows > 0;
     $existe->close();
+    ponto_exigir_rbac($conn, $is_update ? 'editar' : 'criar', 'gerente');
 
     if ($is_update) {
         $stmt = $conn->prepare(
             "UPDATE rh_ponto_lancamento SET
              hora_entrada=?,hora_almoco_saida=?,hora_almoco_retorno=?,hora_saida=?,
-             tipo_dia=?,horas_trabalhadas_min=?,horas_extras_min=?,atraso_min=?,saida_antecipada_min=?,observacoes=? WHERE tenant_id = $tenant_id AND periodo_id=? AND data=?"
+             tipo_dia=?,horas_trabalhadas_min=?,horas_extras_min=?,atraso_min=?,saida_antecipada_min=?,observacoes=? WHERE tenant_id=? AND periodo_id=? AND data=?"
         );
-        $stmt->bind_param('sssssiiiisis',
+        if (!$stmt) { error_log('[RH Ponto] Falha ao preparar atualização; tenant=' . (int)$tenant_id); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível preparar o lançamento de ponto.'); }
+        $stmt->bind_param('sssssiiiisiis',
             $he,$has,$har,$hs,$tipo_dia,
             $calc['trabalhadas'],$calc['extras'],$calc['atraso'],$calc['saida_antecipada'],$obs,
-            $periodo_id,$data
+            $tenant_id,$periodo_id,$data
         );
     } else {
         $stmt = $conn->prepare(
             "INSERT INTO rh_ponto_lancamento
-             (periodo_id,colaborador_id,data,hora_entrada,hora_almoco_saida,hora_almoco_retorno,hora_saida,
+             (tenant_id,periodo_id,colaborador_id,data,hora_entrada,hora_almoco_saida,hora_almoco_retorno,hora_saida,
               tipo_dia,horas_trabalhadas_min,horas_extras_min,atraso_min,saida_antecipada_min,observacoes)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
-        $stmt->bind_param('iissssssiiiis',
-            $periodo_id,$colab_id,$data,$he,$has,$har,$hs,
+        if (!$stmt) { error_log('[RH Ponto] Falha ao preparar inserção; tenant=' . (int)$tenant_id); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível preparar o lançamento de ponto.'); }
+        $stmt->bind_param('iiissssssiiiis',
+            $tenant_id,$periodo_id,$colab_id,$data,$he,$has,$har,$hs,
             $tipo_dia,$calc['trabalhadas'],$calc['extras'],$calc['atraso'],$calc['saida_antecipada'],$obs
         );
     }
 
-    if (!$stmt->execute()) { $stmt->close(); fechar_conexao($conn); retornar_json(false, 'Erro ao salvar lançamento: ' . $conn->error); }
+    if (!$stmt->execute()) { error_log('[RH Ponto] Falha ao salvar lançamento; tenant=' . (int)$tenant_id . '; errno=' . (int)$stmt->errno); $stmt->close(); $conn->rollback(); bh_liberar_lock_colaborador($conn, (int)$tenant_id, (int)$colab_id); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível salvar o lançamento de ponto.'); }
+    try {
     // Captura o ID do lançamento (INSERT usa insert_id; UPDATE busca pelo periodo+data)
     $lancamento_id_bh = 0;
     if (!$is_update) {
         $lancamento_id_bh = intval($conn->insert_id);
     } else {
-        $ridRow = $conn->query("SELECT id FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND periodo_id=$periodo_id AND data='$data' LIMIT 1");
-        if ($ridRow) { $ridR = $ridRow->fetch_assoc(); $lancamento_id_bh = intval($ridR['id'] ?? 0); }
+        $stRid = $conn->prepare('SELECT id FROM rh_ponto_lancamento WHERE tenant_id=? AND periodo_id=? AND data=? LIMIT 1');
+        if (!$stRid) throw new RuntimeException('Falha ao preparar leitura do ID do lançamento atualizado.');
+        $stRid->bind_param('iis', $tenant_id, $periodo_id, $data);
+        if (!$stRid->execute()) { $stRid->close(); throw new RuntimeException('Falha ao recuperar ID do lançamento atualizado.'); }
+        $ridR=$stRid->get_result()->fetch_assoc();$stRid->close();$lancamento_id_bh=(int)($ridR['id']??0);
+        if($lancamento_id_bh<=0)throw new RuntimeException('Lançamento atualizado não encontrado para sincronização.');
     }
     $stmt->close();
 
     if ($lancamento_id_bh > 0) {
-        _bh_sincronizar($conn, $lancamento_id_bh, $colab_id, $data, $calc, $escala);
-        _dsr_sincronizar($conn, $colab_id, $data, $escala);
+        _bh_sincronizar($conn, $lancamento_id_bh, $colab_id, $data, $calc, $escala, $tenant_id, ['lock_ja_adquirido'=>true,'transacao_ja_ativa'=>true]);
+        _dsr_sincronizar($conn, $colab_id, $data, $escala, $tenant_id, ['lock_ja_adquirido'=>true,'transacao_ja_ativa'=>true]);
     }
-    _recalcular_totais($conn, $periodo_id);
+    _recalcular_totais($conn, $periodo_id, (int)$tenant_id);
 
     // Cross-period: se este lançamento é só de saída (turno noturno que começou no mês anterior),
     // busca o dia anterior do mesmo colaborador e recalcula as horas daquele dia.
     if (!$he && $hs) {
         $prevDate = date('Y-m-d', strtotime($data . ' -1 day'));
         $sp = $conn->prepare(
-            "SELECT id, hora_entrada, hora_almoco_saida, hora_almoco_retorno, hora_saida, tipo_dia, periodo_id
-             FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND colaborador_id=? AND data=? LIMIT 1"
+            "SELECT l.id,l.hora_entrada,l.hora_almoco_saida,l.hora_almoco_retorno,l.hora_saida,l.tipo_dia,l.periodo_id,p.status
+             FROM rh_ponto_lancamento l INNER JOIN rh_ponto_periodo p ON p.id=l.periodo_id AND p.tenant_id=l.tenant_id WHERE l.tenant_id=? AND l.colaborador_id=? AND l.data=? LIMIT 1"
         );
-        $sp->bind_param('is', $colab_id, $prevDate);
-        $sp->execute();
+        if (!$sp) throw new RuntimeException('Falha ao consultar turno cruzado.');
+        $sp->bind_param('iis', $tenant_id, $colab_id, $prevDate);
+        if (!$sp->execute()) { $sp->close(); throw new RuntimeException('Falha ao consultar turno cruzado.'); }
         $prevRow = $sp->get_result()->fetch_assoc();
         $sp->close();
 
-        if ($prevRow && $prevRow['hora_entrada'] && !$prevRow['hora_saida']) {
+        if ($prevRow && ($prevRow['status'] ?? '') === 'aberto' && $prevRow['hora_entrada'] && !$prevRow['hora_saida']) {
             $prevCalc = _calcular_minutos_par(
                 $prevRow['hora_entrada'],
                 $prevRow['hora_almoco_saida'] ?: null,
@@ -344,180 +404,87 @@ if ($acao === 'salvar_lancamento' && $metodo === 'POST') {
                 $prevDate
             );
             $prevRowId = intval($prevRow['id']);
-            $su = $conn->prepare("UPDATE rh_ponto_lancamento SET horas_trabalhadas_min=?, horas_extras_min=?, atraso_min=?, saida_antecipada_min=? WHERE tenant_id = $tenant_id AND id=?");
-            $su->bind_param('iiiii', $prevCalc['trabalhadas'], $prevCalc['extras'], $prevCalc['atraso'], $prevCalc['saida_antecipada'], $prevRowId);
-            $su->execute();
+            $su = $conn->prepare("UPDATE rh_ponto_lancamento SET horas_trabalhadas_min=?, horas_extras_min=?, atraso_min=?, saida_antecipada_min=? WHERE tenant_id = ? AND id=?");
+            if (!$su) throw new RuntimeException('Falha ao preparar atualização do turno cruzado.');
+            $su->bind_param('iiiiii', $prevCalc['trabalhadas'], $prevCalc['extras'], $prevCalc['atraso'], $prevCalc['saida_antecipada'], $tenant_id, $prevRowId);
+            if (!$su->execute()) { $su->close(); throw new RuntimeException('Falha ao atualizar turno cruzado.'); }
             $su->close();
-            _recalcular_totais($conn, intval($prevRow['periodo_id']));
-            _bh_sincronizar($conn, intval($prevRow['id']), $colab_id, $prevDate, $prevCalc, $escala);
+            _recalcular_totais($conn, intval($prevRow['periodo_id']), (int)$tenant_id);
+            _bh_sincronizar($conn, intval($prevRow['id']), $colab_id, $prevDate, $prevCalc, $escala, $tenant_id, ['lock_ja_adquirido'=>true,'transacao_ja_ativa'=>true]);
         }
     }
+    } catch (Throwable $e) {
+        error_log('[RH Ponto] Falha ao sincronizar espelho e Banco de Horas; tenant='.(int)$tenant_id.'; colaborador='.(int)$colab_id.'; erro='.$e->getMessage());
+        $conn->rollback(); bh_liberar_lock_colaborador($conn, (int)$tenant_id, (int)$colab_id); fechar_conexao($conn);
+        http_response_code(500); retornar_json(false, 'Não foi possível sincronizar o lançamento de ponto com o Banco de Horas.');
+    }
+    if (!$conn->commit()) { $conn->rollback(); bh_liberar_lock_colaborador($conn, (int)$tenant_id, (int)$colab_id); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível confirmar o lançamento de ponto.'); }
+    bh_liberar_lock_colaborador($conn, (int)$tenant_id, (int)$colab_id);
 
     fechar_conexao($conn);
     retornar_json(true, 'Lançamento salvo', $calc);
 }
 
 if ($acao === 'excluir_lancamento' && $metodo === 'DELETE') {
+    ponto_exigir_rbac($conn, 'excluir', 'admin');
     $body2      = json_decode(file_get_contents('php://input'), true) ?? [];
     $id         = intval($body2['id'] ?? $_GET['id'] ?? 0);
     if ($id <= 0) retornar_json(false, 'ID inválido');
 
-    // Pega periodo_id antes de excluir
-    $p = $conn->prepare("SELECT periodo_id FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND id=?");
-    $p->bind_param('i',$id); $p->execute();
+    $p = $conn->prepare('SELECT l.periodo_id,l.colaborador_id,l.data,p.status FROM rh_ponto_lancamento l INNER JOIN rh_ponto_periodo p ON p.id=l.periodo_id AND p.tenant_id=l.tenant_id WHERE l.tenant_id=? AND l.id=? LIMIT 1');
+    if (!$p) { fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar o lançamento.'); }
+    $p->bind_param('ii',$tenant_id,$id); $p->execute();
     $pr = $p->get_result()->fetch_assoc(); $p->close();
-
-    $stmt = $conn->prepare("DELETE FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND id=?");
-    $stmt->bind_param('i',$id); $ok = $stmt->execute(); $stmt->close();
-
-    if ($ok && $pr) _recalcular_totais($conn, $pr['periodo_id']);
-    fechar_conexao($conn);
-    retornar_json($ok, $ok ? 'Lançamento excluído' : 'Erro ao excluir');
+    if (!$pr) { fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Lançamento não encontrado.'); }
+    $colabExclusao=(int)$pr['colaborador_id'];$periodoExclusao=(int)$pr['periodo_id'];$dataExclusao=(string)$pr['data'];
+    try {
+        if (!bh_obter_lock_colaborador($conn,(int)$tenant_id,$colabExclusao)) throw new RuntimeException('Lock do colaborador indisponível.');
+        if (!$conn->begin_transaction()) throw new RuntimeException('Falha ao iniciar transação de exclusão.');
+        $lock=$conn->prepare('SELECT p.status FROM rh_ponto_lancamento l INNER JOIN rh_ponto_periodo p ON p.id=l.periodo_id AND p.tenant_id=l.tenant_id WHERE l.tenant_id=? AND l.id=? AND l.colaborador_id=? LIMIT 1 FOR UPDATE');
+        if(!$lock)throw new RuntimeException('Falha ao bloquear lançamento.');$lock->bind_param('iii',$tenant_id,$id,$colabExclusao);if(!$lock->execute()){$lock->close();throw new RuntimeException('Falha ao bloquear lançamento.');}$lockedRow=$lock->get_result()->fetch_assoc();$lock->close();
+        if(!$lockedRow){$conn->rollback();bh_liberar_lock_colaborador($conn,(int)$tenant_id,$colabExclusao);fechar_conexao($conn);http_response_code(404);retornar_json(false,'Lançamento não encontrado.');}
+        if(($lockedRow['status']??'')!=='aberto'){$conn->rollback();bh_liberar_lock_colaborador($conn,(int)$tenant_id,$colabExclusao);fechar_conexao($conn);http_response_code(409);retornar_json(false,'Período fechado não permite exclusão.');}
+        $stmt=$conn->prepare('DELETE FROM rh_ponto_lancamento WHERE tenant_id=? AND id=? AND colaborador_id=?');if(!$stmt)throw new RuntimeException('Falha ao preparar exclusão.');$stmt->bind_param('iii',$tenant_id,$id,$colabExclusao);if(!$stmt->execute()||$stmt->affected_rows!==1){$stmt->close();throw new RuntimeException('Falha ao excluir lançamento.');}$stmt->close();
+        $escalaExclusao=_buscar_escala($conn,$colabExclusao,(int)$tenant_id);
+        _bh_sincronizar($conn,$id,$colabExclusao,$dataExclusao,['extras'=>0,'atraso'=>0,'saida_antecipada'=>0],$escalaExclusao,(int)$tenant_id,['lock_ja_adquirido'=>true,'transacao_ja_ativa'=>true]);
+        _dsr_sincronizar($conn,$colabExclusao,$dataExclusao,$escalaExclusao,(int)$tenant_id,['lock_ja_adquirido'=>true,'transacao_ja_ativa'=>true]);
+        _recalcular_totais($conn,$periodoExclusao,(int)$tenant_id);
+        if(!$conn->commit())throw new RuntimeException('Falha ao confirmar exclusão.');
+        bh_liberar_lock_colaborador($conn,(int)$tenant_id,$colabExclusao);fechar_conexao($conn);retornar_json(true,'Lançamento excluído');
+    } catch(Throwable $e) {
+        error_log('[RH Ponto] Falha ao excluir lançamento; tenant='.(int)$tenant_id.'; id='.(int)$id.'; erro='.$e->getMessage());$conn->rollback();bh_liberar_lock_colaborador($conn,(int)$tenant_id,$colabExclusao);fechar_conexao($conn);http_response_code(500);retornar_json(false,'Não foi possível excluir e sincronizar o lançamento.');
+    }
 }
 
-// ── RECALCULAR TODOS OS LANÇAMENTOS DO PERÍODO ───────────────────────────────
-// POST ?acao=recalcular_lancamentos&periodo_id=N
-// Recalcula horas_trabalhadas_min / horas_extras_min / atraso_min de cada linha
-// com base nos horários brutos, tratando turnos que cruzam meia-noite.
-// Para escalas 12x36 com linhas divididas (entrada num dia, saída no seguinte),
-// emparelha automaticamente linhas consecutivas.
+// ── RECALCULAR LANÇAMENTOS DO PERÍODO ────────────────────────────────────────
 if ($acao === 'recalcular_lancamentos' && $metodo === 'POST') {
-    $periodo_id = intval($_GET['periodo_id'] ?? $body['periodo_id'] ?? 0);
-    if ($periodo_id <= 0) retornar_json(false, 'periodo_id obrigatório');
-
-    $rowP = $conn->query("SELECT colaborador_id FROM rh_ponto_periodo WHERE id=$periodo_id")->fetch_assoc();
-    if (!$rowP) { fechar_conexao($conn); retornar_json(false, 'Período não encontrado'); }
-    $escala = _buscar_escala($conn, intval($rowP['colaborador_id']));
-
-    $res = $conn->query(
-        "SELECT id, data, hora_entrada, hora_almoco_saida, hora_almoco_retorno, hora_saida, tipo_dia
-         FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND periodo_id = $periodo_id ORDER BY data ASC"
-    );
-    $rows = [];
-    while ($r = $res->fetch_assoc()) $rows[] = $r;
-
-    $stmtUpd = $conn->prepare(
-        "UPDATE rh_ponto_lancamento SET horas_trabalhadas_min=?, horas_extras_min=?, atraso_min=?, saida_antecipada_min=? WHERE tenant_id = $tenant_id AND id=?"
-    );
-
-    $atualizados = 0;
-    $n = count($rows);
-    $i = 0;
-    while ($i < $n) {
-        $row  = $rows[$i];
-        $he   = $row['hora_entrada']        ?: null;
-        $hs   = $row['hora_saida']           ?: null;
-        $has  = $row['hora_almoco_saida']   ?: null;
-        $har  = $row['hora_almoco_retorno'] ?: null;
-        $tipo = $row['tipo_dia'];
-        $id   = intval($row['id']);
-
-        $calc      = null;
-        $skipNext  = false;
-        $rowData   = $row['data'] ?? '';
-
-        if ($he && $hs) {
-            // Linha completa: entrada e saída na mesma data (mesmo com cruzamento de meia-noite)
-            $calc = _calcular_minutos($he, $has, $har, $hs, $tipo, $escala, $rowData);
-        } elseif ($he && !$hs && ($i + 1) < $n) {
-            // Linha de entrada sem saída: verifica se a próxima tem somente saída (par 12x36)
-            $next    = $rows[$i + 1];
-            $he_next = $next['hora_entrada'] ?: null;
-            $hs_next = $next['hora_saida']   ?: null;
-            if ($hs_next && !$he_next) {
-                $calc = _calcular_minutos_par(
-                    $he, $has, $har,
-                    $hs_next,
-                    $tipo, $escala, $rowData
-                );
-                // Linha "de chegada" fica zerada (é apenas o marcador de término)
-                $z = 0;
-                $stmtUpd->bind_param('iiiii', $z, $z, $z, $z, $next['id']);
-                $stmtUpd->execute();
-                $atualizados++;
-                $skipNext = true;
-            }
-        }
-
-        if ($calc !== null) {
-            $stmtUpd->bind_param('iiiii', $calc['trabalhadas'], $calc['extras'], $calc['atraso'], $calc['saida_antecipada'], $id);
-            $stmtUpd->execute();
-            $atualizados++;
-            _bh_sincronizar($conn, $id, intval($rowP['colaborador_id']), $rowData, $calc, $escala);
-        }
-
-        $i += $skipNext ? 2 : 1;
+    $periodo_id = filter_var($_GET['periodo_id'] ?? $body['periodo_id'] ?? null, FILTER_VALIDATE_INT);
+    if (!$periodo_id || $periodo_id <= 0) {
+        fechar_conexao($conn); http_response_code(422); retornar_json(false, 'periodo_id obrigatório e inválido.');
     }
-
-    // Cross-period: verifica se o último lançamento do período tem entrada mas não tem saída
-    // (turno noturno que termina no mês seguinte). Busca o primeiro registro do dia seguinte
-    // em qualquer período do mesmo colaborador e emparelha.
-    if ($n > 0) {
-        $lastRow  = $rows[$n - 1];
-        $lastHe   = $lastRow['hora_entrada'] ?: null;
-        $lastHs   = $lastRow['hora_saida']   ?: null;
-        $lastId   = intval($lastRow['id']);
-        $lastTipo = $lastRow['tipo_dia'];
-
-        if ($lastHe && !$lastHs) {
-            $colabId = intval($rowP['colaborador_id']);
-            $nextQ   = $conn->prepare(
-                "SELECT id, hora_entrada, hora_saida, hora_almoco_saida, hora_almoco_retorno, tipo_dia, periodo_id
-                 FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND colaborador_id = ?
-                   AND data = DATE_ADD((SELECT data FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND id = ?), INTERVAL 1 DAY)
-                 LIMIT 1"
-            );
-            $nextQ->bind_param('ii', $colabId, $lastId);
-            $nextQ->execute();
-            $nextRow = $nextQ->get_result()->fetch_assoc();
-            $nextQ->close();
-
-            if ($nextRow) {
-                $nextHe = $nextRow['hora_entrada'] ?: null;
-                $nextHs = $nextRow['hora_saida']   ?: null;
-                $nextId = intval($nextRow['id']);
-
-                if ($nextHs && !$nextHe) {
-                    $calcCross = _calcular_minutos_par(
-                        $lastHe,
-                        $lastRow['hora_almoco_saida']    ?: null,
-                        $lastRow['hora_almoco_retorno']  ?: null,
-                        $nextHs,
-                        $lastTipo,
-                        $escala,
-                        $lastRow['data'] ?? ''
-                    );
-                    $stmtUpd->bind_param('iiiii', $calcCross['trabalhadas'], $calcCross['extras'], $calcCross['atraso'], $calcCross['saida_antecipada'], $lastId);
-                    $stmtUpd->execute();
-                    _bh_sincronizar($conn, $lastId, $colabId, $lastRow['data'] ?? '', $calcCross, $escala);
-                    // O marcador de término do mês seguinte fica zerado (apenas referência)
-                    $z = 0;
-                    $stmtUpd->bind_param('iiiii', $z, $z, $z, $z, $nextId);
-                    $stmtUpd->execute();
-                    $atualizados += 2;
-                    // Atualiza totais do período do mês seguinte para manter consistência
-                    _recalcular_totais($conn, intval($nextRow['periodo_id']));
-                }
-            }
+    $st = $conn->prepare('SELECT colaborador_id,status FROM rh_ponto_periodo WHERE tenant_id=? AND id=? LIMIT 1');
+    if (!$st) { fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar o período.'); }
+    $st->bind_param('ii', $tenant_id, $periodo_id);
+    if (!$st->execute()) { $st->close(); fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível consultar o período.'); }
+    $periodo = $st->get_result()->fetch_assoc(); $st->close();
+    if (!$periodo) { fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Período não encontrado.'); }
+    if (($periodo['status'] ?? '') !== 'aberto') { fechar_conexao($conn); http_response_code(409); retornar_json(false, 'Período fechado não pode ser recalculado.'); }
+    try {
+        $colaboradorId = (int)$periodo['colaborador_id'];
+        if (!bh_colaborador_pertence_tenant($conn, (int)$tenant_id, $colaboradorId)) {
+            fechar_conexao($conn); http_response_code(404); retornar_json(false, 'Período não encontrado.');
         }
+        $escala = _buscar_escala($conn, $colaboradorId, (int)$tenant_id);
+        $resultado = bh_processar_periodo($conn, (int)$tenant_id, (int)$periodo_id, $escala, [
+            'colaborador_id' => $colaboradorId,
+            'sincronizar_dsr' => true,
+        ]);
+        fechar_conexao($conn);
+        retornar_json(true, 'Recalculado com sucesso.', ['atualizados' => (int)$resultado['atualizados']]);
+    } catch (Throwable $e) {
+        error_log('[RH Ponto] Falha ao recalcular período; tenant=' . (int)$tenant_id . '; periodo=' . (int)$periodo_id . '; erro=' . $e->getMessage());
+        fechar_conexao($conn); http_response_code(500); retornar_json(false, 'Não foi possível recalcular o período.');
     }
-
-    $stmtUpd->close();
-
-    // Sincroniza DSR para todas as semanas do período
-    // Usa uma representante por semana ISO para evitar chamadas duplicadas
-    $semanasProcessadas = [];
-    foreach ($rows as $row) {
-        $semKey = date('o-W', strtotime($row['data'])); // ex: 2025-04
-        if (!isset($semanasProcessadas[$semKey])) {
-            $semanasProcessadas[$semKey] = true;
-            _dsr_sincronizar($conn, intval($rowP['colaborador_id']), $row['data'], $escala);
-        }
-    }
-
-    _recalcular_totais($conn, $periodo_id);
-    fechar_conexao($conn);
-    retornar_json(true, 'Recalculado com sucesso.', ['atualizados' => $atualizados]);
 }
 
 fechar_conexao($conn);
@@ -529,9 +496,10 @@ retornar_json(false, 'Ação não reconhecida');
 // rh_ponto_core.php (compartilhadas com api_rh_abono.php) — ver require_once
 // no topo deste arquivo.
 
-function _gerar_dias_mes($conn, int $periodo_id, int $colab_id, int $mes, int $ano): void {
+function _gerar_dias_mes($conn, int $periodo_id, int $colab_id, int $mes, int $ano, ?int $tenant_id = null): void {
     $dias   = cal_days_in_month(CAL_GREGORIAN, $mes, $ano);
-    $escala = _buscar_escala($conn, $colab_id);
+    $tenant_id = $tenant_id ?: (int)($_SESSION['tenant_id'] ?? 0);
+    $escala = _buscar_escala($conn, $colab_id, $tenant_id);
 
     // Mapa de dia da semana PHP (0=Dom..6=Sab) para chaves do sistema
     $mapDia = [0=>'dom',1=>'seg',2=>'ter',3=>'qua',4=>'qui',5=>'sex',6=>'sab'];
@@ -561,8 +529,8 @@ function _gerar_dias_mes($conn, int $periodo_id, int $colab_id, int $mes, int $a
     }
 
     $stmt = $conn->prepare(
-        "INSERT IGNORE INTO rh_ponto_lancamento (periodo_id, colaborador_id, data, tipo_dia)
-         VALUES (?, ?, ?, ?)"
+        "INSERT IGNORE INTO rh_ponto_lancamento (tenant_id, periodo_id, colaborador_id, data, tipo_dia)
+         VALUES (?, ?, ?, ?, ?)"
     );
 
     for ($d = 1; $d <= $dias; $d++) {
@@ -596,7 +564,7 @@ function _gerar_dias_mes($conn, int $periodo_id, int $colab_id, int $mes, int $a
             $tipoDia = in_array($diaSem, $diasTrabalho) ? 'normal' : 'folga';
         }
 
-        $stmt->bind_param('iiss', $periodo_id, $colab_id, $data, $tipoDia);
+        $stmt->bind_param('iiiss', $tenant_id, $periodo_id, $colab_id, $data, $tipoDia);
         $stmt->execute();
     }
     $stmt->close();
@@ -619,105 +587,11 @@ function _dsr_sincronizar(
     mysqli $conn,
     int $colab_id,
     string $data,
-    ?array $escala
+    ?array $escala,
+    ?int $tenant_id = null,
+    array $opcoes = []
 ): void {
-    if (!$escala || empty($escala['banco_horas_ativo'])) return;
-
-    $tipo = $escala['tipo'] ?? '';
-    // Divisores mensais oficiais MTE por tipo (minutos)
-    $mensalPadrao = ['jornada_44h' => 13200, 'jornada_40h' => 12000, 'jornada_36h' => 10800];
-    if (!isset($mensalPadrao[$tipo])) return;
-    // DSR perdido = valor de 1 dia no divisor mensal (mensal ÷ 30 dias calendário)
-    // jornada_44h: 13200÷30 = 440 min; jornada_40h: 12000÷30 = 400 min; jornada_36h: 10800÷30 = 360 min
-    // Isso é DIFERENTE da carga_horaria_diaria_min (que reflete o horário programado real, ex: 8h=480 min).
-    $mensalMin   = intval($escala['carga_horaria_mensal_min'] ?? 0);
-    $cargaDiaria = $mensalMin > 0
-        ? intval(round($mensalMin / 30))
-        : intval(round($mensalPadrao[$tipo] / 30));
-
-    // Dias úteis de trabalho (que podem causar perda de DSR se faltarem)
-    $diasUteisMap = [
-        'jornada_44h' => ['seg','ter','qua','qui','sex','sab'],
-        'jornada_40h' => ['seg','ter','qua','qui','sex'],
-        'jornada_36h' => ['seg','ter','qua','qui','sex','sab'],
-    ];
-    $diasUteis = $diasUteisMap[$tipo];
-
-    // Nome do dia da semana PHP (0=Dom..6=Sáb)
-    $mapDowKey = [0=>'dom',1=>'seg',2=>'ter',3=>'qua',4=>'qui',5=>'sex',6=>'sab'];
-
-    // Segunda-feira da semana ISO
-    $ts  = strtotime($data);
-    $dow = intval(date('w', $ts));
-    $monTs  = $ts + (($dow === 0 ? -6 : 1 - $dow) * 86400);
-    $sunTs  = $monTs + 6 * 86400;
-    $monStr = date('Y-m-d', $monTs);
-    $sunStr = date('Y-m-d', $sunTs);
-
-    // Garante que a tabela rh_banco_horas existe
-    _bh_garantir_tabela($conn);
-
-    // Busca lançamentos da semana (Seg a Dom)
-    $stmt = $conn->prepare(
-        "SELECT id, data, tipo_dia, DAYOFWEEK(data) AS mysql_dow
-         FROM rh_ponto_lancamento WHERE tenant_id = $tenant_id AND colaborador_id = ? AND data BETWEEN ? AND ?
-         ORDER BY data ASC"
-    );
-    if (!$stmt) return;
-    $stmt->bind_param('iss', $colab_id, $monStr, $sunStr);
-    $stmt->execute();
-    $semana = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
-
-    $domingoRow = null;
-    $hasFalta   = false;
-
-    foreach ($semana as $row) {
-        // mysql DAYOFWEEK: 1=Dom, 2=Seg … 7=Sáb
-        $dow_php = ($row['mysql_dow'] == 1) ? 0 : ($row['mysql_dow'] - 1);
-        $diaNome = $mapDowKey[$dow_php] ?? '';
-
-        if ($diaNome === 'dom') {
-            $domingoRow = $row;
-        } elseif (in_array($diaNome, $diasUteis) && $row['tipo_dia'] === 'falta') {
-            $hasFalta = true;
-        }
-    }
-
-    if (!$domingoRow) return; // Sem domingo no período
-
-    $sunId        = intval($domingoRow['id']);
-    $sunData      = $domingoRow['data'];
-    $tipoAtual    = $domingoRow['tipo_dia'];
-
-    // Preserva feriado ou afastamento manual — não sobrescreve
-    if (in_array($tipoAtual, ['feriado','afastamento'])) return;
-
-    $novoTipo = $hasFalta ? 'falta' : 'folga';
-
-    if ($tipoAtual !== $novoTipo) {
-        $conn->query("UPDATE rh_ponto_lancamento SET tipo_dia = '$novoTipo', horas_trabalhadas_min=0, horas_extras_min=0, atraso_min=0 WHERE tenant_id = $tenant_id AND id = $sunId");
-    }
-
-    // Atualiza banco de horas do domingo (remove automáticos e recria)
-    $conn->query(
-        "DELETE FROM rh_banco_horas WHERE tenant_id = $tenant_id AND lancamento_id = $sunId AND tipo IN ('credito','debito')"
-    );
-
-    if ($hasFalta) {
-        // DSR perdido: débita carga diária
-        $descr = 'DSR perdido — falta injustificada na semana';
-        $stBH = $conn->prepare(
-            "INSERT INTO rh_banco_horas
-             (colaborador_id, lancamento_id, data, tipo, minutos, descricao, usuario)
-             VALUES (?, ?, ?, 'debito', ?, ?, 'Sistema')"
-        );
-        if ($stBH) {
-            $stBH->bind_param('iisis', $colab_id, $sunId, $sunData, $cargaDiaria, $descr);
-            $stBH->execute();
-            $stBH->close();
-        }
-    }
-    // DSR ganho: sem entrada no banco — domingo é descanso remunerado sem débito
+    _bh_dsr_sincronizar($conn, $colab_id, $data, $escala, $tenant_id, $opcoes);
 }
+
 ?>

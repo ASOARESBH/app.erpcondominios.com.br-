@@ -117,3 +117,14 @@ Em acesso de Dependente, a API confirma em qualquer movimento que o dependente p
 - Permissões são resolvidas por ação e tenant. A ausência de `PERMITIR` significa sem acesso; um grupo de somente leitura não cria `NEGAR` automático para criar/editar/excluir nem anula permissões de outros grupos.
 - Precedência única: perfil `admin`/`super_admin` confirmado no banco concede acesso total; fora deles, `NEGAR` individual explícito > `PERMITIR` individual explícito > `NEGAR` explícito de grupo > `PERMITIR` de grupo > sem acesso. `HERDAR` remove a exceção individual ou deixa o grupo sem regra e retorna à decisão herdada.
 - Configurar matriz/grupos exige `usuarios.configurar` no tenant da sessão. O operador não pode alterar a própria matriz nem conceder a outro usuário uma ação que ele não possui; a autorização e o tenant são validados no backend, independentemente dos controles visuais.
+
+## 14. Banco de Horas — compensação e pagamento
+
+- Crédito automático é positivo; débito automático, abatimento e pagamento consomem minutos. Tipos fora da whitelist, inclusive `tipo=''` legado, não podem ser tratados implicitamente como débito.
+- Abatimento (folga compensatória) pode superar o saldo: a primeira tentativa responde HTTP 409 e não grava; a efetivação exige confirmação explícita e justificativa de 10 a 500 caracteres, deixando saldo negativo auditado. O limite devedor é opcional por escala; `NULL` significa sem limite e um limite excedido retorna HTTP 422.
+- Crédito automático posterior é somado naturalmente ao saldo negativo. Pagamento monetário permanece limitado ao saldo positivo disponível; quando excede, deve ser recusado com orientação para usar Abatimento.
+- Reprocessamento automático não pode apagar lançamentos manuais nem linhas de outro tenant; DSR mantém a regra de jornada vigente e registra suas linhas automáticas no tenant do colaborador.
+- Falta abonada não caracteriza falta injustificada para perda do DSR. Alterar ou remover abono/falta exige recalcular a semana afetada; ponto, abono, DSR e ledger são confirmados ou revertidos juntos sob lock do colaborador.
+- A função pura `bh_apurar_dia()` é a única fonte de crédito, débito e excedente para sincronização, mapeamento e reprocessamento. `CREDITAR_TUDO` credita extra líquida integral; `LIMITAR_E_SEPARAR` credita até o teto configurado e mantém a diferença como excedente fora do saldo para decisão do RH.
+- **Decisão de regra:** o limite de 2 h/dia (CLT art. 59) é controle de jornada; não autoriza descartar horas efetivamente trabalhadas. O teto também é alerta visual, sem corte de horas no espelho. A política de crédito/excedente deve ser validada com RH/contabilidade do condomínio.
+- Reprocessar exige prévia, revisão expressa e motivo auditável. Períodos fechados são ignorados por padrão; somente administrador pode incluí-los, com essa opção registrada no histórico. A transação é por tenant/colaborador e retries da mesma prévia são idempotentes.
