@@ -11,6 +11,7 @@ require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 require_once __DIR__ . '/helpers/cpf_helper.php';
+require_once __DIR__ . '/helpers/visitantes_documento_helper.php';
 require_once __DIR__ . '/helpers/visitantes_config_helper.php';
 
 if (!function_exists('retornar_json')) {
@@ -185,9 +186,18 @@ if ($metodo === 'GET' && isset($_GET['documento'])) {
 
     if ($row) {
         retornar_json(true, "Visitante encontrado", $row);
-    } else {
-        retornar_json(false, "Visitante não encontrado com este documento");
     }
+    // Não é visitante: avisa se o CPF é de morador ativo (não pode virar visitante).
+    if ($tipo_documento !== 'RG' && strlen(preg_replace('/\D/', '', $doc)) === 11) {
+        $moradorCpf = visitante_cpf_de_morador($conexao, (int)$tenant_id, $doc);
+        if ($moradorCpf) {
+            retornar_json(false, visitante_mensagem_cpf_morador($moradorCpf, true), [
+                'cpf_de_morador' => true,
+                'morador' => ['id' => (int)$moradorCpf['id'], 'nome' => $moradorCpf['nome'], 'unidade' => $moradorCpf['unidade']],
+            ]);
+        }
+    }
+    retornar_json(false, "Visitante não encontrado com este documento");
 }
 
 // ========== RELATÓRIO ANALÍTICO DE ACESSOS ==========
@@ -502,6 +512,10 @@ if ($metodo === 'POST') {
             retornar_json(false, 'CPF inválido. Informe um CPF válido.');
         }
         $documento = cpf_formatar($documento);
+        $moradorCpf = visitante_cpf_de_morador($conexao, (int)$tenant_id, $documento);
+        if ($moradorCpf) {
+            retornar_json(false, visitante_mensagem_cpf_morador($moradorCpf, true), ['cpf_de_morador' => true]);
+        }
     }
 
     // A unicidade é conferida apenas quando há documento informado.
@@ -668,6 +682,10 @@ if ($metodo === 'PUT') {
             retornar_json(false, 'CPF inválido. Informe um CPF válido.');
         }
         $documento = cpf_formatar($documento);
+        $moradorCpf = visitante_cpf_de_morador($conexao, (int)$tenant_id, $documento);
+        if ($moradorCpf) {
+            retornar_json(false, visitante_mensagem_cpf_morador($moradorCpf, true), ['cpf_de_morador' => true]);
+        }
     }
 
     // Verificar duplicidade somente quando há um documento informado.

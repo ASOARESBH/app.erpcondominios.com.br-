@@ -6934,7 +6934,11 @@ function convidadosMontarPayload() {
     if (visitanteId) {
         payload.visitante_id = parseInt(visitanteId, 10);
     } else if (ConvidadosPortal.docVisitanteId) {
+        // Visitante encontrado pela busca: o servidor confere que o documento é o do cadastro.
         payload.visitante_id = ConvidadosPortal.docVisitanteId;
+        payload.tipo_documento = document.getElementById('convTipoDocumento').value;
+        payload.documento = document.getElementById('convDocumento').value.trim();
+        payload.nome = document.getElementById('convNome').value.trim();
     } else {
         payload.tipo_documento = document.getElementById('convTipoDocumento').value;
         payload.documento = document.getElementById('convDocumento').value.trim();

@@ -274,6 +274,9 @@ async function _verificarDocumentoDuplicado(documentoConsultado, tipo, input) {
             if (!ehOProprioRegistro) {
                 _marcarErroDocumento(`${tipo} já cadastrado — pertence a ${data.dados.nome_completo}.`);
             }
+        } else if (data.dados?.cpf_de_morador) {
+            // CPF de morador ativo não pode ser cadastrado como visitante (o servidor também bloqueia).
+            _marcarErroDocumento(data.mensagem || 'Este CPF pertence a um morador e não pode ser cadastrado como visitante.');
         }
     } catch (erro) {
         console.warn('[Visitantes][Documento] Não foi possível verificar duplicidade agora:', erro);

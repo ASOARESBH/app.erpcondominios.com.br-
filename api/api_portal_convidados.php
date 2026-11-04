@@ -15,7 +15,8 @@
  * GET  ?acao=opcoes                         → dados do formulário (dependentes, tipos, visitantes da unidade)
  * GET  ?acao=listar&filtro=ativos|historico|todos&pagina=&limite=
  * GET  ?acao=buscar_documento&tipo_documento=CPF|RG&documento=
- *                                         → visitante da unidade (preenche o nome) ou "não cadastrado"
+ *                                         → visitante da base de Visitantes do condomínio (preenche o nome)
+ *                                           ou "não cadastrado"
  * GET  ?acao=obter&id=
  * POST ?acao=verificar_alertas              → alertas da própria unidade que afetam o convite
  * POST ?acao=criar                          → pré-cadastro (aceita X-Idempotency-Key ou idempotency_key);
@@ -32,6 +33,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/helpers/convidados_core_helper.php';
 require_once __DIR__ . '/helpers/portal_visitantes_unidade_helper.php';
 require_once __DIR__ . '/helpers/alertas_unidade_helper.php';
+require_once __DIR__ . '/helpers/visitantes_documento_helper.php';
 ob_end_clean();
 date_default_timezone_set('America/Sao_Paulo');
 
@@ -122,6 +124,28 @@ function portal_convidados_visitante_da_unidade(mysqli $conexao, array $auth, $v
     return $linha ?: null;
 }
 
+/**
+ * Visitante ativo do condomínio cujo documento é idêntico ao digitado pelo morador
+ * (tipo + documento normalizado). Usado para vincular cadastros da portaria.
+ */
+function portal_convidados_visitante_por_documento_informado(mysqli $conexao, array $auth, $visitanteId, array $dados) {
+    $tipo = strtoupper(trim((string)($dados['tipo_documento'] ?? '')));
+    $documento = trim((string)($dados['documento'] ?? ''));
+    if (!in_array($tipo, ['CPF', 'RG'], true) || $documento === '') return null;
+    $normalizado = convidados_normalizar_documento($tipo, $documento);
+    if ($normalizado === '') return null;
+    $stmt = convidados_executar(
+        $conexao,
+        'SELECT id, nome_completo, tipo_documento, documento FROM visitantes WHERE tenant_id = ? AND id = ? AND ativo = 1 LIMIT 1',
+        'ii',
+        [$auth['tenant_id'], (int)$visitanteId]
+    );
+    $visitante = convidados_linha($stmt);
+    $stmt->close();
+    if (!$visitante || strtoupper((string)$visitante['tipo_documento']) !== $tipo) return null;
+    return convidados_normalizar_documento($tipo, $visitante['documento']) === $normalizado ? $visitante : null;
+}
+
 /** Prepara o payload do morador: força o anfitrião titular e completa o documento a partir do visitante. */
 function portal_convidados_payload(mysqli $conexao, array $auth, array $dados) {
     $dados['morador_id'] = $auth['morador_id'];
@@ -135,7 +159,12 @@ function portal_convidados_payload(mysqli $conexao, array $auth, array $dados) {
         ? (int)$dados['visitante_id'] : 0;
     if ($visitanteId > 0) {
         $visitante = portal_convidados_visitante_da_unidade($conexao, $auth, $visitanteId);
-        if (!$visitante) convidados_erro('O visitante selecionado não está vinculado à sua unidade.', 403, 'VISITANTE_FORA_DO_ESCOPO');
+        if (!$visitante) {
+            // Cadastro da base geral (ex.: feito pela portaria): só pode ser vinculado quando o
+            // morador informou exatamente o mesmo documento (evita vincular por ID arbitrário).
+            $visitante = portal_convidados_visitante_por_documento_informado($conexao, $auth, $visitanteId, $dados);
+        }
+        if (!$visitante) convidados_erro('O visitante informado não corresponde ao documento digitado.', 403, 'VISITANTE_FORA_DO_ESCOPO');
         $tipoDoc = strtoupper(trim((string)$visitante['tipo_documento']));
         if (!in_array($tipoDoc, ['CPF', 'RG'], true)) {
             convidados_erro('O cadastro deste visitante não possui CPF ou RG. Informe o documento manualmente.', 422, 'DOCUMENTO_VISITANTE_INVALIDO');
@@ -152,8 +181,10 @@ function portal_convidados_payload(mysqli $conexao, array $auth, array $dados) {
 function portal_convidados_opcoes_entrada(mysqli $conexao, array $auth, array $dados) {
     return [
         'origem_forcada' => portal_convidados_origem($conexao, $dados),
-        'validar_visitante_escopo' => function (array $visitante) use ($conexao, $auth) {
-            return portal_convidados_visitante_da_unidade($conexao, $auth, (int)$visitante['id']) !== null;
+        // O payload já exigiu: visitante da unidade OU documento digitado idêntico ao do cadastro.
+        'validar_visitante_escopo' => function (array $visitante) use ($conexao, $auth, $dados) {
+            return portal_convidados_visitante_da_unidade($conexao, $auth, (int)$visitante['id']) !== null
+                || portal_convidados_visitante_por_documento_informado($conexao, $auth, (int)$visitante['id'], $dados) !== null;
         },
     ];
 }
@@ -205,8 +236,9 @@ function portal_convidados_publico(array $linha, array $auth, $documentoCompleto
 
 /**
  * Localiza visitante ativo do condomínio pelo documento normalizado.
- * Retorna ['visitante' => linha|null, 'na_unidade' => bool].
- * O nome só é exposto ao morador quando o visitante pertence à unidade dele.
+ * Retorna ['visitante' => linha|null, 'na_unidade' => bool], preferindo o cadastro da unidade.
+ * Busca na base de Visitantes do condomínio (inclusive cadastros feitos pela portaria, que
+ * não têm unidade). Só é chamada com o documento completo digitado pelo morador.
  */
 function portal_convidados_localizar_visitante(mysqli $conexao, array $auth, $tipoDocumento, $documentoNormalizado) {
     $stmt = convidados_executar(
@@ -254,16 +286,16 @@ function portal_convidados_buscar_documento(mysqli $conexao, array $auth) {
         if ($ehMorador) convidados_erro('Este CPF pertence a um morador do condomínio e não pode ser convidado.', 400, 'CPF_DE_MORADOR');
     }
     $achado = portal_convidados_localizar_visitante($conexao, $auth, $tipo, $normalizado);
-    if ($achado['visitante'] && $achado['na_unidade']) {
+    if ($achado['visitante']) {
         convidados_responder(true, 'Visitante encontrado.', [
             'encontrado' => true,
             'visitante_id' => (int)$achado['visitante']['id'],
             'nome' => (string)$achado['visitante']['nome_completo'],
             'tipo_documento' => $tipo,
             'documento_mascarado' => convidados_mascarar_documento($tipo, $normalizado),
+            'da_unidade' => (bool)$achado['na_unidade'],
         ]);
     }
-    // Não encontrado na unidade: não revela se o documento existe em outra unidade.
     convidados_responder(true, 'Visitante não cadastrado.', [
         'encontrado' => false,
         'cadastrar_visitante' => true,
@@ -274,20 +306,20 @@ function portal_convidados_buscar_documento(mysqli $conexao, array $auth) {
 /**
  * Após salvar o convite sem visitante vinculado: cadastra o convidado em Visitantes
  * (autoria do morador, mesmas regras de api_portal_morador.php?action=visitantes) e vincula.
- * Se o documento já existe no condomínio fora da unidade, não duplica nem vincula
- * (a portaria localiza o cadastro pelo documento na chegada).
- * Retorna 'CADASTRADO' | 'EXISTENTE_PORTARIA' | 'FALHOU'.
+ * Se o documento já existe no condomínio, apenas vincula (nunca duplica).
+ * Retorna 'CADASTRADO' | 'VINCULADO' | 'FALHOU'.
  */
 function portal_convidados_cadastrar_visitante(mysqli $conexao, array $auth, $convidadoId, array $entrada) {
     try {
         $achado = portal_convidados_localizar_visitante($conexao, $auth, $entrada['tipo_documento'], $entrada['documento_normalizado']);
         if ($achado['visitante']) {
-            if ($achado['na_unidade']) {
-                convidados_executar($conexao, 'UPDATE convidados SET visitante_id = ? WHERE tenant_id = ? AND id = ? AND visitante_id IS NULL', 'iii',
-                    [(int)$achado['visitante']['id'], $auth['tenant_id'], (int)$convidadoId])->close();
-                return 'VINCULADO';
-            }
-            return 'EXISTENTE_PORTARIA';
+            convidados_executar($conexao, 'UPDATE convidados SET visitante_id = ? WHERE tenant_id = ? AND id = ? AND visitante_id IS NULL', 'iii',
+                [(int)$achado['visitante']['id'], $auth['tenant_id'], (int)$convidadoId])->close();
+            return 'VINCULADO';
+        }
+        // Defesa adicional: CPF de morador nunca vira visitante.
+        if ($entrada['tipo_documento'] === 'CPF' && visitante_cpf_de_morador($conexao, $auth['tenant_id'], $entrada['documento_normalizado'])) {
+            return 'FALHOU';
         }
         $documento = $entrada['tipo_documento'] === 'CPF' && function_exists('cpf_formatar')
             ? cpf_formatar($entrada['documento_normalizado'])
@@ -531,12 +563,15 @@ function portal_convidados_criar(mysqli $conexao, array $auth, array $dados) {
     }
     $dados = portal_convidados_payload($conexao, $auth, $dados);
     $cadastrarVisitante = !array_key_exists('cadastrar_visitante', $dados) || !empty($dados['cadastrar_visitante']);
-    // Documento digitado de visitante já cadastrado na unidade: vincula o cadastro existente.
+    // Documento digitado de visitante já cadastrado no condomínio: vincula o cadastro existente.
     if (empty($dados['visitante_id']) && !empty($dados['documento'])) {
         $tipoDoc = strtoupper(trim((string)($dados['tipo_documento'] ?? '')));
         if (in_array($tipoDoc, ['CPF', 'RG'], true)) {
             $achado = portal_convidados_localizar_visitante($conexao, $auth, $tipoDoc, convidados_normalizar_documento($tipoDoc, $dados['documento']));
-            if ($achado['visitante'] && $achado['na_unidade']) $dados['visitante_id'] = (int)$achado['visitante']['id'];
+            if ($achado['visitante']) {
+                $dados['visitante_id'] = (int)$achado['visitante']['id'];
+                $dados = portal_convidados_payload($conexao, $auth, $dados);
+            }
         }
     }
     $entrada = convidados_dados_entrada($conexao, $auth['tenant_id'], $dados, 'criar', 0, portal_convidados_opcoes_entrada($conexao, $auth, $dados));

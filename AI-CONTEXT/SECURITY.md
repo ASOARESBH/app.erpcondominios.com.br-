@@ -70,6 +70,8 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - Toda consulta filtra `tenant_id` + `morador_id` da sessão (outro morador ou outro condomínio recebe 404). Visitante vinculado precisa pertencer à unidade (`pvu_condicao_visitante_unidade`); dependente precisa pertencer ao morador.
 - Documento completo só é devolvido ao próprio autor do convite; listas usam documento mascarado. `verificar_alertas` não expõe alertas de outras unidades.
 - Proteção contra abuso: máximo de 100 convites PREVISTO por morador (429) e chave de idempotência.
+- Decisão (2026-11-04): para encontrar visitantes da portaria, `buscar_documento` revela o nome do visitante do condomínio quando o morador informa o **documento completo e válido**. Listagens continuam restritas à unidade; vínculo por ID fora da unidade exige documento idêntico.
+- CPF de morador não vira visitante; no Portal/App a mensagem não identifica o morador.
 
 ## 9. RH — Banco de Horas
 - A identidade e o `tenant_id` vêm da sessão autenticada. Toda leitura/gravação/exclusão do ledger usa o tenant preparado e valida o colaborador em `rh_colaboradores` no mesmo tenant; IDs de outro condomínio retornam 404.

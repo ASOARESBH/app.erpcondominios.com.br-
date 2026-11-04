@@ -2,6 +2,15 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.24] - 2026-11-04
+### Corrigido
+- **Convidados (Portal/App) não encontrava visitante cadastrado pela portaria.** Caso real: GABRIEL ELIAS RODRIGUES SILVA (CPF 130.565.176-64), cadastrado no painel por usuário (`cadastrado_por_tipo=FUNCIONARIO`, sem unidade), aparecia como "Visitante não cadastrado". Causa: `buscar_documento` só considerava visitantes vinculados à unidade do morador (`pvu_condicao_visitante_unidade`). Agora a busca usa a **base de Visitantes do condomínio** (tenant), preferindo o cadastro da unidade; resposta traz `da_unidade`. Ao salvar, o convite é vinculado ao cadastro existente (nunca duplica); o estado `EXISTENTE_PORTARIA` deixou de existir.
+- Vínculo seguro: `visitante_id` fora da unidade só é aceito quando o documento digitado é idêntico ao do cadastro (`portal_convidados_visitante_por_documento_informado`); caso contrário 403 `VISITANTE_FORA_DO_ESCOPO`. Portal e app enviam `visitante_id` + `tipo_documento` + `documento`. A lista "Visitante já cadastrado" do formulário continua restrita à unidade.
+### Adicionado
+- **CPF de morador ativo não pode ser cadastrado como visitante** — helper `api/helpers/visitantes_documento_helper.php` (`visitante_cpf_de_morador`, `visitante_mensagem_cpf_morador`) aplicado em: `api/api_visitantes.php` POST e PUT (mensagem com nome/unidade do morador, `dados.cpf_de_morador`), `GET api_visitantes.php?documento=` (avisa `cpf_de_morador` quando não é visitante), `api/api_portal_morador.php?action=visitantes` POST (Portal/App; mensagem sem expor o morador; também valida CPF e grava formatado) e cadastro automático de visitante do pré-cadastro de convidado. Página Visitantes (`visitantes.js`) mostra o aviso ao sair do campo documento.
+### Observação
+- `api/api_portal.php?action=cadastrar_visitante` é legado (colunas `nome/cpf/tipo` inexistentes, sem tenant) e não é chamado por portal/app; não recebeu a regra. Candidato a remoção.
+
 ## [2.1.23] - 2026-11-04
 ### Adicionado
 - **Convidados (Portal do Morador + app): busca automática do documento em Visitantes.** Com CPF completo e válido (ou ao sair do campo, no RG) o formulário consulta `GET api/api_portal_convidados.php?acao=buscar_documento`. Visitante da unidade encontrado → nome preenchido e travado, convite vinculado ao cadastro. Não encontrado → aviso "Visitante não cadastrado"; o morador informa o nome e, ao salvar, o convidado é **cadastrado em Visitantes da unidade** (autoria `MORADOR`, CPF formatado) e vinculado ao convite. `criar` devolve `dados.visitante`: `VINCULADO` | `CADASTRADO` | `EXISTENTE_PORTARIA` | `NAO_CADASTRADO` | `FALHOU`; `cadastrar_visitante:false` desativa o cadastro.

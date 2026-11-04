@@ -95,6 +95,8 @@ Em acesso de Dependente, a API confirma em qualquer movimento que o dependente p
 - Limite de 100 pré-cadastros PREVISTO por morador.
 - No Portal/App, ao digitar o documento do convidado o sistema busca em Visitantes da unidade; sem cadastro, o convidado é cadastrado automaticamente em Visitantes da unidade ao salvar o convite. Anexos exigidos pela política de visitantes continuam sendo concluídos na chegada (Registro Manual).
 - No painel, "visitante não encontrado" e demais avisos aparecem dentro do modal do convite; o convite é salvo com o nome digitado e o cadastro completo de visitante segue na chegada.
+- A busca do convidado no Portal/App considera todos os visitantes do condomínio (inclusive os cadastrados pela portaria); o convite é vinculado ao cadastro existente e só cria visitante quando o documento não existe no condomínio.
+- CPF de morador ativo nunca pode ser cadastrado como visitante (painel, Portal/App e pré-cadastro de convidado).
 
 ## 12. Alertas da Unidade
 

@@ -217,6 +217,10 @@ O painel (`api/api_convidados.php`) passou a aceitar `GET listar&origem=MORADOR|
 - `GET buscar_documento&tipo_documento=CPF|RG&documento=` → `{encontrado:true, visitante_id, nome, tipo_documento, documento_mascarado}` para visitante ativo da unidade; senão `{encontrado:false, cadastrar_visitante:true, mensagem}` (não revela cadastro de outra unidade). 400 `CPF_INVALIDO` / `CPF_DE_MORADOR`.
 - `POST criar` sem `visitante_id`: documento de visitante da unidade → vincula; documento inexistente no condomínio e `cadastrar_visitante` ≠ false → após salvar o convite, insere em `visitantes` (tenant, morador_id, cadastrado_por_tipo/morador_id/nome, observação de origem; colunas opcionais detectadas) e vincula; documento de outra unidade → não duplica nem vincula. Retorno `dados.visitante`.
 
+**Atualização (2026-11-04, noite):** `buscar_documento` pesquisa a base de Visitantes do **condomínio** (inclui cadastros da portaria sem unidade) e retorna `da_unidade`. `criar`/`editar` aceitam `visitante_id` de fora da unidade somente com `tipo_documento`+`documento` idênticos ao cadastro. Documento existente no condomínio é sempre vinculado (sem duplicar).
+
+**Visitantes — CPF de morador:** `POST/PUT api/api_visitantes.php` e `POST api/api_portal_morador.php?action=visitantes` recusam CPF de morador ativo do tenant (`dados.cpf_de_morador=true` no painel). `GET api_visitantes.php?documento=` devolve `sucesso:false` + `dados{cpf_de_morador, morador{id,nome,unidade}}` quando o CPF é de morador.
+
 ## 19. Banco de Horas (RH)
 
 `api/api_rh_banco_horas.php` exige sessão e tenant resolvido por `exigirTenantId()`. `GET ?acao=saldo|extrato&colaborador_id=N` valida o colaborador em `rh_colaboradores` no mesmo tenant e filtra cada leitura por `(tenant_id, colaborador_id)`; colaborador de outro tenant retorna 404. `POST ?acao=registrar` aceita somente `abatimento`/`pagamento`, minutos inteiros positivos, data válida, descrição e `idempotency_key` opcional. Tenant e autoria são derivados da sessão.

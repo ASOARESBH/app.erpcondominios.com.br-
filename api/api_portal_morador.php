@@ -6,6 +6,7 @@
 
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once __DIR__ . '/helpers/visitantes_documento_helper.php';
 
 // Função para retornar JSON
 if (!function_exists('retornar_json')) {
@@ -496,6 +497,17 @@ if ($action === 'visitantes' && $metodo === 'POST') {
     
     if (empty($nome_completo) || empty($documento)) {
         retornar_json(false, "Nome e documento são obrigatórios");
+    }
+    $tipo_documento = strtoupper(trim((string)$tipo_documento)) === 'RG' ? 'RG' : 'CPF';
+    if ($tipo_documento === 'CPF') {
+        if (!cpf_valido($documento)) {
+            retornar_json(false, 'CPF inválido. Confira os dígitos informados.');
+        }
+        // CPF de morador ativo não pode ser cadastrado como visitante.
+        if (visitante_cpf_de_morador($conexao, (int)$tenant_id, $documento)) {
+            retornar_json(false, visitante_mensagem_cpf_morador([], false));
+        }
+        $documento = cpf_formatar($documento);
     }
     
     // Verificar se existe campo morador_id
