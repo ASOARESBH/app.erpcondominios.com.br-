@@ -18,7 +18,7 @@
 
 if (!function_exists('pvu_unidade_morador')) {
     function pvu_unidade_morador(mysqli $conexao, int $tenant_id, int $morador_id): string {
-        $stmt = $conexao->prepare('SELECT unidade FROM moradores WHERE tenant_id = ? AND id = ? LIMIT 1');
+        $stmt = $conexao->prepare('SELECT unidade FROM moradores WHERE tenant_id = ? AND id = ? AND ativo = 1 LIMIT 1');
         if (!$stmt) return '';
         $stmt->bind_param('ii', $tenant_id, $morador_id);
         $stmt->execute();
