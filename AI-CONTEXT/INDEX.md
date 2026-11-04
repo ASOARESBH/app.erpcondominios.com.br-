@@ -20,6 +20,7 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **Análise do Vigilante/Rondas Mobile**: [ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md](ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md)
 
 ## 📋 3.1 Prompts de Implementação Planejados
+- **Manus — Visitantes da Gleba no App/Portal**: [PROMPT_MANUS_VISITANTES_GLEBA_20261104.md](PROMPT_MANUS_VISITANTES_GLEBA_20261104.md)
 - **Lista de Convidados (aba no Registro de Acesso)**: [PROMPT_LISTA_CONVIDADOS_20261031.md](PROMPT_LISTA_CONVIDADOS_20261031.md)
 - **Debug — App: visitantes da Gleba incompletos**: [DEBUG_VISITANTES_APP_GLEBA_20261104.md](DEBUG_VISITANTES_APP_GLEBA_20261104.md)
 - **Debug — erro 500 na listagem de convidados**: [DEBUG_LISTA_CONVIDADOS_500_20261102.md](DEBUG_LISTA_CONVIDADOS_500_20261102.md)
