@@ -15,6 +15,7 @@ const API_UNIDADES    = '../api/api_unidades.php';
 const API_CONVIDADOS = '../api/api_convidados.php';
 const API_ALERTAS_UNIDADE = '../api/api_alertas_unidade.php';
 const REGISTRO_FEEDBACK_STORAGE_KEY = 'registro_manual_feedback';
+const REGISTRO_INFO_PREFERENCE_KEY = 'registro_manual_nao_mostrar_info';
 
 let registrosCache = [];
 let veiculosCache  = [];
@@ -34,6 +35,31 @@ let registroCienciaState = { chave: '', contexto: null, resultado: null, token: 
 let registroCienciaListeners = [];
 let registroCienciaModalResolver = null;
 let registroCienciaModalPreviousFocus = null;
+let registroStepperAtual = 1;
+let registroEtapasConcluidas = new Set();
+let registroEtapaEmProcessamento = false;
+let registroEtapaModalResolver = null;
+let registroEtapaModalPreviousFocus = null;
+let registroEtapaModalData = null;
+let registroStepperListeners = [];
+let registroAlertasEtapaVistos = new Set();
+let registroBaseContextoAlertas = '';
+let registroEtapaToastTimer = null;
+let registroInfoTimer = null;
+let registroInfoRemaining = 8000;
+let registroInfoStartedAt = 0;
+let registroInfoPausado = false;
+let registroVisitanteCompactTimer = null;
+let registroVisitanteDocumentoPendente = '';
+let registroVisitanteDocumentoAnexado = null;
+let registroVisitanteMensagemDetalhada = '';
+let registroInformativosEtapa = new Map();
+let registroAlertasEspecificosPendentes = 0;
+let registroAlertaTimer = null;
+let registroAlertaEtapaAtual = null;
+let registroUltimoErro = '';
+let registroConfirmacaoDestinoPlacaKey = '';
+let registroDestinoPlacaRecusadoKey = '';
 
 function gerarIdempotencyKey() {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -73,6 +99,8 @@ export function init() {
     _setupModoRegistro();
     _setupForm();
     _setupCienciaRegistro();
+    _setupStepperRegistro();
+    _setupInfoRegistro();
     _setupBusca();
     _setupActions();
     _setupMascaraDocumento();
@@ -80,10 +108,12 @@ export function init() {
     _setupCascataMorador();
     _setupCheckDependente();
     _setupOcupantes();
+    _atualizarCamposTipoRegistro();
     garantirIdempotencyKey();
     _carregarUnidades();
 
     atualizarDataHoraAtual();
+    _atualizarEstadoBotoesEtapa();
     carregarVeiculos();
     carregarRegistros();
     _mostrarFeedbackPosAtualizacao();
@@ -105,6 +135,16 @@ export function destroy() {
     documentoBuscaToken += 1;
     convidadoSelecaoToken += 1;
     _destroyCienciaRegistro();
+    _resolverModalAlertaEtapa({ continuar: false, destruido: true });
+    registroStepperListeners.forEach(({ elemento, evento, handler }) => elemento.removeEventListener(evento, handler));
+    registroStepperListeners = [];
+    if (registroEtapaToastTimer) clearTimeout(registroEtapaToastTimer);
+    if (registroInfoTimer) clearTimeout(registroInfoTimer);
+    if (registroVisitanteCompactTimer) clearTimeout(registroVisitanteCompactTimer);
+    if (registroAlertaTimer) clearTimeout(registroAlertaTimer);
+    registroEtapaToastTimer = registroInfoTimer = registroVisitanteCompactTimer = registroAlertaTimer = null;
+    registroInfoRemaining = 8000;
+    registroInfoPausado = false;
     if (moduloConvidados?.destroy) {
         try { moduloConvidados.destroy(); } catch (error) { console.warn('[Registro][Convidados] Falha ao destruir módulo:', error); }
     }
@@ -117,6 +157,20 @@ export function destroy() {
     ultimoEnvioRegistro = null;
     convidadoAtivo = null;
     politicaVisitantes = null;
+    registroStepperAtual = 1;
+    registroEtapasConcluidas = new Set();
+    registroEtapaEmProcessamento = false;
+    registroAlertasEtapaVistos = new Set();
+    registroInformativosEtapa = new Map();
+    registroAlertasEspecificosPendentes = 0;
+    registroBaseContextoAlertas = '';
+    registroVisitanteDocumentoAnexado = null;
+    registroVisitanteMensagemDetalhada = '';
+    registroVisitanteDocumentoPendente = '';
+    registroAlertaEtapaAtual = null;
+    registroUltimoErro = '';
+    registroConfirmacaoDestinoPlacaKey = '';
+    registroDestinoPlacaRecusadoKey = '';
 }
 
 function _carregarModuloConvidados(lifecycleToken) {
@@ -480,12 +534,15 @@ function _setupMascaraDocumento() {
     const tipoDoc  = document.getElementById('tipoDocRegistro');
     const docInput = document.getElementById('documentoRegistro');
     if (!tipoDoc || !docInput) return;
+    const ajustarTeclado = () => { docInput.inputMode = tipoDoc.value === 'CPF' ? 'numeric' : 'text'; };
 
     tipoDoc.addEventListener('change', () => {
         docInput.value = '';
         docInput.placeholder = tipoDoc.value === 'CPF' ? '000.000.000-00' : 'XX.XXX.XXX-X';
+        ajustarTeclado();
         _invalidarPessoaSelecionadaRegistro();
     });
+    ajustarTeclado();
 
     docInput.addEventListener('input', () => {
         docInput.value = _aplicarMascaraDocumentoValor(tipoDoc.value, docInput.value);
@@ -508,6 +565,11 @@ function _invalidarPessoaSelecionadaRegistro() {
     setCampoValue('visitanteIdRegistro', '');
     setCampoValue('convidadoIdRegistro', '');
     setCampoValue('nomeVisitanteRegistro', '');
+    registroVisitanteDocumentoAnexado = null;
+    registroVisitanteDocumentoPendente = '';
+    registroVisitanteMensagemDetalhada = '';
+    if (registroVisitanteCompactTimer) clearTimeout(registroVisitanteCompactTimer);
+    registroVisitanteCompactTimer = null;
     const nomeInput = document.getElementById('nomeVisitanteRegistro');
     if (nomeInput) nomeInput.readOnly = false;
     ['visitanteEncontrado', 'convidadoPrevistoRegistro'].forEach((id) => {
@@ -515,6 +577,7 @@ function _invalidarPessoaSelecionadaRegistro() {
         if (box) { box.style.display = 'none'; box.innerHTML = ''; }
     });
     document.getElementById('cadastroVisitanteNaChegada')?.remove();
+    _atualizarEstadoBotoesEtapa();
 }
 
 // ── Ocupantes do Veículo (Visitante/Prestador) ────────────────────────────────
@@ -815,6 +878,8 @@ async function _buscarVisitantePorDocumento() {
     if (btnBuscar) { btnBuscar.disabled = true; btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
 
     try {
+        const politica = await _carregarPoliticaVisitantes();
+        if (!isCurrent()) return;
         const parametrosVisitante = new URLSearchParams({ documento: doc, tipo_documento: tipoDocumento });
         const resp = await fetch(`${API_VISITANTES}?${parametrosVisitante.toString()}`, { credentials: 'include' });
         const data = await resp.json();
@@ -827,6 +892,10 @@ async function _buscarVisitantePorDocumento() {
             const v = data.dados;
             setCampoValue('nomeVisitanteRegistro', v.nome_completo || '');
             setCampoValue('visitanteIdRegistro', v.id || '');
+            registroVisitanteDocumentoAnexado = Boolean(v.documento_arquivo);
+            registroVisitanteDocumentoPendente = Boolean(politica?.documento_digitalizado?.obrigatorio && !v.documento_arquivo)
+                ? 'Este condomínio exige documento digitalizado para liberar o acesso.' : '';
+            registroVisitanteMensagemDetalhada = `Cadastro encontrado: ${v.nome_completo || 'Visitante'} — ${v.tipo_documento}: ${v.documento}${v.telefone_contato ? ` — Tel: ${v.telefone_contato}` : ''}${v.documento_arquivo ? ' — Documento digitalizado confirmado.' : ' — Sem documento digitalizado anexado.'}`;
             const nomeInput = document.getElementById('nomeVisitanteRegistro');
             if (nomeInput) nomeInput.readOnly = true;
             const placaInput = document.getElementById('placaRegistro');
@@ -845,14 +914,22 @@ async function _buscarVisitantePorDocumento() {
                         <span>Cadastro encontrado: <strong>${_esc(v.nome_completo)}</strong>
                         — sem documento digitalizado anexado. Se este condomínio exigir o anexo,
                         o servidor recusará ao salvar; caso contrário, o acesso pode ser registrado normalmente.</span>`;
+                box.dataset.detalhe = registroVisitanteMensagemDetalhada;
+                _compactarVisitanteEncontrado(6000);
             }
+            _atualizarEstadoBotoesEtapa();
+            if (registroVisitanteDocumentoPendente) _mostrarErroEtapaRegistro(registroVisitanteDocumentoPendente);
         } else {
             setCampoValue('nomeVisitanteRegistro', '');
             setCampoValue('visitanteIdRegistro', '');
+            registroVisitanteDocumentoAnexado = null;
+            registroVisitanteDocumentoPendente = '';
+            registroVisitanteMensagemDetalhada = '';
             if (box) { box.style.display = 'none'; box.innerHTML = ''; }
             const temConvite = await _buscarConvidadosPrevistos(doc, tipoDocumento, isCurrent);
             if (!isCurrent()) return;
             if (!temConvite) mostrarAlerta('error', 'Visitante não encontrado. Preencha o nome manualmente ou cadastre-o no módulo Visitantes.');
+            _atualizarEstadoBotoesEtapa();
             return;
         }
         await _buscarConvidadosPrevistos(doc, tipoDocumento, isCurrent);
@@ -893,6 +970,585 @@ function _setupForm() {
     if (tipo) tipo.addEventListener('change', onTipoChange);
 }
 
+function _registrarListenerStepper(elemento, evento, handler) {
+    if (!elemento) return;
+    elemento.addEventListener(evento, handler);
+    registroStepperListeners.push({ elemento, evento, handler });
+}
+
+function _setupStepperRegistro() {
+    const form = document.getElementById('registroForm');
+    if (!form) return;
+    registroStepperAtual = 1;
+    registroEtapasConcluidas = new Set();
+    registroAlertasEtapaVistos = new Set();
+    registroInformativosEtapa = new Map();
+    _registrarListenerStepper(document.getElementById('btnEtapa1Avancar'), 'click', () => { void _avancarEtapaRegistro(1); });
+    _registrarListenerStepper(document.getElementById('btnEtapa2Avancar'), 'click', () => { void _avancarEtapaRegistro(2); });
+    _registrarListenerStepper(document.getElementById('btnEtapa3Avancar'), 'click', () => { void _avancarEtapaRegistro(3); });
+    _registrarListenerStepper(document.getElementById('btnEtapa4Voltar'), 'click', () => {
+        const tipo = document.getElementById('tipoRegistro')?.value || '';
+        _abrirEtapaRegistro(_tipoExigeDocumento(tipo) ? 3 : 2);
+    });
+    _registrarListenerStepper(form, 'click', (evento) => {
+        const editar = evento.target.closest('[data-step-edit]');
+        const voltar = evento.target.closest('[data-step-back]');
+        if (editar) _editarEtapaRegistro(Number(editar.dataset.stepEdit));
+        else if (voltar) _abrirEtapaRegistro(Number(voltar.dataset.stepBack));
+    });
+    const atualizarValidacoes = (evento) => {
+        if (evento?.target?.matches('#placaRegistro, #tipoRegistro, #unidadeDestinoRegistro, #moradorDestinoRegistro, #unidadeMoradorRegistro, #moradorSelecionadoRegistro')) {
+            registroConfirmacaoDestinoPlacaKey = '';
+            registroDestinoPlacaRecusadoKey = '';
+        }
+        if (evento?.target && evento.target.matches('input, select, textarea')
+            && (registroUltimoErro || document.getElementById('alertBox')?.querySelector('.alert-error'))) _limparErroRegistro();
+        _atualizarEstadoBotoesEtapa();
+    };
+    _registrarListenerStepper(form, 'input', atualizarValidacoes);
+    _registrarListenerStepper(form, 'change', atualizarValidacoes);
+    _registrarListenerStepper(form, 'keydown', (evento) => {
+        if (evento.key !== 'Enter' || evento.shiftKey || evento.isComposing || registroEtapaEmProcessamento) return;
+        const alvo = evento.target;
+        if (alvo?.tagName === 'TEXTAREA' || alvo?.tagName === 'BUTTON' || alvo?.type === 'submit') return;
+        if (registroStepperAtual < 4) {
+            evento.preventDefault();
+            void _avancarEtapaRegistro(registroStepperAtual);
+        }
+    });
+    _registrarListenerStepper(document.getElementById('registroAlertasChip'), 'click', () => {
+        const alertas = [...registroInformativosEtapa.values()].map((item) => item.alerta);
+        if (alertas.length) _abrirModalAlertaEtapa({ alertas }, { somenteLeitura: true });
+    });
+    _registrarListenerStepper(document.getElementById('btnRegistroAlertaEtapaConfirmar'), 'click', _confirmarAlertaEtapa);
+    _registrarListenerStepper(document.getElementById('btnRegistroAlertaEtapaCancelar'), 'click', () => _cancelarAlertaEtapa(true));
+    _registrarListenerStepper(document.getElementById('registroAlertaEtapaModal'), 'keydown', (evento) => {
+        if (evento.key === 'Escape') {
+            evento.preventDefault();
+            _cancelarAlertaEtapa(false);
+            return;
+        }
+        if (evento.key !== 'Tab') return;
+        const modal = document.getElementById('registroAlertaEtapaModal');
+        const focaveis = [...(modal?.querySelectorAll('button:not([disabled]):not([hidden]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])') || [])]
+            .filter((elemento) => elemento.getClientRects().length > 0 && getComputedStyle(elemento).visibility !== 'hidden');
+        if (!focaveis.length) return;
+        const primeiro = focaveis[0];
+        const ultimo = focaveis[focaveis.length - 1];
+        if (evento.shiftKey && document.activeElement === primeiro) {
+            evento.preventDefault();
+            ultimo.focus();
+        } else if (!evento.shiftKey && document.activeElement === ultimo) {
+            evento.preventDefault();
+            primeiro.focus();
+        }
+    });
+    _registrarListenerStepper(document.getElementById('btnRegistroComoFunciona'), 'click', () => _alternarInfoRegistro(true));
+    _registrarListenerStepper(document.getElementById('btnFecharRegistroInfo'), 'click', () => _recolherInfoRegistro());
+    const info = document.getElementById('registroInfoBox');
+    ['mouseenter', 'focusin'].forEach((evento) => _registrarListenerStepper(info, evento, _pausarTimerInfoRegistro));
+    ['mouseleave', 'focusout'].forEach((evento) => _registrarListenerStepper(info, evento, _retomarTimerInfoRegistro));
+    _renderStepperRegistro();
+    _atualizarEstadoBotoesEtapa();
+}
+
+function _validarEtapa1Registro() {
+    return Boolean(document.getElementById('dataHoraRegistro')?.value
+        && document.getElementById('tipoRegistro')?.value
+        && document.querySelector('input[name="tipo_acesso"]:checked')?.value);
+}
+
+function _validarEtapa2Registro() {
+    const tipo = document.getElementById('tipoRegistro')?.value || '';
+    if (!_validarEtapa1Registro() || !tipo) return false;
+    if (tipo === 'Morador') {
+        return Boolean(document.getElementById('unidadeMoradorRegistro')?.value
+            && document.getElementById('moradorSelecionadoRegistro')?.value
+            && (!document.getElementById('checkDependente')?.checked || document.getElementById('dependenteSelecionadoRegistro')?.value));
+    }
+    return Boolean(document.getElementById('unidadeDestinoRegistro')?.value && document.getElementById('moradorDestinoRegistro')?.value);
+}
+
+function _validarEtapa3BasicaRegistro() {
+    const tipo = document.getElementById('tipoRegistro')?.value || '';
+    if (!_tipoExigeDocumento(tipo)) return tipo === 'Morador';
+    const documento = document.getElementById('documentoRegistro')?.value.trim() || '';
+    const tipoDocumento = document.getElementById('tipoDocRegistro')?.value || 'CPF';
+    const nome = document.getElementById('nomeVisitanteRegistro')?.value.trim() || '';
+    return Boolean(document.getElementById('visitanteIdRegistro')?.value && documento && nome
+        && !registroVisitanteDocumentoPendente
+        && (tipoDocumento !== 'CPF' || _cpfValidoRegistro(documento)));
+}
+
+function _validarEtapa4BasicaRegistro() {
+    if (!_validarEtapa2Registro()) return false;
+    const tipo = document.getElementById('tipoRegistro')?.value || '';
+    if (_tipoExigeDocumento(tipo) && (!_validarEtapa3BasicaRegistro() || registroVisitanteDocumentoPendente)) return false;
+    if (_isPedestre()) return true;
+    const placa = normalizarPlaca(document.getElementById('placaRegistro')?.value || '');
+    const chaveDestino = _chaveDestinoPlacaAtual(placa);
+    return /^[A-Z]{3}(?:[0-9]{4}|[0-9][A-Z][0-9]{2})$/.test(placa)
+        && document.getElementById('placaRegistro')?.dataset.consultando !== '1'
+        && registroDestinoPlacaRecusadoKey !== chaveDestino;
+}
+
+function _chaveDestinoPlacaAtual(placa = normalizarPlaca(document.getElementById('placaRegistro')?.value || '')) {
+    const tipo = document.getElementById('tipoRegistro')?.value || '';
+    const eVisitante = _tipoExigeDocumento(tipo);
+    const morador = String(document.getElementById(eVisitante ? 'moradorDestinoRegistro' : 'moradorSelecionadoRegistro')?.value
+        || (!eVisitante ? document.getElementById('moradorId')?.value : '') || '');
+    const unidade = String(document.getElementById(eVisitante ? 'unidadeDestinoRegistro' : 'unidadeMoradorRegistro')?.value || '');
+    return `${placa}|${tipo}|${morador}|${unidade}`;
+}
+
+function _atualizarEstadoBotoesEtapa() {
+    const b1 = document.getElementById('btnEtapa1Avancar');
+    const b2 = document.getElementById('btnEtapa2Avancar');
+    const b3 = document.getElementById('btnEtapa3Avancar');
+    const b4 = document.getElementById('btnSalvarRegistro');
+    if (b1) b1.disabled = !(_validarEtapa1Registro() && !registroEtapaEmProcessamento);
+    if (b2) b2.disabled = !(_validarEtapa2Registro() && !registroEtapaEmProcessamento);
+    if (b3) b3.disabled = !(_validarEtapa3BasicaRegistro() && !registroEtapaEmProcessamento);
+    if (b4) b4.disabled = !(_validarEtapa4BasicaRegistro() && !registroEtapaEmProcessamento && !salvandoReg);
+}
+
+function _resumoEtapaRegistro(etapa) {
+    const tipo = document.getElementById('tipoRegistro')?.value || '-';
+    if (etapa === 1) {
+        const acesso = _getTipoAcesso();
+        const data = document.getElementById('dataHoraRegistro')?.value || '';
+        return [acesso, tipo, data ? data.replace('T', ' ') : ''].filter(Boolean).join(' · ');
+    }
+    if (etapa === 2) {
+        if (tipo === 'Morador') {
+            const unidade = document.getElementById('unidadeMoradorRegistro')?.value || '';
+            const morador = document.getElementById('moradorSelecionadoRegistro');
+            const pessoa = morador?.selectedOptions?.[0]?.textContent || '';
+            const dependente = document.getElementById('checkDependente')?.checked
+                ? (document.getElementById('dependenteSelecionadoRegistro')?.selectedOptions?.[0]?.textContent || '')
+                : '';
+            return [unidade, dependente || pessoa].filter(Boolean).join(' · ');
+        }
+        const unidade = document.getElementById('unidadeDestinoRegistro')?.value || '';
+        const morador = document.getElementById('moradorDestinoRegistro')?.selectedOptions?.[0]?.textContent || '';
+        const dias = document.getElementById('diasPermanenciaRegistro')?.value || '';
+        return [unidade, morador, dias ? `${dias} dia${Number(dias) === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+    }
+    if (etapa === 3) {
+        if (!_tipoExigeDocumento(tipo)) return 'Identificação de visitante não se aplica';
+        const nome = document.getElementById('nomeVisitanteRegistro')?.value.trim() || '';
+        const documento = document.getElementById('documentoRegistro')?.value.trim() || '';
+        return [nome, documento ? `Documento ${documento}` : '', document.getElementById('convidadoIdRegistro')?.value ? 'Convidado vinculado' : ''].filter(Boolean).join(' · ');
+    }
+    return _isPedestre() ? 'Pedestre' : [document.getElementById('placaRegistro')?.value.trim(), document.getElementById('modeloRegistro')?.value.trim()].filter(Boolean).join(' · ');
+}
+
+function _renderStepperRegistro() {
+    const tipo = document.getElementById('tipoRegistro')?.value || '';
+    const etapa3Pulada = !_tipoExigeDocumento(tipo);
+    document.querySelectorAll('.registro-step-card[data-step]').forEach((card) => {
+        const etapa = Number(card.dataset.step);
+        const ativa = etapa === registroStepperAtual;
+        const etapaOmitida = etapa === 3 && etapa3Pulada;
+        const colapsada = !ativa && !etapaOmitida && registroEtapasConcluidas.has(etapa);
+        card.hidden = !ativa && !colapsada;
+        card.classList.toggle('is-active', ativa);
+        card.classList.toggle('is-collapsed', colapsada);
+        card.classList.toggle('is-complete', registroEtapasConcluidas.has(etapa));
+        card.classList.toggle('is-skipped', etapa === 3 && etapa3Pulada);
+        const conteudo = card.querySelector('[data-step-content]');
+        if (conteudo) conteudo.hidden = colapsada;
+        const summary = document.getElementById(`registroResumoEtapa${etapa}`);
+        if (summary) {
+            summary.textContent = registroEtapasConcluidas.has(etapa) ? _resumoEtapaRegistro(etapa) : '';
+            summary.hidden = !colapsada;
+        }
+        const edit = card.querySelector('[data-step-edit]');
+        if (edit) edit.hidden = !colapsada;
+    });
+    document.querySelectorAll('[data-step-indicator]').forEach((indicador) => {
+        const etapa = Number(indicador.dataset.stepIndicator);
+        indicador.classList.toggle('is-current', etapa === registroStepperAtual);
+        indicador.classList.toggle('is-complete', registroEtapasConcluidas.has(etapa));
+        indicador.classList.toggle('is-skipped', etapa === 3 && etapa3Pulada);
+        if (etapa === 3 && etapa3Pulada) indicador.setAttribute('aria-label', 'Etapa 3 Identificação pulada para Morador');
+        else indicador.removeAttribute('aria-label');
+    });
+    const status = document.getElementById('registroEtapaStatus');
+    if (status) status.textContent = `Etapa ${registroStepperAtual} de 4${etapa3Pulada ? ' · Identificação do visitante não se aplica' : ''}`;
+    _atualizarEstadoBotoesEtapa();
+}
+
+function _abrirEtapaRegistro(etapa, focar = true) {
+    const alvo = Number(etapa);
+    if (![1, 2, 3, 4].includes(alvo)) return;
+    if (alvo === 3 && !_tipoExigeDocumento(document.getElementById('tipoRegistro')?.value || '')) return;
+    registroStepperAtual = alvo;
+    _renderStepperRegistro();
+    if (focar) {
+        const card = document.getElementById(`registroEtapa${alvo}`);
+        const campo = [...(card?.querySelectorAll('input:not([type="hidden"]):not([disabled]):not([hidden]), select:not([disabled]):not([hidden]), button:not([disabled]):not([hidden])') || [])]
+            .find((elemento) => elemento.getClientRects().length > 0 && getComputedStyle(elemento).visibility !== 'hidden');
+        requestAnimationFrame(() => campo?.focus({ preventScroll: true }));
+        card?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    }
+}
+
+function _editarEtapaRegistro(etapa) {
+    registroEtapasConcluidas.forEach((concluida) => { if (concluida >= etapa) registroEtapasConcluidas.delete(concluida); });
+    _invalidarCienciaRegistro();
+    _abrirEtapaRegistro(etapa);
+    if (etapa === 2) _agendarPreflightCienciaRegistro('DESTINO');
+}
+
+async function _avancarEtapaRegistro(etapa) {
+    if (registroEtapaEmProcessamento || Number(etapa) !== registroStepperAtual) return;
+    if (etapa === 1) {
+        if (!_validarEtapa1Registro()) { _mostrarErroEtapaRegistro('Preencha data e hora, tipo e Entrada/Saída para avançar.'); return; }
+        registroEtapasConcluidas.add(1);
+        onTipoChange();
+        _abrirEtapaRegistro(2);
+        return;
+    }
+    if (etapa === 2) {
+        if (!_validarEtapa2Registro()) { _mostrarErroEtapaRegistro('Selecione a unidade e o morador de destino. Se marcou Dependente, escolha também o dependente.'); return; }
+        const tipoAcesso = _getTipoAcesso();
+        if (tipoAcesso === 'Entrada') {
+            const resultado = await _executarPreflightEtapaRegistro('DESTINO');
+            if (!resultado?.continuar) return;
+        }
+        registroEtapasConcluidas.add(2);
+        const proxima = _tipoExigeDocumento(document.getElementById('tipoRegistro')?.value || '') ? 3 : 4;
+        if (proxima === 4) registroEtapasConcluidas.add(3);
+        _abrirEtapaRegistro(proxima);
+        return;
+    }
+    if (etapa === 3) {
+        if (!_validarEtapa3BasicaRegistro()) { _mostrarErroEtapaRegistro('Busque e confirme o visitante pelo documento antes de avançar.'); return; }
+        if (!await _validarDocumentoVisitanteRegistro()) return;
+        if (_getTipoAcesso() === 'Entrada') {
+            const resultado = await _executarPreflightEtapaRegistro('IDENTIFICACAO');
+            if (!resultado?.continuar) return;
+        }
+        registroEtapasConcluidas.add(3);
+        _abrirEtapaRegistro(4);
+    }
+}
+
+function _contextoBaseAlertaRegistro(contexto) {
+    return JSON.stringify({ contexto: contexto?.contexto || '', unidade: contexto?.unidade || '', morador_id: contexto?.morador_id || '', dependente_id: contexto?.dependente_id || '', tipo_pessoa: contexto?.tipo_pessoa || '', tipo_acesso: contexto?.tipo_acesso || '', data_hora: contexto?.data_hora || '' });
+}
+
+function _chaveAlertaEtapa(alerta, contexto) {
+    const alvo = String(alerta?.tipo_alvo_correspondente || '').toUpperCase();
+    let identificador = '';
+    if (alvo === 'PLACA') identificador = normalizarPlaca(contexto?.placa || '');
+    else if (alvo === 'DOCUMENTO') identificador = String(contexto?.documento_normalizado || contexto?.documento || '').replace(/\W/g, '').toUpperCase();
+    else if (alvo === 'VISITANTE') identificador = String(contexto?.visitante_id || '');
+    const conteudo = JSON.stringify([alerta?.titulo || '', alerta?.mensagem || '', alerta?.nivel || '', alerta?.acao || '', alerta?.instrucao_operador || '', alerta?.telefone_contato || '']);
+    return `${Number(alerta?.id || 0)}|${_contextoBaseAlertaRegistro(contexto)}|${alvo}|${identificador}|${conteudo}`;
+}
+
+function _alertaAbrePopupEtapa(alerta) {
+    return _alertaExigeDecisao(alerta) || ['ATENCAO', 'CRITICO'].includes(String(alerta?.nivel || '').toUpperCase());
+}
+
+function _mostrarErroEtapaRegistro(mensagem) {
+    const box = document.getElementById('registroEtapaFeedback');
+    if (!box) { mostrarAlerta('error', mensagem); return; }
+    box.className = 'registro-etapa-feedback is-error';
+    box.innerHTML = `<span>${_esc(mensagem)}</span><button type="button" data-registro-feedback-close aria-label="Fechar mensagem"><i class="fas fa-times"></i></button>`;
+    box.hidden = false;
+    registroUltimoErro = String(mensagem || '');
+    box.querySelector('[data-registro-feedback-close]')?.addEventListener('click', _limparErroRegistro);
+    box.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+}
+
+function _limparErroRegistro() {
+    registroUltimoErro = '';
+    if (registroAlertaTimer) clearTimeout(registroAlertaTimer);
+    registroAlertaTimer = null;
+    const box = document.getElementById('registroEtapaFeedback');
+    if (box) { box.hidden = true; box.textContent = ''; }
+    const global = document.getElementById('alertBox');
+    if (global?.querySelector('.alert-error')) global.innerHTML = '';
+}
+
+function _mostrarToastEtapaRegistro(mensagem) {
+    const box = document.getElementById('registroEtapaFeedback');
+    if (!box) return;
+    if (registroEtapaToastTimer) clearTimeout(registroEtapaToastTimer);
+    box.className = 'registro-etapa-feedback is-info';
+    box.innerHTML = `<span>${_esc(mensagem)}</span><button type="button" data-registro-feedback-close aria-label="Fechar aviso"><i class="fas fa-times"></i></button>`;
+    box.hidden = false;
+    box.querySelector('[data-registro-feedback-close]')?.addEventListener('click', () => { if (registroEtapaToastTimer) clearTimeout(registroEtapaToastTimer); box.hidden = true; });
+    registroEtapaToastTimer = setTimeout(() => { if (box.isConnected) box.hidden = true; }, 7500);
+}
+
+async function _executarPreflightEtapaRegistro(etapa) {
+    if (_getTipoAcesso() === 'Saída') return { continuar: true, alertas: [] };
+    if (etapa === 'DESTINO' && !_validarEtapa2Registro()) return { continuar: false };
+    if (etapa === 'IDENTIFICACAO' && !_validarEtapa3BasicaRegistro()) return { continuar: false };
+    const contexto = _obterContextoCienciaRegistro(etapa);
+    if (!contexto) return { continuar: false };
+    const lifecycleToken = registroLifecycleToken;
+    const versao = registroCienciaVersion;
+    const chaveAntes = _chaveContextoCiencia(contexto);
+    registroCienciaController?.abort();
+    const controller = new AbortController();
+    registroCienciaController = controller;
+    registroEtapaEmProcessamento = true;
+    _atualizarEstadoBotoesEtapa();
+    try {
+        const resposta = await _solicitarCienciaRegistro('verificar', { ...contexto, parcial: true, etapa, modo_registro: _isPedestre() ? 'PEDESTRE' : 'VEICULO' }, controller.signal);
+        if (!registroEstaAtivo(lifecycleToken) || controller.signal.aborted || versao !== registroCienciaVersion
+            || chaveAntes !== _chaveContextoCiencia(_obterContextoCienciaRegistro(etapa))) return { continuar: false };
+        if (!resposta.data?.sucesso || resposta.data?.dados?.parcial !== true) throw new Error(resposta.data?.mensagem || 'A pré-validação não foi concluída.');
+        const dados = resposta.data.dados || {};
+        const alertas = Array.isArray(dados.alertas) ? dados.alertas : [];
+        registroCienciaState = { chave: chaveAntes, contexto, resultado: resposta.data, token: '' };
+        registroBaseContextoAlertas = _contextoBaseAlertaRegistro(contexto);
+        registroAlertasEspecificosPendentes = Number(dados.alertas_especificos_pendentes || 0);
+        const novos = [];
+        alertas.forEach((alerta) => {
+            const chave = _chaveAlertaEtapa(alerta, contexto);
+            if (!_alertaAbrePopupEtapa(alerta)) registroInformativosEtapa.set(chave, { alerta, contexto, etapa });
+            if (!registroAlertasEtapaVistos.has(chave)) novos.push({ alerta, chave });
+        });
+        _renderBannerCienciaRegistro(resposta.data);
+        if (novos.length) _anunciarAlertasEtapa(novos, contexto, etapa);
+        const popupsNovos = novos.filter((item) => _alertaAbrePopupEtapa(item.alerta));
+        if (popupsNovos.length) {
+            const respostaPopup = { ...resposta.data, dados: { ...dados, alertas: popupsNovos.map((item) => item.alerta) } };
+            const decisao = await _abrirModalAlertaEtapa(respostaPopup, { etapa, contexto });
+            if (!registroEstaAtivo(lifecycleToken) || !decisao.continuar) return { continuar: false };
+            novos.forEach((item) => registroAlertasEtapaVistos.add(item.chave));
+            _atualizarChipAlertasEtapa();
+            return { continuar: true, overrideSolicitado: Boolean(decisao.overrideSolicitado), alertas };
+        }
+        novos.forEach((item) => registroAlertasEtapaVistos.add(item.chave));
+        if (novos.length) _mostrarToastEtapaRegistro(`${novos.length} alerta${novos.length === 1 ? '' : 's'} informativo${novos.length === 1 ? '' : 's'} da unidade. Toque no resumo fixo para rever.`);
+        else if (registroAlertasEspecificosPendentes > 0 && etapa !== 'VEICULO') _mostrarToastEtapaRegistro(`${registroAlertasEspecificosPendentes} alerta${registroAlertasEspecificosPendentes === 1 ? '' : 's'} específico${registroAlertasEspecificosPendentes === 1 ? '' : 's'} será(ão) conferido(s) adiante. Nenhum dado de terceiros foi exibido.`);
+        _atualizarChipAlertasEtapa();
+        return { continuar: true, alertas };
+    } catch (error) {
+        if (error?.name === 'AbortError' || controller.signal.aborted) return { continuar: false };
+        console.warn('[Registro][Alertas] Falha na pré-validação da etapa:', error);
+        _mostrarErroEtapaRegistro(error?.message || 'Não foi possível validar alertas; tente novamente antes de avançar.');
+        return { continuar: false };
+    } finally {
+        if (registroCienciaController === controller) registroCienciaController = null;
+        if (registroEstaAtivo(lifecycleToken)) { registroEtapaEmProcessamento = false; _atualizarEstadoBotoesEtapa(); }
+    }
+}
+
+function _anunciarAlertasEtapa(itens, contexto, etapa) {
+    const banner = document.getElementById('registroCienciaBanner');
+    if (!banner) return;
+    const critico = itens.some(({ alerta }) => String(alerta.nivel || '').toUpperCase() === 'CRITICO' || _acaoAlertaCiencia(alerta) === 'BLOQUEAR');
+    banner.setAttribute('role', critico ? 'alert' : 'status');
+    banner.setAttribute('aria-live', critico ? 'assertive' : 'polite');
+    itens.forEach(({ alerta, chave }) => { if (!_alertaAbrePopupEtapa(alerta)) registroInformativosEtapa.set(chave, { alerta, contexto, etapa }); });
+    _atualizarChipAlertasEtapa();
+    if (!itens.some(({ alerta }) => !_alertaAbrePopupEtapa(alerta))) return;
+    requestAnimationFrame(() => {
+        if (!registroEstaAtivo() || !document.getElementById('registroAlertaEtapaModal')?.hidden) return;
+        banner.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+        banner.focus({ preventScroll: true });
+    });
+}
+
+function _atualizarChipAlertasEtapa() {
+    const chip = document.getElementById('registroAlertasChip');
+    if (!chip) return;
+    const informativos = registroInformativosEtapa.size;
+    const pendentes = Math.max(0, Number(registroAlertasEspecificosPendentes || 0));
+    chip.hidden = informativos === 0 && pendentes === 0;
+    chip.innerHTML = `<i class="fas fa-bell"></i> ${informativos ? `${informativos} alerta${informativos === 1 ? '' : 's'} da unidade` : ''}${informativos && pendentes ? ' · ' : ''}${pendentes ? `${pendentes} específico${pendentes === 1 ? '' : 's'} adiante` : ''}`;
+    chip.setAttribute('aria-label', `${informativos} alertas informativos e ${pendentes} alertas específicos ainda serão verificados`);
+}
+
+function _abrirModalAlertaEtapa(data, opcoes = {}) {
+    const modal = document.getElementById('registroAlertaEtapaModal');
+    const lista = document.getElementById('registroAlertaEtapaLista');
+    const descricao = document.getElementById('registroAlertaEtapaDescricao');
+    const confirmar = document.getElementById('btnRegistroAlertaEtapaConfirmar');
+    const cancelar = document.getElementById('btnRegistroAlertaEtapaCancelar');
+    const dados = _dadosCiencia(data);
+    const alertas = Array.isArray(dados.alertas) ? dados.alertas : [];
+    if (!modal || !lista || !descricao || !confirmar || !cancelar) return Promise.resolve({ continuar: false });
+    const bloqueio = alertas.some((alerta) => _acaoAlertaCiencia(alerta) === 'BLOQUEAR');
+    const somenteLeitura = Boolean(opcoes.somenteLeitura);
+    const podeOverride = dados.pode_override === true;
+    descricao.textContent = somenteLeitura
+        ? (alertas.length ? 'Alertas informativos avaliados neste contexto:' : `${registroAlertasEspecificosPendentes} alertas específicos serão conferidos adiante; nenhum dado de terceiros é exibido.`)
+        : bloqueio
+            ? (podeOverride ? 'Acesso bloqueado. Só será possível continuar pela revisão final de override, que exige moradores.aprovar e reautenticação.' : 'Acesso bloqueado. Este operador não possui permissão de override; o registro não pode continuar.')
+            : 'Revise o alerta antes de avançar. Esta confirmação não substitui a ciência formal exigida na gravação.';
+    lista.innerHTML = alertas.length ? alertas.map((alerta) => {
+        const nivel = String(alerta.nivel || '').toUpperCase();
+        const classe = _acaoAlertaCiencia(alerta) === 'BLOQUEAR' ? 'ciencia-alert--bloquear' : _acaoAlertaCiencia(alerta) === 'CONTATAR_MORADOR' ? 'ciencia-alert--contatar' : '';
+        return `<article class="ciencia-alert ${classe} ${nivel === 'CRITICO' ? 'ciencia-alert--critico' : nivel === 'ATENCAO' ? 'ciencia-alert--atencao' : ''}">
+            <div class="ciencia-alert__meta"><span>Nível: ${_esc(alerta.nivel || 'INFORMATIVO')}</span><span>Ação: ${_esc(alerta.acao || 'APENAS_AVISAR')}</span></div><strong class="ciencia-alert__title">${_esc(alerta.titulo || 'Alerta da unidade')}</strong><p class="ciencia-alert__message">${_esc(alerta.mensagem || '')}</p>
+            ${alerta.instrucao_operador ? `<p class="ciencia-alert__instruction">Orientação: ${_esc(alerta.instrucao_operador)}</p>` : ''}
+            ${alerta.telefone_contato ? `<p class="ciencia-alert__instruction">Contato: ${_telefoneAlertaHtml(alerta.telefone_contato)}</p>` : ''}</article>`;
+    }).join('') : '<p>Nenhum detalhe de alerta foi exibido nesta etapa.</p>';
+    registroEtapaModalData = { data, opcoes, somenteLeitura, bloqueio, podeOverride };
+    registroEtapaModalPreviousFocus = document.activeElement;
+    cancelar.textContent = somenteLeitura ? 'Fechar' : 'Cancelar registro';
+    cancelar.hidden = false;
+    confirmar.hidden = somenteLeitura || (bloqueio && !podeOverride);
+    confirmar.disabled = false;
+    confirmar.innerHTML = bloqueio && podeOverride ? 'Ir à revisão de override <i class="fas fa-arrow-right"></i>' : 'Ciente, prosseguir';
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    (confirmar.hidden ? cancelar : confirmar).focus();
+    return new Promise((resolve) => { registroEtapaModalResolver = resolve; });
+}
+
+function _resolverModalAlertaEtapa(resultado) {
+    const resolver = registroEtapaModalResolver;
+    registroEtapaModalResolver = null;
+    const modal = document.getElementById('registroAlertaEtapaModal');
+    if (modal) { modal.hidden = true; modal.setAttribute('aria-hidden', 'true'); }
+    const foco = registroEtapaModalPreviousFocus;
+    registroEtapaModalPreviousFocus = null;
+    registroEtapaModalData = null;
+    if (resolver) resolver(resultado || { continuar: false });
+    if (foco?.isConnected) foco.focus({ preventScroll: true });
+}
+
+function _confirmarAlertaEtapa() {
+    const dados = registroEtapaModalData;
+    if (!dados || dados.somenteLeitura) return;
+    const continuar = !dados.bloqueio || dados.podeOverride;
+    _resolverModalAlertaEtapa({ continuar, overrideSolicitado: dados.bloqueio && dados.podeOverride });
+}
+
+function _cancelarAlertaEtapa(limpar) {
+    if (!registroEtapaModalData) return;
+    const somenteLeitura = registroEtapaModalData.somenteLeitura;
+    _resolverModalAlertaEtapa({ continuar: false, somenteLeitura });
+    if (limpar && !somenteLeitura) limparFormulario();
+}
+
+async function _validarDocumentoVisitanteRegistro() {
+    const visitanteId = Number(document.getElementById('visitanteIdRegistro')?.value || 0);
+    const documentoDigitado = document.getElementById('documentoRegistro')?.value.trim() || '';
+    const tipoDocumento = document.getElementById('tipoDocRegistro')?.value || 'CPF';
+    if (visitanteId <= 0 || !documentoDigitado) { _mostrarErroEtapaRegistro('Busque e selecione um visitante cadastrado antes de avançar.'); return false; }
+    if (tipoDocumento === 'CPF' && !_cpfValidoRegistro(documentoDigitado)) { _mostrarErroEtapaRegistro('CPF inválido. Confira os dígitos informados.'); document.getElementById('documentoRegistro')?.focus(); return false; }
+    try {
+        const politica = await _carregarPoliticaVisitantes();
+        if (!politica) throw new Error('Política de documentos indisponível.');
+        const parametros = new URLSearchParams({ documento: documentoDigitado, tipo_documento: tipoDocumento });
+        const response = await fetch(`${API_VISITANTES}?${parametros.toString()}`, { credentials: 'include' });
+        const data = await response.json();
+        if (!response.ok || !data.sucesso || Number(data.dados?.id || 0) !== visitanteId) throw new Error(data.mensagem || 'Não foi possível confirmar o cadastro do visitante.');
+        const visitante = data.dados;
+        if (_normalizarDocumentoComparacao(visitante.documento || '') !== _normalizarDocumentoComparacao(documentoDigitado)
+            || String(visitante.tipo_documento || '').toUpperCase() !== String(tipoDocumento).toUpperCase()) {
+            _mostrarErroEtapaRegistro('O documento não corresponde ao cadastro selecionado. Busque o visitante novamente.');
+            return false;
+        }
+        const possuiDocumento = Boolean(visitante.documento_arquivo);
+        registroVisitanteDocumentoAnexado = possuiDocumento;
+        registroVisitanteDocumentoPendente = Boolean(politica.documento_digitalizado?.obrigatorio && !possuiDocumento)
+            ? 'Este condomínio exige documento digitalizado para liberar o acesso.' : '';
+        registroVisitanteMensagemDetalhada = `Cadastro encontrado: ${visitante.nome_completo || 'Visitante'} — ${tipoDocumento}: ${documentoDigitado}${visitante.telefone_contato ? ` — Tel: ${visitante.telefone_contato}` : ''}${possuiDocumento ? ' — Documento digitalizado confirmado.' : ' — Sem documento digitalizado anexado.'}`;
+        _renderStatusVisitanteCompacto(visitante, !possuiDocumento);
+        _atualizarEstadoBotoesEtapa();
+        if (registroVisitanteDocumentoPendente) { _mostrarErroEtapaRegistro(registroVisitanteDocumentoPendente); return false; }
+        return true;
+    } catch (error) { _mostrarErroEtapaRegistro(error?.message || 'Não foi possível validar o documento do visitante.'); return false; }
+}
+
+function _renderStatusVisitanteCompacto(visitante, semDocumento) {
+    const box = document.getElementById('visitanteEncontrado');
+    if (!box) return;
+    box.dataset.detalhe = registroVisitanteMensagemDetalhada || `Cadastro de ${visitante?.nome_completo || 'visitante'}.`;
+    box.classList.add('is-compact');
+    box.classList.toggle('visitante-documento-pendente', semDocumento);
+    const rotulo = registroVisitanteDocumentoPendente ? 'Documento obrigatório pendente' : semDocumento ? 'Sem documento' : 'Cadastro encontrado';
+    box.innerHTML = `<button type="button" class="registro-visitante-badge" title="${_esc(box.dataset.detalhe)}"><span>${semDocumento ? '⚠' : '✓'}</span> ${rotulo}</button>`;
+    box.style.display = 'flex';
+    box.querySelector('button')?.addEventListener('click', _mostrarDetalheVisitante);
+}
+
+function _mostrarDetalheVisitante() {
+    const box = document.getElementById('visitanteEncontrado');
+    if (!box) return;
+    box.classList.remove('is-compact');
+    box.textContent = box.dataset.detalhe || registroVisitanteMensagemDetalhada || 'Dados do cadastro de visitante.';
+    if (registroVisitanteCompactTimer) clearTimeout(registroVisitanteCompactTimer);
+}
+
+function _compactarVisitanteEncontrado(tempo = 6000) {
+    if (registroVisitanteCompactTimer) clearTimeout(registroVisitanteCompactTimer);
+    registroVisitanteCompactTimer = setTimeout(() => {
+        if (!Number(document.getElementById('visitanteIdRegistro')?.value || 0) || !registroEstaAtivo()) return;
+        _renderStatusVisitanteCompacto({ nome_completo: document.getElementById('nomeVisitanteRegistro')?.value }, registroVisitanteDocumentoAnexado === false);
+    }, tempo);
+}
+
+function _setupInfoRegistro() {
+    const box = document.getElementById('registroInfoBox');
+    const toggle = document.getElementById('btnRegistroComoFunciona');
+    if (!box || !toggle) return;
+    let naoMostrar = false;
+    try { naoMostrar = localStorage.getItem(REGISTRO_INFO_PREFERENCE_KEY) === '1'; } catch (_) {}
+    const checkbox = document.getElementById('registroInfoNaoMostrar');
+    if (checkbox) checkbox.checked = naoMostrar;
+    _registrarListenerStepper(checkbox, 'change', () => {
+        try {
+            if (checkbox.checked) localStorage.setItem(REGISTRO_INFO_PREFERENCE_KEY, '1');
+            else localStorage.removeItem(REGISTRO_INFO_PREFERENCE_KEY);
+        } catch (_) {}
+    });
+    if (naoMostrar) { _recolherInfoRegistro(false); return; }
+    _agendarTimerInfoRegistro();
+}
+
+function _agendarTimerInfoRegistro() {
+    if (registroInfoTimer) clearTimeout(registroInfoTimer);
+    const box = document.getElementById('registroInfoBox');
+    if (registroInfoPausado || !box || box.hidden) return;
+    registroInfoStartedAt = Date.now();
+    registroInfoTimer = setTimeout(() => _recolherInfoRegistro(true), Math.max(0, registroInfoRemaining));
+}
+
+function _pausarTimerInfoRegistro() {
+    if (registroInfoTimer) { clearTimeout(registroInfoTimer); registroInfoTimer = null; registroInfoRemaining = Math.max(0, registroInfoRemaining - (Date.now() - registroInfoStartedAt)); }
+    registroInfoPausado = true;
+}
+
+function _retomarTimerInfoRegistro() { registroInfoPausado = false; _agendarTimerInfoRegistro(); }
+
+function _recolherInfoRegistro(animar = true) {
+    const box = document.getElementById('registroInfoBox');
+    const toggle = document.getElementById('btnRegistroComoFunciona');
+    if (!box || !toggle) return;
+    if (registroInfoTimer) clearTimeout(registroInfoTimer);
+    registroInfoTimer = null;
+    box.classList.toggle('is-collapsed', animar);
+    if (!animar) box.hidden = true;
+    else setTimeout(() => { if (box.classList.contains('is-collapsed')) box.hidden = true; }, 260);
+    toggle.setAttribute('aria-expanded', 'false');
+    if (document.getElementById('registroInfoNaoMostrar')?.checked) { try { localStorage.setItem(REGISTRO_INFO_PREFERENCE_KEY, '1'); } catch (_) {} }
+}
+
+function _alternarInfoRegistro(usuarioIniciou = false) {
+    const box = document.getElementById('registroInfoBox');
+    const toggle = document.getElementById('btnRegistroComoFunciona');
+    if (!box || !toggle) return;
+    if (!box.hidden && !box.classList.contains('is-collapsed')) { _recolherInfoRegistro(); return; }
+    box.hidden = false;
+    box.classList.remove('is-collapsed');
+    toggle.setAttribute('aria-expanded', 'true');
+    registroInfoRemaining = usuarioIniciou ? 8000 : 8000;
+    _agendarTimerInfoRegistro();
+}
+
 // ── Pré-validação e ciência de alertas ────────────────────────────────────────
 function _setupCienciaRegistro() {
     const ids = [
@@ -904,14 +1560,7 @@ function _setupCienciaRegistro() {
         const elemento = document.getElementById(id);
         if (!elemento) return;
         const evento = elemento.tagName === 'INPUT' && ['text', 'checkbox'].includes(elemento.type) ? 'input' : 'change';
-        const handler = () => {
-            if (id === 'checkDependente' && elemento.type === 'checkbox') {
-                _invalidarCienciaRegistro();
-            } else {
-                _invalidarCienciaRegistro();
-            }
-            _agendarPreflightCienciaRegistro();
-        };
+        const handler = () => { _invalidarCienciaRegistro(); };
         elemento.addEventListener(evento, handler);
         registroCienciaListeners.push({ elemento, evento, handler });
     });
@@ -919,7 +1568,6 @@ function _setupCienciaRegistro() {
     document.querySelectorAll('input[name="tipo_acesso"]').forEach((elemento) => {
         const handler = () => {
             _invalidarCienciaRegistro();
-            _agendarPreflightCienciaRegistro();
         };
         elemento.addEventListener('change', handler);
         registroCienciaListeners.push({ elemento, evento: 'change', handler });
@@ -968,23 +1616,27 @@ function _invalidarCienciaRegistro() {
     registroCienciaController?.abort();
     registroCienciaController = null;
     registroCienciaState = { chave: '', contexto: null, resultado: null, token: '' };
+    registroInformativosEtapa = new Map();
+    registroAlertasEspecificosPendentes = 0;
+    _atualizarChipAlertasEtapa();
     _resolverModalCiencia({ continuar: false });
     _renderBannerCienciaRegistro(null);
 }
 
-function _agendarPreflightCienciaRegistro() {
+function _agendarPreflightCienciaRegistro(etapa = '') {
     if (registroCienciaTimer) clearTimeout(registroCienciaTimer);
+    if (!etapa) return;
     const versao = registroCienciaVersion;
     registroCienciaTimer = setTimeout(() => {
         registroCienciaTimer = null;
-        void _executarPreflightCienciaRegistro(versao);
-    }, 450);
+        if (versao === registroCienciaVersion && registroStepperAtual === 2) void _executarPreflightEtapaRegistro(etapa);
+    }, 350);
 }
 
-function _obterContextoCienciaRegistro() {
+function _obterContextoCienciaRegistro(etapa = 'COMPLETO') {
     const tipo = String(document.getElementById('tipoRegistro')?.value || '').trim();
     const tipoAcesso = _getTipoAcesso();
-    if (!tipo || tipoAcesso === 'Saída') return null;
+    if (!tipo) return null;
 
     const eVisitante = _tipoExigeDocumento(tipo);
     const unidade = eVisitante
@@ -1003,16 +1655,18 @@ function _obterContextoCienciaRegistro() {
         unidade,
         morador_id: moradorId ? Number(moradorId) || moradorId : null,
         dependente_id: dependenteId ? Number(dependenteId) || dependenteId : null,
-        tipo_pessoa: tipo,
-        visitante_id: eVisitante ? ((document.getElementById('visitanteIdRegistro')?.value || '').trim() || null) : null,
-        documento: eVisitante ? ((document.getElementById('documentoRegistro')?.value || '').trim() || null) : null,
-        tipo_documento: eVisitante ? (document.getElementById('tipoDocRegistro')?.value || null) : null,
-        placa: _isPedestre() ? null : (normalizarPlaca(document.getElementById('placaRegistro')?.value || '') || null),
+        tipo_pessoa: !eVisitante && dependenteId ? 'Dependente' : tipo,
+        visitante_id: eVisitante && etapa !== 'DESTINO' ? ((document.getElementById('visitanteIdRegistro')?.value || '').trim() || null) : null,
+        documento: eVisitante && etapa !== 'DESTINO' ? ((document.getElementById('documentoRegistro')?.value || '').trim() || null) : null,
+        tipo_documento: eVisitante && etapa !== 'DESTINO' ? (document.getElementById('tipoDocRegistro')?.value || null) : null,
+        placa: !_isPedestre() && ['VEICULO', 'COMPLETO'].includes(etapa) ? (normalizarPlaca(document.getElementById('placaRegistro')?.value || '') || null) : null,
         tipo_acesso: tipoAcesso,
         data_hora: dataHoraRegistro ? dataHoraRegistro.replace('T', ' ') + ':00' : null
     };
-    if (!contexto.unidade || !contexto.morador_id || (eVisitante && !contexto.visitante_id)) return null;
+    if (!contexto.unidade || !contexto.morador_id) return null;
+    if (eVisitante && etapa !== 'DESTINO' && !contexto.visitante_id) return null;
     if (!eVisitante && contexto.dependente_id && !document.getElementById('dependenteSelecionadoRegistro')?.value) return null;
+    if (tipoAcesso === 'Saída') contexto.tipo_acesso = 'Saída';
     return contexto;
 }
 
@@ -1021,26 +1675,8 @@ function _chaveContextoCiencia(contexto) {
 }
 
 async function _executarPreflightCienciaRegistro(versao = registroCienciaVersion) {
-    const contexto = _obterContextoCienciaRegistro();
-    if (!contexto || versao !== registroCienciaVersion || !registroEstaAtivo()) return null;
-    const chave = _chaveContextoCiencia(contexto);
-    registroCienciaController?.abort();
-    const controller = new AbortController();
-    registroCienciaController = controller;
-    try {
-        const resposta = await _solicitarCienciaRegistro('verificar', contexto, controller.signal);
-        if (versao !== registroCienciaVersion || controller.signal.aborted || !registroEstaAtivo()) return null;
-        registroCienciaState = { chave, contexto, resultado: resposta.data, token: '' };
-        _renderBannerCienciaRegistro(resposta.data);
-        return resposta.data;
-    } catch (error) {
-        if (error?.name === 'AbortError' || controller.signal.aborted) return null;
-        console.warn('[Registro][Alertas] Falha no preflight:', error);
-        _renderBannerCienciaRegistro(null);
-        return null;
-    } finally {
-        if (registroCienciaController === controller) registroCienciaController = null;
-    }
+    if (versao !== registroCienciaVersion || !registroEstaAtivo()) return null;
+    return _executarPreflightEtapaRegistro('VEICULO');
 }
 
 async function _solicitarCienciaRegistro(acao, corpo, signal) {
@@ -1074,6 +1710,14 @@ function _alertaExigeDecisao(alerta) {
     return ['EXIGIR_CIENTE', 'CONTATAR_MORADOR', 'BLOQUEAR'].includes(_acaoAlertaCiencia(alerta));
 }
 
+function _telefoneAlertaHtml(valor) {
+    const exibicao = String(valor || '').trim();
+    const discagem = exibicao.replace(/[^0-9+]/g, '');
+    if (!exibicao) return '';
+    if (!/^\+?\d{7,15}$/.test(discagem)) return _esc(exibicao);
+    return `<a href="tel:${_esc(discagem)}">${_esc(exibicao)}</a>`;
+}
+
 function _resultadoExigeCiencia(data) {
     return _alertasCiencia(data).some(_alertaExigeDecisao);
 }
@@ -1087,7 +1731,8 @@ function _renderBannerCienciaRegistro(data) {
         ${alertas.map((alerta) => `<div class="ciencia-banner__item"><strong>${_esc(alerta.titulo || 'Alerta de acesso')}</strong>
             <span> · Nível: ${_esc(alerta.nivel || 'AVISO')} · Ação: ${_esc(alerta.acao || 'APENAS_AVISAR')}</span>
             <div>${_esc(alerta.mensagem || '')}</div>
-            ${alerta.instrucao_operador ? `<div><strong>Orientação:</strong> ${_esc(alerta.instrucao_operador)}</div>` : ''}</div>`).join('')}`;
+            ${alerta.instrucao_operador ? `<div><strong>Orientação:</strong> ${_esc(alerta.instrucao_operador)}</div>` : ''}
+            ${alerta.telefone_contato ? `<div><strong>Contato:</strong> ${_telefoneAlertaHtml(alerta.telefone_contato)}</div>` : ''}</div>`).join('')}`;
     banner.hidden = false;
 }
 
@@ -1122,7 +1767,7 @@ function _renderModalCienciaRegistro(data) {
         return `<article class="ciencia-alert ${classe}"><div class="ciencia-alert__meta"><span>Nível: ${_esc(alerta.nivel || 'AVISO')}</span><span>Ação: ${_esc(alerta.acao || 'APENAS_AVISAR')}</span></div>
             <strong class="ciencia-alert__title">${_esc(alerta.titulo || 'Alerta de acesso')}</strong><p class="ciencia-alert__message">${_esc(alerta.mensagem || '')}</p>
             ${alerta.instrucao_operador ? `<p class="ciencia-alert__instruction">Orientação: ${_esc(alerta.instrucao_operador)}</p>` : ''}
-            ${alerta.telefone_contato ? `<p class="ciencia-alert__instruction">Contato: ${_esc(alerta.telefone_contato)}</p>` : ''}${decisao}</article>`;
+            ${alerta.telefone_contato ? `<p class="ciencia-alert__instruction">Contato: ${_telefoneAlertaHtml(alerta.telefone_contato)}</p>` : ''}${decisao}</article>`;
     }).join('') + (decisivos.some((alerta) => _acaoAlertaCiencia(alerta) === 'BLOQUEAR') && _dadosCiencia(data).pode_override
         ? '<div class="ciencia-decision"><label for="registroCienciaSenhaSupervisor">Confirme sua senha de supervisor</label><input id="registroCienciaSenhaSupervisor" type="password" autocomplete="current-password" maxlength="1024" required></div>'
         : '');
@@ -1137,6 +1782,7 @@ function _onCienciaRegistroKeydown(evento) {
     if (evento.key === 'Escape') {
         evento.preventDefault();
         evento.stopPropagation();
+        _resolverModalCiencia({ continuar: false, cancelado: true });
         return;
     }
     if (evento.key !== 'Tab') return;
@@ -1257,7 +1903,7 @@ async function _garantirCienciaRegistro(contexto, lifecycleToken) {
         return { continuar: false };
     }
     if (!_resultadoExigeCiencia(data)) return { continuar: true, token: '' };
-    const decisao = await _abrirModalCiencia(data);
+    const decisao = await _abrirModalCienciaRegistro(data);
     if (!decisao.continuar) {
         if (decisao.negado) mostrarAlerta('warning', 'O morador negou a liberação. A entrada não foi registrada.');
         return { continuar: false };
@@ -1277,7 +1923,7 @@ async function _resolverAlertaPendenteRegistro(data, contexto, lifecycleToken) {
     };
     registroCienciaState = { chave: _chaveContextoCiencia(contexto), contexto, resultado: pendente, token: '', modalData: pendente };
     _renderBannerCienciaRegistro(pendente);
-    const decisao = await _abrirModalCiencia(pendente);
+    const decisao = await _abrirModalCienciaRegistro(pendente);
     if (!decisao.continuar) {
         if (decisao.negado) mostrarAlerta('warning', 'O morador negou a liberação. A entrada não foi registrada.');
         return { continuar: false };
@@ -1302,16 +1948,20 @@ function _setupActions() {
 // ── Tipo Change ───────────────────────────────────────────────────────────────
 function onTipoChange() {
     const tipo         = document.getElementById('tipoRegistro')?.value || '';
-    const extraCampos  = document.getElementById('extraCampos');
     const camposMorador = document.getElementById('camposMorador');
+    const camposDestinoConvidado = document.getElementById('camposDestinoConvidado');
+    const camposIdentificacaoVisitante = document.getElementById('camposIdentificacaoVisitante');
+    const camposOcupantesVisitante = document.getElementById('camposOcupantesVisitante');
 
     if (convidadoAtivo && _normalizarTipoConvidado(convidadoAtivo.tipo_convidado) !== tipo) {
         convidadoAtivo = null;
         setCampoValue('convidadoIdRegistro', '');
     }
 
-    if (extraCampos)  extraCampos.style.display  = _tipoExigeDocumento(tipo) ? 'block' : 'none';
     if (camposMorador) camposMorador.style.display = tipo === 'Morador' ? 'block' : 'none';
+    if (camposDestinoConvidado) camposDestinoConvidado.style.display = _tipoExigeDocumento(tipo) ? 'block' : 'none';
+    if (camposIdentificacaoVisitante) camposIdentificacaoVisitante.style.display = _tipoExigeDocumento(tipo) ? 'block' : 'none';
+    if (camposOcupantesVisitante) camposOcupantesVisitante.style.display = _tipoExigeDocumento(tipo) ? 'block' : 'none';
 
     if (!_tipoExigeDocumento(tipo)) {
         ['nomeVisitanteRegistro', 'documentoRegistro', 'diasPermanenciaRegistro'].forEach(id => {
@@ -1323,6 +1973,9 @@ function onTipoChange() {
         setCampoValue('visitanteIdRegistro', '');
         const boxV = document.getElementById('visitanteEncontrado');
         if (boxV) { boxV.style.display = 'none'; boxV.innerHTML = ''; }
+        registroVisitanteMensagemDetalhada = '';
+        registroVisitanteDocumentoAnexado = null;
+        registroVisitanteDocumentoPendente = '';
         _limparOcupantes();
     }
 
@@ -1336,7 +1989,11 @@ function onTipoChange() {
     }
 
     _atualizarModoRegistro();
+    _renderStepperRegistro();
+    _atualizarEstadoBotoesEtapa();
 }
+
+function _atualizarCamposTipoRegistro() { onTipoChange(); }
 
 function _tipoExigeDocumento(tipo) {
     return ['Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'].includes(tipo);
@@ -1381,6 +2038,11 @@ async function iniciarConvidado(guest, tipoAcesso = 'Entrada') {
     if (!_tipoExigeDocumento(tipo)) throw new Error('O tipo deste convidado não pode ser registrado pelo fluxo de visitantes.');
     const lifecycleToken = registroLifecycleToken;
     const selectionToken = ++convidadoSelecaoToken;
+    registroVisitanteDocumentoAnexado = null;
+    registroVisitanteDocumentoPendente = '';
+    registroVisitanteMensagemDetalhada = '';
+    if (registroVisitanteCompactTimer) clearTimeout(registroVisitanteCompactTimer);
+    registroVisitanteCompactTimer = null;
     document.getElementById('cadastroVisitanteNaChegada')?.remove();
     const convitesPendentes = document.getElementById('convidadoPrevistoRegistro');
     if (convitesPendentes) { convitesPendentes.style.display = 'none'; convitesPendentes.innerHTML = ''; }
@@ -1388,6 +2050,8 @@ async function iniciarConvidado(guest, tipoAcesso = 'Entrada') {
     _ativarAbaManual();
     setCampoValue('tipoRegistro', tipo);
     onTipoChange();
+    registroStepperAtual = 1;
+    registroEtapasConcluidas = new Set();
     convidadoAtivo = { ...guest };
     _garantirCampoConvidado().value = String(guest.id);
     setCampoValue('tipoDocRegistro', ['CPF', 'RG'].includes(String(guest.tipo_documento || '').toUpperCase())
@@ -1406,6 +2070,13 @@ async function iniciarConvidado(guest, tipoAcesso = 'Entrada') {
     await _selecionarDestinoConvidado(guest, selectionToken, lifecycleToken);
     if (!registroEstaAtivo(lifecycleToken) || selectionToken !== convidadoSelecaoToken || Number(convidadoAtivo?.id) !== Number(guest.id)) return false;
 
+    if (_getTipoAcesso() === 'Entrada') {
+        const preflightDestino = await _executarPreflightEtapaRegistro('DESTINO');
+        if (!registroEstaAtivo(lifecycleToken) || !preflightDestino?.continuar) return false;
+    }
+    registroEtapasConcluidas.add(1);
+    registroEtapasConcluidas.add(2);
+
     const box = document.getElementById('visitanteEncontrado');
     if (box) {
         box.style.display = 'flex';
@@ -1416,8 +2087,24 @@ async function iniciarConvidado(guest, tipoAcesso = 'Entrada') {
     }
     if (!guest.visitante_id) _mostrarCadastroVisitanteNaChegada(guest);
     else document.getElementById('cadastroVisitanteNaChegada')?.remove();
+    if (guest.visitante_id) {
+        if (!await _validarDocumentoVisitanteRegistro()) { _abrirEtapaRegistro(3); return false; }
+        if (_getTipoAcesso() === 'Entrada') {
+            const preflightIdentificacao = await _executarPreflightEtapaRegistro('IDENTIFICACAO');
+            if (!registroEstaAtivo(lifecycleToken) || !preflightIdentificacao?.continuar) return false;
+        }
+        registroEtapasConcluidas.add(3);
+        registroStepperAtual = 4;
+        _abrirEtapaRegistro(4);
+    } else {
+        registroStepperAtual = 3;
+        _abrirEtapaRegistro(3);
+    }
     _ativarAbaManual();
-    document.getElementById('placaRegistro')?.focus();
+    if (guest.visitante_id) document.getElementById('placaRegistro')?.focus();
+    else document.getElementById('btnBuscarDocRegistro')?.focus();
+    _renderStepperRegistro();
+    _atualizarEstadoBotoesEtapa();
     return true;
 }
 
@@ -1487,7 +2174,7 @@ function _atualizarCamposCadastroChegada() {
 }
 
 function _mostrarCadastroVisitanteNaChegada(guest) {
-    const extra = document.getElementById('extraCampos');
+    const extra = document.getElementById('camposIdentificacaoVisitante');
     if (!extra || document.getElementById('cadastroVisitanteNaChegada')) return;
     const lifecycleToken = registroLifecycleToken;
     const box = document.createElement('div');
@@ -1509,7 +2196,7 @@ function _mostrarCadastroVisitanteNaChegada(guest) {
         </div>
         <button type="button" class="btn-secondary-modern" id="btnCriarVisitanteChegada" disabled>Carregando política...</button>
         <small id="convidadoChegadaPolitica" style="display:block;margin-top:8px;"></small>`;
-    extra.insertBefore(box, extra.firstChild);
+    extra.appendChild(box);
     setCampoValue('convidadoChegadaNome', guest?.nome || guest?.nome_completo || '');
     setCampoValue('convidadoChegadaTipoDocumento', guest?.tipo_documento || 'CPF');
     setCampoValue('convidadoChegadaDocumento', guest?.documento || '');
@@ -1642,6 +2329,10 @@ async function _criarVisitanteNaChegada() {
 
         convidadoAtivo.visitante_id = visitanteId;
         convidadoAtivo.nome = campos.nome_completo;
+        registroVisitanteDocumentoAnexado = Boolean(documentoArquivo);
+        registroVisitanteDocumentoPendente = Boolean(config.documento_digitalizado?.obrigatorio && !documentoArquivo)
+            ? 'Este condomínio exige documento digitalizado para liberar o acesso.' : '';
+        registroVisitanteMensagemDetalhada = `Cadastro de ${campos.nome_completo} concluído e vinculado ao convite. ${documentoArquivo ? 'Documento digitalizado confirmado.' : 'Sem documento digitalizado anexado.'}`;
         setCampoValue('visitanteIdRegistro', visitanteId);
         setCampoValue('nomeVisitanteRegistro', campos.nome_completo);
         const nomeInput = document.getElementById('nomeVisitanteRegistro');
@@ -1653,8 +2344,11 @@ async function _criarVisitanteNaChegada() {
         if (box) {
             box.style.display = 'flex';
             box.classList.remove('visitante-documento-pendente');
-            box.innerHTML = `<i class="fas fa-check-circle"></i><span>Cadastro de <strong>${_esc(campos.nome_completo)}</strong> concluído e vinculado ao convite. Agora confirme o registro de acesso.</span>`;
+            box.innerHTML = `<i class="fas fa-check-circle"></i><span>${_esc(registroVisitanteMensagemDetalhada)}</span>`;
+            box.dataset.detalhe = registroVisitanteMensagemDetalhada;
+            _compactarVisitanteEncontrado(6000);
         }
+        _atualizarEstadoBotoesEtapa();
         mostrarAlerta('success', 'Visitante cadastrado e vinculado. Confirme o registro de acesso.');
     } catch (error) {
         if (!registroEstaAtivo(lifecycleToken) || Number(convidadoAtivo?.id) !== guestId) return;
@@ -1800,8 +2494,21 @@ function renderMensagemTabela(tbody, msg) {
 
 // ── Salvar ────────────────────────────────────────────────────────────────────
 async function salvarRegistro() {
-    if (salvandoReg) return;
+    if (salvandoReg || registroEtapaEmProcessamento) return;
     const lifecycleToken = registroLifecycleToken;
+    if (!_validarEtapa1Registro()) { _abrirEtapaRegistro(1); _mostrarErroEtapaRegistro('Complete data, tipo e Entrada/Saída antes de registrar.'); return; }
+    if (!_validarEtapa2Registro()) { _abrirEtapaRegistro(2); _mostrarErroEtapaRegistro('Complete o destino antes de registrar.'); return; }
+    const tipoAtual = document.getElementById('tipoRegistro')?.value || '';
+    if (_tipoExigeDocumento(tipoAtual) && !_validarEtapa3BasicaRegistro()) { _abrirEtapaRegistro(3); _mostrarErroEtapaRegistro('Identifique o visitante e conclua o cadastro antes de registrar.'); return; }
+    if (!_validarEtapa4BasicaRegistro()) { _abrirEtapaRegistro(4); _mostrarErroEtapaRegistro('Informe uma placa válida ou selecione Pedestre.'); return; }
+    if (_getTipoAcesso() === 'Entrada') {
+        const contextoFinal = _obterContextoCienciaRegistro('VEICULO');
+        const chaveFinal = contextoFinal ? _chaveContextoCiencia(contextoFinal) : '';
+        if (!contextoFinal || registroCienciaState?.chave !== chaveFinal || registroCienciaState?.resultado?.dados?.parcial !== true) {
+            const preflightFinal = await _executarPreflightEtapaRegistro('VEICULO');
+            if (!registroEstaAtivo(lifecycleToken) || !preflightFinal?.continuar) return;
+        }
+    }
     salvandoReg = true;
     const btn = document.getElementById('btnSalvarRegistro');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
@@ -1898,7 +2605,16 @@ async function salvarRegistro() {
             }
         }
 
-        const contextoCiencia = _obterContextoCienciaRegistro();
+        if (_tipoExigeDocumento(tipo) && !await _validarDocumentoVisitanteRegistro()) {
+            _abrirEtapaRegistro(3);
+            return;
+        }
+        if (tipoAcesso === 'Entrada') {
+            const preflightVeiculo = await _executarPreflightEtapaRegistro('VEICULO');
+            if (!registroEstaAtivo(lifecycleToken) || !preflightVeiculo?.continuar) return;
+        }
+
+        const contextoCiencia = _obterContextoCienciaRegistro('COMPLETO');
         const cienciaInicial = await _garantirCienciaRegistro(contextoCiencia, lifecycleToken);
         if (!registroEstaAtivo(lifecycleToken) || !cienciaInicial.continuar) return;
         if (cienciaInicial.token) payload.ciencia_token = cienciaInicial.token;
@@ -1992,7 +2708,8 @@ async function salvarRegistro() {
     } finally {
         if (registroEstaAtivo(lifecycleToken)) {
             salvandoReg = false;
-            if (btn?.isConnected) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Registrar Acesso'; }
+            if (btn?.isConnected) btn.innerHTML = '<i class="fas fa-save"></i> Registrar Acesso';
+            _atualizarEstadoBotoesEtapa();
         }
     }
 }
@@ -2039,16 +2756,36 @@ async function excluirRegistro(id) {
 function limparFormulario() {
     ultimoEnvioRegistro = null;
     convidadoAtivo = null;
+    registroConfirmacaoDestinoPlacaKey = '';
+    registroDestinoPlacaRecusadoKey = '';
+    _invalidarCienciaRegistro();
+    _resolverModalAlertaEtapa({ continuar: false, cancelado: true });
+    registroStepperAtual = 1;
+    registroEtapasConcluidas = new Set();
+    registroAlertasEtapaVistos = new Set();
+    registroInformativosEtapa = new Map();
+    registroAlertasEspecificosPendentes = 0;
+    registroBaseContextoAlertas = '';
+    registroVisitanteDocumentoAnexado = null;
+    registroVisitanteDocumentoPendente = '';
+    registroVisitanteMensagemDetalhada = '';
+    registroUltimoErro = '';
+    if (registroEtapaToastTimer) clearTimeout(registroEtapaToastTimer);
+    registroEtapaToastTimer = null;
     const form = document.getElementById('registroForm');
     if (form) form.reset();
 
     ['moradorId', 'veiculoId', 'visitanteIdRegistro'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
     });
-    garantirIdempotencyKey();
+    const campoIdempotency = document.getElementById('idempotencyKeyRegistro');
+    if (campoIdempotency) campoIdempotency.value = gerarIdempotencyKey();
+    ultimoEnvioRegistro = null;
 
-    document.getElementById('extraCampos')?.style && (document.getElementById('extraCampos').style.display = 'none');
     document.getElementById('camposMorador')?.style && (document.getElementById('camposMorador').style.display = 'none');
+    document.getElementById('camposDestinoConvidado')?.style && (document.getElementById('camposDestinoConvidado').style.display = 'none');
+    document.getElementById('camposIdentificacaoVisitante')?.style && (document.getElementById('camposIdentificacaoVisitante').style.display = 'none');
+    document.getElementById('camposOcupantesVisitante')?.style && (document.getElementById('camposOcupantesVisitante').style.display = 'none');
 
     const boxV = document.getElementById('veiculoEncontrado');
     if (boxV) { boxV.style.display = 'none'; boxV.innerHTML = ''; }
@@ -2070,6 +2807,10 @@ function limparFormulario() {
     _atualizarBotoesAcesso();
     _atualizarModoRegistro();
     atualizarDataHoraAtual();
+    _limparErroRegistro();
+    _atualizarChipAlertasEtapa();
+    _renderStepperRegistro();
+    _atualizarEstadoBotoesEtapa();
 }
 
 // ── Placa ─────────────────────────────────────────────────────────────────────
@@ -2089,8 +2830,10 @@ async function detectarVeiculoPorPlaca() {
     const placa = normalizarPlaca(placaInput.value);
     if (placa.length < 7) { esconderVeiculoEncontrado(); return; }
     const lifecycleToken = registroLifecycleToken;
+    let respostaCompleta = false;
 
     placaInput.dataset.consultando = '1';
+    _atualizarEstadoBotoesEtapa();
     try {
         const resp = await fetch(`${API_VEICULOS}?acao=consultar_placa&placa=${encodeURIComponent(placa)}`, { credentials: 'include' });
         if (!resp.ok) {
@@ -2103,33 +2846,37 @@ async function detectarVeiculoPorPlaca() {
         }
         if (_isPedestre()) return;
         const veiculo = data.sucesso && data.dados?.existe ? data.dados : null;
-        if (!veiculo) { esconderVeiculoEncontrado(); return; }
+        if (!veiculo) {
+            esconderVeiculoEncontrado();
+            respostaCompleta = true;
+            return;
+        }
+
+        const tipoAtual = document.getElementById('tipoRegistro')?.value || '';
+        const eVisitante = _tipoExigeDocumento(tipoAtual);
+        const destinoMorador = String(document.getElementById(eVisitante ? 'moradorDestinoRegistro' : 'moradorSelecionadoRegistro')?.value
+            || (!eVisitante ? document.getElementById('moradorId')?.value : '') || '');
+        const destinoUnidade = String(document.getElementById(eVisitante ? 'unidadeDestinoRegistro' : 'unidadeMoradorRegistro')?.value || '');
+        const mesmoMorador = destinoMorador && String(veiculo.morador_id || '') === destinoMorador;
+        const mesmaUnidade = destinoUnidade && veiculo.morador_unidade
+            && destinoUnidade.trim().toLocaleLowerCase('pt-BR') === String(veiculo.morador_unidade).trim().toLocaleLowerCase('pt-BR');
+        const contextoConfirmacao = _chaveDestinoPlacaAtual(placa);
+        if (destinoMorador && (!mesmoMorador || !mesmaUnidade) && registroConfirmacaoDestinoPlacaKey !== contextoConfirmacao) {
+            const manterDestino = window.confirm(`Esta placa está cadastrada para ${veiculo.morador_nome || 'outro morador'} da unidade ${veiculo.morador_unidade || 'não informada'}, mas o destino selecionado é ${destinoUnidade || 'não informado'}. Deseja continuar mantendo o destino atual?`);
+            if (!registroEstaAtivo(lifecycleToken) || normalizarPlaca(placaInput.value) !== placa) return;
+            if (!manterDestino) {
+                registroDestinoPlacaRecusadoKey = contextoConfirmacao;
+                _mostrarErroEtapaRegistro('Destino preservado. Revise a unidade/morador ou altere a placa antes de continuar.');
+                _atualizarEstadoBotoesEtapa();
+                return;
+            }
+            registroDestinoPlacaRecusadoKey = '';
+            registroConfirmacaoDestinoPlacaKey = contextoConfirmacao;
+        }
 
         setCampoValue('modeloRegistro', veiculo.modelo || '');
         setCampoValue('corRegistro', veiculo.cor || '');
-        setCampoValue('moradorId', veiculo.morador_id || '');
         setCampoValue('veiculoId', veiculo.id || '');
-        setCampoValue('tipoRegistro', 'Morador');
-        onTipoChange();
-
-        const selU = document.getElementById('unidadeMoradorRegistro');
-        const selM = document.getElementById('moradorSelecionadoRegistro');
-        const unidade = veiculo.morador_unidade || '';
-        if (selU && unidade) {
-            selU.value = unidade;
-            selU.disabled = true;
-        }
-        if (selM && veiculo.morador_id) {
-            selM.innerHTML = '';
-            selM.add(new Option(veiculo.morador_nome || 'Morador cadastrado', veiculo.morador_id));
-            selM.value = String(veiculo.morador_id);
-            selM.disabled = true;
-            const infoBox = document.getElementById('moradorInfoBox');
-            const infoWrap = document.getElementById('moradorInfoWrap');
-            if (infoBox) infoBox.innerHTML = `<i class="fas fa-home" style="margin-right:6px"></i><strong>${_esc(veiculo.morador_nome || '-')}</strong> — Unidade: <strong>${_esc(unidade || '-')}</strong>`;
-            if (infoWrap) infoWrap.style.display = 'block';
-        }
-
         placaInput.dataset.veiculoPreenchido = '1';
         _definirCamposVeiculoBloqueados(true);
         const box = document.getElementById('veiculoEncontrado');
@@ -2137,20 +2884,23 @@ async function detectarVeiculoPorPlaca() {
             const depInfo = veiculo.dependente_id && veiculo.dependente_nome
                 ? `${_esc(veiculo.dependente_nome)}, dependente de ${_esc(veiculo.morador_nome || '-')}`
                 : _esc(veiculo.morador_nome || '-');
-            box.innerHTML = `<i class="fas fa-check-circle"></i> Veículo cadastrado: ${_esc(veiculo.modelo || '-')}, ${depInfo} (Unidade ${_esc(unidade || '-')}). Dados preenchidos automaticamente e bloqueados.`;
+            box.innerHTML = `<i class="fas fa-check-circle"></i> Veículo cadastrado: ${_esc(veiculo.modelo || '-')}, ${depInfo} (Unidade ${_esc(veiculo.morador_unidade || '-')}). Dados do veículo preenchidos; destino atual preservado.`;
             box.style.display = 'block';
         }
+        respostaCompleta = true;
     } catch (error) {
         if (!registroEstaAtivo(lifecycleToken) || !placaInput.isConnected || normalizarPlaca(placaInput.value) !== placa) return;
         console.error('[Registro] Erro ao consultar veículo por placa:', error);
         esconderVeiculoEncontrado();
     } finally {
         if (placaInput.isConnected) delete placaInput.dataset.consultando;
+        if (registroEstaAtivo(lifecycleToken)) _atualizarEstadoBotoesEtapa();
+        if (respostaCompleta) void _prevalidarVeiculoSePronto(lifecycleToken, placa);
     }
 }
 
 function _definirCamposVeiculoBloqueados(bloqueado) {
-    ['modeloRegistro', 'corRegistro', 'unidadeMoradorRegistro', 'moradorSelecionadoRegistro'].forEach(id => {
+    ['modeloRegistro', 'corRegistro'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.disabled = bloqueado;
@@ -2158,25 +2908,26 @@ function _definirCamposVeiculoBloqueados(bloqueado) {
     });
 }
 
+async function _prevalidarVeiculoSePronto(lifecycleToken, placa) {
+    if (!registroEstaAtivo(lifecycleToken) || registroStepperAtual !== 4 || _isPedestre()
+        || normalizarPlaca(document.getElementById('placaRegistro')?.value || '') !== placa
+        || !_validarEtapa4BasicaRegistro() || _getTipoAcesso() !== 'Entrada') return;
+    await _executarPreflightEtapaRegistro('VEICULO');
+}
+
 function esconderVeiculoEncontrado() {
     const placaInput = document.getElementById('placaRegistro');
     const eraPreenchido = placaInput?.dataset.veiculoPreenchido === '1';
-    setCampoValue('moradorId', '');
     setCampoValue('veiculoId', '');
     if (eraPreenchido) {
         setCampoValue('modeloRegistro', '');
         setCampoValue('corRegistro', '');
-        const selU = document.getElementById('unidadeMoradorRegistro');
-        const selM = document.getElementById('moradorSelecionadoRegistro');
-        if (selU) selU.value = '';
-        if (selM) selM.innerHTML = '<option value="">Selecione a unidade primeiro</option>';
-        const infoWrap = document.getElementById('moradorInfoWrap');
-        if (infoWrap) infoWrap.style.display = 'none';
     }
     _definirCamposVeiculoBloqueados(false);
     if (placaInput) delete placaInput.dataset.veiculoPreenchido;
     const box = document.getElementById('veiculoEncontrado');
     if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+    _atualizarEstadoBotoesEtapa();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -2213,6 +2964,8 @@ function formatDateTime(dateTimeRaw) {
 function mostrarAlerta(tipo, mensagem) {
     const box = document.getElementById('alertBox');
     if (!box) { alert(mensagem); return; }
+    if (registroAlertaTimer) clearTimeout(registroAlertaTimer);
+    registroAlertaTimer = null;
     const cores = {
         success: { bg: '#ecfdf5', cor: '#166534', borda: '#86efac', icone: 'fa-check-circle' },
         warning: { bg: '#fffbeb', cor: '#92400e', borda: '#fbbf24', icone: 'fa-exclamation-triangle' },
@@ -2222,9 +2975,13 @@ function mostrarAlerta(tipo, mensagem) {
     const classe = tipo === 'success' ? 'alert-success' : tipo === 'warning' ? 'alert-warning' : 'alert-error';
     // Cores aplicadas também inline (não só via classe CSS) para o aviso não
     // ficar sem cor caso o CSS da página esteja com cache desatualizado.
-    box.innerHTML = `<div class="alert ${classe}" style="background:${c.bg};color:${c.cor};border:1px solid ${c.borda};">
-        <i class="fas ${c.icone}" style="color:${c.cor};"></i> ${_esc(mensagem)}</div>`;
-    setTimeout(() => { box.innerHTML = ''; }, 6000);
+    box.innerHTML = `<div class="alert ${classe}" style="background:${c.bg};color:${c.cor};border:1px solid ${c.borda};" role="${tipo === 'error' ? 'alert' : 'status'}">
+        <i class="fas ${c.icone}" style="color:${c.cor};"></i> ${_esc(mensagem)}${tipo === 'error' ? '<button type="button" class="registro-alert-close" aria-label="Fechar mensagem">&times;</button>' : ''}</div>`;
+    if (tipo === 'error') {
+        box.querySelector('.registro-alert-close')?.addEventListener('click', _limparErroRegistro);
+    } else {
+        registroAlertaTimer = setTimeout(() => { if (box.isConnected) box.innerHTML = ''; }, 6000);
+    }
 }
 
 function _esc(value) {

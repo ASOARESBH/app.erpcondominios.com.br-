@@ -18,267 +18,141 @@
     </div>
 
     <div id="tab-registro-manual" class="tab-content active" role="tabpanel" aria-labelledby="tab-button-manual">
-    <div id="alertBox"></div>
-    <div id="registroCienciaBanner" class="ciencia-banner" hidden role="status" aria-live="polite" aria-atomic="false"></div>
+    <div id="alertBox" aria-live="assertive"></div>
 
     <div class="page-card">
-        <h2><i class="fas fa-plus-circle"></i> Registrar Acesso</h2>
+        <div class="registro-manual-heading">
+            <h2><i class="fas fa-plus-circle"></i> Registrar Acesso</h2>
+            <div class="registro-manual-heading__actions">
+                <button type="button" id="btnRegistroComoFunciona" class="registro-info-toggle" aria-expanded="true" aria-controls="registroInfoBox"><i class="fas fa-info-circle"></i> Como funciona</button>
+                <button type="button" id="registroAlertasChip" class="registro-alert-chip" hidden aria-haspopup="dialog"></button>
+            </div>
+        </div>
 
-        <div class="info-box">
+        <div class="info-box" id="registroInfoBox" aria-label="Como funciona o registro manual">
             <i class="fas fa-info-circle"></i>
             <strong>Registro Manual:</strong> use para visitantes, prestadores, entregadores autorizados, familiares ou morador sem leitura automática.
             Para <strong>Visitante</strong>, <strong>Prestador</strong>, <strong>Entregador Autorizado</strong> ou <strong>Familiar</strong>, informe o RG ou CPF para buscar o cadastro ou um convite válido.
             <strong>Familiar</strong> é um visitante que não reside na unidade; Dependente continua no fluxo <strong>Morador + Dependente</strong>.
             Se este condomínio exigir <strong>documento digitalizado</strong> no cadastro de visitantes (Configurações &gt; Sistema &gt; Visitantes), o mesmo anexo também é exigido aqui para liberar o acesso.
+            <div class="registro-info-box__footer"><label><input type="checkbox" id="registroInfoNaoMostrar"> Não mostrar novamente neste navegador</label><button type="button" id="btnFecharRegistroInfo" aria-label="Recolher informações">Recolher</button></div>
         </div>
 
-        <!-- Box de veículo encontrado (morador) -->
-        <div id="veiculoEncontrado" class="veiculo-encontrado" style="display:none;"></div>
-
-        <!-- Box de visitante/prestador encontrado -->
-        <div id="visitanteEncontrado" class="visitante-encontrado" style="display:none;"></div>
-
-        <form id="registroForm">
+        <form id="registroForm" novalidate>
             <input type="hidden" id="moradorId"          name="moradorId">
             <input type="hidden" id="veiculoId"          name="veiculoId">
             <input type="hidden" id="visitanteIdRegistro" name="visitanteIdRegistro">
             <input type="hidden" id="idempotencyKeyRegistro" name="idempotencyKeyRegistro">
 
-            <div class="dependente-toggle-row">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="checkPedestre">
-                    <span class="checkbox-custom"></span>
-                    Lançar como <strong>Pedestre</strong> (acesso sem veículo)
-                </label>
+            <div class="registro-stepper-header">
+                <div class="registro-stepper-progress" aria-label="Etapas do registro">
+                    <span class="registro-stepper-progress__item" data-step-indicator="1"><span>1</span> Acesso</span>
+                    <span class="registro-stepper-progress__item" data-step-indicator="2"><span>2</span> Destino</span>
+                    <span class="registro-stepper-progress__item" data-step-indicator="3"><span>3</span> Identificação</span>
+                    <span class="registro-stepper-progress__item" data-step-indicator="4"><span>4</span> Veículo</span>
+                </div>
+                <span class="registro-stepper-context" id="registroEtapaStatus" aria-live="polite">Etapa 1 de 4</span>
             </div>
+            <div id="registroCienciaBanner" class="ciencia-banner" hidden role="status" aria-live="polite" aria-atomic="false" tabindex="-1"></div>
+            <div id="registroEtapaFeedback" class="registro-etapa-feedback" role="status" aria-live="polite" hidden></div>
 
-            <!-- LINHA 1: Data/Hora, Placa, Tipo, Entrada/Saída -->
-            <div class="form-grid reg-grid-4">
-                <div>
-                    <label>Data e Hora *</label>
-                    <input type="datetime-local" id="dataHoraRegistro" required>
+            <section class="registro-step-card is-active" id="registroEtapa1" data-step="1" aria-labelledby="registroEtapa1Titulo">
+                <div class="registro-step-heading">
+                    <span class="registro-step-number">1</span><div><h3 id="registroEtapa1Titulo">Acesso</h3><p>Informe quando, como e qual tipo de acesso será registrado.</p></div>
+                    <span class="registro-step-summary" id="registroResumoEtapa1" hidden></span><button type="button" class="registro-step-edit" data-step-edit="1" hidden>Editar</button>
                 </div>
-                <div id="campoPlacaRegistro">
-                    <label>Placa *</label>
-                    <input type="text" id="placaRegistro" maxlength="8" required placeholder="ABC-1D23"
-                           autocomplete="off" style="text-transform:uppercase">
-                </div>
-                <div>
-                    <label>Tipo *</label>
-                    <select id="tipoRegistro" required>
-                        <option value="">Selecione...</option>
-                        <option value="Morador">Morador</option>
-                        <option value="Visitante">Visitante</option>
-                        <option value="Prestador">Prestador</option>
-                        <option value="Entregador Autorizado">Entregador Autorizado</option>
-                        <option value="Familiar" title="Parente visitante que não mora na unidade; não é o fluxo Dependente">Familiar</option>
-                    </select>
-                </div>
-                <div>
-                    <label>Entrada / Saída *</label>
-                    <div class="tipo-acesso-group">
-                        <label class="tipo-acesso-btn" id="btnEntrada">
-                            <input type="radio" name="tipo_acesso" value="Entrada" checked>
-                            <i class="fas fa-sign-in-alt"></i> Entrada
-                        </label>
-                        <label class="tipo-acesso-btn" id="btnSaida">
-                            <input type="radio" name="tipo_acesso" value="Saída">
-                            <i class="fas fa-sign-out-alt"></i> Saída
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <!-- LINHA 2: Modelo, Cor, Observação -->
-            <div class="form-grid reg-grid-3">
-                <div id="campoModeloRegistro">
-                    <label>Modelo do Veículo</label>
-                    <input type="text" id="modeloRegistro" placeholder="Ex: Corolla, HB20, Strada...">
-                </div>
-                <div id="campoCorRegistro">
-                    <label>Cor do Veículo</label>
-                    <input type="text" id="corRegistro" placeholder="Ex: Prata, Branco, Preto...">
-                </div>
-                <div id="campoVestimentaRegistro" style="display:none;">
-                    <label>Vestimenta</label>
-                    <input type="text" id="vestimentaRegistro" maxlength="120" placeholder="Ex: camisa azul, boné preto...">
-                </div>
-                <div>
-                    <label>Observação</label>
-                    <input type="text" id="observacaoRegistro" placeholder="Observações adicionais">
-                </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════════════════════
-                 BLOCO MORADOR (exibido quando Tipo = Morador)
-            ═══════════════════════════════════════════════════════════ -->
-            <div id="camposMorador" style="display:none;">
-                <div class="form-section-title-reg">
-                    <i class="fas fa-home"></i> Identificação do Morador
-                </div>
-
-                <div class="form-grid reg-grid-3">
-                    <!-- Unidade -->
-                    <div>
-                        <label>Unidade *</label>
-                        <select id="unidadeMoradorRegistro">
-                            <option value="">Selecione a unidade...</option>
-                        </select>
-                    </div>
-                    <!-- Morador -->
-                    <div>
-                        <label>Morador *</label>
-                        <select id="moradorSelecionadoRegistro" disabled>
-                            <option value="">Selecione a unidade primeiro</option>
-                        </select>
-                    </div>
-                    <!-- Info do morador -->
-                    <div id="moradorInfoWrap" style="display:none;">
-                        <label>Unidade do Morador</label>
-                        <div id="moradorInfoBox" class="morador-info-box"></div>
-                    </div>
-                </div>
-
-                <!-- Checkbox dependente -->
-                <div class="dependente-toggle-row">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="checkDependente">
-                        <span class="checkbox-custom"></span>
-                        Acesso de <strong>Dependente</strong> (familiar do morador)
-                    </label>
-                </div>
-
-                <!-- Select de dependente (oculto até marcar checkbox) -->
-                <div id="dependenteWrap" style="display:none;">
-                    <div class="form-grid reg-grid-2">
-                        <div>
-                            <label>Dependente *</label>
-                            <select id="dependenteSelecionadoRegistro" disabled>
-                                <option value="">Selecione o morador primeiro</option>
-                            </select>
-                        </div>
-                        <div id="dependenteInfoWrap" style="display:none;">
-                            <label>Parentesco</label>
-                            <div id="dependenteInfoBox" class="morador-info-box"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══════════════════════════════════════════════════════════
-                 BLOCO VISITANTE / PRESTADOR
-            ═══════════════════════════════════════════════════════════ -->
-            <div id="extraCampos" style="display:none;">
-
-                <!-- Busca por documento -->
-                <div class="form-section-title-reg">
-                    <i class="fas fa-id-card"></i> Identificação do Visitante / Prestador
-                </div>
-                <div class="form-grid reg-grid-3">
-                    <div>
-                        <label>Tipo de Documento *</label>
-                        <select id="tipoDocRegistro">
-                            <option value="CPF">CPF</option>
-                            <option value="RG">RG</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label>Número do Documento *</label>
-                        <div style="display:flex; gap:6px; align-items:flex-end;">
-                            <input type="text" id="documentoRegistro" placeholder="000.000.000-00"
-                                   inputmode="numeric" autocomplete="off" style="flex:1">
-                            <button type="button" class="btn-buscar-doc" id="btnBuscarDocRegistro" title="Buscar cadastro">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label>Nome *</label>
-                        <input type="text" id="nomeVisitanteRegistro" name="nomeVisitante" placeholder="Nome completo">
-                    </div>
-                </div>
-
-                <!-- Ocupantes do veículo -->
-                <div class="ocupantes-toggle-row" id="ocupantesToggleRow">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="checkOcupantes">
-                        <span class="checkbox-custom"></span>
-                        Veículo com <strong>Ocupantes</strong> (outros visitantes/prestadores no mesmo veículo)
-                    </label>
-                </div>
-
-                <div id="ocupantesWrap" style="display:none;">
-                    <div class="form-section-title-reg">
-                        <i class="fas fa-users"></i> Ocupantes do Veículo
-                    </div>
+                <div class="registro-step-content" data-step-content="1">
                     <div class="form-grid reg-grid-3">
-                        <div>
-                            <label>Tipo de Documento</label>
-                            <select id="tipoDocOcupante">
-                                <option value="CPF">CPF</option>
-                                <option value="RG">RG</option>
-                            </select>
+                        <div><label for="dataHoraRegistro">Data e Hora *</label><input type="datetime-local" id="dataHoraRegistro" required></div>
+                        <div><label for="tipoRegistro">Tipo *</label><select id="tipoRegistro" required>
+                            <option value="">Selecione...</option><option value="Morador">Morador</option><option value="Visitante">Visitante</option><option value="Prestador">Prestador</option><option value="Entregador Autorizado">Entregador Autorizado</option><option value="Familiar" title="Parente visitante que não mora na unidade; não é o fluxo Dependente">Familiar</option>
+                        </select></div>
+                        <div><label>Entrada / Saída *</label><div class="tipo-acesso-group">
+                            <label class="tipo-acesso-btn" id="btnEntrada"><input type="radio" name="tipo_acesso" value="Entrada" checked><i class="fas fa-sign-in-alt"></i> Entrada</label>
+                            <label class="tipo-acesso-btn" id="btnSaida"><input type="radio" name="tipo_acesso" value="Saída"><i class="fas fa-sign-out-alt"></i> Saída</label>
+                        </div></div>
+                    </div>
+                    <div class="registro-step-actions"><button type="button" class="btn-primary-modern" id="btnEtapa1Avancar">Avançar <i class="fas fa-arrow-right"></i></button></div>
+                </div>
+            </section>
+            <section class="registro-step-card" id="registroEtapa2" data-step="2" aria-labelledby="registroEtapa2Titulo" hidden>
+                <div class="registro-step-heading"><span class="registro-step-number">2</span><div><h3 id="registroEtapa2Titulo">Destino</h3><p>Escolha a unidade e a pessoa relacionada ao acesso.</p></div><span class="registro-step-summary" id="registroResumoEtapa2" hidden></span><button type="button" class="registro-step-edit" data-step-edit="2" hidden>Editar</button></div>
+                <div class="registro-step-content" data-step-content="2">
+                    <div id="camposMorador" style="display:none;">
+                        <div class="form-section-title-reg"><i class="fas fa-home"></i> Destino do Morador</div>
+                        <div class="form-grid reg-grid-3">
+                            <div><label for="unidadeMoradorRegistro">Unidade *</label><select id="unidadeMoradorRegistro"><option value="">Selecione a unidade...</option></select></div>
+                            <div><label for="moradorSelecionadoRegistro">Morador *</label><select id="moradorSelecionadoRegistro" disabled><option value="">Selecione a unidade primeiro</option></select></div>
+                            <div id="moradorInfoWrap" style="display:none;"><label>Unidade do Morador</label><div id="moradorInfoBox" class="morador-info-box"></div></div>
                         </div>
-                        <div>
-                            <label>Número do Documento</label>
-                            <div style="display:flex; gap:6px; align-items:flex-end;">
-                                <input type="text" id="documentoOcupante" placeholder="000.000.000-00"
-                                       inputmode="numeric" autocomplete="off" style="flex:1">
-                                <button type="button" class="btn-buscar-doc" id="btnBuscarDocOcupante" title="Buscar cadastro">
-                                    <i class="fas fa-search"></i>
-                                </button>
+                        <div class="dependente-toggle-row"><label class="checkbox-label"><input type="checkbox" id="checkDependente"><span class="checkbox-custom"></span>Acesso de <strong>Dependente</strong> (familiar do morador)</label></div>
+                        <div id="dependenteWrap" style="display:none;"><div class="form-grid reg-grid-2">
+                            <div><label for="dependenteSelecionadoRegistro">Dependente *</label><select id="dependenteSelecionadoRegistro" disabled><option value="">Selecione o morador primeiro</option></select></div>
+                            <div id="dependenteInfoWrap" style="display:none;"><label>Parentesco</label><div id="dependenteInfoBox" class="morador-info-box"></div></div>
+                        </div></div>
+                    </div>
+                    <div id="camposDestinoConvidado" style="display:none;">
+                        <div class="form-section-title-reg"><i class="fas fa-map-marker-alt"></i> Destino do Visitante</div>
+                        <div class="form-grid reg-grid-3">
+                            <div><label for="unidadeDestinoRegistro">Unidade *</label><select id="unidadeDestinoRegistro" name="unidadeDestino"><option value="">Selecione a unidade...</option></select></div>
+                            <div><label for="moradorDestinoRegistro">Morador *</label><select id="moradorDestinoRegistro" name="moradorDestino" disabled><option value="">Selecione a unidade primeiro</option></select></div>
+                            <div><label for="diasPermanenciaRegistro">Dias de Permanência</label><input type="number" id="diasPermanenciaRegistro" min="1" placeholder="Ex: 1"></div>
+                        </div>
+                    </div>
+                    <div class="registro-step-actions"><button type="button" class="btn-secondary-modern" data-step-back="1"><i class="fas fa-arrow-left"></i> Voltar</button><button type="button" class="btn-primary-modern" id="btnEtapa2Avancar">Avançar <i class="fas fa-arrow-right"></i></button></div>
+                </div>
+            </section>
+
+            <section class="registro-step-card" id="registroEtapa3" data-step="3" aria-labelledby="registroEtapa3Titulo" hidden>
+                <div class="registro-step-heading"><span class="registro-step-number">3</span><div><h3 id="registroEtapa3Titulo">Identificação</h3><p>Confirme a identidade do visitante, prestador ou convidado.</p></div><span class="registro-step-summary" id="registroResumoEtapa3" hidden></span><button type="button" class="registro-step-edit" data-step-edit="3" hidden>Editar</button></div>
+                <div class="registro-step-content" data-step-content="3" id="registroIdentificacaoConteudo">
+                    <div id="camposIdentificacaoVisitante">
+                        <div class="form-section-title-reg"><i class="fas fa-id-card"></i> Identificação do Visitante / Prestador</div>
+                        <div class="form-grid reg-grid-3">
+                            <div><label for="tipoDocRegistro">Tipo de Documento *</label><select id="tipoDocRegistro"><option value="CPF">CPF</option><option value="RG">RG</option></select></div>
+                            <div><label for="documentoRegistro">Número do Documento *</label><div class="registro-input-with-button"><input type="text" id="documentoRegistro" placeholder="000.000.000-00" inputmode="numeric" autocomplete="off"><button type="button" class="btn-buscar-doc" id="btnBuscarDocRegistro" title="Buscar cadastro" aria-label="Buscar cadastro"><i class="fas fa-search"></i></button></div></div>
+                            <div class="registro-visitor-name"><label for="nomeVisitanteRegistro">Nome *</label><input type="text" id="nomeVisitanteRegistro" name="nomeVisitante" placeholder="Nome completo"><div id="visitanteEncontrado" class="visitante-encontrado" style="display:none;" role="status" tabindex="-1"></div></div>
+                        </div>
+                        <div class="registro-step-actions"><button type="button" class="btn-secondary-modern" data-step-back="2"><i class="fas fa-arrow-left"></i> Voltar</button><button type="button" class="btn-primary-modern" id="btnEtapa3Avancar">Avançar <i class="fas fa-arrow-right"></i></button></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="registro-step-card" id="registroEtapa4" data-step="4" aria-labelledby="registroEtapa4Titulo" hidden>
+                <div class="registro-step-heading"><span class="registro-step-number">4</span><div><h3 id="registroEtapa4Titulo">Veículo</h3><p>Informe placa e veículo, ou registre a pessoa como pedestre.</p></div><span class="registro-step-summary" id="registroResumoEtapa4" hidden></span><button type="button" class="registro-step-edit" data-step-edit="4" hidden>Editar</button></div>
+                <div class="registro-step-content" data-step-content="4">
+                    <div class="dependente-toggle-row"><label class="checkbox-label"><input type="checkbox" id="checkPedestre"><span class="checkbox-custom"></span>Lançar como <strong>Pedestre</strong> (acesso sem veículo)</label></div>
+                    <div id="veiculoEncontrado" class="veiculo-encontrado" style="display:none;" role="status"></div>
+                    <div class="form-grid reg-grid-4 registro-veiculo-fields">
+                        <div id="campoPlacaRegistro"><label for="placaRegistro">Placa *</label><input type="text" id="placaRegistro" maxlength="8" required placeholder="ABC-1D23" autocomplete="off" style="text-transform:uppercase"></div>
+                        <div id="campoModeloRegistro"><label for="modeloRegistro">Modelo do Veículo</label><input type="text" id="modeloRegistro" placeholder="Ex: Corolla, HB20, Strada..."></div>
+                        <div id="campoCorRegistro"><label for="corRegistro">Cor do Veículo</label><input type="text" id="corRegistro" placeholder="Ex: Prata, Branco, Preto..."></div>
+                        <div id="campoVestimentaRegistro" style="display:none;"><label for="vestimentaRegistro">Vestimenta</label><input type="text" id="vestimentaRegistro" maxlength="120" placeholder="Ex: camisa azul, boné preto..."></div>
+                    </div>
+                    <div class="form-grid reg-grid-2"><div><label for="observacaoRegistro">Observação</label><input type="text" id="observacaoRegistro" placeholder="Observações adicionais"></div></div>
+                    <div id="camposOcupantesVisitante" style="display:none;">
+                        <div class="ocupantes-toggle-row" id="ocupantesToggleRow"><label class="checkbox-label"><input type="checkbox" id="checkOcupantes"><span class="checkbox-custom"></span>Veículo com <strong>Ocupantes</strong> (outros visitantes/prestadores no mesmo veículo)</label></div>
+                        <div id="ocupantesWrap" style="display:none;">
+                            <div class="form-section-title-reg"><i class="fas fa-users"></i> Ocupantes do Veículo</div>
+                            <div class="form-grid reg-grid-3">
+                                <div><label for="tipoDocOcupante">Tipo de Documento</label><select id="tipoDocOcupante"><option value="CPF">CPF</option><option value="RG">RG</option></select></div>
+                                <div><label for="documentoOcupante">Número do Documento</label><div class="registro-input-with-button"><input type="text" id="documentoOcupante" placeholder="000.000.000-00" inputmode="numeric" autocomplete="off"><button type="button" class="btn-buscar-doc" id="btnBuscarDocOcupante" title="Buscar cadastro" aria-label="Buscar cadastro"><i class="fas fa-search"></i></button></div></div>
+                                <div><label for="nomeOcupante">Nome</label><div class="registro-input-with-button"><input type="text" id="nomeOcupante" placeholder="Busque o documento..." readonly><button type="button" class="btn-add-ocupante" id="btnAdicionarOcupante" title="Adicionar ocupante à lista" disabled><i class="fas fa-plus"></i></button></div></div>
                             </div>
-                        </div>
-                        <div>
-                            <label>Nome</label>
-                            <div style="display:flex; gap:6px; align-items:flex-end;">
-                                <input type="text" id="nomeOcupante" placeholder="Busque o documento..." readonly style="flex:1">
-                                <button type="button" class="btn-add-ocupante" id="btnAdicionarOcupante" title="Adicionar ocupante à lista" disabled>
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
+                            <div id="ocupanteEncontrado" class="visitante-encontrado" style="display:none;"></div><div id="listaOcupantes" class="lista-ocupantes"></div><input type="hidden" id="ocupanteVisitanteIdTemp" value="">
                         </div>
                     </div>
-
-                    <div id="ocupanteEncontrado" class="visitante-encontrado" style="display:none;"></div>
-
-                    <div id="listaOcupantes" class="lista-ocupantes"></div>
-                    <input type="hidden" id="ocupanteVisitanteIdTemp" value="">
+                    <div class="registro-step-actions"><button type="button" class="btn-secondary-modern" id="btnEtapa4Voltar"><i class="fas fa-arrow-left"></i> Voltar</button><button type="submit" class="btn-primary-modern" id="btnSalvarRegistro"><i class="fas fa-save"></i> Registrar Acesso</button><button type="button" class="btn-secondary-modern" id="btnLimparRegistro"><i class="fas fa-eraser"></i> Limpar</button></div>
                 </div>
-
-                <!-- Unidade e Morador destino -->
-                <div class="form-section-title-reg">
-                    <i class="fas fa-map-marker-alt"></i> Destino
-                </div>
-                <div class="form-grid reg-grid-3">
-                    <div>
-                        <label>Unidade *</label>
-                        <select id="unidadeDestinoRegistro" name="unidadeDestino">
-                            <option value="">Selecione a unidade...</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label>Morador *</label>
-                        <select id="moradorDestinoRegistro" name="moradorDestino" disabled>
-                            <option value="">Selecione a unidade primeiro</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label>Dias de Permanência</label>
-                        <input type="number" id="diasPermanenciaRegistro" min="1" placeholder="Ex: 1">
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-actions">
-                <button type="submit" class="btn-primary-modern" id="btnSalvarRegistro">
-                    <i class="fas fa-save"></i> Registrar Acesso
-                </button>
-                <button type="button" class="btn-secondary-modern" id="btnLimparRegistro">
-                    <i class="fas fa-eraser"></i> Limpar
-                </button>
-            </div>
+            </section>
         </form>
+    </div>
+
+    <div id="registroAlertaEtapaModal" class="ciencia-modal" hidden role="dialog" aria-modal="true" aria-labelledby="registroAlertaEtapaTitulo" aria-describedby="registroAlertaEtapaDescricao">
+        <div class="ciencia-modal__dialog" role="document"><div class="ciencia-modal__header"><span class="ciencia-modal__eyebrow">Pré-validação do acesso</span><h2 id="registroAlertaEtapaTitulo">Alerta da unidade</h2></div>
+            <div class="ciencia-modal__body"><p id="registroAlertaEtapaDescricao" class="ciencia-modal__description"></p><div id="registroAlertaEtapaLista" class="ciencia-alert-list"></div><div id="registroAlertaEtapaErro" class="ciencia-modal__error" role="alert" hidden></div></div>
+            <div class="ciencia-modal__footer"><button type="button" class="btn-secondary-modern" id="btnRegistroAlertaEtapaCancelar">Cancelar registro</button><button type="button" class="btn-primary-modern" id="btnRegistroAlertaEtapaConfirmar">Ciente, prosseguir</button></div>
+        </div>
     </div>
 
     <div id="registroCienciaModal" class="ciencia-modal" hidden role="dialog" aria-modal="true" aria-labelledby="registroCienciaTitulo" aria-describedby="registroCienciaDescricao">

@@ -2,6 +2,29 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.19] - 2026-11-04
+### Corrigido
+- **Registro Manual — revisão de integridade**: validar no backend que `dependente_id` pertence ao `morador_id` informado e ao tenant da sessão; a Entrada exige ambos ativos e a Saída histórica ainda pode ser encerrada, mas nunca com dependente de outro morador.
+- Tipo e documento enviados para visitante precisam corresponder ao `visitante_id` do cadastro tenant-local. Permanência dos tipos de visitante aceita somente inteiro de 1 a 365 dias, com omissão igual a 1.
+- O replay idempotente agora compara também o conjunto de ocupantes e devolve HTTP 409 `IDEMPOTENCY_CONFLICT` em colisão; o rollback é explícito antes da resposta.
+- Pré-validação de Alertas com dependente sem morador informado deriva unidade do morador-pai consultado no tenant. O botão Voltar da etapa Veículo retorna a Destino quando Identificação foi omitida para Morador.
+### Validado
+- `php -l` nos endpoints/helpers tocados, `node --check` no módulo Registro e `git diff --check`.
+- MariaDB descartável executou helpers reais de dependente, documento, permanência, unidade canônica e idempotência: vínculo correto/divergente, tenants cruzados, Entrada/Saída, 1/365 dias, ocupantes iguais/removidos/adicionados/divergentes e resposta 409 estruturada passaram.
+- Smoke test Playwright com endpoints mockados incluiu retorno de Veículo para Destino no caso Morador; sem erros de página e sem overflow horizontal em 1366×768 e 375×812. Não houve sessão autenticada, deploy nem teste na base de produção.
+
+## [2.1.18] - 2026-11-04
+### Corrigido e alterado
+- **Registro Manual — fluxo por etapas**: reorganizado em Acesso, Destino, Identificação e Veículo/Pedestre. Etapas concluídas agora ficam recolhidas com resumo e ação Editar; a etapa de identificação é omitida para Morador. Reabrir Destino preserva os campos posteriores e revalida alertas.
+- O foco automático agora escolhe o primeiro controle realmente visível da etapa, ignorando ações Editar ocultas e campos dentro de seções escondidas.
+- A API de Alertas passou a aceitar pré-validação parcial por etapa, sem token de ciência e sem revelar documentos de alvos futuros. A gravação mantém a reavaliação formal e o fluxo de `409 ALERTA_PENDENTE`.
+- Corrigido o fallback `409` do Registro, que referenciava nome inexistente ao abrir o modal formal; as rotas normal e de fallback agora usam o modal existente. Limpar gera uma nova chave de idempotência. A identificação de Dependente foi alinhada ao tipo avaliado na gravação e a consulta de placa não troca automaticamente o destino escolhido.
+### Validado
+- `php -l` nos endpoints/helpers PHP e `node --check` no módulo Registro, além de `git diff --check`.
+- Fixture MariaDB descartável confirmou os alertas gerais por etapa, contagem de específicos sem expor alvos, reclassificação conforme visitante/placa identificados e isolamento tenant A/B.
+- Smoke test Playwright local com APIs interceptadas, sem sessão ou produção, passou em 1366×768 e 375×812: avanço Enter/foco visível, entrada, modal/popups, saída, bloqueio/override, documento obrigatório, Dependente/Pedestre, convite, resumo/edição de etapas, revalidação, `409`→ciência→token→retry com a mesma chave, atualização dos Registros Recentes, limpeza/idempotência e reentrada SPA sem handlers duplicados. Sem erros de página ou overflow horizontal.
+- Em MariaDB descartável, o helper real rejeitou token ao mudar o contexto (`CIENCIA_TOKEN_DIVERGENTE`) e em outro tenant (`CIENCIA_TOKEN_INVALIDO`). Não houve teste de endpoint autenticado, deploy, nem alteração no banco de produção.
+
 ## [2.1.17] - 2026-11-03
 ### Corrigido e alterado
 - **RBAC — permissões explícitas**: removida a negação implícita entre grupos; a ausência de grant é sem acesso, e somente registros `NEGAR` explícitos negam uma ação. Precedência definida como admin/super_admin, negar individual, permitir individual, negar de grupo e permitir de grupo.

@@ -38,6 +38,11 @@ export function destroy() {
 - **Botões**: `.btn-primary-modern`, `.btn-secondary-modern`.
 - **Tabelas**: `.table-responsive`, `.data-table`.
 
+### Registro Manual — stepper web
+- `frontend/pages/registro.html`, `frontend/js/pages/registro.js` e `assets/css/pages/registro.css` implementam Acesso → Destino → Identificação → Veículo/Pedestre, com identificação omitida para Morador. Etapas concluídas permanecem no DOM como resumos recolhidos com ação Editar; reabrir etapa mantém valores posteriores e invalida/reexecuta a pré-validação correspondente. Ao voltar de Veículo, o módulo pula Identificação se o tipo atual for Morador.
+- Pré-validações usam `POST api/api_alertas_unidade.php?acao=verificar` com `parcial=true` e a etapa explícita; respostas parciais não são ciência nem token. Popups decisórios e chip informativo ficam próximos à etapa ativa; a decisão final formal permanece no fluxo `409 ALERTA_PENDENTE` do submit.
+- `init()`/`destroy()` removem timers, requisições e listeners do stepper/modal. Limpar reinicia para Acesso e troca a chave de idempotência; convite vinculado abre o formulário preenchido na etapa final. A confirmação de destino divergente pela placa não substitui a seleção do operador.
+
 
 ## 6. Alertas da Unidade (web)
 
