@@ -103,6 +103,50 @@ function _tipo_exige_cadastro_visitante($tipo) {
     return in_array($tipo, ['Visitante', 'Prestador', 'Entregador Autorizado', 'Familiar'], true);
 }
 
+function _registro_validar_dependente(mysqli $conexao, int $tenantId, int $moradorId, int $dependenteId, bool $exigirAtivos): array {
+    if ($moradorId <= 0 || $dependenteId <= 0) return ['ok'=>false,'mensagem'=>'Selecione o morador relacionado ao dependente.'];
+    $filtroAtivos = $exigirAtivos ? ' AND d.ativo=1 AND m.ativo=1' : '';
+    $stmt = $conexao->prepare('SELECT d.id,d.morador_id,d.nome_completo FROM dependentes d INNER JOIN moradores m ON m.tenant_id=d.tenant_id AND m.id=d.morador_id WHERE d.tenant_id=? AND d.id=?' . $filtroAtivos . ' LIMIT 1');
+    if (!$stmt) {
+        log_registro('ERRO prepare validar dependente', ['errno'=>$conexao->errno]);
+        return ['ok'=>false,'mensagem'=>'Não foi possível validar o dependente selecionado.'];
+    }
+    $stmt->bind_param('ii', $tenantId, $dependenteId);
+    if (!$stmt->execute()) {
+        log_registro('ERRO execute validar dependente', ['errno'=>$stmt->errno]);
+        $stmt->close();
+        return ['ok'=>false,'mensagem'=>'Não foi possível validar o dependente selecionado.'];
+    }
+    $dependente = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$dependente || (int)$dependente['morador_id'] !== $moradorId) {
+        return ['ok'=>false,'mensagem'=>'O dependente não está ativo ou não pertence ao morador selecionado.'];
+    }
+    return ['ok'=>true,'dependente'=>$dependente];
+}
+
+function _registro_documento_visitante_coincide(array $visitante, string $documentoInformado, string $tipoDocumentoInformado): bool {
+    $documentoCadastro = _normalizar_documento_comparacao($visitante['documento'] ?? '');
+    $documentoEnviado = _normalizar_documento_comparacao($documentoInformado);
+    $tipoDocumentoCadastro = strtoupper(trim((string)($visitante['tipo_documento'] ?? '')));
+    return $documentoCadastro !== '' && $documentoEnviado !== ''
+        && hash_equals($documentoCadastro, $documentoEnviado)
+        && $tipoDocumentoInformado !== '' && $tipoDocumentoInformado === $tipoDocumentoCadastro;
+}
+
+function _registro_validar_dias_permanencia(string $tipo, $valor): array {
+    if (!_tipo_exige_cadastro_visitante($tipo)) return ['ok'=>true,'dias'=>0];
+    if ($valor !== null && !is_int($valor) && !is_string($valor)) {
+        return ['ok'=>false,'mensagem'=>'Os dias de permanência devem ser um número inteiro entre 1 e 365.'];
+    }
+    $texto = trim((string)($valor ?? ''));
+    if ($texto === '') $texto = '1';
+    if (!preg_match('/^\d+$/D', $texto)) return ['ok'=>false,'mensagem'=>'Os dias de permanência devem estar entre 1 e 365.'];
+    $dias = (int)$texto;
+    if ($dias < 1 || $dias > 365) return ['ok'=>false,'mensagem'=>'Os dias de permanência devem estar entre 1 e 365.'];
+    return ['ok'=>true,'dias'=>$dias];
+}
+
 function _registro_idempotente_coincide(array $existente, array $esperado) {
     $camposTexto = [
         'data_hora', 'placa', 'modelo', 'cor', 'tipo', 'nome_visitante',
@@ -117,6 +161,54 @@ function _registro_idempotente_coincide(array $existente, array $esperado) {
         if ((int)($existente[$campo] ?? 0) !== (int)($esperado[$campo] ?? 0)) return false;
     }
     return true;
+}
+
+function _registro_ocupantes_idempotentes_coincidem(mysqli $conexao, int $tenantId, int $registroTitularId, array $ocupantesEsperados): bool {
+    $esperados = [];
+    foreach ($ocupantesEsperados as $ocupante) {
+        $esperados[] = [
+            'visitante_id' => (int)($ocupante['id'] ?? 0),
+            'documento' => _normalizar_documento_comparacao($ocupante['documento'] ?? ''),
+        ];
+    }
+    $ordenar = static function (array &$itens): void {
+        usort($itens, static function (array $a, array $b): int {
+            return ($a['visitante_id'] <=> $b['visitante_id']) ?: strcmp($a['documento'], $b['documento']);
+        });
+    };
+    $ordenar($esperados);
+
+    $stmt = $conexao->prepare("SELECT visitante_id,documento_visitante FROM registros_acesso
+        WHERE tenant_id=? AND registro_titular_id=? AND papel_veiculo='OCUPANTE'");
+    if (!$stmt) throw new RuntimeException('Não foi possível validar os ocupantes da chave de idempotência.');
+    $stmt->bind_param('ii', $tenantId, $registroTitularId);
+    if (!$stmt->execute()) { $stmt->close(); throw new RuntimeException('Não foi possível validar os ocupantes da chave de idempotência.'); }
+    $result = $stmt->get_result();
+    $existentes = [];
+    while ($row = $result->fetch_assoc()) {
+        $existentes[] = [
+            'visitante_id' => (int)($row['visitante_id'] ?? 0),
+            'documento' => _normalizar_documento_comparacao($row['documento_visitante'] ?? ''),
+        ];
+    }
+    $stmt->close();
+    $ordenar($existentes);
+    return $existentes === $esperados;
+}
+
+function _registro_responder_conflito_idempotencia(string $mensagem): void {
+    http_response_code(409);
+    retornar_json(false, $mensagem, ['codigo'=>'IDEMPOTENCY_CONFLICT','idempotente'=>false]);
+}
+
+function _registro_payload_idempotente_coincide(mysqli $conexao, int $tenantId, array $existente, array $esperado): bool {
+    if (!_registro_idempotente_coincide($existente, $esperado)) return false;
+    return _registro_ocupantes_idempotentes_coincidem(
+        $conexao,
+        $tenantId,
+        (int)($existente['id'] ?? 0),
+        is_array($esperado['ocupantes'] ?? null) ? $esperado['ocupantes'] : []
+    );
 }
 
 function _garantir_coluna($conexao, $tabela, $coluna, $definicao) {
@@ -570,7 +662,7 @@ if ($metodo === 'POST') {
     $cor              = trim($dados['cor']              ?? '');
     $tipo             = trim($dados['tipo']             ?? '');
     $unidade_destino  = trim($dados['unidade_destino']  ?? '');
-    $dias_permanencia = intval($dados['dias_permanencia'] ?? 0);
+    $dias_permanencia = 0;
     $nome_visitante   = trim($dados['nome_visitante']   ?? '');
     $observacao       = trim($dados['observacao']       ?? '');
     $tipo_acesso      = trim($dados['tipo_acesso']      ?? 'Entrada');
@@ -608,6 +700,10 @@ if ($metodo === 'POST') {
         retornar_json(false, 'Tipo de acesso inválido.');
     }
 
+    $validacaoDias = _registro_validar_dias_permanencia($tipo, $dados['dias_permanencia'] ?? null);
+    if (empty($validacaoDias['ok'])) retornar_json(false, $validacaoDias['mensagem']);
+    $dias_permanencia = (int)$validacaoDias['dias'];
+
     $morador_id   = isset($dados['morador_id'])   && $dados['morador_id']   ? intval($dados['morador_id'])   : null;
     $visitante_id = isset($dados['visitante_id']) && $dados['visitante_id'] ? intval($dados['visitante_id']) : null;
     $dependente_id = isset($dados['dependente_id']) && $dados['dependente_id'] ? intval($dados['dependente_id']) : null;
@@ -627,9 +723,9 @@ if ($metodo === 'POST') {
         $cor = '';
     }
 
-    // A placa cadastrada é a fonte autoritativa: não confiar em modelo, cor,
-    // morador ou unidade enviados pelo navegador, pois campos desabilitados
-    // ainda podem ser alterados por requisições manuais.
+    // A placa é fonte autoritativa para modelo/cor. Morador e unidade de destino
+    // continuam sendo resolvidos e validados pelo fluxo de tipo abaixo: um
+    // operador pode confirmar um destino diferente do proprietário do veículo.
     if ($modo_registro === 'VEICULO') {
         $stmtVeiculo = $conexao->prepare("SELECT v.modelo, v.cor, v.morador_id, m.nome, m.unidade
             FROM veiculos v INNER JOIN moradores m ON m.id = v.morador_id AND m.tenant_id = ?
@@ -642,11 +738,11 @@ if ($metodo === 'POST') {
             if ($veiculoCadastrado) {
                 $modelo = trim((string)($veiculoCadastrado['modelo'] ?? ''));
                 $cor = trim((string)($veiculoCadastrado['cor'] ?? ''));
-                if ($convidado_id === null) {
+                if ($convidado_id === null && $morador_id <= 0 && $tipo === 'Morador') {
                     $morador_id = (int)$veiculoCadastrado['morador_id'];
                     $unidade_destino = trim((string)($veiculoCadastrado['unidade'] ?? ''));
+                    $tipo = 'Morador';
                 }
-                if ($convidado_id === null) $tipo = 'Morador';
             }
         }
     }
@@ -713,6 +809,20 @@ if ($metodo === 'POST') {
         if (!empty($convidado['visitante_id'])) $visitante_id = (int)$convidado['visitante_id'];
         $documento = trim((string)$convidado['documento']);
     }
+
+    $dependenteValidado = null;
+    if ($dependente_id !== null) {
+        $resultadoDependente = _registro_validar_dependente(
+            $conexao,
+            $tenant_id,
+            (int)($morador_id ?? 0),
+            $dependente_id,
+            $tipo_acesso === 'Entrada'
+        );
+        if (empty($resultadoDependente['ok'])) retornar_json(false, $resultadoDependente['mensagem']);
+        $dependenteValidado = $resultadoDependente['dependente'];
+    }
+
     $tag          = null;
     $liberado     = 0;
     $status       = '';
@@ -770,20 +880,7 @@ if ($metodo === 'POST') {
             $status = '✅ Acesso liberado - Morador';
         }
 
-        // Se for dependente, buscar nome do dependente para o status
-        if ($dependente_id) {
-            $stmtDep = $conexao->prepare('SELECT nome_completo FROM dependentes WHERE tenant_id = ? AND id = ?');
-            if ($stmtDep) {
-                $stmtDep->bind_param('ii', $tenant_id, $dependente_id);
-                $stmtDep->execute();
-                $resDep = $stmtDep->get_result();
-                if ($resDep->num_rows > 0) {
-                    $dep = $resDep->fetch_assoc();
-                    $status .= ' (Dependente: ' . $dep['nome_completo'] . ')';
-                }
-                $stmtDep->close();
-            }
-        }
+        if ($dependenteValidado) $status .= ' (Dependente: ' . $dependenteValidado['nome_completo'] . ')';
 
     } else {
         // Visitante e Prestador compartilham o cadastro-base. O documento
@@ -799,6 +896,9 @@ if ($metodo === 'POST') {
             retornar_json(false, $validacaoTitular['mensagem']);
         }
         $visitante = $validacaoTitular['visitante'];
+        if (!_registro_documento_visitante_coincide($visitante, $documento_informado, $tipo_documento_informado)) {
+            retornar_json(false, 'O tipo e o documento informados não correspondem ao cadastro de visitante selecionado.');
+        }
         if ($convidado !== null) {
             $documentoVisitante = _normalizar_documento_comparacao($visitante['documento'] ?? '');
             if (strtoupper((string)($visitante['tipo_documento'] ?? '')) !== strtoupper((string)$convidado['tipo_documento'])
@@ -887,6 +987,7 @@ if ($metodo === 'POST') {
         'visitante_id' => $visitante_id, 'documento_visitante' => $documento,
         'modo_registro' => $modo_registro, 'vestimenta' => $vestimenta, 'liberado' => $liberado,
         'status' => $status, 'convidado_id' => ($tem_convidado_id && $convidado_id !== null) ? (int)$convidado_id : 0,
+        'ocupantes' => $ocupantesValidados,
     ];
 
     $conexao->begin_transaction();
@@ -924,8 +1025,9 @@ if ($metodo === 'POST') {
                 $registroReplay = $stmtReplay->get_result()->fetch_assoc();
                 $stmtReplay->close();
                 if ($registroReplay) {
-                    if (!_registro_idempotente_coincide($registroReplay, $esperadoIdempotencia)) {
-                        throw new DomainException('A chave de idempotência já foi usada para outro registro.');
+                    if (!_registro_payload_idempotente_coincide($conexao, $tenant_id, $registroReplay, $esperadoIdempotencia)) {
+                        $conexao->rollback();
+                        _registro_responder_conflito_idempotencia('A chave de idempotência já foi usada para outro registro.');
                     }
                     $conexao->rollback();
                     retornar_json(true, 'Acesso já havia sido registrado.', [
@@ -1036,7 +1138,10 @@ if ($metodo === 'POST') {
             $registroReplay = $stmtReplay->get_result()->fetch_assoc();
             $stmtReplay->close();
             if ($registroReplay) {
-                if (!_registro_idempotente_coincide($registroReplay, $esperadoIdempotencia)) throw new DomainException('A chave de idempotência já foi usada para outro registro.');
+                if (!_registro_payload_idempotente_coincide($conexao, $tenant_id, $registroReplay, $esperadoIdempotencia)) {
+                    $conexao->rollback();
+                    _registro_responder_conflito_idempotencia('A chave de idempotência já foi usada para outro registro.');
+                }
                 $conexao->rollback();
                 retornar_json(true, 'Acesso já havia sido registrado.', ['id'=>(int)$registroReplay['id'],'liberado'=>(int)$registroReplay['liberado'],'status'=>$registroReplay['status'],'tipo_acesso'=>$registroReplay['tipo_acesso'],'modo_registro'=>$registroReplay['modo_registro'],'vestimenta'=>$registroReplay['vestimenta'],'ocupantes_registrados'=>[],'idempotente'=>true]);
             }
@@ -1052,7 +1157,7 @@ if ($metodo === 'POST') {
                 retornar_json(false, 'A integração de Alertas da Unidade ainda não foi instalada. Aplique a migration do módulo antes de registrar novas entradas.', ['codigo'=>'MIGRATION_ALERTAS_PENDENTE']);
             }
             $contextoAlerta = alertas_unidade_construir_contexto_registro($conexao, $tenant_id, [
-                'contexto'=>'REGISTRO_MANUAL','data_hora'=>$data_hora,'tipo_pessoa'=>$tipo,
+                'contexto'=>'REGISTRO_MANUAL','data_hora'=>$data_hora,'tipo_pessoa'=>$dependente_id !== null ? 'Dependente' : $tipo,
                 'morador_id'=>$morador_id,'dependente_id'=>$dependente_id,'unidade'=>$unidade_destino,
                 'visitante_id'=>$visitante_id,'documento'=>$documento,
                 'tipo_documento'=>$tipo_documento_informado ?: ($visitante['tipo_documento'] ?? ($convidado['tipo_documento'] ?? '')),
@@ -1113,7 +1218,7 @@ if ($metodo === 'POST') {
                     $existente = $stmtExistente->get_result()->fetch_assoc();
                     $stmtExistente->close();
                     if ($existente) {
-                        $mesmo_lancamento = _registro_idempotente_coincide($existente, $esperadoIdempotencia);
+                        $mesmo_lancamento = _registro_payload_idempotente_coincide($conexao, $tenant_id, $existente, $esperadoIdempotencia);
 
                         if ($mesmo_lancamento) {
                             log_registro('POST idempotente', ['id' => $existente['id']]);
@@ -1130,10 +1235,7 @@ if ($metodo === 'POST') {
                         }
 
                         log_registro('CONFLITO chave idempotente', ['id_existente' => $existente['id']]);
-                        retornar_json(false, 'A chave deste lançamento já pertence a outro acesso. Gere uma nova chave para continuar.', [
-                            'codigo' => 'IDEMPOTENCY_CONFLICT',
-                            'idempotente' => false,
-                        ]);
+                        _registro_responder_conflito_idempotencia('A chave deste lançamento já pertence a outro acesso. Gere uma nova chave para continuar.');
                     }
                 }
             }

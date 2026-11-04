@@ -386,6 +386,7 @@ if (!function_exists('alertas_unidade_avaliar')) {
             $mesmaUnidade = $unidade !== '' && hash_equals((string)$alerta['unidade'], $unidade);
             $divergencia = false;
             $match = false;
+            $tipoAlvoCorrespondente = null;
             if ((string)$alerta['abrangencia'] === 'TODOS_DO_TIPO') {
                 $match = $mesmaUnidade;
             } else {
@@ -394,6 +395,7 @@ if (!function_exists('alertas_unidade_avaliar')) {
                     $ctxAlvo['visitante_id'] = $visitanteId;
                     if (au_target_match($alvo, $ctxAlvo, $doc, $placa)) {
                         $match = true;
+                        $tipoAlvoCorrespondente = (string)($alvo['tipo_alvo'] ?? '');
                         $divergencia = !$mesmaUnidade;
                         break;
                     }
@@ -414,6 +416,7 @@ if (!function_exists('alertas_unidade_avaliar')) {
                 'criado_por_tipo' => (string)$alerta['criado_por_tipo'],
                 'total_acionamentos' => (int)$alerta['total_acionamentos'],
                 'divergencia_unidade' => $divergencia,
+                'tipo_alvo_correspondente' => $tipoAlvoCorrespondente,
             ];
             $resultado[] = $linha;
         }

@@ -247,7 +247,11 @@ function au_api_contexto(mysqli $c, $tenantId, array $dados, $contextoPadrao = '
         $dependente = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         if (!$dependente || ($moradorId > 0 && (int)$dependente['morador_id'] !== $moradorId)) au_api_erro('O dependente não pertence ao condomínio atual.', 422, 'DEPENDENTE_INVALIDO');
-        if ($moradorId <= 0) $moradorId = (int)$dependente['morador_id'];
+        if ($moradorId <= 0) {
+            $moradorId = (int)$dependente['morador_id'];
+            $morador = au_api_buscar_morador($c, $tenantId, $moradorId);
+            $unidade = (string)$morador['unidade'];
+        }
     }
     $visitanteId = (int)($dados['visitante_id'] ?? 0);
     $pessoaNome = '';
@@ -269,6 +273,67 @@ function au_api_contexto(mysqli $c, $tenantId, array $dados, $contextoPadrao = '
         'tipo_acesso' => trim((string)($dados['tipo_acesso'] ?? 'Entrada')), 'data_hora' => $data,
         'pessoa_nome' => $pessoaNome ?: au_api_texto($dados['pessoa_nome'] ?? $dados['nome_visitante'] ?? '', 200),
     ];
+}
+function au_api_validar_visitante_contexto(mysqli $c, int $tenantId, array &$ctx) {
+    $visitanteId = (int)($ctx['visitante_id'] ?? 0);
+    if ($visitanteId <= 0) au_api_erro('Identifique o visitante antes de consultar alertas específicos.', 422, 'VISITANTE_OBRIGATORIO');
+    $stmt = au_query($c, 'SELECT id,tipo_documento,documento FROM visitantes WHERE tenant_id=? AND id=? AND ativo=1 LIMIT 1', 'ii', [$tenantId, $visitanteId]);
+    $visitante = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$visitante) au_api_erro('O visitante não pertence a este condomínio.', 422, 'VISITANTE_INVALIDO');
+    $documentoCanonico = alertas_unidade_normalizar_documento($visitante['documento'] ?? '', $visitante['tipo_documento'] ?? '');
+    $documentoRecebido = (string)($ctx['documento_normalizado'] ?? '');
+    $tipoRecebido = strtoupper(trim((string)($ctx['tipo_documento'] ?? '')));
+    $tipoCanonico = strtoupper(trim((string)($visitante['tipo_documento'] ?? '')));
+    if ($documentoCanonico === '') au_api_erro('O visitante não possui documento válido para esta consulta.', 422, 'DOCUMENTO_VISITANTE_INVALIDO');
+    if (($documentoRecebido !== '' && !hash_equals($documentoCanonico, $documentoRecebido))
+        || ($tipoRecebido !== '' && $tipoRecebido !== $tipoCanonico)) {
+        au_api_erro('O documento informado não corresponde ao visitante selecionado.', 422, 'DOCUMENTO_DIVERGENTE');
+    }
+    $ctx['documento'] = (string)$visitante['documento'];
+    $ctx['documento_normalizado'] = $documentoCanonico;
+    $ctx['tipo_documento'] = $tipoCanonico;
+}
+function au_api_contar_especificos_pendentes(mysqli $c, int $tenantId, array $ctx, string $etapa): int {
+    if ($etapa === 'VEICULO') return 0;
+    $unidade = trim((string)($ctx['unidade'] ?? ''));
+    $tipo = alertas_unidade_mapear_tipo($ctx['tipo_pessoa'] ?? '');
+    $data = au_now($ctx['data_hora'] ?? null);
+    if ($tenantId <= 0 || $unidade === '' || !$tipo || !$data) return 0;
+    $dataSql = $data->format('Y-m-d H:i:s');
+    $tiposVisitante = ['VISITANTE', 'PRESTADOR', 'ENTREGADOR_AUTORIZADO', 'FAMILIAR'];
+    $tiposAlvo = $etapa === 'DESTINO' && in_array($tipo, $tiposVisitante, true)
+        ? "'VISITANTE','DOCUMENTO','PLACA'"
+        : "'PLACA'";
+    $identificados = [];
+    if ($etapa === 'IDENTIFICACAO') {
+        foreach (alertas_unidade_avaliar($c, $tenantId, $ctx) as $alerta) {
+            $tipoAlvo = strtoupper((string)($alerta['tipo_alvo_correspondente'] ?? ''));
+            if ((string)($alerta['abrangencia'] ?? '') === 'ESPECIFICO'
+                && in_array($tipoAlvo, ['VISITANTE', 'DOCUMENTO'], true)) {
+                $id = (int)($alerta['id'] ?? 0);
+                if ($id > 0) $identificados[$id] = $id;
+            }
+        }
+    }
+    $exclusaoSql = '';
+    $types = 'issss';
+    $params = [$tenantId, $unidade, $dataSql, $dataSql, $tipo];
+    if ($identificados) {
+        $exclusaoSql = ' AND a.id NOT IN (' . implode(',', array_fill(0, count($identificados), '?')) . ')';
+        $types .= str_repeat('i', count($identificados));
+        $params = array_merge($params, array_values($identificados));
+    }
+    $stmt = au_query($c, "SELECT a.id,a.dias_semana,a.hora_inicio,a.hora_fim FROM alertas_unidade a
+        WHERE a.tenant_id=? AND a.unidade=? AND a.status='ATIVO' AND a.abrangencia='ESPECIFICO'
+          AND a.vigencia_inicio<=? AND (a.vigencia_fim IS NULL OR a.vigencia_fim>=?)
+          AND a.publico IN ('TODOS',?,'VEICULO')
+          AND EXISTS (SELECT 1 FROM alertas_unidade_alvos x WHERE x.tenant_id=a.tenant_id AND x.alerta_id=a.id AND x.tipo_alvo IN ($tiposAlvo))
+          $exclusaoSql ORDER BY a.id ASC", $types, $params);
+    $quantidade = 0;
+    foreach (au_rows($stmt) as $alerta) if (au_janela_valida($alerta, $data)) $quantidade++;
+    $stmt->close();
+    return $quantidade;
 }
 function au_api_rate_limit(mysqli $c, $tenantId, $uid, $unidade) {
     $unidade = au_api_texto($unidade, 50);
@@ -526,13 +591,55 @@ if ($acao === 'alterar_status' && $metodo === 'POST') {
 if ($acao === 'verificar' && $metodo === 'POST') {
     au_api_rbac($conexao, $tenantId, 'verificar');
     $ctx = au_api_contexto($conexao, $tenantId, $body);
+    if (($body['parcial'] ?? false) === true) {
+        $etapa = strtoupper(trim((string)($body['etapa'] ?? '')));
+        if (!in_array($etapa, ['DESTINO', 'IDENTIFICACAO', 'VEICULO'], true)) au_api_erro('Informe uma etapa parcial válida.', 422, 'ETAPA_PARCIAL_INVALIDA');
+        if ($ctx['tipo_acesso'] === 'Saída') {
+            au_api_responder(true, 'Saída não requer pré-validação de alertas.', ['parcial'=>true,'etapa'=>$etapa,'alertas'=>[],'precisa_ciencia'=>false,'bloqueado'=>false,'pode_override'=>false,'alertas_especificos_pendentes'=>0]);
+        }
+        au_api_rate_limit($conexao, $tenantId, $uid, $ctx['unidade']);
+        if ($ctx['tipo_acesso'] !== 'Saída' && ((int)$ctx['morador_id'] <= 0 || trim((string)$ctx['unidade']) === '')) {
+            au_api_erro('Selecione a unidade e o morador de destino antes da pré-validação.', 422, 'DESTINO_INCOMPLETO');
+        }
+        if ($ctx['tipo_acesso'] !== 'Saída' && $etapa !== 'DESTINO'
+            && in_array((string)$ctx['tipo_pessoa'], ['VISITANTE', 'PRESTADOR', 'ENTREGADOR_AUTORIZADO', 'FAMILIAR'], true)) {
+            au_api_validar_visitante_contexto($conexao, (int)$tenantId, $ctx);
+        }
+        if ($ctx['tipo_acesso'] !== 'Saída' && $etapa === 'VEICULO'
+            && in_array((string)$ctx['tipo_pessoa'], ['VISITANTE', 'PRESTADOR', 'ENTREGADOR_AUTORIZADO', 'FAMILIAR'], true)
+            && (int)($ctx['visitante_id'] ?? 0) <= 0) {
+            au_api_erro('Identifique o visitante antes da verificação final do veículo.', 422, 'VISITANTE_OBRIGATORIO');
+        }
+        if ($etapa === 'VEICULO' && strtoupper(trim((string)($body['modo_registro'] ?? 'VEICULO'))) !== 'PEDESTRE' && trim((string)$ctx['placa']) === '') {
+            au_api_erro('Informe a placa ou selecione o modo Pedestre antes da verificação final.', 422, 'PLACA_OBRIGATORIA');
+        }
+        $alertas = $ctx['tipo_acesso'] === 'Saída' ? [] : alertas_unidade_avaliar($conexao, $tenantId, $ctx);
+        if ($etapa === 'DESTINO') {
+            $alertas = array_values(array_filter($alertas, static function ($alerta) {
+                return (string)($alerta['abrangencia'] ?? '') === 'TODOS_DO_TIPO';
+            }));
+        }
+        $precisaCiencia = false; $bloqueado = false; $saida = [];
+        foreach ($alertas as $alerta) {
+            if ($alerta['acao'] !== 'APENAS_AVISAR') $precisaCiencia = true;
+            if ($alerta['acao'] === 'BLOQUEAR') $bloqueado = true;
+            $saida[] = ['id'=>(int)$alerta['id'],'titulo'=>$alerta['titulo'],'mensagem'=>$alerta['mensagem'],'nivel'=>$alerta['nivel'],'acao'=>$alerta['acao'],'unidade'=>$alerta['unidade'],'abrangencia'=>$alerta['abrangencia'],'publico'=>$alerta['publico'],'tipo_alvo_correspondente'=>$alerta['tipo_alvo_correspondente'] ?? null,'instrucao_operador'=>$alerta['instrucao_operador'],'telefone_contato'=>$alerta['telefone_contato'],'divergencia_unidade'=>!empty($alerta['divergencia_unidade'])];
+        }
+        $podeOverride = alertas_unidade_usuario_pode_override($conexao, $uid, (int)$tenantId);
+        $especificosPendentes = $ctx['tipo_acesso'] === 'Saída' ? 0 : au_api_contar_especificos_pendentes($conexao, (int)$tenantId, $ctx, $etapa);
+        au_api_responder(true, $alertas ? 'Pré-validação parcial concluída.' : 'Pré-validação parcial concluída sem alertas identificados nesta etapa.', [
+            'parcial'=>true,'etapa'=>$etapa,'alertas'=>$saida,'precisa_ciencia'=>$precisaCiencia,
+            'bloqueado'=>$bloqueado && !$podeOverride,'pode_override'=>$podeOverride,
+            'alertas_especificos_pendentes'=>$especificosPendentes,
+        ]);
+    }
     au_api_rate_limit($conexao, $tenantId, $uid, $ctx['unidade']);
     $alertas = alertas_unidade_avaliar($conexao, $tenantId, $ctx);
     $precisaCiencia = false; $bloqueado = false;
     foreach ($alertas as $alerta) { if ($alerta['acao'] !== 'APENAS_AVISAR') $precisaCiencia = true; if ($alerta['acao'] === 'BLOQUEAR') $bloqueado = true; }
     $podeOverride = alertas_unidade_usuario_pode_override($conexao, $uid, (int)$tenantId);
     $saida = [];
-    foreach ($alertas as $alerta) $saida[] = ['id'=>(int)$alerta['id'],'titulo'=>$alerta['titulo'],'mensagem'=>$alerta['mensagem'],'nivel'=>$alerta['nivel'],'acao'=>$alerta['acao'],'unidade'=>$alerta['unidade'],'instrucao_operador'=>$alerta['instrucao_operador'],'telefone_contato'=>$alerta['telefone_contato'],'divergencia_unidade'=>!empty($alerta['divergencia_unidade'])];
+    foreach ($alertas as $alerta) $saida[] = ['id'=>(int)$alerta['id'],'titulo'=>$alerta['titulo'],'mensagem'=>$alerta['mensagem'],'nivel'=>$alerta['nivel'],'acao'=>$alerta['acao'],'unidade'=>$alerta['unidade'],'abrangencia'=>$alerta['abrangencia'],'publico'=>$alerta['publico'],'tipo_alvo_correspondente'=>$alerta['tipo_alvo_correspondente'] ?? null,'instrucao_operador'=>$alerta['instrucao_operador'],'telefone_contato'=>$alerta['telefone_contato'],'divergencia_unidade'=>!empty($alerta['divergencia_unidade'])];
     au_api_responder(true, $alertas ? 'Alertas aplicáveis encontrados.' : 'Nenhum alerta aplicável encontrado.', ['alertas'=>$saida,'precisa_ciencia'=>$precisaCiencia,'bloqueado'=>$bloqueado && !$podeOverride,'pode_override'=>$podeOverride]);
 }
 
