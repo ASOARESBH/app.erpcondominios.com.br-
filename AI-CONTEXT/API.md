@@ -213,6 +213,10 @@ Corpo de criar/editar: `anfitriao_tipo` (MORADOR|DEPENDENTE), `dependente_id`, `
 
 O painel (`api/api_convidados.php`) passou a aceitar `GET listar&origem=MORADOR|EMAIL|WHATSAPP|PRESENCIAL|ADMINISTRATIVO|PORTAL_MORADOR|APP_MORADOR` e devolve `resumo.pre_cadastros_morador`. O painel continua sem poder criar com origem de morador (400). Ambos usam `api/helpers/convidados_core_helper.php`.
 
+**Busca de documento e cadastro em Visitantes (2026-11-04):**
+- `GET buscar_documento&tipo_documento=CPF|RG&documento=` → `{encontrado:true, visitante_id, nome, tipo_documento, documento_mascarado}` para visitante ativo da unidade; senão `{encontrado:false, cadastrar_visitante:true, mensagem}` (não revela cadastro de outra unidade). 400 `CPF_INVALIDO` / `CPF_DE_MORADOR`.
+- `POST criar` sem `visitante_id`: documento de visitante da unidade → vincula; documento inexistente no condomínio e `cadastrar_visitante` ≠ false → após salvar o convite, insere em `visitantes` (tenant, morador_id, cadastrado_por_tipo/morador_id/nome, observação de origem; colunas opcionais detectadas) e vincula; documento de outra unidade → não duplica nem vincula. Retorno `dados.visitante`.
+
 ## 19. Banco de Horas (RH)
 
 `api/api_rh_banco_horas.php` exige sessão e tenant resolvido por `exigirTenantId()`. `GET ?acao=saldo|extrato&colaborador_id=N` valida o colaborador em `rh_colaboradores` no mesmo tenant e filtra cada leitura por `(tenant_id, colaborador_id)`; colaborador de outro tenant retorna 404. `POST ?acao=registrar` aceita somente `abatimento`/`pagamento`, minutos inteiros positivos, data válida, descrição e `idempotency_key` opcional. Tenant e autoria são derivados da sessão.

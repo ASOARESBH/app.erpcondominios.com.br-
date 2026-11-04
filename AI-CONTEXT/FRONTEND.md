@@ -60,6 +60,7 @@ export function destroy() {
 ## 8. Convidados (Portal do Morador e painel)
 - Portal: aba `convidados` em `frontend/portal_morador.html` (botão em `#mainNav`, item `#mmi-convidados`, `ABAS_INFO`, loader `convidadosInicializar`). Painel `#panel-convidados` com formulário (visitante da unidade opcional, máscara/validação de CPF, prévia da validade), lista Ativos/Histórico com paginação "Carregar mais", modais `#modalConvidadoCancelar` e `#modalConvidadoDetalhe`. Estado em `ConvidadosPortal`; CSS com prefixo `.conv-`.
 - Painel: `frontend/js/pages/registro-convidados.js` — `ORIGENS_MORADOR`, `originCell()` (selo "Pré-cadastro"), `setOriginLocked()` (origem travada ao editar pré-cadastro), filtro `#filtroConvidadosOrigem` em `frontend/pages/registro.html`.
+- Busca de documento (2026-11-04) — Portal: `#convDocFeedback` (`.conv-doc-feedback found|notfound|error|loading`), `convidadosDocumentoAlterado()`, `convidadosBuscarDocumento()`, `ConvidadosPortal.docVisitanteId`. Painel: `openGuestModal()`, `showFeedback()` roteado para `[data-modal-feedback]` do modal aberto, `setDocumentFeedback()`, `scheduleAutoDocumentSearch()`.
 
 ## 9. RH — Banco de Horas
 

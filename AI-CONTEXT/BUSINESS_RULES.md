@@ -93,6 +93,8 @@ Em acesso de Dependente, a API confirma em qualquer movimento que o dependente p
 - O morador vê todos os convites em que é anfitrião (inclusive os criados pela portaria), mas só edita os que ele próprio cadastrou; pode cancelar qualquer convite PREVISTO dele (motivo obrigatório). A portaria pode editar pré-cadastros, sem alterar a origem.
 - Antes de cadastrar, o morador é avisado se houver alerta ativo da própria unidade que afete a entrada (ex.: "não receber visitas"); a portaria continua seguindo o alerta na chegada.
 - Limite de 100 pré-cadastros PREVISTO por morador.
+- No Portal/App, ao digitar o documento do convidado o sistema busca em Visitantes da unidade; sem cadastro, o convidado é cadastrado automaticamente em Visitantes da unidade ao salvar o convite. Anexos exigidos pela política de visitantes continuam sendo concluídos na chegada (Registro Manual).
+- No painel, "visitante não encontrado" e demais avisos aparecem dentro do modal do convite; o convite é salvo com o nome digitado e o cadastro completo de visitante segue na chegada.
 
 ## 12. Alertas da Unidade
 

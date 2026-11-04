@@ -592,6 +592,8 @@
 .page-registro .guest-document-feedback { margin-top: 6px; border-radius: 7px; padding: 7px 9px; color: #475569; font-size: 11px; line-height: 1.4; }
 .page-registro .guest-document-feedback.found { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
 .page-registro .guest-document-feedback.pending { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }
+.page-registro .guest-document-feedback.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.page-registro .guest-modal-body > .guest-feedback { margin-bottom: 14px; }
 .page-registro .btn-danger-modern { border: 0; border-radius: 8px; padding: 10px 15px; background: #dc2626; color: #fff; cursor: pointer; font: inherit; font-weight: 700; }
 .page-registro .btn-danger-modern:hover { background: #b91c1c; }
 .page-registro .btn-danger-modern:disabled { opacity: .55; cursor: not-allowed; }

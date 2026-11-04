@@ -254,9 +254,21 @@ async function requestJson(url, options = {}) {
     return data;
 }
 
+/**
+ * Exibe a mensagem no lugar em que o usuário está olhando: se houver um modal de
+ * convidados aberto, dentro dele ([data-modal-feedback]); senão, no topo da aba.
+ * Antes, mensagens disparadas com o modal aberto (CPF inválido, visitante não
+ * encontrado, erro ao salvar) apareciam na página atrás do modal.
+ */
+function openGuestModal() {
+    return [...(state.root?.querySelectorAll('.guest-modal') || [])].find(modal => !modal.hidden) || null;
+}
+
 function showFeedback(type, message) {
-    const box = byId('convidadosFeedback');
+    const modal = openGuestModal();
+    const box = (modal && modal.querySelector('[data-modal-feedback]')) || byId('convidadosFeedback');
     if (!box) return;
+    if (message && modal) box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     box.className = `guest-feedback ${type || 'info'}`;
     box.textContent = message || '';
     box.hidden = !message;
@@ -688,6 +700,14 @@ function normalizeDocument(value) {
     return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+function setDocumentFeedback(kind, html) {
+    const feedback = byId('convidadoDocumentoFeedback');
+    if (!feedback) return;
+    feedback.className = `guest-document-feedback ${kind || ''}`.trim();
+    feedback.innerHTML = html || '';
+    feedback.hidden = !html;
+}
+
 function resetDocumentState() {
     state.documentSearchToken += 1;
     const name = byId('convidadoNome');
@@ -698,6 +718,20 @@ function resetDocumentState() {
     if (feedback) { feedback.textContent = ''; feedback.hidden = true; feedback.className = 'guest-document-feedback'; }
 }
 
+/** Ao completar os 11 dígitos do CPF, busca o visitante sozinho (sem precisar clicar em Buscar). */
+function scheduleAutoDocumentSearch() {
+    if (state.autoSearchTimer) clearTimeout(state.autoSearchTimer);
+    state.autoSearchTimer = null;
+    if ((byId('convidadoTipoDocumento')?.value || 'CPF') !== 'CPF') return;
+    const digits = String(byId('convidadoDocumento')?.value || '').replace(/\D/g, '');
+    if (digits.length !== 11) return;
+    if (!cpfValid(digits)) {
+        setDocumentFeedback('error', '<i class="fas fa-exclamation-circle"></i> CPF inválido. Confira os dígitos informados.');
+        return;
+    }
+    state.autoSearchTimer = window.setTimeout(() => { state.autoSearchTimer = null; void searchVisitor(); }, 300);
+}
+
 async function searchVisitor() {
     const root = state.root;
     const input = byId('convidadoDocumento');
@@ -705,12 +739,12 @@ async function searchVisitor() {
     const type = byId('convidadoTipoDocumento')?.value || 'CPF';
     const documentValue = input?.value.trim() || '';
     if (!documentValue) {
-        showFeedback('warning', 'Informe o número do documento para buscar.');
+        setDocumentFeedback('error', '<i class="fas fa-exclamation-circle"></i> Informe o número do documento para buscar.');
         input?.focus();
         return;
     }
     if (type === 'CPF' && !cpfValid(documentValue)) {
-        showFeedback('error', 'CPF inválido. Confira os dígitos informados.');
+        setDocumentFeedback('error', '<i class="fas fa-exclamation-circle"></i> CPF inválido. Confira os dígitos informados.');
         input?.focus();
         return;
     }
@@ -742,16 +776,16 @@ async function searchVisitor() {
             if (visitorId) visitorId.value = '';
             if (feedback) {
                 feedback.className = 'guest-document-feedback pending';
-                feedback.innerHTML = '<i class="fas fa-info-circle"></i> Visitante ainda não cadastrado — o cadastro completo (com anexo, se exigido) será feito na chegada.';
+                feedback.innerHTML = '<i class="fas fa-user-plus"></i> <strong>Visitante não cadastrado.</strong> Informe o nome completo para salvar o convite; o cadastro de visitante (com anexo, se exigido) é concluído na chegada, no Registro Manual.';
                 feedback.hidden = false;
             }
-            showFeedback('warning', 'Visitante não encontrado. Informe o nome manualmente.');
+            if (name) name.placeholder = 'Digite o nome completo do convidado';
             name?.focus();
         }
     } catch (error) {
         if (!isCurrent()) return;
         console.error('[RegistroConvidados] Falha ao buscar visitante:', error);
-        showFeedback('error', error?.message || 'Não foi possível buscar o visitante.');
+        setDocumentFeedback('error', `<i class="fas fa-exclamation-circle"></i> ${esc(error?.message || 'Não foi possível buscar o visitante.')}`);
     } finally {
         if (isCurrent() && button?.isConnected) { button.disabled = false; button.innerHTML = '<i class="fas fa-search"></i> Buscar'; }
     }
@@ -824,7 +858,11 @@ function resetForm() {
     resetDocumentState();
     updateHostTypeUI();
     renewIdempotencyKey();
-    showFeedback('', '');
+    state.root?.querySelectorAll('[data-modal-feedback]').forEach(box => { box.textContent = ''; box.hidden = true; });
+    const pageBox = byId('convidadosFeedback');
+    if (pageBox) { pageBox.textContent = ''; pageBox.hidden = true; }
+    const name = byId('convidadoNome');
+    if (name) name.placeholder = 'Busque o documento primeiro';
 }
 
 async function openNewGuest() {
@@ -896,6 +934,7 @@ async function openEditGuest(id) {
 function openModal(id) {
     const modal = byId(id);
     if (!modal) return;
+    modal.querySelectorAll('[data-modal-feedback]').forEach(box => { box.textContent = ''; box.hidden = true; });
     modal.classList.add('show');
     modal.hidden = false;
     const focusable = modal.querySelector('input, select, textarea, button');
@@ -931,6 +970,12 @@ async function submitGuest(event) {
         return;
     }
     const payload = collectFormPayload();
+    if (!payload.visitante_id && !payload.nome) {
+        // O campo nome fica somente leitura até a busca e não participa da validação nativa.
+        setDocumentFeedback('error', '<i class="fas fa-search"></i> Busque o documento do convidado e, se ele não estiver cadastrado, informe o nome completo.');
+        byId('convidadoDocumento')?.focus();
+        return;
+    }
     const today = todaySaoPaulo();
     if (payload.data_prevista_chegada < today && !state.editingId) {
         showFeedback('error', 'A data prevista de chegada não pode ser anterior a hoje.');
@@ -1155,7 +1200,7 @@ function setupEvents() {
     listen(byId('convidadoUnidade'), 'change', event => { void loadMoradores(event.target.value); });
     listen(byId('convidadoMorador'), 'change', event => { void loadDependentes(event.target.value); });
     listen(byId('convidadoTipoDocumento'), 'change', () => { setFormValue('convidadoDocumento', ''); resetDocumentState(); renewIdempotencyKey(); });
-    listen(byId('convidadoDocumento'), 'input', () => { maskDocumentInput(); resetDocumentState(); renewIdempotencyKey(); });
+    listen(byId('convidadoDocumento'), 'input', () => { maskDocumentInput(); resetDocumentState(); renewIdempotencyKey(); scheduleAutoDocumentSearch(); });
     listen(byId('convidadoDocumento'), 'keydown', event => { if (event.key === 'Enter') { event.preventDefault(); void searchVisitor(); } });
     listen(byId('formConvidado'), 'input', renewIdempotencyKey);
     listen(byId('formConvidado'), 'change', renewIdempotencyKey);
@@ -1198,6 +1243,8 @@ export function init() {
 
 export function destroy() {
     if (state.listTimer) clearTimeout(state.listTimer);
+    if (state.autoSearchTimer) clearTimeout(state.autoSearchTimer);
+    state.autoSearchTimer = null;
     if (state.urlUpdateTimer) clearTimeout(state.urlUpdateTimer);
     if (state.listController) state.listController.abort();
     state.cascadeToken += 1;

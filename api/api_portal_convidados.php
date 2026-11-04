@@ -14,9 +14,13 @@
  *
  * GET  ?acao=opcoes                         → dados do formulário (dependentes, tipos, visitantes da unidade)
  * GET  ?acao=listar&filtro=ativos|historico|todos&pagina=&limite=
+ * GET  ?acao=buscar_documento&tipo_documento=CPF|RG&documento=
+ *                                         → visitante da unidade (preenche o nome) ou "não cadastrado"
  * GET  ?acao=obter&id=
  * POST ?acao=verificar_alertas              → alertas da própria unidade que afetam o convite
- * POST ?acao=criar                          → pré-cadastro (aceita X-Idempotency-Key ou idempotency_key)
+ * POST ?acao=criar                          → pré-cadastro (aceita X-Idempotency-Key ou idempotency_key);
+ *                                              se o convidado não for visitante cadastrado, ele é cadastrado
+ *                                              em Visitantes da unidade (autoria do morador) e vinculado ao convite
  * POST|PUT ?acao=editar                     → somente PREVISTO e cadastrado pelo próprio morador
  * POST ?acao=cancelar  {id, motivo}         → somente PREVISTO do próprio morador
  *
@@ -197,6 +201,126 @@ function portal_convidados_publico(array $linha, array $auth, $documentoCompleto
         $saida['documento'] = (string)($linha['documento'] ?? '');
     }
     return $saida;
+}
+
+/**
+ * Localiza visitante ativo do condomínio pelo documento normalizado.
+ * Retorna ['visitante' => linha|null, 'na_unidade' => bool].
+ * O nome só é exposto ao morador quando o visitante pertence à unidade dele.
+ */
+function portal_convidados_localizar_visitante(mysqli $conexao, array $auth, $tipoDocumento, $documentoNormalizado) {
+    $stmt = convidados_executar(
+        $conexao,
+        "SELECT v.id, v.nome_completo, v.tipo_documento, v.documento FROM visitantes v
+         WHERE v.tenant_id = ? AND v.ativo = 1 AND UPPER(v.tipo_documento) = ?
+           AND REPLACE(REPLACE(REPLACE(REPLACE(UPPER(v.documento), '.', ''), '-', ''), '/', ''), ' ', '') = ?
+         ORDER BY v.id ASC",
+        'iss',
+        [$auth['tenant_id'], $tipoDocumento, $documentoNormalizado]
+    );
+    $linhas = convidados_todas_linhas($stmt);
+    $stmt->close();
+    foreach ($linhas as $linha) {
+        if (portal_convidados_visitante_da_unidade($conexao, $auth, (int)$linha['id'])) {
+            return ['visitante' => $linha, 'na_unidade' => true];
+        }
+    }
+    return ['visitante' => $linhas ? $linhas[0] : null, 'na_unidade' => false];
+}
+
+function portal_convidados_documento_informado() {
+    $tipo = strtoupper(trim((string)($_GET['tipo_documento'] ?? '')));
+    $documento = trim((string)($_GET['documento'] ?? ''));
+    if (!in_array($tipo, ['CPF', 'RG'], true) || $documento === '') convidados_erro('Informe o tipo e o número do documento.');
+    if (strlen($documento) > 20) convidados_erro('O documento informado é inválido.');
+    if ($tipo === 'CPF' && !cpf_valido($documento)) convidados_erro('CPF inválido. Confira os dígitos informados.', 400, 'CPF_INVALIDO');
+    $normalizado = convidados_normalizar_documento($tipo, $documento);
+    if ($normalizado === '') convidados_erro('O documento informado é inválido.');
+    return [$tipo, $normalizado];
+}
+
+/** Busca do documento digitado no formulário do Portal/App. */
+function portal_convidados_buscar_documento(mysqli $conexao, array $auth) {
+    list($tipo, $normalizado) = portal_convidados_documento_informado();
+    if ($tipo === 'CPF') {
+        $stmtMorador = convidados_executar(
+            $conexao,
+            "SELECT id FROM moradores WHERE tenant_id = ? AND ativo = 1 AND REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ? LIMIT 1",
+            'is',
+            [$auth['tenant_id'], $normalizado]
+        );
+        $ehMorador = convidados_linha($stmtMorador) !== null;
+        $stmtMorador->close();
+        if ($ehMorador) convidados_erro('Este CPF pertence a um morador do condomínio e não pode ser convidado.', 400, 'CPF_DE_MORADOR');
+    }
+    $achado = portal_convidados_localizar_visitante($conexao, $auth, $tipo, $normalizado);
+    if ($achado['visitante'] && $achado['na_unidade']) {
+        convidados_responder(true, 'Visitante encontrado.', [
+            'encontrado' => true,
+            'visitante_id' => (int)$achado['visitante']['id'],
+            'nome' => (string)$achado['visitante']['nome_completo'],
+            'tipo_documento' => $tipo,
+            'documento_mascarado' => convidados_mascarar_documento($tipo, $normalizado),
+        ]);
+    }
+    // Não encontrado na unidade: não revela se o documento existe em outra unidade.
+    convidados_responder(true, 'Visitante não cadastrado.', [
+        'encontrado' => false,
+        'cadastrar_visitante' => true,
+        'mensagem' => 'Visitante não cadastrado. Informe o nome completo: ao salvar, ele será cadastrado em Visitantes da sua unidade.',
+    ]);
+}
+
+/**
+ * Após salvar o convite sem visitante vinculado: cadastra o convidado em Visitantes
+ * (autoria do morador, mesmas regras de api_portal_morador.php?action=visitantes) e vincula.
+ * Se o documento já existe no condomínio fora da unidade, não duplica nem vincula
+ * (a portaria localiza o cadastro pelo documento na chegada).
+ * Retorna 'CADASTRADO' | 'EXISTENTE_PORTARIA' | 'FALHOU'.
+ */
+function portal_convidados_cadastrar_visitante(mysqli $conexao, array $auth, $convidadoId, array $entrada) {
+    try {
+        $achado = portal_convidados_localizar_visitante($conexao, $auth, $entrada['tipo_documento'], $entrada['documento_normalizado']);
+        if ($achado['visitante']) {
+            if ($achado['na_unidade']) {
+                convidados_executar($conexao, 'UPDATE convidados SET visitante_id = ? WHERE tenant_id = ? AND id = ? AND visitante_id IS NULL', 'iii',
+                    [(int)$achado['visitante']['id'], $auth['tenant_id'], (int)$convidadoId])->close();
+                return 'VINCULADO';
+            }
+            return 'EXISTENTE_PORTARIA';
+        }
+        $documento = $entrada['tipo_documento'] === 'CPF' && function_exists('cpf_formatar')
+            ? cpf_formatar($entrada['documento_normalizado'])
+            : $entrada['documento'];
+        $colunas = ['tenant_id', 'nome_completo', 'documento', 'tipo_documento'];
+        $tipos = 'isss';
+        $valores = [$auth['tenant_id'], $entrada['nome'], $documento, $entrada['tipo_documento']];
+        $opcionais = [
+            'morador_id' => ['i', $auth['morador_id']],
+            'cadastrado_por_tipo' => ['s', 'MORADOR'],
+            'cadastrado_por_morador_id' => ['i', $auth['morador_id']],
+            'cadastrado_por_nome' => ['s', convidados_texto($auth['nome'], 150)],
+            'observacao' => ['s', 'Cadastrado pelo pré-cadastro de convidado (' . ($entrada['origem_cadastro'] === 'APP_MORADOR' ? 'aplicativo' : 'portal') . ').'],
+        ];
+        foreach ($opcionais as $coluna => $def) {
+            if (convidados_coluna_existe($conexao, 'visitantes', $coluna)) {
+                $colunas[] = $coluna;
+                $tipos .= $def[0];
+                $valores[] = $def[1];
+            }
+        }
+        $sql = 'INSERT INTO visitantes (`' . implode('`, `', $colunas) . '`) VALUES (' . implode(', ', array_fill(0, count($colunas), '?')) . ')';
+        convidados_executar($conexao, $sql, $tipos, $valores)->close();
+        $visitanteId = (int)$conexao->insert_id;
+        convidados_executar($conexao, 'UPDATE convidados SET visitante_id = ? WHERE tenant_id = ? AND id = ? AND visitante_id IS NULL', 'iii',
+            [$visitanteId, $auth['tenant_id'], (int)$convidadoId])->close();
+        error_log('[PortalConvidados] visitante cadastrado tenant=' . $auth['tenant_id'] . ' visitante=' . $visitanteId . ' convidado=' . (int)$convidadoId . ' morador=' . $auth['morador_id']);
+        return 'CADASTRADO';
+    } catch (Throwable $erro) {
+        // O convite já foi salvo; a falha no cadastro do visitante não o desfaz (a portaria cadastra na chegada).
+        error_log('[PortalConvidados] falha ao cadastrar visitante convidado=' . (int)$convidadoId . ' classe=' . get_class($erro) . ' codigo=' . (int)$erro->getCode());
+        return 'FALHOU';
+    }
 }
 
 function portal_convidados_opcoes(mysqli $conexao, array $auth) {
@@ -406,16 +530,32 @@ function portal_convidados_criar(mysqli $conexao, array $auth, array $dados) {
         convidados_erro('Você atingiu o limite de ' . PORTAL_CONVIDADOS_LIMITE_ATIVOS . ' convidados previstos. Cancele convites que não serão usados.', 429, 'LIMITE_CONVIDADOS');
     }
     $dados = portal_convidados_payload($conexao, $auth, $dados);
+    $cadastrarVisitante = !array_key_exists('cadastrar_visitante', $dados) || !empty($dados['cadastrar_visitante']);
+    // Documento digitado de visitante já cadastrado na unidade: vincula o cadastro existente.
+    if (empty($dados['visitante_id']) && !empty($dados['documento'])) {
+        $tipoDoc = strtoupper(trim((string)($dados['tipo_documento'] ?? '')));
+        if (in_array($tipoDoc, ['CPF', 'RG'], true)) {
+            $achado = portal_convidados_localizar_visitante($conexao, $auth, $tipoDoc, convidados_normalizar_documento($tipoDoc, $dados['documento']));
+            if ($achado['visitante'] && $achado['na_unidade']) $dados['visitante_id'] = (int)$achado['visitante']['id'];
+        }
+    }
     $entrada = convidados_dados_entrada($conexao, $auth['tenant_id'], $dados, 'criar', 0, portal_convidados_opcoes_entrada($conexao, $auth, $dados));
     $resultado = convidados_persistir_novo($conexao, $auth['tenant_id'], $entrada, portal_convidados_autor($auth));
     if ($resultado['idempotente']) {
         convidados_responder(true, 'Convidado já havia sido cadastrado.', ['id' => $resultado['id'], 'idempotente' => true]);
     }
-    error_log('[PortalConvidados] criado tenant=' . $auth['tenant_id'] . ' id=' . $resultado['id'] . ' morador=' . $auth['morador_id'] . ' origem=' . $entrada['origem_cadastro']);
-    convidados_responder(true, 'Convidado cadastrado. A portaria já verá o pré-cadastro na Lista de Convidados.', [
+    $visitante = $entrada['visitante_id'] ? 'VINCULADO' : 'NAO_CADASTRADO';
+    if (!$entrada['visitante_id'] && $cadastrarVisitante) {
+        $visitante = portal_convidados_cadastrar_visitante($conexao, $auth, $resultado['id'], $entrada);
+    }
+    error_log('[PortalConvidados] criado tenant=' . $auth['tenant_id'] . ' id=' . $resultado['id'] . ' morador=' . $auth['morador_id'] . ' origem=' . $entrada['origem_cadastro'] . ' visitante=' . $visitante);
+    $mensagem = 'Convidado cadastrado. A portaria já verá o pré-cadastro na Lista de Convidados.';
+    if ($visitante === 'CADASTRADO') $mensagem = 'Convidado cadastrado e incluído em Visitantes da sua unidade. A portaria já verá o pré-cadastro.';
+    convidados_responder(true, $mensagem, [
         'id' => $resultado['id'],
         'origem_cadastro' => $entrada['origem_cadastro'],
         'validade_fim' => $entrada['validade_fim'],
+        'visitante' => $visitante,
     ], 201);
 }
 
@@ -461,6 +601,7 @@ try {
     if ($metodo === 'GET' && $acao === 'opcoes') portal_convidados_opcoes($conexao, $auth);
     if ($metodo === 'GET' && $acao === 'listar') portal_convidados_listar($conexao, $auth);
     if ($metodo === 'GET' && $acao === 'obter') portal_convidados_obter($conexao, $auth, $_GET['id'] ?? 0);
+    if ($metodo === 'GET' && $acao === 'buscar_documento') portal_convidados_buscar_documento($conexao, $auth);
     if ($metodo === 'POST' && $acao === 'verificar_alertas') portal_convidados_verificar_alertas($conexao, $auth, $dados);
     if ($metodo === 'POST' && $acao === 'criar') portal_convidados_criar($conexao, $auth, $dados);
     if (in_array($metodo, ['POST', 'PUT'], true) && $acao === 'editar') portal_convidados_editar($conexao, $auth, $dados);

@@ -342,6 +342,7 @@
                 <div class="guest-modal-header"><h2 id="convidadoModalTitle">Novo Convidado</h2><button type="button" class="guest-modal-close" data-modal-close="modalConvidado" aria-label="Fechar"><i class="fas fa-times"></i></button></div>
                 <form id="formConvidado">
                     <div class="guest-modal-body">
+                        <div id="convidadoModalFeedback" class="guest-feedback" data-modal-feedback role="alert" aria-live="polite" hidden></div>
                         <input type="hidden" id="convidadoId">
                         <input type="hidden" id="convidadoVisitanteId">
                         <input type="hidden" id="convidadoIdempotencyKey">
@@ -369,7 +370,7 @@
         <div id="modalCancelarConvidado" class="guest-modal modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="convidadoCancelTitle">
             <div class="modal-content guest-modal-content guest-modal-small">
                 <div class="guest-modal-header"><h2 id="convidadoCancelTitle">Cancelar convidado</h2><button type="button" class="guest-modal-close" data-modal-close="modalCancelarConvidado" aria-label="Fechar"><i class="fas fa-times"></i></button></div>
-                <form id="formCancelarConvidado"><div class="guest-modal-body"><input type="hidden" id="convidadoCancelId"><p>Você está cancelando <strong id="convidadoCancelNome"></strong>.</p><div class="guest-form-group"><label for="convidadoCancelMotivo">Motivo *</label><textarea id="convidadoCancelMotivo" maxlength="255" rows="4" required placeholder="Informe o motivo do cancelamento"></textarea></div></div><div class="guest-modal-footer"><button type="button" class="btn-secondary-modern" data-modal-close="modalCancelarConvidado">Voltar</button><button type="submit" id="btnConfirmarCancelamento" class="btn-danger-modern"><i class="fas fa-ban"></i> Confirmar cancelamento</button></div></form>
+                <form id="formCancelarConvidado"><div class="guest-modal-body"><div id="convidadoCancelFeedback" class="guest-feedback" data-modal-feedback role="alert" aria-live="polite" hidden></div><input type="hidden" id="convidadoCancelId"><p>Você está cancelando <strong id="convidadoCancelNome"></strong>.</p><div class="guest-form-group"><label for="convidadoCancelMotivo">Motivo *</label><textarea id="convidadoCancelMotivo" maxlength="255" rows="4" required placeholder="Informe o motivo do cancelamento"></textarea></div></div><div class="guest-modal-footer"><button type="button" class="btn-secondary-modern" data-modal-close="modalCancelarConvidado">Voltar</button><button type="submit" id="btnConfirmarCancelamento" class="btn-danger-modern"><i class="fas fa-ban"></i> Confirmar cancelamento</button></div></form>
             </div>
         </div>
 

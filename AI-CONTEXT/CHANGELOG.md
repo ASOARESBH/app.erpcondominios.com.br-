@@ -2,6 +2,18 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.23] - 2026-11-04
+### Adicionado
+- **Convidados (Portal do Morador + app): busca automática do documento em Visitantes.** Com CPF completo e válido (ou ao sair do campo, no RG) o formulário consulta `GET api/api_portal_convidados.php?acao=buscar_documento`. Visitante da unidade encontrado → nome preenchido e travado, convite vinculado ao cadastro. Não encontrado → aviso "Visitante não cadastrado"; o morador informa o nome e, ao salvar, o convidado é **cadastrado em Visitantes da unidade** (autoria `MORADOR`, CPF formatado) e vinculado ao convite. `criar` devolve `dados.visitante`: `VINCULADO` | `CADASTRADO` | `EXISTENTE_PORTARIA` | `NAO_CADASTRADO` | `FALHOU`; `cadastrar_visitante:false` desativa o cadastro.
+- App Flutter: `GuestDocumentLookup` + `GuestsRemoteDataSource.buscarDocumento()`; `GuestEntity.visitanteId`; formulário com status (encontrado/não cadastrado/CPF inválido), nome travado quando vinculado, vínculo preservado na edição.
+- Painel (Registro > Convidados): busca automática ao completar o CPF.
+### Corrigido
+- **Painel — mensagens do modal "Novo Convidado" apareciam na página atrás do modal** ("CPF inválido", "Visitante não encontrado", erros ao salvar/cancelar). `showFeedback()` passa a escrever no `[data-modal-feedback]` do modal aberto (`#convidadoModalFeedback`, `#convidadoCancelFeedback`); mensagens da busca ficam abaixo do documento (`#convidadoDocumentoFeedback`, estado `.error` novo em `assets/css/pages/registro.css`). Ao abrir um modal, o aviso dele é limpo.
+- Painel: com o Nome somente leitura (antes da busca) o envio passava pela validação nativa e só falhava no servidor; agora o modal pede a busca/nome.
+- Portal: editar convite vinculado a visitante não derruba mais o vínculo.
+### Segurança / privacidade
+- `buscar_documento` só revela nome de visitante **da unidade do morador**; documento de outra unidade responde "não cadastrado" e, ao salvar, não cria duplicado nem vincula (`EXISTENTE_PORTARIA`) — a portaria localiza pelo documento na chegada. CPF de morador ativo → 400 `CPF_DE_MORADOR`; CPF inválido → 400 `CPF_INVALIDO`. Falha ao cadastrar o visitante não desfaz o convite salvo (log `[PortalConvidados] falha ao cadastrar visitante`).
+
 ## [2.1.22] - 2026-11-04
 ### Corrigido e adicionado
 - **RH — Banco de Horas**: removido o descarte silencioso de extras acima de 120 minutos; `bh_apurar_dia()` aplica `CREDITAR_TUDO` ou separa excedente conforme a política da escala.

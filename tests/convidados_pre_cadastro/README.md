@@ -23,4 +23,4 @@ cp tests/convidados_pre_cadastro/api/config.stub.php /tmp/erp_test/api/config.ph
 mysql erptest < tests/convidados_pre_cadastro/seed.sql
 python3 tests/convidados_pre_cadastro/test_convidados.py
 ```
-Resultado em 2026-11-04: **65/65 OK**.
+Resultado em 2026-11-04: **79/79 OK**.

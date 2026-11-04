@@ -1681,6 +1681,12 @@
         .conv-intro strong { display:block; margin-bottom:.15rem; }
         .conv-intro p { font-size:.85rem; color:inherit; margin:0; }
         .conv-hidden { display:none !important; }
+        .conv-doc-feedback { display:flex; gap:.55rem; align-items:flex-start; margin:-.35rem 0 1rem; padding:.65rem .85rem; border-radius:.5rem; font-size:.86rem; line-height:1.4; border:1px solid transparent; }
+        .conv-doc-feedback i { margin-top:.15rem; flex-shrink:0; }
+        .conv-doc-feedback.found { background:var(--success-bg); color:var(--success-text); border-color:color-mix(in srgb, var(--success-text) 25%, transparent); }
+        .conv-doc-feedback.notfound { background:var(--warning-bg); color:var(--warning-text); border-color:color-mix(in srgb, var(--warning-text) 25%, transparent); }
+        .conv-doc-feedback.error { background:var(--danger-bg); color:var(--danger-text); border-color:color-mix(in srgb, var(--danger-text) 25%, transparent); }
+        .conv-doc-feedback.loading { background:var(--bg-subtle); color:var(--text-secondary); border-color:var(--border); }
         .conv-validade { margin:-.25rem 0 1rem; padding:.6rem .85rem; border-radius:.5rem; background:var(--bg-subtle); border:1px dashed var(--border); font-size:.86rem; color:var(--text-secondary); }
         .conv-validade strong { color:var(--text-primary); }
         .conv-editando { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:1rem; padding:.6rem .85rem; border-radius:.5rem; background:var(--warning-bg); color:var(--warning-text); font-size:.86rem; }
@@ -2308,20 +2314,21 @@
                 <div class="form-grid" id="convDadosPessoa">
                     <div class="form-group">
                         <label for="convTipoDocumento">Documento *</label>
-                        <select id="convTipoDocumento" onchange="convidadosAplicarMascaraDocumento()">
+                        <select id="convTipoDocumento" onchange="convidadosTrocarTipoDocumento()">
                             <option value="CPF">CPF</option>
                             <option value="RG">RG</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="convDocumento">Número do documento *</label>
-                        <input type="text" id="convDocumento" maxlength="20" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" oninput="convidadosAplicarMascaraDocumento()">
+                        <input type="text" id="convDocumento" maxlength="20" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" oninput="convidadosDocumentoAlterado()" onchange="convidadosBuscarDocumento(false)" aria-describedby="convDocFeedback">
                     </div>
                     <div class="form-group">
                         <label for="convNome">Nome completo *</label>
-                        <input type="text" id="convNome" maxlength="200" autocomplete="off" placeholder="Nome do convidado">
+                        <input type="text" id="convNome" maxlength="200" autocomplete="off" placeholder="Digite o documento primeiro">
                     </div>
                 </div>
+                <div id="convDocFeedback" class="conv-doc-feedback conv-hidden" role="status" aria-live="polite"></div>
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="convData">Data prevista de chegada *</label>
@@ -6661,7 +6668,12 @@ const ConvidadosPortal = {
     salvando: false,
     cancelarId: null,
     chaveIdempotencia: null,
-    eventosPreparados: false
+    eventosPreparados: false,
+    // Resultado da busca do documento digitado: visitante da unidade encontrado (id) ou não.
+    docVisitanteId: null,
+    docBuscaToken: 0,
+    docBuscaTimer: null,
+    docUltimaBusca: ''
 };
 
 const CONV_TIPO_LABELS = { VISITANTE: 'Visitante', PRESTADOR: 'Prestador', ENTREGADOR_AUTORIZADO: 'Entregador autorizado', FAMILIAR: 'Familiar' };
@@ -6781,6 +6793,7 @@ function convidadosAtualizarAnfitriao() {
 function convidadosAtualizarVisitante() {
     const usandoCadastro = document.getElementById('convVisitante').value !== '';
     document.getElementById('convDadosPessoa').classList.toggle('conv-hidden', usandoCadastro);
+    if (usandoCadastro) convidadosDocFeedback('', '');
 }
 
 function convidadosAplicarMascaraDocumento() {
@@ -6795,6 +6808,86 @@ function convidadosAplicarMascaraDocumento() {
         campo.setAttribute('inputmode', 'text');
         campo.placeholder = 'Número do RG';
         campo.value = campo.value.toUpperCase().replace(/[^0-9A-Z.\-\/ ]/g, '').slice(0, 20);
+    }
+}
+
+function convidadosDocFeedback(tipo, html) {
+    const el = document.getElementById('convDocFeedback');
+    if (!el) return;
+    el.className = 'conv-doc-feedback' + (html ? ' ' + tipo : ' conv-hidden');
+    el.innerHTML = html || '';
+}
+
+/** Volta o estado "documento ainda não buscado" (nome liberado, sem visitante vinculado). */
+function convidadosResetarBuscaDocumento() {
+    ConvidadosPortal.docBuscaToken += 1;
+    ConvidadosPortal.docVisitanteId = null;
+    ConvidadosPortal.docUltimaBusca = '';
+    if (ConvidadosPortal.docBuscaTimer) { clearTimeout(ConvidadosPortal.docBuscaTimer); ConvidadosPortal.docBuscaTimer = null; }
+    const nome = document.getElementById('convNome');
+    if (nome && nome.readOnly) { nome.readOnly = false; nome.value = ''; }
+    if (nome) nome.placeholder = 'Digite o documento primeiro';
+    convidadosDocFeedback('', '');
+}
+
+function convidadosTrocarTipoDocumento() {
+    document.getElementById('convDocumento').value = '';
+    convidadosResetarBuscaDocumento();
+    convidadosAplicarMascaraDocumento();
+}
+
+/** Ao digitar: aplica a máscara e, com o CPF completo, busca automaticamente em Visitantes. */
+function convidadosDocumentoAlterado() {
+    convidadosAplicarMascaraDocumento();
+    convidadosResetarBuscaDocumento();
+    const tipo = document.getElementById('convTipoDocumento').value;
+    const valor = document.getElementById('convDocumento').value;
+    if (tipo !== 'CPF') return; // RG: busca ao sair do campo (onchange)
+    const digitos = valor.replace(/\D/g, '');
+    if (digitos.length !== 11) return;
+    if (!convidadosCpfValido(digitos)) {
+        convidadosDocFeedback('error', '<i class="fas fa-exclamation-circle" aria-hidden="true"></i><span>CPF inválido. Confira os números digitados.</span>');
+        return;
+    }
+    ConvidadosPortal.docBuscaTimer = setTimeout(() => { ConvidadosPortal.docBuscaTimer = null; convidadosBuscarDocumento(true); }, 300);
+}
+
+async function convidadosBuscarDocumento(automatica) {
+    const tipo = document.getElementById('convTipoDocumento').value;
+    const documento = document.getElementById('convDocumento').value.trim();
+    const chave = tipo + ':' + documento.toUpperCase().replace(/[^0-9A-Z]/g, '');
+    if (!documento || chave === ConvidadosPortal.docUltimaBusca) return;
+    if (tipo === 'CPF' && !convidadosCpfValido(documento)) {
+        if (!automatica && documento.replace(/\D/g, '').length === 11) {
+            convidadosDocFeedback('error', '<i class="fas fa-exclamation-circle" aria-hidden="true"></i><span>CPF inválido. Confira os números digitados.</span>');
+        }
+        return;
+    }
+    if (tipo === 'RG' && documento.replace(/[^0-9A-Za-z]/g, '').length < 5) return;
+    ConvidadosPortal.docUltimaBusca = chave;
+    const token = ++ConvidadosPortal.docBuscaToken;
+    convidadosDocFeedback('loading', '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span>Buscando em Visitantes...</span>');
+    try {
+        const resposta = await convidadosApi('buscar_documento', {}, { tipo_documento: tipo, documento });
+        if (token !== ConvidadosPortal.docBuscaToken) return;
+        const d = resposta.dados || {};
+        const nome = document.getElementById('convNome');
+        if (d.encontrado) {
+            ConvidadosPortal.docVisitanteId = d.visitante_id;
+            nome.value = d.nome || '';
+            nome.readOnly = true;
+            convidadosDocFeedback('found', `<i class="fas fa-check-circle" aria-hidden="true"></i><span>Visitante já cadastrado: <strong>${escHtml(d.nome || '')}</strong>. O convite será vinculado a este cadastro.</span>`);
+        } else {
+            ConvidadosPortal.docVisitanteId = null;
+            nome.readOnly = false;
+            nome.placeholder = 'Digite o nome completo do convidado';
+            convidadosDocFeedback('notfound', `<i class="fas fa-user-plus" aria-hidden="true"></i><span><strong>Visitante não cadastrado.</strong> ${escHtml(String(d.mensagem || '').replace(/^Visitante não cadastrado\.\s*/, '') || 'Informe o nome completo: ao salvar, ele será cadastrado em Visitantes da sua unidade.')}</span>`);
+            nome.focus();
+        }
+    } catch (erro) {
+        if (token !== ConvidadosPortal.docBuscaToken) return;
+        ConvidadosPortal.docUltimaBusca = '';
+        convidadosDocFeedback('error', `<i class="fas fa-exclamation-circle" aria-hidden="true"></i><span>${escHtml(erro.message)}</span>`);
     }
 }
 
@@ -6840,6 +6933,8 @@ function convidadosMontarPayload() {
     };
     if (visitanteId) {
         payload.visitante_id = parseInt(visitanteId, 10);
+    } else if (ConvidadosPortal.docVisitanteId) {
+        payload.visitante_id = ConvidadosPortal.docVisitanteId;
     } else {
         payload.tipo_documento = document.getElementById('convTipoDocumento').value;
         payload.documento = document.getElementById('convDocumento').value.trim();
@@ -6922,6 +7017,7 @@ function convidadosLimparFormulario() {
     document.querySelector('#btnSalvarConvidado span').textContent = 'Cadastrar convidado';
     document.getElementById('convVisitante').disabled = false;
     ConvidadosPortal.chaveIdempotencia = null;
+    convidadosResetarBuscaDocumento();
     convidadosFeedback('');
     convidadosAtualizarAnfitriao();
     convidadosAtualizarVisitante();
@@ -7030,6 +7126,13 @@ async function convidadosEditar(id) {
         document.getElementById('convDocumento').value = c.documento || '';
         convidadosAplicarMascaraDocumento();
         document.getElementById('convNome').value = c.nome;
+        if (c.visitante_id) {
+            // Preserva o vínculo com o cadastro de visitante; alterar o documento refaz a busca.
+            ConvidadosPortal.docVisitanteId = c.visitante_id;
+            ConvidadosPortal.docUltimaBusca = c.tipo_documento + ':' + String(c.documento || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+            document.getElementById('convNome').readOnly = true;
+            convidadosDocFeedback('found', `<i class="fas fa-check-circle" aria-hidden="true"></i><span>Vinculado ao cadastro de visitante <strong>${escHtml(c.nome)}</strong>.</span>`);
+        }
         document.getElementById('convTipo').value = c.tipo_convidado;
         document.getElementById('convData').value = c.data_prevista_chegada;
         document.getElementById('convDias').value = c.dias_permanencia;
