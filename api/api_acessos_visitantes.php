@@ -214,20 +214,22 @@ if ($metodo === 'POST') {
         retornar_json(false, "Todos os campos são obrigatórios");
     }
     
-    $vinculos_visitante = [];
-    $params_visitante = [$tenant_id, $visitante_id];
-    $tipos_visitante = 'ii';
     if ($portal_morador_id) {
-        if (av_coluna_existe($conexao, 'visitantes', 'morador_id')) { $vinculos_visitante[] = 'morador_id=?'; $params_visitante[] = $portal_morador_id; $tipos_visitante .= 'i'; }
-        if (av_coluna_existe($conexao, 'visitantes', 'cadastrado_por_morador_id')) { $vinculos_visitante[] = 'cadastrado_por_morador_id=?'; $params_visitante[] = $portal_morador_id; $tipos_visitante .= 'i'; }
-        if (!$vinculos_visitante) retornar_json(false, 'O Portal ainda não está configurado para restringir visitantes à unidade autenticada.');
+        // Portal: o visitante precisa pertencer à unidade (Gleba) do morador
+        // autenticado — mesmo escopo da listagem em api_portal_morador.php.
+        require_once __DIR__ . '/helpers/portal_visitantes_unidade_helper.php';
+        if (!av_coluna_existe($conexao, 'visitantes', 'morador_id') || !av_coluna_existe($conexao, 'visitantes', 'cadastrado_por_morador_id')) {
+            retornar_json(false, 'O Portal ainda não está configurado para restringir visitantes à unidade autenticada.');
+        }
+        list($cond_unidade_av, $tipos_unidade_av, $params_unidade_av) = pvu_condicao_visitante_unidade('v', (int)$tenant_id, (int)$portal_morador_id, trim((string)$portal_morador_unidade));
+        $stmt_visitante_validar = $conexao->prepare('SELECT v.id FROM visitantes v WHERE v.tenant_id=? AND v.id=? AND v.ativo=1 AND ' . $cond_unidade_av . ' LIMIT 1');
+        if (!$stmt_visitante_validar) retornar_json(false, 'Não foi possível validar o visitante.');
+        pvu_bind($stmt_visitante_validar, 'ii' . $tipos_unidade_av, array_merge([(int)$tenant_id, $visitante_id], $params_unidade_av));
+    } else {
+        $stmt_visitante_validar = $conexao->prepare('SELECT id FROM visitantes WHERE tenant_id=? AND id=? AND ativo=1 LIMIT 1');
+        if (!$stmt_visitante_validar) retornar_json(false, 'Não foi possível validar o visitante.');
+        $stmt_visitante_validar->bind_param('ii', $tenant_id, $visitante_id);
     }
-    $sql_visitante_validar = 'SELECT id FROM visitantes WHERE tenant_id=? AND id=? AND ativo=1' . ($vinculos_visitante ? ' AND (' . implode(' OR ', $vinculos_visitante) . ')' : '') . ' LIMIT 1';
-    $stmt_visitante_validar = $conexao->prepare($sql_visitante_validar);
-    if (!$stmt_visitante_validar) retornar_json(false, 'Não foi possível validar o visitante.');
-    $bind_visitante = [$tipos_visitante];
-    foreach ($params_visitante as $i => &$valor_visitante) $bind_visitante[] = &$valor_visitante;
-    call_user_func_array([$stmt_visitante_validar, 'bind_param'], $bind_visitante);
     $stmt_visitante_validar->execute();
     $visitanteValido = $stmt_visitante_validar->get_result()->fetch_assoc();
     $stmt_visitante_validar->close();

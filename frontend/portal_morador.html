@@ -3585,12 +3585,13 @@ function carregarVisitantes() {
                         ${escHtml(v.tipo_documento)}: ${escHtml(v.documento)}
                         &nbsp;·&nbsp; ${escHtml(contato)}
                         &nbsp;·&nbsp; <span class="badge ${statusClass}">${statusLabel}</span>
+                        ${v.cadastrado_por_nome ? `<br>Cadastrado por: ${v.proprio ? 'você' : escHtml(v.cadastrado_por_nome)}` : ''}
                     </div>
                 </div>
                 <div class="visitante-actions">
-                    <button class="btn btn-danger btn-sm" onclick="excluirVisitante(${v.id})" title="Excluir visitante" aria-label="Excluir ${escHtml(v.nome_completo)}">
+                    ${v.pode_excluir ? `<button class="btn btn-danger btn-sm" onclick="excluirVisitante(${Number(v.id)})" title="Excluir visitante" aria-label="Excluir ${escHtml(v.nome_completo)}">
                         <i class="fas fa-trash" aria-hidden="true"></i>
-                    </button>
+                    </button>` : ''}
                 </div>
             </div>`;
         });

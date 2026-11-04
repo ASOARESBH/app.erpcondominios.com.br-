@@ -2,6 +2,16 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.20] - 2026-11-04
+### Corrigido
+- **App/Portal do Morador — Visitantes por Gleba**: `GET api/api_portal_morador.php?action=visitantes` filtrava `morador_id = morador da sessão`, ocultando visitantes cadastrados por outros moradores da mesma unidade e visitantes da base geral autorizados para a Gleba. A lista agora usa o escopo da unidade do morador autenticado (moradores ativos da mesma unidade, mesmo tenant), por `morador_id`, `cadastrado_por_morador_id` ou autorização em `acessos_visitantes`. Novo helper `api/helpers/portal_visitantes_unidade_helper.php`.
+- A resposta passou a trazer `cadastrado_por_nome`, `proprio` e `pode_excluir`; `ativo`/`id` são inteiros. A exclusão continua restrita ao autor (`morador_id` da sessão).
+- `POST api/api_acessos_visitantes.php` (geração de QR pelo portal/app) usa o mesmo escopo de unidade; antes recusava visitantes da Gleba cadastrados por outro morador.
+- App Flutter (`aplicativoerpcondominios`): `visitors_screen.dart` exibe "Visitantes da Unidade", contador, autor do cadastro e só mostra excluir quando `pode_excluir`; `access_screen.dart` lista apenas visitantes ativos no seletor do QR. `frontend/portal_morador.html` recebeu o mesmo tratamento de autor/exclusão.
+- **App Flutter — build Android após atualização do Flutter SDK (3.47.1)**: `flutter run` falhava com "Gradle 8.12.0 is lower than Flutter's minimum supported version of 8.14.0". O Flutter 3.47.1 exige Gradle ≥ 8.14, AGP ≥ 8.11.1, Kotlin ≥ 2.2.20 e Java 17. Atualizados em `aplicativoerpcondominios/android`: wrapper Gradle 8.12 → 8.14, AGP 8.7.3 → 8.13.1, Kotlin 2.1.0 → 2.3.20, `compileOptions` Java 11 → 17 e `kotlinOptions` (erro no Kotlin 2.2+) substituído por `kotlin { compilerOptions { jvmTarget = JVM_17 } }`. Mantido AGP 8.x (sem migrar para AGP 9/newDsl) com `android.newDsl=false` e `android.builtInKotlin=false` gravados pelo migrador do Flutter. Versões escolhidas já presentes no cache Gradle local.
+### Validado
+- `php -l` nos três PHP tocados; MariaDB descartável executando o endpoint real com fixture de duas Glebas, ex-morador inativo, Gleba 13/1330, unidade sem prefixo e outro tenant. Detalhes em `DEBUG_VISITANTES_APP_GLEBA_20261104.md`.
+
 ## [2.1.19] - 2026-11-04
 ### Corrigido
 - **Registro Manual — revisão de integridade**: validar no backend que `dependente_id` pertence ao `morador_id` informado e ao tenant da sessão; a Entrada exige ambos ativos e a Saída histórica ainda pode ser encerrada, mas nunca com dependente de outro morador.
@@ -110,9 +120,17 @@ Registro de alterações significativas no ERP.
 ### Validado
 - Teste em MariaDB descartável confirmou que grupo customizado somente leitura e `compat-visualizador` mantêm `moradores.visualizar` e negam criar/editar/excluir/exportar apesar do `compat-operador`; o operador compatível sem grupo somente leitura preserva edição. Invalidação de cache e criação da revisão RBAC ausente também passaram. `php -l`, `node --check` e `git diff --check` passaram.
 
+## [2.1.9] - 2026-11-04
+### Planejado
+- **RH — Banco de Horas: botão "Gerar" (reprocessar) + mapeamento espelho × banco**: causa confirmada em `rh_ponto_core.php` `_bh_sincronizar()` L401–407 — `min($extraLiquido, 120)` descarta silenciosamente horas extras acima de 2h/dia (caso Wanderson 17/10/2026: espelho 03:17, banco 02:00; outubro: espelho 07:09 × banco 04:47). Banco só é ressincronizado ao salvar/recalcular o espelho, ficando congelado em regras antigas. Especificado: função única `bh_apurar_dia()`, política configurável `CREDITAR_TUDO` (padrão) / `LIMITAR_E_SEPARAR` (excedente fora do saldo, nunca descartado), endpoint `mapear`, botão "Gerar" ao lado do filtro Colaborador com prévia (simular) → aplicar com hash, lotes por departamento, tabela `rh_banco_horas_reprocessamentos`. Nenhuma alteração de código — prompt em `PROMPT_BANCO_HORAS_REPROCESSAR_20261104.md`.
+
 ## [2.1.8] - 2026-11-03
 ### Corrigido
 - **Protocolos de Mercadorias**: removida a dependência da listagem global de usuários, que retornava 403 para funcionários sem `usuarios.visualizar`. O campo Recebedor (Portaria) passa a exibir o operador autenticado; a API grava esse nome a partir da sessão e preserva a autoria na edição. Escritas passam a exigir permissões RBAC do módulo Protocolos.
+
+## [2.1.8] - 2026-11-04
+### Planejado
+- **RH — Banco de Horas: abatimento maior que o saldo**: analisados `api_rh_banco_horas.php`, `rh_ponto_core.php` (`_bh_sincronizar`), `api_rh_ponto.php` (DSR), `api_rh_relatorios.php`, `recursos_humanos.js/.html`. Causa do bloqueio "Saldo insuficiente": `registrar` rejeita `minutos > saldo` para abatimento e pagamento (L187). Especificado: abatimento pode negativar o saldo com confirmação (HTTP 409 `CONFIRMAR_SALDO_NEGATIVO` + justificativa + auditoria); pagamento segue limitado ao saldo. Achados críticos: INSERTs em `rh_banco_horas` sem `tenant_id` (coluna `DEFAULT 1` → lançamentos de qualquer tenant caem no tenant 1); extrato/relatório sem filtro de tenant; saldo calculado em 4 lugares tratando qualquer tipo não-crédito como débito; linha de 15/09/2026 com `tipo` vazio no extrato; sem transação/lock no registrar. Nenhuma alteração de código — prompt em `PROMPT_BANCO_HORAS_ABATIMENTO_20261104.md`.
 
 ## [2.1.7] - 2026-11-02
 ### Implementado — web/backend

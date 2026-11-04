@@ -418,35 +418,67 @@ if ($action === 'desativar_token_push' && $metodo === 'POST') {
 // VISITANTES
 // ========================================
 
-// GET: Listar visitantes do morador
+// GET: Listar visitantes da unidade (Gleba) do morador.
+// O escopo inclui cadastros de todos os moradores ativos da mesma unidade e
+// visitantes autorizados para eles; a exclusão continua restrita ao autor.
 if ($action === 'visitantes' && $metodo === 'GET') {
-    // Verificar se existe campo morador_id na tabela visitantes
+    require_once __DIR__ . '/helpers/portal_visitantes_unidade_helper.php';
+
     $colunas = $conexao->query("SHOW COLUMNS FROM visitantes LIKE 'morador_id'");
-    
-    if ($colunas->num_rows > 0) {
-        // Tabela tem campo morador_id
-        $stmt = $conexao->prepare("
-            SELECT id, nome_completo, documento, tipo_documento, telefone, celular, 
-                   email, observacao, ativo, data_cadastro
-            FROM visitantes 
-            WHERE tenant_id = ? AND morador_id = ?
-            ORDER BY data_cadastro DESC
-        ");
-        $stmt->bind_param("ii", $tenant_id, $morador_id);
-    } else {
-        // Tabela não tem campo morador_id (retornar vazio)
+    if (!$colunas || $colunas->num_rows === 0) {
         retornar_json(true, "Nenhum visitante cadastrado", []);
-        exit;
     }
-    
-    $stmt->execute();
+
+    $unidadeMorador = pvu_unidade_morador($conexao, $tenant_id, $morador_id);
+    list($condUnidade, $tiposUnidade, $paramsUnidade) = pvu_condicao_visitante_unidade('v', $tenant_id, $morador_id, $unidadeMorador);
+
+    $stmt = $conexao->prepare("
+        SELECT v.id, v.nome_completo, v.documento, v.tipo_documento, v.telefone, v.celular,
+               v.email, v.observacao, v.ativo, v.data_cadastro,
+               v.morador_id, v.cadastrado_por_morador_id, v.cadastrado_por_tipo,
+               COALESCE(NULLIF(NULLIF(v.cadastrado_por_nome, ''), 'Cadastro legado'),
+                        NULLIF(m_autor.nome, ''), NULLIF(m_legado.nome, ''),
+                        CASE WHEN v.cadastrado_por_tipo = 'FUNCIONARIO' THEN 'Portaria/Administração' ELSE NULL END) AS cadastrado_por_nome
+        FROM visitantes v
+        LEFT JOIN moradores m_autor  ON m_autor.id  = v.cadastrado_por_morador_id AND m_autor.tenant_id  = v.tenant_id
+        LEFT JOIN moradores m_legado ON m_legado.id = v.morador_id                AND m_legado.tenant_id = v.tenant_id
+        WHERE v.tenant_id = ? AND {$condUnidade}
+        ORDER BY v.ativo DESC, v.nome_completo ASC, v.id DESC
+    ");
+    if (!$stmt) {
+        error_log('[api_portal_morador][visitantes] prepare: ' . $conexao->error);
+        retornar_json(false, 'Não foi possível carregar os visitantes da unidade.');
+    }
+    pvu_bind($stmt, 'i' . $tiposUnidade, array_merge([$tenant_id], $paramsUnidade));
+    if (!$stmt->execute()) {
+        error_log('[api_portal_morador][visitantes] execute: ' . $stmt->error);
+        retornar_json(false, 'Não foi possível carregar os visitantes da unidade.');
+    }
     $resultado = $stmt->get_result();
     $visitantes = [];
-    
+
     while ($row = $resultado->fetch_assoc()) {
-        $visitantes[] = $row;
+        $proprio = (int)($row['morador_id'] ?? 0) === $morador_id
+            || (int)($row['cadastrado_por_morador_id'] ?? 0) === $morador_id;
+        $visitantes[] = [
+            'id' => (int)$row['id'],
+            'nome_completo' => $row['nome_completo'],
+            'documento' => $row['documento'],
+            'tipo_documento' => $row['tipo_documento'],
+            'telefone' => $row['telefone'],
+            'celular' => $row['celular'],
+            'email' => $row['email'],
+            'observacao' => $row['observacao'],
+            'ativo' => (int)$row['ativo'],
+            'data_cadastro' => $row['data_cadastro'],
+            'cadastrado_por_nome' => $row['cadastrado_por_nome'],
+            'proprio' => $proprio,
+            // DELETE só remove cadastros do próprio morador (morador_id = sessão).
+            'pode_excluir' => (int)($row['morador_id'] ?? 0) === $morador_id,
+        ];
     }
-    
+    $stmt->close();
+
     retornar_json(true, "Visitantes obtidos com sucesso", $visitantes);
 }
 

@@ -102,3 +102,15 @@ A rota autenticada `/employee/vigilante` pertence à `ShellRoute` do colaborador
 O fluxo usa `EmployeeApiClient` e as constantes `actionVigilanteQrDetalhe`, `actionVigilanteRegistrarLeitura` e `actionVigilanteHistoricoHoje`. A sequência é scanner → GET de detalhe → `AlertDialog` de confirmação → POST de registro → diálogo visual de SLA → atualização do histórico. A tela trata expressamente `data['sucesso'] == false`, inclusive respostas 4xx, e exibe a mensagem devolvida pelo PHP sem reescrever a regra de negócio.
 
 A primeira versão deliberadamente não pede localização. O backend aceita GPS opcional para clientes futuros, mas a indisponibilidade de GPS não bloqueia a ronda. O histórico do dia é recarregado no início, após registro e por pull-to-refresh. Logs Dart usam somente tipo de erro, sem QR, token, CPF ou coordenadas.
+
+## Toolchain Android (atualizado 2026-11-04)
+
+| Item | Versão | Observação |
+|---|---|---|
+| Flutter SDK | 3.47.1 (stable, Dart 3.13.1) | Mínimos: Gradle 8.14, AGP 8.11.1, Kotlin 2.2.20, Java 17, minSdk 23 |
+| Gradle wrapper | 8.14 | `android/gradle/wrapper/gradle-wrapper.properties` |
+| AGP | 8.13.1 | `android/settings.gradle.kts`; AGP 9 ainda não adotado (`android.newDsl=false`) |
+| Kotlin Gradle Plugin | 2.3.20 | `android.builtInKotlin=false` |
+| Java (source/target/jvmTarget) | 17 | `kotlin { compilerOptions }` no lugar de `kotlinOptions` |
+
+Ao atualizar o Flutter SDK, conferir `packages/flutter_tools/gradle/src/main/kotlin/DependencyVersionChecker.kt` (valores `error*Version`) antes de compilar.

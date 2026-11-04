@@ -14,7 +14,7 @@ Todas as respostas seguem o padrão `{sucesso, mensagem, dados}` (ver [API.md](A
 | Esqueci senha | `endpointPasswordRecovery` | `api_recuperar_senha.php` | POST `{email}` |
 | Perfil | `endpointPortal` | `api_portal_morador.php` | `action=perfil` (GET leitura, PUT `{telefone, celular}`) |
 | Alterar senha | `endpointPortal` | `api_portal_morador.php` | PUT `action=alterar_senha` `{senha_atual, senha_nova}` |
-| Visitantes | `endpointPortal` | `api_portal_morador.php` | `action=visitantes` (GET lista / POST cria / DELETE `id`) |
+| Visitantes | `endpointPortal` | `api_portal_morador.php` | `action=visitantes` (GET lista da **unidade/Gleba** / POST cria / DELETE `id` somente do autor) |
 | Veículos (somente leitura) | `endpointPortal` | `api_portal_morador.php` | `action=veiculos` |
 | Notificações (lista + marcar lida) | `endpointPortal` | `api_portal_morador.php` | `action=notificacoes` (`limite`), `action=marcar_notificacao_lida` |
 | Registrar/remover token push | `endpointPortal` | `api_portal_morador.php` | `action=registrar_token_push` / `action=desativar_token_push` |
@@ -55,6 +55,8 @@ Todas as respostas seguem o padrão `{sucesso, mensagem, dados}` (ver [API.md](A
 **Dashboard** (`dashboard_screen.dart`): não faz nenhuma chamada de rede — renderiza a partir da sessão local (`authProvider.session`), garantindo que a tela inicial nunca fica em loading após o login. Grade fixa com 12 módulos.
 
 **Visitantes**: cadastro (nome completo, tipo de documento em `CPF/RG/CNH/Passaporte`, número, telefone, celular, e-mail, observação) + lista com exclusão (confirmação via diálogo). Não há edição, apenas criar/excluir.
+
+Desde 2026-11-04 a lista mostra **todos os visitantes da Gleba** do morador autenticado: cadastrados por qualquer morador ativo da mesma unidade (mesmo tenant) ou da base geral com autorização em `acessos_visitantes` emitida para um desses moradores. Cada item traz `cadastrado_por_nome`, `proprio` e `pode_excluir`; o botão excluir só aparece quando `pode_excluir == true` (o backend só exclui cadastros do próprio morador). A tela de Acessos (QR) reutiliza a lista, filtrando apenas ativos, e o backend aceita gerar QR para qualquer visitante ativo da Gleba. Ver `DEBUG_VISITANTES_APP_GLEBA_20261104.md`.
 
 **Acessos (QR Code)**: gera autorização de entrada vinculando um visitante já cadastrado + dados opcionais de veículo (placa maiúscula, modelo, cor) + período (`data_inicial`/`data_final`, valida final ≥ inicial) + tipo de acesso (`portaria`/`externo`/`lagoa`). O QR exibido é gerado **no cliente** (`qr_flutter`) a partir de uma URL de download (`api_acessos_visitantes.php?action=gerar_qrcode&id=`) — o QR não é obtido do servidor, apenas a URL que ele codifica. Permite revogar (exclui) o acesso.
 

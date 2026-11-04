@@ -189,3 +189,11 @@ Os novos tipos `Entregador Autorizado` e `Familiar` são aceitos pela escrita e 
 - `api/api_protocolos.php?acao=operador_atual` exige sessão e `protocolos.visualizar`, localiza o usuário ativo pelo ID e tenant da sessão e retorna somente seu nome para preencher Recebedor (Portaria). Não consulta a lista administrativa de usuários nem exige `usuarios.visualizar`.
 - A criação exige `protocolos.criar` quando RBAC está ativo e grava `recebedor_portaria` a partir do usuário autenticado no servidor; o valor enviado pelo navegador não define autoria. Edição exige `protocolos.editar` e preserva o recebedor original. Registrar retirada usa `protocolos.aprovar`; exclusão usa `protocolos.excluir`. Antes da migration RBAC, mantém-se a hierarquia legada.
 - Todos os protocolos, moradores e usuários resolvidos nessa API ficam limitados ao `tenant_id` da sessão.
+
+## 17. Portal do Morador — Visitantes da unidade (Gleba)
+
+- `GET api/api_portal_morador.php?action=visitantes` (Bearer do portal) devolve os visitantes da unidade do morador autenticado. A unidade vem de `moradores.unidade` da sessão, nunca do cliente, e é comparada com `REPLACE(UPPER(TRIM(unidade)),'GLEBA ','')` — a mesma normalização da ação `acessos`. Entram visitantes cujo `morador_id` ou `cadastrado_por_morador_id` pertence a morador **ativo** da unidade no mesmo tenant, ou que tenham autorização em `acessos_visitantes` com `morador_id` desses moradores. Sem unidade no cadastro, o escopo cai para o próprio morador.
+- Campos: `id`, `nome_completo`, `documento`, `tipo_documento`, `telefone`, `celular`, `email`, `observacao`, `ativo` (int), `data_cadastro`, `cadastrado_por_nome`, `proprio` (bool), `pode_excluir` (bool). Ordenação: ativos primeiro, depois nome.
+- `DELETE ...&id=` continua restrito a `morador_id = sessão`; visitantes de outros moradores da Gleba vêm com `pode_excluir=false`.
+- `POST api/api_acessos_visitantes.php` com Bearer do portal valida o visitante com o mesmo helper (`pvu_condicao_visitante_unidade`) e exige `ativo=1`.
+- Helper: `api/helpers/portal_visitantes_unidade_helper.php` (`pvu_unidade_morador`, `pvu_condicao_visitante_unidade`, `pvu_bind`).
