@@ -32,7 +32,13 @@ if ($metodo==='GET' && $acao==='minhas_permissoes') {
 rbacExigir($conexao,'usuarios',$metodo==='GET' ? 'visualizar' : 'configurar');
 
 if ($metodo==='GET' && $acao==='catalogo') {
-    rbac_api_responder(true,'Catálogo RBAC carregado',['modulos'=>array_values(rbacCatalogoApi($conexao))]);
+    $catalogo=rbacCatalogoApi($conexao);
+    foreach ($catalogo as $chave=>&$modulo) {
+        $modulo['acoes_concediveis']=[];
+        foreach ($modulo['acoes'] as $acaoCatalogo) $modulo['acoes_concediveis'][$acaoCatalogo]=rbacPodeConceder($conexao,$chave,$acaoCatalogo);
+    }
+    unset($modulo);
+    rbac_api_responder(true,'Catálogo RBAC carregado',['modulos'=>array_values($catalogo),'pode_configurar'=>rbacPode($conexao,'usuarios','configurar')]);
 }
 
 if ($metodo==='GET' && $acao==='grupo') {
@@ -40,8 +46,8 @@ if ($metodo==='GET' && $acao==='grupo') {
     $st=$conexao->prepare('SELECT id,slug,nome,descricao,ativo,protegido FROM rbac_grupos WHERE id=? AND tenant_id=? AND excluido_em IS NULL LIMIT 1');
     $st->bind_param('ii',$id,$tenant_id); $st->execute(); $grupo=$st->get_result()->fetch_assoc(); $st->close();
     if(!$grupo) rbac_api_responder(false,'Grupo não encontrado.',null,404);
-    $st=$conexao->prepare('SELECT m.chave,p.acao FROM rbac_grupo_permissoes gp INNER JOIN rbac_permissoes p ON p.id=gp.permissao_id INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE gp.grupo_id=? AND gp.efeito=\'PERMITIR\'');
-    $st->bind_param('i',$id); $st->execute(); $rs=$st->get_result(); $permissoes=[]; while($r=$rs->fetch_assoc()) $permissoes[]=$r['chave'].'.'.$r['acao']; $st->close();
+    $st=$conexao->prepare('SELECT m.chave,p.acao,gp.efeito FROM rbac_grupo_permissoes gp INNER JOIN rbac_permissoes p ON p.id=gp.permissao_id INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE gp.grupo_id=? AND p.ativo=1 AND m.ativo=1 ORDER BY m.chave,p.acao');
+    $st->bind_param('i',$id); $st->execute(); $rs=$st->get_result(); $permissoes=[]; while($r=$rs->fetch_assoc()) $permissoes[]=['modulo'=>$r['chave'],'acao'=>$r['acao'],'estado'=>$r['efeito']]; $st->close();
     rbac_api_responder(true,'Grupo carregado',['grupo'=>$grupo,'permissoes'=>$permissoes]);
 }
 
@@ -93,15 +99,47 @@ if ($metodo==='POST' && $acao==='salvar_grupo') {
     $slug=trim($slug,'-');
     $descricao=trim(substr((string)($entrada['descricao'] ?? ''),0,255));
     $permissoes=is_array($entrada['permissoes'] ?? null) ? $entrada['permissoes'] : [];
+    $estados=[];
     if ($nome==='' || $slug==='') rbac_api_responder(false,'Informe nome e identificador do grupo.',null,400);
     if ($id>0) {
         $st=$conexao->prepare('SELECT id,protegido FROM rbac_grupos WHERE id=? AND tenant_id=? AND excluido_em IS NULL'); $st->bind_param('ii',$id,$tenant_id); $st->execute(); $atual=$st->get_result()->fetch_assoc(); $st->close();
         if (!$atual) rbac_api_responder(false,'Grupo não encontrado neste condomínio.',null,404);
         if ((int)$atual['protegido']===1) rbac_api_responder(false,'Grupos de compatibilidade são protegidos e não podem ser alterados.',null,403);
     }
-    foreach ($permissoes as $chavePermissao) {
-        $partes=explode('.',(string)$chavePermissao,2);
-        if (count($partes)!==2 || !rbacPodeConceder($conexao,$partes[0],$partes[1])) rbac_api_responder(false,'Você não pode conceder a permissão solicitada: '.htmlspecialchars((string)$chavePermissao),null,403);
+    $antes=[];
+    if ($id>0) {
+        $st=$conexao->prepare('SELECT m.chave,p.acao,gp.efeito FROM rbac_grupo_permissoes gp INNER JOIN rbac_permissoes p ON p.id=gp.permissao_id INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE gp.grupo_id=? AND p.ativo=1 AND m.ativo=1');
+        $st->bind_param('i',$id); $st->execute(); $rs=$st->get_result(); while($r=$rs->fetch_assoc()) $antes[$r['chave'].'.'.$r['acao']]=$r['efeito']; $st->close();
+    }
+    foreach ($permissoes as $item) {
+        if (is_string($item)) {
+            $partes=explode('.', $item, 2);
+            $item=['modulo'=>$partes[0] ?? '', 'acao'=>$partes[1] ?? '', 'estado'=>'PERMITIR'];
+        }
+        if (!is_array($item)) rbac_api_responder(false,'Matriz de permissões do grupo inválida.',null,400);
+        $modulo=trim((string)($item['modulo'] ?? ''));
+        $acaoPermissao=trim((string)($item['acao'] ?? ''));
+        $estado=strtoupper(trim((string)($item['estado'] ?? 'PERMITIR')));
+        if ($modulo==='' || $acaoPermissao==='' || !in_array($estado,['HERDAR','PERMITIR','NEGAR'],true)) rbac_api_responder(false,'Estado de permissão do grupo inválido.',null,400);
+        $chave=$modulo . '.' . $acaoPermissao;
+        $st=$conexao->prepare('SELECT p.id FROM rbac_permissoes p INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE m.chave=? AND m.ativo=1 AND p.acao=? AND p.ativo=1 LIMIT 1');
+        if (!$st) rbac_api_responder(false,'Não foi possível validar o catálogo RBAC.',null,500);
+        $st->bind_param('ss',$modulo,$acaoPermissao); $st->execute(); $permissaoCatalogo=$st->get_result()->fetch_assoc(); $st->close();
+        if (!$permissaoCatalogo) rbac_api_responder(false,'Ação não encontrada no catálogo: ' . $chave,null,400);
+        if ($estado==='PERMITIR' && ($antes[$chave] ?? 'HERDAR')!=='PERMITIR' && !rbacPodeConceder($conexao,$modulo,$acaoPermissao)) rbac_api_responder(false,'Você não pode conceder a permissão solicitada: ' . $chave,null,403);
+        if (($antes[$chave] ?? null)==='NEGAR' && $estado!=='NEGAR' && !rbacPodeConceder($conexao,$modulo,$acaoPermissao)) rbac_api_responder(false,'Não é possível remover esta negação: você não possui a permissão que seria exposta (' . $chave . ').',null,403);
+        $estados[$chave]=['modulo'=>$modulo,'acao'=>$acaoPermissao,'estado'=>$estado,'permissao_id'=>(int)$permissaoCatalogo['id']];
+    }
+    $depois=[];
+    foreach ($estados as $chave=>$permissao) if ($permissao['estado']!=='HERDAR') $depois[$chave]=$permissao['estado'];
+    $permissoesAtorAntes=rbacObterPermissoesEfetivas($conexao,$usuario_atual,$tenant_id,true);
+    $permissoesUsuariosAntes=[];
+    if ($id>0) {
+        $st=$conexao->prepare('SELECT usuario_id FROM rbac_usuario_grupos WHERE grupo_id=? AND tenant_id=? AND ativo=1 AND removido_em IS NULL');
+        if (!$st) rbac_api_responder(false,'Não foi possível validar os usuários vinculados ao grupo.',null,500);
+        $st->bind_param('ii',$id,$tenant_id); $st->execute(); $rs=$st->get_result();
+        while($membro=$rs->fetch_assoc()) { $membroId=(int)$membro['usuario_id']; $permissoesUsuariosAntes[$membroId]=rbacObterPermissoesEfetivas($conexao,$membroId,$tenant_id,true); }
+        $st->close();
     }
     $conexao->begin_transaction();
     try {
@@ -111,32 +149,50 @@ if ($metodo==='POST' && $acao==='salvar_grupo') {
             $st=$conexao->prepare('INSERT INTO rbac_grupos (tenant_id,slug,nome,descricao,ativo,protegido,criado_por_usuario_id) VALUES (?,?,?,?,1,0,?)'); $st->bind_param('isssi',$tenant_id,$slug,$nome,$descricao,$usuario_atual); if(!$st->execute()) throw new RuntimeException($st->error); $id=$conexao->insert_id; $st->close();
         }
         $st=$conexao->prepare('DELETE FROM rbac_grupo_permissoes WHERE grupo_id=?'); $st->bind_param('i',$id); $st->execute(); $st->close();
-        foreach ($permissoes as $chavePermissao) {
-            [$modulo,$acaoPermissao]=explode('.',(string)$chavePermissao,2);
-            $st=$conexao->prepare('SELECT p.id FROM rbac_permissoes p INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE m.chave=? AND p.acao=? LIMIT 1'); $st->bind_param('ss',$modulo,$acaoPermissao); $st->execute(); $perm=$st->get_result()->fetch_assoc(); $st->close();
-            if ($perm) { $st=$conexao->prepare("INSERT INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados,criado_por_usuario_id) VALUES (?,?,'PERMITIR','GLOBAL',?)"); $st->bind_param('iii',$id,$perm['id'],$usuario_atual); if(!$st->execute()) throw new RuntimeException($st->error); $st->close(); }
+        foreach ($estados as $permissao) {
+            if ($permissao['estado']==='HERDAR') continue;
+            $st=$conexao->prepare("INSERT INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados,criado_por_usuario_id) VALUES (?,?,?,'GLOBAL',?)");
+            if (!$st) throw new RuntimeException('prepare matriz do grupo: ' . $conexao->error);
+            $st->bind_param('iisi',$id,$permissao['permissao_id'],$permissao['estado'],$usuario_atual);
+            if(!$st->execute()) { $erro=$st->error; $st->close(); throw new RuntimeException('gravar matriz do grupo: ' . $erro); }
+            $st->close();
+        }
+        $permissoesAtorDepois=rbacObterPermissoesEfetivas($conexao,$usuario_atual,$tenant_id,true);
+        $elevacao=rbacPrimeiraConcessaoNaoPossuida($permissoesAtorAntes,$permissoesAtorAntes,$permissoesAtorDepois);
+        if ($elevacao!==null) throw new DomainException('A alteração do grupo elevaria suas próprias permissões (' . $elevacao . ').');
+        foreach ($permissoesUsuariosAntes as $membroId=>$antesMembro) {
+            $depoisMembro=rbacObterPermissoesEfetivas($conexao,$membroId,$tenant_id,true);
+            $grantNaoAutorizado=rbacPrimeiraConcessaoNaoPossuida($permissoesAtorAntes,$antesMembro,$depoisMembro);
+            if ($grantNaoAutorizado!==null) throw new DomainException('A alteração concederia a permissão ' . $grantNaoAutorizado . ' a um usuário do grupo, mas você não possui essa permissão.');
         }
         $conexao->commit(); rbacInvalidarCache($conexao,$tenant_id);
-        rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>$entrada['id'] ? 'EDITAR_GRUPO':'CRIAR_GRUPO','registro_tipo'=>'rbac_grupos','registro_id'=>$id,'dados_depois'=>['nome'=>$nome,'slug'=>$slug,'permissoes'=>$permissoes],'resultado'=>'SUCESSO','status_http'=>200]);
+        unset($_SESSION['_rbac_cache']);
+        rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>!empty($entrada['id']) ? 'EDITAR_GRUPO':'CRIAR_GRUPO','registro_tipo'=>'rbac_grupos','registro_id'=>$id,'dados_antes'=>$antes,'dados_depois'=>['nome'=>$nome,'slug'=>$slug,'permissoes'=>$depois],'resultado'=>'SUCESSO','status_http'=>200]);
         rbac_api_responder(true,'Grupo salvo com sucesso.',['id'=>$id]);
-    } catch(Throwable $e) { $conexao->rollback(); rbac_api_responder(false,'Não foi possível salvar o grupo.',null,400); }
+    } catch(Throwable $e) { $conexao->rollback(); unset($_SESSION['_rbac_cache']); error_log('[RBAC] Falha ao salvar grupo tenant=' . $tenant_id . ' grupo=' . $id . ': ' . $e->getMessage()); rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>'SALVAR_GRUPO','registro_tipo'=>'rbac_grupos','registro_id'=>$id,'dados_antes'=>$antes,'dados_depois'=>['nome'=>$nome,'slug'=>$slug,'permissoes'=>$depois],'resultado'=>'ERRO','status_http'=>400,'motivo'=>$e instanceof DomainException ? $e->getMessage() : 'Falha ao persistir a matriz do grupo.']); rbac_api_responder(false,$e instanceof DomainException ? $e->getMessage() : 'Não foi possível salvar o grupo.',null,400); }
 }
 
 if ($metodo==='POST' && $acao==='atribuir_grupos') {
     $alvo=(int)($entrada['usuario_id'] ?? 0); $grupos=array_map('intval',(array)($entrada['grupos_ids'] ?? []));
     if (!$alvo || $alvo===$usuario_atual) rbac_api_responder(false,'Não é permitido alterar os próprios grupos.',null,400);
     if (!rbacUsuarioMesmoTenant($conexao,$alvo,$tenant_id)) rbac_api_responder(false,'Usuário não encontrado no condomínio atual.',null,404);
+    $permissoesAtorAntes=rbacObterPermissoesEfetivas($conexao,$usuario_atual,$tenant_id,true);
+    $permissoesAlvoAntes=rbacObterPermissoesEfetivas($conexao,$alvo,$tenant_id,true);
     $conexao->begin_transaction();
     try {
         $st=$conexao->prepare('UPDATE rbac_usuario_grupos SET ativo=0,removido_em=NOW() WHERE usuario_id=? AND tenant_id=?'); $st->bind_param('ii',$alvo,$tenant_id); $st->execute(); $st->close();
         foreach(array_unique($grupos) as $grupoId) {
-            $st=$conexao->prepare('SELECT id FROM rbac_grupos WHERE id=? AND tenant_id=? AND ativo=1 AND excluido_em IS NULL'); $st->bind_param('ii',$grupoId,$tenant_id); $st->execute(); $grupo=$st->get_result()->fetch_assoc(); $st->close();
+            $st=$conexao->prepare('SELECT id,protegido FROM rbac_grupos WHERE id=? AND tenant_id=? AND ativo=1 AND excluido_em IS NULL'); $st->bind_param('ii',$grupoId,$tenant_id); $st->execute(); $grupo=$st->get_result()->fetch_assoc(); $st->close();
             if(!$grupo) throw new RuntimeException('Grupo inválido.');
+            if ((int)$grupo['protegido']===1) throw new DomainException('Grupos de compatibilidade são gerenciados pelo perfil e não podem ser atribuídos manualmente.');
             $st=$conexao->prepare('INSERT INTO rbac_usuario_grupos (usuario_id,tenant_id,grupo_id,ativo,atribuido_por_usuario_id,atribuido_em,removido_em) VALUES (?,?,?,1,?,NOW(),NULL) ON DUPLICATE KEY UPDATE ativo=1,atribuido_por_usuario_id=VALUES(atribuido_por_usuario_id),atribuido_em=NOW(),removido_em=NULL'); $st->bind_param('iiii',$alvo,$tenant_id,$grupoId,$usuario_atual); if(!$st->execute()) throw new RuntimeException($st->error); $st->close();
         }
-        $conexao->commit(); rbacInvalidarCache($conexao,$tenant_id); rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>'ATRIBUIR_GRUPOS','registro_tipo'=>'usuarios','registro_id'=>$alvo,'dados_depois'=>['grupos_ids'=>$grupos],'resultado'=>'SUCESSO','status_http'=>200]);
+        $permissoesAlvoDepois=rbacObterPermissoesEfetivas($conexao,$alvo,$tenant_id,true);
+        $concessaoNaoAutorizada=rbacPrimeiraConcessaoNaoPossuida($permissoesAtorAntes,$permissoesAlvoAntes,$permissoesAlvoDepois);
+        if ($concessaoNaoAutorizada!==null) throw new DomainException('Você não pode conceder ao usuário a permissão ' . $concessaoNaoAutorizada . '.');
+        $conexao->commit(); rbacInvalidarCache($conexao,$tenant_id); unset($_SESSION['_rbac_cache']); rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>'ATRIBUIR_GRUPOS','registro_tipo'=>'usuarios','registro_id'=>$alvo,'dados_antes'=>$permissoesAlvoAntes['grupos'],'dados_depois'=>['grupos_ids'=>$grupos],'resultado'=>'SUCESSO','status_http'=>200]);
         rbac_api_responder(true,'Grupos atribuídos com sucesso.');
-    } catch(Throwable $e) { $conexao->rollback(); rbac_api_responder(false,'Não foi possível atribuir os grupos.',null,400); }
+    } catch(Throwable $e) { $conexao->rollback(); unset($_SESSION['_rbac_cache']); error_log('[RBAC] Falha ao atribuir grupos tenant=' . $tenant_id . ' usuario=' . $alvo . ': ' . $e->getMessage()); rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>'ATRIBUIR_GRUPOS','registro_tipo'=>'usuarios','registro_id'=>$alvo,'resultado'=>'ERRO','status_http'=>400,'motivo'=>$e instanceof DomainException ? $e->getMessage() : 'Falha ao alterar os grupos.']); rbac_api_responder(false,$e instanceof DomainException ? $e->getMessage() : 'Não foi possível atribuir os grupos.',null,400); }
 }
 
 if ($metodo==='POST' && $acao==='revogar_sessao') {
@@ -155,9 +211,37 @@ if ($metodo==='DELETE' && $acao==='excluir_grupo') {
     $st=$conexao->prepare('SELECT nome,protegido FROM rbac_grupos WHERE id=? AND tenant_id=? AND excluido_em IS NULL'); $st->bind_param('ii',$id,$tenant_id); $st->execute(); $grupo=$st->get_result()->fetch_assoc(); $st->close();
     if(!$grupo) rbac_api_responder(false,'Grupo não encontrado.',null,404);
     if((int)$grupo['protegido']===1) rbac_api_responder(false,'Grupos de compatibilidade são protegidos.',null,403);
-    $st=$conexao->prepare('UPDATE rbac_grupos SET ativo=0,excluido_em=NOW() WHERE id=? AND tenant_id=?'); $st->bind_param('ii',$id,$tenant_id); $ok=$st->execute(); $st->close();
-    if($ok) { rbacInvalidarCache($conexao,$tenant_id); rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>'EXCLUIR_GRUPO','registro_tipo'=>'rbac_grupos','registro_id'=>$id,'dados_antes'=>$grupo,'resultado'=>'SUCESSO','status_http'=>200]); rbac_api_responder(true,'Grupo excluído com segurança.'); }
-    rbac_api_responder(false,'Não foi possível excluir o grupo.',null,400);
+    $permissoesAtorAntes=rbacObterPermissoesEfetivas($conexao,$usuario_atual,$tenant_id,true);
+    $permissoesUsuariosAntes=[];
+    $st=$conexao->prepare('SELECT usuario_id FROM rbac_usuario_grupos WHERE grupo_id=? AND tenant_id=? AND ativo=1 AND removido_em IS NULL');
+    if (!$st) rbac_api_responder(false,'Não foi possível validar os usuários vinculados ao grupo.',null,500);
+    $st->bind_param('ii',$id,$tenant_id); $st->execute(); $rs=$st->get_result();
+    while($membro=$rs->fetch_assoc()) { $membroId=(int)$membro['usuario_id']; $permissoesUsuariosAntes[$membroId]=rbacObterPermissoesEfetivas($conexao,$membroId,$tenant_id,true); }
+    $st->close();
+    $conexao->begin_transaction();
+    try {
+        $st=$conexao->prepare('UPDATE rbac_grupos SET ativo=0,excluido_em=NOW() WHERE id=? AND tenant_id=?');
+        if (!$st) throw new RuntimeException('prepare excluir grupo: ' . $conexao->error);
+        $st->bind_param('ii',$id,$tenant_id); if(!$st->execute()) { $erro=$st->error; $st->close(); throw new RuntimeException($erro); }
+        $afetados=$st->affected_rows; $st->close();
+        if (!$afetados) throw new DomainException('Grupo já foi removido ou não está ativo.');
+        $permissoesAtorDepois=rbacObterPermissoesEfetivas($conexao,$usuario_atual,$tenant_id,true);
+        $elevacao=rbacPrimeiraConcessaoNaoPossuida($permissoesAtorAntes,$permissoesAtorAntes,$permissoesAtorDepois);
+        if ($elevacao!==null) throw new DomainException('A remoção do grupo elevaria suas próprias permissões (' . $elevacao . ').');
+        foreach ($permissoesUsuariosAntes as $membroId=>$antesMembro) {
+            $depoisMembro=rbacObterPermissoesEfetivas($conexao,$membroId,$tenant_id,true);
+            $grantNaoAutorizado=rbacPrimeiraConcessaoNaoPossuida($permissoesAtorAntes,$antesMembro,$depoisMembro);
+            if ($grantNaoAutorizado!==null) throw new DomainException('A remoção concederia a permissão ' . $grantNaoAutorizado . ' a um usuário vinculado, mas você não possui essa permissão.');
+        }
+        $conexao->commit(); rbacInvalidarCache($conexao,$tenant_id); unset($_SESSION['_rbac_cache']);
+        rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>'EXCLUIR_GRUPO','registro_tipo'=>'rbac_grupos','registro_id'=>$id,'dados_antes'=>$grupo,'resultado'=>'SUCESSO','status_http'=>200]);
+        rbac_api_responder(true,'Grupo excluído com segurança.');
+    } catch(Throwable $e) {
+        $conexao->rollback(); unset($_SESSION['_rbac_cache']);
+        error_log('[RBAC] Falha ao excluir grupo tenant=' . $tenant_id . ' grupo=' . $id . ': ' . $e->getMessage());
+        rbacAuditar($conexao,['modulo_chave'=>'usuarios','submodulo_chave'=>'grupos','acao'=>'EXCLUIR_GRUPO','registro_tipo'=>'rbac_grupos','registro_id'=>$id,'dados_antes'=>$grupo,'resultado'=>'ERRO','status_http'=>400,'motivo'=>$e instanceof DomainException ? $e->getMessage() : 'Falha ao remover grupo.']);
+        rbac_api_responder(false,$e instanceof DomainException ? $e->getMessage() : 'Não foi possível excluir o grupo.',null,400);
+    }
 }
 
 rbac_api_responder(false,'Ação não reconhecida.',null,404);

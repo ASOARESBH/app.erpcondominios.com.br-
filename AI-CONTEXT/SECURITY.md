@@ -36,10 +36,18 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - `api_moradores.php`, `api_dependentes.php`, `api_moradores_anexos.php`, o PDF de
   moradores e o conteúdo privado de `api_arquivos_tenant.php` devem validar a ação no
   backend. Esconder botões no frontend não é suficiente.
-- Grupo personalizado ou `compat-visualizador` que conceda somente `moradores.visualizar`
-  deve aplicar `NEGAR` às demais ações herdadas, inclusive de `compat-operador`; o cálculo efetivo prioriza
-  negações. A alteração de políticas sempre incrementa/cria a revisão do tenant para
-  que sessões com permissões cacheadas refaçam a consulta.
+- A ausência de `PERMITIR` significa sem acesso; herança entre grupos nunca cria `NEGAR`
+  sintético. Só um `NEGAR` armazenado explicitamente pode negar uma ação. A precedência
+  efetiva é: admin/super_admin do registro atual do usuário; depois `NEGAR` individual,
+  `PERMITIR` individual, `NEGAR` de grupo e `PERMITIR` de grupo. Assim, `moradores.visualizar`
+  em um grupo não apaga um `moradores.editar` concedido por outro grupo; para negar a edição,
+  configure `NEGAR` explicitamente no grupo ou no usuário.
+- Alterar perfil, exceções individuais, grupos ou vínculos incrementa/cria a revisão RBAC do
+  tenant. Sessões ativas conferem a revisão e recarregam as permissões sem exigir novo login;
+  falha de leitura bloqueia escritas no frontend e a autorização backend continua obrigatória.
+- A Central de Usuários só pode conceder ações que o configurador possui, exceto admin real.
+  O backend também compara efeitos antes/depois para alterações de perfil, grupo e vínculo,
+  no tenant da sessão, impedindo autoelevação ou concessões indiretas a outros usuários.
 
 ## 6. Escopo de Ordens de Serviço
 - A matriz `os_permissoes_departamento` é tenant-aware e controla visualização, criação,

@@ -98,3 +98,9 @@ O Registro Manual pode lançar acessos em dois modos: `VEICULO`, quando a placa 
 - No cadastro pelo painel, a seleção é encadeada: Unidade → Morador titular (apenas moradores ativos da unidade) → Dependente (apenas quando o tipo do titular for Dependente, restrito à unidade/morador). Unidades são exibidas em ordem natural (Gleba 2 antes de Gleba 10).
 - A avaliação ocorre somente para Entrada, nunca para Saída. `alertas_unidade` (regras do morador/unidade e ciência prévia) não é `alertas_acesso` (detecção administrativa pós-evento).
 - A rotina CLI `cron/alertas_unidade_a_cada_10_minutos.php` muda alertas vencidos de `ATIVO` para `EXPIRADO`, registrando a operação `EXPIRAR`; também enfileira uma única notificação aproximadamente 24 horas antes da vigência final. A preferência individual `push_ativo` é mantida por tenant/morador no Portal; padrão habilitado. Se o morador desativar o push, o FCM é suprimido para acionamentos e lembretes, mas o inbox do Portal continua persistido. O envio também respeita a configuração global do tenant `push_alertas_unidade_ativo`.
+
+## 13. Permissões por módulo (RBAC)
+
+- Permissões são resolvidas por ação e tenant. A ausência de `PERMITIR` significa sem acesso; um grupo de somente leitura não cria `NEGAR` automático para criar/editar/excluir nem anula permissões de outros grupos.
+- Precedência única: perfil `admin`/`super_admin` confirmado no banco concede acesso total; fora deles, `NEGAR` individual explícito > `PERMITIR` individual explícito > `NEGAR` explícito de grupo > `PERMITIR` de grupo > sem acesso. `HERDAR` remove a exceção individual ou deixa o grupo sem regra e retorna à decisão herdada.
+- Configurar matriz/grupos exige `usuarios.configurar` no tenant da sessão. O operador não pode alterar a própria matriz nem conceder a outro usuário uma ação que ele não possui; a autorização e o tenant são validados no backend, independentemente dos controles visuais.

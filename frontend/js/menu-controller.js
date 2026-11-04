@@ -39,28 +39,29 @@
     // sem módulo próprio permanecem visíveis até serem catalogadas explicitamente.
     const PAGE_TO_PERMISSION = {
         dashboard:'dashboard', moradores:'moradores', veiculos:'veiculos', visitantes:'visitantes', registro:'registro',
-        acesso:'acesso', lpr:'lpr', relatorios:'relatorios_acesso', financeiro:'financeiro', configuracao:'configuracao',
+        acesso:'acesso', lpr:'lpr', rondas_vigilante:'rondas_vigilante', relatorios:'relatorios_acesso', financeiro:'financeiro', configuracao:'configuracao',
         unidades:'unidades', manutencao:'manutencao', hidrometro:'hidrometro', leitura:'leitura',
         relatorios_hidrometro:'relatorios_hidrometro', abastecimento:'abastecimento', estoque:'estoque',
         inventario:'inventario', relatorios_inventario:'relatorios_inventario', ordens_servico:'ordens_servico',
-        imprimir_os:'imprimir_os', checklists:'checklists', documentos:'documentos',
+        imprimir_os:'imprimir_os', checklists:'checklists', documentos:'documentos', contas_bancarias:'contas_bancarias',
+        conciliacao:'conciliacao', relatorios_bancarios:'relatorios_bancarios', contas_pagar:'contas_pagar',
+        contas_receber:'contas_receber', planos_contas:'financeiro', importacao_financeira:'importacao_financeira',
+        inadimplencia:'inadimplencia', logs_financeiro:'logs_financeiro',
         administrativa:'administrativo', recursos_humanos:'recursos_humanos',
+        assembleia:'assembleia', contratos:'contratos', protocolos:'protocolos', protocolo:'protocolo',
+        notificacoes:'notificacoes', notificacoes_push:'notificacoes_push', eventos:'eventos',
+        crm:'crm', marketplace:'marketplace', marketplace_admin:'marketplace_admin',
+        fornecedores:'marketplace_admin', cadastro_fornecedor_admin:'marketplace_admin',
         usuarios:'usuarios', empresa:'empresa', dispositivos:'dispositivos', seguranca:'seguranca', sistema:'sistema', config_visitantes:'sistema',
-        meu_perfil:'meu_perfil', inadimplencia:'inadimplencia', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin', config_moradores:'sistema'
+        meu_perfil:'meu_perfil', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin',
+        superadmin_aplicativos:'superadmin_aplicativos', aplicativos:'superadmin_aplicativos', pwa_central:'pwa_central',
+        'admin-sessoes':'admin_sessoes', admin_sessoes:'admin_sessoes', auditoria:'auditoria',
+        manual:'manual', monitoring:'superadmin', config_moradores:'sistema'
     };
-
-    function emContextoGlobalSuperAdmin() {
-        try {
-            return String(localStorage.getItem('usuario_permissao') || '').toLowerCase() === 'super_admin' &&
-                !localStorage.getItem('superadmin_tenant_original');
-        } catch (error) {
-            return false;
-        }
-    }
 
     function emContextoTenantSuperAdmin() {
         try {
-            return String(localStorage.getItem('usuario_permissao') || '').toLowerCase() === 'super_admin' &&
+            return state.perfil === 'super_admin' &&
                 !!localStorage.getItem('superadmin_tenant_original');
         } catch (error) {
             return false;
@@ -70,7 +71,8 @@
     const state = {
         logEnabled: false,
         initialized: false,
-        mode: emContextoGlobalSuperAdmin() ? 'superadmin' : 'operacional',
+        mode: 'operacional',
+        perfil: null,
         permissoes: null,
         carregamentoPermissoes: null,
         items: MENU_ITEMS.map((item) => ({ ...item })),
@@ -247,8 +249,13 @@
             .then(async (resposta) => {
                 const texto = await resposta.text();
                 let dados = null; try { dados = JSON.parse(texto); } catch (_) { return true; }
-                // Enquanto a migration não estiver instalada, preserva o menu legado.
-                if (resposta.ok && dados.sucesso) state.permissoes = dados.dados?.modulos || {};
+                if (resposta.ok && dados.sucesso && dados.dados) {
+                    state.permissoes = dados.dados.modulos || {};
+                    state.perfil = String(dados.dados.permissao || '').toLowerCase();
+                    let tenantSuperAdmin = false;
+                    try { tenantSuperAdmin = !!localStorage.getItem('superadmin_tenant_original'); } catch (_) { /* sem storage, não assumir contexto */ }
+                    state.mode = state.perfil === 'super_admin' && !tenantSuperAdmin ? 'superadmin' : 'operacional';
+                }
                 return true;
             })
             .catch(() => true)
@@ -374,6 +381,7 @@
 
     function setMode(mode) {
         const proximoModo = mode === 'superadmin' ? 'superadmin' : 'operacional';
+        if (proximoModo === 'superadmin' && state.perfil !== 'super_admin') return false;
         if (state.mode === proximoModo) {
             renderMenu();
             return true;
@@ -392,6 +400,25 @@
         renderMenu();
         markActive();
         carregarPermissoesEfetivas();
+
+        document.addEventListener('permissoesAtualizadas', function (event) {
+            const perms = event && event.detail ? event.detail : null;
+            if (!perms || perms.carregamento_falhou) {
+                state.permissoes = null;
+                state.perfil = null;
+                state.mode = 'operacional';
+                renderMenu();
+                markActive();
+                return;
+            }
+            state.permissoes = perms.permissoes || {};
+            state.perfil = String(perms.permissao || '').toLowerCase();
+            let tenantSuperAdmin = false;
+            try { tenantSuperAdmin = !!localStorage.getItem('superadmin_tenant_original'); } catch (_) { /* sem storage, não assumir contexto */ }
+            state.mode = state.perfil === 'super_admin' && !tenantSuperAdmin ? 'superadmin' : 'operacional';
+            renderMenu();
+            markActive();
+        });
 
         document.addEventListener('sidebarLoaded', function (event) {
             const sidebar = event && event.detail ? event.detail.sidebar : null;

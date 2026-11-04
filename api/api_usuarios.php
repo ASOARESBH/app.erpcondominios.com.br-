@@ -181,6 +181,7 @@ if ($metodo === 'POST') {
     // sem gestão de segurança, qualquer tentativa de perfil superior é reduzida.
     if ($permissao === 'super_admin') retornar_json(false, 'O perfil Super Admin não pode ser concedido por esta API.');
     if ($rbac_ativo && !rbacPode($conexao, 'usuarios', 'configurar') && $permissao !== 'visualizador') $permissao = 'visualizador';
+    $permissoesAtorAntes = $rbac_ativo ? rbacObterPermissoesEfetivas($conexao, (int)($_SESSION['usuario_id'] ?? 0), $tenant_id, true) : null;
     $ativo = isset($dados['ativo']) ? intval($dados['ativo']) : 1;
     $sessao_inativa = isset($dados['sessao_inativa']) ? intval($dados['sessao_inativa']) : 0;
     
@@ -207,7 +208,7 @@ if ($metodo === 'POST') {
     // Inserir usuário no tenant atual; o tenant jamais é aceito do navegador.
     $stmt = $conexao->prepare("INSERT INTO usuarios (tenant_id, nome, email, senha, funcao, departamento, permissao, ativo, sessao_inativa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("issssssii", $tenant_id, $nome, $email, $senha_hash, $funcao, $departamento, $permissao, $ativo, $sessao_inativa);
-    
+    $conexao->begin_transaction();
     if ($stmt->execute()) {
         $id_inserido = $conexao->insert_id;
         // Compatibilidade multi-tenant para rotinas que resolvem o contexto pelo vínculo.
@@ -216,22 +217,37 @@ if ($metodo === 'POST') {
         // esse valor para resolver a permissão efetiva — sem isso, todo usuário novo
         // (inclusive admin) era rebaixado para 'operador' a cada login.
         $vinculo = $conexao->prepare('INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE permissao = VALUES(permissao), ativo = 1');
-        if ($vinculo) { $vinculo->bind_param('iis', $id_inserido, $tenant_id, $permissao); $vinculo->execute(); $vinculo->close(); }
+        if (!$vinculo) { $conexao->rollback(); error_log('[Usuarios][RBAC] Falha ao preparar vínculo do usuário ' . $id_inserido . ': ' . $conexao->error); retornar_json(false, 'Não foi possível criar o vínculo do usuário com o condomínio.'); }
+        $vinculo->bind_param('iis', $id_inserido, $tenant_id, $permissao);
+        if (!$vinculo->execute()) { $erroVinculo=$vinculo->error; $vinculo->close(); $conexao->rollback(); error_log('[Usuarios][RBAC] Falha ao criar vínculo do usuário ' . $id_inserido . ': ' . $erroVinculo); retornar_json(false, 'Não foi possível criar o vínculo do usuário com o condomínio.'); }
+        $vinculo->close();
         if ($rbac_ativo) {
             $slug_grupo_inicial = in_array($permissao, ['visualizador','operador','gerente','admin'], true) ? 'compat-' . $permissao : 'compat-visualizador';
             $grupo = $conexao->prepare("SELECT id FROM rbac_grupos WHERE tenant_id=? AND slug=? AND ativo=1 LIMIT 1");
-            if ($grupo) {
-                $grupo->bind_param('is', $tenant_id, $slug_grupo_inicial);
-                $grupo->execute();
-                $linha_grupo = $grupo->get_result()->fetch_assoc();
-                $grupo->close();
-                $grupo_id = (int)($linha_grupo['id'] ?? 0);
-                if ($grupo_id > 0) {
-                    $associacao = $conexao->prepare('INSERT IGNORE INTO rbac_usuario_grupos (usuario_id,tenant_id,grupo_id,ativo,atribuido_por_usuario_id) VALUES (?,?,?,?,?)');
-                    if ($associacao) { $ator=(int)($_SESSION['usuario_id'] ?? 0); $um=1; $associacao->bind_param('iiiii',$id_inserido,$tenant_id,$grupo_id,$um,$ator); $associacao->execute(); $associacao->close(); }
-                }
+            if (!$grupo) { $conexao->rollback(); retornar_json(false, 'Não foi possível localizar o grupo de compatibilidade do perfil.'); }
+            $grupo->bind_param('is', $tenant_id, $slug_grupo_inicial);
+            if (!$grupo->execute()) { $grupo->close(); $conexao->rollback(); retornar_json(false, 'Não foi possível consultar o grupo do perfil.'); }
+            $linha_grupo = $grupo->get_result()->fetch_assoc();
+            $grupo->close();
+            $grupo_id = (int)($linha_grupo['id'] ?? 0);
+            if ($grupo_id <= 0) { $conexao->rollback(); retornar_json(false, 'Grupo de compatibilidade do perfil não encontrado.'); }
+            $associacao = $conexao->prepare('INSERT IGNORE INTO rbac_usuario_grupos (usuario_id,tenant_id,grupo_id,ativo,atribuido_por_usuario_id) VALUES (?,?,?,?,?)');
+            if (!$associacao) { $conexao->rollback(); retornar_json(false, 'Não foi possível associar o grupo do perfil.'); }
+            $ator=(int)($_SESSION['usuario_id'] ?? 0); $um=1; $associacao->bind_param('iiiii',$id_inserido,$tenant_id,$grupo_id,$um,$ator);
+            if (!$associacao->execute()) { $associacao->close(); $conexao->rollback(); retornar_json(false, 'Não foi possível associar o grupo do perfil.'); }
+            $associacao->close();
+            $permissoesAlvoDepois = rbacObterPermissoesEfetivas($conexao, $id_inserido, $tenant_id, true);
+            $concessaoNaoAutorizada = rbacPrimeiraConcessaoNaoPossuida($permissoesAtorAntes, ['is_admin_total'=>false,'permitidas'=>[]], $permissoesAlvoDepois);
+            if ($concessaoNaoAutorizada !== null) {
+                $conexao->rollback();
+                unset($_SESSION['_rbac_cache']);
+                retornar_json(false, 'Você não pode conceder ao usuário a permissão ' . $concessaoNaoAutorizada . '.');
             }
+        }
+        $conexao->commit();
+        if ($rbac_ativo) {
             rbacInvalidarCache($conexao, $tenant_id);
+            unset($_SESSION['_rbac_cache']);
             rbacAuditar($conexao, ['modulo_chave'=>'usuarios','acao'=>'CRIAR','registro_tipo'=>'usuarios','registro_id'=>$id_inserido,'dados_depois'=>['nome'=>$nome,'email'=>$email,'perfil'=>$permissao],'resultado'=>'SUCESSO','status_http'=>201]);
         }
 
@@ -312,13 +328,18 @@ if ($metodo === 'PUT') {
         $stmt->bind_param("ssssssiii", $nome, $email, $funcao, $departamento, $permissao, $ativo, $sessao_inativa, $tenant_id, $id);
     }
     
+    $permissoesAtorAntes = $rbac_ativo ? rbacObterPermissoesEfetivas($conexao, (int)($_SESSION['usuario_id'] ?? 0), $tenant_id, true) : null;
+    $permissoesAlvoAntes = $rbac_ativo ? rbacObterPermissoesEfetivas($conexao, $id, $tenant_id, true) : null;
     $conexao->begin_transaction();
     if ($stmt->execute()) {
         // Mantém usuario_tenant.permissao sincronizada — sem isso, promover/rebaixar
         // alguém aqui não tinha efeito nenhum na permissão efetiva usada no login
         // (api_verificar_tipo_login.php lê o vínculo, não usuarios.permissao direto).
         $vinculoUpd = $conexao->prepare('INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE permissao = VALUES(permissao), ativo = 1');
-        if ($vinculoUpd) { $vinculoUpd->bind_param('iis', $id, $tenant_id, $permissao); $vinculoUpd->execute(); $vinculoUpd->close(); }
+        if (!$vinculoUpd) { $conexao->rollback(); error_log('[Usuarios][RBAC] Falha ao preparar vínculo do usuário ' . $id . ': ' . $conexao->error); retornar_json(false, 'Não foi possível sincronizar o perfil do usuário. Nenhuma alteração foi aplicada.'); }
+        $vinculoUpd->bind_param('iis', $id, $tenant_id, $permissao);
+        if (!$vinculoUpd->execute()) { $erroVinculo=$vinculoUpd->error; $vinculoUpd->close(); $conexao->rollback(); error_log('[Usuarios][RBAC] Falha ao atualizar vínculo do usuário ' . $id . ': ' . $erroVinculo); retornar_json(false, 'Não foi possível sincronizar o perfil do usuário. Nenhuma alteração foi aplicada.'); }
+        $vinculoUpd->close();
 
         if ($rbac_ativo) {
             $grupoSync = rbacSincronizarGrupoCompatibilidade($conexao, $tenant_id, $id, $permissao);
@@ -326,6 +347,13 @@ if ($metodo === 'PUT') {
                 $conexao->rollback();
                 error_log('[Usuarios][RBAC] Falha ao sincronizar perfil do usuário ' . $id . ': ' . ($grupoSync['mensagem'] ?? 'erro desconhecido'));
                 retornar_json(false, 'Não foi possível sincronizar as permissões do perfil. Nenhuma alteração foi aplicada.');
+            }
+            $permissoesAlvoDepois = rbacObterPermissoesEfetivas($conexao, $id, $tenant_id, true);
+            $concessaoNaoAutorizada = rbacPrimeiraConcessaoNaoPossuida($permissoesAtorAntes, $permissoesAlvoAntes, $permissoesAlvoDepois);
+            if ($concessaoNaoAutorizada !== null) {
+                $conexao->rollback();
+                unset($_SESSION['_rbac_cache']);
+                retornar_json(false, 'Você não pode conceder ao usuário a permissão ' . $concessaoNaoAutorizada . '.');
             }
         }
 

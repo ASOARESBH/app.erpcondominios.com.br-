@@ -89,7 +89,14 @@ if ($metodo === 'GET' && $acao === 'permissoes_usuario') {
             rbacInvalidarCache($conexao, $tenant_id);
             $dados_rbac = rbacFormatoPermissoesApi($conexao, $usuario_id, $tenant_id, true);
         }
-        retornar_json(true, 'Permissões efetivas carregadas', ['usuario'=>$usuario_rbac, 'permissoes'=>$dados_rbac['modulos'], 'grupos'=>$dados_rbac['grupos'], 'revisao'=>$dados_rbac['revisao']]);
+        foreach ($dados_rbac['modulos'] as $chaveModulo=>&$moduloPermissoes) {
+            $moduloPermissoes['acoes_concediveis']=[];
+            foreach (($moduloPermissoes['modulo']['acoes'] ?? []) as $acaoCatalogo) {
+                $moduloPermissoes['acoes_concediveis'][$acaoCatalogo]=rbacPodeConceder($conexao,$chaveModulo,$acaoCatalogo);
+            }
+        }
+        unset($moduloPermissoes);
+        retornar_json(true, 'Permissões efetivas carregadas', ['usuario'=>$usuario_rbac, 'permissoes'=>$dados_rbac['modulos'], 'grupos'=>$dados_rbac['grupos'], 'revisao'=>$dados_rbac['revisao'], 'pode_configurar'=>rbacPode($conexao,'usuarios','configurar')]);
     }
     if ($usuario_id <= 0) {
         retornar_json(false, 'ID de usuário inválido');
@@ -192,13 +199,24 @@ if ($metodo === 'GET' && $acao === 'permissoes_usuario') {
 if ($metodo === 'GET' && $acao === 'minhas_permissoes') {
     $acao = 'meus_modulos'; // normalizar para o bloco abaixo
 }
+if ($metodo === 'GET' && $acao === 'revisao_permissoes') {
+    $perfilBanco = rbacUsuarioPerfilBanco($conexao, (int)$usuario_logado['id'], (int)$tenant_id);
+    if ($perfilBanco === null) retornar_json(false, 'Usuário não localizado no tenant autenticado.');
+    retornar_json(true, 'Revisão RBAC consultada', [
+        'usuario_id'=>(int)$usuario_logado['id'],
+        'tenant_id'=>(int)$tenant_id,
+        'permissao'=>$perfilBanco,
+        'revisao'=>$rbac_ativo ? rbacObterRevisao($conexao,$tenant_id) : 0
+    ]);
+}
 if ($metodo === 'GET' && $acao === 'meus_modulos') {
     $uid = $usuario_logado['id'];
     if ($rbac_ativo) {
         $dados_rbac = rbacFormatoPermissoesApi($conexao, (int)$uid, $tenant_id, false);
-        retornar_json(true, 'Permissões efetivas carregadas', ['modulos'=>$dados_rbac['modulos'], 'is_admin'=>$dados_rbac['is_admin'], 'revisao'=>$dados_rbac['revisao'], 'grupos'=>$dados_rbac['grupos']]);
+        retornar_json(true, 'Permissões efetivas carregadas', ['modulos'=>$dados_rbac['modulos'], 'is_admin'=>$dados_rbac['is_admin'], 'revisao'=>$dados_rbac['revisao'], 'grupos'=>$dados_rbac['grupos'], 'usuario_id'=>(int)$uid, 'tenant_id'=>(int)$tenant_id, 'permissao'=>$dados_rbac['permissao']]);
     }
-    $permissao = $usuario_logado['permissao'] ?? 'operador';
+    $permissao = rbacUsuarioPerfilBanco($conexao, (int)$uid, (int)$tenant_id);
+    if ($permissao === null) retornar_json(false, 'Usuário não localizado no tenant autenticado.');
 
     // Admin e Super-Admin têm acesso total aos módulos. O Super-Admin
     // recebe adicionalmente a autorização específica da API Super-Admin.
@@ -215,7 +233,7 @@ if ($metodo === 'GET' && $acao === 'meus_modulos') {
                 'pode_exportar' => true
             ];
         }
-        retornar_json(true, 'Módulos carregados', ['modulos' => $modulos, 'is_admin' => true]);
+        retornar_json(true, 'Módulos carregados', ['modulos' => $modulos, 'is_admin' => true, 'revisao'=>0, 'usuario_id'=>(int)$uid, 'tenant_id'=>(int)$tenant_id, 'permissao'=>strtolower((string)$permissao)]);
     }
 
     $hierarquia = ['visualizador' => 1, 'operador' => 2, 'gerente' => 3, 'admin' => 4, 'super_admin' => 5];
@@ -252,7 +270,7 @@ if ($metodo === 'GET' && $acao === 'meus_modulos') {
     }
     $stmt->close();
 
-    retornar_json(true, 'Módulos carregados', ['modulos' => $modulos, 'is_admin' => false]);
+    retornar_json(true, 'Módulos carregados', ['modulos' => $modulos, 'is_admin' => false, 'revisao'=>0, 'usuario_id'=>(int)$uid, 'tenant_id'=>(int)$tenant_id, 'permissao'=>strtolower((string)$permissao)]);
 }
 
 // ─────────────────────────────────────────────────────────────────────

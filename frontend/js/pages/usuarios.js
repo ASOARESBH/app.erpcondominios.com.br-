@@ -10,13 +10,16 @@ const state = {
     // Módulos
     todosUsuarios: [],
     usuarioModuloAtual: null,
-    permissoesEditadas: {},   // { chave: { pode_acessar, pode_criar, pode_editar, pode_excluir, pode_exportar } }
+    permissoesEditadas: {},   // { chave: { estados: { acao: HERDAR|PERMITIR|NEGAR } } }
+    permissoesOriginais: {},
     todosModulos: [],
     rbacGrupos: [],
     rbacCatalogo: [],
+    rbacPodeConfigurar: false,
     usuarioGruposSelecionado: null,
     abaAtual: 'usuarios'
 };
+let permissoesAtualizadasHandler = null;
 
 export function init() {
     console.log('[Usuarios v4.0] Inicializando...');
@@ -34,8 +37,6 @@ export function init() {
         resetarParaPerfil:        resetarParaPerfil,
         salvarPermissoes:         salvarPermissoes,
         abrirModulosUsuario:      abrirModulosUsuario,
-        _onToggleModulo:          _onToggleModulo,
-        _onTogglePerm:            _onTogglePerm,
         novoGrupoRbac:            novoGrupoRbac,
         editarGrupoRbac:          editarGrupoRbac,
         cancelarGrupoRbac:        cancelarGrupoRbac,
@@ -50,6 +51,10 @@ export function init() {
 
 export function destroy() {
     console.log('[Usuarios] Destruindo...');
+    if (permissoesAtualizadasHandler) {
+        document.removeEventListener('permissoesAtualizadas', permissoesAtualizadasHandler);
+        permissoesAtualizadasHandler = null;
+    }
     window.UsuariosPage = null;
 }
 
@@ -133,6 +138,37 @@ function bindEvents() {
             else if (btnToggle)  toggleStatusUsuario(btnToggle.dataset.id, btnToggle.dataset.nome, btnToggle.dataset.ativo);
         });
     }
+    state.dom.modGruposContainer?.addEventListener('change', (e) => {
+        const select = e.target.closest('.rbac-individual-state');
+        if (select) _alterarEstadoIndividual(select);
+    });
+    state.dom.modGruposContainer?.addEventListener('click', (e) => {
+        const bulk = e.target.closest('.rbac-group-bulk');
+        if (bulk) {
+            e.stopPropagation();
+            window.UsuariosPage?._toggleGrupo?.(bulk.dataset.rbacGrupo, bulk.dataset.rbacEstado);
+            return;
+        }
+        const collapse = e.target.closest('.rbac-group-collapse');
+        if (collapse) document.getElementById(collapse.dataset.target)?.classList.toggle('hidden');
+    });
+    state.dom.tabelaGruposRbac?.addEventListener('click', (e) => {
+        const editar = e.target.closest('[data-rbac-grupo-editar]');
+        const excluir = e.target.closest('[data-rbac-grupo-excluir]');
+        if (editar) editarGrupoRbac(editar.dataset.rbacGrupoEditar);
+        else if (excluir) excluirGrupoRbac(excluir.dataset.rbacGrupoExcluir, excluir.dataset.nome || 'grupo');
+    });
+    state.dom.grupoPermissoesCatalog?.addEventListener('change', (e) => {
+        const select = e.target.closest('.rbac-grupo-state');
+        if (select) _atualizarPreviaGrupo(select);
+    });
+    if (permissoesAtualizadasHandler) document.removeEventListener('permissoesAtualizadas', permissoesAtualizadasHandler);
+    permissoesAtualizadasHandler = (e) => {
+        const perms = e.detail;
+        _definirPodeConfigurarRBAC(!!perms && !perms.carregamento_falhou &&
+            (!!perms.is_admin || !!perms.permissoes?.usuarios?.pode_configurar));
+    };
+    document.addEventListener('permissoesAtualizadas', permissoesAtualizadasHandler);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -211,7 +247,7 @@ function _carregarDepartamentosSelect() {
 function carregarUsuarios() {
     if (state.dom.loading) state.dom.loading.style.display = 'block';
     console.log('[Usuarios] Carregando lista...');
-    fetch(`${state.apiBase}api_usuarios.php`)
+    fetch(`${state.apiBase}api_usuarios.php`, { credentials:'include' })
         .then(r => {
             console.log('[Usuarios] HTTP status:', r.status);
             if (r.status === 401) {
@@ -307,6 +343,7 @@ function abrirModulosUsuario(userId) {
 }
 
 function selecionarUsuarioModulos(userId) {
+    _definirPodeConfigurarRBAC(false);
     if (!userId) {
         // Sem usuário: mostrar estado vazio
         if (state.dom.modEstadoVazio)   state.dom.modEstadoVazio.style.display = 'block';
@@ -368,19 +405,26 @@ function selecionarUsuarioModulos(userId) {
     if (state.dom.modLoading) state.dom.modLoading.style.display = 'block';
     if (state.dom.modGruposContainer) state.dom.modGruposContainer.innerHTML = '';
 
-    fetch(`${state.apiBase}api_permissoes_modulos.php?acao=permissoes_usuario&id=${uid}`)
+    fetch(`${state.apiBase}api_permissoes_modulos.php?acao=permissoes_usuario&id=${uid}`, { credentials:'include' })
         .then(r => r.json())
         .then(data => {
             if (state.dom.modLoading) state.dom.modLoading.style.display = 'none';
             if (!data.sucesso) { mostrarAlerta('Erro ao carregar módulos: ' + data.mensagem, 'error'); return; }
+            _definirPodeConfigurarRBAC(!!data.dados.pode_configurar);
             const permissoes = data.dados.permissoes || {};
             state.todosModulos = Object.entries(permissoes).map(([chave, m]) => {
                 const meta = m.modulo || m;
                 return { ...m, modulo_chave: meta.chave || m.modulo_chave || chave, nome: meta.nome || m.nome || chave, grupo: meta.grupo || m.grupo || 'Sistema', icone: meta.icone || m.icone || 'fas fa-shield-alt', descricao: meta.descricao || m.descricao || '', permissao_minima: meta.perfil_compatibilidade || m.permissao_minima || 'visualizador', perfil_permite: true };
             });
-            // Inicializar exceções editáveis a partir da decisão efetiva.
+            state.permissoesEditadas = {};
+            state.permissoesOriginais = {};
             state.todosModulos.forEach(m => {
-                state.permissoesEditadas[m.modulo_chave] = { pode_acessar:!!m.pode_acessar, pode_criar:!!m.pode_criar, pode_editar:!!m.pode_editar, pode_excluir:!!m.pode_excluir, pode_exportar:!!m.pode_exportar };
+                const estados = {};
+                (m.modulo?.acoes || []).forEach(acao => {
+                    estados[acao] = m.estados_individuais?.[acao] || 'HERDAR';
+                });
+                state.permissoesEditadas[m.modulo_chave] = { estados };
+                state.permissoesOriginais[m.modulo_chave] = { ...estados };
             });
             // Exibir rastreabilidade de auditoria
             _exibirAuditoria(permissoes);
@@ -391,6 +435,14 @@ function selecionarUsuarioModulos(userId) {
             console.error('[Usuarios] Erro ao carregar módulos:', err);
             mostrarAlerta('Erro de conexão ao carregar módulos.', 'error');
         });
+}
+
+function _definirPodeConfigurarRBAC(permitido) {
+    state.rbacPodeConfigurar = !!permitido;
+    state.dom.modHeader?.querySelectorAll('button').forEach(btn => { btn.disabled = !state.rbacPodeConfigurar; });
+    state.dom.painelGrupos?.querySelectorAll('button:not(.mod-btn-outline)').forEach(btn => { btn.disabled = !state.rbacPodeConfigurar; });
+    state.dom.grupoEditor?.querySelectorAll('input,textarea,select,button:not(.mod-btn-outline)').forEach(el => { el.disabled = !state.rbacPodeConfigurar; });
+    state.dom.modGruposContainer?.querySelectorAll('.rbac-individual-state').forEach(select => { select.disabled = !state.rbacPodeConfigurar; });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -421,25 +473,26 @@ function renderizarGruposModulos(modulos, usuario) {
     };
 
     container.innerHTML = Object.entries(grupos).map(([grupo, mods]) => {
-        const habilitados = mods.filter(m => state.permissoesEditadas[m.modulo_chave]?.pode_acessar).length;
+        const habilitados = mods.filter(m => _estadoPrevisto(m, 'visualizar') === 'PERMITIR' || _estadoPrevisto(m, 'visualizar') === 'ADMIN_TOTAL').length;
         const total = mods.length;
         const grupoId = 'grupo_' + grupo.replace(/[^a-z0-9]/gi, '_');
+        const grupoSeguro = _escHtml(grupo);
         return `
-        <div class="mod-grupo" data-grupo="${grupo}">
-            <div class="mod-grupo-header" onclick="document.getElementById('${grupoId}').classList.toggle('hidden')">
+        <div class="mod-grupo" data-grupo="${grupoSeguro}">
+            <div class="mod-grupo-header">
                 <div class="mod-grupo-titulo">
                     <i class="${iconeGrupo[grupo] || 'fas fa-folder'}" style="color:#2563eb;"></i>
-                    ${grupo}
+                    ${grupoSeguro}
                     <span class="mod-grupo-badge">${habilitados}/${total}</span>
                 </div>
                 <div class="mod-grupo-toggle">
-                    <button class="mod-grupo-btn" onclick="event.stopPropagation();UsuariosPage._toggleGrupo('${grupo}',true)">
-                        <i class="fas fa-check"></i> Todos
+                    <button type="button" class="mod-grupo-btn rbac-group-bulk" data-rbac-grupo="${grupoSeguro}" data-rbac-estado="PERMITIR">
+                        <i class="fas fa-check"></i> Permitir ações disponíveis
                     </button>
-                    <button class="mod-grupo-btn" onclick="event.stopPropagation();UsuariosPage._toggleGrupo('${grupo}',false)">
-                        <i class="fas fa-times"></i> Nenhum
+                    <button type="button" class="mod-grupo-btn rbac-group-bulk" data-rbac-grupo="${grupoSeguro}" data-rbac-estado="NEGAR">
+                        <i class="fas fa-times"></i> Negar ações
                     </button>
-                    <i class="fas fa-chevron-down" style="color:#94a3b8;font-size:0.8rem;"></i>
+                    <button type="button" class="mod-grupo-btn rbac-group-collapse" data-target="${grupoId}" aria-label="Expandir ou recolher ${grupoSeguro}"><i class="fas fa-chevron-down" style="color:#94a3b8;font-size:0.8rem;"></i></button>
                 </div>
             </div>
             <div class="mod-grid" id="${grupoId}">
@@ -449,161 +502,93 @@ function renderizarGruposModulos(modulos, usuario) {
     }).join('');
 
     // Expor _toggleGrupo
-    window.UsuariosPage._toggleGrupo = function(grupo, habilitar) {
+    window.UsuariosPage._toggleGrupo = function(grupo, estado) {
         const mods = state.todosModulos.filter(m => m.grupo === grupo);
         mods.forEach(m => {
-            if (!m.perfil_permite && habilitar) return; // não habilitar o que o perfil não permite
-            const perm = state.permissoesEditadas[m.modulo_chave];
-            if (perm) {
-                perm.pode_acessar = habilitar ? 1 : 0;
-                if (!habilitar) {
-                    perm.pode_criar = 0;
-                    perm.pode_editar = 0;
-                    perm.pode_excluir = 0;
-                    perm.pode_exportar = 0;
-                }
-            }
-            const toggle = document.getElementById(`toggle_${m.modulo_chave}`);
-            if (toggle) toggle.checked = habilitar && !!m.perfil_permite;
-            const card = document.getElementById(`card_${m.modulo_chave}`);
-            if (card) _atualizarClasseCard(card, habilitar && !!m.perfil_permite, m.perfil_permite);
+            const estados = state.permissoesEditadas[m.modulo_chave]?.estados || {};
+            (m.modulo?.acoes || []).forEach(acao => {
+                if (estado === 'PERMITIR' && !m.acoes_concediveis?.[acao]) return;
+                estados[acao] = estado;
+            });
+        });
+        state.dom.modGruposContainer?.querySelectorAll('.rbac-individual-state').forEach(select => {
+            if (mods.some(m => m.modulo_chave === select.dataset.modulo)) select.value = state.permissoesEditadas[select.dataset.modulo]?.estados?.[select.dataset.acao] || 'HERDAR';
         });
         _atualizarContadorGrupo(grupo);
-        state.alteracoesPendentes = (state.alteracoesPendentes || 0) + 1;
-        _atualizarBadgePendente(state.alteracoesPendentes);
+        _recalcularPendentes();
     };
 }
 
-function _renderCardModulo(m, usuario) {
-    const perm = state.permissoesEditadas[m.modulo_chave] || {};
-    const habilitado = !!perm.pode_acessar;
-    const perfilPermite = !!m.perfil_permite;
-    const classeCard = habilitado ? 'habilitado' : (perfilPermite ? '' : 'perfil-sem-acesso');
-
-    const minBadgeClass = {
-        visualizador: 'mod-min-visualizador',
-        operador:     'mod-min-operador',
-        gerente:      'mod-min-gerente',
-        admin:        'mod-min-admin'
-    }[m.permissao_minima] || 'mod-min-operador';
-
-    const perms = [
-        { key:'pode_acessar',  label:'Ver',      icon:'fa-eye' },
-        { key:'pode_criar',    label:'Criar',    icon:'fa-plus' },
-        { key:'pode_editar',   label:'Editar',   icon:'fa-edit' },
-        { key:'pode_excluir',  label:'Excluir',  icon:'fa-trash' },
-        { key:'pode_exportar', label:'Exportar', icon:'fa-download' }
-    ];
-
-    // No modo RBAC nem todo módulo tem as 5 ações "legadas" cadastradas em
-    // rbac_permissoes (ex.: um módulo pai pode só ter "visualizar"). Antes,
-    // o card sempre desenhava os 5 chips mesmo quando a ação não existia no
-    // catálogo — o operador marcava "Criar"/"Editar" e o servidor descartava
-    // a mudança em silêncio (rbacSalvarExcecoesLegadas pula ações sem
-    // permissao_id correspondente), dando a falsa impressão de que "não salva".
-    // Aqui só mostramos os chips das ações que realmente existem para o módulo.
-    const acoesDoModulo = Array.isArray(m.modulo?.acoes) ? m.modulo.acoes : null;
-    const campoPorAcao = { visualizar:'pode_acessar', criar:'pode_criar', editar:'pode_editar', excluir:'pode_excluir', exportar:'pode_exportar' };
-    const permsDisponiveis = acoesDoModulo
-        ? perms.filter(p => p.key === 'pode_acessar' || acoesDoModulo.some(acao => campoPorAcao[acao] === p.key))
-        : perms;
-
-    return `
-    <div class="mod-card ${classeCard}" id="card_${m.modulo_chave}" data-chave="${m.modulo_chave}" data-grupo="${m.grupo}">
-        <div class="mod-card-top">
-            <div class="mod-card-icon"><i class="${m.icone}"></i></div>
-            <div class="mod-card-info">
-                <div class="mod-card-nome">${m.nome}</div>
-                <div class="mod-card-desc">${m.descricao || ''}</div>
-                <span class="mod-min-badge ${minBadgeClass}">
-                    <i class="fas fa-lock" style="font-size:0.65rem;"></i> mínimo: ${_textoPermissao(m.permissao_minima)}
-                </span>
-            </div>
-            ${!perfilPermite ? `<div title="Perfil não tem permissão mínima" style="color:#94a3b8;font-size:0.85rem;"><i class="fas fa-lock"></i></div>` : ''}
-        </div>
-        <div class="mod-card-perms" id="perms_${m.modulo_chave}">
-            ${permsDisponiveis.map(p => {
-                const ativo = !!perm[p.key];
-                const desabilitado = !perfilPermite || (p.key !== 'pode_acessar' && !perm.pode_acessar);
-                return `<div class="mod-perm-chip ${ativo ? 'on' : 'off'} ${desabilitado ? 'disabled' : ''}"
-                     id="chip_${m.modulo_chave}_${p.key}"
-                     onclick="UsuariosPage._onTogglePerm('${m.modulo_chave}','${p.key}',this)"
-                     title="${p.label}: ${ativo ? 'Habilitado — clique para desabilitar' : 'Desabilitado — clique para habilitar'}">
-                    <i class="fas ${p.icon}" style="font-size:0.65rem;"></i> ${p.label}
-                </div>`;
-            }).join('')}
-        </div>
+function _renderCardModulo(m) {
+    const modulo = m.modulo_chave;
+    const grupos = state.permissoesEditadas[modulo]?.estados || {};
+    const labels = {visualizar:'Visualizar',criar:'Criar',editar:'Editar',excluir:'Excluir',exportar:'Exportar',imprimir:'Imprimir',importar:'Importar',aprovar:'Aprovar',configurar:'Configurar',executar:'Executar',bloquear:'Bloquear',desbloquear:'Desbloquear'};
+    const acoes = (m.modulo?.acoes || []).map(acao => {
+        const estado = grupos[acao] || 'HERDAR';
+        const concedivel = !!m.acoes_concediveis?.[acao];
+        const nomeAcao = _escHtml(labels[acao] || acao);
+        const origem = _escHtml(_origemPrevista(m, acao));
+        const efetiva = _escHtml(_estadoPrevisto(m, acao));
+        return `<div class="rbac-permission-row">
+            <label for="ind_${_escHtml(modulo)}_${_escHtml(acao)}">${nomeAcao}</label>
+            <select class="rbac-individual-state" id="ind_${_escHtml(modulo)}_${_escHtml(acao)}" data-modulo="${_escHtml(modulo)}" data-acao="${_escHtml(acao)}" ${state.rbacPodeConfigurar?'':'disabled'}>
+                <option value="HERDAR" ${estado==='HERDAR'?'selected':''}>Herdar</option>
+                <option value="PERMITIR" ${estado==='PERMITIR'?'selected':''} ${concedivel?'':'disabled'}>Permitir</option>
+                <option value="NEGAR" ${estado==='NEGAR'?'selected':''}>Negar</option>
+            </select>
+        <small class="rbac-effective-preview" data-preview-modulo="${_escHtml(modulo)}" data-preview-acao="${_escHtml(acao)}">Efetiva: ${efetiva.replace(/_/g,' ')} · ${origem}</small>
+        </div>`;
+    }).join('');
+    const grants = (m.modulo?.acoes || []).filter(acao => m.acoes_concediveis?.[acao]).length;
+    return `<div class="mod-card" id="card_${_escHtml(modulo)}" data-chave="${_escHtml(modulo)}" data-grupo="${_escHtml(m.grupo)}">
+        <div class="mod-card-top"><div class="mod-card-icon"><i class="${_escHtml(m.icone || 'fas fa-shield-alt')}"></i></div><div class="mod-card-info">
+            <div class="mod-card-nome">${_escHtml(m.nome)}</div><div class="mod-card-desc">${_escHtml(m.descricao || '')}</div>
+            <span class="mod-min-badge">${_escHtml(m.permissao_minima || 'RBAC')} · ${grants} ação${grants===1?'':'ões'} concedível${grants===1?'':'s'} por você</span>
+        </div></div>
+        <div class="rbac-permission-matrix">${acoes || '<span style="color:#64748b;">Nenhuma ação cadastrada.</span>'}</div>
     </div>`;
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// INTERAÇÕES COM MÓDULOS
-// ─────────────────────────────────────────────────────────────────────
-function _onToggleModulo(chave, habilitado) {
-    const perm = state.permissoesEditadas[chave];
-    if (!perm) return;
-    perm.pode_acessar = habilitado ? 1 : 0;
-    if (!habilitado) {
-        perm.pode_criar = 0;
-        perm.pode_editar = 0;
-        perm.pode_excluir = 0;
-        perm.pode_exportar = 0;
-    }
-    const card = document.getElementById(`card_${chave}`);
-    const m = state.todosModulos.find(x => x.modulo_chave === chave);
-    if (card) _atualizarClasseCard(card, habilitado, m?.perfil_permite);
-    // Desabilitar chips se desabilitado
-    const chips = document.querySelectorAll(`[id^="chip_${chave}_"]`);
-    chips.forEach(c => c.classList.toggle('disabled', !habilitado));
-    // Atualizar contador do grupo
-    if (m) _atualizarContadorGrupo(m.grupo);
+function _estadoPrevisto(modulo, acao) {
+    const estado = state.permissoesEditadas[modulo.modulo_chave]?.estados?.[acao] || 'HERDAR';
+    if (estado !== 'HERDAR') return estado;
+    return modulo.herdadas?.[acao] || 'SEM_ACESSO';
 }
 
-function _onTogglePerm(chave, permKey, chip) {
-    const perm = state.permissoesEditadas[chave];
-    if (!perm) return;
-    // Se clicar em 'Ver' (pode_acessar), ativar/desativar o módulo todo
-    if (permKey === 'pode_acessar') {
-        perm.pode_acessar = perm.pode_acessar ? 0 : 1;
-        if (!perm.pode_acessar) {
-            perm.pode_criar = 0;
-            perm.pode_editar = 0;
-            perm.pode_excluir = 0;
-            perm.pode_exportar = 0;
-        }
-        chip.classList.toggle('on',  !!perm.pode_acessar);
-        chip.classList.toggle('off', !perm.pode_acessar);
-        // Desabilitar/habilitar os outros chips
-        const card = document.getElementById(`card_${chave}`);
-        const m = state.todosModulos.find(x => x.modulo_chave === chave);
-        if (card) _atualizarClasseCard(card, !!perm.pode_acessar, m?.perfil_permite);
-        const outrosChips = document.querySelectorAll(`[id^="chip_${chave}_"]`);
-        outrosChips.forEach(c => {
-            if (c.id === `chip_${chave}_pode_acessar`) return;
-            c.classList.toggle('disabled', !perm.pode_acessar);
+function _origemPrevista(modulo, acao) {
+    const estado = state.permissoesEditadas[modulo.modulo_chave]?.estados?.[acao] || 'HERDAR';
+    if (estado !== 'HERDAR') return 'Exceção individual';
+    const origens = modulo.origens_herdadas?.[acao] || [];
+    return origens.length ? origens.join(', ') : 'Sem concessão herdada';
+}
+
+function _alterarEstadoIndividual(select) {
+    const { modulo, acao } = select.dataset;
+    const m = state.todosModulos.find(item => item.modulo_chave === modulo);
+    if (!m || !state.permissoesEditadas[modulo]) return;
+    state.permissoesEditadas[modulo].estados[acao] = select.value;
+    const preview = [...(state.dom.modGruposContainer?.querySelectorAll('.rbac-effective-preview') || [])]
+        .find(el => el.dataset.previewModulo === modulo && el.dataset.previewAcao === acao);
+    if (preview) preview.textContent = `Efetiva: ${_estadoPrevisto(m, acao).replace(/_/g,' ')} · ${_origemPrevista(m, acao)}`;
+    _atualizarContadorGrupo(m.grupo);
+    _recalcularPendentes();
+}
+
+function _recalcularPendentes() {
+    let count = 0;
+    Object.entries(state.permissoesEditadas).forEach(([modulo, perm]) => {
+        Object.entries(perm.estados || {}).forEach(([acao, estado]) => {
+            if ((state.permissoesOriginais[modulo]?.[acao] || 'HERDAR') !== estado) count++;
         });
-        if (m) _atualizarContadorGrupo(m.grupo);
-    } else {
-        if (!perm.pode_acessar) return; // não alterar se módulo desabilitado
-        perm[permKey] = perm[permKey] ? 0 : 1;
-        chip.classList.toggle('on',  !!perm[permKey]);
-        chip.classList.toggle('off', !perm[permKey]);
-    }
-    // Rastrear alterações pendentes
-    state.alteracoesPendentes = (state.alteracoesPendentes || 0) + 1;
-    _atualizarBadgePendente(state.alteracoesPendentes);
-}
-
-function _atualizarClasseCard(card, habilitado, perfilPermite) {
-    card.classList.remove('habilitado', 'bloqueado', 'perfil-sem-acesso');
-    if (habilitado) card.classList.add('habilitado');
-    else if (!perfilPermite) card.classList.add('perfil-sem-acesso');
+    });
+    state.alteracoesPendentes = count;
+    _atualizarBadgePendente(count);
 }
 
 function _atualizarContadorGrupo(grupo) {
     const mods = state.todosModulos.filter(m => m.grupo === grupo);
-    const habilitados = mods.filter(m => state.permissoesEditadas[m.modulo_chave]?.pode_acessar).length;
-    const badge = document.querySelector(`[data-grupo="${grupo}"] .mod-grupo-badge`);
+    const habilitados = mods.filter(m => ['PERMITIR','ADMIN_TOTAL'].includes(_estadoPrevisto(m, 'visualizar'))).length;
+    const badge = [...document.querySelectorAll('.mod-grupo')].find(el => el.dataset.grupo === grupo)?.querySelector('.mod-grupo-badge');
     if (badge) badge.textContent = `${habilitados}/${mods.length}`;
 }
 
@@ -611,55 +596,51 @@ function _atualizarContadorGrupo(grupo) {
 // AÇÕES GLOBAIS
 // ─────────────────────────────────────────────────────────────────────
 function habilitarTodos() {
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar permissões.', 'error'); return; }
     state.todosModulos.forEach(m => {
-        if (!m.perfil_permite) return;
-        const perm = state.permissoesEditadas[m.modulo_chave];
-        if (perm) { perm.pode_acessar = 1; perm.pode_criar = 1; perm.pode_editar = 1; perm.pode_exportar = 1; }
-        const toggle = document.getElementById(`toggle_${m.modulo_chave}`);
-        if (toggle && !toggle.disabled) toggle.checked = true;
-        const card = document.getElementById(`card_${m.modulo_chave}`);
-        if (card) _atualizarClasseCard(card, true, m.perfil_permite);
-        const chips = document.querySelectorAll(`[id^="chip_${m.modulo_chave}_"]`);
-        chips.forEach(c => { c.classList.add('on'); c.classList.remove('off','disabled'); });
+        const estados = state.permissoesEditadas[m.modulo_chave]?.estados || {};
+        (m.modulo?.acoes || []).forEach(acao => {
+            if (m.acoes_concediveis?.[acao]) estados[acao] = 'PERMITIR';
+        });
     });
-    Object.keys(
-        state.todosModulos.reduce((acc, m) => { acc[m.grupo] = true; return acc; }, {})
-    ).forEach(g => _atualizarContadorGrupo(g));
-    state.alteracoesPendentes = (state.alteracoesPendentes || 0) + 1;
-    _atualizarBadgePendente(state.alteracoesPendentes);
-    mostrarAlerta('Todos os módulos habilitados. Clique em Salvar para confirmar.', 'info');
+    _sincronizarSelectsIndividuais();
+    _atualizarTodosContadoresGrupo();
+    _recalcularPendentes();
+    mostrarAlerta('Ações que você possui foram marcadas como Permitir. Revise a prévia e salve para confirmar.', 'info');
 }
 
 function desabilitarTodos() {
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar permissões.', 'error'); return; }
     state.todosModulos.forEach(m => {
-        const perm = state.permissoesEditadas[m.modulo_chave];
-        if (perm) {
-            perm.pode_acessar = 0;
-            perm.pode_criar = 0;
-            perm.pode_editar = 0;
-            perm.pode_excluir = 0;
-            perm.pode_exportar = 0;
-        }
-        const toggle = document.getElementById(`toggle_${m.modulo_chave}`);
-        if (toggle) toggle.checked = false;
-        const card = document.getElementById(`card_${m.modulo_chave}`);
-        if (card) _atualizarClasseCard(card, false, m.perfil_permite);
-        const chips = document.querySelectorAll(`[id^="chip_${m.modulo_chave}_"]`);
-        chips.forEach(c => c.classList.add('disabled'));
+        const estados = state.permissoesEditadas[m.modulo_chave]?.estados || {};
+        (m.modulo?.acoes || []).forEach(acao => { estados[acao] = 'NEGAR'; });
     });
-    Object.keys(
-        state.todosModulos.reduce((acc, m) => { acc[m.grupo] = true; return acc; }, {})
-    ).forEach(g => _atualizarContadorGrupo(g));
-    state.alteracoesPendentes = (state.alteracoesPendentes || 0) + 1;
-    _atualizarBadgePendente(state.alteracoesPendentes);
-    mostrarAlerta('Todos os módulos desabilitados. Clique em Salvar para confirmar.', 'warning');
+    _sincronizarSelectsIndividuais();
+    _atualizarTodosContadoresGrupo();
+    _recalcularPendentes();
+    mostrarAlerta('Ações de todos os módulos foram marcadas como Negar. Revise a prévia e salve para confirmar.', 'warning');
+}
+
+function _sincronizarSelectsIndividuais() {
+    state.dom.modGruposContainer?.querySelectorAll('.rbac-individual-state').forEach(select => {
+        select.value = state.permissoesEditadas[select.dataset.modulo]?.estados?.[select.dataset.acao] || 'HERDAR';
+        const modulo = state.todosModulos.find(item => item.modulo_chave === select.dataset.modulo);
+        const preview = select.closest('.rbac-permission-row')?.querySelector('.rbac-effective-preview');
+        if (modulo && preview) preview.textContent = `Efetiva: ${_estadoPrevisto(modulo, select.dataset.acao).replace(/_/g,' ')} · ${_origemPrevista(modulo, select.dataset.acao)}`;
+    });
+}
+
+function _atualizarTodosContadoresGrupo() {
+    [...new Set(state.todosModulos.map(m => m.grupo))].forEach(_atualizarContadorGrupo);
 }
 
 function resetarParaPerfil() {
     if (!state.usuarioModuloAtual) return;
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar permissões.', 'error'); return; }
     if (!confirm(`Resetar todas as permissões de "${state.usuarioModuloAtual.nome}" para o padrão do perfil "${_textoPermissao(state.usuarioModuloAtual.permissao)}"?`)) return;
     fetch(`${state.apiBase}api_permissoes_modulos.php`, {
         method: 'POST',
+        credentials:'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ acao: 'resetar_para_perfil', usuario_id: state.usuarioModuloAtual.id })
     })
@@ -667,6 +648,7 @@ function resetarParaPerfil() {
     .then(data => {
         if (data.sucesso) {
             mostrarAlerta('Permissões resetadas para o padrão do perfil.', 'success');
+            window.PermissoesModulos?.revalidarPermissoes?.();
             selecionarUsuarioModulos(state.usuarioModuloAtual.id);
         } else {
             mostrarAlerta('Erro: ' + data.mensagem, 'error');
@@ -676,13 +658,24 @@ function resetarParaPerfil() {
 
 function salvarPermissoes() {
     if (!state.usuarioModuloAtual) return;
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar permissões.', 'error'); return; }
+    const alteradas = {};
+    Object.entries(state.permissoesEditadas).forEach(([modulo, perm]) => {
+        const estados = {};
+        Object.entries(perm.estados || {}).forEach(([acao, estado]) => {
+            if ((state.permissoesOriginais[modulo]?.[acao] || 'HERDAR') !== estado) estados[acao] = estado;
+        });
+        if (Object.keys(estados).length) alteradas[modulo] = { estados };
+    });
+    if (!Object.keys(alteradas).length) { mostrarAlerta('Não há alterações pendentes para salvar.', 'info'); return; }
     const payload = {
         acao: 'salvar_permissoes',
         usuario_id: state.usuarioModuloAtual.id,
-        permissoes: state.permissoesEditadas
+        permissoes: alteradas
     };
     fetch(`${state.apiBase}api_permissoes_modulos.php`, {
         method: 'POST',
+        credentials:'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
@@ -695,8 +688,8 @@ function salvarPermissoes() {
             // Atualizar rastreabilidade
             if (state.dom.modAuditData)   state.dom.modAuditData.textContent   = new Date().toLocaleString('pt-BR');
             if (state.dom.modAuditAutor)  state.dom.modAuditAutor.textContent  = 'Você (agora)';
-            const total = Object.keys(state.permissoesEditadas).length;
-            const hab   = Object.values(state.permissoesEditadas).filter(p => p.pode_acessar).length;
+            const total = state.todosModulos.length;
+            const hab   = state.todosModulos.filter(m => ['PERMITIR','ADMIN_TOTAL'].includes(_estadoPrevisto(m,'visualizar'))).length;
             if (state.dom.modAuditOrigem) state.dom.modAuditOrigem.textContent = `${hab}/${total} módulos habilitados`;
             console.log('[Usuarios] Permissões salvas; recarregando estado efetivo do usuário', state.usuarioModuloAtual.id);
             selecionarUsuarioModulos(state.usuarioModuloAtual.id);
@@ -750,6 +743,7 @@ function salvarUsuario(e) {
     }
     fetch(`${state.apiBase}api_usuarios.php`, {
         method:  metodo,
+        credentials:'include',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(dados)
     })
@@ -770,7 +764,7 @@ function salvarUsuario(e) {
 }
 
 function editarUsuario(id) {
-    fetch(`${state.apiBase}api_usuarios.php?id=${id}`)
+    fetch(`${state.apiBase}api_usuarios.php?id=${id}`, { credentials:'include' })
     .then(r => r.json())
     .then(data => {
         if (data.sucesso) {
@@ -799,6 +793,7 @@ function excluirUsuario(id, nome) {
     if (!confirm(`Deseja realmente excluir o usuário "${nome}"?`)) return;
     fetch(`${state.apiBase}api_usuarios.php`, {
         method:  'DELETE',
+        credentials:'include',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ id })
     })
@@ -844,6 +839,7 @@ function toggleStatusUsuario(id, nome, ativoAtual) {
 
     fetch(`${state.apiBase}api_usuarios.php`, {
         method:  'PATCH',
+        credentials:'include',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ id: parseInt(id), acao: novaAcao })
     })
@@ -917,13 +913,6 @@ function _atualizarBadgePendente(count) {
     }
 }
 
-// Expor funções de toggle para uso inline no HTML
-if (typeof window !== 'undefined') {
-    window.UsuariosPage = window.UsuariosPage || {};
-    window.UsuariosPage._onToggleModulo = _onToggleModulo;
-    window.UsuariosPage._onTogglePerm   = _onTogglePerm;
-}
-
 // ─────────────────────────────────────────────────────────────────────
 // CENTRAL RBAC — GRUPOS, VÍNCULOS E CATÁLOGO DE PERMISSÕES
 // ─────────────────────────────────────────────────────────────────────
@@ -948,6 +937,7 @@ async function _rbacRequest(acao, options = {}) {
 }
 
 async function carregarCentralGrupos() {
+    _definirPodeConfigurarRBAC(false);
     try {
         _popularSelectUsuarios();
         const [dadosGrupos, dadosCatalogo] = await Promise.all([
@@ -955,6 +945,7 @@ async function carregarCentralGrupos() {
         ]);
         state.rbacGrupos = dadosGrupos.grupos || [];
         state.rbacCatalogo = dadosCatalogo.modulos || [];
+        _definirPodeConfigurarRBAC(!!dadosCatalogo.pode_configurar);
         _renderizarTabelaGrupos();
     } catch (erro) {
         console.error('[RBAC] Falha ao carregar grupos:', erro);
@@ -979,13 +970,14 @@ function _renderizarTabelaGrupos() {
             <td><span class="badge badge-${g.ativo == 1 ? 'success':'danger'}">${g.protegido == 1 ? 'Protegido' : (g.ativo == 1 ? 'Ativo' : 'Inativo')}</span></td>
             <td style="white-space:nowrap;">
                 ${g.protegido == 1 ? '<span style="color:#64748b;font-size:.8rem;"><i class="fas fa-lock"></i> Sistema</span>' : `
-                <button class="mod-grupo-btn" onclick="UsuariosPage.editarGrupoRbac(${Number(g.id)})"><i class="fas fa-edit"></i> Editar</button>
-                <button class="mod-grupo-btn" style="color:#b91c1c;" onclick="UsuariosPage.excluirGrupoRbac(${Number(g.id)},'${_rbacEsc(g.nome).replace(/'/g,'&#039;')}')"><i class="fas fa-trash"></i></button>`}
+                <button class="mod-grupo-btn" data-rbac-grupo-editar="${Number(g.id)}" ${state.rbacPodeConfigurar?'':'disabled'}><i class="fas fa-edit"></i> Editar</button>
+                <button class="mod-grupo-btn" data-rbac-grupo-excluir="${Number(g.id)}" data-nome="${_rbacEsc(g.nome)}" ${state.rbacPodeConfigurar?'':'disabled'} style="color:#b91c1c;"><i class="fas fa-trash"></i></button>`}
             </td>
         </tr>`).join('');
 }
 
 function novoGrupoRbac() {
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar grupos RBAC.', 'error'); return; }
     if (!state.dom.grupoEditor) return;
     state.dom.grupoEditor.style.display = 'block';
     state.dom.grupoId.value = '';
@@ -997,6 +989,7 @@ function novoGrupoRbac() {
 }
 
 async function editarGrupoRbac(id) {
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar grupos RBAC.', 'error'); return; }
     try {
         const dados = await _rbacRequest('grupo', { query:`&id=${encodeURIComponent(id)}` });
         state.dom.grupoEditor.style.display = 'block';
@@ -1016,23 +1009,48 @@ function cancelarGrupoRbac() {
 function _renderizarPermissoesGrupo(selecionadas) {
     const destino = state.dom.grupoPermissoesCatalog;
     if (!destino) return;
-    const selecionado = new Set(selecionadas);
+    const estadosSelecionados = new Map();
+    (selecionadas || []).forEach(item => {
+        if (typeof item === 'string') estadosSelecionados.set(item, 'PERMITIR');
+        else if (item?.modulo && item?.acao) estadosSelecionados.set(`${item.modulo}.${item.acao}`, item.estado || 'PERMITIR');
+    });
+    const nomesAcoes = {visualizar:'Visualizar',criar:'Criar',editar:'Editar',excluir:'Excluir',exportar:'Exportar',imprimir:'Imprimir',importar:'Importar',aprovar:'Aprovar',configurar:'Configurar',executar:'Executar',bloquear:'Bloquear',desbloquear:'Desbloquear'};
     destino.innerHTML = state.rbacCatalogo.map(m => {
         const acoes = (m.acoes || []).map(acao => {
             const chave = `${m.chave}.${acao}`;
-            return `<label class="mod-perm-chip ${selecionado.has(chave) ? 'on':'off'}" style="cursor:pointer;">
-                <input type="checkbox" class="rbac-grupo-permissao" value="${_rbacEsc(chave)}" ${selecionado.has(chave) ? 'checked':''} style="accent-color:#2563eb;"> ${_rbacEsc(acao)}
-            </label>`;
+            const estado = estadosSelecionados.get(chave) || 'HERDAR';
+            const concedivel = !!m.acoes_concediveis?.[acao];
+            const nome = _rbacEsc(nomesAcoes[acao] || acao);
+            return `<div class="rbac-permission-row">
+                <label for="grp_${_rbacEsc(m.chave)}_${_rbacEsc(acao)}">${nome}</label>
+                <select class="rbac-grupo-state" id="grp_${_rbacEsc(m.chave)}_${_rbacEsc(acao)}" data-modulo="${_rbacEsc(m.chave)}" data-acao="${_rbacEsc(acao)}" ${state.rbacPodeConfigurar?'':'disabled'}>
+                    <option value="HERDAR" ${estado==='HERDAR'?'selected':''}>Herdar / sem regra</option>
+                    <option value="PERMITIR" ${estado==='PERMITIR'?'selected':''} ${concedivel?'':'disabled'}>Permitir</option>
+                    <option value="NEGAR" ${estado==='NEGAR'?'selected':''}>Negar</option>
+                </select>
+                <small class="rbac-group-preview">${_rbacEsc(_descricaoEstadoGrupo(estado))}</small>
+            </div>`;
         }).join('');
-        return `<div class="mod-card"><div class="mod-card-top"><div class="mod-card-icon"><i class="${_rbacEsc(m.icone || 'fas fa-shield-alt')}"></i></div><div class="mod-card-info"><div class="mod-card-nome">${_rbacEsc(m.nome)}</div><div class="mod-card-desc">${_rbacEsc(m.descricao || m.chave)}</div></div></div><div class="mod-card-perms">${acoes || '<span style="color:#94a3b8;font-size:.75rem;">Sem ações cadastradas</span>'}</div></div>`;
+        return `<div class="mod-card"><div class="mod-card-top"><div class="mod-card-icon"><i class="${_rbacEsc(m.icone || 'fas fa-shield-alt')}"></i></div><div class="mod-card-info"><div class="mod-card-nome">${_rbacEsc(m.nome)}</div><div class="mod-card-desc">${_rbacEsc(m.descricao || m.chave)}</div></div></div><div class="rbac-permission-matrix">${acoes || '<span style="color:#94a3b8;font-size:.75rem;">Sem ações cadastradas</span>'}</div></div>`;
     }).join('');
 }
 
+function _descricaoEstadoGrupo(estado) {
+    return estado === 'PERMITIR' ? 'Este grupo concede a ação.' : estado === 'NEGAR' ? 'Este grupo nega explicitamente a ação.' : 'Este grupo não define a ação.';
+}
+
+function _atualizarPreviaGrupo(select) {
+    const preview = select.closest('.rbac-permission-row')?.querySelector('.rbac-group-preview');
+    if (preview) preview.textContent = _descricaoEstadoGrupo(select.value);
+}
+
 async function salvarGrupoRbac() {
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar grupos RBAC.', 'error'); return; }
     const nome = state.dom.grupoNome?.value.trim();
     const slug = state.dom.grupoSlug?.value.trim();
     if (!nome || !slug) { mostrarAlerta('Informe nome e identificador do grupo.', 'warning'); return; }
-    const permissoes = [...document.querySelectorAll('.rbac-grupo-permissao:checked')].map(el => el.value);
+    const permissoes = [...(state.dom.grupoPermissoesCatalog?.querySelectorAll('.rbac-grupo-state') || [])]
+        .map(el => ({ modulo:el.dataset.modulo, acao:el.dataset.acao, estado:el.value }));
     try {
         await _rbacRequest('salvar_grupo', { method:'POST', body:{ id:Number(state.dom.grupoId?.value || 0), nome, slug, descricao:state.dom.grupoDescricao?.value.trim() || '', permissoes } });
         mostrarAlerta('Grupo salvo com sucesso. As permissões foram recalculadas.', 'success');
@@ -1042,6 +1060,7 @@ async function salvarGrupoRbac() {
 }
 
 async function excluirGrupoRbac(id, nome) {
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar grupos RBAC.', 'error'); return; }
     if (!confirm(`Excluir o grupo "${nome}"? O histórico de auditoria será preservado.`)) return;
     try {
         await _rbacRequest('excluir_grupo', { method:'DELETE', body:{id:Number(id)} });
@@ -1058,16 +1077,18 @@ async function carregarGruposUsuario(usuarioId) {
         const vinculados = new Set((dados.grupos || []).map(g => Number(g.id)));
         const destino = state.dom.grupoUsuarioVinculos;
         destino.style.display = 'block';
-        destino.innerHTML = `<strong style="display:block;margin-bottom:.6rem;color:#334155;"><i class="fas fa-link"></i> Grupos do usuário</strong>` + state.rbacGrupos.map(g => `<label style="display:inline-flex;align-items:center;gap:.45rem;margin:.3rem .9rem .3rem 0;padding:.38rem .6rem;background:#fff;border:1px solid #e2e8f0;border-radius:6px;cursor:${g.protegido == 1 ? 'not-allowed':'pointer'};opacity:${g.protegido == 1 ? '.75':'1'};"><input type="checkbox" class="rbac-usuario-grupo" value="${Number(g.id)}" ${vinculados.has(Number(g.id)) ? 'checked':''} ${g.protegido == 1 ? 'disabled':''}> ${_rbacEsc(g.nome)}${g.protegido == 1 ? ' <small>(compat.)</small>':''}</label>`).join('');
+        destino.innerHTML = `<strong style="display:block;margin-bottom:.6rem;color:#334155;"><i class="fas fa-link"></i> Grupos do usuário</strong>` + state.rbacGrupos.map(g => `<label style="display:inline-flex;align-items:center;gap:.45rem;margin:.3rem .9rem .3rem 0;padding:.38rem .6rem;background:#fff;border:1px solid #e2e8f0;border-radius:6px;cursor:${g.protegido == 1 || !state.rbacPodeConfigurar ? 'not-allowed':'pointer'};opacity:${g.protegido == 1 || !state.rbacPodeConfigurar ? '.75':'1'};"><input type="checkbox" class="rbac-usuario-grupo" value="${Number(g.id)}" ${vinculados.has(Number(g.id)) ? 'checked':''} ${g.protegido == 1 || !state.rbacPodeConfigurar ? 'disabled':''}> ${_rbacEsc(g.nome)}${g.protegido == 1 ? ' <small>(compat.)</small>':''}</label>`).join('');
     } catch (erro) { mostrarAlerta(erro.message, 'error'); }
 }
 
 async function salvarGruposUsuario() {
+    if (!state.rbacPodeConfigurar) { mostrarAlerta('Você não possui autorização para configurar grupos RBAC.', 'error'); return; }
     if (!state.usuarioGruposSelecionado) { mostrarAlerta('Selecione um usuário.', 'warning'); return; }
     const grupos_ids = [...document.querySelectorAll('.rbac-usuario-grupo:checked')].map(el => Number(el.value));
     try {
         await _rbacRequest('atribuir_grupos',{method:'POST',body:{usuario_id:state.usuarioGruposSelecionado,grupos_ids}});
         mostrarAlerta('Vínculos de grupos atualizados. A nova política será aplicada na próxima requisição do usuário.', 'success');
+        window.PermissoesModulos?.revalidarPermissoes?.();
     } catch (erro) { mostrarAlerta(erro.message, 'error'); }
 }
 

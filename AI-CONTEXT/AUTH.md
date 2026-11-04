@@ -11,6 +11,11 @@
 Toda API protegida inclui `auth_helper.php` e chama `verificarAutenticacao()`.
 Esta função verifica se a sessão está ativa e se o nível de permissão é suficiente.
 
+Quando as tabelas RBAC estão instaladas, operações também devem validar a ação com
+`rbacExigir()` usando usuário e tenant autenticados. A decisão `admin/super_admin` é
+resolvida pelo perfil atual do usuário no banco; o papel armazenado numa sessão antiga
+não pode conceder acesso total após rebaixamento.
+
 ## 3. Hierarquia de Permissões
 | Nível | Nome | Acesso |
 |---|---|---|

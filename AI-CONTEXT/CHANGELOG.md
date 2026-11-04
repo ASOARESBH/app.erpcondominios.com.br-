@@ -2,6 +2,18 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.17] - 2026-11-03
+### Corrigido e alterado
+- **RBAC — permissões explícitas**: removida a negação implícita entre grupos; a ausência de grant é sem acesso, e somente registros `NEGAR` explícitos negam uma ação. Precedência definida como admin/super_admin, negar individual, permitir individual, negar de grupo e permitir de grupo.
+- A Central de Usuários agora edita estados `HERDAR`/`PERMITIR`/`NEGAR` por ação, apresenta origem/prévia efetiva e valida grants em perfil, grupo, vínculo, exceção individual e reset. O backend compara efeitos antes/depois e rejeita autoelevação/concessões indiretas acima da permissão do configurador; grupos de compatibilidade não são atribuíveis manualmente.
+- O perfil admin/super_admin é lido do registro atual no tenant, não de uma sessão/localStorage potencialmente desatualizados; a resposta efetiva e `is_admin` usam o mesmo papel do banco. Revisão do tenant revalida caches, MenuController e a sessão ativa sem novo login. Em falha da API, o menu operacional é preservado, escrita é bloqueada e aparece aviso.
+- Os guards `PermissoesModulos` e `MenuController` alinham aliases de rota às chaves canônicas RBAC (incluindo `relatorios_acesso`, `administrativo` e rotas auxiliares); os casos legados conhecidos têm alias explícito e ações sem mapeamento negam por padrão.
+- **Auditoria estática REPO_ONLY**: analisados 59 módulos ativos; encontrados gaps de enforcement, catálogo, controles e chaves/rotas em múltiplos módulos. Nenhuma base de produção foi consultada.
+### Validado
+- PHP lint nos cinco endpoints/helpers RBAC tocados, `node --check` em `usuarios.js`, `permissoes-modulos.js` e `menu-controller.js`, além de `git diff --check`.
+- Fixture MariaDB descartável confirmou 59 módulos ativos e 199 ações seedadas e testou U1–U9: somente visualização, grants por grupo/usuário, interseção de grupos, NEGAR individual/de grupo, precedência, isolamento tenant, papel admin de banco versus sessão stale, recusa de grant/reset não autorizado, grant por admin e criação/incremento da revisão. Todos passaram; a auditoria adicional inspecionou 357 operações do código, REPO_ONLY.
+- Não houve teste autenticado em browser, chamada direta com cookie real, deploy ou consulta/alteração da base de produção.
+
 ## [2.1.16] - 2026-11-03
 ### Corrigido
 - **Moradores — permissões de edição**: a aplicação das permissões agora marca quais controles foram desabilitados pelo RBAC e remove `disabled` somente desses controles quando a resposta efetiva permite a ação. Estados `disabled` próprios de fluxos, como a cascata de Unidade → Morador, são preservados.

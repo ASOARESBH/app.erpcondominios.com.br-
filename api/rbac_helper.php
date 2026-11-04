@@ -204,8 +204,23 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         return ['ok' => true, 'alterado' => true, 'grupo_id' => $alvoId];
     }
 
-    function rbacUsuarioEhSuperAdmin() {
-        return strtolower((string)($_SESSION['usuario_permissao'] ?? '')) === 'super_admin';
+    function rbacUsuarioPerfilBanco($conexao, $usuarioId, $tenantId) {
+        $usuarioId = (int)$usuarioId;
+        $tenantId = (int)$tenantId;
+        if (!$conexao instanceof mysqli || $usuarioId <= 0 || $tenantId <= 0) return null;
+        $st = $conexao->prepare("SELECT LOWER(COALESCE(permissao, '')) AS permissao FROM usuarios WHERE id=? AND (tenant_id=? OR LOWER(COALESCE(permissao, ''))='super_admin') LIMIT 1");
+        if (!$st) return null;
+        $st->bind_param('ii', $usuarioId, $tenantId);
+        $st->execute();
+        $linha = $st->get_result()->fetch_assoc();
+        $st->close();
+        return isset($linha['permissao']) ? (string)$linha['permissao'] : null;
+    }
+
+    function rbacUsuarioEhSuperAdmin($conexao = null, $usuarioId = null, $tenantId = null) {
+        $usuarioId = (int)($usuarioId ?? ($_SESSION['usuario_id'] ?? 0));
+        $tenantId = (int)($tenantId ?? ($_SESSION['tenant_id'] ?? 0));
+        return $conexao instanceof mysqli && rbacUsuarioPerfilBanco($conexao, $usuarioId, $tenantId) === 'super_admin';
     }
 
     /**
@@ -215,23 +230,22 @@ if (!function_exists('rbacTabelasDisponiveis')) {
      * Sem isto, um admin criado num tenant sem grupos RBAC herdados fica sem
      * nenhuma permissão efetiva, pois o RBAC não concede nada por padrão.
      */
-    function rbacUsuarioTemAcessoTotal() {
-        $permissao = strtolower((string)($_SESSION['usuario_permissao'] ?? ''));
-        return in_array($permissao, ['admin', 'super_admin'], true);
+    function rbacUsuarioTemAcessoTotal($conexao = null, $usuarioId = null, $tenantId = null) {
+        $usuarioId = (int)($usuarioId ?? ($_SESSION['usuario_id'] ?? 0));
+        $tenantId = (int)($tenantId ?? ($_SESSION['tenant_id'] ?? 0));
+        if (!$conexao instanceof mysqli || $usuarioId <= 0 || $tenantId <= 0) return false;
+        return rbacUsuarioAlvoTemAcessoTotal($conexao, $usuarioId, $tenantId);
     }
 
     function rbacUsuarioAlvoTemAcessoTotal($conexao, $usuarioId, $tenantId) {
-        $st = $conexao->prepare("SELECT LOWER(COALESCE(permissao, '')) AS permissao FROM usuarios WHERE id=? AND tenant_id=? LIMIT 1");
-        if (!$st) return false;
-        $st->bind_param('ii', $usuarioId, $tenantId);
-        $st->execute();
-        $linha = $st->get_result()->fetch_assoc();
-        $st->close();
-        return in_array((string)($linha['permissao'] ?? ''), ['admin', 'super_admin'], true);
+        return in_array(rbacUsuarioPerfilBanco($conexao, $usuarioId, $tenantId), ['admin', 'super_admin'], true);
     }
 
     function rbacObterPermissoesEfetivas($conexao, $usuarioId, $tenantId, $forcarAtualizacao = false) {
-        if (!rbacTabelasDisponiveis($conexao)) return ['modo_compatibilidade' => true, 'is_super_admin' => rbacUsuarioEhSuperAdmin(), 'is_admin_total' => rbacUsuarioTemAcessoTotal(), 'permitidas' => [], 'detalhes' => []];
+        if (!rbacTabelasDisponiveis($conexao)) {
+            $acessoTotal = rbacUsuarioTemAcessoTotal($conexao, $usuarioId, $tenantId);
+            return ['modo_compatibilidade' => true, 'is_super_admin' => $acessoTotal, 'is_admin_total' => $acessoTotal, 'permitidas' => [], 'detalhes' => []];
+        }
         $revisao = rbacObterRevisao($conexao, $tenantId);
         $cache = $_SESSION['_rbac_cache'] ?? null;
         if (!$forcarAtualizacao && $revisao > 0 && is_array($cache) && (int)($cache['usuario_id'] ?? 0) === (int)$usuarioId && (int)($cache['tenant_id'] ?? 0) === (int)$tenantId && (int)($cache['revisao'] ?? -1) === $revisao) return $cache;
@@ -239,7 +253,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         $efetivas = [];
         $detalhes = [];
         $grupos = [];
-        $st = $conexao->prepare('SELECT g.id,g.slug,g.nome,g.protegido FROM rbac_usuario_grupos ug INNER JOIN rbac_grupos g ON g.id=ug.grupo_id WHERE ug.usuario_id=? AND ug.tenant_id=? AND ug.ativo=1 AND ug.removido_em IS NULL AND g.ativo=1 AND g.excluido_em IS NULL');
+        $st = $conexao->prepare('SELECT g.id,g.slug,g.nome,g.protegido FROM rbac_usuario_grupos ug INNER JOIN rbac_grupos g ON g.id=ug.grupo_id WHERE ug.usuario_id=? AND ug.tenant_id=? AND ug.ativo=1 AND ug.removido_em IS NULL AND g.ativo=1 AND g.excluido_em IS NULL ORDER BY g.nome,g.id');
         if ($st) {
             $st->bind_param('ii', $usuarioId, $tenantId);
             $st->execute();
@@ -248,41 +262,16 @@ if (!function_exists('rbacTabelasDisponiveis')) {
             $st->close();
         }
         foreach ($grupos as $grupo) {
-            $st = $conexao->prepare('SELECT m.chave,p.acao,gp.efeito,gp.escopo_dados FROM rbac_grupo_permissoes gp INNER JOIN rbac_permissoes p ON p.id=gp.permissao_id INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE gp.grupo_id=? AND p.ativo=1 AND m.ativo=1');
+            $st = $conexao->prepare('SELECT m.chave,p.acao,gp.efeito,gp.escopo_dados FROM rbac_grupo_permissoes gp INNER JOIN rbac_permissoes p ON p.id=gp.permissao_id INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE gp.grupo_id=? AND p.ativo=1 AND m.ativo=1 ORDER BY m.chave,p.acao');
             if (!$st) continue;
             $st->bind_param('i', $grupo['id']);
             $st->execute();
             $rs = $st->get_result();
-            $permissoesGrupoPorModulo = [];
             while ($linha = $rs->fetch_assoc()) {
                 $chave = $linha['chave'] . '.' . $linha['acao'];
                 $detalhes[$chave][] = ['origem' => 'grupo:' . $grupo['nome'], 'efeito' => $linha['efeito'], 'escopo' => $linha['escopo_dados']];
-                if ($linha['efeito'] === 'PERMITIR') $permissoesGrupoPorModulo[$linha['chave']][] = $linha['acao'];
             }
             $st->close();
-
-            foreach ($permissoesGrupoPorModulo as $moduloChave => $acoesGrupo) {
-                $grupoSomenteLeitura = (int)$grupo['protegido'] !== 1 || (string)$grupo['slug'] === 'compat-visualizador';
-                if (!$grupoSomenteLeitura || $moduloChave !== 'moradores' || count($acoesGrupo) !== 1 || $acoesGrupo[0] !== 'visualizar') continue;
-                $stAcoes = $conexao->prepare("SELECT p.acao FROM rbac_permissoes p INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE m.chave=? AND m.ativo=1 AND p.ativo=1 AND p.acao <> 'visualizar'");
-                $acoesNegadas = ['criar', 'editar', 'excluir', 'exportar', 'imprimir', 'importar', 'aprovar', 'executar', 'configurar', 'bloquear', 'desbloquear'];
-                if ($stAcoes) {
-                    $stAcoes->bind_param('s', $moduloChave);
-                    if ($stAcoes->execute()) {
-                        $rsAcoes = $stAcoes->get_result();
-                        $acoesNegadas = [];
-                        while ($acaoLinha = $rsAcoes->fetch_assoc()) $acoesNegadas[] = $acaoLinha['acao'];
-                    } else {
-                        error_log('[RBAC] Falha ao carregar ações herdadas do módulo Moradores.');
-                    }
-                    $stAcoes->close();
-                } else {
-                    error_log('[RBAC] Falha ao preparar ações herdadas do módulo Moradores.');
-                }
-                foreach ($acoesNegadas as $acaoNegada) {
-                    $detalhes[$moduloChave . '.' . $acaoNegada][] = ['origem' => 'grupo:' . $grupo['nome'] . ' (somente visualizar)', 'efeito' => 'NEGAR', 'escopo' => 'GLOBAL'];
-                }
-            }
         }
         $st = $conexao->prepare('SELECT m.chave,p.acao,up.efeito,up.escopo_dados FROM rbac_usuario_permissoes up INNER JOIN rbac_permissoes p ON p.id=up.permissao_id INNER JOIN rbac_modulos m ON m.id=p.modulo_id WHERE up.usuario_id=? AND up.tenant_id=? AND up.revogado_em IS NULL AND p.ativo=1 AND m.ativo=1');
         if ($st) {
@@ -296,12 +285,53 @@ if (!function_exists('rbacTabelasDisponiveis')) {
             $st->close();
         }
         foreach ($detalhes as $chave => $origens) {
-            $negado = false; $permitido = false; $escopo = 'GLOBAL';
+            $prioridadeVencedora = 0;
+            $efeitoVencedor = null;
+            $vencedores = [];
+            $prioridadeGrupo = 0;
+            $efeitoGrupo = null;
+            $vencedoresGrupo = [];
+            $efeitoIndividual = null;
             foreach ($origens as $origem) {
-                if ($origem['efeito'] === 'NEGAR') $negado = true;
-                if ($origem['efeito'] === 'PERMITIR') { $permitido = true; $escopo = $origem['escopo']; }
+                $nivelOrigem = $origem['origem'] === 'individual' ? 2 : 1;
+                $nivelEfeito = $origem['efeito'] === 'NEGAR' ? 1 : ($origem['efeito'] === 'PERMITIR' ? 0 : -1);
+                $prioridade = ($nivelOrigem * 2) + $nivelEfeito;
+                if ($prioridade > $prioridadeVencedora) {
+                    $prioridadeVencedora = $prioridade;
+                    $efeitoVencedor = $origem['efeito'];
+                    $vencedores = [$origem];
+                } elseif ($prioridade === $prioridadeVencedora) {
+                    $vencedores[] = $origem;
+                }
+                if ($origem['origem'] === 'individual') {
+                    $efeitoIndividual = $origem['efeito'];
+                } else {
+                    $prioridadeDoGrupo = $nivelEfeito + 1;
+                    if ($prioridadeDoGrupo > $prioridadeGrupo) {
+                        $prioridadeGrupo = $prioridadeDoGrupo;
+                        $efeitoGrupo = $origem['efeito'];
+                        $vencedoresGrupo = [$origem];
+                    } elseif ($prioridadeDoGrupo === $prioridadeGrupo) {
+                        $vencedoresGrupo[] = $origem;
+                    }
+                }
             }
-            $efetivas[$chave] = ['permitido' => !$negado && $permitido, 'escopo' => $escopo, 'origens' => $origens];
+            $escopo = 'GLOBAL';
+            foreach ($vencedores as $vencedor) {
+                if ($efeitoVencedor === 'PERMITIR') $escopo = $vencedor['escopo'];
+            }
+            $efetivas[$chave] = [
+                'permitido' => $efeitoVencedor === 'PERMITIR',
+                'efeito_efetivo' => $efeitoVencedor,
+                'origem_efetiva' => array_values(array_unique(array_column($vencedores, 'origem'))),
+                'origens_efetivas' => $vencedores,
+                'prioridade' => $prioridadeVencedora,
+                'escopo' => $escopo,
+                'origens' => $origens,
+                'estado_individual' => $efeitoIndividual ?? 'HERDAR',
+                'herdado' => $efeitoGrupo ?? 'SEM_ACESSO',
+                'origens_herdadas' => $vencedoresGrupo,
+            ];
         }
         $alvoAcessoTotal = rbacUsuarioAlvoTemAcessoTotal($conexao, $usuarioId, $tenantId);
         $resultado = ['modo_compatibilidade' => false, 'is_super_admin' => $alvoAcessoTotal, 'is_admin_total' => $alvoAcessoTotal, 'usuario_id' => (int)$usuarioId, 'tenant_id' => (int)$tenantId, 'revisao' => $revisao, 'grupos' => $grupos, 'permitidas' => $efetivas, 'detalhes' => $detalhes];
@@ -310,15 +340,28 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         return $resultado;
     }
 
+    function rbacEfetivaPermissaoPermitida(array $efetivas, $moduloChave, $acao) {
+        if (!empty($efetivas['modo_compatibilidade']) || !empty($efetivas['is_admin_total'])) return true;
+        $registro = $efetivas['permitidas'][$moduloChave . '.' . $acao] ?? null;
+        return $registro && !empty($registro['permitido']);
+    }
+
+    function rbacPrimeiraConcessaoNaoPossuida(array $ator, array $antesAlvo, array $depoisAlvo) {
+        if (!empty($ator['is_admin_total'])) return null;
+        if (empty($antesAlvo['is_admin_total']) && !empty($depoisAlvo['is_admin_total'])) return 'admin_total';
+        foreach (($depoisAlvo['permitidas'] ?? []) as $chave=>$permissao) {
+            if (!empty($permissao['permitido']) && empty($antesAlvo['permitidas'][$chave]['permitido']) &&
+                empty($ator['permitidas'][$chave]['permitido'])) return $chave;
+        }
+        return null;
+    }
+
     function rbacPode($conexao, $moduloChave, $acao, $usuarioId = null, $tenantId = null) {
         $usuarioId = $usuarioId ?: (int)($_SESSION['usuario_id'] ?? 0);
         $tenantId = $tenantId ?: (int)($_SESSION['tenant_id'] ?? 0);
         if ($usuarioId <= 0 || $tenantId <= 0) return false;
-        if (rbacUsuarioTemAcessoTotal()) return true;
         $efetivas = rbacObterPermissoesEfetivas($conexao, $usuarioId, $tenantId);
-        if ($efetivas['modo_compatibilidade']) return true;
-        $registro = $efetivas['permitidas'][$moduloChave . '.' . $acao] ?? null;
-        return $registro && !empty($registro['permitido']);
+        return rbacEfetivaPermissaoPermitida($efetivas, $moduloChave, $acao);
     }
 
     /**
