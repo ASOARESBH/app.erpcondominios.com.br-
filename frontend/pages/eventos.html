@@ -3,27 +3,117 @@
 
 <div class="page-wrapper page-eventos">
 
-  <!-- Breadcrumb -->
-  <nav class="stub-breadcrumb">
-    <span data-page="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
-    <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+  <nav class="ev-breadcrumb">
+    <span class="ev-link" data-ev-nav="administrativa"><i class="fas fa-briefcase"></i> Administrativo</span>
+    <span class="ev-sep"><i class="fas fa-chevron-right"></i></span>
     <span>Eventos</span>
   </nav>
 
-  <!-- Page Header -->
-  <div class="page-header">
-    <h1><i class="fas fa-calendar-alt"></i> Eventos</h1>
-    <p>Agendamento e gerenciamento de eventos em áreas comuns do condomínio</p>
+  <div class="page-header ev-header">
+    <div>
+      <h1><i class="fas fa-calendar-alt"></i> Eventos</h1>
+      <p>Cadastre eventos do condomínio e avise os moradores pelo Chat-In (portal e aplicativo).</p>
+    </div>
+    <button type="button" class="btn-primary-modern" id="evBtnNovo"><i class="fas fa-plus"></i> Novo evento</button>
   </div>
 
-  <!-- Em desenvolvimento -->
-  <div class="page-card stub-card">
-    <i class="fas fa-calendar-alt stub-icon"></i>
-    <h3>Módulo em Desenvolvimento</h3>
-    <p>O módulo de Eventos estará disponível em breve.</p>
-    <button class="stub-btn-back" data-page="administrativa">
-      <i class="fas fa-arrow-left"></i> Voltar ao Administrativo
-    </button>
+  <div id="evAlerta" aria-live="polite"></div>
+
+  <div class="page-card">
+    <div class="ev-filtros">
+      <div class="ev-segmento" role="tablist">
+        <button type="button" class="ativo" data-periodo="proximos">Próximos</button>
+        <button type="button" data-periodo="passados">Realizados</button>
+        <button type="button" data-periodo="todos">Todos</button>
+      </div>
+      <select id="evFiltroStatus" class="form-input ev-select" aria-label="Status">
+        <option value="">Todos os status</option>
+        <option value="AGENDADO">Agendados</option>
+        <option value="CANCELADO">Cancelados</option>
+      </select>
+    </div>
+    <div id="evLista" class="ev-lista"><div class="ev-vazio"><i class="fas fa-spinner fa-spin"></i> Carregando eventos…</div></div>
   </div>
 
+  <!-- Modal: evento -->
+  <div class="ev-overlay" id="evModal" hidden>
+    <div class="ev-modal" role="dialog" aria-modal="true" aria-labelledby="evModalTitulo">
+      <header class="ev-modal-topo">
+        <h3 id="evModalTitulo"><i class="fas fa-calendar-plus"></i> Novo evento</h3>
+        <button type="button" class="ev-fechar" data-ev-fechar aria-label="Fechar"><i class="fas fa-times"></i></button>
+      </header>
+      <div class="ev-modal-corpo">
+        <div data-modal-feedback></div>
+        <input type="hidden" id="evId">
+        <div class="form-group">
+          <label class="form-label" for="evTitulo">Título <span class="ev-req">*</span></label>
+          <input type="text" id="evTitulo" class="form-input" maxlength="150" placeholder="Ex.: Festa junina no salão de festas">
+        </div>
+        <div class="ev-grid2">
+          <div class="form-group">
+            <label class="form-label" for="evInicio">Início <span class="ev-req">*</span></label>
+            <input type="datetime-local" id="evInicio" class="form-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="evFim">Término</label>
+            <input type="datetime-local" id="evFim" class="form-input">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="evLocal">Local</label>
+          <input type="text" id="evLocal" class="form-input" maxlength="150" placeholder="Ex.: Salão de festas">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="evDescricao">Descrição</label>
+          <textarea id="evDescricao" class="form-input" rows="4" maxlength="2000" placeholder="Informações que os moradores devem saber"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Público</label>
+          <div class="ev-radios">
+            <label><input type="radio" name="evPublico" value="TODOS" checked> Todos os moradores</label>
+            <label><input type="radio" name="evPublico" value="UNIDADES"> Unidades específicas</label>
+          </div>
+          <div id="evUnidadesWrap" class="ev-unidades" hidden>
+            <input type="search" id="evUnidadesBusca" class="form-input" placeholder="Filtrar unidades" autocomplete="off">
+            <div id="evUnidades" class="ev-unidades-lista"></div>
+          </div>
+        </div>
+        <label class="ev-chatin">
+          <input type="checkbox" id="evNotificar" checked>
+          <span><i class="fas fa-comments"></i> <strong id="evNotificarTexto">Notificar pelo Chat-In</strong>
+            <small>O aviso chega em "Avisos do condomínio" no portal e no app (com push), somente para o público escolhido.</small></span>
+        </label>
+      </div>
+      <footer class="ev-modal-rodape">
+        <button type="button" class="btn-secondary-modern" data-ev-fechar>Cancelar</button>
+        <button type="button" class="btn-primary-modern" id="evSalvar"><i class="fas fa-save"></i> Salvar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Modal: cancelar -->
+  <div class="ev-overlay" id="evModalCancelar" hidden>
+    <div class="ev-modal ev-modal-pequeno" role="dialog" aria-modal="true" aria-labelledby="evCancelarTitulo">
+      <header class="ev-modal-topo">
+        <h3 id="evCancelarTitulo"><i class="fas fa-ban"></i> Cancelar evento</h3>
+        <button type="button" class="ev-fechar" data-ev-fechar aria-label="Fechar"><i class="fas fa-times"></i></button>
+      </header>
+      <div class="ev-modal-corpo">
+        <div data-modal-feedback></div>
+        <p id="evCancelarNome" class="ev-cancelar-nome"></p>
+        <div class="form-group">
+          <label class="form-label" for="evMotivo">Motivo (opcional)</label>
+          <input type="text" id="evMotivo" class="form-input" maxlength="255" placeholder="Ex.: Previsão de chuva forte">
+        </div>
+        <label class="ev-chatin">
+          <input type="checkbox" id="evCancelarNotificar" checked>
+          <span><i class="fas fa-comments"></i> <strong>Avisar o cancelamento pelo Chat-In</strong></span>
+        </label>
+      </div>
+      <footer class="ev-modal-rodape">
+        <button type="button" class="btn-secondary-modern" data-ev-fechar>Voltar</button>
+        <button type="button" class="btn-danger-modern ev-btn-perigo" id="evConfirmarCancelar"><i class="fas fa-ban"></i> Cancelar evento</button>
+      </footer>
+    </div>
+  </div>
 </div>

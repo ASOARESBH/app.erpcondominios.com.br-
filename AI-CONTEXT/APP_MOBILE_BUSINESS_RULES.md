@@ -126,3 +126,9 @@ O resultado mostra SLA em verde para `no_prazo` e laranja para `atrasado`, inclu
 - O datasource envia `canal=app` em todas as chamadas: o servidor grava a origem `APP_MORADOR` (ou `PORTAL_MORADOR` se a migration do ENUM não foi aplicada). O app nunca envia morador, unidade ou origem.
 - Tela: chips Ativos/Histórico com contadores, cards (status, período, entradas usadas, anfitrião, origem/autoria), detalhe com entradas/saídas da portaria, editar (só cadastros próprios PREVISTO), cancelar com motivo. Formulário em bottom sheet com visitante já cadastrado da unidade (opcional), validação de CPF, data/dias com prévia da validade, entradas (único/2–10/livres) e aviso de alerta ativo da unidade antes de criar. Idempotência via `uuid` v4 por envio.
 - Busca de documento (2026-11-04): com CPF completo (ou RG ao concluir a digitação) chama `buscar_documento`; status visual encontrado/não cadastrado/inválido; nome travado quando o visitante da unidade é encontrado; ao salvar sem cadastro, o servidor cadastra o convidado em Visitantes da unidade.
+
+## 7. Chat-In — app
+- Menu lateral "Chat-In", card no Início e ícone com badge de não lidas na AppBar (ping de presença/contador a cada 30 s enquanto o app está em primeiro plano).
+- Lista de conversas (inclui "Avisos do condomínio", somente leitura), aba "Nova conversa" com busca por nome/unidade, preferências (aparecer na busca, mostrar online, notificações).
+- Conversa: polling a cada 5 s com `plataforma=app` + `conversa_id` (o servidor não envia push dessa conversa enquanto ela está aberta); mensagens pendentes/falhas com reenvio idempotente (uuid); bloquear/desbloquear e arquivar pelo menu.
+- Push: canal Android `chatin`; tocar abre `/home/chatin/{id}` (também com o app encerrado). Notificação em primeiro plano é suprimida se a conversa já está na tela.

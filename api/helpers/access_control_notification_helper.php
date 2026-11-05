@@ -8,6 +8,8 @@
 
 require_once __DIR__ . '/protocol_notification_helper.php';
 require_once __DIR__ . '/email_alertas_dispatcher.php';
+require_once __DIR__ . '/notificacao_canais_helper.php';
+require_once __DIR__ . '/chatin_helper.php';
 
 if (!function_exists('controle_acesso_notificacao_coluna_existe')) {
     function controle_acesso_notificacao_coluna_existe(mysqli $conexao, string $tabela, string $coluna): bool {
@@ -285,11 +287,42 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
         $permitir_push = ($configuracoes['push_controle_acesso_ativo'] ?? '1') !== '0';
         $resumo = ['sucesso' => true, 'destinatarios' => count($destinatarios), 'persistidas' => 0, 'push_enviados' => 0];
 
+        // Canais configurados em Sistema > Controle de Acesso (evento acesso.visitante_chegou).
+        // Só se aplicam à ENTRADA de não moradores; demais movimentações mantêm o comportamento anterior.
+        $chegada_visitante = $entrada && trim($tipo_pessoa) !== 'Morador';
+        $canais_visita = function_exists('notif_canais_do_evento')
+            ? notif_canais_do_evento($conexao, $tenant_id, 'acesso.visitante_chegou')
+            : ['EMAIL' => true, 'APP' => true, 'CHATIN' => false];
+        if ($chegada_visitante && empty($canais_visita['APP'])) {
+            $permitir_push = false;
+        }
+        if ($chegada_visitante) {
+            $resumo['canais'] = $canais_visita;
+            $nome_exibicao = trim($nome_pessoa) !== '' ? trim($nome_pessoa) : $categoria;
+            $titulo_chegada = 'Seu visitante chegou';
+            $corpo_chegada = $nome_exibicao . ($nome_exibicao !== $categoria ? ' (' . $categoria . ')' : '')
+                . ' chegou à portaria' . ($data_hora ? ' às ' . date('H:i', strtotime($data_hora)) : '') . ' — entrada registrada para ' . $unidade . '.';
+            if ($placa !== '') $corpo_chegada .= ' Placa ' . $placa . '.';
+            $destinos_pessoas = array_map(static fn($d) => ['tipo' => 'MORADOR', 'id' => (int)$d['id']], $destinatarios);
+            if (!empty($canais_visita['CHATIN']) && function_exists('chatin_enviar_aviso')) {
+                try {
+                    $resumo['chatin_entregues'] = chatin_enviar_aviso($conexao, $tenant_id, $destinos_pessoas, 'Portaria', $titulo_chegada, $corpo_chegada, 'acesso', $registro_acesso_id);
+                } catch (Throwable $e) {
+                    error_log('[ControleAcesso][ChatIn] ' . get_class($e) . ' codigo=' . (int)$e->getCode());
+                }
+            }
+            if (function_exists('notif_canais_disparar_externos')) {
+                $resumo['externos'] = notif_canais_disparar_externos($conexao, $tenant_id, 'acesso.visitante_chegou', $destinos_pessoas, [
+                    'titulo' => $titulo_chegada, 'corpo' => $corpo_chegada, 'referencia_tipo' => 'acesso', 'referencia_id' => $registro_acesso_id,
+                ]);
+            }
+        }
+
         // acesso.visitante_registrado: só faz sentido para Visitante/Prestador
         // entrando (não para Morador nem para saída) — cada morador destinatário
         // vira um e-mail próprio, reaproveitando a mesma resolução de unidade
         // acima em vez de duplicar a query em api_registros.php.
-        if ($entrada && trim($tipo_pessoa) !== 'Morador' && trim($nome_pessoa) !== '') {
+        if ($entrada && trim($tipo_pessoa) !== 'Morador' && trim($nome_pessoa) !== '' && !empty($canais_visita['EMAIL'])) {
             foreach ($destinatarios as $destinatario) {
                 if (empty($destinatario['email'])) continue;
                 try {

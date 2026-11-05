@@ -1,95 +1,65 @@
-/**
- * stub.css — Estilos compartilhados para páginas em desenvolvimento
- * Usado por: seguranca, notificacoes, sistema
- * @version 1.0.0
- */
-
 /* ============================================================
-   BREADCRUMB STUB
+   Eventos (Administrativo) — cadastro e aviso pelo Chat-In
    ============================================================ */
-.stub-breadcrumb {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.875rem;
-    color: #64748b;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-}
-
-.stub-breadcrumb [data-page] {
-    color: #4f46e5;
-    cursor: pointer;
-    font-weight: 500;
-    transition: color 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.stub-breadcrumb [data-page]:hover {
-    color: #3730a3;
-    text-decoration: underline;
-}
-
-.stub-sep {
-    color: #cbd5e1;
-    font-size: 0.7rem;
-}
-
-/* ============================================================
-   CARD EM DESENVOLVIMENTO
-   ============================================================ */
-.stub-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 2rem;
-    text-align: center;
-    border: 2px dashed #e2e8f0;
-    background: #fafbfc;
-}
-
-.stub-icon {
-    font-size: 3.5rem;
-    color: #cbd5e1;
-    margin-bottom: 1.25rem;
-}
-
-.stub-card h3 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #64748b;
-    margin: 0 0 0.75rem 0;
-}
-
-.stub-card p {
-    font-size: 0.9rem;
-    color: #94a3b8;
-    max-width: 480px;
-    line-height: 1.6;
-    margin: 0 0 1.5rem 0;
-}
-
-.stub-btn-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 9px 18px;
-    background: #4f46e5;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: inherit;
-}
-
-.stub-btn-back:hover {
-    background: #4338ca;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+.page-eventos .ev-breadcrumb { display: flex; align-items: center; gap: 6px; font-size: .875rem; color: #64748b; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.page-eventos .ev-link { color: #4f46e5; cursor: pointer; font-weight: 500; display: inline-flex; gap: 5px; align-items: center; }
+.page-eventos .ev-link:hover { color: #3730a3; }
+.page-eventos .ev-sep { font-size: .7rem; color: #cbd5e1; }
+.page-eventos .ev-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.page-eventos .ev-filtros { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.page-eventos .ev-segmento { display: inline-flex; background: #f1f5f9; border-radius: 10px; padding: 3px; }
+.page-eventos .ev-segmento button { border: none; background: transparent; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; color: #64748b; }
+.page-eventos .ev-segmento button.ativo { background: #fff; color: #2563eb; box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
+.page-eventos .ev-select { max-width: 220px; }
+.page-eventos .ev-lista { display: flex; flex-direction: column; gap: 12px; }
+.page-eventos .ev-vazio { padding: 40px 16px; text-align: center; color: #94a3b8; }
+.page-eventos .ev-vazio i { font-size: 30px; display: block; margin-bottom: 8px; color: #cbd5e1; }
+.page-eventos .ev-erro { color: #b91c1c; }
+.page-eventos .ev-card { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.page-eventos .ev-card.cancelado { opacity: .65; background: #f8fafc; }
+.page-eventos .ev-data { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 0; border-radius: 10px; background: #eff6ff; color: #1d4ed8; }
+.page-eventos .ev-data strong { font-size: 24px; line-height: 1; }
+.page-eventos .ev-data span { font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.page-eventos .ev-data small { font-size: 11px; color: #64748b; }
+.page-eventos .ev-info h3 { margin: 0 0 4px; font-size: 16px; color: #1e293b; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.page-eventos .ev-meta { margin: 2px 0; font-size: 13px; color: #64748b; }
+.page-eventos .ev-desc { margin: 8px 0 0; font-size: 13px; color: #334155; white-space: pre-wrap; }
+.page-eventos .ev-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: #f1f5f9; color: #64748b; }
+.page-eventos .ev-tag-ok { background: #dcfce7; color: #15803d; }
+.page-eventos .ev-tag-cancelado { background: #fee2e2; color: #b91c1c; }
+.page-eventos .ev-acoes { display: flex; gap: 6px; }
+.page-eventos .ev-acao { width: 36px; height: 36px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; color: #475569; cursor: pointer; }
+.page-eventos .ev-acao:hover { border-color: #93c5fd; color: #2563eb; }
+.page-eventos .ev-acao-perigo:hover { border-color: #fca5a5; color: #dc2626; }
+.page-eventos .ev-overlay { position: fixed; inset: 0; z-index: 1300; background: rgba(15, 23, 42, .5); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.page-eventos .ev-overlay[hidden] { display: none; }
+.page-eventos .ev-modal { width: 100%; max-width: 620px; max-height: calc(100vh - 32px); background: #fff; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(15, 23, 42, .3); }
+.page-eventos .ev-modal-pequeno { max-width: 460px; }
+.page-eventos .ev-modal-topo { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+.page-eventos .ev-modal-topo h3 { margin: 0; font-size: 17px; color: #1e293b; display: flex; gap: 8px; align-items: center; }
+.page-eventos .ev-fechar { width: 34px; height: 34px; border: none; border-radius: 8px; background: transparent; font-size: 18px; color: #64748b; cursor: pointer; }
+.page-eventos .ev-fechar:hover { background: #f1f5f9; }
+.page-eventos .ev-modal-corpo { padding: 16px 20px; overflow-y: auto; }
+.page-eventos .ev-modal-rodape { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid #e2e8f0; }
+.page-eventos .ev-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.page-eventos .ev-req { color: #dc2626; }
+.page-eventos .ev-radios { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; }
+.page-eventos .ev-radios label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.page-eventos .ev-unidades { margin-top: 10px; }
+.page-eventos .ev-unidades[hidden] { display: none; }
+.page-eventos .ev-unidades-lista { margin-top: 8px; max-height: 170px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.page-eventos .ev-unidade { display: flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
+.page-eventos .ev-unidade[hidden] { display: none; }
+.page-eventos .ev-ajuda { color: #94a3b8; }
+.page-eventos .ev-chatin { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 10px; cursor: pointer; margin-top: 6px; }
+.page-eventos .ev-chatin input { margin-top: 3px; }
+.page-eventos .ev-chatin i { color: #2563eb; }
+.page-eventos .ev-chatin small { display: block; color: #475569; margin-top: 2px; font-size: 12px; }
+.page-eventos .ev-cancelar-nome { font-weight: 600; color: #1e293b; margin-top: 0; }
+.page-eventos .ev-btn-perigo { background: #dc2626; color: #fff; border: none; border-radius: 8px; padding: 9px 16px; font-weight: 600; cursor: pointer; }
+.page-eventos .ev-btn-perigo:hover { background: #b91c1c; }
+@media (max-width: 640px) {
+    .page-eventos .ev-card { grid-template-columns: 56px minmax(0, 1fr); }
+    .page-eventos .ev-acoes { grid-column: 1 / -1; justify-content: flex-end; }
+    .page-eventos .ev-grid2 { grid-template-columns: 1fr; }
 }

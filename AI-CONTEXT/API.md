@@ -239,3 +239,11 @@ Registro manual ocorre sob transação e lock compartilhado do colaborador; a ch
 - O relatório `api_rh_relatorios.php?acao=banco_horas` aceita colaborador ou departamento e datas completas; no modo departamental retorna agregados apenas de colaboradores ativos com escala/Banco de Horas ativo no tenant. Histórico pode ser filtrado por `colaborador_id` ou pelo valor de `departamento`.
 - `sql/migration_rh_banco_horas_mapeamento_mysql57.sql` cria campos de apuração/excedente e histórico. A política `LIMITAR_E_SEPARAR` apresenta excedente como tipo fora do saldo; `CREDITAR_TUDO` credita integralmente extras líquidas.
 - Leitura de extrato, saldo, relatórios HTML/JSON e PDF exige `recursos_humanos.visualizar`; lançamento manual e reprocessamento exigem `recursos_humanos.editar`; exclusão exige `recursos_humanos.excluir`. Escala e Abono validam a ação correspondente no servidor. Escritas de Ponto, Abono, DSR e ledger adquirem o mesmo lock do colaborador e confirmam origem, totais e lançamentos automáticos na mesma transação.
+
+## 20. Chat-In, Eventos e Canais de Notificação (2026-11-05)
+Referência completa em `AI-CONTEXT/CHATIN.md`.
+- `api/api_chatin.php` — Bearer (morador) ou sessão (usuário). `GET sync|conversas|contatos|mensagens|preferencias`; `POST abrir|enviar|lida|arquivar|preferencias|bloquear`. 503 `NAO_INSTALADO`, 429 rate limit (20/min), idempotência por `idempotency_key`.
+- `api/api_eventos.php` — RBAC `eventos`. `GET listar(periodo=proximos|passados|todos,status)|obter|opcoes`; `POST salvar {..., publico, unidades[], notificar_chatin}|cancelar {id,motivo,notificar_chatin}|notificar {id}`. JSON `{sucesso,mensagem,dados}`.
+- `api/api_notificacao_canais.php` — `GET` (visitantes/visualizar) catálogo + canais ativos por evento; `PUT {evento, canais}` (sistema/configurar), auditado.
+- `api/api_assembleia.php` — `criar`/`atualizar` aceitam `notificar_chatin`; nova ação `notificar_chatin {id}`; todas as ações principais filtram `tenant_id`; 409 se a coluna não existir.
+- `api/api_documentos.php` — `documento_salvar` aceita `notificar_chatin=1` (resposta inclui `notificados_chatin`; -1 = visibilidade só usuários).

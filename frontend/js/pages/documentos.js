@@ -419,6 +419,10 @@ const DocumentosPage = (() => {
     $('doc-data-exp').value     = doc ? (doc.data_expiracao || '') : '';
     $('doc-status').value       = doc ? (doc.status || 'ativo') : 'ativo';
     $('doc-visibilidade').value = doc ? (doc.visibilidade || 'todos') : 'todos';
+    if ($('doc-notificar-chatin')) $('doc-notificar-chatin').checked = false;
+    if ($('doc-notificar-chatin-texto')) $('doc-notificar-chatin-texto').textContent = doc
+      ? 'Reenviar aviso deste documento aos moradores pelo Chat-In'
+      : 'Notificar moradores pelo Chat-In';
     // Preencher usuários selecionados ao editar
     const idsPermitidos = doc ? (doc.usuarios_acesso_ids || []) : [];
     if (doc && doc.visibilidade === 'usuarios') {
@@ -449,6 +453,11 @@ const DocumentosPage = (() => {
     const vis = $('doc-visibilidade') ? $('doc-visibilidade').value : '';
     const wrapUnidades = $('doc-unidades-wrap');
     if (wrapUnidades) wrapUnidades.style.display = vis === 'unidades_especificas' ? 'block' : 'none';
+    const chkChatin = $('doc-notificar-chatin');
+    if (chkChatin) {
+      chkChatin.disabled = vis === 'usuarios';
+      if (vis === 'usuarios') chkChatin.checked = false;
+    }
     const wrapUsuarios = $('doc-usuarios-wrap');
     if (wrapUsuarios) {
       wrapUsuarios.style.display = vis === 'usuarios' ? 'block' : 'none';
@@ -606,6 +615,7 @@ const DocumentosPage = (() => {
       data_publicacao: $('doc-data-pub').value,
       data_expiracao: $('doc-data-exp').value,
     };
+    if ($('doc-notificar-chatin') && $('doc-notificar-chatin').checked) params.notificar_chatin = '1';
     const arqInput = $('doc-arquivo');
     if (arqInput && arqInput.files && arqInput.files[0]) params.arquivo = arqInput.files[0];
     const r = await _api(params, 'POST');

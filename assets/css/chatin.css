@@ -1,0 +1,169 @@
+/* ============================================================
+   ERP CONDOMÍNIOS — CHAT-IN (widget global + página embutida)
+   Usado por frontend/layout-base.html e frontend/portal_morador.html
+   ============================================================ */
+:root {
+    --chatin-largura: 380px;
+    --chatin-azul: #2563eb;
+    --chatin-azul-escuro: #1e40af;
+    --chatin-fundo: #f8fafc;
+    --chatin-borda: #e2e8f0;
+    --chatin-texto: #1e293b;
+    --chatin-sub: #64748b;
+    --chatin-verde: #16a34a;
+}
+
+/* ── Botão flutuante ─────────────────────────────────────────── */
+.chatin-launcher {
+    position: fixed; right: 22px; bottom: 22px; z-index: 1190;
+    width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--chatin-azul), var(--chatin-azul-escuro)); color: #fff;
+    font-size: 24px; box-shadow: 0 8px 24px rgba(37, 99, 235, .35);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .18s, box-shadow .18s;
+}
+.chatin-launcher:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(37, 99, 235, .45); }
+.chatin-launcher:focus-visible { outline: 3px solid rgba(37, 99, 235, .4); outline-offset: 3px; }
+.chatin-launcher[hidden] { display: none; }
+.chatin-badge {
+    position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px;
+    border-radius: 11px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; border: 2px solid #fff;
+}
+.chatin-badge[hidden] { display: none; }
+
+/* ── Painel lateral ──────────────────────────────────────────── */
+.chatin-dock {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 1200;
+    width: var(--chatin-largura); max-width: 100vw;
+    background: #fff; border-left: 1px solid var(--chatin-borda);
+    box-shadow: -10px 0 30px rgba(15, 23, 42, .12);
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .22s ease-out;
+    font-family: inherit; color: var(--chatin-texto);
+}
+.chatin-dock[hidden] { display: none; }
+.chatin-dock.aberto { transform: translateX(0); }
+.chatin-dock.fixado { box-shadow: none; }
+.chatin-dock-topo {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 12px 14px; background: linear-gradient(135deg, var(--chatin-azul), var(--chatin-azul-escuro)); color: #fff;
+}
+.chatin-marca { font-weight: 700; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.chatin-dock-acoes { display: flex; gap: 4px; }
+.chatin-dock-topo .chatin-icone-btn { color: #fff; }
+.chatin-dock-topo .chatin-icone-btn:hover { background: rgba(255, 255, 255, .18); }
+.chatin-dock-topo .chatin-icone-btn.ativo { background: rgba(255, 255, 255, .28); }
+.chatin-corpo { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--chatin-fundo); }
+
+/* Painel fixado empurra o conteúdo (telas largas) */
+@media (min-width: 1100px) {
+    body.chatin-fixado { padding-right: var(--chatin-largura); }
+}
+
+/* ── Página embutida (layout-base ?page=chatin) ──────────────── */
+.chatin-embutido {
+    display: flex; flex-direction: column; min-height: 0;
+    height: calc(100vh - 190px); min-height: 460px;
+    background: var(--chatin-fundo); border: 1px solid var(--chatin-borda); border-radius: 12px; overflow: hidden;
+}
+
+/* ── Elementos comuns ────────────────────────────────────────── */
+.chatin-icone-btn {
+    width: 34px; height: 34px; border: none; border-radius: 8px; background: transparent; cursor: pointer;
+    color: var(--chatin-sub); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: 0 0 auto;
+}
+.chatin-icone-btn:hover { background: #eef2ff; color: var(--chatin-azul); }
+.chatin-btn {
+    margin-top: 12px; border: none; border-radius: 8px; padding: 9px 14px; cursor: pointer;
+    background: var(--chatin-azul); color: #fff; font-weight: 600; font-size: 13px;
+}
+.chatin-abas { display: flex; border-bottom: 1px solid var(--chatin-borda); background: #fff; }
+.chatin-abas button {
+    flex: 1; padding: 11px 8px; border: none; background: transparent; cursor: pointer;
+    color: var(--chatin-sub); font-weight: 600; font-size: 13px; border-bottom: 3px solid transparent;
+}
+.chatin-abas button.ativa { color: var(--chatin-azul); border-bottom-color: var(--chatin-azul); }
+.chatin-lista { flex: 1; min-height: 0; overflow-y: auto; }
+.chatin-item {
+    width: 100%; display: flex; gap: 11px; align-items: center; text-align: left;
+    padding: 11px 14px; border: none; border-bottom: 1px solid #f1f5f9; background: #fff; cursor: pointer; font: inherit; color: inherit;
+}
+.chatin-item:hover { background: #f1f5ff; }
+.chatin-item.nao-lida strong { color: #0f172a; }
+.chatin-item.nao-lida .chatin-previa { color: var(--chatin-texto); font-weight: 600; }
+.chatin-item-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.chatin-item-linha { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+.chatin-item-linha strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatin-item-linha small { color: var(--chatin-sub); font-size: 11px; flex: 0 0 auto; }
+.chatin-sub, .chatin-previa { font-size: 12px; color: var(--chatin-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatin-pill { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--chatin-azul); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.chatin-avatar {
+    position: relative; width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto;
+    color: #fff; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; justify-content: center;
+}
+.chatin-avatar-avisos { background: linear-gradient(135deg, #f59e0b, #ea580c); }
+.chatin-online-dot { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: var(--chatin-verde); border: 2px solid #fff; }
+.chatin-online-txt { color: var(--chatin-verde) !important; font-weight: 600; }
+.chatin-busca { display: flex; align-items: center; gap: 8px; margin: 10px 12px; padding: 0 12px; background: #fff; border: 1px solid var(--chatin-borda); border-radius: 10px; color: var(--chatin-sub); }
+.chatin-busca input { flex: 1; border: none; outline: none; padding: 10px 0; font: inherit; font-size: 14px; background: transparent; color: var(--chatin-texto); }
+.chatin-vazio { padding: 36px 20px; text-align: center; color: var(--chatin-sub); }
+.chatin-vazio i { font-size: 34px; color: #cbd5e1; display: block; margin-bottom: 10px; }
+.chatin-vazio p { margin: 0; font-size: 13px; line-height: 1.5; }
+.chatin-erro i { color: #f87171; }
+.chatin-carregando { padding: 30px; text-align: center; color: var(--chatin-azul); }
+
+/* ── Conversa ────────────────────────────────────────────────── */
+.chatin-conversa-topo { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #fff; border-bottom: 1px solid var(--chatin-borda); }
+.chatin-conversa-id { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.chatin-conversa-id span { min-width: 0; display: flex; flex-direction: column; }
+.chatin-conversa-id strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatin-conversa-id small { font-size: 12px; color: var(--chatin-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatin-menu { position: absolute; right: 10px; top: 46px; z-index: 5; background: #fff; border: 1px solid var(--chatin-borda); border-radius: 10px; box-shadow: 0 10px 24px rgba(15, 23, 42, .14); overflow: hidden; min-width: 200px; }
+.chatin-menu[hidden] { display: none; }
+.chatin-menu button { display: flex; gap: 8px; align-items: center; width: 100%; padding: 10px 14px; border: none; background: #fff; cursor: pointer; font: inherit; font-size: 13px; color: var(--chatin-texto); text-align: left; }
+.chatin-menu button:hover { background: #f1f5ff; }
+.chatin-mensagens { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 12px 6px; display: flex; flex-direction: column; gap: 6px; }
+.chatin-dia { text-align: center; margin: 8px 0 4px; }
+.chatin-dia span { font-size: 11px; color: var(--chatin-sub); background: #e2e8f0; padding: 3px 10px; border-radius: 10px; }
+.chatin-msg { max-width: 82%; align-self: flex-start; background: #fff; border: 1px solid var(--chatin-borda); border-radius: 14px 14px 14px 4px; padding: 7px 11px 5px; }
+.chatin-msg.minha { align-self: flex-end; background: #dbeafe; border-color: #bfdbfe; border-radius: 14px 14px 4px 14px; }
+.chatin-msg.pendente { opacity: .7; }
+.chatin-msg.falhou { border-color: #fca5a5; background: #fef2f2; }
+.chatin-msg p { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.chatin-msg-autor { display: block; font-size: 11px; font-weight: 700; color: var(--chatin-azul); margin-bottom: 2px; }
+.chatin-msg-hora { display: block; text-align: right; font-size: 10px; color: var(--chatin-sub); margin-top: 2px; }
+.chatin-msg-hora a { color: #dc2626; }
+.chatin-aviso { align-self: stretch; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 10px 12px; }
+.chatin-aviso-topo { display: flex; gap: 6px; align-items: center; font-size: 11px; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: .3px; }
+.chatin-aviso-topo small { margin-left: auto; font-weight: 500; color: var(--chatin-sub); text-transform: none; }
+.chatin-aviso strong { display: block; margin-top: 4px; font-size: 14px; }
+.chatin-aviso p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.chatin-mais { align-self: center; border: 1px solid var(--chatin-borda); background: #fff; border-radius: 14px; padding: 5px 12px; font-size: 12px; color: var(--chatin-azul); cursor: pointer; }
+.chatin-somente-leitura { padding: 12px 14px; font-size: 12px; color: var(--chatin-sub); background: #fff; border-top: 1px solid var(--chatin-borda); display: flex; gap: 8px; align-items: center; }
+.chatin-composer { position: relative; display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px; background: #fff; border-top: 1px solid var(--chatin-borda); }
+.chatin-composer textarea { flex: 1; resize: none; border: 1px solid var(--chatin-borda); border-radius: 18px; padding: 8px 12px; font: inherit; font-size: 14px; line-height: 1.4; max-height: 120px; outline: none; background: var(--chatin-fundo); color: var(--chatin-texto); }
+.chatin-composer textarea:focus { border-color: #93c5fd; background: #fff; }
+.chatin-enviar { width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer; background: var(--chatin-azul); color: #fff; flex: 0 0 auto; }
+.chatin-enviar:hover { background: var(--chatin-azul-escuro); }
+.chatin-emojis { position: absolute; left: 8px; bottom: 54px; z-index: 5; display: grid; grid-template-columns: repeat(5, 36px); gap: 2px; padding: 6px; background: #fff; border: 1px solid var(--chatin-borda); border-radius: 12px; box-shadow: 0 10px 24px rgba(15, 23, 42, .14); }
+.chatin-emojis[hidden] { display: none; }
+.chatin-emojis button { width: 36px; height: 36px; border: none; background: transparent; font-size: 20px; cursor: pointer; border-radius: 8px; }
+.chatin-emojis button:hover { background: #f1f5f9; }
+.chatin-composer-aviso { position: absolute; left: 10px; right: 10px; bottom: 100%; margin-bottom: 6px; padding: 8px 10px; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-size: 12px; border: 1px solid #fecaca; }
+
+/* ── Preferências ────────────────────────────────────────────── */
+.chatin-prefs { padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.chatin-pref { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid var(--chatin-borda); border-radius: 10px; padding: 12px; cursor: pointer; }
+.chatin-pref input { margin-top: 3px; width: 16px; height: 16px; flex: 0 0 auto; }
+.chatin-pref span { display: flex; flex-direction: column; gap: 3px; }
+.chatin-pref strong { font-size: 13px; }
+.chatin-pref small { font-size: 12px; color: var(--chatin-sub); line-height: 1.4; }
+.chatin-prefs-nota { margin: 4px 2px; font-size: 12px; color: var(--chatin-sub); line-height: 1.45; }
+
+/* ── Celular ─────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .chatin-dock { width: 100vw; }
+    .chatin-launcher { right: 16px; bottom: 16px; width: 54px; height: 54px; }
+    .chatin-embutido { height: calc(100vh - 150px); }
+}

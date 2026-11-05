@@ -50,3 +50,6 @@ Pré-cadastro do morador: aba **Convidados** no Portal do Morador e tela **Convi
 ## 9. Alertas da Unidade
 
 A aba Alertas pertence à rota Moradores e ao RBAC `moradores`; suas APIs e dados vivem no domínio `alertas_unidade`. Regras são avaliadas em Registro Manual, Controle de Acesso e leitura de QR do Console, com ciência humana, bloqueio automático e histórico de acionamentos. O Portal web possui Meus Alertas e preflight de convites QR. Não confundir com `alertas_acesso`, que continua sendo o motor administrativo de detecção pós-evento. O app Flutter permanece fora do escopo autorizado nesta etapa.
+
+## 10. Chat-In, Eventos e canais de notificação
+Comunicador interno (menu abaixo de Recursos Humanos) para usuários e moradores, com avisos automáticos de Documentos, Assembleia, Eventos e chegada de visitante. Eventos (Administrativo) agora é funcional. Sistema › Controle de Acesso define os canais (E-mail, App, Chat-In; WhatsApp/SMS preparados). Ver `CHATIN.md`.

@@ -1728,6 +1728,9 @@
             .card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
         }
     </style>
+    <!-- Chat-In: comunicador interno com a administração e vizinhos -->
+    <link rel="stylesheet" href="/assets/css/chatin.css?v=20261105-chatin-1">
+    <script src="js/chatin-widget.js?v=20261105-chatin-1"></script>
 </head>
 <body>
 
@@ -3376,6 +3379,9 @@ function inicializarPortal() {
     // Aplicar layout de navegação conforme dispositivo
     aplicarLayoutNavegacao();
 
+    // Chat-In (botão flutuante): autenticação pelo mesmo token do portal
+    if (window.ChatIn) window.ChatIn.iniciar({ plataforma: 'portal', token: () => Portal.token });
+
     // Reagir a redimensionamento de janela em tempo real
     window.addEventListener('resize', debounce(aplicarLayoutNavegacao, 150));
 
@@ -3613,6 +3619,7 @@ function setLoadingText(txt) {
    ────────────────────────────────────────────────────────────────── */
 function fazerLogout() {
     if (!confirm('Deseja realmente sair do portal?')) return;
+    if (window.ChatIn) window.ChatIn.encerrar();
 
     fetch(window.location.origin + '/api/logout_morador.php', {
         method: 'POST',

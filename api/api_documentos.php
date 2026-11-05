@@ -50,6 +50,7 @@ require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
+require_once __DIR__ . '/helpers/chatin_helper.php';
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -346,6 +347,7 @@ function _criar_tabelas($db) {
 // tabela antiga — ela vira o guard de idempotência: se não existir mais
 // com esse nome, a migração já ocorreu e a função retorna imediatamente.
 function _migrar_departamentos_legado($db) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $rExiste = $db->query("SHOW TABLES LIKE 'documentos_departamentos'");
     if (!$rExiste || $rExiste->num_rows === 0) return;
 
@@ -408,6 +410,7 @@ function _log($db, $sessao, ?int $docId, string $acao, string $desc): void {
 }
 
 function _registrar_acesso($db, $sessao, int $docId, string $tipo, string $origem): void {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $uid   = (int)($sessao['id'] ?? 0);
     $nome  = _esc($db, $sessao['nome'] ?? '');
     $perf  = _esc($db, $sessao['perfil'] ?? '');
@@ -431,6 +434,7 @@ function _registrar_acesso($db, $sessao, int $docId, string $tipo, string $orige
 // DASHBOARD
 // ============================================================
 function _dashboard_stats($db) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $hoje = date('Y-m-d');
 
     $rTotal    = $db->query("SELECT COUNT(*) c FROM documentos WHERE tenant_id = $tenant_id AND status = 'ativo'");
@@ -519,6 +523,7 @@ function _departamentos_listar($db) {
 // mas permite manter o vínculo se ele já existia antes da mudança
 // (preserva o histórico quando um departamento é desativado depois).
 function _departamento_ativo_para_associacao($db, int $depId, int $depIdAtual): bool {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     if (!$depId || $depId === $depIdAtual) return true;
     $res = $db->query("SELECT ativo FROM departamentos WHERE tenant_id = $tenant_id AND id=$depId LIMIT 1");
     $row = $res ? $res->fetch_assoc() : null;
@@ -562,6 +567,7 @@ function _grupo_membros($db) {
 }
 
 function _grupo_salvar($db, $sessao) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $id   = (int)($_POST['id'] ?? 0);
     $nome = _esc($db, $_POST['nome'] ?? '');
     $desc = _esc($db, $_POST['descricao'] ?? '');
@@ -581,6 +587,7 @@ function _grupo_salvar($db, $sessao) {
 }
 
 function _grupo_excluir($db) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $id = (int)($_POST['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
     $db->query("UPDATE documentos_grupos SET ativo=0 WHERE tenant_id = $tenant_id AND id=$id");
@@ -633,6 +640,7 @@ function _pastas_listar($db) {
 }
 
 function _pasta_salvar($db, $sessao) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $id    = (int)($_POST['id'] ?? 0);
     $nome  = _esc($db, $_POST['nome'] ?? '');
     $depId = (int)($_POST['departamento_id'] ?? 0);
@@ -666,6 +674,7 @@ function _pasta_salvar($db, $sessao) {
 }
 
 function _pasta_excluir($db) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $id = (int)($_POST['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
     $res = $db->query("SELECT COUNT(*) c FROM documentos WHERE tenant_id = $tenant_id AND pasta_id=$id");
@@ -847,7 +856,8 @@ function _documento_salvar($db, $sessao) {
         $db->query("UPDATE documentos SET $setSql WHERE tenant_id = $tenant_id AND id=$id");
         _log($db, $sessao, $id, 'edicao', "Documento editado: $nome");
         _sincronizar_usuarios_acesso($db, $id, $visib, $usuariosIds);
-        retornar_json(true, 'Documento atualizado com sucesso.');
+        $avisoChatin = !empty($_POST['notificar_chatin']) ? _documento_notificar_chatin($db, $id) : null;
+        retornar_json(true, 'Documento atualizado com sucesso.' . _documento_texto_chatin($avisoChatin), ['notificados_chatin' => $avisoChatin]);
     } else {
         $arqSql   = $arquivoNovo ? "'$arquivoNovo'" : 'NULL';
         $tipoSql  = $arquivoTipo ? "'$arquivoTipo'" : 'NULL';
@@ -870,8 +880,64 @@ function _documento_salvar($db, $sessao) {
         // Notificação por e-mail (opcional — integra ao sistema existente)
         _notificar_novo_documento($db, $novoId, $nome, $grupoId, $uid, $tenant_id);
         _sincronizar_usuarios_acesso($db, $novoId, $visib, $usuariosIds);
-        retornar_json(true, 'Documento cadastrado com sucesso.', ['id' => $novoId]);
+        $avisoChatin = !empty($_POST['notificar_chatin']) ? _documento_notificar_chatin($db, (int)$novoId) : null;
+        retornar_json(true, 'Documento cadastrado com sucesso.' . _documento_texto_chatin($avisoChatin), ['id' => $novoId, 'notificados_chatin' => $avisoChatin]);
     }
+}
+
+// ============================================================
+// CHAT-IN — aviso de novo documento aos moradores
+// ============================================================
+/**
+ * Envia "Novo documento disponível" em Avisos do condomínio (Chat-In) aos moradores
+ * que podem ver o documento: visibilidade todos/moradores → todos os moradores ativos;
+ * unidades_especificas → moradores das unidades marcadas; usuarios → ninguém (só equipe).
+ * Retorna o total de moradores avisados, ou -1 quando a visibilidade não alcança moradores.
+ */
+function _documento_notificar_chatin($db, int $docId): int {
+    global $tenant_id;
+    if (!chatin_instalado($db)) return 0;
+    $stmt = $db->prepare("SELECT d.nome, d.descricao, d.visibilidade, d.unidades_acesso, d.status, t.nome AS tipo_nome
+                          FROM documentos d LEFT JOIN documentos_tipos t ON t.id = d.tipo_id
+                          WHERE d.tenant_id = ? AND d.id = ? LIMIT 1");
+    if (!$stmt) {
+        $stmt = $db->prepare("SELECT d.nome, d.descricao, d.visibilidade, d.unidades_acesso, d.status, NULL AS tipo_nome
+                              FROM documentos d WHERE d.tenant_id = ? AND d.id = ? LIMIT 1");
+    }
+    $t = (int)$tenant_id;
+    $stmt->bind_param('ii', $t, $docId);
+    $stmt->execute();
+    $doc = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$doc || ($doc['status'] ?? 'ativo') !== 'ativo') return 0;
+
+    $visib = (string)($doc['visibilidade'] ?? 'todos');
+    if ($visib === 'usuarios') return -1;
+    $unidades = null;
+    if ($visib === 'unidades_especificas') {
+        $ids = array_values(array_filter(array_map('intval', (array)json_decode((string)$doc['unidades_acesso'], true))));
+        if (!$ids) return 0;
+        $marcadores = implode(',', array_fill(0, count($ids), '?'));
+        $stU = $db->prepare("SELECT nome FROM unidades WHERE tenant_id = ? AND id IN ($marcadores)");
+        $tipos = 'i' . str_repeat('i', count($ids));
+        $stU->bind_param($tipos, $t, ...$ids);
+        $stU->execute();
+        $unidades = array_column($stU->get_result()->fetch_all(MYSQLI_ASSOC), 'nome');
+        $stU->close();
+        if (!$unidades) return 0;
+    }
+    $corpo = 'Um novo documento foi publicado: "' . $doc['nome'] . '"'
+        . (!empty($doc['tipo_nome']) ? ' (' . $doc['tipo_nome'] . ')' : '') . '.'
+        . (trim((string)$doc['descricao']) !== '' ? "\n\n" . trim($doc['descricao']) : '')
+        . "\n\nAcesse em Documentos no portal ou no aplicativo.";
+    return chatin_enviar_aviso($db, $t, chatin_destinatarios_moradores($db, $t, $unidades), 'Administração',
+        'Novo documento: ' . $doc['nome'], $corpo, 'documento', $docId);
+}
+
+function _documento_texto_chatin($n): string {
+    if ($n === null) return '';
+    if ($n < 0) return ' Aviso pelo Chat-In não enviado: o documento está visível somente para usuários da administração.';
+    return ' Aviso enviado pelo Chat-In a ' . (int)$n . ' morador(es).';
 }
 
 // ============================================================
@@ -899,6 +965,7 @@ function _sincronizar_usuarios_acesso($db, int $docId, string $visib, $usuariosI
 }
 
 function _usuarios_sistema($db): void {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $res = $db->query("SELECT id, nome, email, nivel FROM usuarios WHERE tenant_id = $tenant_id AND ativo = 1 ORDER BY nome ASC");
     $rows = [];
     if ($res) while ($r = $res->fetch_assoc()) $rows[] = $r;
@@ -1088,6 +1155,7 @@ function _compartilhamentos_listar($db) {
 }
 
 function _compartilhamento_gerar($db, $sessao) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $docId      = (int)($_POST['documento_id'] ?? 0);
     $desc       = _esc($db, $_POST['descricao'] ?? '');
     $expira     = _esc($db, $_POST['expira_em'] ?? '');
@@ -1286,6 +1354,7 @@ function _tipo_salvar($db, $sessao) {
 }
 
 function _tipo_excluir($db) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $id = (int)($_POST['id'] ?? 0);
     if (!$id) retornar_json(false, 'ID inválido.');
     // Verificar se há documentos vinculados
@@ -1301,6 +1370,7 @@ function _tipo_excluir($db) {
 // UNIDADES (integração com tabela unidades)
 // ============================================================
 function _unidades_select($db) {
+    global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $res = $db->query("SELECT id, nome, bloco FROM unidades WHERE tenant_id = $tenant_id AND ativo = 1
                        ORDER BY CASE WHEN bloco = 'ADMIN' THEN 9999 ELSE CAST(SUBSTRING_INDEX(nome, ' ', -1) AS UNSIGNED) END ASC, nome ASC");
     $rows = [];

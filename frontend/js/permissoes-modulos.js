@@ -97,6 +97,7 @@
         monitoring:             'superadmin',
         config_visitantes:      'sistema',
         config_moradores:       'sistema',
+        config_controle_acesso: 'sistema',
 
         // Sistema
         configuracao:           'configuracao',
@@ -121,7 +122,7 @@
     };
 
     // Páginas sempre visíveis (independente de permissão)
-    const SEMPRE_VISIVEIS = ['dashboard', 'meu_perfil'];
+    const SEMPRE_VISIVEIS = ['dashboard', 'meu_perfil', 'chatin']; // Chat-In: comunicador de todos os usuários autenticados
 
     // Cache de permissões (carregado uma vez por sessão)
     let _cache = null;

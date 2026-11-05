@@ -1,0 +1,9 @@
+/* Sistema > Controle de Acesso — reaproveita os cartões/switches de config_visitantes.css (fonte única) */
+@import url('config_visitantes.css');
+
+.page-config-controle-acesso .config-visitantes-card { max-width: 1080px; }
+.page-config-controle-acesso .config-acesso-evento { margin-top: 1.25rem; }
+.page-config-controle-acesso .config-acesso-evento-titulo { font-size: 1rem; font-weight: 600; color: #1e293b; margin: 0 0 .25rem; display: flex; align-items: center; gap: 8px; }
+.page-config-controle-acesso .config-acesso-evento-titulo i { color: #2563eb; }
+.page-config-controle-acesso .config-acesso-evento-desc { color: #64748b; font-size: .875rem; margin: 0 0 .75rem; }
+.page-config-controle-acesso .config-campo-item.indisponivel { cursor: not-allowed; }

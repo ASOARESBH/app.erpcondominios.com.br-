@@ -15,6 +15,7 @@
         { id: 'manutencao', label: 'Manutencao', icon: 'fas fa-tools', page: 'manutencao', href: 'manutencao.html', order: 11 },
         { id: 'administrativa', label: 'Administrativo', icon: 'fas fa-briefcase', page: 'administrativa', href: 'administrativa.html', order: 12 },
         { id: 'recursos_humanos', label: 'Recursos Humanos', icon: 'fas fa-users-cog', page: 'recursos_humanos', href: 'layout-base.html?page=recursos_humanos', order: 13 },
+        { id: 'chatin', label: 'Chat-In', icon: 'fas fa-comments', page: 'chatin', href: 'layout-base.html?page=chatin', order: 13.5 },
         { id: 'manual', label: 'Manual do Sistema', icon: 'fas fa-book-open', page: 'manual', href: 'layout-base.html?page=manual', order: 14, style: 'color: #60a5fa; font-weight: 600;', separator: true }
     ];
 
@@ -56,7 +57,7 @@
         meu_perfil:'meu_perfil', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin',
         superadmin_aplicativos:'superadmin_aplicativos', aplicativos:'superadmin_aplicativos', pwa_central:'pwa_central',
         'admin-sessoes':'admin_sessoes', admin_sessoes:'admin_sessoes', auditoria:'auditoria',
-        manual:'manual', monitoring:'superadmin', config_moradores:'sistema'
+        manual:'manual', monitoring:'superadmin', config_moradores:'sistema', config_controle_acesso:'sistema'
     };
 
     function emContextoTenantSuperAdmin() {

@@ -13,6 +13,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_helper.php';
 require_once __DIR__ . '/tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
+require_once __DIR__ . '/helpers/chatin_helper.php';
 
 header('Content-Type: application/json; charset=utf-8');
 $_mt_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -30,7 +31,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 $sess = verificarAutenticacao(true, null);
 $tenant_id = exigirTenantId();
 $uid  = $sess['id']   ?? 0;
-$role = $sess['role'] ?? $sess['perfil'] ?? 'morador';
+// verificarAutenticacao() devolve o nível em 'permissao' (admin/gerente/operador/visualizador).
+// A leitura anterior de 'role'/'perfil' sempre resultava em 'morador' e bloqueava toda escrita.
+$role = $sess['permissao'] ?? $sess['role'] ?? $sess['perfil'] ?? 'visualizador';
 
 // ── Roteamento ───────────────────────────────────────────────
 $method = $_SERVER['REQUEST_METHOD'];
@@ -43,6 +46,14 @@ if (in_array($method, ['POST','PUT','PATCH'])) {
 // acao: GET param > POST param > JSON body (suporte a Content-Type: application/json)
 $acao = $_GET['acao'] ?? $_POST['acao'] ?? $body['acao'] ?? '';
 
+// Isolamento por condomínio: sem a coluna assembleias.tenant_id a API não opera
+// (evita listar/alterar assembleias de outro tenant). Ver sql/migration_assembleia_tenant_mysql57.sql.
+if ($acao !== 'migration' && !_assembleia_tenant_pronto()) {
+    http_response_code(409);
+    echo json_encode(['ok' => false, 'erro' => 'Módulo de assembleias aguardando atualização do banco: execute sql/migration_assembleia_tenant_mysql57.sql.']);
+    exit;
+}
+
 switch ($acao) {
     // ── Assembleias ──
     case 'listar':              responder_listar();          break;
@@ -51,6 +62,7 @@ switch ($acao) {
     case 'atualizar':           responder_atualizar();       break;
     case 'excluir':             responder_excluir();         break;
     case 'alterar_status':      responder_alterar_status();  break;
+    case 'notificar_chatin':    responder_notificar_chatin(); break;
     // ── Pautas ──
     case 'listar_pautas':       responder_listar_pautas();   break;
     case 'criar_pauta':         responder_criar_pauta();     break;
@@ -85,6 +97,7 @@ function responder_migration() {
     $sqls = [
         "CREATE TABLE IF NOT EXISTS assembleias (
             id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tenant_id       INT           DEFAULT NULL,
             nome            VARCHAR(255)  NOT NULL,
             tipo            ENUM('ordinaria','extraordinaria','deliberacao') NOT NULL DEFAULT 'ordinaria',
             data_assembleia DATETIME      NOT NULL,
@@ -96,7 +109,8 @@ function responder_migration() {
             criado_em       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             atualizado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_status (status),
-            INDEX idx_data   (data_assembleia)
+            INDEX idx_data   (data_assembleia),
+            INDEX idx_assembleias_tenant_data (tenant_id, data_assembleia)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 
         "CREATE TABLE IF NOT EXISTS assembleia_pautas (
@@ -195,9 +209,10 @@ function responder_listar() {
     $status = $_GET['status'] ?? '';
     $busca  = trim($_GET['busca'] ?? '');
 
-    $where = ['1=1'];
-    $params = [];
-    $types  = '';
+    global $tenant_id;
+    $where = ['a.tenant_id = ?'];
+    $params = [(int)$tenant_id];
+    $types  = 'i';
 
     if ($status !== '') {
         $where[] = 'a.status = ?';
@@ -234,12 +249,13 @@ function responder_listar() {
 // OBTER ASSEMBLEIA (com pautas e anexos)
 // ════════════════════════════════════════════════════════════
 function responder_obter() {
-    global $conn;
+    global $conn, $tenant_id;
     $id = (int)($_GET['id'] ?? 0);
     if (!$id) { http_response_code(400); echo json_encode(['erro' => 'ID obrigatório']); return; }
 
-    $stmt = mysqli_prepare($conn, "SELECT a.*, u.nome AS criador_nome FROM assembleias a LEFT JOIN usuarios u ON u.id = a.criado_por WHERE a.id = ?");
-    mysqli_stmt_bind_param($stmt, 'i', $id);
+    $stmt = mysqli_prepare($conn, "SELECT a.*, u.nome AS criador_nome FROM assembleias a LEFT JOIN usuarios u ON u.id = a.criado_por WHERE a.tenant_id = ? AND a.id = ?");
+    $tenantObter = (int)$tenant_id;
+    mysqli_stmt_bind_param($stmt, 'ii', $tenantObter, $id);
     mysqli_stmt_execute($stmt);
     $ass = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
     if (!$ass) { http_response_code(404); echo json_encode(['erro' => 'Assembleia não encontrada']); return; }
@@ -279,7 +295,7 @@ function responder_obter() {
 // CRIAR ASSEMBLEIA
 // ════════════════════════════════════════════════════════════
 function responder_criar() {
-    global $conn, $uid;
+    global $conn, $uid, $body, $tenant_id;
     _exigir_admin();
     $nome   = trim($body['nome']   ?? ''); if (!$nome) { _erro('Nome obrigatório'); return; }
     $tipo   = $body['tipo']   ?? 'ordinaria';
@@ -291,12 +307,15 @@ function responder_criar() {
     if (!$data) { _erro('Data da assembleia obrigatória'); return; }
 
     $stmt = mysqli_prepare($conn,
-        "INSERT INTO assembleias (nome, tipo, data_assembleia, local_realizacao, descricao, quorum_minimo, criado_por)
-         VALUES (?, ?, ?, ?, ?, ?, ?)");
-    mysqli_stmt_bind_param($stmt, 'sssssii', $nome, $tipo, $data, $local, $desc, $quorum, $uid);
+        "INSERT INTO assembleias (tenant_id, nome, tipo, data_assembleia, local_realizacao, descricao, quorum_minimo, criado_por)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    $tenantCriar = (int)$tenant_id;
+    mysqli_stmt_bind_param($stmt, 'isssssii', $tenantCriar, $nome, $tipo, $data, $local, $desc, $quorum, $uid);
     if (mysqli_stmt_execute($stmt)) {
         $id = mysqli_insert_id($conn);
-        echo json_encode(['ok' => true, 'id' => $id, 'mensagem' => 'Assembleia criada com sucesso']);
+        $notificados = !empty($body['notificar_chatin']) ? _assembleia_notificar_chatin($id) : null;
+        echo json_encode(['ok' => true, 'id' => $id, 'notificados' => $notificados,
+            'mensagem' => 'Assembleia criada com sucesso' . ($notificados !== null ? " — aviso enviado pelo Chat-In a $notificados morador(es)" : '')]);
     } else {
         _erro('Erro ao criar assembleia: ' . mysqli_error($conn));
     }
@@ -306,7 +325,7 @@ function responder_criar() {
 // ATUALIZAR ASSEMBLEIA
 // ════════════════════════════════════════════════════════════
 function responder_atualizar() {
-    global $conn, $body;
+    global $conn, $body, $tenant_id;
     _exigir_admin();
     $id     = (int)($body['id'] ?? 0); if (!$id) { _erro('ID obrigatório'); return; }
     $nome   = trim($body['nome']   ?? '');
@@ -317,22 +336,27 @@ function responder_atualizar() {
     $quorum = (int)($body['quorum_minimo'] ?? 0);
 
     $stmt = mysqli_prepare($conn,
-        "UPDATE assembleias SET nome=?, tipo=?, data_assembleia=?, local_realizacao=?, descricao=?, quorum_minimo=? WHERE id=?");
-    mysqli_stmt_bind_param($stmt, 'sssssii', $nome, $tipo, $data, $local, $desc, $quorum, $id);
+        "UPDATE assembleias SET nome=?, tipo=?, data_assembleia=?, local_realizacao=?, descricao=?, quorum_minimo=? WHERE tenant_id=? AND id=?");
+    $tenantAtualizar = (int)$tenant_id;
+    mysqli_stmt_bind_param($stmt, 'sssssiii', $nome, $tipo, $data, $local, $desc, $quorum, $tenantAtualizar, $id);
     mysqli_stmt_execute($stmt);
-    echo json_encode(['ok' => true, 'mensagem' => 'Assembleia atualizada']);
+    if (mysqli_stmt_affected_rows($stmt) < 0 || !_assembleia_do_tenant($id)) { http_response_code(404); echo json_encode(['erro' => 'Assembleia não encontrada']); return; }
+    $notificados = !empty($body['notificar_chatin']) ? _assembleia_notificar_chatin($id) : null;
+    echo json_encode(['ok' => true, 'notificados' => $notificados,
+        'mensagem' => 'Assembleia atualizada' . ($notificados !== null ? " — aviso enviado pelo Chat-In a $notificados morador(es)" : '')]);
 }
 
 // ════════════════════════════════════════════════════════════
 // EXCLUIR ASSEMBLEIA
 // ════════════════════════════════════════════════════════════
 function responder_excluir() {
-    global $conn, $body;
+    global $conn, $body, $tenant_id;
     _exigir_admin();
     $id = (int)($body['id'] ?? $_GET['id'] ?? 0);
     if (!$id) { _erro('ID obrigatório'); return; }
-    $stmt = mysqli_prepare($conn, "DELETE FROM assembleias WHERE id=?");
-    mysqli_stmt_bind_param($stmt, 'i', $id);
+    $stmt = mysqli_prepare($conn, "DELETE FROM assembleias WHERE tenant_id=? AND id=?");
+    $tenantExcluir = (int)$tenant_id;
+    mysqli_stmt_bind_param($stmt, 'ii', $tenantExcluir, $id);
     mysqli_stmt_execute($stmt);
     echo json_encode(['ok' => true, 'mensagem' => 'Assembleia excluída']);
 }
@@ -341,14 +365,15 @@ function responder_excluir() {
 // ALTERAR STATUS
 // ════════════════════════════════════════════════════════════
 function responder_alterar_status() {
-    global $conn, $body;
+    global $conn, $body, $tenant_id;
     _exigir_admin();
     $id     = (int)($body['id'] ?? 0);
     $status = $body['status'] ?? '';
     $validos = ['rascunho','convocada','em_andamento','encerrada','cancelada'];
     if (!$id || !in_array($status, $validos)) { _erro('Dados inválidos'); return; }
-    $stmt = mysqli_prepare($conn, "UPDATE assembleias SET status=? WHERE id=?");
-    mysqli_stmt_bind_param($stmt, 'si', $status, $id);
+    $stmt = mysqli_prepare($conn, "UPDATE assembleias SET status=? WHERE tenant_id=? AND id=?");
+    $tenantStatus = (int)$tenant_id;
+    mysqli_stmt_bind_param($stmt, 'sii', $status, $tenantStatus, $id);
     mysqli_stmt_execute($stmt);
     echo json_encode(['ok' => true, 'mensagem' => 'Status alterado para ' . $status]);
 }
@@ -656,6 +681,47 @@ function responder_listar_participantes() {
 // ════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════
+function _assembleia_tenant_pronto() {
+    global $conn;
+    $t = mysqli_query($conn, "SHOW TABLES LIKE 'assembleias'");
+    if (!$t || mysqli_num_rows($t) === 0) return true; // tabela ainda não criada: a ação "migration" cria a estrutura
+    $r = mysqli_query($conn, "SHOW COLUMNS FROM assembleias LIKE 'tenant_id'");
+    return $r && mysqli_num_rows($r) > 0;
+}
+
+/** Assembleia do tenant da sessão (ou null). */
+function _assembleia_do_tenant($id) {
+    global $conn, $tenant_id;
+    $stmt = mysqli_prepare($conn, 'SELECT * FROM assembleias WHERE tenant_id = ? AND id = ? LIMIT 1');
+    $t = (int)$tenant_id; $i = (int)$id;
+    mysqli_stmt_bind_param($stmt, 'ii', $t, $i);
+    mysqli_stmt_execute($stmt);
+    return mysqli_fetch_assoc(mysqli_stmt_get_result($stmt)) ?: null;
+}
+
+/** Convocação pelo Chat-In para todos os moradores ativos do condomínio. */
+function _assembleia_notificar_chatin($id) {
+    global $conn, $tenant_id;
+    $a = _assembleia_do_tenant($id);
+    if (!$a || !chatin_instalado($conn)) return 0;
+    $quando = $a['data_assembleia'] ? date('d/m/Y', strtotime($a['data_assembleia'])) . ' às ' . date('H:i', strtotime($a['data_assembleia'])) : '';
+    $tipos = ['ordinaria' => 'Assembleia Geral Ordinária', 'extraordinaria' => 'Assembleia Geral Extraordinária', 'deliberacao' => 'Deliberação'];
+    $corpo = ($tipos[$a['tipo']] ?? 'Assembleia') . ($quando !== '' ? ' em ' . $quando : '')
+        . (trim((string)$a['local_realizacao']) !== '' ? ' — Local: ' . trim($a['local_realizacao']) : '') . '.'
+        . (trim((string)$a['descricao']) !== '' ? "\n\n" . trim($a['descricao']) : '');
+    return chatin_enviar_aviso($conn, (int)$tenant_id, chatin_destinatarios_moradores($conn, (int)$tenant_id), 'Administração',
+        'Convocação: ' . $a['nome'], $corpo, 'assembleia', (int)$a['id']);
+}
+
+function responder_notificar_chatin() {
+    global $body;
+    _exigir_admin();
+    $id = (int)($body['id'] ?? 0);
+    if (!$id || !_assembleia_do_tenant($id)) { http_response_code(404); echo json_encode(['erro' => 'Assembleia não encontrada']); return; }
+    $n = _assembleia_notificar_chatin($id);
+    echo json_encode(['ok' => true, 'notificados' => $n, 'mensagem' => "Convocação enviada pelo Chat-In a $n morador(es)"]);
+}
+
 function _exigir_admin() {
     global $role;
     $admins = ['admin','administrador','sindico','gerente'];

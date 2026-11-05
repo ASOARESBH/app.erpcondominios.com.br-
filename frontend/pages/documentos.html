@@ -550,6 +550,18 @@
         <input type="url" id="doc-link-externo" class="form-input" placeholder="https://drive.google.com/...">
         <div class="form-hint">Use para documentos hospedados no Google Drive, OneDrive, Dropbox, etc.</div>
       </div>
+
+      <!-- Aviso pelo Chat-In -->
+      <div class="form-group">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+          <input type="checkbox" id="doc-notificar-chatin" style="margin-top:3px;">
+          <span>
+            <i class="fas fa-comments" style="color:#2563eb;"></i>
+            <strong id="doc-notificar-chatin-texto">Notificar moradores pelo Chat-In</strong>
+            <span class="form-hint" style="display:block;">Envia "Novo documento disponível" em Avisos do condomínio (portal e app) para os moradores que podem ver este documento — todos ou só as unidades selecionadas. Não se aplica à visibilidade "Somente usuários".</span>
+          </span>
+        </label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary-modern" onclick="DocumentosPage.fecharModalDoc()">Cancelar</button>

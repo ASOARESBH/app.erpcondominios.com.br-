@@ -77,3 +77,9 @@ export function destroy() {
 
 - No modal `Nova Ordem de Serviço`/edição (`frontend/pages/ordens_servico.html`), a seleção segue Unidade → Morador da unidade. Unidades ativas vêm de `api_unidades.php?acao=select`, ficam em ordem numérica crescente e o segundo select permanece desabilitado até haver unidade.
 - Moradores são carregados sob demanda de `api_moradores.php?acao=select_por_unidade&unidade=...`, com `credentials: 'include'`; uma troca rápida de unidade aborta a consulta anterior. Selecionar somente a unidade continua permitido para chamados sem morador específico.
+
+## 11. Chat-In (widget global) e novas páginas
+- `frontend/js/chatin-widget.js` + `assets/css/chatin.css` são carregados no `layout-base.html` (`ChatIn.iniciar({plataforma:'painel'})`) e no `portal_morador.html` (após validar a sessão, com `token: () => Portal.token`; `ChatIn.encerrar()` no logout). API global: `ChatIn.iniciar/abrir/minimizar/abrirComContato(tipo,id)/montarEmbutido(el)/desmontarEmbutido(el)/encerrar`.
+- O widget usa atributos `data-ci` (nunca `data-page`, que o layout intercepta para navegação).
+- Novas rotas SPA: `chatin` (sempre visível), `config_controle_acesso` (módulo `sistema`), `eventos` (implementada). Assembleia e Documentos ganharam checkbox "Notificar pelo Chat-In".
+- `config_controle_acesso.css` faz `@import` de `config_visitantes.css` (fonte única dos cartões/switches).

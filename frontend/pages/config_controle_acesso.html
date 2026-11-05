@@ -1,0 +1,48 @@
+<div id="page-metadata" data-title="Controle de Acesso" data-icon="fa-door-open" style="display:none"></div>
+
+<div class="page-wrapper page-config-controle-acesso">
+    <nav class="stub-breadcrumb">
+        <span data-page="configuracao"><i class="fas fa-cog"></i> Configurações</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span data-page="sistema">Sistema</span>
+        <span class="stub-sep"><i class="fas fa-chevron-right"></i></span>
+        <span>Controle de Acesso</span>
+    </nav>
+
+    <div class="page-header">
+        <h1><i class="fas fa-door-open"></i> Controle de Acesso</h1>
+        <p>Escolha por quais canais o morador é avisado quando a portaria registra a chegada de um visitante.</p>
+    </div>
+
+    <div id="configAcessoAlerta" aria-live="polite"></div>
+
+    <div class="page-card config-visitantes-card">
+        <div class="config-visitantes-intro">
+            <div class="config-visitantes-intro-icon"><i class="fas fa-bell"></i></div>
+            <div>
+                <h2>Notificação de visita</h2>
+                <p>Os canais ativos são acionados automaticamente na <strong>entrada</strong> de visitante, prestador, entregador ou familiar para a unidade — pelo Registro, Console de Acesso e dispositivos de reconhecimento.</p>
+            </div>
+        </div>
+
+        <div class="config-visitantes-note">
+            <i class="fas fa-shield-alt"></i>
+            <span>Somente usuários com permissão de <strong>Sistema &gt; Configurar</strong> podem alterar os canais. As mensagens mostram apenas nome do visitante, categoria, horário e unidade.</span>
+        </div>
+
+        <div id="configAcessoLoading" class="loading config-visitantes-loading">
+            <i class="fas fa-spinner fa-spin"></i><span>Carregando canais de notificação...</span>
+        </div>
+
+        <div id="configAcessoEventos"></div>
+
+        <div class="form-actions config-visitantes-actions">
+            <button type="button" id="btnSalvarConfigAcesso" class="btn-primary-modern">
+                <i class="fas fa-save"></i> Salvar canais
+            </button>
+            <button type="button" id="btnVoltarSistemaAcesso" class="btn-secondary-modern">
+                <i class="fas fa-arrow-left"></i> Voltar ao Sistema
+            </button>
+        </div>
+    </div>
+</div>

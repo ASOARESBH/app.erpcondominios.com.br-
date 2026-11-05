@@ -83,3 +83,10 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - A opção de incluir período fechado exige administrador validado e é persistida no histórico junto a autor, nome, motivo, período, totais, status, hashes e IP. A migration de reprocessamento é aditiva/idempotente; não altera dados de produção automaticamente.
 - Gravação/exclusão de Ponto, alteração de Abono, DSR e sincronização do ledger usam o mesmo lock tenant/colaborador; período é relido sob `FOR UPDATE` antes da escrita, e uma falha de sincronização desfaz a transação em vez de retornar sucesso parcial. Abono não altera período fechado.
 - Leituras de relatórios RH/PDF exigem `recursos_humanos.visualizar`; configuração de escala aplica RBAC por ação. CORS das APIs RH que foram ajustadas valida origem permitida com credenciais, sem wildcard de subdomínio.
+
+## 10. Chat-In
+- Identidade e tenant vêm do token/sessão; o cliente nunca informa quem é. Participação é conferida em toda leitura/escrita (404 fora da conversa).
+- Respostas não trazem CPF, e-mail ou telefone — somente nome, unidade/função e status online (que o morador pode ocultar).
+- `strip_tags` + limite de tamanho no corpo; o frontend escapa todo conteúdo (sem HTML). Rate limit 20/min, idempotência por chave, bloqueio bilateral.
+- Push só com dados mínimos (`conversa_id`, `rota`); o app aceita apenas rotas internas `/home/...` vindas do push.
+- Assembleia passou a isolar por tenant e exigir `permissao` admin/gerente para escrita (antes a checagem lia campo inexistente).

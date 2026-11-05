@@ -13,6 +13,7 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **Backend (PHP 8)**: [BACKEND.md](BACKEND.md)
 - **Segurança & Auth**: [SECURITY.md](SECURITY.md)
 - **Regras de Negócio**: [BUSINESS_RULES.md](BUSINESS_RULES.md)
+- **Chat-In (comunicação interna, avisos, canais de notificação)**: [CHATIN.md](CHATIN.md)
 
 ## 📱 3. App Mobile (Flutter) — `aplicativoerpcondominios`
 - **Arquitetura do App**: [APP_MOBILE_ARCHITECTURE.md](APP_MOBILE_ARCHITECTURE.md)

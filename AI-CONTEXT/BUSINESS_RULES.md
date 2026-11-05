@@ -136,3 +136,11 @@ Em acesso de Dependente, a API confirma em qualquer movimento que o dependente p
 - A função pura `bh_apurar_dia()` é a única fonte de crédito, débito e excedente para sincronização, mapeamento e reprocessamento. `CREDITAR_TUDO` credita extra líquida integral; `LIMITAR_E_SEPARAR` credita até o teto configurado e mantém a diferença como excedente fora do saldo para decisão do RH.
 - **Decisão de regra:** o limite de 2 h/dia (CLT art. 59) é controle de jornada; não autoriza descartar horas efetivamente trabalhadas. O teto também é alerta visual, sem corte de horas no espelho. A política de crédito/excedente deve ser validada com RH/contabilidade do condomínio.
 - Reprocessar exige prévia, revisão expressa e motivo auditável. Períodos fechados são ignorados por padrão; somente administrador pode incluí-los, com essa opção registrada no histórico. A transação é por tenant/colaborador e retries da mesma prévia são idempotentes.
+
+## 15. Chat-In e notificação de visita
+- Contatos: todos com todos dentro do condomínio; exibir somente nome + unidade (morador) ou nome + função (usuário). Morador pode se ocultar da busca de outros moradores e bloquear contatos; a administração sempre encontra o morador. Equipe `super_admin` não aparece.
+- Mensagens são permanentes (arquivar só oculta); 2000 caracteres; 20 mensagens/min por pessoa.
+- Avisos automáticos (Documentos, Assembleia, Eventos, chegada de visitante) chegam no canal somente leitura "Avisos do condomínio".
+- Chegada de visitante: canais por condomínio em Sistema › Controle de Acesso. Padrão E-mail + App ligados e Chat-In desligado. Somente ENTRADA de não morador para a unidade.
+- Documento só avisa quem pode vê-lo (todos/moradores/unidades específicas); visibilidade "usuários" não gera aviso.
+Referência: `CHATIN.md`.

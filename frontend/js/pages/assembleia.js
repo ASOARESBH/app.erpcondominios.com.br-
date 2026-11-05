@@ -425,6 +425,12 @@ function _abrirModalAssembleia(ass = null) {
     D.formLocal.value = ass?.local_realizacao || '';
     D.formQuorum.value = ass?.quorum_minimo || 0;
     D.formDesc.value  = ass?.descricao || '';
+    const chkChatin = document.getElementById('ass_formNotificarChatin');
+    const txtChatin = document.getElementById('ass_formNotificarChatinTexto');
+    if (chkChatin) chkChatin.checked = false;
+    if (txtChatin) txtChatin.textContent = ass
+        ? 'Reenviar a convocação atualizada aos moradores pelo Chat-In'
+        : 'Notificar todos os moradores pelo Chat-In';
 
     if (ass?.data_assembleia) {
         // Converter para formato datetime-local
@@ -460,11 +466,12 @@ async function _salvarAssembleia() {
 
     const payload = { acao: id ? 'atualizar' : 'criar', nome, tipo, data_assembleia: data.replace('T',' '), local_realizacao: local, descricao: desc, quorum_minimo: quorum };
     if (id) payload.id = id;
+    if (document.getElementById('ass_formNotificarChatin')?.checked) payload.notificar_chatin = true;
 
     const res = await _post(payload);
     if (!res?.ok) { _toast(res?.erro || 'Erro ao salvar', 'error'); return; }
 
-    _toast(id ? 'Assembleia atualizada!' : 'Assembleia criada!', 'success');
+    _toast(res.mensagem || (id ? 'Assembleia atualizada!' : 'Assembleia criada!'), 'success');
     _fecharModal(D.modalAss);
     await _carregarAssembleias();
 

@@ -109,3 +109,10 @@ Antes de gerar o `.zip` final, certifique-se de que nenhum caminho absoluto (ex:
 - `node --check frontend/js/pages/ordens_servico.js` e `git diff --check` passaram.
 - Harness Node isolado validou ordenação natural (`Gleba 1`, `Gleba 2`, `Gleba 10`, `ADMINISTRATIVO`), chamada `select_por_unidade` com `credentials: 'include'` e `AbortSignal`, e preseleção do morador/snapshot ao editar.
 - Não foi executado browser com sessão autenticada nem feita alteração em API, banco ou dados de produção.
+
+## 17. Chat-In, Eventos, Canais, Assembleia (2026-11-05)
+Ambiente descartável MariaDB 10.11 + PHP 8.3 (`php -S`) com stubs de sessão; migrations aplicadas duas vezes.
+- **Integração (73/73)**: autenticação Bearer/sessão/expirado; presença; busca (mesmo tenant, sem inativos, sem super_admin, sem a si mesmo, sem dados sensíveis, por unidade); ocultar-se da busca; abrir/enviar/idempotência/strip HTML/limites/rate limit 429; leitura e contador; `apos_id`; bloqueio bilateral; arquivar mantendo histórico; Eventos (todos/unidades, isolamento, cancelar, passado, cancelado não edita); Assembleia (criar com tenant e nome, 403 operador, isolamento obter/excluir, convocação); canais (padrões, WhatsApp não ativa, por tenant, evento inválido); aviso de chegada só à unidade; push respeita conversa aberta e preferência.
+- **Interface Playwright (21/21)**: widget no portal (abrir, buscar, enviar, emoji, fixar/minimizar), página Chat-In embutida no painel com online e resposta chegando por polling, Eventos (criar por unidade, validação no modal, aviso no morador, avisos somente leitura), Controle de Acesso (Em breve, salvar), celular 390 px sem rolagem horizontal, sem erros de JS.
+- Migration de assembleia executada com usuário MySQL sem privilégios globais; guard 409 validado sem a coluna.
+- Não executado: `flutter analyze`/build do app (sem SDK), push FCM real, sessão real do painel/produção.

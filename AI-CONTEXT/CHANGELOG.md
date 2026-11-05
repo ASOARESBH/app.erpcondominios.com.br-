@@ -2,6 +2,20 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.26] - 2026-11-05
+### Adicionado
+- **Chat-In** (menu abaixo de Recursos Humanos): comunicador interno entre usuários do painel e moradores (Portal e app). Botão flutuante + painel lateral fixável/minimizável, página do painel, status online, busca por nome/unidade, histórico permanente, bloqueio, ocultar-se da busca, emojis, push FCM no app com deep link. Detalhes em `AI-CONTEXT/CHATIN.md`. Migration `sql/migration_chatin_mysql57.sql`.
+- **Avisos do condomínio** (canal somente leitura do Chat-In) alimentado por Documentos, Assembleia, Eventos e chegada de visitante.
+- **Eventos** (Administrativo): a página stub virou módulo completo (`api/api_eventos.php`) com público por unidades, aviso/cancelamento pelo Chat-In.
+- **Sistema › Controle de Acesso**: liga/desliga por condomínio o aviso de chegada de visitante por E-mail, Aplicativo e Chat-In; WhatsApp/SMS preparados ("Em breve") com registro de provedor.
+- Opção "Notificar pelo Chat-In" em Documentos e Assembleia.
+### Corrigido
+- **Assembleia**: criar sempre falhava (`responder_criar` sem `global $body` e sem `tenant_id`); `_exigir_admin()` lia `role/perfil` em vez de `permissao` e bloqueava toda escrita; listagem mostrava assembleias de **todos os condomínios** e obter/atualizar/excluir/status filtravam só por id. Agora tudo filtra por tenant. Migration `sql/migration_assembleia_tenant_mysql57.sql` (sem `INFORMATION_SCHEMA`, com backfill); sem a coluna a API responde 409 orientando a migration.
+- **Documentos (`api_documentos.php`)**: 12 funções usavam `$tenant_id` fora de escopo (SQL `tenant_id = AND`), quebrando p.ex. salvar documento com departamento ("Departamento inativo"/500), dashboard, unidades do seletor, grupos, pastas, tipos e compartilhamento. Adicionado `global $tenant_id`.
+### Pendências conhecidas
+- Assembleia: pautas, votos e participantes ainda não têm `tenant_id` próprio (dependem do id da assembleia; leitura/escrita por id da pauta não confere tenant). Corrigir em etapa própria.
+- App Flutter não foi compilado neste ambiente (sem SDK): rodar `flutter analyze` antes do build.
+
 ## [2.1.25] - 2026-11-05
 ### Alterado
 - **Ordens de Serviço — seleção de unidade e morador**: o campo livre Morador/Cliente foi substituído por selects encadeados. Unidades ativas são ordenadas numericamente; moradores ativos são carregados somente após escolher a unidade. A seleção apenas da unidade permanece válida para chamados de área comum.

@@ -114,3 +114,9 @@ A primeira versão deliberadamente não pede localização. O backend aceita GPS
 | Java (source/target/jvmTarget) | 17 | `kotlin { compilerOptions }` no lugar de `kotlinOptions` |
 
 Ao atualizar o Flutter SDK, conferir `packages/flutter_tools/gradle/src/main/kotlin/DependencyVersionChecker.kt` (valores `error*Version`) antes de compilar.
+
+## 11. Chat-In (2026-11-05)
+- `domain/entities/chatin_entity.dart`, `data/datasources/remote/chatin_remote_datasource.dart` (endpoint `AppConstants.endpointChatin`), `presentation/screens/chatin/chatin_screen.dart` (providers `chatinDataSourceProvider`, `chatinUnreadProvider`).
+- Rotas em `app_router.dart`: `/home/chatin` e filha `:id` (aceita `extra: ChatInConversa`).
+- Deep link de notificação: `NotificationService.rotaPendente` (ValueNotifier) é preenchido por `onMessageOpenedApp`, `getInitialMessage` e toque em notificação local; o roteador navega quando há sessão autenticada (aguarda 700 ms após login/restauração). `NotificationService.rotaSegura()` só aceita rotas `/home/...`.
+- Não compilado no ambiente de desenvolvimento da IA: executar `flutter analyze` e testar push em aparelho.
