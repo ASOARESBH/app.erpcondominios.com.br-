@@ -8,7 +8,7 @@ Foi executada, pelo administrador no phpMyAdmin, uma consulta `SELECT` somente d
 
 A listagem estrutural do schema exibiu 250 objetos na primeira página e 20 na segunda. Isso confirma 270 objetos listados na interface, mas ainda não é reconciliação entre tabelas-base e views, nem substitui `SHOW CREATE`.
 
-O SQL anexado depois foi submetido apenas a um preflight em memória, com tamanho, hash e contagens de marcadores por início de linha. Como o preflight encontrou marcadores de operações DML (`INSERT`/`UPDATE`/`DELETE`) e comentários condicionais, o arquivo **não foi aceito como schema-only**. O catalogador fail-closed parou antes de gerar bundle. Não foram exibidos, extraídos, transformados ou persistidos valores de registros ou nomes/trechos SQL; o anexo original não foi copiado para o Git ou para o pacote de resultados.
+O SQL anexado depois foi submetido apenas a um preflight em memória, com tamanho, hash e contagens de marcadores por início de linha. O preflight encontrou marcadores de DML (`INSERT`/`UPDATE`/`DELETE`) e comentários condicionais; ele não consegue distinguir statements top-level de código dentro de corpos de triggers/rotinas. Portanto, o arquivo ficou **não classificado** e não foi aceito nem catalogado como `tables_ddl.sql`; isso não prova que existam linhas de dados no anexo. O catalogador fail-closed parou antes de gerar bundle. Não foram exibidos, extraídos, transformados ou persistidos valores de registros ou nomes/trechos SQL; o anexo original não foi copiado para o Git ou para o pacote de resultados.
 
 ## O que permanece pendente
 
@@ -16,7 +16,7 @@ Ainda não foram obtidos `tables_ddl.sql`, `tables_inventory.csv` reconciliado, 
 
 ## Próximo passo operacional
 
-Gerar um novo export personalizado `.sql` em armazenamento privado, com todas as opções `table_data[]` desmarcadas e todas as `table_structure[]` marcadas; incluir definições de views, triggers e routines/events quando disponíveis. Antes de transferir, confirmar que o arquivo contém apenas DDL: sem `INSERT`, DML, linhas, truncamento ou segredos. Se a ferramenta incluir comandos de sessão necessários ao DDL, revisar e aprovar separadamente sem executar o arquivo. Para `SHOW CREATE` e objetos não incluídos no export, consultar nomes permitidos do catálogo em modo somente leitura, sem executar procedures, functions, eventos ou triggers.
+Gerar artefatos separados em armazenamento privado: `tables_ddl.sql` somente com DDL de tabelas e `objects_ddl.sql` com corpos de objetos programáveis autorizados. Confirmar que as opções `table_data[]` estão desmarcadas; não remover DML automaticamente, pois operações dentro de triggers/rotinas são regras de negócio a preservar. Classificar DML top-level versus DML de corpos; se a exportação misturar contextos e não permitir classificação segura sem ler valores, manter pendente e solicitar extração separada ao DBA. Revisar comentários condicionais, truncamento e segredos. Para `SHOW CREATE` e objetos não incluídos, consultar nomes permitidos do catálogo em modo somente leitura, sem executar procedures, functions, eventos ou triggers.
 
 As consultas para qualidade devem ser planejadas como agregados limitados, em etapas e após avaliação de impacto. A consulta 8 do checklist identifica somente candidatos estruturais de anexos por nome/tipo de coluna em `INFORMATION_SCHEMA`; não foi executada na origem e não produz manifesto.
 
