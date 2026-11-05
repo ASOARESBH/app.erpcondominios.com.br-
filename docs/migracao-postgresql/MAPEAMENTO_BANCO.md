@@ -39,9 +39,9 @@ Nenhuma linha da tabela é uma instrução pronta para execução. Views, proced
 
 ## Inventário lexical indexado
 
-O arquivo [inventario_sintaxe_mysql.csv](inventario_sintaxe_mysql.csv) contém apenas três colunas: `arquivo`, `linha`, `categoria`. Ele foi construído a partir de caminhos rastreados pelo Git no worktree oficial, excluindo caminhos em pastas `docs`, `md`, `dump(s)` e `upload(s)`, nomes de dump/upload, e arquivos não rastreados. Não contém conteúdo SQL, segredos, tokens ou dados pessoais.
+O arquivo [inventario_sintaxe_mysql.csv](inventario_sintaxe_mysql.csv) contém cinco colunas: `arquivo`, `linha`, `sinal`, `categoria` e `classificacao_arquivo`. A triagem examinou 436 caminhos rastreados com extensões PHP/SQL/PHTML/INC (sem `docs/`, `md/`, `api/md/`, dependências vendorizadas e diretórios auxiliares); registrou 17.865 matches em 394 arquivos. Não contém trechos SQL, segredos, tokens ou dados pessoais.
 
-Categorias atuais: `mysqli_sql`, `mysql_ddl`, `mysql_function`, `tenant_scope` e `auth_context`. O catálogo é resultado de busca textual/heurística para revisão semântica. Pode incluir falsos positivos, comentários, strings e sinais que não representam execução; não alega exaustividade, parsing completo ou compreensão semântica. O CSV não substitui parser, replay ordenado de `CREATE` + `ALTER`, export da instância ou testes.
+Categorias: `driver_surface`, `mysql_ddl`, `mysql_dml`, `mysql_function`, `mysql_metadata`, `mysql_routine` e `mysql_data_compatibility`. A classificação do caminho diferencia candidatos canônicos de variantes/auxiliares e ferramentas/testes, mas não prova que um arquivo seja consumido. O catálogo é busca textual/heurística para revisão semântica: pode incluir falsos positivos, comentários, strings e sinais sem execução; não alega exaustividade, parsing completo ou entendimento semântico. Não substitui parser, replay ordenado de `CREATE` + `ALTER`, export da instância ou testes.
 
 ## Método de fechamento
 

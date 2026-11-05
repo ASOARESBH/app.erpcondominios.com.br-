@@ -28,7 +28,7 @@ A documentação usa exclusivamente o commit oficial e evidências estruturadas 
 | [PLANO_BACKUP_ROLLBACK.md](PLANO_BACKUP_ROLLBACK.md) | Backup, restore, rollback, RPO/RTO e abort criteria. |
 | [PENDENCIAS.md](PENDENCIAS.md) | Pendências bloqueadoras e evidências que precisam ser obtidas. |
 | [DECISOES_TECNICAS.md](DECISOES_TECNICAS.md) | Decisões registradas, decisões pendentes e não decisões. |
-| [inventario_sintaxe_mysql.csv](inventario_sintaxe_mysql.csv) | Catálogo estático `arquivo,linha,categoria`, indexado por `MAPEAMENTO_BANCO.md`. |
+| [inventario_sintaxe_mysql.csv](inventario_sintaxe_mysql.csv) | Triagem estática `arquivo,linha,sinal,categoria,classificacao_arquivo`, indexada por `MAPEAMENTO_BANCO.md`. |
 
 ## Convenções
 

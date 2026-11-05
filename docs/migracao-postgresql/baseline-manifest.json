@@ -38,19 +38,23 @@
   },
   "mysql_compatibility_inventory": {
     "file": "inventario_sintaxe_mysql.csv",
-    "sha256": "c52c9661e26e2cf1b7437191e77d5d8a01d9012ecd5abd469c74012c28771986",
-    "columns": ["arquivo", "linha", "categoria"],
-    "data_rows": 14986,
-    "total_lines_including_header": 14987,
-    "unique_source_files": 570,
+    "sha256": "eda8e7b6b3bfedfb6200077433f564e62af19c531e2ca0174c03c5f458fd9ba0",
+    "columns": ["arquivo", "linha", "sinal", "categoria", "classificacao_arquivo"],
+    "source_paths_scanned": 436,
+    "data_rows": 17865,
+    "total_lines_including_header": 17866,
+    "unique_source_files": 394,
     "category_counts": {
-      "auth_context": 2398,
-      "mysql_ddl": 4078,
-      "mysql_function": 830,
-      "tenant_scope": 4884,
-      "mysqli_sql": 2796
+      "driver_surface": 5288,
+      "mysql_data_compatibility": 105,
+      "mysql_ddl": 11238,
+      "mysql_dml": 266,
+      "mysql_function": 448,
+      "mysql_metadata": 356,
+      "mysql_routine": 164
     },
-    "qualification": "Static lexical triage from tracked source paths; may contain false positives and is not an exhaustive parser, semantic review, route inventory, or proof of execution."
+    "excluded_paths": ["docs/", "md/", "api/md/", "api/vendor/", "vendor/", "node_modules/", "PHPMailer/", ".claude/"],
+    "qualification": "Static lexical triage from tracked PHP/SQL/PHTML/INC paths. The sinal field names a matched lexical pattern without copying source SQL; classifications are heuristics. May include false positives and is not an exhaustive parser, semantic review, route inventory, or proof of execution."
   },
   "external_evidence_not_committed": [
     {

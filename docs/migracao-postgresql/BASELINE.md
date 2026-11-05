@@ -38,7 +38,7 @@ Não houve `npm install`, execução de QA contra servidor, requests HTTP, login
 - Presença de DDL, migration ou trigger no Git não prova execução no HostGator.
 - Ausência em schema-only não prova ausência na instância.
 - Um endpoint que menciona `tenant_id` não está automaticamente isolado em todas as consultas.
-- O CSV [inventario_sintaxe_mysql.csv](inventario_sintaxe_mysql.csv) é triagem lexical: arquivo/linha/categoria, sem SQL ou conteúdo sensível; serve para revisão semântica e não alega exaustividade de entendimento.
+- O CSV [inventario_sintaxe_mysql.csv](inventario_sintaxe_mysql.csv) é triagem lexical: arquivo/linha/sinal/categoria/classificação do caminho, sem SQL ou conteúdo sensível; serve para revisão semântica e não alega exaustividade de entendimento.
 
 ## Próximos passos e artefatos exatos
 
