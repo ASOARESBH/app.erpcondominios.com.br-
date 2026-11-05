@@ -1,16 +1,16 @@
 # Pendências e artefatos necessários
 
-> **Estado:** Gate 2 parcial. Foi executado somente um `SELECT` de metadados do servidor por operador no phpMyAdmin; não houve escrita, leitura de linhas de aplicação, importação, deploy, tentativa de SSH ou alteração de runtime/código.
+> **Estado:** Gate 2 parcial. O export schema-only mais recente foi validado em memória. Um SELECT agregado de catálogo live foi submetido uma vez no phpMyAdmin, mas o navegador expirou sem resultado confirmado; não foi reenviado. Não houve escrita, leitura de linhas de aplicação, importação, deploy, SSH ou alteração de runtime/código.
 >
 > **Fonte oficial:** `ASOARESBH/app.erpcondominios.com.br-`, commit `f60739713e6de3f2473b79ecd14a70fd700e5462`.
 
 ## Bloqueadores P0
 
 - Aprovar parâmetros PostgreSQL: versão, extensões, UTF-8, timezone, collation, TLS, scheduler e políticas de tipos.
-- Completar os artefatos reais `tables_ddl.sql`, `tables_inventory.csv`, `constraints_indexes.csv`, `objects_ddl.sql`, `objects_inventory.csv`, `migration_ledger.csv`, `data_quality_aggregates.csv`, `tenant_profile.csv`, `attachment_manifest.csv` e `MYSQL_POSTGRESQL_CROSSWALK.csv`; cada um deve ter origem, data/hora, checksum, ambiente, responsável e retenção. `server_metadata.txt` foi produzido parcialmente, com resultado informado pelo usuário. O arquivo `tools/phase2/mysql_metadata_inventory.sql` continua sem execução como lote; DDL completo exige `SHOW CREATE`.
-- O SQL anexado recentemente permanece não classificado: o preflight mínimo contou marcadores de DML, que podem estar em corpos de objetos, e o catalogador parou diante de comentário condicional. Isso não prova que haja linhas de dados. Não houve catalogação nem leitura/exibição de valores. Solicitar `tables_ddl.sql` separado de `objects_ddl.sql`; não converter, executar ou importar o anexo até classificar os statements.
-- Validar a exportação personalizada do phpMyAdmin antes de baixar: todos os checkboxes `table_data[]` devem estar desmarcados e `table_structure[]` marcados; incluir views, triggers, procedures/functions/events conforme disponibilidade. A exportação anterior não foi iniciada porque o estado dinâmico completo dos checkboxes não pôde ser confirmado com segurança.
-- Reconciliar os 270 objetos listados no phpMyAdmin com `TABLE_TYPE` e DDL real; as contagens 270 CREATE/489 ALTER/7 triggers/228 tenant/42 sem tenant pertencem ao schema-only anterior, não à instância atual.
+- Obter e reconciliar evidências live de `INFORMATION_SCHEMA` e `SHOW CREATE` para `tables_inventory.csv`, `constraints_indexes.csv`, `objects_ddl.sql`, `objects_inventory.csv`, `migration_ledger.csv`, `data_quality_aggregates.csv`, `tenant_profile.csv`, `attachment_manifest.csv` e `MYSQL_POSTGRESQL_CROSSWALK.csv`; cada artefato deve ter origem, data/hora, checksum, ambiente, responsável e retenção. `server_metadata.txt` continua parcial e inclui valores informados pelo operador. O checklist `tools/phase2/mysql_metadata_inventory.sql` não foi executado como lote.
+- O anexo `(7)` foi validado pelo parser fail-closed: schema-only SHA-256 `44505b1aab8c9a1085453ff3bf4d8a66519700810ac63fcd225693fdefec604a`, 270 `CREATE TABLE`, 489 `ALTER TABLE`, 7 triggers, 11 FKs explícitas e zero DML top-level. O anexo `(6)` anterior permanece rejeitado e não foi usado. Não foram lidos ou exibidos valores de linhas.
+- Reconciliar os 270 `CREATE TABLE` no export e a listagem de 270 objetos exibida na interface com `TABLE_TYPE` e `SHOW CREATE` real. Uma única consulta agregada expirou sem resultado confirmado e não foi repetida. Os counts 228/42 descrevem presença/ausência de `tenant_id` no export, não o catálogo ou dados instalados.
+- Obter `SHOW CREATE` por tipo de objeto e comprovar visibilidade/permissões. O export contém sete triggers e nenhuma definição de view/procedure/function/event; ausência no arquivo não prova ausência no servidor.
 - Fechar isolamento da Assembleia, incluindo pai/filho, anexos e autorização da ação migration.
 - Fechar Console/ControlID: gate de dispositivo, vínculo explícito device → tenant → pessoa/veículo e rejeição de ambiguidades.
 - Tornar RBAC e resolução de tenant fail closed para operações sensíveis; retirar default operacional tenant 1.
@@ -21,8 +21,8 @@
 
 - Matriz `path + método + ação` com request/response/status/auth/RBAC/tenant/idempotência e consumidor.
 - Reconciliar Portal Documentos: tenant explícito, prepared statements, Bearer sem query string e autorização de stream/download.
-- Modelo final do schema após replay dos 489 `ALTER TABLE` e comparação com `SHOW CREATE` da instância.
-- Classificação funcional das 42 tabelas sem `tenant_id` continua pendente: o DDL anterior tem 22 nomes view-like no total (18 sem `tenant_id` e 4 com), além de 24 outros nomes sem `tenant_id`. Nome de objeto não classifica semântica nem isolamento.
+- Modelo final do schema após replay controlado dos 489 `ALTER TABLE` e comparação com `SHOW CREATE` da instância.
+- Classificação funcional das 42 tabelas sem `tenant_id` continua pendente: o export schema-only validado contém 22 nomes view-like no total (18 sem `tenant_id` e 4 com), além de 24 outros nomes sem `tenant_id`. Nome de objeto não classifica semântica nem isolamento.
 - Perfil agregado real: contagem, NULLs, duplicidades, órfãos, tenant coverage, zero-date, enum, limites DECIMAL, IDs e tamanhos de TEXT/BLOB/JSON; executar em etapas após avaliar impacto.
 - Manifesto de anexos: referência, tipo, contagem e tamanho agregados, tenant e política de retenção, sem baixar conteúdo ou publicar caminhos pessoais.
 - Adapter/dialect PHP para PostgreSQL, prepared statements, SQLSTATE, transações, locks, JSON, identity, temporal e upsert.

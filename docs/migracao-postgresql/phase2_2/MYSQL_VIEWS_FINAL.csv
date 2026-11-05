@@ -1,0 +1,2 @@
+record_scope,object_name,source_export_count,information_schema_type,show_create_status,dependencies_status,mysql_function_review,server_presence,reconciliation_status
+TYPE_LEVEL_SUMMARY,,0,UNKNOWN,NOT_OBTAINED,NOT_ASSESSED,NOT_ASSESSED,UNKNOWN,NO_CREATE_VIEW_IN_EXPORT_LIVE_CATALOG_UNCONFIRMED

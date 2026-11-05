@@ -1,0 +1,2 @@
+object_name,source_export_count,information_schema_count,event_scheduler_reported,show_create_status,server_presence,reconciliation_status
+,0,UNKNOWN,OFF_PER_OPERATOR_PROVIDED_METADATA,NOT_OBTAINED,UNKNOWN,NO_CREATE_EVENT_IN_EXPORT_LIVE_CATALOG_UNCONFIRMED
