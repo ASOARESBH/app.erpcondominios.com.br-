@@ -13,7 +13,14 @@ const API_RH             = window.location.origin + '/api/api_rh_colaboradores.p
 const API_ESTOQUE        = window.location.origin + '/api/api_estoque.php';
 const API_USUARIO_LOGADO = window.location.origin + '/api/api_usuario_logado.php';
 const collatorUnidades = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
-const compararUnidades = (a, b) => collatorUnidades.compare(String(a?.nome ?? a ?? '').trim(), String(b?.nome ?? b ?? '').trim());
+const compararUnidades = (a, b) => {
+    const nomeA = String(a?.nome ?? a ?? '').trim();
+    const nomeB = String(b?.nome ?? b ?? '').trim();
+    const adminA = String(a?.bloco || '').toUpperCase() === 'ADMIN' || /^ADMINISTRATIVO$/i.test(nomeA);
+    const adminB = String(b?.bloco || '').toUpperCase() === 'ADMIN' || /^ADMINISTRATIVO$/i.test(nomeB);
+    if (adminA !== adminB) return adminA ? 1 : -1;
+    return collatorUnidades.compare(nomeA, nomeB);
+};
 
 // Estado global do módulo
 const state = {
@@ -28,6 +35,7 @@ const state = {
     departamentos: [],      // Cache de departamentos
     unidadesFiltro: [],     // Unidades ativas disponíveis para filtrar O.S.
     moradoresFiltroAbort: null,
+    moradoresModalAbort: null,
     assuntos: [],           // Cache de assuntos
     usuarios: [],           // Cache de usuários
     usuarioLogado: null,    // Usuário logado (para auto-preencher atendente)
@@ -759,14 +767,19 @@ async function abrirEditar(id) {
     document.getElementById('os-descricao').innerHTML = os.descricao || '';
     document.getElementById('os-projeto-publico').checked = !!(os.projeto_publico && Number(os.projeto_publico) === 1);
     _atualizarCamposProjetoOS(os.projeto_etapa_id, os.projeto_percentual);
-    if (os.morador_id) {
-        document.getElementById('os-morador-id').value = os.morador_id;
-        document.getElementById('os-morador-nome').value = os.morador_nome;
-        document.getElementById('os-morador-unidade').value = os.morador_unidade;
-        document.getElementById('os-morador-busca').value = os.morador_nome + (os.morador_unidade ? ' — Unid. ' + os.morador_unidade : '');
-        const tag = document.getElementById('os-morador-tag');
-        tag.innerHTML = `<i class="fas fa-user"></i> ${os.morador_nome} — Unid. ${os.morador_unidade || '?'} <button onclick="limparMorador()">×</button>`;
-        tag.style.display = 'inline-flex';
+    const unidadeOS = String(os.morador_unidade || '').trim();
+    if (unidadeOS) {
+        garantirUnidadeModalOption(unidadeOS);
+        document.getElementById('os-unidade').value = unidadeOS;
+    }
+    document.getElementById('os-morador-id').value = os.morador_id || '';
+    document.getElementById('os-morador-nome').value = os.morador_nome || '';
+    document.getElementById('os-morador-unidade').value = unidadeOS;
+    if (unidadeOS) {
+        carregarMoradoresModalOS(unidadeOS, os.morador_id ? {
+            id: os.morador_id,
+            nome: os.morador_nome || '',
+        } : null);
     }
     // RH
     if (os.recursos_humanos && os.recursos_humanos.length) {
@@ -789,11 +802,14 @@ function limparFormOS() {
     document.getElementById('os-atendente').value = '';
     document.getElementById('os-atendente').disabled = false;
     document.getElementById('os-descricao').innerHTML = '';
+    state.moradoresModalAbort?.abort();
+    state.moradoresModalAbort = null;
+    document.getElementById('os-unidade').value = '';
+    preencherSelectFiltro(document.getElementById('os-morador-select'), 'Selecione uma unidade primeiro');
+    document.getElementById('os-morador-select').disabled = true;
     document.getElementById('os-morador-id').value = '';
     document.getElementById('os-morador-nome').value = '';
     document.getElementById('os-morador-unidade').value = '';
-    document.getElementById('os-morador-busca').value = '';
-    document.getElementById('os-morador-tag').style.display = 'none';
     document.getElementById('os-pai-id').value = '';
     document.getElementById('os-pai-busca').value = '';
     document.getElementById('os-pai-tag').style.display = 'none';
@@ -837,7 +853,8 @@ async function salvarOS() {
         departamento:     document.getElementById('os-departamento').value || '',
         morador_id:       document.getElementById('os-morador-id').value || null,
         morador_nome:     document.getElementById('os-morador-nome').value || '',
-        morador_unidade:  document.getElementById('os-morador-unidade').value || '',
+        morador_unidade:  document.getElementById('os-unidade').value.trim()
+            || document.getElementById('os-morador-unidade').value || '',
         atendente_id:     atendenteId,
         atendente_nome:   atendenteNome,
         data_previsao:    document.getElementById('os-data-previsao').value || null,
@@ -894,6 +911,8 @@ async function excluirOS(id, numero) {
 }
 
 function fecharModalOS() {
+    state.moradoresModalAbort?.abort();
+    state.moradoresModalAbort = null;
     document.getElementById('modal-os').style.display = 'none';
 }
 
@@ -1333,58 +1352,99 @@ function renderizarEquipe(lista) {
     `).join('');
 }
 
-// ─── AUTOCOMPLETE: MORADORES ──────────────────────────────────────────────
-function initAutocompleteMorador() {
-    const input = document.getElementById('os-morador-busca');
-    const lista = document.getElementById('os-morador-lista');
-    let timer;
+// ─── VÍNCULO DE UNIDADE E MORADOR NO FORMULÁRIO DE O.S. ────────────────────
+function initSeletoresMoradorOS() {
+    const unidade = document.getElementById('os-unidade');
+    const morador = document.getElementById('os-morador-select');
+    if (!unidade || !morador) return;
 
-    input.addEventListener('input', () => {
-        clearTimeout(timer);
-        const q = input.value.trim();
-        if (q.length < 2) { lista.classList.remove('visible'); return; }
-        timer = setTimeout(async () => {
-            const res = await fetch(`${API_MORADORES}?nome=${encodeURIComponent(q)}&por_pagina=10`, { credentials: 'include' });
-            const json = await res.json();
-            const moradores = json.dados?.itens || json.dados?.moradores || json.dados || [];
-            if (!moradores.length) { lista.classList.remove('visible'); return; }
-            lista.innerHTML = moradores.map(m => `
-                <div class="os-autocomplete-item" data-id="${m.id}" data-nome="${m.nome}" data-unidade="${m.unidade || ''}">
-                    ${m.nome}
-                    <div class="os-ac-sub">Unidade: ${m.unidade || '—'}</div>
-                </div>
-            `).join('');
-            lista.classList.add('visible');
-        }, 300);
+    unidade.addEventListener('change', async () => {
+        const nomeUnidade = unidade.value.trim();
+        document.getElementById('os-morador-id').value = '';
+        document.getElementById('os-morador-nome').value = '';
+        document.getElementById('os-morador-unidade').value = nomeUnidade;
+        await carregarMoradoresModalOS(nomeUnidade);
     });
 
-    lista.addEventListener('click', e => {
-        const item = e.target.closest('.os-autocomplete-item');
-        if (!item) return;
-        document.getElementById('os-morador-id').value = item.dataset.id;
-        document.getElementById('os-morador-nome').value = item.dataset.nome;
-        document.getElementById('os-morador-unidade').value = item.dataset.unidade;
-        input.value = item.dataset.nome + (item.dataset.unidade ? ' — Unid. ' + item.dataset.unidade : '');
-        const tag = document.getElementById('os-morador-tag');
-        tag.innerHTML = `<i class="fas fa-user"></i> ${item.dataset.nome} — Unid. ${item.dataset.unidade || '?'} <button onclick="limparMorador()">×</button>`;
-        tag.style.display = 'inline-flex';
-        lista.classList.remove('visible');
-    });
-
-    document.addEventListener('click', e => {
-        if (!e.target.closest('#os-morador-busca') && !e.target.closest('#os-morador-lista')) {
-            lista.classList.remove('visible');
-        }
+    morador.addEventListener('change', () => {
+        const selecionado = morador.selectedOptions[0];
+        const id = morador.value;
+        document.getElementById('os-morador-id').value = id;
+        document.getElementById('os-morador-nome').value = id
+            ? (selecionado?.dataset.nome || selecionado?.textContent || '')
+            : '';
+        document.getElementById('os-morador-unidade').value = unidade.value.trim();
     });
 }
 
-window.limparMorador = () => {
-    document.getElementById('os-morador-id').value = '';
-    document.getElementById('os-morador-nome').value = '';
-    document.getElementById('os-morador-unidade').value = '';
-    document.getElementById('os-morador-busca').value = '';
-    document.getElementById('os-morador-tag').style.display = 'none';
-};
+async function carregarMoradoresModalOS(nomeUnidade, moradorAtual = null) {
+    const sel = document.getElementById('os-morador-select');
+    if (!sel) return false;
+    state.moradoresModalAbort?.abort();
+    state.moradoresModalAbort = null;
+
+    if (!nomeUnidade) {
+        preencherSelectFiltro(sel, 'Selecione uma unidade primeiro');
+        sel.disabled = true;
+        return true;
+    }
+
+    const controller = new AbortController();
+    state.moradoresModalAbort = controller;
+    preencherSelectFiltro(sel, 'Carregando moradores…');
+    sel.disabled = true;
+
+    try {
+        const query = new URLSearchParams({ acao: 'select_por_unidade', unidade: nomeUnidade });
+        const resposta = await fetch(`${API_MORADORES}?${query.toString()}`, {
+            credentials: 'include',
+            signal: controller.signal,
+        });
+        const json = await resposta.json();
+        if (state.moradoresModalAbort !== controller) return false;
+        if (!resposta.ok || !json.sucesso || !Array.isArray(json.dados)) {
+            const erroResposta = new Error(json.mensagem || `HTTP ${resposta.status}`);
+            erroResposta.status = resposta.status;
+            throw erroResposta;
+        }
+
+        const moradores = json.dados.slice();
+        log('Moradores ativos carregados para seleção na O.S.', { unidade: nomeUnidade, total: moradores.length });
+        const idAtual = moradorAtual ? String(moradorAtual.id) : '';
+        if (idAtual && !moradores.some(item => String(item.id) === idAtual)) {
+            moradores.push({ id: idAtual, nome: `${moradorAtual.nome || 'Morador atual'} (vínculo atual)` });
+        }
+        if (!moradores.length) {
+            preencherSelectFiltro(sel, 'Nenhum morador ativo nesta unidade');
+            sel.disabled = true;
+            return true;
+        }
+
+        preencherSelectFiltro(sel, '— Selecione o morador (opcional) —', moradores,
+            item => item.id,
+            item => item.nome);
+        moradores.forEach((item, indice) => {
+            const opcao = sel.options[indice + 1];
+            if (opcao) opcao.dataset.nome = String(item.nome || '');
+        });
+        sel.disabled = false;
+        if (idAtual) {
+            sel.value = idAtual;
+            document.getElementById('os-morador-id').value = idAtual;
+            document.getElementById('os-morador-nome').value = String(moradorAtual.nome || '');
+            document.getElementById('os-morador-unidade').value = nomeUnidade;
+        }
+        return true;
+    } catch (erro) {
+        if (erro.name === 'AbortError') return false;
+        log('Falha ao carregar moradores da unidade na O.S.', { unidade: nomeUnidade, erro });
+        preencherSelectFiltro(sel, Number(erro.status) === 403
+            ? 'Sem permissão para listar moradores'
+            : 'Não foi possível carregar moradores');
+        sel.disabled = true;
+        return false;
+    }
+}
 
 // ─── AUTOCOMPLETE: RH COLABORADORES ──────────────────────────────────────
 function initAutocompleteRH() {
@@ -1705,6 +1765,20 @@ function garantirUnidadeFiltroOption(nome) {
     return unidade;
 }
 
+function garantirUnidadeModalOption(nome) {
+    const sel = document.getElementById('os-unidade');
+    const unidade = String(nome || '').trim();
+    if (!sel || !unidade) return '';
+    const existente = Array.from(sel.options).find(opcao =>
+        opcao.value.toLocaleUpperCase('pt-BR') === unidade.toLocaleUpperCase('pt-BR'));
+    if (existente) return existente.value;
+    const opcao = new Option(unidade, unidade);
+    const proxima = Array.from(sel.options).slice(1).find(item => compararUnidades(unidade, item.textContent) < 0);
+    if (proxima) sel.insertBefore(opcao, proxima);
+    else sel.appendChild(opcao);
+    return unidade;
+}
+
 async function carregarUnidadesFiltro() {
     const sel = document.getElementById('filtro-unidade');
     if (!sel) return false;
@@ -1727,11 +1801,23 @@ async function carregarUnidadesFiltro() {
         preencherSelectFiltro(sel, 'Todas', state.unidadesFiltro,
             unidade => unidade.nome,
             unidade => unidade.nome);
+        const unidadeModal = document.getElementById('os-unidade');
+        const unidadeModalAtual = unidadeModal?.value || '';
+        preencherSelectFiltro(unidadeModal, '— Selecione uma unidade —', state.unidadesFiltro,
+            unidade => unidade.nome,
+            unidade => unidade.nome);
+        if (unidadeModal) {
+            unidadeModal.disabled = false;
+            if (unidadeModalAtual) unidadeModal.value = garantirUnidadeModalOption(unidadeModalAtual);
+        }
         return true;
     } catch (erro) {
         log('Falha ao carregar unidades para o filtro de O.S.', erro);
         preencherSelectFiltro(sel, 'Unidades indisponíveis');
         sel.disabled = true;
+        const unidadeModal = document.getElementById('os-unidade');
+        preencherSelectFiltro(unidadeModal, 'Unidades indisponíveis');
+        if (unidadeModal) unidadeModal.disabled = true;
         return false;
     }
 }
@@ -2603,7 +2689,7 @@ function init_modulo() {
     initFiltros();
     initEditor();
     initInteracaoEditor();
-    initAutocompleteMorador();
+    initSeletoresMoradorOS();
     initAutocompleteRH();
     initAutocompleteProdutos();
     initDetalheAbas();
@@ -2811,12 +2897,16 @@ if (state.moradoresFiltroAbort) {
     state.moradoresFiltroAbort.abort();
     state.moradoresFiltroAbort = null;
 }
+if (state.moradoresModalAbort) {
+    state.moradoresModalAbort.abort();
+    state.moradoresModalAbort = null;
+}
 // Remover globals expostos
 ['osPaginar','osVerDetalhe','osAbrirEditar','osExcluir','osRemoverMaterial',
  'osRemoverRH','osEditarAssunto','osExcluirAssunto','osEditarConfigHH','osExcluirConfigHH',
  'osAssuntosPag','osConfigHHPag','osEditarEtapa','osExcluirEtapa',
  '_osSalvarDocsProjeto',
- 'limparMorador','limparOSPai','osRemoverAnexo'].forEach(k => { if (window[k]) delete window[k]; });
+ 'limparOSPai','osRemoverAnexo'].forEach(k => { if (window[k]) delete window[k]; });
 if (window.OrdensServico) delete window.OrdensServico;
 }
 

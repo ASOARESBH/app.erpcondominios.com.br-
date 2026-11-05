@@ -72,3 +72,8 @@ export function destroy() {
 - Gerar abre modal próprio com totais e mapeamento diário (batidas, carga, trabalhado, extra, atraso, abonos, valores atuais/esperados, diferença e status). “Mostrar somente divergências”, aviso de teto, fechados e escala ausente, opção administrativa de incluir fechados, revisão expressa e motivo são apresentados antes de aplicar.
 - O cliente envia hash/filtro da própria prévia, trava duplo envio, atualiza progresso por lote, pede nova revisão em 409 e mantém o histórico (autor, horário, motivo e totais). Após aplicar, recarrega o relatório de Banco de Horas individual ou agregado; CSV/PDF refletem o filtro de departamento. O selo amarelo de desatualizado aponta divergência e o atalho Gerar.
 - O mapa consultivo por departamento é paginado; quando existem lotes não verificados, o aviso informa que a verificação é parcial mesmo se o primeiro lote não tiver divergências. Renderizadores de colaboradores, espelho, escalas, Abono e relatórios escapam conteúdo dinâmico com `_esc()` e normalizam IDs/minutos usados em atributos; caminhos de foto aceitam apenas HTTP(S) da mesma origem e caem para o avatar padrão em caso contrário.
+
+## 10. Ordens de Serviço — vínculo Unidade/Morador
+
+- No modal `Nova Ordem de Serviço`/edição (`frontend/pages/ordens_servico.html`), a seleção segue Unidade → Morador da unidade. Unidades ativas vêm de `api_unidades.php?acao=select`, ficam em ordem numérica crescente e o segundo select permanece desabilitado até haver unidade.
+- Moradores são carregados sob demanda de `api_moradores.php?acao=select_por_unidade&unidade=...`, com `credentials: 'include'`; uma troca rápida de unidade aborta a consulta anterior. Selecionar somente a unidade continua permitido para chamados sem morador específico.

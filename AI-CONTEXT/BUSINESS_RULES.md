@@ -36,6 +36,10 @@
   persistida, consulta a unidade atual do morador no mesmo tenant. A divergência entre
   snapshot e cadastro atual pode ser investigada por `sql/diagnostico_os_unidade_divergente.sql`,
   que é somente leitura e não altera registros.
+- No cadastro interno de O.S., primeiro se escolhe a unidade ativa; em seguida, se desejado,
+  seleciona-se um morador ativo daquela unidade. O chamado pode permanecer associado somente
+  à unidade (por exemplo, área comum). A lista de unidades usa ordem numérica crescente e a
+  API resolve o vínculo de morador no tenant da sessão.
 
 ## 5. Documentos (GED)
 - Documentos podem ter visibilidade: `todos`, `moradores`, `usuarios` ou `unidades_especificas`.

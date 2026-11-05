@@ -104,3 +104,8 @@ Antes de gerar o `.zip` final, certifique-se de que nenhum caminho absoluto (ex:
 - Regressão adicional executou `_bh_dsr_sincronizar()` real em schema QA descartável: falta abonada manteve o domingo como folga sem débito; remover o abono gerou falta e débito de 440 minutos; abonar novamente removeu o débito e restaurou a folga. Tudo isolado no tenant sintético 99.
 - Harness Node com payloads XSS sintéticos confirmou escaping/ID numérico e delegação nos cards de colaboradores, normalização dos horários de escala manual e escaping da justificativa/dados do renderer de Abono; a extensão final também validou o espelho em intervalo multi-mês (read-only) e rejeitou esquemas/hosts externos em fotos.
 - `php -l` nos PHP RH tocados, `node --check frontend/js/pages/recursos_humanos.js` e `git diff --check` passaram. Não houve sessão/API/browser autenticado, teste MySQL 5.7 (QA local MariaDB 10.11), acesso a dados/migration de produção ou deploy.
+
+## 16. Ordens de Serviço — seleção de Unidade/Morador (2026-11-05)
+- `node --check frontend/js/pages/ordens_servico.js` e `git diff --check` passaram.
+- Harness Node isolado validou ordenação natural (`Gleba 1`, `Gleba 2`, `Gleba 10`, `ADMINISTRATIVO`), chamada `select_por_unidade` com `credentials: 'include'` e `AbortSignal`, e preseleção do morador/snapshot ao editar.
+- Não foi executado browser com sessão autenticada nem feita alteração em API, banco ou dados de produção.

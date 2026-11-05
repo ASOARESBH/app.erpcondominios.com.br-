@@ -510,19 +510,23 @@
                 </div>
             </div>
 
-            <!-- Linha 3: Morador / Cliente (largura total) -->
+            <!-- Linha 3: Unidade + Morador da unidade -->
             <div class="os-form-row">
-                <div class="os-form-group os-form-group-flex2">
-                    <label>Morador / Cliente</label>
-                    <div class="os-autocomplete-wrapper">
-                        <input type="text" id="os-morador-busca" placeholder="Digite nome ou unidade para buscar...">
-                        <div class="os-autocomplete-list" id="os-morador-lista"></div>
-                    </div>
-                    <input type="hidden" id="os-morador-id">
-                    <input type="hidden" id="os-morador-nome">
-                    <input type="hidden" id="os-morador-unidade">
-                    <div class="os-morador-selecionado" id="os-morador-tag" style="display:none;"></div>
+                <div class="os-form-group">
+                    <label for="os-unidade">Unidade</label>
+                    <select id="os-unidade">
+                        <option value="">— Selecione uma unidade —</option>
+                    </select>
                 </div>
+                <div class="os-form-group">
+                    <label for="os-morador-select">Morador da unidade</label>
+                    <select id="os-morador-select" disabled>
+                        <option value="">Selecione uma unidade primeiro</option>
+                    </select>
+                </div>
+                <input type="hidden" id="os-morador-id">
+                <input type="hidden" id="os-morador-nome">
+                <input type="hidden" id="os-morador-unidade">
             </div>
 
             <!-- Linha 4: Atendente + Previsão de Conclusão -->

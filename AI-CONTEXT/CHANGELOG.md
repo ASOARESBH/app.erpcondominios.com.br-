@@ -2,6 +2,11 @@
 
 Registro de alterações significativas no ERP.
 
+## [2.1.25] - 2026-11-05
+### Alterado
+- **Ordens de Serviço — seleção de unidade e morador**: o campo livre Morador/Cliente foi substituído por selects encadeados. Unidades ativas são ordenadas numericamente; moradores ativos são carregados somente após escolher a unidade. A seleção apenas da unidade permanece válida para chamados de área comum.
+- O frontend reutiliza APIs tenant-scoped existentes e cancela consultas de moradores obsoletas ao trocar unidade, fechar a modal ou desmontar a página. O backend continua resolvendo nome e snapshot da unidade a partir do `morador_id` quando um morador é selecionado.
+
 ## [2.1.24] - 2026-11-04
 ### Corrigido
 - **Convidados (Portal/App) não encontrava visitante cadastrado pela portaria.** Caso real: GABRIEL ELIAS RODRIGUES SILVA (CPF 130.565.176-64), cadastrado no painel por usuário (`cadastrado_por_tipo=FUNCIONARIO`, sem unidade), aparecia como "Visitante não cadastrado". Causa: `buscar_documento` só considerava visitantes vinculados à unidade do morador (`pvu_condicao_visitante_unidade`). Agora a busca usa a **base de Visitantes do condomínio** (tenant), preferindo o cadastro da unidade; resposta traz `da_unidade`. Ao salvar, o convite é vinculado ao cadastro existente (nunca duplica); o estado `EXISTENTE_PORTARIA` deixou de existir.

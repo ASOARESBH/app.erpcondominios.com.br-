@@ -112,6 +112,8 @@ Sem restritividade, o usuário pode consultar as próprias O.S., as atribuídas/
 
 Ao criar ou editar uma O.S. com `morador_id`, o backend resolve `nome` e `unidade` diretamente de `moradores` pelo ID e `tenant_id` da sessão; os valores correspondentes enviados pelo navegador são ignorados. Na edição, se o `morador_id` permanecer igual, `morador_unidade` mantém o snapshot original mesmo que o cadastro atual tenha mudado; uma troca explícita de morador grava o snapshot do novo vínculo. Não há reescrita automática em massa de O.S. antigas. A API do Portal do Morador e o lançamento de O.S. pelo Portal não são alterados por esse filtro.
 
+No formulário interno de criação/edição, `api/api_unidades.php?acao=select` fornece unidades ativas do tenant e `api/api_moradores.php?acao=select_por_unidade&unidade=...` fornece moradores ativos daquela unidade; o segundo select só habilita após escolher unidade. A seleção de unidade sem morador permanece válida para chamados de área comum. Ao selecionar um morador, o formulário envia `morador_id` e o backend continua sendo a fonte de verdade para nome/unidade.
+
 Na aba Chamados, o select de Unidade exibe somente o nome, sem quantitativos, e ordena/deduplica no frontend após trim e normalização de caixa. Deep-links e o atalho do ranking inserem uma unidade ausente na posição natural, mantendo `Todas` como primeira opção. A aba não consome mais `GET ...?acao=unidades_com_os`; a busca no código encontrou somente a própria ação backend como definição, sem outro consumidor ativo. A ação permanece tenant-safe e RBAC, preservada por enquanto como candidata a remoção futura.
 
 ## 10.2 Projetos — URL pública personalizada por tenant
