@@ -12,11 +12,11 @@ SQL_PATH = Path(__file__).with_name("mysql_metadata_inventory.sql")
 
 
 class MySQLMetadataInventoryTest(unittest.TestCase):
-    def test_inventory_contains_only_seven_select_statements(self) -> None:
+    def test_inventory_contains_only_eight_select_statements(self) -> None:
         source = SQL_PATH.read_text(encoding="utf-8")
         without_line_comments = "\n".join(line.split("--", 1)[0] for line in source.splitlines())
         statements = [part.strip() for part in without_line_comments.split(";") if part.strip()]
-        self.assertEqual(len(statements), 7)
+        self.assertEqual(len(statements), 8)
         self.assertTrue(all(re.match(r"(?is)^SELECT\b", statement) for statement in statements))
         for forbidden in ("INSERT", "UPDATE", "DELETE", "REPLACE", "CALL", "SHOW", "CREATE", "DROP", "ALTER", "TRUNCATE"):
             self.assertFalse(any(re.search(rf"(?i)\b{forbidden}\b", statement) for statement in statements), forbidden)
@@ -31,6 +31,17 @@ class MySQLMetadataInventoryTest(unittest.TestCase):
         self.assertRegex(source, r"(?is)EVENT_MANIPULATION\s+AS\s+OBJECT_EVENT")
         self.assertNotRegex(source, r"(?im)^\s*COLUMN_DEFAULT\s*,")
         self.assertNotRegex(source, r"(?im)^\s*GENERATION_EXPRESSION\s*(?:,|FROM)")
+
+    def test_attachment_candidates_read_only_information_schema(self) -> None:
+        source = SQL_PATH.read_text(encoding="utf-8")
+        without_line_comments = "\n".join(line.split("--", 1)[0] for line in source.splitlines())
+        statements = [part.strip() for part in without_line_comments.split(";") if part.strip()]
+        attachment_query = statements[7]
+        self.assertRegex(attachment_query, r"(?is)FROM\s+information_schema\.COLUMNS\b")
+        self.assertRegex(attachment_query, r"(?is)LOWER\(COLUMN_NAME\)\s+REGEXP")
+        self.assertRegex(attachment_query, r"(?is)DATA_TYPE\s+IN\s*\('tinyblob',\s*'blob',\s*'mediumblob',\s*'longblob'\)")
+        self.assertNotRegex(attachment_query, r"(?is)FROM\s+(?!information_schema\.)[A-Za-z_][A-Za-z0-9_$]*")
+        self.assertNotRegex(attachment_query, r"(?is)SELECT\s+\*|COLUMN_DEFAULT|GENERATION_EXPRESSION")
 
 
 if __name__ == "__main__":

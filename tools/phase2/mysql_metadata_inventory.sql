@@ -136,3 +136,24 @@ WHERE TABLE_SCHEMA = DATABASE()
       OR LOWER(TABLE_NAME) LIKE '%version%'
   )
 ORDER BY TABLE_NAME;
+
+-- 8. Candidatos a referencia/armazenamento de anexos por nomes e tipos de coluna.
+-- A consulta revela apenas metadados estruturais, nao caminhos nem valores armazenados.
+SELECT
+    TABLE_SCHEMA,
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    IS_NULLABLE,
+    CHARACTER_MAXIMUM_LENGTH,
+    CASE
+        WHEN DATA_TYPE IN ('tinyblob', 'blob', 'mediumblob', 'longblob') THEN 'binary_storage_candidate'
+        ELSE 'reference_name_candidate'
+    END AS CANDIDATE_KIND
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND (
+      LOWER(COLUMN_NAME) REGEXP '(file|arquivo|path|url|anexo|document|foto|imagem|pdf|upload|blob|storage|caminho)'
+      OR DATA_TYPE IN ('tinyblob', 'blob', 'mediumblob', 'longblob')
+  )
+ORDER BY TABLE_NAME, ORDINAL_POSITION;
