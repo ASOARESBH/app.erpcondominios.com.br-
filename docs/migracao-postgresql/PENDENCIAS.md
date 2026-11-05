@@ -7,7 +7,7 @@
 ## Bloqueadores P0
 
 - Aprovar parâmetros PostgreSQL: versão, extensões, UTF-8, timezone, collation, TLS, scheduler e políticas de tipos.
-- Obter exports read-only da instância oficial: versão; `SHOW CREATE TABLE`; colunas; índices; PK/UK/FK; `AUTO_INCREMENT`; triggers; views; procedures; functions; events; permissões e migration ledger.
+- Obter por canal autorizado os arquivos exatos `server_metadata.txt`, `tables_ddl.sql`, `constraints_indexes.csv`, `objects_ddl.sql`, `objects_inventory.csv`, `migration_ledger.csv`, `data_quality_aggregates.csv`, `tenant_profile.csv` e `attachment_manifest.csv`, com checksum, ambiente, data, responsável e retenção. O checklist `tools/phase2/mysql_metadata_inventory.sql` é somente SELECT e ainda não foi executado; DDL de cada objeto exige extração `SHOW CREATE` separada.
 - Fechar isolamento da Assembleia, incluindo pai/filho, anexos e autorização da ação migration.
 - Fechar Console/ControlID: gate de dispositivo, vínculo explícito device → tenant → pessoa/veículo e rejeição de ambiguidades.
 - Tornar RBAC e resolução de tenant fail closed para operações sensíveis; retirar default operacional tenant 1.
@@ -19,11 +19,12 @@
 - Matriz `path + método + ação` com request/response/status/auth/RBAC/tenant/idempotência e consumidor.
 - Reconciliar Portal Documentos: tenant explícito, prepared statements, Bearer sem query string e autorização de stream/download.
 - Modelo final do schema após replay dos 489 `ALTER TABLE`.
-- Classificação das 42 tabelas sem `tenant_id`; 22 nomes view-like e a inconsistência textual de “24 restantes” precisam de reconciliação.
+- Classificação funcional das 42 tabelas sem `tenant_id` continua pendente: o DDL tem 22 nomes view-like no total (18 sem `tenant_id` e 4 com), além de 24 outros nomes sem `tenant_id`. O nome não classifica semântica nem isolamento.
 - Perfil agregado de dados: contagem, NULLs, duplicidades, órfãos, tenant coverage, zero-date, enum, limites DECIMAL, IDs e tamanhos de TEXT/BLOB/JSON.
 - Manifesto de anexos: arquivo, hash, tamanho, referência, tenant e política de retenção, sem publicar conteúdo pessoal.
 - Adapter/dialect PHP para PostgreSQL, prepared statements, SQLSTATE, transações, locks, JSON, identity, temporal e upsert.
 - Definições reais dos sete triggers e de qualquer view/procedure/function/event instalado.
+- Reconciliar os resultados do catalogador `tools/phase2/catalog_schema_only.py` com a instância e revisar os 489 `ALTER` semântica/ordenadamente; projeção atual é parcial, não executável.
 - Manifesto de runtime: PHP/SAPI/extensões, driver, web server/PHP-FPM, Node/Chrome para QA, scheduler, timezone, limites e observabilidade.
 - Correção planejada do QA Node: Node mínimo, comando de execução e arquivo `qa-puppeteer-auth-header.js` duplicado.
 - Catálogo CDN, versões de FontAwesome/Chart.js/html5-qrcode e política de fallback.

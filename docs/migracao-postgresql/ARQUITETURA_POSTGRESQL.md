@@ -61,6 +61,8 @@ Uploads/downloads devem permanecer autorizados no backend, com storage central t
 
 A ordem recomendada é: fechar evidência instalada; decidir parâmetros; converter schema em ambiente descartável; implementar/validar adaptador; migrar dados com reconciliação; executar QA de contratos e isolamento; ensaiar backup/restore/rollback; só então planejar cutover. Não há autorização para executar qualquer etapa operacional neste baseline.
 
+O catalogador `tools/phase2/catalog_schema_only.py` implementa apenas leitura offline do schema-only: gera ledger/hash lexical, catálogo parcial de `CREATE TABLE`, projeção de tipos com blockers e lista não reproduzida de `ALTER`. Não aplica SQL, não acessa banco, não inclui DDL bruto nos outputs e não gera um suposto estado final. Para converter será obrigatório replayar/revisar todas as cláusulas em ordem, falhar em gramática não suportada e comparar a projeção final ao inventário metadata-only da instância. Veja [FASE2_IMPLEMENTACAO.md](FASE2_IMPLEMENTACAO.md).
+
 ## Decisões ainda abertas
 
 - Versão PostgreSQL e extensões permitidas.

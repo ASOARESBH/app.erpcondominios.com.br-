@@ -4,7 +4,7 @@
 >
 > **Fonte oficial de código:** `ASOARESBH/app.erpcondominios.com.br-`, commit `f60739713e6de3f2473b79ecd14a70fd700e5462`.
 >
-> **Branch:** `pg/00-baseline-contratos`, criada em worktree isolado diretamente do commit acima. Os arquivos desta pasta são documentação e inventário da Fase 1; não há alterações de aplicação.
+> **Branch:** `pg/01-schema-tenant-rbac`, derivada da branch publicada `pg/00-baseline-contratos` e mantida em worktree isolado. Esta fase acrescenta documentação e tooling offline; não há alterações na aplicação, DDL PostgreSQL executável ou conversão de linhas.
 
 ## Objetivo e limites
 
@@ -29,6 +29,11 @@ A documentação usa exclusivamente o commit oficial e evidências estruturadas 
 | [PENDENCIAS.md](PENDENCIAS.md) | Pendências bloqueadoras e evidências que precisam ser obtidas. |
 | [DECISOES_TECNICAS.md](DECISOES_TECNICAS.md) | Decisões registradas, decisões pendentes e não decisões. |
 | [inventario_sintaxe_mysql.csv](inventario_sintaxe_mysql.csv) | Triagem estática `arquivo,linha,sinal,categoria,classificacao_arquivo`, indexada por `MAPEAMENTO_BANCO.md`. |
+| [FASE2_IMPLEMENTACAO.md](FASE2_IMPLEMENTACAO.md) | Arquitetura e tooling offline da Fase 2, contagens reconciliadas e artefatos ainda bloqueadores. |
+| [RELATORIOS_QUALIDADE_READ_ONLY.md](RELATORIOS_QUALIDADE_READ_ONLY.md) | Contrato de agregados sem dados de linha e operação do gerador. |
+| `tools/phase2/catalog_schema_only.py` | Catálogo parcial de schema-only; inventaria `ALTER`, não os aplica nem gera estado final. |
+| `tools/phase2/mysql_metadata_inventory.sql` | Consultas read-only de metadados para execução futura pelo operador; não executadas nesta tarefa. |
+| `tools/generate_read_only_quality_reports.py` | Formatter/validator offline de snapshot agregado metadata-only. |
 
 ## Convenções
 
@@ -43,7 +48,8 @@ A documentação usa exclusivamente o commit oficial e evidências estruturadas 
 1. Aprovar os parâmetros PostgreSQL e a matriz de compatibilidade em [DECISOES_TECNICAS.md](DECISOES_TECNICAS.md).
 2. Obter, por canal autorizado e read-only, exports de metadados, objetos e qualidade agregada descritos em [PENDENCIAS.md](PENDENCIAS.md).
 3. Fechar contratos API/auth/tenant/RBAC antes de conversão, conforme [CONTRATOS_API.md](CONTRATOS_API.md) e [AUTENTICACAO_TENANT_RBAC.md](AUTENTICACAO_TENANT_RBAC.md).
-4. Executar QA e ensaios de restore/rollback somente em ambiente isolado, após aprovação separada.
+4. Concluir metadata e qualidade da instância conforme [FASE2_IMPLEMENTACAO.md](FASE2_IMPLEMENTACAO.md); os scripts atuais não certificam schema final.
+5. Executar QA e ensaios de restore/rollback somente em ambiente isolado, após aprovação separada.
 
 ## Fonte de rastreabilidade
 

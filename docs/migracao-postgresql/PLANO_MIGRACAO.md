@@ -22,7 +22,7 @@ Aprovar versão/extensões PostgreSQL, encoding, timezone, collation, TLS, drive
 
 ### Fase 2 — evidência instalada e qualidade
 
-Obter exports read-only de objetos e metadados; reconstituir o modelo final após `ALTER`; classificar tabelas sem tenant; obter agregados de qualidade e manifesto de anexos. Criar migration ledger com ordem, checksum, ambiente, resultado e recovery. **Gate 2:** evidência reconciliada, sem inferir instalação de fontes Git.
+O catálogo offline atual lê somente schema-only fornecido e classifica statements, tabelas/colunas, tipos candidatos e suboperações; os 489 `ALTER TABLE` ficam explicitamente não reproduzidos, logo não há modelo final. Obter os exports da instância em [FASE2_IMPLEMENTACAO.md](FASE2_IMPLEMENTACAO.md), reconciliar `SHOW CREATE`, views/rotinas/triggers e ledger, classificar tabelas sem tenant, agregar qualidade sem valores pessoais e obter manifesto de anexos. **Gate 2 continua fechado** até cruzamento contra a instância e decisão de todos os blockers, sem inferir instalação a partir do Git/schema-only. A evidência, owners, aprovadores e critérios de abort/rollback dos Gates 2–5 estão na [matriz de gates](FASE2_IMPLEMENTACAO.md#41-matriz-de-gates-para-avancar-de-fase).
 
 ### Fase 3 — conversão descartável
 
@@ -46,9 +46,9 @@ Cobrir painel, RH, financeiro, manutenção, segurança/acesso, moradores/depend
 - decisão assinada dos parâmetros PostgreSQL;
 - catálogo `path + método + ação` e matriz auth/tenant/RBAC;
 - manifesto de runtime e dependências reproduzíveis;
-- exports de DDL/metadata/objetos e migration ledger;
+- `server_metadata.txt`, `tables_ddl.sql`, `constraints_indexes.csv`, `objects_ddl.sql`, `objects_inventory.csv`, `migration_ledger.csv`;
 - modelo final de tabelas/índices/constraints e crosswalk;
-- perfil agregado de qualidade, tenant profile e attachment manifest;
+- `data_quality_aggregates.csv`, `tenant_profile.csv` e `attachment_manifest.csv` metadata-only;
 - adapter/dialect, migrations PostgreSQL e conversores versionados;
 - evidências T01–T22, reconciliação, backup/restore/PITR/WAL e rollback rehearsal;
 - plano operacional, RPO/RTO/SLO, janela, abort criteria e validação de acesso ao host.

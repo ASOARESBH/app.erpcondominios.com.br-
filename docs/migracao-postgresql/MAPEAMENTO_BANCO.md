@@ -10,7 +10,7 @@
 
 O artefato externo `hostgator_schema_only.sql` foi usado somente como referência DDL, junto de `schema_extraction_summary.json` e `review_database.md`; nome e checksum estão em [baseline-manifest.json](baseline-manifest.json). Esses artefatos não são copiados para esta branch. O relatório identifica 270 definições `CREATE TABLE`, 489 `ALTER TABLE` e 7 `CREATE TRIGGER`; não há `CREATE VIEW`, `CREATE PROCEDURE`, `CREATE FUNCTION` ou `CREATE EVENT` nesse snapshot. Isso não prova o estado instalado nem a ausência desses objetos na instância.
 
-A análise estática identifica 228 de 270 tabelas com coluna declarada `tenant_id` e 42 sem ela; 22 nomes entre as sem coluna são view-like (`view_`, `vw_`, `v_`), mas o nome não prova que sejam views. Foram encontradas apenas 11 FKs explícitas e nenhuma referencia `tenants.id`. A classificação global versus tenant-aware permanece contratual e pendente.
+A recontagem independente do DDL identifica 228 de 270 tabelas com coluna declarada `tenant_id` e 42 sem ela. Há 22 nomes view-like (`view_`, `vw_`, `v_`) no conjunto total; 18 deles estão entre as 42 sem `tenant_id`, e 4 possuem essa coluna. As outras 24 tabelas sem `tenant_id` não têm nome view-like. A regra lexical de nome não prova que qualquer uma seja view. Foram encontradas 11 FKs explícitas e nenhuma referencia `tenants.id`; a classificação funcional das 42 permanece pendente.
 
 Os sete triggers observados são `trg_atualizar_km_acumulado`, `tr_dependente_ativar_veiculos`, `tr_dependente_deletar_veiculos`, `tr_dependente_inativar_veiculos`, `after_validacao_dispositivo_insert`, `trg_alerta_estoque_baixo` e `after_qrcode_token_insert`. Seus efeitos cruzam tabelas, mas não foram executados nem validados quanto a concorrência, permissões ou ordem.
 
