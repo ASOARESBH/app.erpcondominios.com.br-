@@ -6,7 +6,7 @@
 
 ## Resumo executivo
 
-Foram publicados os entregáveis documentais da Fase 2.3 e preparados os dez artefatos solicitados para Fase 2.4, com provenance, data, limitações e rótulos de confirmação. A sessão My Browser alcançou o schema solicitado em phpMyAdmin 5.2.3, mas o formulário de consulta retornou “Está faltando valores no formulário”; a tentativa seguinte de interação expirou. Nenhum resultado do catálogo live foi recebido. A autorização do usuário permitia leitura, mas não substitui evidência que não foi retornada.
+Foram publicados os entregáveis documentais da Fase 2.3 e preparados os dez artefatos iniciais da Fase 2.4. Depois, foram preparados o [pacote SQL de coleta incremental](MYSQL_LIVE_CATALOG_COLLECTION.sql) e o [manual de execução assistida](INSTRUCOES_COLETA_MYSQL_LIVE.md). A sessão My Browser alcançou o schema solicitado em phpMyAdmin 5.2.3, mas o formulário anterior retornou “Está faltando valores no formulário”; a tentativa seguinte expirou. Nenhuma consulta do novo pacote foi executada e nenhum resultado live foi recebido.
 
 Os arquivos desta fase são **matrizes de reconciliação parcialmente preenchidas com a evidência de export**; não são catálogo live confirmado. O único metadado real já disponível é o resultado de servidor informado pelo operador em 2026-11-05, registrado separadamente. Nenhuma alteração no MySQL foi realizada.
 
@@ -36,15 +36,16 @@ Os arquivos desta fase são **matrizes de reconciliação parcialmente preenchid
 3. Confirmar estrutura final depois dos ALTERs e reconciliar migrations/ledger sem assumir que scripts foram aplicados.
 4. Fechar revisão live das 42 estruturas sem tenant e das 22 candidatas a views, apoiada por tipo/DDL live e contrato de domínio.
 5. Resolver decisões de tipo, alcance temporal, `UNSIGNED`, `ENUM`, `DECIMAL`, `JSON`, `TINYINT(1)`, `AUTO_INCREMENT`, defaults, collation e `ON UPDATE CURRENT_TIMESTAMP` com evidência final.
-6. Obter evidência segura de acesso read-only suficientemente estável. O fluxo atual do phpMyAdmin não submeteu a consulta, então não manter tentativas repetidas que possam aumentar carga ou provocar timeout.
+6. Obter evidência segura de acesso read-only suficientemente estável. O fluxo anterior do phpMyAdmin não submeteu a consulta agregada. Para retomada, executar uma instrução por vez do pacote SQL independente, conforme o manual; não repetir a consulta agregada anterior.
 
 ## Retomada segura
 
 - Preferir export estrutural sem dados, selecionando explicitamente apenas estrutura/definições; fazer preflight local fail-closed antes de qualquer parser, rejeitando linhas de negócio.
 - Se usar phpMyAdmin, executar consultas curtas e paginadas em lotes limitados, uma família de metadados por vez; confirmar o resultado visual antes de registrar qualquer linha. Não usar `SELECT *` nem ler tabelas de domínio.
+- O pacote [MYSQL_LIVE_CATALOG_COLLECTION.sql](MYSQL_LIVE_CATALOG_COLLECTION.sql) contém dez blocos independentes, cada lista limitada por `LIMIT`/`OFFSET`; o administrador pode salvar cada bloco separadamente seguindo [INSTRUCOES_COLETA_MYSQL_LIVE.md](INSTRUCOES_COLETA_MYSQL_LIVE.md). Estes arquivos são instruções, não evidência de execução.
 - Se campos de `INFORMATION_SCHEMA` forem incompatíveis ou privilégios insuficientes, registrar `NÃO CONFIRMADO` e solicitar ao operador export metadata-only apropriado. Não contornar controle de acesso.
 - Gerar checksum/proveniência dos artefatos fora do Git e manter separados do dump. Só publicar matrizes sem dados pessoais ou credenciais.
 
 ## Resultado da Fase 2.4
 
-A fase pode produzir documentos e matrizes com lacunas explícitas, mas **não conclui a reconciliação live nem recomenda aprovação do Gate 2**. Nenhuma conversão MySQL→PostgreSQL, migration, importação, banco PostgreSQL, alteração de API, VM ou deploy foi iniciada. A Fase 3 permanece bloqueada até fechamento do Gate 2, revisão dos riscos P0 e aprovação humana.
+A fase pode produzir documentos e matrizes com lacunas explícitas, mas **não conclui a reconciliação live nem recomenda aprovação do Gate 2**. Nenhuma consulta do novo pacote foi executada nesta atualização. Nenhuma conversão MySQL→PostgreSQL, migration, importação, banco PostgreSQL, alteração de API, VM ou deploy foi iniciada. A Fase 3 permanece bloqueada até fechamento do Gate 2, revisão dos riscos P0 e aprovação humana.

@@ -1,6 +1,6 @@
 # Migração PostgreSQL — documentação de planejamento
 
-> **Estado:** coleta read-only parcial. A Fase 2.3 foi publicada na branch `pg/02-3-compatibilidade-riscos`, commit `4288185bb65456d682cbf2cce5b3ebab34d4b0e5`. Na Fase 2.4, a sessão do phpMyAdmin alcançou o schema, mas o formulário informou que faltavam valores e a tentativa de interação expirou; nenhum resultado do catálogo live foi confirmado. **Gate 2 permanece fechado.**
+> **Estado:** coleta read-only parcial. A Fase 2.3 foi publicada na branch `pg/02-3-compatibilidade-riscos`, commit `4288185bb65456d682cbf2cce5b3ebab34d4b0e5`. Na Fase 2.4, a tentativa anterior no phpMyAdmin não retornou resultados. Foi preparado um pacote de consultas independentes, ainda não executado; nenhum resultado do catálogo live está confirmado. **Gate 2 permanece fechado.**
 >
 > **Fonte oficial de código:** `ASOARESBH/app.erpcondominios.com.br-`, commit-base `f60739713e6de3f2473b79ecd14a70fd700e5462`.
 >
@@ -35,6 +35,8 @@ A documentação usa exclusivamente o commit oficial e evidências estruturadas 
 | [phase2_2/MYSQL_INSTALLED_CATALOG_REPORT.md](phase2_2/MYSQL_INSTALLED_CATALOG_REPORT.md) | Reconciliação parcial e limites do inventário estrutural da Fase 2.2. |
 | [phase2_3/README.md](phase2_3/README.md) | Compatibilidade MySQL/PostgreSQL, riscos de integridade, tenant, índices, views e triggers, com evidência estática. |
 | [phase2_4/LIVE_MYSQL_CATALOG.md](phase2_4/LIVE_MYSQL_CATALOG.md) | Estado da tentativa de catálogo live, dados exportados separados de campos não confirmados. |
+| [phase2_4/MYSQL_LIVE_CATALOG_COLLECTION.sql](phase2_4/MYSQL_LIVE_CATALOG_COLLECTION.sql) | Dez blocos independentes read-only para catálogo e definições de objetos, com limites por página. Ainda não executado. |
+| [phase2_4/INSTRUCOES_COLETA_MYSQL_LIVE.md](phase2_4/INSTRUCOES_COLETA_MYSQL_LIVE.md) | Passo a passo para execução assistida, exportação de metadados, redação de conteúdo sensível e envio separado dos resultados. |
 | [phase2_4/MYSQL_EXPORT_VS_LIVE_DIFF.md](phase2_4/MYSQL_EXPORT_VS_LIVE_DIFF.md) | Comparação export × live e lacunas não comparáveis. |
 | [phase2_4/GATE_2_READINESS_REPORT.md](phase2_4/GATE_2_READINESS_REPORT.md) | Parecer do Gate 2 e bloqueadores P0; recomendação atual: manter fechado. |
 | `tools/phase2/catalog_schema_only.py` | Catálogo parcial de schema-only; inventaria `ALTER`, não os aplica nem gera estado final. |
@@ -52,7 +54,7 @@ A documentação usa exclusivamente o commit oficial e evidências estruturadas 
 
 ## Próximos passos imediatos
 
-1. Obter um export metadata-only ou resultados read-only paginados que permitam reconciliar `TABLES`, `COLUMNS`, índices/FKs, views/rotinas/triggers/events e ledger.
+1. O administrador executa individualmente os blocos necessários de [MYSQL_LIVE_CATALOG_COLLECTION.sql](phase2_4/MYSQL_LIVE_CATALOG_COLLECTION.sql), seguindo o [manual](phase2_4/INSTRUCOES_COLETA_MYSQL_LIVE.md), e disponibiliza resultados revisados e metadata-only. Não repetir a consulta agregada anterior.
 2. Fechar a revisão live das 22 candidatas a views, 42 estruturas sem `tenant_id`, sete triggers, estado pós-ALTER e artefatos ausentes do export.
 3. Registrar source, data, ambiente, checksum e limitações de cada artefato, sem coletar linhas pessoais ou credenciais.
 4. Aprovar parâmetros PostgreSQL e contratos API/auth/tenant/RBAC antes de qualquer conversão; consultar [PENDENCIAS.md](PENDENCIAS.md) e [GATE_2_READINESS_REPORT.md](phase2_4/GATE_2_READINESS_REPORT.md).

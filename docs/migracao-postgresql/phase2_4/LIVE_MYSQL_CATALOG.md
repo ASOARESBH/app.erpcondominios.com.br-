@@ -2,6 +2,8 @@
 
 **Data:** 2026-11-06 (tentativa de reconciliação live; resultados não obtidos). **Schema selecionado:** `inlaud99_erpcondor`. **Status:** tentativa read-only sem resultado do catálogo live; Gate 2 não aprovado. **Branch:** `pg/02-4-live-catalog-reconciliation`.
 
+Para continuar sem repetir a consulta anterior, foi preparado o [pacote SQL de dez blocos independentes](MYSQL_LIVE_CATALOG_COLLECTION.sql) e o [manual de execução e salvamento assistidos](INSTRUCOES_COLETA_MYSQL_LIVE.md). **Nenhum desses blocos foi executado ainda.**
+
 ## Resumo
 
 A Fase 2.4 preparou a reconciliação entre o MySQL/Percona de origem, o export estrutural validado, o código do repositório oficial e as análises da Fase 2.3. A coleta live não foi concluída: My Browser exibiu o schema solicitado no phpMyAdmin 5.2.3, com SELECT somente de metadados visível no editor, mas houve alerta de formulário incompleto; uma tentativa de interação posterior expirou. Nenhuma contagem ou definição do catálogo foi recebida, e não houve reenvio da consulta.
@@ -21,6 +23,8 @@ Consequentemente, os campos de catálogo live abaixo são `NÃO CONFIRMADO`/`NÃ
 | [MYSQL_EXPORT_VS_LIVE_DIFF.md](MYSQL_EXPORT_VS_LIVE_DIFF.md) | Comparação explícita export × live | diferenças indeterminadas; não declarar “sem diferença” |
 | [TENANT_CLASSIFICATION_FINAL_REVIEW.csv](TENANT_CLASSIFICATION_FINAL_REVIEW.csv) | 42 propostas existentes com colunas live/final bloqueadas | classificação final pendente |
 | [GATE_2_READINESS_REPORT.md](GATE_2_READINESS_REPORT.md) | Decisão e critérios do Gate 2 | recomendar manter fechado |
+| [MYSQL_LIVE_CATALOG_COLLECTION.sql](MYSQL_LIVE_CATALOG_COLLECTION.sql) | Dez consultas read-only independentes, paginadas e sem leitura de linhas de negócio | preparado; aguardando execução pelo administrador |
+| [INSTRUCOES_COLETA_MYSQL_LIVE.md](INSTRUCOES_COLETA_MYSQL_LIVE.md) | Instruções para executar, salvar e revisar cada bloco separadamente | preparado; nenhum resultado anexado |
 
 ## O que se sabe sobre a origem
 

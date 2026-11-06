@@ -1,17 +1,17 @@
 # Pendências e artefatos necessários
 
-> **Estado:** Gate 2 fechado/não aprovado. A Fase 2.3 foi publicada no repositório autorizado. Na tentativa da Fase 2.4, o phpMyAdmin mostrou o schema e o alerta “Está faltando valores no formulário”; a interação posterior expirou sem retorno de resultados. Nenhum conjunto live foi confirmado. Não houve alteração de dados, importação, deploy, SSH, PostgreSQL ou runtime.
+> **Estado:** Gate 2 fechado/não aprovado. A Fase 2.3 foi publicada no repositório autorizado. A tentativa anterior da Fase 2.4 no phpMyAdmin não retornou resultados. Foi preparado o pacote de consultas independentes e o manual assistido, mas nenhum bloco novo foi executado e nenhum conjunto live foi confirmado. Não houve alteração de dados, importação, deploy, SSH, PostgreSQL ou runtime.
 >
 > **Fonte oficial:** `ASOARESBH/app.erpcondominios.com.br-`, commit-base `f60739713e6de3f2473b79ecd14a70fd700e5462`.
 >
-> **Registro da tentativa:** [Catálogo MySQL Fase 2.4](phase2_4/LIVE_MYSQL_CATALOG.md) e [parecer do Gate 2](phase2_4/GATE_2_READINESS_REPORT.md).
+> **Registro e retomada:** [Catálogo MySQL Fase 2.4](phase2_4/LIVE_MYSQL_CATALOG.md), [parecer do Gate 2](phase2_4/GATE_2_READINESS_REPORT.md), [pacote SQL incremental](phase2_4/MYSQL_LIVE_CATALOG_COLLECTION.sql) e [manual de coleta](phase2_4/INSTRUCOES_COLETA_MYSQL_LIVE.md).
 
 ## Bloqueadores P0
 
 - Aprovar parâmetros PostgreSQL: versão, extensões, UTF-8, timezone, collation, TLS, scheduler e políticas de tipos.
-- Obter e reconciliar evidências live de `INFORMATION_SCHEMA` e `SHOW CREATE` para tables, columns, indexes, objects, migration ledger, qualidade agregada, tenant profile e manifesto de anexos. Cada artefato deve ter origem, data/hora, checksum, ambiente, responsável e retenção. `server_metadata.txt` continua parcial e inclui valores informados pelo operador. O checklist `tools/phase2/mysql_metadata_inventory.sql` não foi executado como lote.
+- Obter e reconciliar evidências live de `INFORMATION_SCHEMA` e `SHOW CREATE` para tables, columns, indexes, objects e rotinas. O novo `phase2_4/MYSQL_LIVE_CATALOG_COLLECTION.sql` contém blocos read-only independentes; aguarda execução individual pelo administrador, conforme `phase2_4/INSTRUCOES_COLETA_MYSQL_LIVE.md`. Cada saída precisa de origem, data/hora, checksum, ambiente, responsável e retenção. `server_metadata.txt` continua parcial e inclui valores informados pelo operador. O checklist `tools/phase2/mysql_metadata_inventory.sql` não foi executado como lote. Permanecem também pendentes, fora deste pacote: migration ledger live, agregados de qualidade, perfil agregado de tenant e manifesto agregado de anexos.
 - O anexo `(7)` foi validado pelo parser fail-closed: schema-only com 270 `CREATE TABLE`, 489 `ALTER TABLE`, 7 triggers, 11 FKs explícitas e zero DML top-level. O anexo `(6)` anterior permanece rejeitado. Nenhuma linha de negócio foi lida ou exibida.
-- Reconciliar os 270 `CREATE TABLE` e os 489 `ALTER` do export com `TABLE_TYPE` e `SHOW CREATE` reais. Eventos `not_replayed` não demonstram estado instalado. A consulta agregada à origem não gerou resultado confirmado; na retomada da Fase 2.4, o formulário do phpMyAdmin apontou valores ausentes e a tentativa de interação expirou. Não declarar zero divergências nem repetir tentativas pesadas.
+- Reconciliar os 270 `CREATE TABLE` e os 489 `ALTER` do export com `TABLE_TYPE` e `SHOW CREATE` reais. Eventos `not_replayed` não demonstram estado instalado. A consulta agregada anterior à origem não gerou resultado confirmado; não a repetir. Executar, se autorizado, apenas blocos independentes e paginados do novo pacote, um por vez; não declarar zero divergências.
 - Obter `SHOW CREATE` por tipo de objeto e comprovar visibilidade/privilégios. O export tem sete triggers e não contém `CREATE VIEW`/procedures/functions/events; a ausência no export não prova ausência live.
 - Revisar os 22 candidatos a views, confirmar tipo e definições live, mapear dependências reais e testar consumo/escopo tenant em etapa posterior.
 - Revisar as 42 estruturas sem `tenant_id` após confirmação live, preservando as propostas da Fase 2.3 como hipóteses; não adicionar `tenant_id` automaticamente.
