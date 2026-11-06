@@ -1,12 +1,12 @@
 # Checklist de Homologação — Ambiente Hetzner
 
 **Status do documento:** `BLOCKED / NOT EXECUTED`
-**Execução nesta sessão:** `NOT EXECUTED`
+**Execução nesta sessão:** checagem de rede TCP/22 executada; SSH/autenticação não executados
 **Branch/worktree:** `infra/hetzner-environment-preparation`
 **Baseline de código consultado:** `f60739713e6de3f2473b79ecd14a70fd700e5462`
 **Escopo desta autorização:** preparação de infraestrutura após os gates técnicos: atualizações necessárias, hardening restritivo, instalação/configuração de serviços, PostgreSQL vazio com role mínima, clone privado completo, fixture sintética de infraestrutura somente em loopback/socket Unix, backup do banco vazio e restore exclusivamente desse PostgreSQL vazio, além de cópia local protegida dos diretórios compartilhados formalmente acordados, com checksum e preservação da origem, sem restaurar esses arquivos. Sem migração, linhas ou dados MySQL, deploy público, DNS, cutover ou QA/fixture funcional do ERP.
 
-> Este checklist orienta a preparação autorizada; nenhuma ação remota, instalação, alteração, clone, banco, backup, teste ou validação ocorreu nesta sessão e nenhuma linha é evidência de execução. A autorização cobre infraestrutura, não a homologação funcional do ERP.
+> Esta sessão executou somente uma checagem TCP de alcance à porta 22, sem enviar dados de aplicação. Não houve handshake SSH, leitura de host key, autenticação, sessão na VM, instalação, alteração, clone, operação de banco/backup ou teste de serviço/aplicação. A checagem TCP não comprova SSH funcional, identidade do host nem acesso administrativo; nenhuma linha é evidência de execução na VM. A autorização cobre infraestrutura, não a homologação funcional do ERP.
 
 > O Gate 2 é **CLOSED / NÃO AUTORIZADO / NÃO-WAIVABLE** para migração ou integração. Ele não pode ser aberto por inferência nem confundido com a preparação de infraestrutura. Itens proibidos não podem receber exceção via `WAIVED`; ver [ESCOPO_E_STATUS.md](ESCOPO_E_STATUS.md).
 
@@ -42,8 +42,8 @@ Interromper se houver divergência de identidade, conflito/comprometimento ou ex
 
 | Item | Estado nesta sessão | Evidência disponível | Decisão/implicação | Owner |
 |---|---|---|---|---|
-| Acesso à VM | `BLOCKED` / `NOT EXECUTED` | SSH autenticado não confirmado; fingerprint do host não validada; chaves não confirmadas; nenhum acesso à VM realizado | Bloqueia qualquer execução remota; não contornar controle do provedor | Infra/Operação |
-| Console | `BLOCKED` / `NOT EXECUTED` | Handoff de 2026-11-05 registrou expiração; em 2026-11-06 My Browser chegou ao controle de acesso do provedor da console, mas expirou antes da autenticação | Nenhum acesso/estado da VM foi obtido; não contornar o controle | Infra/Operação |
+| Acesso à VM | `BLOCKED` / `NOT EXECUTED` | Em 2026-11-06T18:15:16Z, uma conexão TCP `connect_ex` do sandbox Manus à porta 22 foi aceita; não houve handshake/banner SSH, leitura de host key, autenticação ou sessão. A chave cliente conhecida está presente localmente com modo restrito, mas não está carregada em `ssh-agent`; processo/sessão SSH ativo não encontrado. Fingerprint não validada, nenhuma host key confiável local e instalação da chave no servidor/usuário autorizado não confirmados | TCP aberto e chave local não provam acesso. Não iniciar handshake/autenticação até validar fingerprint por canal independente e confirmar usuário autorizado e instalação da chave pública na conta correspondente | Infra/Operação |
+| Console | `BLOCKED` / `NOT EXECUTED` | Em 2026-11-06, navegação no My Browser para a Hetzner permaneceu no Security Check automático; verificações passivas expiraram antes de abrir a console. Nenhuma autenticação ou informação da VM foi obtida | Acesso/fingerprint seguem sem validação; não contornar o controle do provedor | Infra/Operação |
 | VM alvo | `BLOCKED` / `NOT EXECUTED` | Declaração do usuário: `<hostname privado omitido>`, `<IP privado omitido>`, Helsinki, CPX32, 4 vCPU, 8 GB RAM, 160 GB; Ubuntu 24.04 LTS escolhido como imagem, sem verificação de instalação | São parâmetros declarados, não fatos auditados por falta de acesso autenticado, fingerprint e inventário | Infra/Operação |
 | OS, firewall, usuários, discos e serviços | `BLOCKED` / `NOT EXECUTED` | Estado atual desconhecido | Exige inventário somente leitura autorizado; acesso, fingerprint e inventário confiáveis ainda não disponíveis | Infra/Operação |
 | ERP e runtime | `BLOCKED` / `NOT EXECUTED` | ERP documentado como SPA Vanilla JS + PHP 8.x; PHP 8.3 foi solicitado como alvo preferido, PostgreSQL como destino; baseline usa MySQL/mysqli | Comparar PHP 8.3/8.4/8.5, validar runtime/extensões e compatibilidade com PostgreSQL após acesso e inventário confiáveis | Backend/Infra |
@@ -85,7 +85,7 @@ Cada registro deve identificar, no mínimo, data/hora UTC, executor, comando ou 
 | PF-10 | Verificar ausência de comprometimento/conflito | Não há indício de comprometimento, conflito operacional ou alteração indevida; qualquer dúvida interrompe a preparação | Evidência sanitizada da verificação e decisão de parada, se aplicável | `BLOCKED` / `NOT EXECUTED` | Infra/Segurança |
 | PF-11 | Snapshot de configuração separado | Antes de qualquer mudança reversível, o snapshot/manifesto de configuração autorizado está definido e não contém segredos; ele não é backup/restore do PostgreSQL vazio | Manifesto sanitizado, referência ao cofre e aprovação | `BLOCKED` / `NOT EXECUTED` | Infra/Segurança |
 
-**Bloqueadores atuais da fase:** acesso SSH/fingerprint não confirmados; controle do provedor bloqueou autenticação; inventário somente leitura completo não realizado; ausência de comprometimento, janela, rollback, snapshot de configuração e segredo seguro ainda não demonstrados. Backup/cópia da origem MySQL/HostGator e de dados ou diretórios não acordados não estão autorizados; somente a cópia local protegida dos diretórios compartilhados formalmente acordados poderá ser considerada em execução futura.
+**Bloqueadores atuais da fase:** somente a porta TCP/22 foi alcançável; handshake/banner SSH, autenticação e fingerprint confiável não foram obtidos; a console permaneceu no Security Check automático; inventário somente leitura completo não realizado; ausência de comprometimento, janela, rollback, snapshot de configuração e segredo seguro ainda não demonstrados. Backup/cópia da origem MySQL/HostGator e de dados ou diretórios não acordados não estão autorizados; somente a cópia local protegida dos diretórios compartilhados formalmente acordados poderá ser considerada em execução futura.
 
 ## 5. Fase 1 — Host e serviços
 

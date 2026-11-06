@@ -11,7 +11,7 @@
 
 Registrar o estado histórico conhecido sobre autenticação e acesso administrativo, delimitar o que não foi comprovado e estabelecer uma sequência segura para eventual preparação privada e reversível da VM. Qualquer preparação depende cumulativamente de acesso administrativo autenticado, identidade do host validada por canal confiável, inventário read-only completo, preservação dos serviços e dados existentes e caminho de recuperação validado. O Gate 2 permanece **CLOSED / NÃO AUTORIZADO / NÃO-WAIVABLE**.
 
-Nenhuma sessão SSH, chamada à API da Hetzner, autenticação na console, instalação, alteração de firewall, alteração de serviços, atualização do sistema ou outra mudança na VM foi realizada.
+Nenhuma sessão SSH, chamada à API da Hetzner, autenticação na console, instalação, alteração de firewall, alteração de serviços, atualização do sistema ou outra mudança na VM foi realizada. A única verificação nova foi uma conexão TCP à porta 22, sem enviar dados de aplicação; ela não constitui handshake SSH nem prova acesso administrativo.
 
 ## 2. Estado e evidências disponíveis
 
@@ -25,6 +25,9 @@ A tabela abaixo separa fatos históricos de lacunas atuais. Uma observação ant
 | 2026-11-05 — horário não informado no handoff | O `sshd` foi observado como `inactive/disabled` em uma inspeção anterior. | A observação é histórica; o estado atual do serviço não foi verificado. |
 | 2026-11-05 — horário não informado no handoff | A tentativa mais recente de console serial expirou. | Não houve confirmação de acesso operacional pela console. |
 | 2026-11-06T08:15:33-03:00 | A navegação via My Browser à console Hetzner abriu controle de acesso do provedor; a verificação automática não concluiu e a visualização expirou em seguida. | Não houve autenticação no painel nem acesso à VM; o estado do host não foi obtido. |
+| 2026-11-06T22:27:53Z | A chave cliente previamente conhecida foi encontrada no sandbox com permissões restritas; não foi carregada em `ssh-agent` e não havia processo/sessão SSH ativo no momento da verificação. | A chave privada não foi lida nem exibida; sua autorização na conta do servidor e o usuário SSH correspondente continuam sem confirmação. |
+| 2026-11-06T18:15:16Z | Uma verificação de alcance TCP `connect_ex` do sandbox Manus à porta 22 foi aceita; nenhuma carga útil foi enviada e o socket foi fechado. | Não houve handshake/banner SSH, leitura de host key, autenticação ou sessão. TCP alcançável não valida `sshd`, usuário, fingerprint nem acesso administrativo. |
+| 2026-11-06T22:23:36Z | My Browser navegou para os detalhes do servidor, mas permaneceu na página automática Security Check; a visualização posterior expirou. | Nenhuma autenticação ou informação da VM foi obtida; o controle do provedor não foi contornado. |
 | 2026-11-06T08:18:02-03:00 — registro desta preparação | Este documento foi elaborado sem acesso à VM. | Não é evidência de estado do servidor, firewall, sistema operacional, usuários, discos ou serviços. |
 
 ### 2.1 O que permanece desconhecido
@@ -103,11 +106,11 @@ O hardening restritivo de usuário/chaves/sudo, SSH, UFW/Fail2ban ou firewall es
 
 ### 4.6 Proibições de migração e publicação
 
-Permanecem proibidos o bypass de acesso, SSH inseguro, alterações de SSH/firewall sem change específico, listener ou porta pública, testes remotos, DNS, `release/`, `current/`, deploy, publicação, servir a aplicação, start/reload de Nginx/PHP-FPM fora do teste controlado de fixture local após os gates ou qualquer enable desses serviços, conexão/configuração/teste funcional do ERP, acesso/cópia/backup do MySQL/HostGator, dados ou uploads preexistentes, schema/migrations/importação, backup externo, cutover e qualquer claim de ação executada.
+Permanecem proibidos o bypass de acesso, SSH inseguro, alterações de SSH/firewall sem change específico, listener ou porta pública, testes remotos de serviços/aplicação/ERP, DNS, `release/`, `current/`, deploy, publicação, servir a aplicação, start/reload de Nginx/PHP-FPM fora do teste controlado de fixture local após os gates ou qualquer enable desses serviços, conexão/configuração/teste funcional do ERP, acesso/cópia/backup do MySQL/HostGator, dados ou uploads preexistentes, schema/migrations/importação, backup externo, cutover e qualquer claim de ação executada. A única checagem remota nesta atualização foi TCP connect à porta 22; ela não inicia o handshake SSH pelo cliente, não valida a host key e não é evidência de serviço ou acesso autenticado.
 
 ## 5. Testes e critérios de aceite
 
-Nenhum teste foi executado nesta tarefa documental. Os itens abaixo são critérios para a preparação autorizada e não reabrem nem dispensam o Gate 2, que permanece **CLOSED / NÃO AUTORIZADO / NÃO-WAIVABLE**:
+Foi executada somente uma checagem TCP de alcance à porta 22, sem iniciar handshake SSH pelo cliente, ler banner/host key, autenticar ou acessar a VM. Nenhum teste de serviço, PostgreSQL, PDO, Nginx/PHP-FPM, ERP ou aplicação foi executado. Os itens abaixo são critérios para a preparação autorizada e não reabrem nem dispensam o Gate 2, que permanece **CLOSED / NÃO AUTORIZADO / NÃO-WAIVABLE**:
 
 - acesso administrativo autenticado, fingerprint confiável comparada por canais independentes, inventário read-only completo, segunda sessão administrativa independente e recuperação validada, sem divergência ou comprometimento;
 - URL do remoto autorizado, SHA de `origin/main`, SHA de `HEAD`, baseline e diff do clone completo verificados, com o clone privado exclusivamente em `source/`;
