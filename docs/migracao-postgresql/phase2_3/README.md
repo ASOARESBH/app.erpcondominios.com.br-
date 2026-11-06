@@ -1,8 +1,8 @@
 # Fase 2.3 — Análise de compatibilidade e riscos
 
-Repositório exclusivo: `ASOARESBH/app.erpcondominios.com.br-`. Baseline de código: `f60739713e6de3f2473b79ecd14a70fd700e5462`. Branch local: `pg/02-3-compatibilidade-riscos`. Origem MySQL/Percona 5.7; destino PostgreSQL definitivo, sem banco criado nesta fase.
+Repositório exclusivo: `ASOARESBH/app.erpcondominios.com.br-`. Baseline de código: `f60739713e6de3f2473b79ecd14a70fd700e5462`. Branch publicada: `pg/02-3-compatibilidade-riscos`, commit `4288185bb65456d682cbf2cce5b3ebab34d4b0e5`. Origem MySQL/Percona 5.7; destino PostgreSQL definitivo, sem banco criado nesta fase.
 
-**Status:** entregáveis de análise produzidos; **reconciliação live não confirmada e Gate 2 fechado**. Não foram alterados dados, schema, APIs, aplicação ou VM. Nenhum SQL de qualidade foi executado. Não houve migration, importação, deploy, commit/push desta fase ou alteração direta de main.
+**Status:** entregáveis de análise produzidos e publicados; **reconciliação live não confirmada e Gate 2 fechado**. Não foram alterados dados, schema, APIs, aplicação ou VM. Nenhum SQL de qualidade foi executado. Não houve migration, importação, deploy ou alteração direta de `main`.
 
 ## Nove entregáveis solicitados
 

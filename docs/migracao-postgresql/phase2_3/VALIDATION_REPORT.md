@@ -45,6 +45,6 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v \
 
 ## Controles preservados
 
-Somente `docs/migracao-postgresql/phase2_3/` recebeu artefatos nesta entrega. O worktree da branch isolada não incorpora pendências herdadas de main. Não há commit/push desta fase. Não foram alterados APIs, aplicação, banco, VM ou produção; nenhum SQL, EXPLAIN, migration, carga ou deploy foi executado.
+Somente `docs/migracao-postgresql/phase2_3/` recebeu artefatos naquela entrega. O worktree da branch isolada não incorporou pendências herdadas de `main`. A documentação foi publicada em `pg/02-3-compatibilidade-riscos`, commit `4288185bb65456d682cbf2cce5b3ebab34d4b0e5`; `main` não foi alterada. Não foram alterados APIs, aplicação, banco, VM ou produção; nenhum SQL, EXPLAIN, migration, carga ou deploy foi executado.
 
 Os checksums cobrem os arquivos da entrega, excluindo o próprio manifesto. Devem ser conferidos após extração com `sha256sum -c artifact_checksums.sha256`. Hashes não equivalem a aprovação de gate nem autorização de operação.

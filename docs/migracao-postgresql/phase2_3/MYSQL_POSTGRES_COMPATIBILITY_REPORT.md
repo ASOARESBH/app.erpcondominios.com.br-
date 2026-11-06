@@ -1,14 +1,14 @@
 # Fase 2.3 — Compatibilidade MySQL → PostgreSQL e riscos
 
-**Resultado:** os nove entregáveis de análise foram produzidos. **Gate 2 fechado/não aprovado:** o catálogo instalado do MySQL de origem não foi reconciliado. PostgreSQL é o destino definitivo já definido pelo usuário; não foi criado banco ou realizado deploy nesta fase.
+**Resultado:** os nove entregáveis de análise foram produzidos. **Gate 2 fechado/não aprovado:** o catálogo instalado do MySQL de origem não foi reconciliado. PostgreSQL é o destino definitivo já definido pelo usuário; não foi criado banco ou realizado deploy nesta fase. Os documentos foram publicados em `pg/02-3-compatibilidade-riscos`, commit `4288185bb65456d682cbf2cce5b3ebab34d4b0e5`.
 
 ## 1. Resumo executivo
 
-A análise combinou o export estrutural autorizado do anexo (7) e revisões estáticas do único repositório autorizado, `ASOARESBH/app.erpcondominios.com.br-`, com baseline de código `f60739713e6de3f2473b79ecd14a70fd700e5462`. A branch local de trabalho é `pg/02-3-compatibilidade-riscos`, derivada da fase anterior sem alteração direta de `main`.
+A análise combinou o export estrutural autorizado do anexo (7) e revisões estáticas do único repositório autorizado, `ASOARESBH/app.erpcondominios.com.br-`, com baseline de código `f60739713e6de3f2473b79ecd14a70fd700e5462`. A branch publicada `pg/02-3-compatibilidade-riscos` deriva da fase anterior sem alteração direta de `main`.
 
 Foram realizadas 53 revisões individuais: 46 objetos únicos da união das estruturas sem tenant e candidatas a views, mais sete triggers. Há sobreposição de 18 objetos entre os grupos de 42 sem tenant e 22 view-like; os grupos não devem ser somados como objetos distintos. Quatro frentes técnicas complementaram tipos, chaves/relações, integridade e segurança, seguidas de síntese e QA.
 
-Os arquivos distinguem export estrutural, análise estática do código, hipótese/recomendação e catálogo live **não confirmado**. Não foram executados SQL, importação, conversão de triggers, migrations ou testes de dados nesta fase. APIs, aplicação, MySQL e VM não foram alterados. Nenhum commit/push desta Fase 2.3 foi realizado.
+Os arquivos distinguem export estrutural, análise estática do código, hipótese/recomendação e catálogo live **não confirmado**. Não foram executados SQL, importação, conversão de triggers, migrations ou testes de dados nesta fase. APIs, aplicação, MySQL e VM não foram alterados. A publicação documental está registrada no commit informado acima; `main` não foi alterada.
 
 ## 2. Cobertura e métricas
 

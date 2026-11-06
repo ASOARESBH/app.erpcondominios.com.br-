@@ -5,7 +5,7 @@
 ## Limites comuns
 
 - Origem analisada: `ASOARESBH/app.erpcondominios.com.br-`; baseline de código: `f60739713e6de3f2473b79ecd14a70fd700e5462`; `source_summary.json` com SHA-256 `44505b1aab8c9a1085453ff3bf4d8a66519700810ac63fcd225693fdefec604a`.
-- O destino PostgreSQL já está definido, mas não há PostgreSQL instalado nesta tarefa. Nenhum SQL foi executado ou trigger instalado; código aplicativo, banco, API, VM e main não foram alterados. A branch local contém somente documentos de análise, sem commit/push desta fase.
+- O destino PostgreSQL já está definido, mas não há PostgreSQL instalado nesta tarefa. Nenhum SQL foi executado ou trigger instalado; código aplicativo, banco, API, VM e `main` não foram alterados. Os documentos foram publicados em `pg/02-3-compatibilidade-riscos`, commit `4288185bb65456d682cbf2cce5b3ebab34d4b0e5`.
 - Não são publicados corpos de definição nem informações sensíveis de segurança, mensagens, credenciais ou chaves. Cada origem é citada como **revisão privada `<objeto>.json` (não versionada)**.
 - `not_replayed` significa somente que o parser não reproduziu um `ALTER` no estado inicial `CREATE`; não significa que a migração não esteja instalada nem revela o estado MySQL live atual.
 - Todo `NEW`/`OLD` com tenant usado na proposta PostgreSQL é melhoria deliberada de segurança e isolamento; não é comportamento legado confirmado. A regra legada é descrita separadamente do escopo seguro proposto.

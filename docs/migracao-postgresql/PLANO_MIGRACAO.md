@@ -1,6 +1,6 @@
 # Plano de migração para PostgreSQL
 
-> **Estado:** documentação de planejamento. Não houve deploy, migration, tentativa de SSH, acesso à VM/ao banco/ao ambiente de produção, importação de dados, alteração de runtime ou alteração do código aplicativo.
+> **Estado:** planejamento e coleta read-only parcial. Não houve deploy, migration, tentativa de SSH, acesso à VM, importação de dados, alteração de runtime ou código aplicativo. Houve consulta histórica somente de metadados e tentativa de reconciliação read-only no phpMyAdmin, sem resultado de catálogo live confirmado.
 >
 > **Fonte oficial:** `ASOARESBH/app.erpcondominios.com.br-`, commit `f60739713e6de3f2473b79ecd14a70fd700e5462`.
 >
@@ -22,7 +22,11 @@ Aprovar versão/extensões PostgreSQL, encoding, timezone, collation, TLS, drive
 
 ### Fase 2 — evidência instalada e qualidade
 
-O catálogo offline atual lê somente schema-only fornecido e classifica statements, tabelas/colunas, tipos candidatos e suboperações; os 489 `ALTER TABLE` ficam explicitamente não reproduzidos, logo não há modelo final. A coleta read-only real obteve somente metadados de servidor e contou 270 objetos na listagem do phpMyAdmin, ainda sem classificação por tipo/DDL. Um SQL recebido depois permanece não classificado: o preflight mínimo encontrou marcadores DML, que podem pertencer a corpos de objetos, e comentário condicional; isso não prova a existência de linhas de dados. Não foi catalogado nem teve valores de linha exibidos. O status e os bloqueios estão em [COLETA_INSTANCIA.md](COLETA_INSTANCIA.md). Obter `tables_ddl.sql` e `objects_ddl.sql` separados em armazenamento privado, reconciliar `SHOW CREATE`, views/rotinas/triggers e ledger, classificar tabelas sem tenant, agregar qualidade sem valores pessoais e obter manifesto de anexos. **Gate 2 continua fechado** até cruzamento contra a instância e decisão de todos os blockers, sem inferir instalação a partir do Git/schema-only. A evidência, owners, aprovadores e critérios de abort/rollback dos Gates 2–5 estão na [matriz de gates](FASE2_IMPLEMENTACAO.md#41-matriz-de-gates-para-avancar-de-fase).
+O catálogo offline aprovado lê o schema-only validado da origem: 270 `CREATE TABLE`, 489 `ALTER TABLE` (746 suboperações), 3.339 colunas iniciais, 514 declarações de chaves/índices em ALTER (240 PK, 70 UNIQUE, 193 INDEX, 11 FK), sete triggers e 232 modificações de coluna. O parser não aplica os ALTERs, portanto esse conjunto não representa estado final instalado. O export não contém `CREATE VIEW`, procedures, functions ou events; a ausência não prova ausência live.
+
+A Fase 2.3 publicou análise estática das 22 candidatas a views, 42 estruturas sem `tenant_id`, sete regras de trigger e riscos/tipos. São propostas estruturais, não catálogo live. Na tentativa da Fase 2.4, a tela do phpMyAdmin indicou formulário incompleto e a interação posterior expirou sem que qualquer resultado de `INFORMATION_SCHEMA`/`SHOW CREATE` fosse confirmado. Não há comparação live suficiente; os dez artefatos Fase 2.4 mostram explicitamente cada campo pendente.
+
+Obter catálogo metadata-only em lotes pequenos/paginados, reconciliar views/rotinas/triggers e ledger, confirmar estado pós-ALTER, classificar as estruturas sem tenant e obter qualidade agregada sem valores pessoais. **Gate 2 continua fechado; não aprovar nem iniciar Fase 3 antes de haver evidência live suficiente e decisão dos riscos P0.** O registro está no [parecer de prontidão](phase2_4/GATE_2_READINESS_REPORT.md) e nas [pendências](PENDENCIAS.md).
 
 ### Fase 3 — conversão descartável
 
