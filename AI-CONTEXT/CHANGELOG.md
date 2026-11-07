@@ -2,6 +2,19 @@
 
 Registro de alterações significativas no ERP.
 
+## [Infraestrutura — Fase 2.5] - 2026-11-07
+### Preparado e verificado
+- Na branch `infra/hetzner-environment-preparation`, executada uma vez a v2 fornecida/aprovada pelo usuário, sem editar o anexo: 22.576 bytes, SHA-256 `5ddf609b108095dfd510a3ff1c0654fbab1549dca3d527e3a3274f01fc8c473a`; código 0 e `FASE_2_5_BASE_OK`.
+- Base Ubuntu com swap 4 GiB, UFW 22/80/443 IPv4/IPv6, Nginx 1.24.0 e PHP 8.3.6/PHP-FPM, PostgreSQL 18.6 PGDG local e banco `erpcondominios` vazio. Fuso `America/Sao_Paulo`; backup Hetzner desativado por decisão informada pelo usuário, não alterado/auditado pelo agente.
+- Autorização específica admitiu Nginx/PHP-FPM ativos/habilitados com catch-all e restart fail2ban, após fingerprint/acesso/inventário e confirmação de segunda sessão/recuperação. Configurações SSH/fail2ban preservadas; não se alterou hardening SSH nem NOPASSWD.
+- Verificação read-only: PostgreSQL apenas loopback/5432; 443 sem listener; catch-all `000`/curl 52 esperado para `444`; somente `00-catchall.conf` habilitado; zero tabelas públicas e zero unidades systemd em falha; PDO técnico separado do ERP passou; `nginx -t`/`php-fpm8.3 -t` passaram. Clone oficial privado no baseline `f60739713e6de3f2473b79ecd14a70fd700e5462`, sem `current`/configuração operacional ERP.
+### Incidente e correção
+- v1 descartada para novas execuções (21.740 bytes, SHA-256 `7dcabbda5cd07e342fdd555eb67d002aa0182f042329400a083f145507bcc90e`): o executor usou `umask 077` para proteger o log e ela foi herdada pelo script; `90-erp.conf` ficou root/0600, ilegível por postgres, causando falha no restart. Parada e diagnóstico read-only respeitados. v2 define `umask 022`, owner/modes explícitos e validação como postgres antes do restart; corrigida a leitura e validado cluster online.
+### Pendências e limites
+- Lint PHP 8.3.6: 349 de 350 arquivos PHP rastreados aprovados; `api/teste_phpmailer.php` tem erro de sintaxe na linha 35, não corrigido. Bug legado `api/controlid_monitor.php: Cannot redeclare fechar_conexao()` informado, não reproduzido por não executar o ERP.
+- Mapear logs, fotos de `api_face_id.php` e `config/firebase/service-account.json` via `api_pwa_central.php` para paths persistentes privados antes do deploy. Tradução dos dez `.htaccess` é template preparado, não homologação de rotas/CORS; grants PostgreSQL são os do script (`CONNECT, TEMPORARY`), sem ajuste avulso.
+- Gate 2/Fase 3 seguem fechados: sem schema/dados/migration de aplicação, servidor MySQL, vhost ERP, TLS/DNS, merge em main ou deploy. V2, cópias Nginx e runbooks em `docs/infraestrutura/hetzner/`; nenhum segredo, IP pessoal ou log bruto incluído.
+
 ## [2.1.26] - 2026-11-05
 ### Adicionado
 - **Chat-In** (menu abaixo de Recursos Humanos): comunicador interno entre usuários do painel e moradores (Portal e app). Botão flutuante + painel lateral fixável/minimizável, página do painel, status online, busca por nome/unidade, histórico permanente, bloqueio, ocultar-se da busca, emojis, push FCM no app com deep link. Detalhes em `AI-CONTEXT/CHATIN.md`. Migration `sql/migration_chatin_mysql57.sql`.

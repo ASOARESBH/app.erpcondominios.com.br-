@@ -1,5 +1,45 @@
 # Escopo, estado e evidências — preparação Hetzner
 
+## Estado vigente — execução específica v2, 07/11/2026
+
+**Status:** `BASE_FASE_2_5_PREPARADA / VERIFICACAO_OK / ERP_NAO_PUBLICADO / GATE_2_CLOSED`.
+
+**Fonte exclusiva:** `ASOARESBH/app.erpcondominios.com.br-`. **Branch:** `infra/hetzner-environment-preparation`. O código privado recebido na VM tem HEAD/origin/main no baseline `f60739713e6de3f2473b79ecd14a70fd700e5462`; a documentação desta preparação não foi mergeada em main nem aplicada ao código do ERP.
+
+### Autorização mais recente e limites
+
+O usuário aprovou somente a execução integral da v2 fornecida, sem editar seu conteúdo, com verificação de tamanho/hash, uma execução e parada em falha. Confirmou segunda sessão administrativa/console de recuperação e permitiu expressamente o reinício previsto do fail2ban, sem editar sua configuração. Fingerprint SSH, autenticação por chave e inventário read-only foram validados antes da preparação.
+
+A decisão específica passou a autorizar Nginx do Ubuntu, PHP 8.3 do Ubuntu, PostgreSQL 18/PGDG, fuso `America/Sao_Paulo`, swap e UFW permitindo 22/80/443 em IPv4/IPv6; Nginx/PHP-FPM ativos/habilitados e catch-all HTTP, sem vhost ERP. Esses limites de base substituem os trechos anteriores que proibiam qualquer listener/autostart. **Não se trata de waiver do Gate 2:** continuam proibidos deploy do ERP, habilitar vhost, criar `current` ou configuração operacional do ERP, emitir TLS, alterar DNS, instalar servidor MySQL, importar dados, criar schema/objetos da aplicação, remover NOPASSWD, mergear main ou iniciar a Fase 3.
+
+Backup Hetzner desativado por decisão informada pelo usuário; nenhuma alteração/auditoria dessa opção foi feita pelo agente. Não houve execução de backup/restore nesta tarefa, nem consulta a linhas do HostGator.
+
+### Executado e verificado
+
+| Item | Evidência sanitizada |
+|---|---|
+| Script | v2 de 22.576 bytes, hash `5ddf609b108095dfd510a3ff1c0654fbab1549dca3d527e3a3274f01fc8c473a`; cópia local/remota verificada; execução única em 21:49:27–21:49:43 UTC, código 0 e `FASE_2_5_BASE_OK` |
+| OS | Ubuntu 24.04.5 LTS, kernel `6.8.0-149-generic`, 4 vCPUs e RAM ~8 GB; swap 4 GiB |
+| Nginx/PHP | Nginx 1.24.0, PHP 8.3.6/PHP-FPM; sintaxe válida; somente catch-all habilitado; 349/350 PHP rastreados aprovados em lint, sem QA funcional |
+| Rede local | UFW ativo deny incoming/allow outgoing, 22/80/443 liberados IPv4/IPv6; listener HTTP público; nenhum listener HTTPS; PostgreSQL apenas loopback |
+| Banco | PostgreSQL 18.6 PGDG, cluster online, `erpcondominios` com zero tabelas públicas; teste PDO técnico isolado passou; `America/Sao_Paulo` |
+| Clone | Completo e privado em `/opt/erpcondominios/source`, origem oficial, baseline presente, árvore limpa; não precisou deploy key |
+| Preservação SSH/fail2ban | Checksums de 167 configurações iguais ao preflight; restart fail2ban autorizado, sem editar hardening/configurações |
+| Ausências verificadas | `current`, configuração operacional ERP e vhost ERP habilitado ausentes; zero unidades systemd em falha |
+
+### Incidente v1 e correção v2
+
+A v1 (`7dcabbda5cd07e342fdd555eb67d002aa0182f042329400a083f145507bcc90e`, 21.740 bytes) foi descartada para execução futura. O executor aplicou `umask 077` ao proteger logs e o script a herdou: `90-erp.conf` foi criado root/0600, ilegível por postgres; reinício falhou. O diagnóstico foi read-only e não houve correção sem autorização. A v2 fixa `umask 022`, aplica owner/modes explícitos e valida como postgres antes de reiniciar; a verificação confirmou conf postgres/0644 e hba postgres/0640, cluster online. Histórico e detalhe: [INSTALACAO_SERVICOS.md](INSTALACAO_SERVICOS.md).
+
+### Ainda não aprovado/executado
+
+Gate 2 permanece **CLOSED/NÃO APROVADO**; não se reconciliou catálogo MySQL live nem se migrou dado/schema. Não há adapter PostgreSQL do ERP ou homologação de autenticação, tenant/RBAC, módulos, relatórios ou uploads. Zero tabelas/PDO `SELECT 1` não comprovam aplicação funcional. Os grants são os do script (`CONNECT, TEMPORARY`), não a política mínima antiga; nenhuma correção avulsa foi realizada. As alegações de tradução fiel dos `.htaccess` não foram homologadas funcionalmente; CORS, paths persistentes e bugs legados estão nas pendências.
+
+Artefatos públicos desta change limitam-se à v2 fornecida, seis arquivos Nginx autorizados e documentação sanitizada. Segredos, IPs pessoais de origem e logs brutos ficam fora do Git. Nginx e tarefas futuras: [CONFIGURACAO_NGINX.md](CONFIGURACAO_NGINX.md).
+
+<details>
+<summary>Histórico preservado: escopo/status de 06/11/2026, anterior à execução específica v2</summary>
+
 **Data de referência:** 06/11/2026
 **Status:** `DRAFT / BLOCKED / NOT_EXECUTED`
 **Classificação:** documentação sanitizada destinada ao repositório oficial público. Não incluir IP, hostname, detalhes de acesso, credenciais, chaves ou evidências operacionais; essas informações permanecem em armazenamento privado.
@@ -53,3 +93,5 @@ Em 06/11/2026, a página oficial do PHP indica que 8.3 está apenas em suporte d
 [2]: https://www.postgresql.org/support/versioning/ "Política de versões PostgreSQL"
 [3]: https://www.postgresql.org/about/news/postgresql-186-1711-1615-1519-1424-and-19-beta-3-released-3365/ "PostgreSQL 18.6 e atualizações de agosto de 2026"
 [4]: https://www.postgresql.org/download/linux/ubuntu/ "Pacotes PostgreSQL para Ubuntu"
+
+</details>

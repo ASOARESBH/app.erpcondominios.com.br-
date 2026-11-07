@@ -1,0 +1,103 @@
+# =============================================================================
+# ERP Condomínios — vhost Nginx (tradução fiel dos 10 .htaccess do repositório)
+# Preparado na Fase 2.5, HABILITADO somente na homologação.
+# __ERP_SERVER_NAMES__ e __ERP_ROOT__ são substituídos na instalação.
+# TLS: adicionado depois pelo certbot (--nginx).
+# =============================================================================
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __ERP_SERVER_NAMES__;
+
+    root  __ERP_ROOT__;
+    index login.html;                         # DirectoryIndex login.html
+    charset utf-8;                            # AddDefaultCharset UTF-8
+    autoindex off;                            # Options -Indexes
+    client_max_body_size 40m;                 # = post_max_size do PHP
+
+    access_log /var/log/nginx/erp_access.log;
+    error_log  /var/log/nginx/erp_error.log warn;
+
+    include snippets/erp-headers.conf;
+
+    # ---- Rotas reescritas (.htaccess raiz, api/controlid, api/controlid/notifications)
+    rewrite ^/(new_uhf_tag|new_user_identified|new_card|new_qrcode|device_is_alive)\.fcgi$ /api/controlid/$1.php last;
+    rewrite ^/api/controlid/(push|result)$              /api/controlid/$1.php               last;
+    rewrite ^/api/controlid/notifications/(dao|door)$   /api/controlid/notifications/$1.php last;
+    rewrite ^/dashboard/?$                              /frontend/layout-base.html?page=dashboard? last;
+    rewrite ^/projetos/?$                               /projetos_publico.php last;
+    rewrite ^/projetos/(\d+)/?$                         /projetos_publico.php?id=$1 last;
+    rewrite "^/projetos/([a-z0-9][a-z0-9-]{2,59})/(\d+)/?$" /projetos_publico.php?tenant_slug=$1&id=$2 last;
+    rewrite "^/projetos/([a-z0-9][a-z0-9-]{2,59})/?$"       /projetos_publico.php?tenant_slug=$1 last;
+
+    # ---- Let's Encrypt
+    location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; default_type text/plain; try_files $uri =404; }
+
+    # ---- uploads/.htaccess: nunca executar script; todo caminho legado vai para a API
+    location ^~ /uploads/ {
+        location ~* \.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$ { return 403; }
+        location ~* "(^|/)(\.env(\..*)?|[^/]*\.(env|ini|log|bak|backup|old|orig|original|save|tmp|sql|dump|sqlite|zip|tar|gz|rar))$" { return 403; }
+        location ~ /\. { return 403; }
+        rewrite ^/uploads/(.+)$ /api/api_arquivos_tenant.php?acao=legado&caminho=uploads/$1 last;
+        return 404;
+    }
+
+    # ---- BLOQUEIOS (ordem importa: regex é avaliada na ordem em que aparece)
+    # .git, .htaccess, .env e qualquer arquivo/pasta oculta
+    location ~ /\. { return 403; }
+    # pastas internas (.htaccess raiz; api/error/.htaccess; config/firebase/.htaccess)
+    location ~* ^/(api/(testeAPI|error)|backup|backups|logs?|storage|tmp|temp|config|deploy)(/|$) { return 403; }
+    # pastas de documentação/ferramentas (não existem no release; defesa extra)
+    location ~* "^/(AI-CONTEXT|md|md |docs|sql|tests|tools|bridge_local|Claude outputs|PHPMailer)(/|$)" { return 403; }
+    # config.php, configuration.php, database.php, db.php, settings.php
+    location ~* "(^|/)(config(\..*)?|configuration|database|db|settings)\.php$" { return 403; }
+    # *debug*, *teste*, *test*, *diagnostico*, *backup*, *corrigida*, *final* .php
+    location ~* "(^|/)([^/]*[_-])?(debug|teste|test|diagnostico|backup|corrigida|final)([_-][a-z0-9]+|_[0-9]+)*\.php$" { return 403; }
+    # .env, .ini, .log, .bak, .sql, .zip etc. (+ .md, defesa extra)
+    location ~* "(^|/)(\.env(\..*)?|[^/]*\.(env|ini|log|bak|backup|old|orig|original|save|tmp|sql|dump|sqlite|zip|tar|gz|rar|md))$" { return 403; }
+    # frontend/.htaccess: nenhum PHP dentro de frontend/
+    location ~* ^/frontend/.*\.php(/|$) { return 403; }
+
+    # ---- PHP da API (api/.htaccess: CORS + OPTIONS 200; suporta PATH_INFO)
+    location ~ ^/api/.+?\.php(/|$) {
+        include snippets/erp-cors-api.conf;
+        if ($request_method = OPTIONS) { return 200; }
+        fastcgi_hide_header Access-Control-Allow-Origin;
+        fastcgi_hide_header Access-Control-Allow-Methods;
+        fastcgi_hide_header Access-Control-Allow-Headers;
+        fastcgi_hide_header Access-Control-Allow-Credentials;
+        try_files $fastcgi_script_name =404;
+        include snippets/erp-php.conf;
+    }
+    # ---- Demais PHP (raiz). Inexistente cai em login.html, como no Apache.
+    location ~ \.php(/|$) {
+        try_files $fastcgi_script_name /login.html;
+        include snippets/erp-php.conf;
+    }
+
+    # ---- frontend/.htaccess: cache
+    location = /frontend/layout-base.html {
+        include snippets/erp-headers.conf;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+    location ~* ^/frontend/.+\.(css|js)$  { include snippets/erp-headers.conf; expires 30d; try_files $uri =404; }
+    location ~* ^/frontend/.+\.(png|jpe?g)$ { include snippets/erp-headers.conf; expires 1y; try_files $uri =404; }
+    location ~* ^/frontend/.+\.html$      { include snippets/erp-headers.conf; expires 1h; try_files $uri =404; }
+
+    # ---- Estáticos: se não existir, 404 (não cai no login)
+    location ~* \.(gif|jpg|jpeg|png|css|js|svg|ico|woff|woff2|ttf|eot|json|xml)$ { try_files $uri =404; }
+
+    # ---- /api/ e /frontend/ sem arquivo: 404 (não cai no login)
+    location /api/ {
+        include snippets/erp-cors-api.conf;
+        if ($request_method = OPTIONS) { return 200; }
+        try_files $uri $uri/ =404;
+    }
+    location /frontend/ { try_files $uri $uri/ =404; }
+
+    # ---- Qualquer outra rota: arquivo, pasta ou login.html (SPA fallback do .htaccess raiz)
+    location / { try_files $uri $uri/ /login.html; }
+}

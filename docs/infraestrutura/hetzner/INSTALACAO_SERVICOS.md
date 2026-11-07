@@ -1,5 +1,62 @@
 # Preparação de serviços — Ubuntu na VM Hetzner
 
+## Execução autorizada e resultado — 07/11/2026
+
+**Status vigente:** `BASE_PREPARADA / VERIFICACAO_READ_ONLY_OK / ERP_NAO_PUBLICADO / GATE_2_CLOSED`.
+
+O usuário autorizou a execução integral e única da v2, confirmou segunda sessão administrativa e console de recuperação, permitiu expressamente o reinício previsto do fail2ban e aprovou as escolhas do script. Acesso SSH com fingerprint comparada e verificação estrita, inventário read-only e pré-checagens já haviam sido obtidos. A autorização específica mais recente admite UFW 22/80/443 IPv4/IPv6 e Nginx/PHP-FPM ativos/habilitados com catch-all; isso substitui somente os limites anteriores de instalação privada sem listener/autostart, **não os gates de migração, conexão do ERP, dados ou deploy**.
+
+### Script e integridade
+
+| Versão | Bytes | SHA-256 | Estado |
+|---|---:|---|---|
+| v1 | 21.740 | `7dcabbda5cd07e342fdd555eb67d002aa0182f042329400a083f145507bcc90e` | Descartada para novas execuções; interrompida no reinício PostgreSQL |
+| [v2 versionada](scripts/fase2_5_base_servidor.sh) | 22.576 | `5ddf609b108095dfd510a3ff1c0654fbab1549dca3d527e3a3274f01fc8c473a` | Verificada no sandbox e na VM; executada uma vez, sem editar o anexo |
+
+A v2 foi executada em 2026-11-07, 21:49:27–21:49:43 UTC. Script/SSH retornaram 0, `tee` retornou 0 e o marcador `FASE_2_5_BASE_OK` foi registrado. Log e evidências operacionais permanecem privados, fora do Git. Não foi necessária deploy key; o clone por HTTPS do repositório oficial terminou.
+
+### Incidente da v1: causa, parada e correção
+
+A v1 parou na linha 374, no reinício `postgresql@18-main`. O diagnóstico read-only confirmou `Permission denied` para `conf.d/90-erp.conf`: proprietário `root:root`, modo `0600`, ilegível por `postgres`.
+
+**Causa atribuída ao executor:** o wrapper de execução aplicou `umask 077` para proteger o log, e o script a herdou na criação de arquivos de serviço. O original v1 não foi editado, mas seu ambiente de execução foi inadequado. Após a falha, não houve correção ou repetição sem nova autorização; somente os comandos de diagnóstico solicitados foram executados.
+
+A v2 fornecida pelo usuário define `umask 022`, aplica proprietários/permissões explícitos, mantém a geração de segredo em escopo restritivo e valida a configuração como `postgres` antes do restart. Na verificação final: `90-erp.conf` pertence a `postgres:postgres`, modo `0644`; `pg_hba.conf`, ao mesmo proprietário, modo `0640`; `postgres -C timezone` retorna `America/Sao_Paulo`. Cluster online e teste PDO confirmam que o bloqueio de leitura foi resolvido.
+
+### Componentes e decisões aprovadas
+
+| Componente | Resultado observado |
+|---|---|
+| OS/kernel | Ubuntu 24.04.5 LTS; `6.8.0-149-generic` |
+| Swap | 4 GiB ativos; sem uso na verificação |
+| UFW | Ativo, entrada deny; allow 22/80/443 em IPv4/IPv6 conforme aprovação específica |
+| Nginx | 1.24.0 do Ubuntu, ativo/habilitado; somente catch-all habilitado |
+| PHP | 8.3.6 do Ubuntu, PHP-FPM ativo/habilitado e extensões do script; 349/350 arquivos rastreados aprovados em lint |
+| PostgreSQL | 18.6, pacote `18.6-1.pgdg24.04+2`, PGDG no Ubuntu 24.04; cluster `18/main` online |
+| Banco e timezone | `erpcondominios`, vazio conforme contagens executadas; `America/Sao_Paulo`; log timezone UTC |
+| Código | Clone completo em `source/` fora do webroot; remoto oficial, HEAD/origin/main `f60739713e6de3f2473b79ecd14a70fd700e5462`, baseline presente e árvore limpa |
+| Backup Hetzner | Desativado por decisão informada pelo usuário; opção do provedor não foi alterada/auditada pelo agente |
+
+### Verificações concluídas
+
+1. `ufw status verbose`: políticas acima. SSH/HTTP possuem listeners públicos; HTTPS/443 não possui listener. `5432` aparece somente em `127.0.0.1` e `::1`.
+2. Catch-all local com Host arbitrário: HTTP `000`, curl saída 52, esperado para conexão encerrada por `444`; somente `00-catchall.conf` em `sites-enabled`.
+3. Banco: zero tabelas em `public` na verificação read-only e zero tabelas não-sistema na checagem do script; PDO isolado executou a consulta técnica do script (`SELECT 1`, timezone e relógio), sem carregar o ERP ou criar objetos de aplicação.
+4. `systemctl --failed`: zero unidades; `nginx -t` e `php-fpm8.3 -t`: sucesso; memória disponível ~7,0 GiB.
+5. Checksums de 167 arquivos de configuração SSH/fail2ban iguais aos anteriores. O fail2ban foi reiniciado por autorização específica; não houve edição de sua configuração nem do hardening SSH.
+6. `current` e configuração operacional do ERP ausentes; nenhuma migration, importação, MySQL servidor, TLS, DNS ou Fase 3 executada.
+
+### Limites e pendências
+
+`FASE_2_5_BASE_OK` comprova somente a base e os testes efetivamente realizados. O script concedeu `CONNECT, TEMPORARY` a `erp_app` e criou `erp_owner NOLOGIN`; não afirmar a política mínima `CONNECT` do runbook antigo como aplicada. Não houve mudança avulsa de privilégios. Revisão de grants, backups locais/restauração, retenção, limites de memória e hardening adicional dependem de tarefas próprias.
+
+PHP lint não é homologação de execução: `api/teste_phpmailer.php` tem erro de sintaxe na linha 35, confirmado e não corrigido; `api/controlid_monitor.php` tem bug legado reportado `Cannot redeclare fechar_conexao()`, não reproduzido porque não se executou o ERP. Mapear logs, fotos de `api_face_id.php` e `config/firebase/service-account.json` via `api_pwa_central.php` para diretórios persistentes em `/var/lib/erpcondominios` antes de deploy. Segredos e service-account nunca entram no Git.
+
+Tradução dos dez `.htaccess` é um template preparado; somente sintaxe/catch-all foram testados, sem homologação das rotas/CORS. Gate 2 continua fechado: sem schema/tabelas/dados de aplicação, sem integração PHP/PostgreSQL do ERP, sem habilitar vhost, `current`, TLS, DNS, merge em main, migração ou cutover.
+
+<details>
+<summary>Histórico preservado: runbook anterior à autorização e execução específica v2</summary>
+
 **Status:** `DRAFT` / `BLOCKED` / `NOT_EXECUTED`
 **Escopo:** preparação de infraestrutura expressamente autorizada na Fase 2.5, condicionada a acesso/fingerprint validados e inventário read-only completo; nenhuma execução é alegada.
 **Baseline consultado:** `f60739713e6de3f2473b79ecd14a70fd700e5462`
@@ -265,3 +322,5 @@ Este arquivo registra o plano autorizado para preparação, mas nenhuma instala�
 [2]: https://www.php.net/supported-versions.php "Versões PHP oficialmente suportadas"
 [3]: https://www.postgresql.org/download/linux/ubuntu/ "Repositório PostgreSQL para Ubuntu"
 [4]: https://www.postgresql.org/about/news/postgresql-186-1711-1615-1519-1424-and-19-beta-3-released-3365/ "Anúncio oficial do PostgreSQL 18.6, 13/08/2026"
+
+</details>

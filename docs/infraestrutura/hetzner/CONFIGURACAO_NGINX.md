@@ -1,5 +1,46 @@
 # Configuração Nginx/PHP-FPM — ERP Condomínios
 
+## Estado vigente — 07/11/2026
+
+**Resultado:** base Nginx/PHP-FPM instalada e validada dentro dos testes executados; **ERP não publicado**. A autorização específica do script v2 substitui, somente para esta preparação, os limites anteriores de ausência de listener/autostart: Nginx/PHP-FPM estão ativos e habilitados, HTTP atende apenas o catch-all, e o vhost ERP continua desabilitado. Gate 2/Fase 3 permanecem fechados.
+
+**Decisão aprovada:** Nginx do Ubuntu (não Apache), PHP 8.3 do Ubuntu, PostgreSQL 18/PGDG e fuso `America/Sao_Paulo`. Foram observados Nginx 1.24.0 e PHP 8.3.6. Backup Hetzner desativado por decisão informada pelo usuário; o agente não alterou nem auditou essa opção no provedor.
+
+### Artefatos instalados e versionados
+
+Os seis arquivos abaixo foram recebidos por leitura dos paths autorizados da VM, sem copiar segredos, e preservados neste diretório de documentação:
+
+| Path Nginx | Cópia versionada |
+|---|---|
+| `conf.d/erp-http.conf` | [nginx/conf.d/erp-http.conf](nginx/conf.d/erp-http.conf) |
+| `snippets/erp-headers.conf` | [nginx/snippets/erp-headers.conf](nginx/snippets/erp-headers.conf) |
+| `snippets/erp-cors-api.conf` | [nginx/snippets/erp-cors-api.conf](nginx/snippets/erp-cors-api.conf) |
+| `snippets/erp-php.conf` | [nginx/snippets/erp-php.conf](nginx/snippets/erp-php.conf) |
+| `sites-available/00-catchall.conf` | [nginx/sites-available/00-catchall.conf](nginx/sites-available/00-catchall.conf) |
+| `sites-available/erpcondominios.conf.template` | [nginx/sites-available/erpcondominios.conf.template](nginx/sites-available/erpcondominios.conf.template) |
+
+Somente `00-catchall.conf` está em `sites-enabled`. Nginx escuta HTTP/80 em IPv4/IPv6; não foi observado listener HTTPS/443. O template usa placeholders; não foram criados `current`, configuração operacional do ERP, domínio, TLS ou DNS.
+
+### Verificações efetivas
+
+- `nginx -t` e `php-fpm8.3 -t`: sucesso. O script também validou sintaticamente uma cópia temporária do template ERP sem habilitá-lo.
+- `curl` local com `Host: x.invalid`: código HTTP `000`, saída 52 (resposta vazia), compatível com o encerramento `444` configurado. Isso é sucesso do critério do catch-all, não erro da preparação.
+- Lint PHP 8.3.6 no clone oficial: 350 arquivos PHP rastreados, 349 aprovados e um erro de sintaxe em `api/teste_phpmailer.php`, linha 35 (`unexpected token "use"`). O arquivo não foi corrigido.
+- Nenhum QA funcional de SPA/API, autenticação, tenant, RBAC, uploads, relatórios, CORS ou tradução de rotas foi executado.
+
+### Tradução dos `.htaccess`: preparada, não homologada
+
+O template fornecido pelo usuário pretende traduzir dez `.htaccess`: rewrites de ControlID/projetos/dashboard, bloqueios, uploads legados via API, cache, headers e CORS. A expressão “tradução fiel/testada” presente no artefato é uma alegação do script recebido, **não uma conclusão de homologação deste trabalho**. Aqui foram verificados somente sintaxe e catch-all. Ordem de locations, PATH_INFO, rewrites, fallback, autorização de arquivos e a origem CORS literal devem ser comparados funcionalmente com o código antes de habilitar o ERP.
+
+### Pendências de deploy
+
+Mapear diretórios graváveis persistentes fora do código em `/var/lib/erpcondominios`: logs, fotos utilizadas por `api_face_id.php` e `config/firebase/service-account.json` provisionado por `api_pwa_central.php`. Não copiar ou versionar service-account/segredos. `api/controlid_monitor.php` tem incidente legado reportado `Cannot redeclare fechar_conexao()`; não foi executado nem corrigido nesta preparação. Lint não detecta todos os erros de execução.
+
+O incidente da umask v1, a correção v2 e as verificações do PostgreSQL estão em [INSTALACAO_SERVICOS.md](INSTALACAO_SERVICOS.md). A autorização corrente e o estado consolidado estão em [ESCOPO_E_STATUS.md](ESCOPO_E_STATUS.md).
+
+<details>
+<summary>Histórico preservado: planejamento e restrições anteriores, substituídos pela autorização específica v2 onde expressamente indicado acima</summary>
+
 **Status atual:** `DRAFT / BLOCKED / NOT_EXECUTED` — execução bloqueada porque acesso autenticado, fingerprint confiável, inventário read-only completo, segunda sessão administrativa independente e mecanismo de recuperação ainda não foram validados.
 **Gate 2:** `CLOSED / NÃO AUTORIZADO / NÃO-WAIVABLE` para migração/integração; não bloqueia a preparação local condicionada da Fase 2.5.
 **Escopo autorizado condicionalmente (Fase 2.5):** instalação/configuração de Nginx/PHP-FPM após os gates técnicos cumulativos; hardening restritivo também somente após esses gates, dentro desta autorização condicional e sem autorização extra; teste de sintaxe e fixture local permitidos, sem serving externo do ERP.
@@ -174,3 +215,5 @@ Não são testes desta fase: SPA, API, sessão, uploads, CORS, headers, exposiç
 - PostgreSQL local explicitamente vazio e teste separado PHP/PDO_PGSQL `SELECT 1`, sem conexão/configuração/teste funcional do ERP.
 - É proibido acessar, copiar ou fazer backup do MySQL/HostGator e de suas linhas/dados reais, usar uploads preexistentes não acordados, criar schema definitivo, executar migrations, fazer importação, backup externo, cutover, deploy, publicação/serving externo ou listener público. Hardening de SSH/firewall somente após os cinco gates técnicos; dentro da autorização condicional da Fase 2.5, sem autorização extra. Não são proibidos o backup/restore local do banco vazio nem a cópia protegida de diretórios compartilhados explicitamente acordados, desde que preservada a origem; sem paths acordados, nenhuma cópia deve ser feita.
 - Nenhuma configuração foi aplicada; portanto, não há resultado de teste, reload, endpoint, serviço ou estado atual a reportar.
+
+</details>
