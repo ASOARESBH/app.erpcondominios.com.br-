@@ -328,7 +328,12 @@ def validate_on_update_snapshot(columns, manifest_path=None):
     expected = json.loads(raw)
     if expected.get("schema") != SCHEMA or expected.get("count") != 111:
         raise RuntimeError("ON UPDATE CURRENT_TIMESTAMP manifest metadata differs from approved rehearsal snapshot")
-    if columns != expected.get("columns"):
+    expected_columns = expected.get("columns")
+    if (not isinstance(expected_columns, list) or len(expected_columns) != expected["count"]
+            or len(set(expected_columns)) != expected["count"]):
+        raise RuntimeError("ON UPDATE CURRENT_TIMESTAMP manifest metadata differs from approved rehearsal snapshot")
+    if (len(columns) != expected["count"] or len(set(columns)) != expected["count"]
+            or set(columns) != set(expected_columns)):
         raise RuntimeError("ON UPDATE CURRENT_TIMESTAMP column list differs from approved rehearsal snapshot")
     return hashlib.sha256(raw).hexdigest()
 

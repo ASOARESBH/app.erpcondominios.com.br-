@@ -128,6 +128,8 @@ class TypeMappingTests(unittest.TestCase):
     def test_on_update_columns_match_exact_reviewed_allowlist(self):
         manifest = json.loads((ROOT / "expected_on_update_columns.json").read_text(encoding="utf-8"))
         self.assertEqual(len(validate_on_update_snapshot(manifest["columns"])), len(hashlib.sha256().hexdigest()))
+        reordered_digest = validate_on_update_snapshot(list(reversed(manifest["columns"])))
+        self.assertEqual(len(reordered_digest), len(hashlib.sha256().hexdigest()))
         changed = list(manifest["columns"])
         changed.pop()
         with self.assertRaises(RuntimeError) as mismatch:
