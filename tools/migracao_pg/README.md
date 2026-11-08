@@ -32,6 +32,8 @@ O modo pós-FK repete somente a reconciliação sobre o target existente. A comp
 
 As 11 assinaturas de FK são verificadas contra allowlist exata. Neste snapshot, somente três pares têm tipos incompatíveis: `aplicativos_versoes.aplicativo_id` e `moradores_anexos.morador_id` passam de `integer` para `bigint` com `CHECK` preservando o domínio MySQL signed INT; `rbac_auditoria.sessao_id` passa de `numeric(20,0)` para `bigint` somente após confirmar novamente 791 linhas e zero nulos, frações, negativos ou valores fora da faixa signed. A regeneração do catálogo e comparação de DDL permitem somente essas diferenças; os três `ALTER TYPE`, os checks e as 11 FKs são aplicados por `psql -1` como bundle atômico. Isso não define a regra da migração final nem aceita valores unsigned fora da faixa signed.
 
+A reconciliação canonicaliza somente os aliases equivalentes de `format_type` (`character varying(n)` → `varchar(n)` e `character(n)` → `char(n)`), preservando rigorosamente o typmod; diferenças de comprimento ou de tipo continuam bloqueando.
+
 ## Artefatos e privacidade
 
 - Logs e resultados da execução: `/var/lib/erp-pg-rehearsal/v9/runs/`, owner `postgres`, diretórios `0700`, arquivos `0600`.

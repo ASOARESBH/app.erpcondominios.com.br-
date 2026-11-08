@@ -22,7 +22,7 @@ from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, ti
                      EXPECTED_FK_TYPE_NORMALIZATIONS, normalize_fk_types, tenant_contract,
                      text_nul_counts_for_table, validate_sensitive_column_defaults)
 from reconcile import (numeric_equal, sequence_status, verify_destination_fk, verify_destination_fk_types,
-                       verify_signed_integer_range_checks)
+                       verify_signed_integer_range_checks, normalize_postgres_type)
 from run_migration import (APPROVED_POST_FK_RUN_ID, APPROVED_POST_FK_SOURCE_COMMIT,
                            APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT,
                            apply_sql, as_postgres, run_reconciliation_step, run_step,
@@ -801,6 +801,28 @@ class TypeMappingTests(unittest.TestCase):
         pg.cursor.return_value.__enter__.return_value.fetchone.return_value = ("integer", "bigint")
         with self.assertRaisesRegex(RuntimeError, "column types differ"):
             verify_destination_fk_types(pg, fks[0], columns)
+
+    def test_postgres_type_aliases_normalize_without_losing_typmod(self):
+        self.assertEqual(normalize_postgres_type("character varying(128)"), "varchar(128)")
+        self.assertEqual(normalize_postgres_type("character(12)"), "char(12)")
+        self.assertEqual(normalize_postgres_type("character varying"), "varchar")
+        self.assertIsNone(normalize_postgres_type(None))
+
+    def test_fk_type_verification_accepts_equivalent_postgres_varchar_aliases(self):
+        columns = {
+            "child": [{"name": "external_key", "pg_type": "varchar(128)"}],
+            "parent": [{"name": "external_key", "pg_type": "varchar(128)"}],
+        }
+        fk = {"table": "child", "columns": [{"column": "external_key", "ref_table": "parent",
+                                               "ref_column": "external_key", "position": 1}]}
+        pg = MagicMock()
+        pg.cursor.return_value.__enter__.return_value.fetchone.return_value = (
+            "character varying(128)", "character varying(128)")
+        verify_destination_fk_types(pg, fk, columns)
+        pg.cursor.return_value.__enter__.return_value.fetchone.return_value = (
+            "character varying(129)", "character varying(128)")
+        with self.assertRaisesRegex(RuntimeError, "column types differ"):
+            verify_destination_fk_types(pg, fk, columns)
 
     def test_zero_dates(self):
         self.assertTrue(zero_date("0000-00-00"))

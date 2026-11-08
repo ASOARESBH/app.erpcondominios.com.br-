@@ -334,13 +334,25 @@ def verify_destination_fk(pg, fk):
     return bool(row[1])
 
 
+def normalize_postgres_type(type_name):
+    if type_name is None:
+        return None
+    value = type_name.strip().lower()
+    for source, target in (("character varying", "varchar"), ("character", "char")):
+        if value == source or value.startswith(source + "("):
+            return target + value[len(source):]
+    return value
+
+
 def verify_destination_fk_types(pg, fk, columns):
     ordered = sorted(fk["columns"], key=lambda item: item["position"])
     with pg.cursor() as cur:
         for item in ordered:
-            source_expected = next(c["pg_type"] for c in columns[fk["table"]] if c["name"] == item["column"])
-            referenced_expected = next(c["pg_type"] for c in columns[item["ref_table"]]
-                                      if c["name"] == item["ref_column"])
+            source_expected = normalize_postgres_type(
+                next(c["pg_type"] for c in columns[fk["table"]] if c["name"] == item["column"]))
+            referenced_expected = normalize_postgres_type(
+                next(c["pg_type"] for c in columns[item["ref_table"]]
+                     if c["name"] == item["ref_column"]))
             cur.execute(
                 "SELECT (SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
                 "WHERE a.attrelid=%s::regclass AND a.attname=%s AND a.attnum>0 AND NOT a.attisdropped),"
@@ -350,6 +362,8 @@ def verify_destination_fk_types(pg, fk, columns):
                  f'"erp"."{item["ref_table"]}"', item["ref_column"]),
             )
             source_actual, referenced_actual = cur.fetchone()
+            source_actual = normalize_postgres_type(source_actual)
+            referenced_actual = normalize_postgres_type(referenced_actual)
             if (source_actual != source_expected or referenced_actual != referenced_expected
                     or source_actual != referenced_actual):
                 raise RuntimeError("destination foreign key column types differ from the normalized contract")
