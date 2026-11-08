@@ -491,6 +491,29 @@ def validate_resume_history(records, previous_commit: str, batch_size: int = 100
         raise RuntimeError("accepted runs cannot be resumed")
 
 
+def validate_resume_table_inventory(metrics, legacy_tables, legacy_classification):
+    if (not isinstance(metrics, list) or len(metrics) != 270
+            or not isinstance(legacy_tables, list) or not isinstance(legacy_classification, dict)):
+        raise RuntimeError("resume table inventory is malformed")
+    names = [item.get("table") if isinstance(item, dict) else None for item in metrics]
+    if (any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_]+", name) for name in names)
+            or len(set(names)) != 270
+            or any(not isinstance(name, str) for name in legacy_tables)
+            or len(set(legacy_tables)) != len(legacy_tables)
+            or not set(legacy_classification).issubset(set(names))
+            or not set(legacy_tables).issubset(set(names))):
+        raise RuntimeError("resume table inventory is inconsistent")
+    legacy_from_classification = {
+        name for name, decision in legacy_classification.items()
+        if isinstance(decision, dict) and decision.get("schema") == "legado"
+    }
+    if legacy_from_classification != set(legacy_tables):
+        raise RuntimeError("resume legacy classification is inconsistent")
+    if any(not isinstance(item.get("source_rows"), int) or item["source_rows"] < 0 for item in metrics):
+        raise RuntimeError("resume table row metrics are malformed")
+    return names
+
+
 def load_resume_artifacts(resume_run_id: str, previous_commit: str, batch_size: int, postgres_uid: int):
     if not re.fullmatch(r"\d{8}T\d{6}Z", resume_run_id):
         raise RuntimeError("resume run identifier is invalid")
@@ -554,12 +577,8 @@ def load_resume_artifacts(resume_run_id: str, previous_commit: str, batch_size: 
             or loader_summary.get("dst_ambiguous_local_times")
             or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")):
         raise RuntimeError("resume load evidence does not meet the approved v9 contract")
-    names = [item.get("table") for item in metrics]
-    if (any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_]+", name) for name in names)
-            or len(set(names)) != 270 or set(names) != set(legacy_classification)
-            or any(name not in names for name in legacy_tables)
-            or any(not isinstance(item.get("source_rows"), int) or item["source_rows"] < 0 for item in metrics)
-            or sum(item.get("source_rows", -1) for item in metrics) != loader_summary.get("source_rows_loaded")):
+    validate_resume_table_inventory(metrics, legacy_tables, legacy_classification)
+    if sum(item["source_rows"] for item in metrics) != loader_summary.get("source_rows_loaded"):
         raise RuntimeError("resume table metrics are malformed")
     return run_dir, log, catalog_summary, loader_summary, routine_snapshot
 

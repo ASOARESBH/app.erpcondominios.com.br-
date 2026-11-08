@@ -21,8 +21,8 @@ from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, ti
                      text_nul_counts_for_table, validate_sensitive_column_defaults)
 from reconcile import numeric_equal, sequence_status, verify_destination_fk
 from run_migration import (APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT, as_postgres, run_step,
-                           validate_resume_history, verify_baseline_ancestry, verify_resume_code_ancestry,
-                           verify_resume_target)
+                           validate_resume_history, validate_resume_table_inventory,
+                           verify_baseline_ancestry, verify_resume_code_ancestry, verify_resume_target)
 
 
 class TypeMappingTests(unittest.TestCase):
@@ -171,6 +171,15 @@ class TypeMappingTests(unittest.TestCase):
         with patch("run_migration.subprocess.run", side_effect=outputs):
             with self.assertRaisesRegex(RuntimeError, "counts differ"):
                 verify_resume_target("erp_ensaio_v9", summary, loader)
+
+    def test_resume_table_inventory_accepts_partial_legacy_candidate_map(self):
+        metrics = [{"table": f"t{index}", "source_rows": 0} for index in range(270)]
+        classification = {f"t{index}": {"schema": "legado" if index < 8 else "erp"}
+                          for index in range(12)}
+        legacy_tables = [f"t{index}" for index in range(8)]
+        self.assertEqual(len(validate_resume_table_inventory(metrics, legacy_tables, classification)), 270)
+        with self.assertRaisesRegex(RuntimeError, "legacy classification is inconsistent"):
+            validate_resume_table_inventory(metrics, legacy_tables[:-1], classification)
 
     def test_resume_code_requires_partial_run_commit_as_ancestor(self):
         with patch("run_migration.subprocess.run") as run:
