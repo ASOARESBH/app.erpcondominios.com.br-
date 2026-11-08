@@ -29,7 +29,7 @@ class TypeMappingTests(unittest.TestCase):
 
     def test_backup_candidate_snapshot_matches_approved_catalog(self):
         self.assertEqual(EXPECTED_BACKUP_CANDIDATES, {
-            "avaliacoes_backup", "mt_os_chamados_id_zero_backup", "mt_protocolos_id_zero_backup",
+            "avaliacoes_backup", "documentos_departamentos_migrado_bkp", "mt_os_chamados_id_zero_backup", "mt_protocolos_id_zero_backup",
             "rbac_sessoes_bkp_ids_a_partir_15_20261027", "rbac_usuario_grupos_bkp_ids_a_partir_15_20261027",
             "rbac_usuario_permissoes_bkp_ids_a_partir_15_20261027", "sessoes_usuarios_bkp_ids_a_partir_15_20261027",
             "usuarios_bkp_duplicata_admin_20261027", "usuarios_bkp_ids_a_partir_15_20261027",

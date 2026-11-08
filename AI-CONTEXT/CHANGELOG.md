@@ -8,7 +8,7 @@ Registro de alterações significativas no ERP.
 ### Validado/limites
 - Gate 2 aprovado por André em 08/11/2026 exclusivamente para fins de conversão do catálogo do snapshot (270 tabelas, 3.339 colunas); não é aprovação de equivalência pós-snapshot, deploy, DNS ou cutover.
 - Suíte sintética local cobre tipos, datas/UTC→hora civil, zero-date, ENUM/SET, FKs, sequences, roles e regras fail-closed. A carga v9 e reconciliação integral permanecem como gate obrigatório antes de homologação; produção segue MySQL.
-- A primeira execução do runner parou no catálogo antes de criar o database PostgreSQL porque a allowlist esperava uma tabela de backup ausente no snapshot; a lista foi corrigida para as 11 tabelas existentes e os 44 testes sintéticos passaram. Nenhuma carga foi iniciada nessa tentativa.
+- As tentativas do runner foram bloqueadas antes de criar o database: um resumo agregado anterior omitia uma tabela candidata a backup. Consulta metadata-only atual de INFORMATION_SCHEMA confirmou 12 candidatas; a allowlist e o teste foram alinhados ao catálogo atual. Nenhum cluster foi iniciado e nenhuma carga PostgreSQL ocorreu nas tentativas bloqueadas.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado
@@ -319,3 +319,4 @@ Registro de alterações significativas no ERP.
 - QR de tenant diferente é recusado com HTTP 403, e a API revalida vínculo do vigilante, agenda, janela de ciclo e índice de duplicidade antes da gravação.
 - Validadas sintaxe PHP, regras de ciclo/SLA, análise direcionada dos arquivos Flutter e testes Flutter. O detalhe técnico e roteiro pós-deploy estão em `ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md`.
 - A primeira execução do runner parou no catálogo antes de criar o database PostgreSQL porque a allowlist esperava uma tabela de backup ausente no snapshot; a lista foi corrigida para as 11 tabelas existentes. Os 45 testes sintéticos passaram, e o runner registra códigos estáticos de falha sem mensagens brutas. Nenhuma carga foi iniciada nas tentativas bloqueadas.
+- As tentativas do runner foram bloqueadas antes de criar o database: um resumo agregado anterior omitia uma tabela candidata a backup. Consulta metadata-only atual de INFORMATION_SCHEMA confirmou 12 candidatas; a allowlist e o teste foram alinhados ao catálogo atual. Nenhum cluster foi iniciado e nenhuma carga PostgreSQL ocorreu nas tentativas bloqueadas.
