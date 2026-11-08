@@ -294,10 +294,10 @@ def test_checklist(cur, catalog):
     cur.execute("SELECT COUNT(*),COALESCE(SUM(km_acumulado),0),MAX(km_acumulado) "
                 "FROM erp.checklist_km_acumulado WHERE tenant_id=%s AND veiculo_id=%s AND categoria=%s",
                 (FIXTURE_TENANT, FIXTURE_VEICULO, category))
-    assert_equal(cur.fetchone(), (3, 75, 25))
-    cur.execute("SELECT ultimo_checklist_id FROM erp.checklist_km_acumulado WHERE id=%s AND tenant_id=%s",
+    assert_equal(cur.fetchone(), (3, 75, 30))
+    cur.execute("SELECT km_acumulado,ultimo_checklist_id FROM erp.checklist_km_acumulado WHERE id=%s AND tenant_id=%s",
                 (seed["id"], FIXTURE_TENANT))
-    assert_equal(cur.fetchone()[0], collision["id"])
+    assert_equal(cur.fetchone(), (25, collision["id"]))
     cur.execute("SELECT COUNT(*) FROM erp.checklist_km_acumulado WHERE tenant_id=%s AND categoria=%s",
                 (FIXTURE_TENANT, category))
     assert_equal(cur.fetchone()[0], 3)
