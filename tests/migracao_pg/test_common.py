@@ -42,6 +42,18 @@ class TypeMappingTests(unittest.TestCase):
                          "source_collation_mismatch")
         self.assertEqual(catalog_error_code(RuntimeError("sensitive unapproved value")), "unclassified")
 
+    def test_catalog_error_codes_cover_enum_and_on_update_gates(self):
+        cases = {
+            "ENUM outside-domain count could not be reconciled to values": "enum_domain_count_mismatch",
+            "ENUM value is not valid UTF-8": "enum_value_not_utf8",
+            "NULL encountered while inspecting ENUM domain": "enum_null_member",
+            "ON UPDATE CURRENT_TIMESTAMP column list differs from approved rehearsal snapshot": "on_update_columns_mismatch",
+            "invalid MySQL client configuration": "mysql_client_config_invalid",
+        }
+        for message, code in cases.items():
+            with self.subTest(code=code):
+                self.assertEqual(catalog_error_code(RuntimeError(message)), code)
+
     def test_routine_signature_preserves_dtd_identifier_without_numeric_coercion(self):
         routine = {"parameters": [
             {"position": 1, "name": "p_tabela", "mode": "IN", "type": "varchar", "dtd": "varchar(64)"},
