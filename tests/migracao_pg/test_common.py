@@ -1,8 +1,10 @@
 import sys
 import json
 import hashlib
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -17,7 +19,7 @@ from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, ti
                      expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
                      verified_routine_snapshot, EXPECTED_BACKUP_CANDIDATES, text_nul_counts_for_table)
 from reconcile import numeric_equal, sequence_status, verify_destination_fk
-from run_migration import BASELINE_MAIN_COMMIT, verify_baseline_ancestry
+from run_migration import BASELINE_MAIN_COMMIT, run_step, verify_baseline_ancestry
 
 
 class TypeMappingTests(unittest.TestCase):
@@ -38,6 +40,20 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(catalog_error_code(RuntimeError("source column collation inventory differs from approved rehearsal snapshot")),
                          "source_collation_mismatch")
         self.assertEqual(catalog_error_code(RuntimeError("sensitive unapproved value")), "unclassified")
+
+    def test_runner_logs_only_static_catalog_error_code(self):
+        proc = MagicMock()
+        proc.stdout = iter(["CATALOG_GENERATION_FAILED type=RuntimeError code=source_collation_mismatch\n"])
+        proc.wait.return_value = 1
+        proc.returncode = 1
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "run.jsonl"
+            with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, "phase catalog failed"):
+                    run_step(["catalog"], "catalog", log, whitelist_json=True)
+            record = json.loads(log.read_text(encoding="utf-8"))
+        self.assertEqual(record["error_code"], "source_collation_mismatch")
+        self.assertEqual(record["error_type"], "RuntimeError")
 
     def test_nul_aggregate_counts_text_without_values(self):
         columns = [{"name": "descricao", "data_type": "text"}, {"name": "titulo", "data_type": "varchar"}]

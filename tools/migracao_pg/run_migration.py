@@ -323,7 +323,7 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
     elapsed = round(time.monotonic() - started, 3)
     if return_code:
         emit_log(log, "step_failed", phase=phase, exit_code=proc.returncode,
-                 error_type=error_type, sqlstate=sqlstate, elapsed_seconds=elapsed)
+                 error_type=error_type, error_code=error_code, sqlstate=sqlstate, elapsed_seconds=elapsed)
         raise RuntimeError(f"phase {phase} failed; see private aggregate log")
     emit_log(log, "step_complete", phase=phase, exit_code=0, elapsed_seconds=elapsed)
     print(json.dumps({"event": "phase_complete", "phase": phase, "elapsed_seconds": elapsed}), flush=True)
