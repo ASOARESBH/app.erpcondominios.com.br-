@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import secrets
 import signal
 import sys
@@ -23,6 +24,22 @@ FIXTURE_MORADOR = -(1_000_000_000 + secrets.randbelow(1_000_000_000))
 FIXTURE_VISITANTE = -(1_000_000_000 + secrets.randbelow(1_000_000_000))
 FIXTURE_VEICULO = -(1_000_000_000 + secrets.randbelow(1_000_000_000))
 FIXTURE_OPERADOR = -(1_000_000_000 + secrets.randbelow(1_000_000_000))
+ACTIVE_TEST = "harness_preflight"
+SAFE_TEST_LABELS = {
+    "harness_preflight", "on_update_timestamp_semantics", "after_qrcode_token_insert",
+    "after_validacao_dispositivo_insert", "trg_alerta_estoque_baixo", "trg_atualizar_km_acumulado",
+    "tr_dependente_ativar_veiculos", "tr_dependente_inativar_veiculos", "tr_dependente_deletar_veiculos",
+    "corrigir_moradores_anexos_tenant", "mt_adicionar_coluna",
+}
+
+
+def trigger_failure_marker(test_label, exc):
+    if test_label not in SAFE_TEST_LABELS:
+        test_label = "harness_preflight"
+    sqlstate = getattr(exc, "sqlstate", None)
+    if not isinstance(sqlstate, str) or not re.fullmatch(r"[0-9A-Z]{5}", sqlstate):
+        sqlstate = "none"
+    return f"TRIGGER_TEST_FAILED type={type(exc).__name__} code={test_label} sqlstate={sqlstate}"
 
 
 def fixture_token():
@@ -440,6 +457,7 @@ def handle_signal(signum, frame):
 
 
 def main():
+    global ACTIVE_TEST
     ap = argparse.ArgumentParser()
     ap.add_argument("--mysql-config", required=True)
     ap.add_argument("--repo-root", required=True)
@@ -485,6 +503,7 @@ def main():
                 verify_fixture_sentinels(cur)
                 print(json.dumps({"test": "erp_app_minimum_privileges", "status": "PASS"}), flush=True)
                 for index, (label, fn, role) in enumerate(tests):
+                    ACTIVE_TEST = label
                     savepoint = f"sp_v9_test_{index}"
                     cur.execute(sql.SQL("SAVEPOINT {}").format(sql.Identifier(savepoint)))
                     cur.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
@@ -516,5 +535,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(f"TRIGGER_TEST_FAILED type={type(exc).__name__}", file=sys.stderr, flush=True)
+        print(trigger_failure_marker(ACTIVE_TEST, exc), file=sys.stderr, flush=True)
         raise SystemExit(1)

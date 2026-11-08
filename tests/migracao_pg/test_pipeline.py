@@ -8,9 +8,20 @@ sys.path.insert(0, str(ROOT))
 
 from loader import TextualNulError, check_text_nul, convert_value
 from reconcile import fk_metrics_for_table, hash_divergence
+from trigger_harness import trigger_failure_marker
 
 
 class LoaderValueTests(unittest.TestCase):
+    def test_trigger_failure_marker_contains_only_sanitized_fields(self):
+        class SyntheticDatabaseError(Exception):
+            sqlstate = "42601"
+
+        marker = trigger_failure_marker("trg_alerta_estoque_baixo", SyntheticDatabaseError("SQL includes a value"))
+        self.assertEqual(marker, "TRIGGER_TEST_FAILED type=SyntheticDatabaseError code=trg_alerta_estoque_baixo sqlstate=42601")
+        self.assertNotIn("value", marker)
+        self.assertEqual(trigger_failure_marker("unexpected", Exception("secret")),
+                         "TRIGGER_TEST_FAILED type=Exception code=harness_preflight sqlstate=none")
+
     def test_business_trigger_uses_verified_primary_key_conflict_target(self):
         business_sql = (ROOT / "business_objects.sql").read_text(encoding="utf-8")
         self.assertIn("ON CONFLICT (id) DO UPDATE", business_sql)
