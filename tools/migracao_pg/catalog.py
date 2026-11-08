@@ -439,7 +439,7 @@ def text_nul_counts_for_table(conn, table, columns):
     json_cols = [c for c in columns if c["data_type"] == "json"]
     result = {}
     if textual:
-        expressions = [f"SUM(CASE WHEN LOCATE(CHAR(0),{mysql_qi(c['name'])}) > 0 THEN 1 ELSE 0 END)"
+        expressions = [f"SUM(CASE WHEN INSTR(BINARY {mysql_qi(c['name'])}, 0x00) > 0 THEN 1 ELSE 0 END)"
                        for c in textual]
         values = query(conn, f"SELECT {', '.join(expressions)} FROM {mysql_qi(table)}")[0]
         result.update({f"{table}.{col['name']}": int(count) for col, count in zip(textual, values, strict=True)

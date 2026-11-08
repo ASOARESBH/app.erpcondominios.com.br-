@@ -103,8 +103,20 @@ class TypeMappingTests(unittest.TestCase):
             counts = text_nul_counts_for_table(object(), "fixture", columns)
         self.assertEqual(counts, {"fixture.descricao": 2, "fixture.titulo": 1})
         query_sql = query_mock.call_args.args[1]
-        self.assertIn("LOCATE(CHAR(0)", query_sql)
+        self.assertIn("INSTR(BINARY `descricao`, 0x00)", query_sql)
+        self.assertIn("INSTR(BINARY `titulo`, 0x00)", query_sql)
+        self.assertNotIn("LOCATE(CHAR(0)", query_sql)
         self.assertIn("`titulo`", query_sql)
+
+    def test_binary_nul_detector_ignores_collation_ignorables_without_nul_bytes(self):
+        ignorable = "\u200b".encode("utf-8")
+        self.assertNotIn(b"\x00", ignorable)
+        with patch("catalog.query", return_value=[(0,)]) as query_mock:
+            counts = text_nul_counts_for_table(
+                object(), "fixture", [{"name": "descricao", "data_type": "varchar"}]
+            )
+        self.assertEqual(counts, {})
+        self.assertIn("INSTR(BINARY `descricao`, 0x00)", query_mock.call_args.args[1])
 
     def test_json_nul_aggregate_parses_json_strings_without_persisting_values(self):
         conn = MagicMock()
