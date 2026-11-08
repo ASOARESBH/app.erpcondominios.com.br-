@@ -2,13 +2,14 @@ import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock, call
 
 ROOT = Path(__file__).resolve().parents[2] / "tools" / "migracao_pg"
 sys.path.insert(0, str(ROOT))
 
 from loader import TextualNulError, check_text_nul, convert_value
 from reconcile import fk_metrics_for_table, hash_divergence
-from trigger_harness import trigger_failure_marker
+from trigger_harness import reset_fixture_sequence, trigger_failure_marker
 
 
 class LoaderValueTests(unittest.TestCase):
@@ -26,6 +27,20 @@ class LoaderValueTests(unittest.TestCase):
         source = Path(__file__).with_name("trigger_harness.py").read_text(encoding="utf-8")
         self.assertIn("LIKE '%%ZERADO%%'", source)
         self.assertIn("LIKE '%%abaixo do estoque mínimo%%'", source)
+
+    def test_fixture_sequence_reset_runs_as_postgres_then_restores_app_role(self):
+        cursor = MagicMock()
+        reset_fixture_sequence(cursor, "erp.fixture_id_seq", -17)
+        self.assertEqual(cursor.execute.call_args_list, [
+            call("RESET ROLE"),
+            call("SELECT setval(%s::regclass,%s,false)", ("erp.fixture_id_seq", -17)),
+            call("SET LOCAL ROLE erp_app"),
+        ])
+        failing_cursor = MagicMock()
+        failing_cursor.execute.side_effect = [None, RuntimeError("synthetic"), None]
+        with self.assertRaisesRegex(RuntimeError, "synthetic"):
+            reset_fixture_sequence(failing_cursor, "erp.fixture_id_seq", -17)
+        self.assertEqual(failing_cursor.execute.call_args_list[-1], call("SET LOCAL ROLE erp_app"))
 
     def test_business_trigger_uses_verified_primary_key_conflict_target(self):
         business_sql = (ROOT / "business_objects.sql").read_text(encoding="utf-8")

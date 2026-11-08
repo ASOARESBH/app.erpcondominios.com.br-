@@ -46,6 +46,14 @@ def fixture_token():
     return "v9qa_" + secrets.token_hex(8)
 
 
+def reset_fixture_sequence(cur, sequence_name, value):
+    cur.execute("RESET ROLE")
+    try:
+        cur.execute("SELECT setval(%s::regclass,%s,false)", (sequence_name, value))
+    finally:
+        cur.execute("SET LOCAL ROLE erp_app")
+
+
 def next_pk(cur, table, cols, indexes):
     pk = indexes.get(table, {}).get("PRIMARY", [])
     values = {}
@@ -276,7 +284,7 @@ def test_checklist(cur, catalog):
     sequence_name = cur.fetchone()[0]
     if not sequence_name:
         raise RuntimeError("checklist identity sequence is missing")
-    cur.execute("SELECT setval(%s::regclass,%s,false)", (sequence_name, seed["id"]))
+    reset_fixture_sequence(cur, sequence_name, seed["id"])
     collision = insert_fixture(cur, catalog, "checklist_veicular", {
         "tenant_id": FIXTURE_TENANT, "status": "aberto", "veiculo_id": FIXTURE_VEICULO,
         "operador_id": FIXTURE_OPERADOR, "km_inicial": 150,
