@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -23,6 +24,9 @@ MYSQL_SECRET_SOURCE = Path("/var/lib/erp-pg-rehearsal/secrets/pgloader.cnf")
 MYSQL_ADMIN_CONFIG = Path("/var/lib/erp-pg-rehearsal/secrets/client.cnf")
 REPO_ROOT = Path("/opt/erpcondominios/source")
 BASELINE_MAIN_COMMIT = "f60739713e6de3f2473b79ecd14a70fd700e5462"
+APPROVED_RESUME_RUN_ID = "20261108T181755Z"
+APPROVED_RESUME_SOURCE_COMMIT = "95fbf8a458cf86d2fe2d70679ba613526ca1b1de"
+APPROVED_RESUME_SOURCE_ROWS = 202609
 V9_ROOT = Path("/var/lib/erp-pg-rehearsal/v9")
 RUN_ROOT = Path("/var/lib/erp-pg-rehearsal/v9/runs")
 TMPFS_ROOT = Path("/dev/shm/erp-pg-v9")
@@ -34,7 +38,8 @@ CLUSTER_STARTED_BY_RUNNER = False
 
 def as_postgres(*command):
     return ["runuser", "-u", "postgres", "--", "env", "-i", "PATH=/usr/bin:/bin",
-            "HOME=/var/lib/postgresql", "LANG=C.UTF-8", "LC_ALL=C.UTF-8", *map(str, command)]
+            "HOME=/var/lib/postgresql", "LANG=C.UTF-8", "LC_ALL=C.UTF-8",
+            f"PYTHONPATH={CODE_ROOT}", "PYTHONDONTWRITEBYTECODE=1", *map(str, command)]
 
 
 def verify_code_provenance(expected_commit: str):
@@ -62,6 +67,13 @@ def verify_baseline_ancestry(repository: Path, commit: str):
                                BASELINE_MAIN_COMMIT, commit], capture_output=True, text=True)
     if ancestry.returncode != 0:
         raise RuntimeError("migration code commit is not descended from the approved baseline")
+
+
+def verify_resume_code_ancestry(repository: Path, commit: str):
+    ancestry = subprocess.run(["git", "-C", str(repository), "merge-base", "--is-ancestor",
+                               APPROVED_RESUME_SOURCE_COMMIT, commit], capture_output=True, text=True)
+    if ancestry.returncode != 0:
+        raise RuntimeError("resume code commit is not descended from the approved partial-run commit")
 
 
 def verify_private_mysql_config(path: Path):
@@ -450,6 +462,156 @@ def create_target_database(dbname: str):
         raise RuntimeError("target database timezone or encoding does not match the approved contract")
 
 
+def validate_resume_history(records, previous_commit: str, batch_size: int = 1000):
+    starts = [item for item in records if item.get("event") == "pipeline_started"]
+    if (len(starts) != 1 or starts[0].get("code_commit") != previous_commit
+            or starts[0].get("batch_size") != batch_size):
+        raise RuntimeError("resume source commit differs from the approved partial run")
+    completed = {item.get("phase") for item in records if item.get("event") == "step_complete"}
+    required = {"catalog", "schema", "load", "constraints_indexes", "identity_sequences",
+                "on_update_triggers", "business_objects", "grants"}
+    if not required.issubset(completed):
+        raise RuntimeError("partial run lacks required completed phases")
+    failures = [item for item in records if item.get("event") == "step_failed"]
+    targets = [item for item in records if item.get("event") == "empty_target_created"]
+    loaded = [item for item in records if item.get("event") == "loader_metrics_verified"]
+    blocked = [item for item in records if item.get("event") == "pipeline_blocked"]
+    stopped = [item for item in records if item.get("event") == "postgres_cluster_stopped"]
+    if (len(failures) != 1 or failures[0].get("phase") != "business_trigger_tests"
+            or failures[0].get("error_code") != "unknown"
+            or len(targets) != 1 or targets[0].get("database") != "erp_ensaio_v9"
+            or len(loaded) != 1 or loaded[0].get("tables") != 270 or loaded[0].get("rows") != 202609
+            or len(blocked) != 1 or len(stopped) != 1):
+        raise RuntimeError("partial run is not eligible for the approved harness-only resume")
+    forbidden = {"foreign_keys_not_valid", "analyze", "reconciliation"}
+    if any(item.get("phase") in forbidden for item in records
+           if item.get("event") in {"step_started", "step_complete", "step_failed"}):
+        raise RuntimeError("partial run has advanced beyond the harness resume point")
+    if any(item.get("event") == "pipeline_accepted" for item in records):
+        raise RuntimeError("accepted runs cannot be resumed")
+
+
+def load_resume_artifacts(resume_run_id: str, previous_commit: str, batch_size: int, postgres_uid: int):
+    if not re.fullmatch(r"\d{8}T\d{6}Z", resume_run_id):
+        raise RuntimeError("resume run identifier is invalid")
+    run_dir = RUN_ROOT / ("run_" + resume_run_id)
+    log = RUN_ROOT / (resume_run_id + ".jsonl")
+    for path, expected_mode, expected_uid in ((run_dir, 0o700, postgres_uid),
+                                               (run_dir / "sql", 0o700, postgres_uid),
+                                               (log, 0o600, 0)):
+        st = path.lstat()
+        if (stat.S_ISLNK(st.st_mode) or st.st_uid != expected_uid
+                or stat.S_IMODE(st.st_mode) != expected_mode
+                or (path == log and not stat.S_ISREG(st.st_mode))
+                or (path != log and not stat.S_ISDIR(st.st_mode))):
+            raise RuntimeError("resume artifact ownership or mode is unsafe")
+    records = []
+    for line in log.read_text(encoding="utf-8").splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            raise RuntimeError("resume log is malformed") from None
+        if isinstance(item, dict):
+            records.append(item)
+    validate_resume_history(records, previous_commit, batch_size)
+
+    required_sql = {
+        "001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql",
+        "002_validate_constraints.sql", "003_identity_sequences.sql",
+        "004_on_update_timestamp.sql", "005_business_triggers_routines.sql", "006_grants.sql",
+    }
+    catalog_path = run_dir / "catalog.json"
+    loader_path = run_dir / "loader_summary.json"
+    routine_snapshot_path = run_dir / "routine_snapshot.json"
+    required_files = (catalog_path, loader_path, routine_snapshot_path)
+    for path in required_files:
+        st = path.lstat()
+        if (stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode) or st.st_uid != postgres_uid
+                or stat.S_IMODE(st.st_mode) != 0o600):
+            raise RuntimeError("resume evidence ownership or mode is unsafe")
+    catalog_summary = json.loads(catalog_path.read_text(encoding="utf-8"))
+    loader_summary = json.loads(loader_path.read_text(encoding="utf-8"))
+    routine_snapshot = json.loads(routine_snapshot_path.read_text(encoding="utf-8"))
+    ddl_hashes = catalog_summary.get("ddl_sha256")
+    if (not isinstance(ddl_hashes, dict) or set(ddl_hashes) != required_sql
+            or catalog_summary.get("tables") != 270 or catalog_summary.get("columns") != 3339):
+        raise RuntimeError("resume catalog summary does not match the approved v9 shape")
+    if {path.name for path in (run_dir / "sql").glob("*.sql")} != required_sql:
+        raise RuntimeError("resume DDL directory contains unexpected or missing SQL files")
+    for name, expected_hash in ddl_hashes.items():
+        path = run_dir / "sql" / name
+        st = path.lstat()
+        if (stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode) or st.st_uid != postgres_uid
+                or stat.S_IMODE(st.st_mode) != 0o600 or not re.fullmatch(r"[0-9a-f]{64}", expected_hash)
+                or hashlib.sha256(path.read_bytes()).hexdigest() != expected_hash):
+            raise RuntimeError("resume DDL artifact failed its recorded hash check")
+    metrics = loader_summary.get("table_metrics")
+    legacy_tables = catalog_summary.get("legacy_tables")
+    legacy_classification = catalog_summary.get("legacy_classification")
+    if (loader_summary.get("tables_loaded") != 270 or not isinstance(metrics, list) or len(metrics) != 270
+            or not isinstance(legacy_tables, list) or len(set(legacy_tables)) != len(legacy_tables)
+            or not isinstance(legacy_classification, dict)
+            or loader_summary.get("dst_ambiguous_local_times")
+            or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")):
+        raise RuntimeError("resume load evidence does not meet the approved v9 contract")
+    names = [item.get("table") for item in metrics]
+    if (any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_]+", name) for name in names)
+            or len(set(names)) != 270 or set(names) != set(legacy_classification)
+            or any(name not in names for name in legacy_tables)
+            or any(not isinstance(item.get("source_rows"), int) or item["source_rows"] < 0 for item in metrics)
+            or sum(item.get("source_rows", -1) for item in metrics) != loader_summary.get("source_rows_loaded")):
+        raise RuntimeError("resume table metrics are malformed")
+    return run_dir, log, catalog_summary, loader_summary, routine_snapshot
+
+
+def quote_pg_ident(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def quote_pg_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dict):
+    legacy_tables = set(catalog_summary["legacy_tables"])
+    metrics = loader_summary["table_metrics"]
+    branches = []
+    expected = {}
+    for item in metrics:
+        table = item["table"]
+        schema = "legado" if table in legacy_tables else "erp"
+        label = f"{schema}.{table}"
+        expected[label] = int(item["source_rows"])
+        qualified = f"{quote_pg_ident(schema)}.{quote_pg_ident(table)}"
+        branches.append(f"SELECT {quote_pg_literal(label)}::text,COUNT(*)::bigint FROM {qualified}")
+    query = " UNION ALL ".join(branches)
+    preflight_sql = (
+        "SELECT current_setting('TimeZone')||'|'||current_setting('server_encoding')||'|'||"
+        "(SELECT COUNT(*) FROM pg_tables WHERE schemaname IN ('erp','legado'))||'|'||"
+        "(SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema IN ('erp','legado') "
+        "AND constraint_type='FOREIGN KEY')"
+    )
+    preflight = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-At", "-h", PGSOCKET,
+                               "-p", str(PGPORT), "-U", "postgres", "-d", dbname, "-c", preflight_sql),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if preflight.returncode or preflight.stdout.strip() != "America/Sao_Paulo|UTF8|270|0":
+        raise RuntimeError("partial rehearsal target does not match its expected pre-harness state")
+    result = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-A", "-t", "-F", "|",
+                             "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET, "-p", str(PGPORT),
+                             "-U", "postgres", "-d", dbname, "-c", query),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode:
+        raise RuntimeError("partial target row-count verification failed")
+    actual = {}
+    for line in result.stdout.splitlines():
+        parts = line.split("|")
+        if len(parts) != 2 or not parts[1].isdigit() or parts[0] in actual:
+            raise RuntimeError("partial target row-count result is malformed")
+        actual[parts[0]] = int(parts[1])
+    if actual != expected or sum(actual.values()) != loader_summary.get("source_rows_loaded"):
+        raise RuntimeError("partial target counts differ from recorded loaded metrics")
+
+
 def apply_sql(dbname: str, path: Path, phase: str, log: Path):
     run_step(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET,
               "-p", str(PGPORT), "-U", "postgres", "-d", dbname, "-f", path), phase, log)
@@ -481,17 +643,22 @@ def main():
     ap.add_argument("--database", required=True)
     ap.add_argument("--expected-commit", required=True)
     ap.add_argument("--batch-size", type=int, default=1000)
+    ap.add_argument("--resume-partial-target", action="store_true")
     args = ap.parse_args()
     if args.database != "erp_ensaio_v9":
         raise SystemExit("refusing any destination except the approved empty rehearsal database erp_ensaio_v9")
     if args.batch_size < 1 or args.batch_size > 10000:
         raise SystemExit("batch size out of range")
+    if args.resume_partial_target and args.batch_size != 1000:
+        raise SystemExit("approved partial target can only resume with its original batch size")
     if os.geteuid() != 0:
         raise SystemExit("runner must start as root so it can verify container namespace")
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     os.umask(0o077)
     verify_code_provenance(args.expected_commit)
+    if args.resume_partial_target:
+        verify_resume_code_ancestry(CODE_ROOT.parents[1], args.expected_commit)
     verify_private_mysql_config(MYSQL_SECRET_SOURCE)
     verify_private_mysql_config(MYSQL_ADMIN_CONFIG)
     if not REPO_ROOT.is_dir() or not PG_PYTHON.is_file():
@@ -524,9 +691,12 @@ def main():
     tmpfs_run.chmod(0o710)
     mysql_config = tmpfs_run / "client.cnf"
     cluster_started_here = False
+    resume_run_dir = None
+    resume_source_snapshot = None
     started = time.monotonic()
     emit_log(log, "pipeline_started", database=args.database, batch_size=args.batch_size,
-             mysql_container=MYSQL_CONTAINER, code_commit=args.expected_commit)
+             mysql_container=MYSQL_CONTAINER, code_commit=args.expected_commit,
+             resume_source_run=APPROVED_RESUME_RUN_ID if args.resume_partial_target else None)
     try:
         copy_private_config(MYSQL_SECRET_SOURCE, mysql_config, postgres.pw_gid)
         mysql_pid = check_mysql_namespace()
@@ -539,43 +709,58 @@ def main():
         os.chown(routine_snapshot, postgres.pw_uid, postgres.pw_gid)
         emit_log(log, "routine_fingerprints_verified", count=2)
         base = ["nsenter", f"--net=/proc/{mysql_pid}/ns/net", "--", *as_postgres(PG_PYTHON, "-s")]
-        catalog = run_dir / "catalog.json"
-        run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
-                  "--output", str(run_dir / "sql"), "--summary", str(catalog),
-                  "--repo-root", str(REPO_ROOT), "--target-database", args.database,
-                  "--routine-snapshot", str(routine_snapshot)],
-                 "catalog", log, whitelist_json=True)
-        ddl_dir = run_dir / "sql"
-        for name in ("001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql", "002_validate_constraints.sql",
-                     "003_identity_sequences.sql", "004_on_update_timestamp.sql",
-                     "005_business_triggers_routines.sql", "006_grants.sql"):
-            path = ddl_dir / name
-            if not path.is_file() or path.stat().st_mode & 0o077:
-                raise RuntimeError("generated SQL file is missing or not private")
-        cluster_started_here = start_cluster(log, run_dir)
-        create_target_database(args.database)
-        emit_log(log, "empty_target_created", database=args.database)
-        apply_sql(args.database, ddl_dir / "001_schema.sql", "schema", log)
-        run_step([*base, str(CODE_ROOT / "loader.py"), "--mysql-config", str(mysql_config),
-                  "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database,
-                  "--repo-root", str(REPO_ROOT), "--evidence", str(run_dir / "loader_summary.json"),
-                  "--batch-size", str(args.batch_size)], "load", log, whitelist_json=True)
-        catalog_summary = json.loads(catalog.read_text(encoding="utf-8"))
-        loader_summary = json.loads((run_dir / "loader_summary.json").read_text(encoding="utf-8"))
-        if (loader_summary.get("tables_loaded") != 270
-                or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")
-                or loader_summary.get("dst_ambiguous_local_times")):
-            raise RuntimeError("loader transformations differ from metadata preflight or require review")
-        if sum(item.get("source_rows", 0) for item in loader_summary.get("table_metrics", [])) != loader_summary.get("source_rows_loaded"):
-            raise RuntimeError("loader row totals are internally inconsistent")
-        emit_log(log, "loader_metrics_verified", tables=270,
-                 rows=loader_summary.get("source_rows_loaded"),
-                 zero_date_columns=len(loader_summary.get("zero_date_conversions", {})))
-        apply_sql(args.database, ddl_dir / "002_constraints_indexes.sql", "constraints_indexes", log)
-        apply_sql(args.database, ddl_dir / "003_identity_sequences.sql", "identity_sequences", log)
-        apply_sql(args.database, ddl_dir / "004_on_update_timestamp.sql", "on_update_triggers", log)
-        apply_sql(args.database, ddl_dir / "005_business_triggers_routines.sql", "business_objects", log)
-        apply_sql(args.database, ddl_dir / "006_grants.sql", "grants", log)
+        if args.resume_partial_target:
+            if args.expected_commit == APPROVED_RESUME_SOURCE_COMMIT:
+                raise RuntimeError("resume code must be a new commit descended from the partial-run commit")
+            resume_run_dir, _resume_log, catalog_summary, loader_summary, resume_source_snapshot = load_resume_artifacts(
+                APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, args.batch_size, postgres.pw_uid)
+            if snapshot != resume_source_snapshot:
+                raise RuntimeError("routine snapshot changed since the approved partial run")
+            ddl_dir = resume_run_dir / "sql"
+            emit_log(log, "resume_artifacts_verified", source_run=APPROVED_RESUME_RUN_ID,
+                     tables=270, rows=loader_summary.get("source_rows_loaded"))
+            cluster_started_here = start_cluster(log, run_dir)
+            verify_resume_target(args.database, catalog_summary, loader_summary)
+            emit_log(log, "resume_target_counts_verified", tables=270,
+                     rows=loader_summary.get("source_rows_loaded"))
+        else:
+            catalog = run_dir / "catalog.json"
+            run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
+                      "--output", str(run_dir / "sql"), "--summary", str(catalog),
+                      "--repo-root", str(REPO_ROOT), "--target-database", args.database,
+                      "--routine-snapshot", str(routine_snapshot)],
+                     "catalog", log, whitelist_json=True)
+            ddl_dir = run_dir / "sql"
+            for name in ("001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql", "002_validate_constraints.sql",
+                         "003_identity_sequences.sql", "004_on_update_timestamp.sql",
+                         "005_business_triggers_routines.sql", "006_grants.sql"):
+                path = ddl_dir / name
+                if not path.is_file() or path.stat().st_mode & 0o077:
+                    raise RuntimeError("generated SQL file is missing or not private")
+            cluster_started_here = start_cluster(log, run_dir)
+            create_target_database(args.database)
+            emit_log(log, "empty_target_created", database=args.database)
+            apply_sql(args.database, ddl_dir / "001_schema.sql", "schema", log)
+            run_step([*base, str(CODE_ROOT / "loader.py"), "--mysql-config", str(mysql_config),
+                      "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database,
+                      "--repo-root", str(REPO_ROOT), "--evidence", str(run_dir / "loader_summary.json"),
+                      "--batch-size", str(args.batch_size)], "load", log, whitelist_json=True)
+            catalog_summary = json.loads(catalog.read_text(encoding="utf-8"))
+            loader_summary = json.loads((run_dir / "loader_summary.json").read_text(encoding="utf-8"))
+            if (loader_summary.get("tables_loaded") != 270
+                    or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")
+                    or loader_summary.get("dst_ambiguous_local_times")):
+                raise RuntimeError("loader transformations differ from metadata preflight or require review")
+            if sum(item.get("source_rows", 0) for item in loader_summary.get("table_metrics", [])) != loader_summary.get("source_rows_loaded"):
+                raise RuntimeError("loader row totals are internally inconsistent")
+            emit_log(log, "loader_metrics_verified", tables=270,
+                     rows=loader_summary.get("source_rows_loaded"),
+                     zero_date_columns=len(loader_summary.get("zero_date_conversions", {})))
+            apply_sql(args.database, ddl_dir / "002_constraints_indexes.sql", "constraints_indexes", log)
+            apply_sql(args.database, ddl_dir / "003_identity_sequences.sql", "identity_sequences", log)
+            apply_sql(args.database, ddl_dir / "004_on_update_timestamp.sql", "on_update_triggers", log)
+            apply_sql(args.database, ddl_dir / "005_business_triggers_routines.sql", "business_objects", log)
+            apply_sql(args.database, ddl_dir / "006_grants.sql", "grants", log)
         harness = CODE_ROOT.parents[1] / "tests" / "migracao_pg" / "trigger_harness.py"
         run_step([*base, str(harness),
                   "--mysql-config", str(mysql_config), "--repo-root", str(REPO_ROOT),

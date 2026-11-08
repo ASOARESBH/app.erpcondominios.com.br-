@@ -20,7 +20,9 @@ from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, ti
                      verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES, tenant_contract,
                      text_nul_counts_for_table, validate_sensitive_column_defaults)
 from reconcile import numeric_equal, sequence_status, verify_destination_fk
-from run_migration import BASELINE_MAIN_COMMIT, run_step, verify_baseline_ancestry
+from run_migration import (APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT, as_postgres, run_step,
+                           validate_resume_history, verify_baseline_ancestry, verify_resume_code_ancestry,
+                           verify_resume_target)
 
 
 class TypeMappingTests(unittest.TestCase):
@@ -135,6 +137,49 @@ class TypeMappingTests(unittest.TestCase):
             run.return_value.returncode = 1
             with self.assertRaisesRegex(RuntimeError, "not descended from the approved baseline"):
                 verify_baseline_ancestry(Path("/repo"), "b" * 40)
+
+    def test_postgres_python_environment_exposes_migration_modules_without_bytecode(self):
+        command = as_postgres("/venv/python3", "-s")
+        self.assertIn(f"PYTHONPATH={ROOT}", command)
+        self.assertIn("PYTHONDONTWRITEBYTECODE=1", command)
+
+    def test_resume_history_accepts_only_the_approved_pre_fk_boundary(self):
+        records = [{"event": "pipeline_started", "code_commit": APPROVED_RESUME_SOURCE_COMMIT,
+                    "batch_size": 1000},
+                   {"event": "empty_target_created", "database": "erp_ensaio_v9"},
+                   {"event": "loader_metrics_verified", "tables": 270, "rows": 202609}]
+        records.extend({"event": "step_complete", "phase": phase} for phase in (
+            "catalog", "schema", "load", "constraints_indexes", "identity_sequences",
+            "on_update_triggers", "business_objects", "grants"))
+        records.extend([{"event": "step_failed", "phase": "business_trigger_tests", "error_code": "unknown"},
+                        {"event": "pipeline_blocked"}, {"event": "postgres_cluster_stopped"}])
+        validate_resume_history(records, APPROVED_RESUME_SOURCE_COMMIT, 1000)
+        records.append({"event": "step_complete", "phase": "foreign_keys_not_valid"})
+        with self.assertRaisesRegex(RuntimeError, "advanced beyond"):
+            validate_resume_history(records, APPROVED_RESUME_SOURCE_COMMIT, 1000)
+
+    def test_resume_target_checks_per_table_counts_before_continuing(self):
+        summary = {"legacy_tables": []}
+        loader = {"table_metrics": [{"table": "fixture", "source_rows": 3}], "source_rows_loaded": 3}
+        outputs = [MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8|270|0"),
+                   MagicMock(returncode=0, stdout="erp.fixture|3\n")]
+        with patch("run_migration.subprocess.run", side_effect=outputs) as run:
+            verify_resume_target("erp_ensaio_v9", summary, loader)
+        count_query = run.call_args_list[1].args[0][-1]
+        self.assertIn('"erp"."fixture"', count_query)
+        outputs[1].stdout = "erp.fixture|2\n"
+        with patch("run_migration.subprocess.run", side_effect=outputs):
+            with self.assertRaisesRegex(RuntimeError, "counts differ"):
+                verify_resume_target("erp_ensaio_v9", summary, loader)
+
+    def test_resume_code_requires_partial_run_commit_as_ancestor(self):
+        with patch("run_migration.subprocess.run") as run:
+            run.return_value.returncode = 0
+            verify_resume_code_ancestry(Path("/repo"), "c" * 40)
+            self.assertEqual(run.call_args.args[0][-2:], [APPROVED_RESUME_SOURCE_COMMIT, "c" * 40])
+            run.return_value.returncode = 1
+            with self.assertRaisesRegex(RuntimeError, "not descended from the approved partial-run commit"):
+                verify_resume_code_ancestry(Path("/repo"), "d" * 40)
 
     def test_generated_consumption_expression_is_supported_without_rewriting(self):
         self.assertEqual(expression_sql("(`leitura_atual` - `leitura_anterior`)"),
