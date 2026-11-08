@@ -17,7 +17,8 @@ from common import (ambiguous_sao_paulo_wall_time, convert_temporal, mysql_type_
                     json_contains_nul, verify_v9_postgres_connection, zero_date)
 from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, time_conversion_risks, validate_on_update_snapshot,
                      expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
-                     verified_routine_snapshot, EXPECTED_BACKUP_CANDIDATES, text_nul_counts_for_table)
+                     verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES,
+                     text_nul_counts_for_table)
 from reconcile import numeric_equal, sequence_status, verify_destination_fk
 from run_migration import BASELINE_MAIN_COMMIT, run_step, verify_baseline_ancestry
 
@@ -40,6 +41,14 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(catalog_error_code(RuntimeError("source column collation inventory differs from approved rehearsal snapshot")),
                          "source_collation_mismatch")
         self.assertEqual(catalog_error_code(RuntimeError("sensitive unapproved value")), "unclassified")
+
+    def test_routine_signature_preserves_dtd_identifier_without_numeric_coercion(self):
+        routine = {"parameters": [
+            {"position": 1, "name": "p_tabela", "mode": "IN", "type": "varchar", "dtd": "varchar(64)"},
+            {"position": 2, "name": "p_coluna", "mode": "IN", "type": "varchar", "dtd": "varchar(64)"},
+            {"position": 3, "name": "p_definicao", "mode": "IN", "type": "text", "dtd": "text"},
+        ]}
+        self.assertEqual(routine_parameter_signature(routine)[2], (3, "p_definicao", "IN", "text", "text"))
 
     def test_runner_logs_only_static_catalog_error_code(self):
         proc = MagicMock()

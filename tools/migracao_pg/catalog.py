@@ -296,6 +296,11 @@ def verified_routine_snapshot(snapshot_path):
     return expected["routines"], hashlib.sha256(expected_bytes).hexdigest()
 
 
+def routine_parameter_signature(routine):
+    return [(int(p["position"]), p["name"], p["mode"], p["type"], p["dtd"])
+            for p in routine["parameters"]]
+
+
 def triggers_inventory(conn):
     rows = query(conn, """
         SELECT TRIGGER_NAME,ACTION_TIMING,EVENT_MANIPULATION,EVENT_OBJECT_TABLE,
@@ -748,9 +753,11 @@ def main():
         if {r["name"] for r in routines if r["type"] == "PROCEDURE"} != EXPECTED_PROCEDURES:
             raise RuntimeError("trigger or routine names differ from approved rehearsal snapshot")
         routine_map = {r["name"]: r for r in routines}
-        mt_signature = [(p["name"], p["mode"], p["type"], int(p["dtd"].split("(")[-1].rstrip(")")) if "(" in p["dtd"] else None)
-                        for p in routine_map["mt_adicionar_coluna"]["parameters"]]
-        if mt_signature != [("p_tabela", "IN", "varchar", 64), ("p_coluna", "IN", "varchar", 64), ("p_definicao", "IN", "text", 65535)] or routine_map["corrigir_moradores_anexos_tenant"]["parameters"]:
+        mt_signature = routine_parameter_signature(routine_map["mt_adicionar_coluna"])
+        if (mt_signature != [(1, "p_tabela", "IN", "varchar", "varchar(64)"),
+                             (2, "p_coluna", "IN", "varchar", "varchar(64)"),
+                             (3, "p_definicao", "IN", "text", "text")]
+                or routine_parameter_signature(routine_map["corrigir_moradores_anexos_tenant"])):
             raise RuntimeError("stored procedure signature differs from approved rehearsal snapshot")
         if any(t["engine"] != "InnoDB" for t in tables.values()):
             raise RuntimeError("non-InnoDB source table requires explicit review")
