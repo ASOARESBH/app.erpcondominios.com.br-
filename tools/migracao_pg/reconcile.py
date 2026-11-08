@@ -15,7 +15,7 @@ import pymysql
 from psycopg import sql
 
 from catalog import (SCHEMA, classify_legacy_tables, columns_inventory, foreign_keys_inventory, indexes_inventory,
-                     mysql_connection, query, table_inventory)
+                     mysql_connection, normalize_fk_types, query, table_inventory)
 from common import canonical, convert_temporal, generated_name, mysql_qi, qi, row_digest, verify_v9_postgres_connection
 
 NUMERIC_TYPES = {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "float", "double"}
@@ -327,6 +327,27 @@ def verify_destination_fk(pg, fk):
     return bool(row[1])
 
 
+def verify_destination_fk_types(pg, fk, columns):
+    ordered = sorted(fk["columns"], key=lambda item: item["position"])
+    with pg.cursor() as cur:
+        for item in ordered:
+            source_expected = next(c["pg_type"] for c in columns[fk["table"]] if c["name"] == item["column"])
+            referenced_expected = next(c["pg_type"] for c in columns[item["ref_table"]]
+                                      if c["name"] == item["ref_column"])
+            cur.execute(
+                "SELECT (SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
+                "WHERE a.attrelid=%s::regclass AND a.attname=%s AND a.attnum>0 AND NOT a.attisdropped),"
+                "(SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
+                "WHERE a.attrelid=%s::regclass AND a.attname=%s AND a.attnum>0 AND NOT a.attisdropped)",
+                (f'"erp"."{fk["table"]}"', item["column"],
+                 f'"erp"."{item["ref_table"]}"', item["ref_column"]),
+            )
+            source_actual, referenced_actual = cur.fetchone()
+            if (source_actual != source_expected or referenced_actual != referenced_expected
+                    or source_actual != referenced_actual):
+                raise RuntimeError("destination foreign key column types differ from the normalized contract")
+
+
 def fk_metrics_for_table(table, fk_results):
     items = [item for item in fk_results if item["table"] == table]
     return {
@@ -429,6 +450,7 @@ def main():
         cols = columns_inventory(mysql)
         indexes = indexes_inventory(mysql)
         fks = foreign_keys_inventory(mysql)
+        fk_type_normalizations = normalize_fk_types(mysql, cols, fks)
         if len(tables) != 270 or sum(map(len, cols.values())) != 3339 or len(fks) != 11:
             raise RuntimeError("catalog shape changed during reconciliation")
         if (sum(c["auto_increment"] for cs in cols.values() for c in cs) != 232
@@ -443,6 +465,7 @@ def main():
         total_started = time.monotonic()
         fk_results = []
         for fk in fks:
+            verify_destination_fk_types(pg, fk, cols)
             initially_validated = verify_destination_fk(pg, fk)
             if initially_validated:
                 raise RuntimeError("foreign key was validated before data reconciliation")
@@ -523,6 +546,10 @@ def main():
             "foreign_keys_with_orphans": sum(x["orphans"] > 0 for x in fk_results),
             "fk_orphan_count_total": sum(x["orphans"] for x in fk_results),
             "fk_tenant_mismatch_count": sum(x["tenant_mismatches"] for x in fk_results),
+            "fk_type_normalizations": fk_type_normalizations,
+            "fk_type_normalizations_sha256": hashlib.sha256(
+                json.dumps(fk_type_normalizations, ensure_ascii=False, sort_keys=True,
+                           separators=(",", ":")).encode()).hexdigest(),
             "fk_results": fk_results, "elapsed_seconds": round(time.monotonic() - total_started, 3),
         }
         Path(args.summary).write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

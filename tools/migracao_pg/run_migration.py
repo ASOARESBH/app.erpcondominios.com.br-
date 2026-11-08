@@ -15,6 +15,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from common import generated_name
+
 PGDATA = Path("/var/lib/erp-pg-rehearsal/pg-data")
 PGSOCKET = Path("/var/lib/erp-pg-rehearsal/pg-socket")
 PGPORT = 55432
@@ -314,7 +316,7 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                 emit_log(log, "synthetic_test_pass", test=item.get("test"))
                 print(json.dumps({"event": "synthetic_test_pass", "test": item.get("test")}), flush=True)
             elif item.get("tables") is not None:
-                safe = {k: v for k, v in item.items() if isinstance(v, (int, float, bool, str))}
+                safe = safe_summary_scalars(item)
                 emit_log(log, "reconciliation_summary", **safe)
                 print(json.dumps({"event": "reconciliation_summary", **safe}, ensure_ascii=False), flush=True)
             elif item.get("tables_loaded") is not None:
@@ -593,12 +595,168 @@ def load_resume_artifacts(resume_run_id: str, previous_commit: str, batch_size: 
     return run_dir, log, catalog_summary, loader_summary, routine_snapshot
 
 
+def replace_resume_column_type(sql_text: str, table: str, column: str, current_type: str, approved_type: str):
+    marker = f'CREATE TABLE "erp"."{table}" ('
+    start = sql_text.find(marker)
+    end = sql_text.find("\n);", start) if start >= 0 else -1
+    if start < 0 or end < 0:
+        raise RuntimeError("resume DDL is missing an expected table definition")
+    block = sql_text[start:end]
+    pattern = re.compile(rf'(^[ \t]*"{re.escape(column)}"\s+){re.escape(current_type)}(?=\s|,|$)', re.M)
+    normalized, count = pattern.subn(lambda match: match.group(1) + approved_type, block)
+    if count != 1:
+        raise RuntimeError("resume DDL type transition is not the exact approved column change")
+    return sql_text[:start] + normalized + sql_text[end:]
+
+
+def validate_resume_catalog_transition(previous_summary: dict, regenerated_summary: dict,
+                                      previous_sql_dir: Path, regenerated_sql_dir: Path,
+                                      postgres_uid: int | None = None):
+    required_sql = {
+        "001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql",
+        "002_validate_constraints.sql", "003_identity_sequences.sql", "004_on_update_timestamp.sql",
+        "005_business_triggers_routines.sql", "006_grants.sql",
+    }
+    if ({path.name for path in previous_sql_dir.glob("*.sql")} != required_sql
+            or {path.name for path in regenerated_sql_dir.glob("*.sql")} != required_sql):
+        raise RuntimeError("resume DDL inventory differs from the reviewed file set")
+    if any(summary.get(key) != value for summary in (previous_summary, regenerated_summary)
+           for key, value in {"tables": 270, "columns": 3339, "foreign_keys": 11, "triggers": 7,
+                              "routines": 2, "events": 0, "auto_increment_columns": 232}.items()):
+        raise RuntimeError("source catalog counts differ from the approved resume snapshot")
+    if ({key: value for key, value in previous_summary.items() if key != "ddl_sha256"}
+            != {key: value for key, value in regenerated_summary.items()
+                if key not in {"ddl_sha256", "fk_type_normalizations", "fk_type_normalizations_sha256"}}):
+        raise RuntimeError("source catalog metadata changed since the partial target was loaded")
+
+    expected = {
+        ("aplicativos_versoes", "aplicativo_id", "aplicativos_catalogo", "id"):
+            ("integer", "bigint", "widen_signed_integer_foreign_key", None),
+        ("moradores_anexos", "morador_id", "moradores", "id"):
+            ("integer", "bigint", "widen_signed_integer_foreign_key", None),
+        ("rbac_auditoria", "sessao_id", "rbac_sessoes", "id"):
+            ("numeric(20,0)", "bigint", "narrow_unsigned_bigint_with_verified_range",
+             {"rows": 791, "nulls": 0, "fractional": 0, "negative": 0, "outside_signed_bigint": 0}),
+    }
+    normalizations = regenerated_summary.get("fk_type_normalizations")
+    if not isinstance(normalizations, list) or len(normalizations) != len(expected):
+        raise RuntimeError("regenerated FK normalization manifest differs from the approved scope")
+    observed = {}
+    for item in normalizations:
+        if not isinstance(item, dict):
+            raise RuntimeError("regenerated FK normalization manifest is malformed")
+        key = (item.get("table"), item.get("column"), item.get("referenced_table"), item.get("referenced_column"))
+        if key in observed or key not in expected:
+            raise RuntimeError("regenerated FK normalization contains an unapproved column")
+        observed[key] = item
+    if set(observed) != set(expected):
+        raise RuntimeError("regenerated FK normalization omitted an approved column")
+    base_keys = {"table", "column", "referenced_table", "referenced_column", "source_pg_type",
+                 "referenced_pg_type", "target_pg_type", "rule"}
+    for key, (source_type, target_type, rule, counts) in expected.items():
+        item = observed[key]
+        expected_keys = base_keys | ({"source_counts"} if counts is not None else set())
+        if (set(item) != expected_keys
+                or (item["source_pg_type"], item["target_pg_type"], item["rule"])
+                != (source_type, target_type, rule)
+                or item["referenced_pg_type"] != target_type):
+            raise RuntimeError("regenerated FK normalization type mapping differs from the reviewed contract")
+        if counts is not None and item.get("source_counts") != counts:
+            raise RuntimeError("regenerated unsigned bigint range evidence differs from the reviewed snapshot")
+    manifest_json = json.dumps(normalizations, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    if hashlib.sha256(manifest_json.encode()).hexdigest() != regenerated_summary.get("fk_type_normalizations_sha256"):
+        raise RuntimeError("regenerated FK normalization fingerprint is invalid")
+
+    for name in sorted(required_sql):
+        old_path = previous_sql_dir / name
+        new_path = regenerated_sql_dir / name
+        for path in (old_path, new_path):
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_mode & 0o077
+                    or (postgres_uid is not None and info.st_uid != postgres_uid)):
+                raise RuntimeError("resume DDL artifact is not a private regular file")
+        old_sql = old_path.read_text(encoding="utf-8")
+        new_sql = new_path.read_text(encoding="utf-8")
+        old_hash = previous_summary.get("ddl_sha256", {}).get(name)
+        new_hash = regenerated_summary.get("ddl_sha256", {}).get(name)
+        if (not re.fullmatch(r"[0-9a-f]{64}", str(old_hash))
+                or not re.fullmatch(r"[0-9a-f]{64}", str(new_hash))
+                or hashlib.sha256(old_path.read_bytes()).hexdigest() != old_hash
+                or hashlib.sha256(new_path.read_bytes()).hexdigest() != new_hash):
+            raise RuntimeError("resume DDL hash does not match its private catalog summary")
+        if name == "001_schema.sql":
+            for (table, column, _ref_table, _ref_column), (old_type, new_type, _rule, _counts) in expected.items():
+                new_sql = replace_resume_column_type(new_sql, table, column, new_type, old_type)
+            if old_sql != new_sql:
+                raise RuntimeError("schema DDL changed outside the three reviewed FK column types")
+        elif name == "002_foreign_keys.sql":
+            old_fk_statements = sorted(line.strip() for line in old_sql.splitlines()
+                                       if " ADD CONSTRAINT " in line and " FOREIGN KEY " in line)
+            new_fk_statements = sorted(line.strip() for line in new_sql.splitlines()
+                                       if " ADD CONSTRAINT " in line and " FOREIGN KEY " in line)
+            if old_fk_statements != new_fk_statements:
+                raise RuntimeError("foreign key definitions changed during resume catalog regeneration")
+            expected_non_fk = [
+                "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace "
+                "WHERE c.contype='f' AND n.nspname='erp') THEN "
+                "RAISE EXCEPTION 'foreign key type normalization requires zero existing foreign keys'; END IF; END $$;"
+            ]
+            for (table, column, ref_table, ref_column), (source_type, target_type, _rule, _counts) in expected.items():
+                qtable = f'"erp"."{table}"'
+                ref_qtable = f"erp.{ref_table}"
+                allowed = ", ".join(quote_pg_literal(value) for value in sorted({source_type, target_type}))
+                expected_non_fk.extend([
+                    "DO $$ DECLARE actual_type text; BEGIN "
+                    f"SELECT format_type(a.atttypid,a.atttypmod) INTO actual_type FROM pg_attribute a "
+                    f"WHERE a.attrelid={quote_pg_literal(qtable)}::regclass AND a.attname={quote_pg_literal(column)} "
+                    "AND a.attnum>0 AND NOT a.attisdropped; "
+                    f"IF actual_type IS NULL OR actual_type NOT IN ({allowed}) THEN "
+                    "RAISE EXCEPTION 'foreign key source type differs from the reviewed normalization'; END IF; END $$;",
+                    "DO $$ DECLARE actual_type text; BEGIN "
+                    f"SELECT format_type(a.atttypid,a.atttypmod) INTO actual_type FROM pg_attribute a "
+                    f"WHERE a.attrelid={quote_pg_literal(ref_qtable)}::regclass "
+                    f"AND a.attname={quote_pg_literal(ref_column)} AND a.attnum>0 AND NOT a.attisdropped; "
+                    f"IF actual_type IS DISTINCT FROM {quote_pg_literal(target_type)} THEN "
+                    "RAISE EXCEPTION 'foreign key referenced type differs from the reviewed normalization'; END IF; END $$;",
+                ])
+                if _rule == "narrow_unsigned_bigint_with_verified_range":
+                    column_sql = f'"{column}"'
+                    expected_non_fk.append(
+                        f"DO $$ BEGIN IF (SELECT COUNT(*) FROM {qtable}) <> 791 OR EXISTS "
+                        f"(SELECT 1 FROM {qtable} WHERE {column_sql} IS NULL OR "
+                        f"({column_sql}::numeric <> trunc({column_sql}::numeric,0) OR {column_sql} < 0 "
+                        f"OR {column_sql} > 9223372036854775807)) THEN "
+                        "RAISE EXCEPTION 'unsigned foreign key values exceed the approved signed bigint range'; END IF; END $$;"
+                    )
+                expected_non_fk.append(
+                    f"ALTER TABLE {qtable} ALTER COLUMN \"{column}\" TYPE bigint USING \"{column}\"::bigint;"
+                )
+                if _rule == "widen_signed_integer_foreign_key":
+                    check_name = generated_name("ck", table, column, "mysql_signed_int_range")
+                    expected_non_fk.append(
+                        f"ALTER TABLE {qtable} ADD CONSTRAINT \"{check_name}\" "
+                        f"CHECK (\"{column}\" BETWEEN -2147483648 AND 2147483647);"
+                    )
+            new_non_fk = [line.strip() for line in new_sql.splitlines() if line.strip()
+                          and not (" ADD CONSTRAINT " in line and " FOREIGN KEY " in line)]
+            if new_non_fk != expected_non_fk:
+                raise RuntimeError("FK type-normalization DDL differs from the approved atomic bundle")
+        elif old_sql != new_sql:
+            raise RuntimeError("resume DDL changed outside the reviewed FK normalization files")
+
+
 def quote_pg_ident(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
 def quote_pg_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def safe_summary_scalars(item: dict) -> dict:
+    return {key: value for key, value in item.items()
+            if isinstance(value, (int, float, bool, str))
+            and not key.endswith("_sha256") and not key.endswith("_fingerprint")}
 
 
 def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dict):
@@ -618,14 +776,24 @@ def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dic
         "SELECT current_setting('TimeZone')||'|'||current_setting('server_encoding')||'|'||"
         "(SELECT COUNT(*) FROM pg_tables WHERE schemaname IN ('erp','legado'))||'|'||"
         "(SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema IN ('erp','legado') "
-        "AND constraint_type='FOREIGN KEY')"
+        "AND constraint_type='FOREIGN KEY')||'|'||"
+        "(SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
+        "WHERE a.attrelid='erp.aplicativos_versoes'::regclass AND a.attname='aplicativo_id' "
+        "AND a.attnum>0 AND NOT a.attisdropped)||'|'||"
+        "(SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
+        "WHERE a.attrelid='erp.moradores_anexos'::regclass AND a.attname='morador_id' "
+        "AND a.attnum>0 AND NOT a.attisdropped)||'|'||"
+        "(SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
+        "WHERE a.attrelid='erp.rbac_auditoria'::regclass AND a.attname='sessao_id' "
+        "AND a.attnum>0 AND NOT a.attisdropped)"
     )
     preflight = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-At", "-h", PGSOCKET,
                                "-p", str(PGPORT), "-U", "postgres", "-d", dbname, "-c", preflight_sql),
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     fields = preflight.stdout.strip().split("|")
-    if (preflight.returncode or len(fields) != 4 or fields[:3] != ["America/Sao_Paulo", "UTF8", "270"]
-            or not fields[3].isdigit() or int(fields[3]) > 11):
+    if (preflight.returncode or len(fields) != 7 or fields[:3] != ["America/Sao_Paulo", "UTF8", "270"]
+            or not fields[3].isdigit() or int(fields[3]) > 11
+            or fields[4:] != ["integer", "integer", "numeric(20,0)"]):
         raise RuntimeError("partial rehearsal target does not match its expected pre-harness state")
     foreign_key_count = int(fields[3])
     result = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-A", "-t", "-F", "|",
@@ -753,9 +921,25 @@ def main():
                 APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, args.batch_size, postgres.pw_uid)
             if snapshot != resume_source_snapshot:
                 raise RuntimeError("routine snapshot changed since the approved partial run")
-            ddl_dir = resume_run_dir / "sql"
             emit_log(log, "resume_artifacts_verified", source_run=APPROVED_RESUME_RUN_ID,
                      tables=270, rows=loader_summary.get("source_rows_loaded"))
+            regenerated_catalog = run_dir / "catalog.json"
+            run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
+                      "--output", str(run_dir / "sql"), "--summary", str(regenerated_catalog),
+                      "--repo-root", str(REPO_ROOT), "--target-database", args.database,
+                      "--routine-snapshot", str(routine_snapshot)],
+                     "resume_catalog_regeneration", log, whitelist_json=True)
+            summary_info = regenerated_catalog.lstat()
+            if (not stat.S_ISREG(summary_info.st_mode) or stat.S_ISLNK(summary_info.st_mode)
+                    or summary_info.st_uid != postgres.pw_uid or stat.S_IMODE(summary_info.st_mode) != 0o600):
+                raise RuntimeError("regenerated catalog summary ownership or mode is unsafe")
+            regenerated_summary = json.loads(regenerated_catalog.read_text(encoding="utf-8"))
+            validate_resume_catalog_transition(catalog_summary, regenerated_summary,
+                                               resume_run_dir / "sql", run_dir / "sql", postgres.pw_uid)
+            catalog_summary = regenerated_summary
+            ddl_dir = run_dir / "sql"
+            emit_log(log, "resume_catalog_delta_verified", source_run=APPROVED_RESUME_RUN_ID,
+                     fk_type_normalizations=3, source_rows=loader_summary.get("source_rows_loaded"))
             cluster_started_here = start_cluster(log, run_dir)
             existing_fk_count = verify_resume_target(args.database, catalog_summary, loader_summary)
             emit_log(log, "resume_target_counts_verified", tables=270,
@@ -820,6 +1004,8 @@ def main():
                 or summary.get("source_rows") != loader_summary.get("source_rows_loaded")
                 or summary.get("destination_rows") != loader_summary.get("source_rows_loaded")
                 or summary.get("foreign_keys_valid", 0) + summary.get("foreign_keys_with_orphans", 0) != 11
+                or summary.get("fk_type_normalizations") != catalog_summary.get("fk_type_normalizations")
+                or summary.get("fk_type_normalizations_sha256") != catalog_summary.get("fk_type_normalizations_sha256")
                 or any(summary.get(k) != 0 for k in (
                     "row_count_mismatches", "tables_with_row_hash_divergence", "pk_max_mismatches",
                     "identity_max_mismatches", "sequences_not_ready", "numeric_sum_mismatches",

@@ -63,6 +63,44 @@ EXPECTED_FOREIGN_KEYS = {
     ("rbac_usuario_grupos", "fk_rbac_ug_grupo"): (("grupo_id", "rbac_grupos", "id", "CASCADE", "RESTRICT"),),
     ("rbac_usuario_permissoes", "fk_rbac_up_permissao"): (("permissao_id", "rbac_permissoes", "id", "CASCADE", "CASCADE"),),
 }
+EXPECTED_FK_TYPE_NORMALIZATIONS = {
+    ("aplicativos_versoes", "aplicativo_id", "aplicativos_catalogo", "id"): {
+        "source_data_type": "int", "source_unsigned": False, "source_auto_increment": False,
+        "source_column_type": "int(11)", "source_precision": 10, "source_scale": 0, "source_nullable": False,
+        "source_default_is_null": True, "source_extra": "", "source_generated": False,
+        "source_pg_type": "integer", "referenced_data_type": "int", "referenced_unsigned": False,
+        "referenced_auto_increment": True, "referenced_column_type": "int(11)",
+        "referenced_precision": 10, "referenced_scale": 0, "referenced_nullable": False,
+        "referenced_default_is_null": True, "referenced_extra": "auto_increment", "referenced_generated": False,
+        "referenced_pg_type": "bigint", "target_pg_type": "bigint",
+        "rule": "widen_signed_integer_foreign_key",
+    },
+    ("moradores_anexos", "morador_id", "moradores", "id"): {
+        "source_data_type": "int", "source_unsigned": False, "source_auto_increment": False,
+        "source_column_type": "int(11)", "source_precision": 10, "source_scale": 0, "source_nullable": False,
+        "source_default_is_null": True, "source_extra": "", "source_generated": False,
+        "source_pg_type": "integer", "referenced_data_type": "int", "referenced_unsigned": False,
+        "referenced_auto_increment": True, "referenced_column_type": "int(11)",
+        "referenced_precision": 10, "referenced_scale": 0, "referenced_nullable": False,
+        "referenced_default_is_null": True, "referenced_extra": "auto_increment", "referenced_generated": False,
+        "referenced_pg_type": "bigint", "target_pg_type": "bigint",
+        "rule": "widen_signed_integer_foreign_key",
+    },
+    ("rbac_auditoria", "sessao_id", "rbac_sessoes", "id"): {
+        "source_data_type": "bigint", "source_unsigned": True, "source_auto_increment": False,
+        "source_column_type": "bigint(20) unsigned", "source_precision": 20, "source_scale": 0,
+        "source_nullable": True, "source_default_is_null": True, "source_extra": "", "source_generated": False,
+        "source_pg_type": "numeric(20,0)", "referenced_data_type": "bigint",
+        "referenced_unsigned": True, "referenced_auto_increment": True,
+        "referenced_column_type": "bigint(20) unsigned", "referenced_precision": 20,
+        "referenced_scale": 0, "referenced_nullable": False, "referenced_default_is_null": True,
+        "referenced_extra": "auto_increment", "referenced_generated": False,
+        "referenced_pg_type": "bigint", "target_pg_type": "bigint",
+        "rule": "narrow_unsigned_bigint_with_verified_range",
+        "expected_source_counts": {"rows": 791, "nulls": 0, "fractional": 0, "negative": 0,
+                                   "outside_signed_bigint": 0},
+    },
+}
 TEMPORAL_TYPES = {"date", "datetime", "timestamp"}
 
 
@@ -265,6 +303,73 @@ def validate_foreign_key_snapshot(fks, tables):
         if tables[fk["table"]]["schema"] != "erp" or any(
                 tables[col["ref_table"]]["schema"] != "erp" for col in fk["columns"]):
             raise RuntimeError("foreign key crosses the approved erp/legado boundary")
+
+
+def normalize_fk_types(conn, columns, fks):
+    column_lookup = {(table, item["name"]): item for table, items in columns.items() for item in items}
+    pairs = {}
+    for fk in fks:
+        for col in fk["columns"]:
+            key = (fk["table"], col["column"], col["ref_table"], col["ref_column"])
+            if key in pairs:
+                raise RuntimeError("duplicate foreign key column pair requires explicit review")
+            pairs[key] = col
+    if set(EXPECTED_FK_TYPE_NORMALIZATIONS) - set(pairs):
+        raise RuntimeError("approved foreign key type normalization signature is missing")
+    records = []
+    for key in sorted(pairs):
+        source = column_lookup.get((key[0], key[1]))
+        referenced = column_lookup.get((key[2], key[3]))
+        if source is None or referenced is None:
+            raise RuntimeError("foreign key column metadata is missing")
+        expected = EXPECTED_FK_TYPE_NORMALIZATIONS.get(key)
+        if expected is None:
+            if source["pg_type"] != referenced["pg_type"]:
+                raise RuntimeError("unlisted foreign key type mismatch requires explicit review")
+            continue
+        actual = {
+            "source_data_type": source["data_type"], "source_unsigned": source["unsigned"],
+            "source_auto_increment": source["auto_increment"], "source_pg_type": source["pg_type"],
+            "source_column_type": source["column_type"].lower(), "source_precision": source["precision"],
+            "source_scale": source["scale"], "source_nullable": source["nullable"],
+            "source_default_is_null": source["default"] is None, "source_extra": source["extra"].lower(),
+            "source_generated": source["generated"],
+            "referenced_data_type": referenced["data_type"], "referenced_unsigned": referenced["unsigned"],
+            "referenced_auto_increment": referenced["auto_increment"],
+            "referenced_column_type": referenced["column_type"].lower(),
+            "referenced_precision": referenced["precision"], "referenced_scale": referenced["scale"],
+            "referenced_nullable": referenced["nullable"],
+            "referenced_default_is_null": referenced["default"] is None,
+            "referenced_extra": referenced["extra"].lower(), "referenced_generated": referenced["generated"],
+            "referenced_pg_type": referenced["pg_type"],
+        }
+        if actual != {name: value for name, value in expected.items()
+                      if name not in {"target_pg_type", "rule", "expected_source_counts"}}:
+            raise RuntimeError("foreign key type normalization metadata differs from the reviewed contract")
+        record = {"table": key[0], "column": key[1], "referenced_table": key[2],
+                  "referenced_column": key[3], "source_pg_type": source["pg_type"],
+                  "referenced_pg_type": referenced["pg_type"], "target_pg_type": expected["target_pg_type"],
+                  "rule": expected["rule"]}
+        if expected["rule"] == "narrow_unsigned_bigint_with_verified_range":
+            col = mysql_qi(key[1])
+            row = query(conn, f"SELECT COUNT(*),COALESCE(SUM({col} IS NULL),0),"
+                               f"COALESCE(SUM({col}<>TRUNCATE({col},0)),0),"
+                               f"COALESCE(SUM({col}<0),0),"
+                               f"COALESCE(SUM({col}>9223372036854775807),0) "
+                               f"FROM {mysql_qi(key[0])}")[0]
+            counts = {"rows": int(row[0]), "nulls": int(row[1]), "fractional": int(row[2]),
+                      "negative": int(row[3]), "outside_signed_bigint": int(row[4])}
+            if counts != expected["expected_source_counts"]:
+                raise RuntimeError("unsigned foreign key values exceed the approved signed bigint range")
+            if not source["nullable"] and counts["nulls"]:
+                raise RuntimeError("non-null foreign key source contains null values")
+            record["source_counts"] = counts
+        source["pg_type"] = expected["target_pg_type"]
+        records.append(record)
+    if any(column_lookup[(key[0], key[1])]["pg_type"] != column_lookup[(key[2], key[3])]["pg_type"]
+           for key in pairs):
+        raise RuntimeError("foreign key PostgreSQL types remain incompatible after normalization")
+    return records
 
 
 def routines_inventory(conn):
@@ -594,7 +699,7 @@ def build_sql(catalog: dict, target_database: str = "erp_ensaio_v9") -> dict[str
             "ALTER SCHEMA erp OWNER TO erp_owner;", "ALTER SCHEMA legado OWNER TO erp_owner;",
             "CREATE COLLATION IF NOT EXISTS erp.ci (provider = icu, locale = 'und-u-ks-level2', deterministic = false);", ""]
     s002 = ["BEGIN;"]
-    s002_fk = ["BEGIN;"]
+    s002_fk = []
     s002_validate = ["BEGIN;"]
     s003 = ["BEGIN;"]
     s004 = ["BEGIN;"]
@@ -690,6 +795,52 @@ def build_sql(catalog: dict, target_database: str = "erp_ensaio_v9") -> dict[str
             else:
                 iname = generated_name("ix", tname, idx_name)
                 s002.append(f"CREATE INDEX {qi(iname)} ON {qtable} ({', '.join(cols_sql)});")
+    fk_normalizations = catalog.get("fk_type_normalizations", [])
+    if fk_normalizations:
+        s002_fk.append(
+            "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace "
+            "WHERE c.contype='f' AND n.nspname='erp') THEN "
+            "RAISE EXCEPTION 'foreign key type normalization requires zero existing foreign keys'; END IF; END $$;"
+        )
+        for item in fk_normalizations:
+            schema, table = "erp", item["table"]
+            col = item["column"]
+            ref_table, ref_col = item["referenced_table"], item["referenced_column"]
+            qtable = f"{qi(schema)}.{qi(table)}"
+            qcol = qi(col)
+            allowed_types = sorted({item["source_pg_type"], item["target_pg_type"]})
+            allowed = ", ".join(ql(value) for value in allowed_types)
+            s002_fk.append(
+                "DO $$ DECLARE actual_type text; BEGIN "
+                f"SELECT format_type(a.atttypid,a.atttypmod) INTO actual_type FROM pg_attribute a "
+                f"WHERE a.attrelid={ql(qi(schema) + '.' + qi(table))}::regclass AND a.attname={ql(col)} "
+                "AND a.attnum>0 AND NOT a.attisdropped; "
+                f"IF actual_type IS NULL OR actual_type NOT IN ({allowed}) THEN "
+                "RAISE EXCEPTION 'foreign key source type differs from the reviewed normalization'; END IF; END $$;"
+            )
+            s002_fk.append(
+                "DO $$ DECLARE actual_type text; BEGIN "
+                f"SELECT format_type(a.atttypid,a.atttypmod) INTO actual_type FROM pg_attribute a "
+                f"WHERE a.attrelid={ql('erp.' + ref_table)}::regclass AND a.attname={ql(ref_col)} "
+                "AND a.attnum>0 AND NOT a.attisdropped; "
+                f"IF actual_type IS DISTINCT FROM {ql(item['referenced_pg_type'])} THEN "
+                "RAISE EXCEPTION 'foreign key referenced type differs from the reviewed normalization'; END IF; END $$;"
+            )
+            if item["rule"] == "narrow_unsigned_bigint_with_verified_range":
+                s002_fk.append(
+                    f"DO $$ BEGIN IF (SELECT COUNT(*) FROM {qtable}) <> 791 OR EXISTS "
+                    f"(SELECT 1 FROM {qtable} WHERE {qcol} IS NULL OR "
+                    f"({qcol}::numeric <> trunc({qcol}::numeric,0) OR {qcol} < 0 "
+                    f"OR {qcol} > 9223372036854775807)) THEN "
+                    "RAISE EXCEPTION 'unsigned foreign key values exceed the approved signed bigint range'; END IF; END $$;"
+                )
+            s002_fk.append(f"ALTER TABLE {qtable} ALTER COLUMN {qcol} TYPE bigint USING {qcol}::bigint;")
+            if item["rule"] == "widen_signed_integer_foreign_key":
+                check_name = generated_name("ck", table, col, "mysql_signed_int_range")
+                s002_fk.append(
+                    f"ALTER TABLE {qtable} ADD CONSTRAINT {qi(check_name)} "
+                    f"CHECK ({qcol} BETWEEN -2147483648 AND 2147483647);"
+                )
     for fk in fks:
         if tables[fk["table"]]["schema"] != "erp" or tables[fk["columns"][0]["ref_table"]]["schema"] != "erp":
             raise ValueError("foreign key crossing the legacy schema boundary requires explicit review")
@@ -736,7 +887,8 @@ def build_sql(catalog: dict, target_database: str = "erp_ensaio_v9") -> dict[str
                  "REVOKE ALL ON ALL TABLES IN SCHEMA legado FROM PUBLIC, erp_app;",
                  "REVOKE ALL ON ALL SEQUENCES IN SCHEMA legado FROM PUBLIC, erp_app;"])
     for s in (s001, s002, s002_fk, s002_validate, s003, s004, s005, s006):
-        s.append("COMMIT;")
+        if s is not s002_fk:
+            s.append("COMMIT;")
     business_sql_path = Path(__file__).with_name("business_objects.sql")
     if not business_sql_path.is_file():
         raise ValueError("manual business trigger translation is missing")
@@ -775,6 +927,7 @@ def main():
         validate_checklist_upsert_contract(indexes)
         fks = foreign_keys_inventory(conn)
         validate_foreign_key_snapshot(fks, tables)
+        fk_type_normalizations = normalize_fk_types(conn, columns, fks)
         triggers = triggers_inventory(conn)
         validate_trigger_snapshot(triggers)
         routines, routine_snapshot_sha256 = verified_routine_snapshot(args.routine_snapshot)
@@ -829,6 +982,7 @@ def main():
             raise RuntimeError("textual NUL requires user decision; counts written to private summary")
         catalog = {"tables": tables, "object_types": object_types, "legacy_decisions": legacy_decisions,
                    "columns": columns, "indexes": indexes, "foreign_keys": fks,
+                   "fk_type_normalizations": fk_type_normalizations,
                    "triggers": triggers, "routines": routines, "events": events,
                    "zero_value_counts": zero_counts, "invalid_enum_counts": invalid_enum,
                    "time_conversion_risks": time_risks,
@@ -839,9 +993,13 @@ def main():
         for name, body in sql.items():
             (out / name).write_text(body, encoding="utf-8")
         safe_invalid_enum = enum_counts_for_summary(invalid_enum)
+        fk_normalization_json = json.dumps(fk_type_normalizations, ensure_ascii=False,
+                                           sort_keys=True, separators=(",", ":"))
         summary = {"mysql_schema": SCHEMA, "object_types": object_types, "tables": len(tables), "views": 0, "columns": sum(map(len, columns.values())),
                    "indexes": sum(len(v) for v in indexes.values()), "primary_keys": sum(1 for t in indexes.values() if "PRIMARY" in t),
-                   "foreign_keys": len(fks), "triggers": len(triggers), "routines": len(routines), "events": events,
+                   "foreign_keys": len(fks), "fk_type_normalizations": fk_type_normalizations,
+                   "fk_type_normalizations_sha256": hashlib.sha256(fk_normalization_json.encode()).hexdigest(),
+                   "triggers": len(triggers), "routines": len(routines), "events": events,
                    "auto_increment_columns": sum(c["auto_increment"] for cs in columns.values() for c in cs),
                    "on_update_current_timestamp_columns": on_update_columns,
                    "source_collation_counts": dict(sorted(collation_counts.items())),
@@ -887,6 +1045,14 @@ CATALOG_ERROR_CODES = {
     "checklist ON DUPLICATE KEY target differs from the approved primary-key contract": "checklist_upsert_contract_mismatch",
     "foreign key crosses the approved erp/legado boundary": "foreign_key_schema_boundary_mismatch",
     "foreign key signature differs from approved rehearsal snapshot": "foreign_key_signature_mismatch",
+    "approved foreign key type normalization signature is missing": "fk_type_normalization_missing",
+    "duplicate foreign key column pair requires explicit review": "fk_type_pair_duplicate",
+    "foreign key column metadata is missing": "fk_column_metadata_missing",
+    "unlisted foreign key type mismatch requires explicit review": "fk_type_unlisted_mismatch",
+    "foreign key type normalization metadata differs from the reviewed contract": "fk_type_metadata_mismatch",
+    "unsigned foreign key values exceed the approved signed bigint range": "fk_unsigned_bigint_range_mismatch",
+    "non-null foreign key source contains null values": "fk_type_nullability_mismatch",
+    "foreign key PostgreSQL types remain incompatible after normalization": "fk_type_incompatible",
     "git grep failed while classifying candidate backup table": "backup_reference_scan_failed",
     "identity, primary-key, or on-update counts differ from approved rehearsal snapshot": "identity_or_key_shape_mismatch",
     "invalid MySQL client configuration": "mysql_client_config_invalid",

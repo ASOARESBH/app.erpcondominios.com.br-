@@ -13,15 +13,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2] / "tools" / "migracao_pg"
 sys.path.insert(0, str(ROOT))
 
-from common import (ambiguous_sao_paulo_wall_time, convert_temporal, mysql_type_to_pg, parse_mysql_enum, row_digest,
+from common import (ambiguous_sao_paulo_wall_time, convert_temporal, generated_name, mysql_type_to_pg, parse_mysql_enum, row_digest,
                     json_contains_nul, verify_v9_postgres_connection, zero_date)
 from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, time_conversion_risks, validate_on_update_snapshot,
                      expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
-                     verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES, tenant_contract,
+                     verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES,
+                     EXPECTED_FK_TYPE_NORMALIZATIONS, normalize_fk_types, tenant_contract,
                      text_nul_counts_for_table, validate_sensitive_column_defaults)
-from reconcile import numeric_equal, sequence_status, verify_destination_fk
+from reconcile import numeric_equal, sequence_status, verify_destination_fk, verify_destination_fk_types
 from run_migration import (APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT, apply_sql, as_postgres, run_step,
-                           validate_resume_history, validate_resume_table_inventory,
+                           quote_pg_literal, validate_resume_history, validate_resume_table_inventory,
+                           validate_resume_catalog_transition, safe_summary_scalars,
                            verify_baseline_ancestry, verify_resume_code_ancestry, verify_resume_target)
 
 
@@ -52,6 +54,14 @@ class TypeMappingTests(unittest.TestCase):
             "ON UPDATE CURRENT_TIMESTAMP column list differs from approved rehearsal snapshot": "on_update_columns_mismatch",
             "ON UPDATE CURRENT_TIMESTAMP manifest metadata differs from approved rehearsal snapshot": "on_update_manifest_metadata_mismatch",
             "invalid MySQL client configuration": "mysql_client_config_invalid",
+            "approved foreign key type normalization signature is missing": "fk_type_normalization_missing",
+            "duplicate foreign key column pair requires explicit review": "fk_type_pair_duplicate",
+            "foreign key column metadata is missing": "fk_column_metadata_missing",
+            "unlisted foreign key type mismatch requires explicit review": "fk_type_unlisted_mismatch",
+            "foreign key type normalization metadata differs from the reviewed contract": "fk_type_metadata_mismatch",
+            "unsigned foreign key values exceed the approved signed bigint range": "fk_unsigned_bigint_range_mismatch",
+            "non-null foreign key source contains null values": "fk_type_nullability_mismatch",
+            "foreign key PostgreSQL types remain incompatible after normalization": "fk_type_incompatible",
         }
         for message, code in cases.items():
             with self.subTest(code=code):
@@ -187,7 +197,7 @@ class TypeMappingTests(unittest.TestCase):
     def test_resume_target_checks_per_table_counts_before_continuing(self):
         summary = {"legacy_tables": []}
         loader = {"table_metrics": [{"table": "fixture", "source_rows": 3}], "source_rows_loaded": 3}
-        outputs = [MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8|270|0"),
+        outputs = [MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8|270|0|integer|integer|numeric(20,0)"),
                    MagicMock(returncode=0, stdout="erp.fixture|3\n")]
         with patch("run_migration.subprocess.run", side_effect=outputs) as run:
             self.assertEqual(verify_resume_target("erp_ensaio_v9", summary, loader), 0)
@@ -201,10 +211,157 @@ class TypeMappingTests(unittest.TestCase):
     def test_resume_target_reports_existing_foreign_key_count(self):
         summary = {"legacy_tables": []}
         loader = {"table_metrics": [{"table": "fixture", "source_rows": 3}], "source_rows_loaded": 3}
-        outputs = [MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8|270|2"),
+        outputs = [MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8|270|2|integer|integer|numeric(20,0)"),
                    MagicMock(returncode=0, stdout="erp.fixture|3\n")]
         with patch("run_migration.subprocess.run", side_effect=outputs):
             self.assertEqual(verify_resume_target("erp_ensaio_v9", summary, loader), 2)
+
+    def test_resume_target_rejects_partially_promoted_fk_types(self):
+        summary = {"legacy_tables": []}
+        loader = {"table_metrics": [{"table": "fixture", "source_rows": 3}], "source_rows_loaded": 3}
+        outputs = [MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8|270|0|bigint|integer|numeric(20,0)")]
+        with patch("run_migration.subprocess.run", side_effect=outputs):
+            with self.assertRaisesRegex(RuntimeError, "pre-harness state"):
+                verify_resume_target("erp_ensaio_v9", summary, loader)
+
+    def resume_catalog_fixture(self, root):
+        previous = Path(root) / "previous"
+        regenerated = Path(root) / "regenerated"
+        previous.mkdir()
+        regenerated.mkdir()
+        required = {
+            "001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql",
+            "002_validate_constraints.sql", "003_identity_sequences.sql", "004_on_update_timestamp.sql",
+            "005_business_triggers_routines.sql", "006_grants.sql",
+        }
+        old_schema = ('CREATE TABLE "erp"."aplicativos_versoes" (\n  "aplicativo_id" integer NOT NULL\n);\n'
+                      'CREATE TABLE "erp"."moradores_anexos" (\n  "morador_id" integer NOT NULL\n);\n'
+                      'CREATE TABLE "erp"."rbac_auditoria" (\n  "sessao_id" numeric(20,0)\n);\n')
+        new_schema = old_schema.replace('"aplicativo_id" integer', '"aplicativo_id" bigint')
+        new_schema = new_schema.replace('"morador_id" integer', '"morador_id" bigint')
+        new_schema = new_schema.replace('"sessao_id" numeric(20,0)', '"sessao_id" bigint')
+        foreign_key_statements = [
+            f'ALTER TABLE "erp"."child_{index}" ADD CONSTRAINT "fk_{index}" FOREIGN KEY ("id") '
+            f'REFERENCES "erp"."parent_{index}" ("id") NOT VALID;'
+            for index in range(11)
+        ]
+        old_foreign_keys = "\n".join(foreign_key_statements) + "\n"
+        new_non_fk = [
+            "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace "
+            "WHERE c.contype='f' AND n.nspname='erp') THEN "
+            "RAISE EXCEPTION 'foreign key type normalization requires zero existing foreign keys'; END IF; END $$;"
+        ]
+        expected_normalizations = [
+            ("aplicativos_versoes", "aplicativo_id", "aplicativos_catalogo", "id", "integer", "bigint",
+             "widen_signed_integer_foreign_key"),
+            ("moradores_anexos", "morador_id", "moradores", "id", "integer", "bigint",
+             "widen_signed_integer_foreign_key"),
+            ("rbac_auditoria", "sessao_id", "rbac_sessoes", "id", "numeric(20,0)", "bigint",
+             "narrow_unsigned_bigint_with_verified_range"),
+        ]
+        for table, column, ref_table, ref_column, source_type, target_type, rule in expected_normalizations:
+            qtable = f'"erp"."{table}"'
+            ref_qtable = f"erp.{ref_table}"
+            allowed = ", ".join(quote_pg_literal(value) for value in sorted({source_type, target_type}))
+            new_non_fk.extend([
+                "DO $$ DECLARE actual_type text; BEGIN "
+                f"SELECT format_type(a.atttypid,a.atttypmod) INTO actual_type FROM pg_attribute a "
+                f"WHERE a.attrelid={quote_pg_literal(qtable)}::regclass AND a.attname={quote_pg_literal(column)} "
+                "AND a.attnum>0 AND NOT a.attisdropped; "
+                f"IF actual_type IS NULL OR actual_type NOT IN ({allowed}) THEN "
+                "RAISE EXCEPTION 'foreign key source type differs from the reviewed normalization'; END IF; END $$;",
+                "DO $$ DECLARE actual_type text; BEGIN "
+                f"SELECT format_type(a.atttypid,a.atttypmod) INTO actual_type FROM pg_attribute a "
+                f"WHERE a.attrelid={quote_pg_literal(ref_qtable)}::regclass "
+                f"AND a.attname={quote_pg_literal(ref_column)} AND a.attnum>0 AND NOT a.attisdropped; "
+                f"IF actual_type IS DISTINCT FROM {quote_pg_literal(target_type)} THEN "
+                "RAISE EXCEPTION 'foreign key referenced type differs from the reviewed normalization'; END IF; END $$;",
+            ])
+            if rule == "narrow_unsigned_bigint_with_verified_range":
+                new_non_fk.append(
+                    f"DO $$ BEGIN IF (SELECT COUNT(*) FROM {qtable}) <> 791 OR EXISTS "
+                    f"(SELECT 1 FROM {qtable} WHERE \"{column}\" IS NULL OR "
+                    f"(\"{column}\"::numeric <> trunc(\"{column}\"::numeric,0) OR \"{column}\" < 0 "
+                    f"OR \"{column}\" > 9223372036854775807)) THEN "
+                    "RAISE EXCEPTION 'unsigned foreign key values exceed the approved signed bigint range'; END IF; END $$;"
+                )
+            new_non_fk.append(
+                f"ALTER TABLE {qtable} ALTER COLUMN \"{column}\" TYPE bigint USING \"{column}\"::bigint;"
+            )
+            if rule == "widen_signed_integer_foreign_key":
+                check_name = generated_name("ck", table, column, "mysql_signed_int_range")
+                new_non_fk.append(
+                    f"ALTER TABLE {qtable} ADD CONSTRAINT \"{check_name}\" "
+                    f"CHECK (\"{column}\" BETWEEN -2147483648 AND 2147483647);"
+                )
+        new_foreign_keys = "\n".join([*new_non_fk, *foreign_key_statements]) + "\n"
+        old_contents = {name: "-- stable\n" for name in required}
+        new_contents = dict(old_contents)
+        old_contents["001_schema.sql"] = old_schema
+        new_contents["001_schema.sql"] = new_schema
+        old_contents["002_foreign_keys.sql"] = "BEGIN;\n" + old_foreign_keys + "COMMIT;\n"
+        new_contents["002_foreign_keys.sql"] = new_foreign_keys
+        for directory, contents in ((previous, old_contents), (regenerated, new_contents)):
+            for name, body in contents.items():
+                path = directory / name
+                path.write_text(body, encoding="utf-8")
+                path.chmod(0o600)
+        normalizations = [
+            {"table": "aplicativos_versoes", "column": "aplicativo_id", "referenced_table": "aplicativos_catalogo",
+             "referenced_column": "id", "source_pg_type": "integer", "referenced_pg_type": "bigint",
+             "target_pg_type": "bigint", "rule": "widen_signed_integer_foreign_key"},
+            {"table": "moradores_anexos", "column": "morador_id", "referenced_table": "moradores",
+             "referenced_column": "id", "source_pg_type": "integer", "referenced_pg_type": "bigint",
+             "target_pg_type": "bigint", "rule": "widen_signed_integer_foreign_key"},
+            {"table": "rbac_auditoria", "column": "sessao_id", "referenced_table": "rbac_sessoes",
+             "referenced_column": "id", "source_pg_type": "numeric(20,0)", "referenced_pg_type": "bigint",
+             "target_pg_type": "bigint", "rule": "narrow_unsigned_bigint_with_verified_range",
+             "source_counts": {"rows": 791, "nulls": 0, "fractional": 0, "negative": 0,
+                               "outside_signed_bigint": 0}},
+        ]
+        common_summary = {"tables": 270, "columns": 3339, "foreign_keys": 11, "triggers": 7,
+                          "routines": 2, "events": 0, "auto_increment_columns": 232,
+                          "zero_date_counts": {}, "source_estimated_bytes": 100}
+        old_summary = {**common_summary,
+                       "ddl_sha256": {name: hashlib.sha256((previous / name).read_bytes()).hexdigest()
+                                      for name in required}}
+        manifest = json.dumps(normalizations, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        new_summary = {**common_summary,
+                       "fk_type_normalizations": normalizations,
+                       "fk_type_normalizations_sha256": hashlib.sha256(manifest.encode()).hexdigest(),
+                       "ddl_sha256": {name: hashlib.sha256((regenerated / name).read_bytes()).hexdigest()
+                                      for name in required}}
+        return old_summary, new_summary, previous, regenerated
+
+    def test_resume_catalog_transition_accepts_only_reviewed_fk_delta(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previous, regenerated, old_sql, new_sql = self.resume_catalog_fixture(directory)
+            validate_resume_catalog_transition(previous, regenerated, old_sql, new_sql)
+
+    def test_resume_catalog_transition_rejects_unrelated_ddl_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previous, regenerated, old_sql, new_sql = self.resume_catalog_fixture(directory)
+            (new_sql / "006_grants.sql").write_text("-- changed\n", encoding="utf-8")
+            (new_sql / "006_grants.sql").chmod(0o600)
+            regenerated["ddl_sha256"]["006_grants.sql"] = hashlib.sha256(
+                (new_sql / "006_grants.sql").read_bytes()).hexdigest()
+            with self.assertRaisesRegex(RuntimeError, "outside the reviewed FK normalization"):
+                validate_resume_catalog_transition(previous, regenerated, old_sql, new_sql)
+
+    def test_resume_catalog_transition_rejects_range_drift_and_manifest_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previous, regenerated, old_sql, new_sql = self.resume_catalog_fixture(directory)
+            path = new_sql / "002_foreign_keys.sql"
+            path.write_text(path.read_text(encoding="utf-8").replace("<> 791", "<> 792"), encoding="utf-8")
+            path.chmod(0o600)
+            regenerated["ddl_sha256"][path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(RuntimeError, "atomic bundle"):
+                validate_resume_catalog_transition(previous, regenerated, old_sql, new_sql)
+
+    def test_safe_summary_excludes_fingerprints_but_keeps_reconciliation_counters(self):
+        self.assertEqual(safe_summary_scalars({"row_hash_divergent_total": 0, "fk_type_normalizations_sha256": "abc",
+                                               "catalog_fingerprint": "def", "tables": 270}),
+                         {"row_hash_divergent_total": 0, "tables": 270})
 
     def test_resume_table_inventory_accepts_partial_legacy_candidate_map(self):
         metrics = [{"table": f"t{index}", "source_rows": 0} for index in range(270)]
@@ -347,6 +504,92 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(mysql_type_to_pg("bigint", "bigint(20) unsigned"), "numeric(20,0)")
         self.assertEqual(mysql_type_to_pg("decimal", "decimal(19,4)"), "numeric(19,4)")
         self.assertEqual(mysql_type_to_pg("tinyint", "tinyint(1)"), "smallint")
+
+    def fk_type_fixture(self):
+        def column(name, data_type, column_type, precision, unsigned, auto_increment, nullable, pg_type):
+            return {"name": name, "data_type": data_type, "column_type": column_type,
+                    "precision": precision, "scale": 0, "unsigned": unsigned,
+                    "auto_increment": auto_increment, "nullable": nullable, "pg_type": pg_type,
+                    "default": None, "extra": "auto_increment" if auto_increment else "", "generated": False}
+
+        columns = {
+            "aplicativos_versoes": [column("aplicativo_id", "int", "int(11)", 10, False, False, False, "integer")],
+            "aplicativos_catalogo": [column("id", "int", "int(11)", 10, False, True, False, "bigint")],
+            "moradores_anexos": [column("morador_id", "int", "int(11)", 10, False, False, False, "integer")],
+            "moradores": [column("id", "int", "int(11)", 10, False, True, False, "bigint")],
+            "rbac_auditoria": [column("sessao_id", "bigint", "bigint(20) unsigned", 20, True, False, True, "numeric(20,0)")],
+            "rbac_sessoes": [column("id", "bigint", "bigint(20) unsigned", 20, True, True, False, "bigint")],
+        }
+        fks = [
+            {"table": "aplicativos_versoes", "columns": [{"column": "aplicativo_id", "ref_table": "aplicativos_catalogo", "ref_column": "id", "position": 1}]},
+            {"table": "moradores_anexos", "columns": [{"column": "morador_id", "ref_table": "moradores", "ref_column": "id", "position": 1}]},
+            {"table": "rbac_auditoria", "columns": [{"column": "sessao_id", "ref_table": "rbac_sessoes", "ref_column": "id", "position": 1}]},
+        ]
+        return columns, fks
+
+    def test_fk_type_normalizations_are_exact_and_value_preserving(self):
+        columns, fks = self.fk_type_fixture()
+        with patch("catalog.query", return_value=[(791, 0, 0, 0, 0)]) as query_mock:
+            records = normalize_fk_types(object(), columns, fks)
+        self.assertEqual(len(records), 3)
+        self.assertEqual({item["rule"] for item in records}, {
+            "widen_signed_integer_foreign_key", "narrow_unsigned_bigint_with_verified_range",
+        })
+        self.assertTrue(all(item["target_pg_type"] == "bigint" for item in records))
+        self.assertEqual(columns["aplicativos_versoes"][0]["pg_type"], "bigint")
+        self.assertEqual(columns["moradores_anexos"][0]["pg_type"], "bigint")
+        self.assertEqual(columns["rbac_auditoria"][0]["pg_type"], "bigint")
+        self.assertEqual(query_mock.call_count, 1)
+        self.assertIn("TRUNCATE", query_mock.call_args.args[1])
+
+    def test_fk_type_normalization_rejects_metadata_drift(self):
+        columns, fks = self.fk_type_fixture()
+        columns["aplicativos_versoes"][0]["column_type"] = "int(10)"
+        with patch("catalog.query") as query_mock:
+            with self.assertRaisesRegex(RuntimeError, "metadata differs"):
+                normalize_fk_types(object(), columns, fks)
+        query_mock.assert_not_called()
+
+    def test_fk_type_normalization_rejects_unsigned_bigint_out_of_range(self):
+        columns, fks = self.fk_type_fixture()
+        with patch("catalog.query", return_value=[(791, 0, 0, 0, 1)]):
+            with self.assertRaisesRegex(RuntimeError, "exceed the approved signed bigint range"):
+                normalize_fk_types(object(), columns, fks)
+
+    def test_fk_type_normalization_rejects_unlisted_incompatibility(self):
+        columns, fks = self.fk_type_fixture()
+        columns["unlisted_child"] = [{"name": "parent_id", "data_type": "int", "column_type": "int(11)",
+                                      "precision": 10, "scale": 0, "unsigned": False,
+                                      "auto_increment": False, "nullable": False, "pg_type": "integer",
+                                      "default": None, "extra": "", "generated": False}]
+        columns["unlisted_parent"] = [{"name": "id", "data_type": "int", "column_type": "int(11)",
+                                       "precision": 10, "scale": 0, "unsigned": False,
+                                       "auto_increment": True, "nullable": False, "pg_type": "bigint",
+                                       "default": None, "extra": "auto_increment", "generated": False}]
+        fks.append({"table": "unlisted_child", "columns": [{"column": "parent_id", "ref_table": "unlisted_parent",
+                                                               "ref_column": "id"}]})
+        with patch("catalog.query", return_value=[(791, 0, 0, 0, 0)]):
+            with self.assertRaisesRegex(RuntimeError, "unlisted foreign key type mismatch"):
+                normalize_fk_types(object(), columns, fks)
+
+    def test_reconciliation_checks_actual_postgres_fk_types(self):
+        columns, fks = self.fk_type_fixture()
+        with patch("catalog.query", return_value=[(791, 0, 0, 0, 0)]):
+            normalize_fk_types(object(), columns, fks)
+        pg = MagicMock()
+        cursor = pg.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = ("bigint", "bigint")
+        verify_destination_fk_types(pg, fks[0], columns)
+        self.assertEqual(cursor.execute.call_count, 1)
+
+    def test_reconciliation_rejects_actual_postgres_fk_type_mismatch(self):
+        columns, fks = self.fk_type_fixture()
+        with patch("catalog.query", return_value=[(791, 0, 0, 0, 0)]):
+            normalize_fk_types(object(), columns, fks)
+        pg = MagicMock()
+        pg.cursor.return_value.__enter__.return_value.fetchone.return_value = ("integer", "bigint")
+        with self.assertRaisesRegex(RuntimeError, "column types differ"):
+            verify_destination_fk_types(pg, fks[0], columns)
 
     def test_zero_dates(self):
         self.assertTrue(zero_date("0000-00-00"))
@@ -503,13 +746,13 @@ class DdlTests(unittest.TestCase):
                             "nullable": False, "default": None, "data_type": "bigint",
                             "column_type": "bigint unsigned", "extra": "auto_increment",
                             "unsigned": True, "auto_increment": True, "collate": None}],
-                "child": [{"name": "id", "pg_type": "bigint", "generated": False,
+                        "child": [{"name": "id", "pg_type": "bigint", "generated": False,
                            "nullable": False, "default": None, "data_type": "bigint",
                            "column_type": "bigint", "extra": "auto_increment",
                            "unsigned": False, "auto_increment": True, "collate": None},
-                          {"name": "parent_id", "pg_type": "bigint", "generated": False,
-                           "nullable": True, "default": None, "data_type": "bigint",
-                           "column_type": "bigint", "extra": "", "unsigned": False,
+                          {"name": "parent_id", "pg_type": "integer", "generated": False,
+                           "nullable": True, "default": None, "data_type": "int",
+                           "column_type": "int(11)", "extra": "", "unsigned": False,
                            "auto_increment": False, "collate": None}],
             },
             "indexes": {"parent": {"PRIMARY": [{"non_unique": False, "column": "id",
@@ -519,10 +762,19 @@ class DdlTests(unittest.TestCase):
             "foreign_keys": [{"table": "child", "name": "fk_child_parent", "columns": [
                 {"column": "parent_id", "ref_table": "parent", "ref_column": "id",
                  "on_update": "RESTRICT", "on_delete": "RESTRICT"}]}],
+            "fk_type_normalizations": [{"table": "child", "column": "parent_id",
+                                         "referenced_table": "parent", "referenced_column": "id",
+                                         "source_pg_type": "integer", "referenced_pg_type": "bigint",
+                                         "target_pg_type": "bigint", "rule": "widen_signed_integer_foreign_key"}],
             "zero_value_counts": {}, "invalid_enum_counts": {},
         }
         sql = build_sql(catalog)
         self.assertIn("NOT VALID", sql["002_foreign_keys.sql"])
+        self.assertIn('ALTER TABLE "erp"."child" ALTER COLUMN "parent_id" TYPE bigint', sql["002_foreign_keys.sql"])
+        self.assertIn('CHECK ("parent_id" BETWEEN -2147483648 AND 2147483647)', sql["002_foreign_keys.sql"])
+        self.assertEqual(sql["002_foreign_keys.sql"].count("ALTER COLUMN"), 1)
+        self.assertNotIn("BEGIN;", sql["002_foreign_keys.sql"])
+        self.assertNotIn("COMMIT;", sql["002_foreign_keys.sql"])
         self.assertNotIn("VALIDATE CONSTRAINT", sql["002_foreign_keys.sql"])
         self.assertNotIn("FOREIGN KEY", sql["002_constraints_indexes.sql"])
         self.assertIn("VALIDATE CONSTRAINT", sql["002_validate_constraints.sql"])
