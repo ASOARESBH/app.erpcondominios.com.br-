@@ -17,7 +17,7 @@ from common import (ambiguous_sao_paulo_wall_time, convert_temporal, mysql_type_
                     json_contains_nul, verify_v9_postgres_connection, zero_date)
 from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, time_conversion_risks, validate_on_update_snapshot,
                      expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
-                     verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES,
+                     verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES, tenant_contract,
                      text_nul_counts_for_table)
 from reconcile import numeric_equal, sequence_status, verify_destination_fk
 from run_migration import BASELINE_MAIN_COMMIT, run_step, verify_baseline_ancestry
@@ -155,6 +155,18 @@ class TypeMappingTests(unittest.TestCase):
         statement = cursor.execute.call_args.args[0]
         self.assertIn("TIME_TO_SEC", statement)
         self.assertIn("MICROSECOND", statement)
+
+    def test_tenant_contract_fingerprint_is_stable_for_mapping_order(self):
+        tables = {"alpha": {}, "beta": {}}
+        columns = {
+            "alpha": [{"name": "tenant_id", "column_type": "int(11)", "nullable": False, "default": 1}],
+            "beta": [],
+        }
+        result = tenant_contract(tables, columns)
+        reversed_result = tenant_contract(dict(reversed(list(tables.items()))), columns)
+        self.assertEqual(result, reversed_result)
+        self.assertEqual(result[0], ["alpha"])
+        self.assertEqual(result[1], ["N|beta"])
 
     def test_enum_values_outside_domain_are_captured_without_rewriting(self):
         columns = {"items": [{"name": "state", "data_type": "enum", "domain_values": ["a", "b"]}]}

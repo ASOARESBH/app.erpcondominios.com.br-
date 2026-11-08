@@ -48,7 +48,7 @@ EXPECTED_COLLATION_COUNTS = {
     "utf8mb4_unicode_ci": 1098,
     "utf8_unicode_ci": 127,
 }
-EXPECTED_TENANT_SIGNATURE_SHA256 = "9002ad8f758aa50bde8eac846f291c264e74115ceb7a8762c50be9a6be9bd496"
+EXPECTED_TENANT_SIGNATURE_SHA256 = "d51a1cdc300c7730eaf92bbee6ee6debaf3e947b3831390749d342efb7401f77"
 EXPECTED_NO_TENANT_NAMES_SHA256 = "70b1a0fee9e2686abb45bfd10330399a818b4ecf71ec908406a37bf249a4d5ca"
 EXPECTED_FOREIGN_KEYS = {
     ("aplicativos_versoes", "fk_aplicativos_versoes_aplicativo"): (("aplicativo_id", "aplicativos_catalogo", "id", "CASCADE", "CASCADE"),),
