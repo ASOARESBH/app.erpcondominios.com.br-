@@ -18,7 +18,7 @@ from common import (ambiguous_sao_paulo_wall_time, convert_temporal, mysql_type_
 from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, time_conversion_risks, validate_on_update_snapshot,
                      expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
                      verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES, tenant_contract,
-                     text_nul_counts_for_table)
+                     text_nul_counts_for_table, validate_sensitive_column_defaults)
 from reconcile import numeric_equal, sequence_status, verify_destination_fk
 from run_migration import BASELINE_MAIN_COMMIT, run_step, verify_baseline_ancestry
 
@@ -54,6 +54,26 @@ class TypeMappingTests(unittest.TestCase):
         for message, code in cases.items():
             with self.subTest(code=code):
                 self.assertEqual(catalog_error_code(RuntimeError(message)), code)
+
+    def test_sensitive_column_defaults_require_exact_reviewed_allowlist(self):
+        approved = {
+            "face_descriptors": [{"name": "token_usado", "data_type": "tinyint", "default": "0"}],
+            "moradores": [{"name": "senha_temporaria", "data_type": "tinyint", "default": "0"}],
+            "pwa_notificacoes_push": [{"name": "total_tokens", "data_type": "int", "default": "0"}],
+            "pwa_oauth_cache": [{"name": "token_type", "data_type": "varchar", "default": "Bearer"}],
+        }
+        validate_sensitive_column_defaults(approved)
+        changed = {table: [dict(column) for column in columns] for table, columns in approved.items()}
+        changed["pwa_oauth_cache"][0]["default"] = "different"
+        with self.assertRaises(RuntimeError):
+            validate_sensitive_column_defaults(changed)
+        extra = {table: [dict(column) for column in columns] for table, columns in approved.items()}
+        extra["extra"] = [{"name": "api_token", "data_type": "varchar", "default": "unexpected"}]
+        with self.assertRaises(RuntimeError):
+            validate_sensitive_column_defaults(extra)
+        missing = {table: columns for table, columns in approved.items() if table != "moradores"}
+        with self.assertRaises(RuntimeError):
+            validate_sensitive_column_defaults(missing)
 
     def test_routine_signature_preserves_dtd_identifier_without_numeric_coercion(self):
         routine = {"parameters": [

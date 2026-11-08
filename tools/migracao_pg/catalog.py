@@ -500,6 +500,33 @@ def tenant_contract(tables, columns):
     return tenant_tables, no_tenant_lines, tenant_hash, no_tenant_hash
 
 
+SENSITIVE_DEFAULTS_ALLOWLIST = {
+    ("face_descriptors", "token_usado"): ("tinyint", "0"),
+    ("moradores", "senha_temporaria"): ("tinyint", "0"),
+    ("pwa_notificacoes_push", "total_tokens"): ("int", "0"),
+    ("pwa_oauth_cache", "token_type"): ("varchar", "Bearer"),
+}
+
+
+def validate_sensitive_column_defaults(columns):
+    pattern = re.compile(r"(?:senha|password|token|secret|hash|api[_-]?key|private[_-]?key)", re.I)
+    observed = set()
+    for table, cols in columns.items():
+        for col in cols:
+            default = col["default"]
+            if not pattern.search(col["name"]) or default in (None, "", "NULL", "null"):
+                continue
+            key = (table, col["name"])
+            expected = SENSITIVE_DEFAULTS_ALLOWLIST.get(key)
+            if isinstance(default, bytes):
+                default = default.decode("utf-8", "strict")
+            if expected is None or col["data_type"] != expected[0] or str(default) != expected[1]:
+                raise RuntimeError("sensitive column defaults require manual review before DDL generation")
+            observed.add(key)
+    if observed != set(SENSITIVE_DEFAULTS_ALLOWLIST):
+        raise RuntimeError("sensitive column defaults require manual review before DDL generation")
+
+
 def source_size(conn, tables):
     total = sum(x["data_length"] + x["index_length"] for x in tables.values())
     return total
@@ -781,11 +808,7 @@ def main():
                 or tenant_hash != EXPECTED_TENANT_SIGNATURE_SHA256
                 or no_tenant_hash != EXPECTED_NO_TENANT_NAMES_SHA256):
             raise RuntimeError("tenant_id coverage differs from approved rehearsal snapshot")
-        sensitive_defaults = [f"{table}.{col['name']}" for table, cols in columns.items() for col in cols
-                              if re.search(r"(?:senha|password|token|secret|hash|api[_-]?key|private[_-]?key)", col["name"], re.I)
-                              and col["default"] not in (None, "", "NULL", "null")]
-        if sensitive_defaults:
-            raise RuntimeError("sensitive column defaults require manual review before DDL generation")
+        validate_sensitive_column_defaults(columns)
         zero_counts = zero_value_counts(conn, tables, columns)
         time_risks = time_conversion_risks(conn, columns)
         if time_risks:
