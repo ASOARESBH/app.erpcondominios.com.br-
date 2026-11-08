@@ -179,6 +179,10 @@ class TypeMappingTests(unittest.TestCase):
         self.assertIn(f"PYTHONPATH={ROOT}", command)
         self.assertIn("PYTHONDONTWRITEBYTECODE=1", command)
 
+    def test_runner_disables_bytecode_before_importing_migration_modules(self):
+        source = (ROOT / "run_migration.py").read_text(encoding="utf-8")
+        self.assertLess(source.index("sys.dont_write_bytecode = True"), source.index("from common import"))
+
     def test_resume_history_accepts_only_the_approved_pre_fk_boundary(self):
         records = [{"event": "pipeline_started", "code_commit": APPROVED_RESUME_SOURCE_COMMIT,
                     "batch_size": 1000},

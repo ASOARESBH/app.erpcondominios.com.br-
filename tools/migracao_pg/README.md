@@ -17,7 +17,7 @@ O pipeline é exclusivo para a cópia de ensaio restaurada do dump autorizado e 
 Depois de publicar e revisar o commit dedicado, o operador autorizado executa no servidor (o SHA deve ser substituído pelo commit revisado):
 
 ```bash
-sudo /usr/bin/python3 /opt/erpcondominios/pg-03-conversion/tools/migracao_pg/run_migration.py \
+sudo /usr/bin/python3 -B /opt/erpcondominios/pg-03-conversion/tools/migracao_pg/run_migration.py \
   --database erp_ensaio_v9 \
   --expected-commit <SHA40_REVISADO> \
   --batch-size 1000

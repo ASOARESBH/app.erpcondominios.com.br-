@@ -15,6 +15,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 from common import generated_name
 
 PGDATA = Path("/var/lib/erp-pg-rehearsal/pg-data")
