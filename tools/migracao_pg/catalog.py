@@ -322,11 +322,13 @@ def validate_trigger_snapshot(triggers):
         raise RuntimeError("trigger definitions differ from approved rehearsal snapshot")
 
 
-def validate_on_update_snapshot(columns):
-    path = Path(__file__).with_name("expected_on_update_columns.json")
+def validate_on_update_snapshot(columns, manifest_path=None):
+    path = Path(manifest_path) if manifest_path is not None else Path(__file__).with_name("expected_on_update_columns.json")
     raw = path.read_bytes()
     expected = json.loads(raw)
-    if expected.get("schema") != SCHEMA or expected.get("count") != 111 or columns != expected.get("columns"):
+    if expected.get("schema") != SCHEMA or expected.get("count") != 111:
+        raise RuntimeError("ON UPDATE CURRENT_TIMESTAMP manifest metadata differs from approved rehearsal snapshot")
+    if columns != expected.get("columns"):
         raise RuntimeError("ON UPDATE CURRENT_TIMESTAMP column list differs from approved rehearsal snapshot")
     return hashlib.sha256(raw).hexdigest()
 
@@ -865,6 +867,7 @@ CATALOG_ERROR_CODES = {
     "official source clone provenance or clean baseline check failed": "source_clone_provenance_mismatch",
     "NULL encountered while inspecting ENUM domain": "enum_null_member",
     "ON UPDATE CURRENT_TIMESTAMP column list differs from approved rehearsal snapshot": "on_update_columns_mismatch",
+    "ON UPDATE CURRENT_TIMESTAMP manifest metadata differs from approved rehearsal snapshot": "on_update_manifest_metadata_mismatch",
     "sensitive column defaults require manual review before DDL generation": "sensitive_column_default",
     "source column collation inventory differs from approved rehearsal snapshot": "source_collation_mismatch",
     "source MySQL grants are not the exact approved read-only set": "source_grants_mismatch",

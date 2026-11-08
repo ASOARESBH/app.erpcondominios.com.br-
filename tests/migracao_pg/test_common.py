@@ -48,6 +48,7 @@ class TypeMappingTests(unittest.TestCase):
             "ENUM value is not valid UTF-8": "enum_value_not_utf8",
             "NULL encountered while inspecting ENUM domain": "enum_null_member",
             "ON UPDATE CURRENT_TIMESTAMP column list differs from approved rehearsal snapshot": "on_update_columns_mismatch",
+            "ON UPDATE CURRENT_TIMESTAMP manifest metadata differs from approved rehearsal snapshot": "on_update_manifest_metadata_mismatch",
             "invalid MySQL client configuration": "mysql_client_config_invalid",
         }
         for message, code in cases.items():
@@ -129,8 +130,16 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(len(validate_on_update_snapshot(manifest["columns"])), len(hashlib.sha256().hexdigest()))
         changed = list(manifest["columns"])
         changed.pop()
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(RuntimeError) as mismatch:
             validate_on_update_snapshot(changed)
+        self.assertEqual(catalog_error_code(mismatch.exception), "on_update_columns_mismatch")
+        with tempfile.TemporaryDirectory() as directory:
+            altered_manifest = dict(manifest, count=manifest["count"] - 1)
+            path = Path(directory) / "expected.json"
+            path.write_text(json.dumps(altered_manifest), encoding="utf-8")
+            with self.assertRaises(RuntimeError) as bad_metadata:
+                validate_on_update_snapshot(manifest["columns"], manifest_path=path)
+        self.assertEqual(catalog_error_code(bad_metadata.exception), "on_update_manifest_metadata_mismatch")
 
     def test_time_risk_counts_are_aggregated_and_column_scoped(self):
         connection = MagicMock()

@@ -10,6 +10,7 @@ Registro de alterações significativas no ERP.
 - Suíte sintética local cobre tipos, datas/UTC→hora civil, zero-date, ENUM/SET, FKs, sequences, roles e regras fail-closed. A carga v9 e reconciliação integral permanecem como gate obrigatório antes de homologação; produção segue MySQL.
 - As tentativas do runner foram bloqueadas antes de criar o database: um resumo agregado anterior omitia uma tabela candidata a backup. Consulta metadata-only atual de INFORMATION_SCHEMA confirmou 12 candidatas; a allowlist e o teste foram alinhados ao catálogo atual. Nenhum cluster foi iniciado e nenhuma carga PostgreSQL ocorreu nas tentativas bloqueadas.
 - O catálogo compara assinaturas de procedures pelo `DTD_IDENTIFIER` literal (por exemplo, `text`, sem inferir tamanho). O runner cobre os 27 `RuntimeError` estáticos com categorias sem mensagem bruta; 48 testes locais passam. As tentativas anteriores pararam antes de criar o database; o cluster v9 permaneceu parado.
+- A consulta metadata-only atual confirma correspondência exata das 111 colunas `ON UPDATE` com o manifesto local. O gate foi dividido entre metadados do manifesto e a lista para localizar uma divergência interna do catalogador; a carga não foi iniciada e o cluster segue parado.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado
