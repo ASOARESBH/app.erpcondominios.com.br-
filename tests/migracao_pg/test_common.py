@@ -20,7 +20,7 @@ from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, ti
                      verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES, tenant_contract,
                      text_nul_counts_for_table, validate_sensitive_column_defaults)
 from reconcile import numeric_equal, sequence_status, verify_destination_fk
-from run_migration import (APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT, as_postgres, run_step,
+from run_migration import (APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT, apply_sql, as_postgres, run_step,
                            validate_resume_history, validate_resume_table_inventory,
                            verify_baseline_ancestry, verify_resume_code_ancestry, verify_resume_target)
 
@@ -99,6 +99,32 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(record["error_code"], "source_collation_mismatch")
         self.assertEqual(record["error_type"], "RuntimeError")
 
+    def test_runner_extracts_only_postgres_sqlstate(self):
+        proc = MagicMock()
+        proc.stdout = iter(["psql:/private.sql: ERROR: 42501: permission denied for synthetic object\n"])
+        proc.wait.return_value = 1
+        proc.returncode = 1
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "run.jsonl"
+            with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, "phase foreign_keys_not_valid failed"):
+                    run_step(["psql"], "foreign_keys_not_valid", log)
+            content = log.read_text(encoding="utf-8")
+            record = json.loads(content)
+        self.assertEqual(record["error_type"], "PostgreSQLError")
+        self.assertEqual(record["error_code"], "postgresql_error")
+        self.assertEqual(record["sqlstate"], "42501")
+        self.assertNotIn("permission denied", content)
+
+    def test_foreign_key_sql_is_atomic_and_sqlstate_only(self):
+        with patch("run_migration.as_postgres", side_effect=lambda *args: [str(arg) for arg in args]):
+            with patch("run_migration.run_step") as runner:
+                apply_sql("erp_ensaio_v9", Path("/tmp/fks.sql"), "foreign_keys_not_valid", Path("/tmp/run.jsonl"))
+        command = runner.call_args.args[0]
+        self.assertIn("-1", command)
+        self.assertIn("VERBOSITY=sqlstate", command)
+        self.assertEqual(command[-2:], ["-f", Path("/tmp/fks.sql")])
+
     def test_nul_aggregate_counts_text_without_values(self):
         columns = [{"name": "descricao", "data_type": "text"}, {"name": "titulo", "data_type": "varchar"}]
         with patch("catalog.query", return_value=[(2, 1)]) as query_mock:
@@ -164,13 +190,21 @@ class TypeMappingTests(unittest.TestCase):
         outputs = [MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8|270|0"),
                    MagicMock(returncode=0, stdout="erp.fixture|3\n")]
         with patch("run_migration.subprocess.run", side_effect=outputs) as run:
-            verify_resume_target("erp_ensaio_v9", summary, loader)
+            self.assertEqual(verify_resume_target("erp_ensaio_v9", summary, loader), 0)
         count_query = run.call_args_list[1].args[0][-1]
         self.assertIn('"erp"."fixture"', count_query)
         outputs[1].stdout = "erp.fixture|2\n"
         with patch("run_migration.subprocess.run", side_effect=outputs):
             with self.assertRaisesRegex(RuntimeError, "counts differ"):
                 verify_resume_target("erp_ensaio_v9", summary, loader)
+
+    def test_resume_target_reports_existing_foreign_key_count(self):
+        summary = {"legacy_tables": []}
+        loader = {"table_metrics": [{"table": "fixture", "source_rows": 3}], "source_rows_loaded": 3}
+        outputs = [MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8|270|2"),
+                   MagicMock(returncode=0, stdout="erp.fixture|3\n")]
+        with patch("run_migration.subprocess.run", side_effect=outputs):
+            self.assertEqual(verify_resume_target("erp_ensaio_v9", summary, loader), 2)
 
     def test_resume_table_inventory_accepts_partial_legacy_candidate_map(self):
         metrics = [{"table": f"t{index}", "source_rows": 0} for index in range(270)]

@@ -274,6 +274,9 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                     error_code = code_match.group(1)
                 if "sqlstate=" in line:
                     sqlstate = line.rsplit("sqlstate=", 1)[1].split()[0]
+                state_match = re.search(r"\b(?:ERROR|FATAL):\s*([0-9A-Z]{5})(?=[:\s])", line)
+                if state_match:
+                    error_type, error_code, sqlstate = "PostgreSQLError", "postgresql_error", state_match.group(1)
                 continue
             try:
                 item = json.loads(line)
@@ -287,6 +290,9 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                     error_code = code_match.group(1)
                 if "sqlstate=" in line:
                     sqlstate = line.rsplit("sqlstate=", 1)[1].split()[0]
+                state_match = re.search(r"\b(?:ERROR|FATAL):\s*([0-9A-Z]{5})(?=[:\s])", line)
+                if state_match:
+                    error_type, error_code, sqlstate = "PostgreSQLError", "postgresql_error", state_match.group(1)
                 continue
             if item.get("event") == "table_loaded":
                 safe = {"table": item.get("table"), "rows": item.get("source_rows"),
@@ -613,8 +619,11 @@ def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dic
     preflight = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-At", "-h", PGSOCKET,
                                "-p", str(PGPORT), "-U", "postgres", "-d", dbname, "-c", preflight_sql),
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if preflight.returncode or preflight.stdout.strip() != "America/Sao_Paulo|UTF8|270|0":
+    fields = preflight.stdout.strip().split("|")
+    if (preflight.returncode or len(fields) != 4 or fields[:3] != ["America/Sao_Paulo", "UTF8", "270"]
+            or not fields[3].isdigit() or int(fields[3]) > 11):
         raise RuntimeError("partial rehearsal target does not match its expected pre-harness state")
+    foreign_key_count = int(fields[3])
     result = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-A", "-t", "-F", "|",
                              "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET, "-p", str(PGPORT),
                              "-U", "postgres", "-d", dbname, "-c", query),
@@ -629,11 +638,16 @@ def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dic
         actual[parts[0]] = int(parts[1])
     if actual != expected or sum(actual.values()) != loader_summary.get("source_rows_loaded"):
         raise RuntimeError("partial target counts differ from recorded loaded metrics")
+    return foreign_key_count
 
 
 def apply_sql(dbname: str, path: Path, phase: str, log: Path):
-    run_step(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET,
-              "-p", str(PGPORT), "-U", "postgres", "-d", dbname, "-f", path), phase, log)
+    command = as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=sqlstate",
+                          "-h", PGSOCKET, "-p", str(PGPORT), "-U", "postgres", "-d", dbname)
+    if phase == "foreign_keys_not_valid":
+        command.append("-1")
+    command.extend(("-f", path))
+    run_step(command, phase, log)
 
 
 def stop_rehearsal_cluster(log: Path, reason: str):
@@ -739,9 +753,11 @@ def main():
             emit_log(log, "resume_artifacts_verified", source_run=APPROVED_RESUME_RUN_ID,
                      tables=270, rows=loader_summary.get("source_rows_loaded"))
             cluster_started_here = start_cluster(log, run_dir)
-            verify_resume_target(args.database, catalog_summary, loader_summary)
+            existing_fk_count = verify_resume_target(args.database, catalog_summary, loader_summary)
             emit_log(log, "resume_target_counts_verified", tables=270,
-                     rows=loader_summary.get("source_rows_loaded"))
+                     rows=loader_summary.get("source_rows_loaded"), existing_foreign_keys=existing_fk_count)
+            if existing_fk_count != 0:
+                raise RuntimeError("partial target contains foreign keys before the approved resume boundary")
         else:
             catalog = run_dir / "catalog.json"
             run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
