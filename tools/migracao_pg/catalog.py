@@ -22,7 +22,7 @@ OFFICIAL_ORIGIN = "https://github.com/ASOARESBH/app.erpcondominios.com.br-.git"
 APPROVED_BASE = "f60739713e6de3f2473b79ecd14a70fd700e5462"
 BACKUP_NAME = re.compile(r"(?:^|_)(?:bkp|backup|old|copy)(?:_|$)|(?:_20\d{6,14})$", re.I)
 EXPECTED_BACKUP_CANDIDATES = {
-    "avaliacoes_backup", "documentos_departamentos_migrado_bkp", "mt_os_chamados_id_zero_backup", "mt_protocolos_id_zero_backup",
+    "avaliacoes_backup", "mt_os_chamados_id_zero_backup", "mt_protocolos_id_zero_backup",
     "rbac_sessoes_bkp_ids_a_partir_15_20261027", "rbac_usuario_grupos_bkp_ids_a_partir_15_20261027",
     "rbac_usuario_permissoes_bkp_ids_a_partir_15_20261027", "sessoes_usuarios_bkp_ids_a_partir_15_20261027",
     "usuarios_bkp_duplicata_admin_20261027", "usuarios_bkp_ids_a_partir_15_20261027",

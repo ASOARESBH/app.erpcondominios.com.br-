@@ -8,6 +8,7 @@ Registro de alterações significativas no ERP.
 ### Validado/limites
 - Gate 2 aprovado por André em 08/11/2026 exclusivamente para fins de conversão do catálogo do snapshot (270 tabelas, 3.339 colunas); não é aprovação de equivalência pós-snapshot, deploy, DNS ou cutover.
 - Suíte sintética local cobre tipos, datas/UTC→hora civil, zero-date, ENUM/SET, FKs, sequences, roles e regras fail-closed. A carga v9 e reconciliação integral permanecem como gate obrigatório antes de homologação; produção segue MySQL.
+- A primeira execução do runner parou no catálogo antes de criar o database PostgreSQL porque a allowlist esperava uma tabela de backup ausente no snapshot; a lista foi corrigida para as 11 tabelas existentes e os 44 testes sintéticos passaram. Nenhuma carga foi iniciada nessa tentativa.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado

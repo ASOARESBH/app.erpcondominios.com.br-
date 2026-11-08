@@ -25,8 +25,14 @@ class TypeMappingTests(unittest.TestCase):
         self.assertTrue(json_contains_nul(b'{"outer":[{"key\\u0000":"value"}]}'))
         self.assertFalse(json_contains_nul(b'{"outer":[{"key":"value"}]}'))
 
-    def test_backup_candidate_snapshot_includes_documentos_backup(self):
-        self.assertIn("documentos_departamentos_migrado_bkp", EXPECTED_BACKUP_CANDIDATES)
+    def test_backup_candidate_snapshot_matches_approved_catalog(self):
+        self.assertEqual(EXPECTED_BACKUP_CANDIDATES, {
+            "avaliacoes_backup", "mt_os_chamados_id_zero_backup", "mt_protocolos_id_zero_backup",
+            "rbac_sessoes_bkp_ids_a_partir_15_20261027", "rbac_usuario_grupos_bkp_ids_a_partir_15_20261027",
+            "rbac_usuario_permissoes_bkp_ids_a_partir_15_20261027", "sessoes_usuarios_bkp_ids_a_partir_15_20261027",
+            "usuarios_bkp_duplicata_admin_20261027", "usuarios_bkp_ids_a_partir_15_20261027",
+            "usuario_modulos_bkp_ids_a_partir_15_20261027", "usuario_tenant_bkp_ids_a_partir_15_20261027",
+        })
 
     def test_nul_aggregate_counts_text_without_values(self):
         columns = [{"name": "descricao", "data_type": "text"}, {"name": "titulo", "data_type": "varchar"}]
