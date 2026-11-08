@@ -122,7 +122,7 @@ class TypeMappingTests(unittest.TestCase):
                 apply_sql("erp_ensaio_v9", Path("/tmp/fks.sql"), "foreign_keys_not_valid", Path("/tmp/run.jsonl"))
         command = runner.call_args.args[0]
         self.assertIn("-1", command)
-        self.assertIn("VERBOSITY=sqlstate", command)
+        self.assertIn("VERBOSITY=verbose", command)
         self.assertEqual(command[-2:], ["-f", Path("/tmp/fks.sql")])
 
     def test_nul_aggregate_counts_text_without_values(self):

@@ -274,7 +274,9 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                     error_code = code_match.group(1)
                 if "sqlstate=" in line:
                     sqlstate = line.rsplit("sqlstate=", 1)[1].split()[0]
-                state_match = re.search(r"\b(?:ERROR|FATAL):\s*([0-9A-Z]{5})(?=[:\s])", line)
+                state_match = re.search(r"\bSQL state:\s*([0-9A-Z]{5})\b", line)
+                if not state_match:
+                    state_match = re.search(r"\b(?:ERROR|FATAL):\s*([0-9A-Z]{5})(?=[:\s])", line)
                 if state_match:
                     error_type, error_code, sqlstate = "PostgreSQLError", "postgresql_error", state_match.group(1)
                 continue
@@ -290,7 +292,9 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                     error_code = code_match.group(1)
                 if "sqlstate=" in line:
                     sqlstate = line.rsplit("sqlstate=", 1)[1].split()[0]
-                state_match = re.search(r"\b(?:ERROR|FATAL):\s*([0-9A-Z]{5})(?=[:\s])", line)
+                state_match = re.search(r"\bSQL state:\s*([0-9A-Z]{5})\b", line)
+                if not state_match:
+                    state_match = re.search(r"\b(?:ERROR|FATAL):\s*([0-9A-Z]{5})(?=[:\s])", line)
                 if state_match:
                     error_type, error_code, sqlstate = "PostgreSQLError", "postgresql_error", state_match.group(1)
                 continue
@@ -642,7 +646,7 @@ def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dic
 
 
 def apply_sql(dbname: str, path: Path, phase: str, log: Path):
-    command = as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=sqlstate",
+    command = as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose",
                           "-h", PGSOCKET, "-p", str(PGPORT), "-U", "postgres", "-d", dbname)
     if phase == "foreign_keys_not_valid":
         command.append("-1")
