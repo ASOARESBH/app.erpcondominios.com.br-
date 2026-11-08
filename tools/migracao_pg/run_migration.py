@@ -31,6 +31,9 @@ BASELINE_MAIN_COMMIT = "f60739713e6de3f2473b79ecd14a70fd700e5462"
 APPROVED_RESUME_RUN_ID = "20261108T181755Z"
 APPROVED_RESUME_SOURCE_COMMIT = "95fbf8a458cf86d2fe2d70679ba613526ca1b1de"
 APPROVED_RESUME_SOURCE_ROWS = 202609
+APPROVED_POST_FK_RUN_ID = "20261108T203651Z"
+APPROVED_POST_FK_SOURCE_COMMIT = "d4447f9867cda910122f9b3b9e4d797b425cf5a4"
+APPROVED_POST_FK_MANIFEST = Path("/root/erp_pg_v9_post_fk_20261108_manifest.json")
 V9_ROOT = Path("/var/lib/erp-pg-rehearsal/v9")
 RUN_ROOT = Path("/var/lib/erp-pg-rehearsal/v9/runs")
 TMPFS_ROOT = Path("/dev/shm/erp-pg-v9")
@@ -73,9 +76,10 @@ def verify_baseline_ancestry(repository: Path, commit: str):
         raise RuntimeError("migration code commit is not descended from the approved baseline")
 
 
-def verify_resume_code_ancestry(repository: Path, commit: str):
+def verify_resume_code_ancestry(repository: Path, commit: str,
+                                source_commit: str = APPROVED_RESUME_SOURCE_COMMIT):
     ancestry = subprocess.run(["git", "-C", str(repository), "merge-base", "--is-ancestor",
-                               APPROVED_RESUME_SOURCE_COMMIT, commit], capture_output=True, text=True)
+                               source_commit, commit], capture_output=True, text=True)
     if ancestry.returncode != 0:
         raise RuntimeError("resume code commit is not descended from the approved partial-run commit")
 
@@ -264,6 +268,7 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
     ACTIVE_PROCESS = proc
     error_type = "unknown"
     error_code = "unknown"
+    error_stage = "none"
     sqlstate = "none"
     try:
         for raw_line in proc.stdout:
@@ -273,9 +278,14 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                                "RECONCILIATION_FAILED type=", "TRIGGER_TEST_FAILED type="):
                     if marker in line:
                         error_type = line.split(marker, 1)[1].split()[0]
+                if line.startswith("RECONCILIATION_BLOCKED "):
+                    error_type = "ReconciliationBlocked"
                 code_match = re.search(r"(?:^|\s)code=([a-z0-9_]+)(?:\s|$)", line)
                 if code_match:
                     error_code = code_match.group(1)
+                stage_match = re.search(r"(?:^|\s)stage=([a-z0-9_]+)(?:\s|$)", line)
+                if stage_match:
+                    error_stage = stage_match.group(1)
                 if "sqlstate=" in line:
                     sqlstate = line.rsplit("sqlstate=", 1)[1].split()[0]
                 state_match = re.search(r"\bSQL state:\s*([0-9A-Z]{5})\b", line)
@@ -291,9 +301,14 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                                "RECONCILIATION_FAILED type=", "TRIGGER_TEST_FAILED type="):
                     if marker in line:
                         error_type = line.split(marker, 1)[1].split()[0]
+                if line.startswith("RECONCILIATION_BLOCKED "):
+                    error_type = "ReconciliationBlocked"
                 code_match = re.search(r"(?:^|\s)code=([a-z0-9_]+)(?:\s|$)", line)
                 if code_match:
                     error_code = code_match.group(1)
+                stage_match = re.search(r"(?:^|\s)stage=([a-z0-9_]+)(?:\s|$)", line)
+                if stage_match:
+                    error_stage = stage_match.group(1)
                 if "sqlstate=" in line:
                     sqlstate = line.rsplit("sqlstate=", 1)[1].split()[0]
                 state_match = re.search(r"\bSQL state:\s*([0-9A-Z]{5})\b", line)
@@ -349,7 +364,8 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
     elapsed = round(time.monotonic() - started, 3)
     if return_code:
         emit_log(log, "step_failed", phase=phase, exit_code=proc.returncode,
-                 error_type=error_type, error_code=error_code, sqlstate=sqlstate, elapsed_seconds=elapsed)
+                 error_type=error_type, error_code=error_code, error_stage=error_stage,
+                 sqlstate=sqlstate, elapsed_seconds=elapsed)
         raise RuntimeError(f"phase {phase} failed; see private aggregate log")
     emit_log(log, "step_complete", phase=phase, exit_code=0, elapsed_seconds=elapsed)
     print(json.dumps({"event": "phase_complete", "phase": phase, "elapsed_seconds": elapsed}), flush=True)
@@ -503,6 +519,61 @@ def validate_resume_history(records, previous_commit: str, batch_size: int = 100
         raise RuntimeError("partial run has advanced beyond the harness resume point")
     if any(item.get("event") == "pipeline_accepted" for item in records):
         raise RuntimeError("accepted runs cannot be resumed")
+
+
+def validate_post_fk_resume_history(records, source_run_id: str):
+    expected_tests = {
+        "erp_app_minimum_privileges", "on_update_timestamp_semantics", "after_qrcode_token_insert",
+        "after_validacao_dispositivo_insert", "trg_alerta_estoque_baixo", "trg_atualizar_km_acumulado",
+        "tr_dependente_ativar_veiculos", "tr_dependente_inativar_veiculos", "tr_dependente_deletar_veiculos",
+        "corrigir_moradores_anexos_tenant", "mt_adicionar_coluna",
+    }
+    starts = [item for item in records if item.get("event") == "pipeline_started"]
+    if (len(starts) != 1 or starts[0].get("database") != "erp_ensaio_v9"
+            or starts[0].get("code_commit") != APPROVED_POST_FK_SOURCE_COMMIT
+            or starts[0].get("batch_size") != 1000 or starts[0].get("resume_source_run") != APPROVED_RESUME_RUN_ID):
+        raise RuntimeError("post-FK run provenance differs from the approved rehearsal")
+    phases = [item.get("phase") for item in records if item.get("event") == "step_complete"]
+    expected_phases = ["resume_catalog_regeneration", "business_trigger_tests", "foreign_keys_not_valid", "analyze"]
+    if phases != expected_phases:
+        raise RuntimeError("post-FK run did not complete the exact approved phase sequence")
+    tests = [item.get("test") for item in records if item.get("event") == "synthetic_test_pass"]
+    if len(tests) != len(expected_tests) or set(tests) != expected_tests:
+        raise RuntimeError("post-FK run lacks the exact approved synthetic test results")
+    artifacts = [item for item in records if item.get("event") == "resume_artifacts_verified"]
+    catalog_delta = [item for item in records if item.get("event") == "resume_catalog_delta_verified"]
+    target = [item for item in records if item.get("event") == "resume_target_counts_verified"]
+    if (len(artifacts) != 1 or artifacts[0].get("source_run") != APPROVED_RESUME_RUN_ID
+            or artifacts[0].get("tables") != 270 or artifacts[0].get("rows") != APPROVED_RESUME_SOURCE_ROWS
+            or len(catalog_delta) != 1 or catalog_delta[0].get("source_run") != APPROVED_RESUME_RUN_ID
+            or catalog_delta[0].get("fk_type_normalizations") != 3
+            or catalog_delta[0].get("source_rows") != APPROVED_RESUME_SOURCE_ROWS
+            or len(target) != 1 or target[0].get("tables") != 270
+            or target[0].get("rows") != APPROVED_RESUME_SOURCE_ROWS
+            or target[0].get("existing_foreign_keys") != 0):
+        raise RuntimeError("post-FK run lacks the approved source and target preflight evidence")
+    failures = [item for item in records if item.get("event") == "step_failed"]
+    blocked = [item for item in records if item.get("event") == "pipeline_blocked"]
+    stopped = [item for item in records if item.get("event") == "postgres_cluster_stopped"]
+    if (len(failures) != 1 or failures[0].get("phase") != "reconciliation"
+            or failures[0].get("error_type") != "RuntimeError"
+            or failures[0].get("error_code") != "unknown"
+            or failures[0].get("sqlstate") != "none"
+            or len(blocked) != 1 or len(stopped) != 1
+            or blocked[0].get("stop_error") is not None or blocked[0].get("cleanup_error") is not None
+            or stopped[0].get("reason") != "pipeline_failure"):
+        raise RuntimeError("post-FK run did not stop at the reviewed reconciliation boundary")
+    if any(item.get("event") in {"cluster_stop_failed_finally", "credential_tmpfs_cleanup_failed_finally"}
+           for item in records):
+        raise RuntimeError("post-FK source run recorded an incomplete cleanup")
+    forbidden = {"empty_target_created", "loader_metrics_verified", "table_loaded", "table_reconciled",
+                 "reconciliation_summary", "pipeline_accepted"}
+    if any(item.get("event") in forbidden for item in records):
+        raise RuntimeError("post-FK run contains a forbidden creation, load, or acceptance event")
+    if any(item.get("event") == "step_failed" and item.get("phase") != "reconciliation" for item in records):
+        raise RuntimeError("post-FK run has an unexpected failed phase")
+    if source_run_id != APPROVED_POST_FK_RUN_ID:
+        raise RuntimeError("post-FK source run identifier is not explicitly approved")
 
 
 def validate_resume_table_inventory(metrics, legacy_tables, legacy_classification):
@@ -747,6 +818,131 @@ def validate_resume_catalog_transition(previous_summary: dict, regenerated_summa
             raise RuntimeError("resume DDL changed outside the reviewed FK normalization files")
 
 
+def load_post_fk_artifacts(source_run_id: str, postgres_uid: int):
+    if source_run_id != APPROVED_POST_FK_RUN_ID:
+        raise RuntimeError("post-FK source run identifier is not explicitly approved")
+    run_dir = RUN_ROOT / ("run_" + source_run_id)
+    log = RUN_ROOT / (source_run_id + ".jsonl")
+    for path, expected_mode, expected_uid, directory in (
+            (run_dir, 0o700, postgres_uid, True), (run_dir / "sql", 0o700, postgres_uid, True),
+            (log, 0o600, 0, False)):
+        item = path.lstat()
+        if (stat.S_ISLNK(item.st_mode) or item.st_uid != expected_uid
+                or stat.S_IMODE(item.st_mode) != expected_mode
+                or (directory and not stat.S_ISDIR(item.st_mode))
+                or (not directory and not stat.S_ISREG(item.st_mode))):
+            raise RuntimeError("post-FK source run ownership or mode is unsafe")
+    records = []
+    for line in log.read_text(encoding="utf-8").splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            raise RuntimeError("post-FK source run log is malformed") from None
+        if isinstance(item, dict):
+            records.append(item)
+    validate_post_fk_resume_history(records, source_run_id)
+    required_sql = {
+        "001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql",
+        "002_validate_constraints.sql", "003_identity_sequences.sql",
+        "004_on_update_timestamp.sql", "005_business_triggers_routines.sql", "006_grants.sql",
+    }
+    if {path.name for path in (run_dir / "sql").glob("*.sql")} != required_sql:
+        raise RuntimeError("post-FK source DDL inventory is incomplete or unexpected")
+    catalog_path = run_dir / "catalog.json"
+    routine_path = run_dir / "routine_snapshot.json"
+    for path in (catalog_path, routine_path):
+        item = path.lstat()
+        if (stat.S_ISLNK(item.st_mode) or not stat.S_ISREG(item.st_mode)
+                or item.st_uid != postgres_uid or stat.S_IMODE(item.st_mode) != 0o600):
+            raise RuntimeError("post-FK source evidence ownership or mode is unsafe")
+    summary = json.loads(catalog_path.read_text(encoding="utf-8"))
+    snapshot = json.loads(routine_path.read_text(encoding="utf-8"))
+    ddl_hashes = summary.get("ddl_sha256")
+    if (not isinstance(ddl_hashes, dict) or set(ddl_hashes) != required_sql
+            or any(summary.get(key) != value for key, value in {
+                "tables": 270, "columns": 3339, "foreign_keys": 11, "triggers": 7,
+                "routines": 2, "events": 0, "auto_increment_columns": 232,
+            }.items())):
+        raise RuntimeError("post-FK source catalog summary differs from the approved rehearsal shape")
+    for name, digest in ddl_hashes.items():
+        path = run_dir / "sql" / name
+        item = path.lstat()
+        if (stat.S_ISLNK(item.st_mode) or not stat.S_ISREG(item.st_mode)
+                or item.st_uid != postgres_uid or stat.S_IMODE(item.st_mode) != 0o600
+                or not re.fullmatch(r"[0-9a-f]{64}", str(digest))
+                or hashlib.sha256(path.read_bytes()).hexdigest() != digest):
+            raise RuntimeError("post-FK source DDL failed its recorded hash check")
+    return run_dir, log, summary, snapshot
+
+
+def verify_post_fk_run_manifest(post_fk_run_id: str, postgres_uid: int, *,
+                                manifest_path: Path | None = None, root_uid: int = 0):
+    if post_fk_run_id != APPROVED_POST_FK_RUN_ID:
+        raise RuntimeError("post-FK manifest run identifier is not explicitly approved")
+    manifest_path = manifest_path or APPROVED_POST_FK_MANIFEST
+    manifest_stat = manifest_path.lstat()
+    if (stat.S_ISLNK(manifest_stat.st_mode) or not stat.S_ISREG(manifest_stat.st_mode)
+            or manifest_stat.st_uid != root_uid or stat.S_IMODE(manifest_stat.st_mode) != 0o600):
+        raise RuntimeError("post-FK run manifest ownership or mode is unsafe")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if (set(manifest) != {"schema_version", "post_fk_run_id", "post_fk_code_commit", "resume_run_id",
+                          "resume_code_commit", "files"}
+            or manifest.get("schema_version") != 1
+            or manifest.get("post_fk_run_id") != APPROVED_POST_FK_RUN_ID
+            or manifest.get("post_fk_code_commit") != APPROVED_POST_FK_SOURCE_COMMIT
+            or manifest.get("resume_run_id") != APPROVED_RESUME_RUN_ID
+            or manifest.get("resume_code_commit") != APPROVED_RESUME_SOURCE_COMMIT):
+        raise RuntimeError("post-FK run manifest does not match the approved run provenance")
+    post_dir = RUN_ROOT / ("run_" + APPROVED_POST_FK_RUN_ID)
+    resume_dir = RUN_ROOT / ("run_" + APPROVED_RESUME_RUN_ID)
+    expected_paths = {
+        RUN_ROOT / (APPROVED_POST_FK_RUN_ID + ".jsonl"), post_dir / "catalog.json",
+        post_dir / "routine_snapshot.json", RUN_ROOT / (APPROVED_RESUME_RUN_ID + ".jsonl"),
+        resume_dir / "catalog.json", resume_dir / "loader_summary.json", resume_dir / "routine_snapshot.json",
+    }
+    required_sql = {
+        "001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql",
+        "002_validate_constraints.sql", "003_identity_sequences.sql",
+        "004_on_update_timestamp.sql", "005_business_triggers_routines.sql", "006_grants.sql",
+    }
+    expected_paths.update(post_dir / "sql" / name for name in required_sql)
+    expected_paths.update(resume_dir / "sql" / name for name in required_sql)
+    file_hashes = manifest.get("files")
+    if (not isinstance(file_hashes, dict)
+            or set(file_hashes) != {str(path.relative_to(RUN_ROOT)) for path in expected_paths}):
+        raise RuntimeError("post-FK run manifest file inventory is incomplete or unexpected")
+    for path in expected_paths:
+        item = path.lstat()
+        expected_uid = root_uid if path.suffix == ".jsonl" else postgres_uid
+        if (stat.S_ISLNK(item.st_mode) or not stat.S_ISREG(item.st_mode)
+                or item.st_uid != expected_uid or stat.S_IMODE(item.st_mode) != 0o600
+                or not re.fullmatch(r"[0-9a-f]{64}", str(file_hashes[str(path.relative_to(RUN_ROOT))]))
+                or hashlib.sha256(path.read_bytes()).hexdigest() != file_hashes[str(path.relative_to(RUN_ROOT))]):
+            raise RuntimeError("post-FK run evidence differs from its root-owned manifest")
+
+
+def validate_catalog_artifact_snapshot(source_summary: dict, current_summary: dict,
+                                       source_sql_dir: Path, current_sql_dir: Path,
+                                       postgres_uid: int):
+    if source_summary != current_summary:
+        raise RuntimeError("source catalog summary changed after the post-FK run")
+    required_sql = set(source_summary.get("ddl_sha256", {}))
+    if (required_sql != {path.name for path in source_sql_dir.glob("*.sql")}
+            or required_sql != {path.name for path in current_sql_dir.glob("*.sql")}):
+        raise RuntimeError("source catalog DDL inventory changed after the post-FK run")
+    for name in required_sql:
+        source = source_sql_dir / name
+        current = current_sql_dir / name
+        for path in (source, current):
+            item = path.lstat()
+            if (stat.S_ISLNK(item.st_mode) or not stat.S_ISREG(item.st_mode)
+                    or item.st_uid != postgres_uid or stat.S_IMODE(item.st_mode) != 0o600):
+                raise RuntimeError("source catalog DDL artifact ownership or mode is unsafe")
+        if (source.read_bytes() != current.read_bytes()
+                or hashlib.sha256(current.read_bytes()).hexdigest() != current_summary["ddl_sha256"][name]):
+            raise RuntimeError("source catalog DDL changed after the post-FK run")
+
+
 def quote_pg_ident(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
@@ -815,6 +1011,69 @@ def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dic
     return foreign_key_count
 
 
+def verify_post_fk_target(dbname: str, catalog_summary: dict, loader_summary: dict):
+    metrics = loader_summary.get("table_metrics")
+    legacy_tables = catalog_summary.get("legacy_tables")
+    legacy_classification = catalog_summary.get("legacy_classification")
+    validate_resume_table_inventory(metrics, legacy_tables, legacy_classification)
+    if (loader_summary.get("tables_loaded") != 270
+            or loader_summary.get("source_rows_loaded") != APPROVED_RESUME_SOURCE_ROWS
+            or sum(item["source_rows"] for item in metrics) != APPROVED_RESUME_SOURCE_ROWS):
+        raise RuntimeError("post-FK source row evidence differs from the approved loaded snapshot")
+    preflight_sql = (
+        "SELECT current_setting('TimeZone')||'|'||current_setting('server_encoding')||'|'||"
+        "(SELECT COUNT(*) FROM pg_tables WHERE schemaname IN ('erp','legado'))||'|'||"
+        "(SELECT COUNT(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace "
+        "WHERE c.contype='f' AND n.nspname IN ('erp','legado'))||'|'||"
+        "(SELECT COUNT(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace "
+        "WHERE c.contype='f' AND NOT c.convalidated AND n.nspname IN ('erp','legado'))||'|'||"
+        "(SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
+        "WHERE a.attrelid='erp.aplicativos_versoes'::regclass AND a.attname='aplicativo_id' "
+        "AND a.attnum>0 AND NOT a.attisdropped)||'|'||"
+        "(SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
+        "WHERE a.attrelid='erp.moradores_anexos'::regclass AND a.attname='morador_id' "
+        "AND a.attnum>0 AND NOT a.attisdropped)||'|'||"
+        "(SELECT format_type(a.atttypid,a.atttypmod) FROM pg_attribute a "
+        "WHERE a.attrelid='erp.rbac_auditoria'::regclass AND a.attname='sessao_id' "
+        "AND a.attnum>0 AND NOT a.attisdropped)"
+    )
+    preflight = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-At", "-v", "ON_ERROR_STOP=1",
+                                           "-h", PGSOCKET, "-p", str(PGPORT), "-U", "postgres",
+                                           "-d", dbname, "-c", preflight_sql),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    fields = preflight.stdout.strip().split("|")
+    if (preflight.returncode or fields != ["America/Sao_Paulo", "UTF8", "270", "11", "11",
+                                           "bigint", "bigint", "bigint"]):
+        raise RuntimeError("post-FK rehearsal target does not match the exact approved FK boundary")
+    legacy = set(legacy_tables)
+    expected = {}
+    branches = []
+    for item in metrics:
+        table = item["table"]
+        schema = "legado" if table in legacy else "erp"
+        label = f"{schema}.{table}"
+        if label in expected:
+            raise RuntimeError("post-FK source table metrics contain duplicates")
+        expected[label] = int(item["source_rows"])
+        qualified = f"{quote_pg_ident(schema)}.{quote_pg_ident(table)}"
+        branches.append(f"SELECT {quote_pg_literal(label)}::text,COUNT(*)::bigint FROM {qualified}")
+    result = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-A", "-t", "-F", "|",
+                                        "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET, "-p", str(PGPORT),
+                                        "-U", "postgres", "-d", dbname, "-c", " UNION ALL ".join(branches)),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode:
+        raise RuntimeError("post-FK table-count verification failed")
+    actual = {}
+    for line in result.stdout.splitlines():
+        parts = line.split("|")
+        if len(parts) != 2 or not parts[1].isdigit() or parts[0] in actual:
+            raise RuntimeError("post-FK table-count result is malformed")
+        actual[parts[0]] = int(parts[1])
+    if actual != expected or sum(actual.values()) != APPROVED_RESUME_SOURCE_ROWS:
+        raise RuntimeError("post-FK table counts differ from the approved loaded snapshot")
+    return 11
+
+
 def apply_sql(dbname: str, path: Path, phase: str, log: Path):
     command = as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose",
                           "-h", PGSOCKET, "-p", str(PGPORT), "-U", "postgres", "-d", dbname)
@@ -822,6 +1081,14 @@ def apply_sql(dbname: str, path: Path, phase: str, log: Path):
         command.append("-1")
     command.extend(("-f", path))
     run_step(command, phase, log)
+
+
+def run_reconciliation_step(base, dbname: str, mysql_config: Path, run_dir: Path, log: Path):
+    return run_step([*base, str(CODE_ROOT / "reconcile.py"), "--mysql-config", str(mysql_config),
+                     "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", dbname,
+                     "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / "reconciliacao_v9.csv"),
+                     "--summary", str(run_dir / "reconciliation_summary.json")],
+                    "reconciliation", log, whitelist_json=True)
 
 
 def stop_rehearsal_cluster(log: Path, reason: str):
@@ -851,13 +1118,22 @@ def main():
     ap.add_argument("--expected-commit", required=True)
     ap.add_argument("--batch-size", type=int, default=1000)
     ap.add_argument("--resume-partial-target", action="store_true")
+    ap.add_argument("--resume-post-fk-reconciliation", action="store_true")
+    ap.add_argument("--source-run-id")
     args = ap.parse_args()
     if args.database != "erp_ensaio_v9":
         raise SystemExit("refusing any destination except the approved empty rehearsal database erp_ensaio_v9")
     if args.batch_size < 1 or args.batch_size > 10000:
         raise SystemExit("batch size out of range")
-    if args.resume_partial_target and args.batch_size != 1000:
+    if args.resume_partial_target and args.resume_post_fk_reconciliation:
+        raise SystemExit("resume modes are mutually exclusive")
+    if (args.resume_partial_target or args.resume_post_fk_reconciliation) and args.batch_size != 1000:
         raise SystemExit("approved partial target can only resume with its original batch size")
+    if args.resume_post_fk_reconciliation:
+        if args.source_run_id != APPROVED_POST_FK_RUN_ID:
+            raise SystemExit("post-FK reconciliation requires its exact approved source run id")
+    elif args.source_run_id is not None:
+        raise SystemExit("source run id is accepted only in post-FK reconciliation mode")
     if os.geteuid() != 0:
         raise SystemExit("runner must start as root so it can verify container namespace")
     signal.signal(signal.SIGTERM, handle_signal)
@@ -866,6 +1142,9 @@ def main():
     verify_code_provenance(args.expected_commit)
     if args.resume_partial_target:
         verify_resume_code_ancestry(CODE_ROOT.parents[1], args.expected_commit)
+    elif args.resume_post_fk_reconciliation:
+        verify_resume_code_ancestry(CODE_ROOT.parents[1], args.expected_commit,
+                                    APPROVED_POST_FK_SOURCE_COMMIT)
     verify_private_mysql_config(MYSQL_SECRET_SOURCE)
     verify_private_mysql_config(MYSQL_ADMIN_CONFIG)
     if not REPO_ROOT.is_dir() or not PG_PYTHON.is_file():
@@ -903,7 +1182,8 @@ def main():
     started = time.monotonic()
     emit_log(log, "pipeline_started", database=args.database, batch_size=args.batch_size,
              mysql_container=MYSQL_CONTAINER, code_commit=args.expected_commit,
-             resume_source_run=APPROVED_RESUME_RUN_ID if args.resume_partial_target else None)
+             resume_source_run=APPROVED_RESUME_RUN_ID if args.resume_partial_target else None,
+             post_fk_source_run=args.source_run_id if args.resume_post_fk_reconciliation else None)
     try:
         copy_private_config(MYSQL_SECRET_SOURCE, mysql_config, postgres.pw_gid)
         mysql_pid = check_mysql_namespace()
@@ -916,7 +1196,42 @@ def main():
         os.chown(routine_snapshot, postgres.pw_uid, postgres.pw_gid)
         emit_log(log, "routine_fingerprints_verified", count=2)
         base = ["nsenter", f"--net=/proc/{mysql_pid}/ns/net", "--", *as_postgres(PG_PYTHON, "-s")]
-        if args.resume_partial_target:
+        if args.resume_post_fk_reconciliation:
+            post_fk_run_dir, _post_fk_log, post_fk_summary, post_fk_snapshot = load_post_fk_artifacts(
+                args.source_run_id, postgres.pw_uid)
+            verify_post_fk_run_manifest(args.source_run_id, postgres.pw_uid)
+            resume_run_dir, _resume_log, base_summary, loader_summary, base_snapshot = load_resume_artifacts(
+                APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, args.batch_size, postgres.pw_uid)
+            if snapshot != post_fk_snapshot or snapshot != base_snapshot:
+                raise RuntimeError("routine snapshot changed after the post-FK source run")
+            validate_resume_catalog_transition(base_summary, post_fk_summary,
+                                               resume_run_dir / "sql", post_fk_run_dir / "sql",
+                                               postgres.pw_uid)
+            emit_log(log, "post_fk_artifacts_verified", source_run=args.source_run_id,
+                     tables=270, rows=loader_summary.get("source_rows_loaded"))
+            regenerated_catalog = run_dir / "catalog.json"
+            run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
+                      "--output", str(run_dir / "sql"), "--summary", str(regenerated_catalog),
+                      "--repo-root", str(REPO_ROOT), "--target-database", args.database,
+                      "--routine-snapshot", str(routine_snapshot)],
+                     "post_fk_catalog_regeneration", log, whitelist_json=True)
+            summary_info = regenerated_catalog.lstat()
+            if (not stat.S_ISREG(summary_info.st_mode) or stat.S_ISLNK(summary_info.st_mode)
+                    or summary_info.st_uid != postgres.pw_uid or stat.S_IMODE(summary_info.st_mode) != 0o600):
+                raise RuntimeError("regenerated post-FK catalog summary ownership or mode is unsafe")
+            catalog_summary = json.loads(regenerated_catalog.read_text(encoding="utf-8"))
+            validate_catalog_artifact_snapshot(post_fk_summary, catalog_summary,
+                                               post_fk_run_dir / "sql", run_dir / "sql", postgres.pw_uid)
+            ddl_dir = run_dir / "sql"
+            emit_log(log, "post_fk_catalog_verified", source_run=args.source_run_id,
+                     fk_type_normalizations=3, source_rows=loader_summary.get("source_rows_loaded"))
+            cluster_started_here = start_cluster(log, run_dir)
+            existing_fk_count = verify_post_fk_target(args.database, catalog_summary, loader_summary)
+            emit_log(log, "post_fk_target_verified", tables=270,
+                     rows=loader_summary.get("source_rows_loaded"), existing_foreign_keys=existing_fk_count)
+            if existing_fk_count != 11:
+                raise RuntimeError("post-FK target lacks the exact reviewed foreign key count")
+        elif args.resume_partial_target:
             if args.expected_commit == APPROVED_RESUME_SOURCE_COMMIT:
                 raise RuntimeError("resume code must be a new commit descended from the partial-run commit")
             resume_run_dir, _resume_log, catalog_summary, loader_summary, resume_source_snapshot = load_resume_artifacts(
@@ -986,20 +1301,17 @@ def main():
             apply_sql(args.database, ddl_dir / "004_on_update_timestamp.sql", "on_update_triggers", log)
             apply_sql(args.database, ddl_dir / "005_business_triggers_routines.sql", "business_objects", log)
             apply_sql(args.database, ddl_dir / "006_grants.sql", "grants", log)
-        harness = CODE_ROOT.parents[1] / "tests" / "migracao_pg" / "trigger_harness.py"
-        run_step([*base, str(harness),
-                  "--mysql-config", str(mysql_config), "--repo-root", str(REPO_ROOT),
-                  "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database],
-                 "business_trigger_tests", log, whitelist_json=True)
-        apply_sql(args.database, ddl_dir / "002_foreign_keys.sql", "foreign_keys_not_valid", log)
-        run_step(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET,
-                  "-p", str(PGPORT), "-U", "postgres", "-d", args.database, "-c", "ANALYZE;"),
-                 "analyze", log)
-        run_step([*base, str(CODE_ROOT / "reconcile.py"), "--mysql-config", str(mysql_config),
-                  "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database,
-                  "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / "reconciliacao_v9.csv"),
-                  "--summary", str(run_dir / "reconciliation_summary.json")],
-                 "reconciliation", log, whitelist_json=True)
+        if not args.resume_post_fk_reconciliation:
+            harness = CODE_ROOT.parents[1] / "tests" / "migracao_pg" / "trigger_harness.py"
+            run_step([*base, str(harness),
+                      "--mysql-config", str(mysql_config), "--repo-root", str(REPO_ROOT),
+                      "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database],
+                     "business_trigger_tests", log, whitelist_json=True)
+            apply_sql(args.database, ddl_dir / "002_foreign_keys.sql", "foreign_keys_not_valid", log)
+            run_step(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET,
+                      "-p", str(PGPORT), "-U", "postgres", "-d", args.database, "-c", "ANALYZE;"),
+                     "analyze", log)
+        run_reconciliation_step(base, args.database, mysql_config, run_dir, log)
         summary_path = run_dir / "reconciliation_summary.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         if (summary.get("tables") != 270

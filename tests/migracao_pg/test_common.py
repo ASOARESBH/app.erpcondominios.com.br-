@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 import hashlib
 import io
@@ -20,11 +21,16 @@ from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, ti
                      verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES,
                      EXPECTED_FK_TYPE_NORMALIZATIONS, normalize_fk_types, tenant_contract,
                      text_nul_counts_for_table, validate_sensitive_column_defaults)
-from reconcile import numeric_equal, sequence_status, verify_destination_fk, verify_destination_fk_types
-from run_migration import (APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT, apply_sql, as_postgres, run_step,
-                           quote_pg_literal, validate_resume_history, validate_resume_table_inventory,
-                           validate_resume_catalog_transition, safe_summary_scalars,
-                           verify_baseline_ancestry, verify_resume_code_ancestry, verify_resume_target)
+from reconcile import (numeric_equal, sequence_status, verify_destination_fk, verify_destination_fk_types,
+                       verify_signed_integer_range_checks)
+from run_migration import (APPROVED_POST_FK_RUN_ID, APPROVED_POST_FK_SOURCE_COMMIT,
+                           APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT,
+                           apply_sql, as_postgres, run_reconciliation_step, run_step,
+                           quote_pg_literal, validate_post_fk_resume_history, validate_resume_history,
+                           validate_resume_table_inventory, validate_resume_catalog_transition,
+                           validate_catalog_artifact_snapshot, verify_post_fk_run_manifest, safe_summary_scalars,
+                           verify_baseline_ancestry, verify_resume_code_ancestry, verify_resume_target,
+                           verify_post_fk_target)
 
 
 class TypeMappingTests(unittest.TestCase):
@@ -109,6 +115,41 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(record["error_code"], "source_collation_mismatch")
         self.assertEqual(record["error_type"], "RuntimeError")
 
+    def test_runner_records_only_reconciliation_stage_code_and_sqlstate(self):
+        proc = MagicMock()
+        proc.stdout = iter(["RECONCILIATION_FAILED type=RuntimeError stage=table_destination_hash "
+                            "code=reconciliation_table_destination_hash sqlstate=none\n"])
+        proc.wait.return_value = 1
+        proc.returncode = 1
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "run.jsonl"
+            with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, "phase reconciliation failed"):
+                    run_step(["reconcile"], "reconciliation", log, whitelist_json=True)
+            content = log.read_text(encoding="utf-8")
+            record = json.loads(content)
+        self.assertEqual(record["error_type"], "RuntimeError")
+        self.assertEqual(record["error_code"], "reconciliation_table_destination_hash")
+        self.assertEqual(record["error_stage"], "table_destination_hash")
+        self.assertEqual(record["sqlstate"], "none")
+        self.assertNotIn("ERROR:", content)
+
+    def test_runner_records_sanitized_reconciliation_metrics_block(self):
+        proc = MagicMock()
+        proc.stdout = iter(["RECONCILIATION_BLOCKED stage=metrics_gate code=reconciliation_metrics_mismatch\n"])
+        proc.wait.return_value = 2
+        proc.returncode = 2
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "run.jsonl"
+            with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, "phase reconciliation failed"):
+                    run_step(["reconcile"], "reconciliation", log, whitelist_json=True)
+            record = json.loads(log.read_text(encoding="utf-8"))
+        self.assertEqual(record["error_type"], "ReconciliationBlocked")
+        self.assertEqual(record["error_stage"], "metrics_gate")
+        self.assertEqual(record["error_code"], "reconciliation_metrics_mismatch")
+        self.assertEqual(record["sqlstate"], "none")
+
     def test_runner_extracts_only_postgres_sqlstate(self):
         proc = MagicMock()
         proc.stdout = iter(["psql:/private.sql: ERROR: 42501: permission denied for synthetic object\n"])
@@ -134,6 +175,62 @@ class TypeMappingTests(unittest.TestCase):
         self.assertIn("-1", command)
         self.assertIn("VERBOSITY=verbose", command)
         self.assertEqual(command[-2:], ["-f", Path("/tmp/fks.sql")])
+
+    def test_post_fk_execution_helper_invokes_only_reconciliation(self):
+        with patch("run_migration.run_step") as runner:
+            run_reconciliation_step(["nsenter", "python"], "erp_ensaio_v9", Path("/tmp/client.cnf"),
+                                    Path("/tmp/run"), Path("/tmp/run.jsonl"))
+        self.assertEqual(runner.call_count, 1)
+        command, phase, _log = runner.call_args.args
+        self.assertEqual(phase, "reconciliation")
+        self.assertTrue(any(str(item).endswith("reconcile.py") for item in command))
+        self.assertFalse(any(token in str(item) for item in command
+                             for token in ("loader.py", "trigger_harness.py", "002_foreign_keys.sql", "ANALYZE")))
+
+    def test_post_fk_target_requires_exact_initial_fk_state_and_counts(self):
+        names = [f"fixture_{index:03d}" for index in range(270)]
+        metrics = [{"table": name, "source_rows": 202609 if index == 0 else 0}
+                   for index, name in enumerate(names)]
+        summary = {"legacy_tables": [], "legacy_classification": {}}
+        loader = {"tables_loaded": 270, "source_rows_loaded": 202609, "table_metrics": metrics}
+        fields = "America/Sao_Paulo|UTF8|270|11|11|bigint|bigint|bigint"
+        rows = "\n".join(f"erp.{name}|{metric['source_rows']}" for name, metric in zip(names, metrics))
+        with patch("run_migration.subprocess.run", side_effect=[
+                MagicMock(returncode=0, stdout=fields), MagicMock(returncode=0, stdout=rows)]) as run:
+            self.assertEqual(verify_post_fk_target("erp_ensaio_v9", summary, loader), 11)
+        self.assertEqual(run.call_count, 2)
+        with patch("run_migration.subprocess.run", return_value=MagicMock(
+                returncode=0, stdout="America/Sao_Paulo|UTF8|270|11|10|bigint|bigint|bigint")) as run:
+            with self.assertRaisesRegex(RuntimeError, "post-FK rehearsal target"):
+                verify_post_fk_target("erp_ensaio_v9", summary, loader)
+        self.assertEqual(run.call_count, 1)
+
+    def test_signed_integer_checks_match_exact_tables_and_ranges(self):
+        normalizations = [
+            {"table": "aplicativos_versoes", "column": "aplicativo_id",
+             "rule": "widen_signed_integer_foreign_key"},
+            {"table": "moradores_anexos", "column": "morador_id",
+             "rule": "widen_signed_integer_foreign_key"},
+            {"table": "rbac_auditoria", "column": "sessao_id",
+             "rule": "narrow_unsigned_bigint_with_verified_range"},
+        ]
+        rows = []
+        for item in normalizations[:2]:
+            name = generated_name("ck", item["table"], item["column"], "mysql_signed_int_range")
+            definition = (f"CHECK (({item['column']} >= -2147483648) AND "
+                          f"({item['column']} <= 2147483647))")
+            if item["table"] == "aplicativos_versoes":
+                definition = (f"CHECK (({item['column']} >= '-2147483648'::bigint) AND "
+                              f"({item['column']} <= '2147483647'::int8))")
+            rows.append(("erp", item["table"], name, definition, True))
+        pg = MagicMock()
+        pg.cursor.return_value.__enter__.return_value.fetchall.return_value = rows
+        verify_signed_integer_range_checks(pg, normalizations)
+        rows[0] = (*rows[0][:3], "CHECK ((aplicativo_id >= -2147483647) AND "
+                   "(aplicativo_id <= 2147483647))", True)
+        pg.cursor.return_value.__enter__.return_value.fetchall.return_value = rows
+        with self.assertRaisesRegex(RuntimeError, "range-check definitions"):
+            verify_signed_integer_range_checks(pg, normalizations)
 
     def test_nul_aggregate_counts_text_without_values(self):
         columns = [{"name": "descricao", "data_type": "text"}, {"name": "titulo", "data_type": "varchar"}]
@@ -182,6 +279,116 @@ class TypeMappingTests(unittest.TestCase):
     def test_runner_disables_bytecode_before_importing_migration_modules(self):
         source = (ROOT / "run_migration.py").read_text(encoding="utf-8")
         self.assertLess(source.index("sys.dont_write_bytecode = True"), source.index("from common import"))
+
+    def post_fk_history_fixture(self):
+        tests = {
+            "erp_app_minimum_privileges", "on_update_timestamp_semantics", "after_qrcode_token_insert",
+            "after_validacao_dispositivo_insert", "trg_alerta_estoque_baixo", "trg_atualizar_km_acumulado",
+            "tr_dependente_ativar_veiculos", "tr_dependente_inativar_veiculos", "tr_dependente_deletar_veiculos",
+            "corrigir_moradores_anexos_tenant", "mt_adicionar_coluna",
+        }
+        records = [{"event": "pipeline_started", "database": "erp_ensaio_v9",
+                    "code_commit": APPROVED_POST_FK_SOURCE_COMMIT, "batch_size": 1000,
+                    "resume_source_run": APPROVED_RESUME_RUN_ID},
+                   {"event": "resume_artifacts_verified", "source_run": APPROVED_RESUME_RUN_ID,
+                    "tables": 270, "rows": 202609},
+                   {"event": "resume_catalog_delta_verified", "source_run": APPROVED_RESUME_RUN_ID,
+                    "fk_type_normalizations": 3, "source_rows": 202609},
+                   {"event": "resume_target_counts_verified", "tables": 270,
+                    "rows": 202609, "existing_foreign_keys": 0}]
+        records.extend({"event": "step_complete", "phase": phase} for phase in (
+            "resume_catalog_regeneration", "business_trigger_tests", "foreign_keys_not_valid", "analyze"))
+        records.extend({"event": "synthetic_test_pass", "test": name} for name in sorted(tests))
+        records.extend([{"event": "step_failed", "phase": "reconciliation", "error_type": "RuntimeError",
+                         "error_code": "unknown", "sqlstate": "none"},
+                        {"event": "pipeline_blocked", "stop_error": None, "cleanup_error": None},
+                        {"event": "postgres_cluster_stopped", "reason": "pipeline_failure"}])
+        return records
+
+    def test_post_fk_resume_history_accepts_only_the_exact_reviewed_boundary(self):
+        records = self.post_fk_history_fixture()
+        validate_post_fk_resume_history(records, APPROVED_POST_FK_RUN_ID)
+        for mutate in (
+                lambda items: items.pop(next(i for i, row in enumerate(items)
+                                             if row.get("event") == "synthetic_test_pass")),
+                lambda items: items.append({"event": "pipeline_accepted"}),
+                lambda items: items.append({"event": "table_loaded"}),
+                lambda items: items.append({"event": "table_reconciled"}),
+                lambda items: items.__setitem__(0, {**items[0], "resume_source_run": "other"}),
+                lambda items: items.__setitem__(next(i for i, row in enumerate(items)
+                                                      if row.get("event") == "step_failed"),
+                                                {"event": "step_failed", "phase": "analyze",
+                                                 "error_type": "RuntimeError", "error_code": "unknown",
+                                                 "sqlstate": "none"}),
+        ):
+            altered = self.post_fk_history_fixture()
+            mutate(altered)
+            with self.assertRaises(RuntimeError):
+                validate_post_fk_resume_history(altered, APPROVED_POST_FK_RUN_ID)
+
+    def test_post_fk_resume_rejects_any_source_run_other_than_explicit_id(self):
+        with self.assertRaisesRegex(RuntimeError, "source run identifier"):
+            validate_post_fk_resume_history(self.post_fk_history_fixture(), "20261108T999999Z")
+
+    def test_post_fk_catalog_snapshot_requires_identical_private_ddl(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            current = root / "current"
+            source.mkdir()
+            current.mkdir()
+            body = "CREATE TABLE fixture (id bigint);\n"
+            digest = hashlib.sha256(body.encode()).hexdigest()
+            for folder in (source, current):
+                path = folder / "001_schema.sql"
+                path.write_text(body, encoding="utf-8")
+                path.chmod(0o600)
+            summary = {"ddl_sha256": {"001_schema.sql": digest}, "tables": 270}
+            validate_catalog_artifact_snapshot(summary, dict(summary), source, current, os.geteuid())
+            (current / "001_schema.sql").write_text(body + "-- drift\n", encoding="utf-8")
+            (current / "001_schema.sql").chmod(0o600)
+            with self.assertRaisesRegex(RuntimeError, "DDL changed"):
+                validate_catalog_artifact_snapshot(summary, dict(summary), source, current, os.geteuid())
+
+    def test_post_fk_manifest_binds_exact_runs_and_private_artifact_hashes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runs = root / "runs"
+            post = runs / ("run_" + APPROVED_POST_FK_RUN_ID)
+            resume = runs / ("run_" + APPROVED_RESUME_RUN_ID)
+            required_sql = {
+                "001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql",
+                "002_validate_constraints.sql", "003_identity_sequences.sql",
+                "004_on_update_timestamp.sql", "005_business_triggers_routines.sql", "006_grants.sql",
+            }
+            paths = [runs / (APPROVED_POST_FK_RUN_ID + ".jsonl"), post / "catalog.json",
+                     post / "routine_snapshot.json", runs / (APPROVED_RESUME_RUN_ID + ".jsonl"),
+                     resume / "catalog.json", resume / "loader_summary.json", resume / "routine_snapshot.json"]
+            paths.extend(post / "sql" / name for name in required_sql)
+            paths.extend(resume / "sql" / name for name in required_sql)
+            hashes = {}
+            for path in paths:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                content = f"private fixture {path.name}\n"
+                path.write_text(content, encoding="utf-8")
+                path.chmod(0o600)
+                hashes[str(path.relative_to(runs))] = hashlib.sha256(content.encode()).hexdigest()
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps({
+                "schema_version": 1, "post_fk_run_id": APPROVED_POST_FK_RUN_ID,
+                "post_fk_code_commit": APPROVED_POST_FK_SOURCE_COMMIT,
+                "resume_run_id": APPROVED_RESUME_RUN_ID,
+                "resume_code_commit": APPROVED_RESUME_SOURCE_COMMIT, "files": hashes,
+            }), encoding="utf-8")
+            manifest_path.chmod(0o600)
+            with patch("run_migration.RUN_ROOT", runs):
+                verify_post_fk_run_manifest(APPROVED_POST_FK_RUN_ID, os.geteuid(),
+                                             manifest_path=manifest_path, root_uid=os.geteuid())
+                (post / "catalog.json").write_text("changed\n", encoding="utf-8")
+                (post / "catalog.json").chmod(0o600)
+                with self.assertRaisesRegex(RuntimeError, "root-owned manifest"):
+                    verify_post_fk_run_manifest(APPROVED_POST_FK_RUN_ID, os.geteuid(),
+                                                manifest_path=manifest_path, root_uid=os.geteuid())
 
     def test_resume_history_accepts_only_the_approved_pre_fk_boundary(self):
         records = [{"event": "pipeline_started", "code_commit": APPROVED_RESUME_SOURCE_COMMIT,
