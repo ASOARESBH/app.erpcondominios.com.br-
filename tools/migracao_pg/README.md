@@ -34,6 +34,10 @@ As 11 assinaturas de FK são verificadas contra allowlist exata. Neste snapshot,
 
 A reconciliação canonicaliza somente os aliases equivalentes de `format_type` (`character varying(n)` → `varchar(n)` e `character(n)` → `char(n)`), preservando rigorosamente o typmod; diferenças de comprimento ou de tipo continuam bloqueando.
 
+## Estado do ensaio atual
+
+O run pós-FK `20261108T214035Z` terminou exit 0/`ACCEPTED`: 270/270 tabelas (202.609 linhas em cada lado), zero divergência de hash, PK/identity/sequence, numeric, binário, buckets tenant e timestamps; as 11 FKs foram validadas sem órfãos. O CSV contém 270 linhas. Esse resultado aceita a equivalência do target preservado, mas não demonstra um único ciclo contínuo de criação/carga/testes/reconciliação desde o zero; houve retomadas fail-closed de estágios após correções publicadas. Não limpar o target nem os ensaios antigos até a decisão de aceite global por André. O cluster v9 está parado.
+
 ## Artefatos e privacidade
 
 - Logs e resultados da execução: `/var/lib/erp-pg-rehearsal/v9/runs/`, owner `postgres`, diretórios `0700`, arquivos `0600`.
