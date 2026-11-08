@@ -2,6 +2,13 @@
 
 Registro de alterações significativas no ERP.
 
+## [3.0.0-pre] - 2026-11-08
+### Adicionado
+- **Migração PostgreSQL — Fase C (ensaio privado):** pipeline v9 em `tools/migracao_pg/` para catálogo MySQL read-only, DDL revisável, carga streaming, testes de triggers e reconciliação agregada. Fonte é o snapshot autorizado do dump 2026-11-07; o dump, dados e segredos não são versionados.
+### Validado/limites
+- Gate 2 aprovado por André em 08/11/2026 exclusivamente para fins de conversão do catálogo do snapshot (270 tabelas, 3.339 colunas); não é aprovação de equivalência pós-snapshot, deploy, DNS ou cutover.
+- Suíte sintética local cobre tipos, datas/UTC→hora civil, zero-date, ENUM/SET, FKs, sequences, roles e regras fail-closed. A carga v9 e reconciliação integral permanecem como gate obrigatório antes de homologação; produção segue MySQL.
+
 ## [2.1.26] - 2026-11-05
 ### Adicionado
 - **Chat-In** (menu abaixo de Recursos Humanos): comunicador interno entre usuários do painel e moradores (Portal e app). Botão flutuante + painel lateral fixável/minimizável, página do painel, status online, busca por nome/unidade, histórico permanente, bloqueio, ocultar-se da busca, emojis, push FCM no app com deep link. Detalhes em `AI-CONTEXT/CHATIN.md`. Migration `sql/migration_chatin_mysql57.sql`.

@@ -1,0 +1,2 @@
+PyMySQL==1.2.3
+psycopg[binary]==3.3.8

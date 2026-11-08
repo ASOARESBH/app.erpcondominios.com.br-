@@ -1,0 +1,31 @@
+{
+  "schema": "inlaud99_erpcondor",
+  "routines": [
+    {
+      "name": "corrigir_moradores_anexos_tenant",
+      "type": "PROCEDURE",
+      "definition_sha256": "8ebbcb3d5126d7fe8bb3a3ceb6a5033b0e90df31146d89a3f81590af6669f331",
+      "definition_bytes": 158,
+      "data_access": "CONTAINS SQL",
+      "deterministic": "NO",
+      "security_type": "DEFINER",
+      "sql_mode": "NO_AUTO_VALUE_ON_ZERO",
+      "parameters": []
+    },
+    {
+      "name": "mt_adicionar_coluna",
+      "type": "PROCEDURE",
+      "definition_sha256": "249370be8741b5dd85a00d6cfcce2f54cd58896441408eda5b178963a5c5b140",
+      "definition_bytes": 501,
+      "data_access": "CONTAINS SQL",
+      "deterministic": "NO",
+      "security_type": "DEFINER",
+      "sql_mode": "NO_AUTO_VALUE_ON_ZERO",
+      "parameters": [
+        {"position": 1, "name": "p_tabela", "mode": "IN", "type": "varchar", "dtd": "varchar(64)"},
+        {"position": 2, "name": "p_coluna", "mode": "IN", "type": "varchar", "dtd": "varchar(64)"},
+        {"position": 3, "name": "p_definicao", "mode": "IN", "type": "text", "dtd": "text"}
+      ]
+    }
+  ]
+}

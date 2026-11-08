@@ -23,3 +23,7 @@ Após backup, deploy dos arquivos e aplicação de `sql/migration_alertas_unidad
 
 ## 6. Chat-In (2026-11-05)
 Após backup: executar no phpMyAdmin `sql/migration_chatin_mysql57.sql` e `sql/migration_assembleia_tenant_mysql57.sql` (conferir `assembleias_sem_tenant = 0`). Enviar os arquivos web. O widget se desativa sozinho enquanto a migration não existir. Para desligar o push do Chat-In em um condomínio: `pwa_configuracoes` chave `push_chatin_ativo` = '0'. App: `flutter analyze` + novo build para o push/telas do Chat-In.
+
+## 7. Ensaio PostgreSQL na Hetzner (2026-11-08)
+
+O PostgreSQL 18 é somente ensaio privado, socket-only e separado do cluster de serviço. Não configurar DNS, Nginx/PHP-FPM público, portas HTTP/HTTPS/5432, deploy, aplicação funcional ou credenciais do ERP para esse ensaio. A cópia do dump fica em armazenamento privado e nunca em Git/webroot; preservar o original. A carga v9 deve usar um database novo aprovado, validar código/cluster e parar somente o cluster de ensaio após a execução. Gate 2 aprovado para conversão não é autorização de cutover. Produção continua no HostGator/MySQL até plano de virada, backup final, reconciliação, rollback e autorização humana explícita.

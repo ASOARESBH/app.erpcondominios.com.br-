@@ -123,3 +123,11 @@ A migration `sql/migration_rh_banco_horas_mapeamento_mysql57.sql` pressupõe a m
 `sql/migration_chatin_mysql57.sql` cria: `chatin_conversas`, `chatin_participantes`, `chatin_mensagens`, `chatin_presenca`, `chatin_preferencias`, `chatin_bloqueios`, `notificacao_canais_config`, `eventos_condominio`. Todas com `tenant_id` e índices iniciando por ele; só `CREATE TABLE IF NOT EXISTS` (compatível com phpMyAdmin sem acesso a `INFORMATION_SCHEMA`). Detalhes em `CHATIN.md` §3.
 `sql/migration_assembleia_tenant_mysql57.sql` adiciona `assembleias.tenant_id` + índice `idx_assembleias_tenant_data` com backfill (criador → `usuarios.tenant_id`; vínculo único em `usuario_tenant`; instalação com um único `tenants`). Idempotente por handlers 1060/1061, sem `INFORMATION_SCHEMA`. Linhas sem tenant ficam invisíveis na API.
 Chave opcional `pwa_configuracoes.push_chatin_ativo` = '0' desliga o push do Chat-In no tenant.
+
+## Migração PostgreSQL (ensaio privado, 2026-11-08)
+
+O banco de produção continua MySQL/Percona no HostGator; PostgreSQL 18 na Hetzner é somente ambiente de ensaio isolado, sem conexão do ERP. Gate 2 foi aprovado por André para conversão usando o catálogo metadata-only da cópia restaurada do dump completo de 2026-11-07; não representa mudanças posteriores da produção. O snapshot contém 270 tabelas, 3.339 colunas, 11 FKs, 7 triggers, 2 procedures, 232 `AUTO_INCREMENT`, 228 tabelas com `tenant_id` e 42 sem.
+
+O pipeline versionado em `tools/migracao_pg/` é fail-closed: `DATETIME` → `timestamp(0) without time zone`; `TIMESTAMP` é lido em UTC e convertido para hora civil de `America/Sao_Paulo`; datas zero/parcial-zero vão a `NULL` com contagem; `TIME` não representável bloqueia; valores textuais são preservados e NUL textual bloqueia. Destinos usam schemas `erp` e `legado`, roles técnicas `erp_owner`/`erp_app`, privilégios mínimos e identities alinhadas. Nunca inferir tenant nem transformar automaticamente regras não mapeadas.
+
+Dump, credenciais, linhas de negócio e logs brutos são privados e nunca versionados. Reconciliação de contagens/hashes/agregados, FKs, tenancy, sequences e timestamps deve passar antes de qualquer homologação de aplicação. Gate 2 não aprova Fase D em produção, deploy, DNS, cutover ou limpeza do backup original.
