@@ -1,6 +1,6 @@
 # Pendências e artefatos necessários
 
-> **Estado:** Gate 2 fechado/não aprovado. A Fase 2.3 foi publicada no repositório autorizado. A tentativa anterior da Fase 2.4 no phpMyAdmin não retornou resultados. Foi preparado o pacote de consultas independentes e o manual assistido, mas nenhum bloco novo foi executado e nenhum conjunto live foi confirmado. Não houve alteração de dados, importação, deploy, SSH, PostgreSQL ou runtime.
+> **Estado:** Gate 2 **aprovado por André em 2026-11-08 para fins de conversão**, com base no catálogo metadata-only da cópia privada restaurada do dump completo de 2026-11-07. Essa evidência substitui a coleta assistida pelo phpMyAdmin para a conversão, mas não afirma equivalência com o estado atual da produção após o snapshot nem aprova cutover/deploy. O pipeline v9 e a Fase D permanecem limitados ao ensaio privado.
 >
 > **Fonte oficial:** `ASOARESBH/app.erpcondominios.com.br-`, commit-base `f60739713e6de3f2473b79ecd14a70fd700e5462`.
 >
@@ -9,19 +9,19 @@
 ## Bloqueadores P0
 
 - Aprovar parâmetros PostgreSQL: versão, extensões, UTF-8, timezone, collation, TLS, scheduler e políticas de tipos.
-- Obter e reconciliar evidências live de `INFORMATION_SCHEMA` e `SHOW CREATE` para tables, columns, indexes, objects e rotinas. O novo `phase2_4/MYSQL_LIVE_CATALOG_COLLECTION.sql` contém blocos read-only independentes; aguarda execução individual pelo administrador, conforme `phase2_4/INSTRUCOES_COLETA_MYSQL_LIVE.md`. Cada saída precisa de origem, data/hora, checksum, ambiente, responsável e retenção. `server_metadata.txt` continua parcial e inclui valores informados pelo operador. O checklist `tools/phase2/mysql_metadata_inventory.sql` não foi executado como lote. Permanecem também pendentes, fora deste pacote: migration ledger live, agregados de qualidade, perfil agregado de tenant e manifesto agregado de anexos.
-- O anexo `(7)` foi validado pelo parser fail-closed: schema-only com 270 `CREATE TABLE`, 489 `ALTER TABLE`, 7 triggers, 11 FKs explícitas e zero DML top-level. O anexo `(6)` anterior permanece rejeitado. Nenhuma linha de negócio foi lida ou exibida.
-- Reconciliar os 270 `CREATE TABLE` e os 489 `ALTER` do export com `TABLE_TYPE` e `SHOW CREATE` reais. Eventos `not_replayed` não demonstram estado instalado. A consulta agregada anterior à origem não gerou resultado confirmado; não a repetir. Executar, se autorizado, apenas blocos independentes e paginados do novo pacote, um por vez; não declarar zero divergências.
-- Obter `SHOW CREATE` por tipo de objeto e comprovar visibilidade/privilégios. O export tem sete triggers e não contém `CREATE VIEW`/procedures/functions/events; a ausência no export não prova ausência live.
-- Revisar os 22 candidatos a views, confirmar tipo e definições live, mapear dependências reais e testar consumo/escopo tenant em etapa posterior.
-- Revisar as 42 estruturas sem `tenant_id` após confirmação live, preservando as propostas da Fase 2.3 como hipóteses; não adicionar `tenant_id` automaticamente.
-- Confirmar os sete triggers, eventos/timing, ordem, definição e dependências; não converter para PL/pgSQL ainda.
-- Confirmar estado final das colunas após 232 `MODIFY`, inclusive AUTO_INCREMENT, UNSIGNED, ENUM, DECIMAL, DATETIME/TIMESTAMP, `ON UPDATE CURRENT_TIMESTAMP`, JSON, TEXT/LONGTEXT/LONGBLOB, TINYINT(1), chaves compostas e defaults.
+- O catálogo do snapshot aprovado substitui a coleta incremental via phpMyAdmin para fins de conversão. Ainda faltam migration ledger do momento do dump, QA de semântica, agregados de reconciliação e evidência de alterações ocorridas após 2026-11-07; isso não reabre o Gate 2 para o ensaio, mas é obrigatório na janela de virada.
+- O anexo schema-only `(7)` foi validado pelo parser fail-closed; o anexo `(6)` continua não catalogado. Em etapa posterior, André autorizou um dump completo de ensaio, restaurado somente na cópia isolada. Dados de negócio não são publicados em Git/relatórios; a cópia e os arquivos brutos permanecem privados e não são fixtures de teste.
+- Os 270 objetos do snapshot do dump são `BASE TABLE`; 3.339 colunas, 11 FKs, 7 triggers, 2 procedures, 0 functions/views/events; 232 `AUTO_INCREMENT`, 30 tabelas sem PK. O catálogo aprovado é a base do ensaio, não evidência de que o banco atual permaneceu idêntico depois do dump.
+- As 22 candidatas estáticas a views do export foram resolvidas como tabelas no snapshot restaurado. Ainda é necessária revisão semântica e de dependências no código para qualquer conversão de query/view.
+- Revisar as 42 estruturas sem `tenant_id` semanticamente, sem adicionar a coluna automaticamente.
+- A lista de 111 colunas `ON UPDATE CURRENT_TIMESTAMP` foi obtida do snapshot e versionada como allowlist exata. Ela difere de uma contagem estática anterior; preservar a lista e a proveniência do novo catálogo.
+- Os sete triggers e duas procedures têm fingerprints metadata-only; completar revisão semântica, executar harness sintético e confirmar equivalência antes de aprovar comportamento no destino.
+- Validar no pipeline o estado final das colunas, defaults, AUTO_INCREMENT, UNSIGNED, ENUM/SET, DECIMAL, DATETIME/TIMESTAMP/TIME, JSON, binários, índices e constraints contra o catálogo do snapshot.
 - Fechar isolamento da Assembleia, incluindo pai/filho, anexos e autorização de migration.
 - Fechar Console/ControlID: gate de dispositivo, vínculo explícito device → tenant → pessoa/veículo e rejeição de ambiguidades.
 - Tornar RBAC e resolução de tenant fail-closed para operações sensíveis; retirar default operacional tenant 1.
 - Definir RPO/RTO/SLO, janela, owner, critérios de abortar e autoridade de rollback.
-- Validar acesso operacional futuro somente após fingerprint, usuário não-root, chave, sudo e recuperação serem aprovados por canal confiável; não tentar SSH agora.
+- Acesso Hetzner e inventário read-only foram validados em etapa separada; não iniciar serviços públicos, ERP runtime ou cutover sem gates/documentação e autorização específicos.
 
 ## Pendências P1
 
@@ -31,7 +31,7 @@
 - Classificação funcional das 42 tabelas sem `tenant_id` continua pendente. O export contém 22 nomes view-like (18 sem tenant_id e 4 com) e 24 outros nomes sem tenant_id; o nome do objeto não classifica semântica nem isolamento.
 - Perfil agregado real: contagem, NULLs, duplicidades, órfãos, cobertura tenant, zero-date, enum, limites DECIMAL, IDs e tamanhos de TEXT/BLOB/JSON; executar por etapas após avaliar impacto.
 - Manifesto de anexos: referência, tipo, contagem e tamanho agregados, tenant e política de retenção, sem baixar conteúdo ou publicar caminhos pessoais.
-- Adapter/dialect PHP para PostgreSQL, prepared statements, SQLSTATE, transações, locks, JSON, identity, temporal e upsert.
+- Adapter/dialect PHP para PostgreSQL, prepared statements, SQLSTATE, transações, locks, JSON, identity, temporal e upsert (Fase D autorizada, branch própria, somente ensaio privado).
 - Definições reais dos triggers e de qualquer view/procedure/function/event instalado; não inferir inexistência a partir do snapshot.
 - Reconciliar resultados de `tools/phase2/catalog_schema_only.py` com a instância e revisar semanticamente/ordenadamente os 489 `ALTER`; a projeção atual é parcial e não executável.
 - Manifesto de runtime: PHP/SAPI/extensões, driver, web server/PHP-FPM, Node/Chrome para QA, scheduler, timezone, limites e observabilidade.
@@ -49,11 +49,11 @@
 
 ## O que não deve ser solicitado ou publicado
 
-Não coletar dumps com linhas pessoais, uploads completos, logs com tokens, configuração com segredos, credenciais, cookies, chaves, arquivos `.env` ou dados não anonimizados. Solicitar metadata-only e agregados controlados, com canal autorizado, checksum e retenção definida. DDL bruto e detalhes operacionais da origem permanecem no pacote privado, nunca no GitHub.
+Não coletar nem transferir dumps com linhas pessoais sem autorização explícita, escopo, isolamento, checksum e retenção definidos. O dump de ensaio autorizado é exceção privada de conversão, fica fora do Git e dos relatórios, não pode ser copiado para fixtures ou compartilhado; logs/relatórios contêm somente metadados, contagens e hashes agregados. Nunca publicar segredos, credenciais, cookies, chaves, arquivos `.env`, uploads completos ou dados não anonimizados.
 
 ## Critério de encerramento
 
-Cada item deve ter owner, evidência, data, ambiente, checksum quando aplicável, decisão e referência no migration ledger. Pendência “não observada” não deve ser marcada como resolvida por ausência no Git ou schema-only. Gate 2 permanece fechado até a reconciliação live descrita no [relatório Fase 2.4](phase2_4/GATE_2_READINESS_REPORT.md).
+Cada item deve ter owner, evidência, data, ambiente, checksum quando aplicável, decisão e referência no migration ledger. A aprovação de Gate 2 é limitada ao catálogo do snapshot para conversão; os critérios de dados, QA, cutover e mudanças pós-snapshot permanecem obrigatórios e não são resolvidos por ausência no Git.
 
 ## Referências
 

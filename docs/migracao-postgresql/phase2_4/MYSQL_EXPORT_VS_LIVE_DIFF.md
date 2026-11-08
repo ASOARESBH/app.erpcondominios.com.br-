@@ -1,40 +1,35 @@
-# Fase 2.4 — Export MySQL versus catálogo live
+# Fase 2.4 — Export MySQL versus catálogo do snapshot
 
-**Tentativa de coleta:** 2026-11-06 (tentativa de reconciliação live; resultados não obtidos). **Schema:** `inlaud99_erpcondor`. **Conclusão:** comparação live incompleta; diferenças não podem ser determinadas.
+**Atualização:** 2026-11-08. **Schema:** `inlaud99_erpcondor`. **Decisão:** André aprovou o catálogo metadata-only da cópia restaurada do dump completo de 2026-11-07 para fins de conversão, substituindo a coleta via phpMyAdmin que não retornou resultados. **Limite:** este snapshot não demonstra alterações realizadas na produção depois da geração do dump.
 
-**Fontes:** export schema-only validado e análise estática publicados em `docs/migracao-postgresql/phase2_3/`; tentativa de catálogo live no phpMyAdmin 5.2.3, sem resultado; repositório oficial `ASOARESBH/app.erpcondominios.com.br-`, baseline `f60739713e6de3f2473b79ecd14a70fd700e5462`. **Limitação:** export, código e resultado informado pelo operador não substituem evidência `INFORMATION_SCHEMA`/`SHOW CREATE` da instância.
+## Comparação
 
-## Resumo
+| Estrutura | Export/schema-only histórico | Catálogo restaurado do dump | Conclusão para conversão |
+|---|---:|---:|---|
+| Objetos base table | 270 CREATE TABLE | 270 BASE TABLE | 270 tabelas no snapshot. |
+| Alterações de schema | 489 ALTER statements; 746 suboperações | Estado pós-alter capturado diretamente pelo catálogo restaurado | Usar snapshot, não replay cego do export. |
+| Colunas | 3.339 iniciais | 3.339 | Shape estrutural reconciliado para o snapshot. |
+| Índices/constraints | 514 declarações catalogadas em ALTER | 770 índices: 400 BTREE não únicos e 370 únicos/PK | Gerar do catálogo restaurado e conferir no destino. |
+| FKs | 11 declaradas | 11 | Assinaturas e ações entram no gate do gerador/reconciliador. |
+| Candidatas a views | 22 nomes identificados por padrão | 0 views; 22 nomes presentes como tabelas | Resolvidas como tabelas para este snapshot. |
+| Triggers | 7 definidos no export | 7 | Presentes e fingerprintados; equivalência requer testes. |
+| Procedures / functions / events | Sem CREATE capturado no export validado | 2 / 0 / 0 | Duas procedures serão traduzidas e testadas; funções/events ausentes no snapshot. |
+| AUTO_INCREMENT | 232 modificações catalogadas | 232 colunas auto_increment | Criar identities e alinhar max+1 no alvo. |
+| Tenant | 42 estruturas inicialmente sem tenant | 228 com tenant_id e 42 sem | Contagem confirmada; classificação semântica segue necessária. |
+| `ON UPDATE CURRENT_TIMESTAMP` | Contagem estática anterior de 45 | 111 colunas no catálogo | Usar lista exata do snapshot versionada, não a contagem antiga. |
 
-A reconciliação depende de um resultado real do catálogo instalado. Na tentativa de 2026-11-06, a página do phpMyAdmin 5.2.3 mostrou o schema selecionado e o SELECT agregado `INFORMATION_SCHEMA.TABLES` no editor, mas apareceu o alerta de formulário incompleto; uma única tentativa de fechar/submeter pelo navegador expirou. Não foi recebido conjunto de resultados. A consulta não foi repetida.
+**Interpretação:** diferenças entre export e catálogo indicam objetos/alterações efetivamente presentes no snapshot restaurado, mas não autorizam inferir alterações posteriores na produção. O export permanece útil como histórico de origem e não substitui o estado pós-ALTER encontrado no snapshot.
 
-| Comparação | Export/estática disponível | Catálogo live | Resultado correto |
-|---|---:|---|---|
-| Objetos `CREATE TABLE` | 270 | NÃO CONFIRMADO | Não comparável; objetos live adicionais/ausentes desconhecidos |
-| `ALTER TABLE` | 489 statements; 746 suboperações | NÃO CONFIRMADO | Eventos do export não foram replayados; estado final desconhecido |
-| Colunas no `CREATE` | 3.339 | NÃO CONFIRMADO | Não comparar por tipo/nullability até obter catálogo live |
-| PK / UNIQUE / INDEX | 240 / 70 / 193 declarações em ALTER | NÃO CONFIRMADO | Não inferir presença nem ausência |
-| FKs | 11 declarações em ALTER | NÃO CONFIRMADO | Não inferir presença nem ausência |
-| Candidatas a views | 22 nomes analisados estaticamente | `TABLE_TYPE` NÃO CONFIRMADO | Nenhuma classificada live |
-| Triggers | 7 definições no export | NÃO CONFIRMADO | Instalação, ordem e definição divergente desconhecidas |
-| Procedures / functions / events | Nenhum `CREATE` capturado no export validado | NÃO CONFIRMADO | Ausência live não confirmada |
+## O que ainda precisa de prova na conversão
 
-**“Não comparável” não significa “sem divergência”.** Não há base para declarar zero objetos extras, zero diferenças ou equivalência entre export e produção.
+- Correspondência de 270/270 tabelas e 3.339 colunas no PostgreSQL de ensaio.
+- Igualdade de contagem e hashes por linha por tabela, somas numéricas, perfil binário, distribuição por tenant e máximo das PKs.
+- Alinhamento exato das 232 sequences para `max+1`, `is_called=false`.
+- Todas as 11 FKs presentes com colunas/ações corretas; constraints sem órfãos validadas, e órfãs mantidas `NOT VALID` com contagens.
+- Equivalência temporal de `DATETIME`, `TIMESTAMP` em hora civil `America/Sao_Paulo`, zero-dates `NULL` e bloqueio de perda de precisão/valores TIME incompatíveis.
+- Testes sintéticos das sete triggers e duas procedures, sem efeitos persistentes.
+- Revisão semântica das 42 tabelas sem `tenant_id` e das tabelas movidas para `legado`.
 
-## Metadado recebido separadamente
+## Histórico e segurança
 
-O operador informou resultado anterior de consulta somente leitura, datado de 2026-11-05: Percona Server 5.7.44-48; `utf8` / `utf8_unicode_ci`; timezone de sessão `SYSTEM`, timezone do servidor `-03`; SQL mode `NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION`; engine padrão InnoDB; `lower_case_table_names=0`; event scheduler `OFF`. É evidência fornecida pelo operador e não confirma motores por tabela, permissões, objetos ou estado estrutural final. O scheduler segue reportado `OFF`; não foi alterado.
-
-## Divergências possíveis ainda não verificáveis
-
-1. Objetos live presentes e ausentes do export, inclusive relações, views, procedures, functions e events.
-2. Objetos exportados que não existem mais no servidor, ou cujo tipo instalado difere de `CREATE TABLE`.
-3. Estado final após 489 `ALTER TABLE`, incluindo `MODIFY`, `AUTO_INCREMENT`, unsigned, defaults e colunas.
-4. Índices, chaves e regras referenciais instaladas, nome, ordem, prefixos e ações.
-5. Definições, eventos, precedência/ordem e dependências live dos sete triggers.
-6. Views e rotinas com dependências/definições não capturadas pelo export.
-7. Engine e collation por objeto, privilégios de visibilidade e migrations/ledger efetivamente aplicados.
-
-## Segurança e limites
-
-Nenhuma linha de negócio foi consultada. Nenhuma migration, DDL, importação, alteração de banco, PostgreSQL, API, VM ou deploy foi executado. A lista estática de Fase 2.3 é referência de origem, não substituto do catálogo instalado.
+A tentativa phpMyAdmin de 2026-11-06 não retornou resultados e nenhuma das dez consultas assistidas foi executada. A decisão de 2026-11-08 substituiu essa coleta para fins de conversão usando o catálogo de uma cópia privada restaurada do dump de 07/11. O dump e dados de negócio permanecem fora do Git e dos relatórios; este documento contém somente metadados e métricas. Não houve escrita no MySQL de produção, conexão da API ao destino, deploy, DNS ou cutover.

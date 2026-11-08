@@ -1,47 +1,56 @@
-# Fase 2.4 — Catálogo MySQL e reconciliação (parcial)
+# Fase 2.4 — Catálogo MySQL e reconciliação
 
-**Data:** 2026-11-06 (tentativa de reconciliação live; resultados não obtidos). **Schema selecionado:** `inlaud99_erpcondor`. **Status:** tentativa read-only sem resultado do catálogo live; Gate 2 não aprovado. **Branch:** `pg/02-4-live-catalog-reconciliation`.
+**Atualização:** 2026-11-08. **Schema:** `inlaud99_erpcondor`. **Status:** catálogo do snapshot completo de 2026-11-07 aprovado por André para fins de conversão. **Branch:** `pg/02-4-live-catalog-reconciliation`.
 
-Para continuar sem repetir a consulta anterior, foi preparado o [pacote SQL de dez blocos independentes](MYSQL_LIVE_CATALOG_COLLECTION.sql) e o [manual de execução e salvamento assistidos](INSTRUCOES_COLETA_MYSQL_LIVE.md). **Nenhum desses blocos foi executado ainda.**
+A tentativa de coleta via phpMyAdmin em 2026-11-06 não retornou resultados; nenhum dos dez blocos do pacote assistido foi executado. Em 2026-11-08, André determinou que o catálogo metadata-only obtido da cópia restaurada do dump completo de 07/11 substitui a coleta via phpMyAdmin para fins de conversão. O dump e a cópia de ensaio são privados, não estão neste repositório e não são fixtures.
 
-## Resumo
+A aprovação cobre o catálogo do snapshot, não mudanças de produção posteriores ao momento do dump, cutover, deploy ou conexão do ERP. Na janela de virada será necessário backup final, checksum/proveniência, reconciliação atualizada, revisão e rollback.
 
-A Fase 2.4 preparou a reconciliação entre o MySQL/Percona de origem, o export estrutural validado, o código do repositório oficial e as análises da Fase 2.3. A coleta live não foi concluída: My Browser exibiu o schema solicitado no phpMyAdmin 5.2.3, com SELECT somente de metadados visível no editor, mas houve alerta de formulário incompleto; uma tentativa de interação posterior expirou. Nenhuma contagem ou definição do catálogo foi recebida, e não houve reenvio da consulta.
+## Resumo do catálogo aprovado
 
-Consequentemente, os campos de catálogo live abaixo são `NÃO CONFIRMADO`/`NÃO OBTIDO`. Isso não quer dizer zero nem ausência. Os CSVs são matrizes com metadados do export em colunas separadas, para evitar transformar inferência em fato.
+| Métrica | Resultado do snapshot | Uso/limite |
+|---|---:|---|
+| `BASE TABLE` | 270 | Entrada do gerador de DDL. |
+| Colunas | 3.339 | Catálogo MySQL restaurado, não projeção do `CREATE TABLE` inicial. |
+| Engine | InnoDB em 270/270 | Confirmado no snapshot restaurado. |
+| Índices | 770 | 400 BTREE não únicos e 370 únicos/PK. |
+| FKs | 11 | Assinaturas e ações verificadas; destino passa por validação de dados. |
+| `AUTO_INCREMENT` | 232 | Geração/alinhamento de identities PostgreSQL com `max+1`. |
+| Tabelas sem PK | 30 | Reconciliação por multiconjunto/hash e contagem. |
+| Triggers | 7 | Fingerprints metadata-only, tradução manual e harness sintético. |
+| Procedures | 2 | Fingerprints/assinaturas metadata-only e tradução manual. |
+| Functions / views / events | 0 / 0 / 0 | Ausências confirmadas no catálogo restaurado do dump. |
+| Tenant coverage | 228 com `tenant_id`; 42 sem | Não adicionar tenant automaticamente; revisão semântica segue necessária. |
+| `ON UPDATE CURRENT_TIMESTAMP` | 111 colunas | Lista explícita aprovada e versionada para gerar um trigger por coluna. Diverge de uma contagem estática anterior, resolvida pelo snapshot. |
+| Candidatas estáticas anteriores a views | 22 tabelas | Os 22 nomes existem como tabelas no snapshot, não como views. |
 
 ## Proveniência por artefato
 
-| Arquivo | Conteúdo e fonte | Estado live |
+| Artefato | Fonte/uso | Estado |
 |---|---|---|
-| [LIVE_TABLES_AND_VIEWS.csv](LIVE_TABLES_AND_VIEWS.csv) | 270 objetos do `CREATE TABLE` do export; candidatos de view ficam identificados como proposta estática | TABLE_TYPE, engine, collation e presença não confirmados |
-| [LIVE_COLUMNS.csv](LIVE_COLUMNS.csv) | 3.339 colunas do CREATE inicial, sem valores de default; eventos posteriores não foram replayados | tipo final, nullabilidade, default e `EXTRA` não confirmados |
-| [LIVE_KEYS_AND_INDEXES.csv](LIVE_KEYS_AND_INDEXES.csv) | 514 declarações de chave/índice em eventos ALTER | presença/definição live não confirmada |
-| [LIVE_FOREIGN_KEYS.csv](LIVE_FOREIGN_KEYS.csv) | 11 FKs declaradas em ALTER no export | presença/definição live não confirmada |
-| [LIVE_TRIGGERS.csv](LIVE_TRIGGERS.csv) | 7 metadados resumidos do export, sem corpos | existência/ordem/definição live não confirmadas |
-| [LIVE_VIEWS_DEFINITIONS.md](LIVE_VIEWS_DEFINITIONS.md) | 22 candidatas do mapa estático da Fase 2.3 | TABLE_TYPE/SHOW CREATE e dependências live não obtidos |
-| [MYSQL_EXPORT_VS_LIVE_DIFF.md](MYSQL_EXPORT_VS_LIVE_DIFF.md) | Comparação explícita export × live | diferenças indeterminadas; não declarar “sem diferença” |
-| [TENANT_CLASSIFICATION_FINAL_REVIEW.csv](TENANT_CLASSIFICATION_FINAL_REVIEW.csv) | 42 propostas existentes com colunas live/final bloqueadas | classificação final pendente |
-| [GATE_2_READINESS_REPORT.md](GATE_2_READINESS_REPORT.md) | Decisão e critérios do Gate 2 | recomendar manter fechado |
-| [MYSQL_LIVE_CATALOG_COLLECTION.sql](MYSQL_LIVE_CATALOG_COLLECTION.sql) | Dez consultas read-only independentes, paginadas e sem leitura de linhas de negócio | preparado; aguardando execução pelo administrador |
-| [INSTRUCOES_COLETA_MYSQL_LIVE.md](INSTRUCOES_COLETA_MYSQL_LIVE.md) | Instruções para executar, salvar e revisar cada bloco separadamente | preparado; nenhum resultado anexado |
+| [LIVE_TABLES_AND_VIEWS.csv](LIVE_TABLES_AND_VIEWS.csv) | Matrizes iniciais baseadas no export schema-only | Histórico; complementar ao catálogo de snapshot. |
+| [LIVE_COLUMNS.csv](LIVE_COLUMNS.csv) | Colunas do CREATE inicial do export | Não representa sozinho o estado pós-ALTER; o gerador usa o catálogo da cópia restaurada. |
+| [LIVE_KEYS_AND_INDEXES.csv](LIVE_KEYS_AND_INDEXES.csv) | Chaves/índices extraídos estaticamente | Histórico; comparar com as 770 entradas confirmadas no snapshot. |
+| [LIVE_FOREIGN_KEYS.csv](LIVE_FOREIGN_KEYS.csv) | Relações do export | 11 relações confirmadas no snapshot, com validação posterior. |
+| [LIVE_TRIGGERS.csv](LIVE_TRIGGERS.csv) | Metadados resumidos do export | 7 triggers confirmados no snapshot; fingerprints não incluem corpos publicados. |
+| [LIVE_VIEWS_DEFINITIONS.md](LIVE_VIEWS_DEFINITIONS.md) | 22 nomes view-like da análise antiga | Resolvidos como tabelas no snapshot; não são views. |
+| [MYSQL_EXPORT_VS_LIVE_DIFF.md](MYSQL_EXPORT_VS_LIVE_DIFF.md) | Comparativo inicial incompleto | Atualizado para reconhecer a fonte do snapshot e seus limites temporais. |
+| [GATE_2_READINESS_REPORT.md](GATE_2_READINESS_REPORT.md) | Decisão do Gate 2 | Aprovado por André em 08/11 para fins de conversão; não para produção/cutover. |
+| [MYSQL_LIVE_CATALOG_COLLECTION.sql](MYSQL_LIVE_CATALOG_COLLECTION.sql) | Dez consultas read-only independentes | Mantido como referência/recovery; não é evidência de execução. |
+| [INSTRUCOES_COLETA_MYSQL_LIVE.md](INSTRUCOES_COLETA_MYSQL_LIVE.md) | Manual assistido phpMyAdmin | Mantido; não exigido para aprovação do snapshot. |
 
-## O que se sabe sobre a origem
+## Interpretação e segurança
 
-O operador informou em 2026-11-05 um resultado de consulta SELECT-only: Percona Server 5.7.44-48; charset/collation `utf8`/`utf8_unicode_ci`; timezone de sessão `SYSTEM` e sistema `-03`; SQL mode `NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION`; engine padrão InnoDB; `lower_case_table_names=0`; Event Scheduler `OFF`. A fonte completa e seu grau de confiança estão em `server_metadata.txt` privado, referenciado pelo relatório interno da coleta anterior; isso não confirma engines ou collations por objeto.
+- O snapshot é proveniente de uma cópia privada restaurada do dump completo de ensaio do banco `inlaud99_erpcondor`. A coleta estrutural não consulta linhas diretamente no MySQL de produção.
+- O dump completo foi autorizado para conversão experimental isolada. Valores de moradores, documentos, financeiro, hashes e outras linhas não são exibidos, publicados ou versionados. Permanecem privados no armazenamento de ensaio.
+- O catálogo substitui o estado estático pós-ALTER para o pipeline deste snapshot. Não prova que produção permaneceu idêntica depois de 2026-11-07.
+- O banco MySQL de produção não foi alterado por esta etapa. O ensaio usa instâncias e clusters isolados; não conectar a API/ERP ao destino como serviço.
+- A aprovação do Gate 2 não é evidência de conversão completa: tabelas, linhas, hashes, numeric sums, binários, tenancy, sequences, FKs e timestamps precisam passar na reconciliação v9.
 
-No export estrutural validado pela Fase 2.3 há 270 `CREATE TABLE`, 489 `ALTER TABLE`, 3.339 colunas iniciais, 514 declarações catalogadas em ALTER (240 PK, 70 UNIQUE, 193 INDEX, 11 FK), 232 modificações de coluna e 7 triggers. Não foram extraídos `CREATE VIEW`, `PROCEDURE`, `FUNCTION` ou `EVENT`. Nomes e `not_replayed` não provam tipo nem estado instalado.
+## Próximos passos
 
-## Tentativa live e limite
-
-Em 2026-11-06, a tela capturada pelo usuário mostrava “Está faltando valores no formulário”. A inspeção read-only confirmou que o phpMyAdmin 5.2.3 estava no schema `inlaud99_erpcondor` e que a query agregada `INFORMATION_SCHEMA.TABLES` continuava no editor. Uma tentativa de interação com o alerta expirou no navegador; nenhum resultado foi retornado. Por orientação do usuário, a coleta não foi perseguida além dessa tentativa.
-
-## Segurança, decisões e próximos passos
-
-- Não foram consultadas linhas de negócio nem extraídos dados pessoais, financeiros, hashes de senha ou tokens.
-- Não foram executados DDL, migrations, transações de escrita, `EXPLAIN`, importação ou queries de qualidade sobre tabelas de domínio.
-- MySQL de produção, PostgreSQL, API, Hetzner e deploy permanecem inalterados.
-- O Gate 2 permanece fechado até obter artefatos read-only com resultados suficientes e reconciliar os 22 candidatos, as 42 estruturas, os sete triggers, o estado pós-ALTER e rotinas ausentes do export.
-- A Fase 3 não deve iniciar conversão executável ou adaptação de driver antes de aprovação do Gate 2.
-
-Para detalhes, consulte o [relatório de prontidão](GATE_2_READINESS_REPORT.md), o [comparativo](MYSQL_EXPORT_VS_LIVE_DIFF.md) e os documentos estáticos da [Fase 2.3](../phase2_3/README.md).
+1. Gerar DDL PostgreSQL versionado a partir do catálogo exato do snapshot e revisar nomes de schema `erp`/`legado`, collations, tipos, defaults, índices, identities, triggers e routines.
+2. Executar a carga v9 somente em database novo e socket-only, com MySQL fonte read-only e logs agregados.
+3. Fazer reconciliação 270/270; bloquear em divergência, órfãos não autorizados, NUL textual, TIME incompatível, precisão perdida ou mudança de catálogo.
+4. Manter validação de tenancy e das 42 tabelas sem `tenant_id` como requisito semântico.
+5. Repetir backup e reconciliação em qualquer janela de virada; preservar o dump original.
