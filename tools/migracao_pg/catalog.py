@@ -845,5 +845,33 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(f"CATALOG_GENERATION_FAILED type={type(exc).__name__}", file=sys.stderr)
+        print(f"CATALOG_GENERATION_FAILED type={type(exc).__name__} code={catalog_error_code(exc)}", file=sys.stderr)
         raise SystemExit(1)
+CATALOG_ERROR_CODES = {
+    "backup candidate set differs from the reviewed rehearsal snapshot": "backup_candidate_set_mismatch",
+    "catalog objects differ from approved rehearsal snapshot": "catalog_objects_mismatch",
+    "catalog shape differs from approved rehearsal snapshot": "catalog_shape_mismatch",
+    "checklist ON DUPLICATE KEY target differs from the approved primary-key contract": "checklist_upsert_contract_mismatch",
+    "foreign key crosses the approved erp/legado boundary": "foreign_key_schema_boundary_mismatch",
+    "foreign key signature differs from approved rehearsal snapshot": "foreign_key_signature_mismatch",
+    "git grep failed while classifying candidate backup table": "backup_reference_scan_failed",
+    "identity, primary-key, or on-update counts differ from approved rehearsal snapshot": "identity_or_key_shape_mismatch",
+    "MySQL TIME values are outside the approved PostgreSQL time(0) range": "time_value_out_of_range",
+    "non-InnoDB source table requires explicit review": "non_innodb_engine",
+    "official source clone provenance or clean baseline check failed": "source_clone_provenance_mismatch",
+    "sensitive column defaults require manual review before DDL generation": "sensitive_column_default",
+    "source column collation inventory differs from approved rehearsal snapshot": "source_collation_mismatch",
+    "source MySQL grants are not the exact approved read-only set": "source_grants_mismatch",
+    "source MySQL is not read-only with events disabled and UTC session": "source_read_only_guard_failed",
+    "stored procedure definitions differ from approved metadata fingerprint": "routine_fingerprint_mismatch",
+    "stored procedure signature differs from approved rehearsal snapshot": "routine_signature_mismatch",
+    "tenant_id coverage differs from approved rehearsal snapshot": "tenant_coverage_mismatch",
+    "textual NUL requires user decision; counts written to private summary": "textual_nul_found",
+    "trigger definitions differ from approved rehearsal snapshot": "trigger_fingerprint_mismatch",
+    "trigger or routine names differ from approved rehearsal snapshot": "business_object_names_mismatch",
+    "trigger-related tenant references require review before translation": "trigger_tenant_reference_mismatch",
+}
+
+
+def catalog_error_code(exc: Exception) -> str:
+    return CATALOG_ERROR_CODES.get(str(exc), "unclassified")

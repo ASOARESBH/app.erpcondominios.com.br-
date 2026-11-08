@@ -247,6 +247,7 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                             bufsize=1, start_new_session=True)
     ACTIVE_PROCESS = proc
     error_type = "unknown"
+    error_code = "unknown"
     sqlstate = "none"
     try:
         for raw_line in proc.stdout:
@@ -256,6 +257,9 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                                "RECONCILIATION_FAILED type=", "TRIGGER_TEST_FAILED type="):
                     if marker in line:
                         error_type = line.split(marker, 1)[1].split()[0]
+                code_match = re.search(r"(?:^|\s)code=([a-z0-9_]+)(?:\s|$)", line)
+                if code_match:
+                    error_code = code_match.group(1)
                 if "sqlstate=" in line:
                     sqlstate = line.rsplit("sqlstate=", 1)[1].split()[0]
                 continue
@@ -266,6 +270,9 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                                "RECONCILIATION_FAILED type=", "TRIGGER_TEST_FAILED type="):
                     if marker in line:
                         error_type = line.split(marker, 1)[1].split()[0]
+                code_match = re.search(r"(?:^|\s)code=([a-z0-9_]+)(?:\s|$)", line)
+                if code_match:
+                    error_code = code_match.group(1)
                 if "sqlstate=" in line:
                     sqlstate = line.rsplit("sqlstate=", 1)[1].split()[0]
                 continue
