@@ -841,12 +841,6 @@ def main():
         conn.rollback()
         conn.close()
 
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as exc:
-        print(f"CATALOG_GENERATION_FAILED type={type(exc).__name__} code={catalog_error_code(exc)}", file=sys.stderr)
-        raise SystemExit(1)
 CATALOG_ERROR_CODES = {
     "backup candidate set differs from the reviewed rehearsal snapshot": "backup_candidate_set_mismatch",
     "catalog objects differ from approved rehearsal snapshot": "catalog_objects_mismatch",
@@ -875,3 +869,11 @@ CATALOG_ERROR_CODES = {
 
 def catalog_error_code(exc: Exception) -> str:
     return CATALOG_ERROR_CODES.get(str(exc), "unclassified")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        print(f"CATALOG_GENERATION_FAILED type={type(exc).__name__} code={catalog_error_code(exc)}", file=sys.stderr)
+        raise SystemExit(1)

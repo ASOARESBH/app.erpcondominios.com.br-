@@ -318,3 +318,4 @@ Registro de alterações significativas no ERP.
 - O parser possui fallback para ambientes PHP sem `mbstring`; consultas usam `tenant_id` exclusivamente da sessão e ordenações utilizam lista branca.
 - QR de tenant diferente é recusado com HTTP 403, e a API revalida vínculo do vigilante, agenda, janela de ciclo e índice de duplicidade antes da gravação.
 - Validadas sintaxe PHP, regras de ciclo/SLA, análise direcionada dos arquivos Flutter e testes Flutter. O detalhe técnico e roteiro pós-deploy estão em `ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md`.
+- A primeira execução do runner parou no catálogo antes de criar o database PostgreSQL porque a allowlist esperava uma tabela de backup ausente no snapshot; a lista foi corrigida para as 11 tabelas existentes. Os 45 testes sintéticos passaram, e o runner registra códigos estáticos de falha sem mensagens brutas. Nenhuma carga foi iniciada nas tentativas bloqueadas.
