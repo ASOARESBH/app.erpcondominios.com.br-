@@ -205,7 +205,7 @@ def test_stock(cur, catalog):
                 (fixture_token(), product["id"], FIXTURE_TENANT))
     cur.execute("SELECT COUNT(*) FILTER (WHERE tipo_alerta='Estoque_Zerado'), "
                 "COUNT(*) FILTER (WHERE tipo_alerta='Estoque_Minimo'), "
-                "COUNT(*) FILTER (WHERE mensagem LIKE %s AND mensagem LIKE '%ZERADO%') "
+                "COUNT(*) FILTER (WHERE mensagem LIKE %s AND mensagem LIKE '%%ZERADO%%') "
                 "FROM erp.alertas_estoque WHERE tenant_id=%s AND produto_id=%s",
                 (f"%{product['nome']}%", FIXTURE_TENANT, product["id"]))
     assert_equal(cur.fetchone(), (1, 0, 1))
@@ -237,7 +237,7 @@ def test_stock(cur, catalog):
     cur.execute("UPDATE erp.produtos_estoque SET observacoes=%s WHERE id=%s AND tenant_id=%s",
                 (fixture_token(), minimum_product["id"], FIXTURE_TENANT))
     cur.execute("SELECT COUNT(*) FILTER (WHERE tipo_alerta='Estoque_Minimo'), "
-                "COUNT(*) FILTER (WHERE mensagem LIKE %s AND mensagem LIKE '%abaixo do estoque mínimo%') "
+                "COUNT(*) FILTER (WHERE mensagem LIKE %s AND mensagem LIKE '%%abaixo do estoque mínimo%%') "
                 "FROM erp.alertas_estoque WHERE tenant_id=%s AND produto_id=%s",
                 (f"%{minimum_product['nome']}%", FIXTURE_TENANT, minimum_product["id"]))
     assert_equal(cur.fetchone(), (1, 1))

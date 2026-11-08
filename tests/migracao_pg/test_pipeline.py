@@ -22,6 +22,11 @@ class LoaderValueTests(unittest.TestCase):
         self.assertEqual(trigger_failure_marker("unexpected", Exception("secret")),
                          "TRIGGER_TEST_FAILED type=Exception code=harness_preflight sqlstate=none")
 
+    def test_stock_harness_escapes_literal_like_wildcards(self):
+        source = Path(__file__).with_name("trigger_harness.py").read_text(encoding="utf-8")
+        self.assertIn("LIKE '%%ZERADO%%'", source)
+        self.assertIn("LIKE '%%abaixo do estoque mínimo%%'", source)
+
     def test_business_trigger_uses_verified_primary_key_conflict_target(self):
         business_sql = (ROOT / "business_objects.sql").read_text(encoding="utf-8")
         self.assertIn("ON CONFLICT (id) DO UPDATE", business_sql)
