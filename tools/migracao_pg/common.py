@@ -10,8 +10,9 @@ from zoneinfo import ZoneInfo
 SAO_PAULO = ZoneInfo("America/Sao_Paulo")
 UTC = timezone.utc
 V9_DATABASE = "erp_ensaio_v9"
-V10_DATABASE = "erp_ensaio_v10"
-REHEARSAL_DATABASES = frozenset({V9_DATABASE, V10_DATABASE})
+PRESERVED_PARTIAL_V10_DATABASE = "erp_ensaio_v10"
+V10B_DATABASE = "erp_ensaio_v10b"
+REHEARSAL_DATABASES = frozenset({V9_DATABASE, V10B_DATABASE})
 V9_PGDATA = "/var/lib/erp-pg-rehearsal/pg-data"
 V9_PGSOCKET = "/var/lib/erp-pg-rehearsal/pg-socket"
 V9_PGPORT = 55432

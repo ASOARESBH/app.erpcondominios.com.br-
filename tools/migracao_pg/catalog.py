@@ -16,7 +16,7 @@ from pymysql.constants import FIELD_TYPE
 
 from common import (collate_class, generated_name, json_contains_nul, mysql_type_to_pg,
                     parse_mysql_enum, pg_name, qi, ql, mysql_qi, REHEARSAL_DATABASES,
-                    V10_DATABASE)
+                    V10B_DATABASE)
 
 SCHEMA = "inlaud99_erpcondor"
 OFFICIAL_ORIGIN = "https://github.com/ASOARESBH/app.erpcondominios.com.br-.git"
@@ -1038,7 +1038,7 @@ def main():
                    "zero_default_cols": [f"{t}.{c['name']}" for t, cs in columns.items() for c in cs if c["data_type"] in TEMPORAL_TYPES and c["default"] is not None and re.match(r"^(0000|\d{4}-00-|\d{4}-\d{2}-00)", str(c["default"]))],
                    "source_estimated_bytes": catalog["source_bytes"],
                    "ddl_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.glob("*.sql"))}}
-        if args.target_database == V10_DATABASE:
+        if args.target_database == V10B_DATABASE:
             summary["table_names"] = sorted(tables)
         Path(args.summary).write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
     finally:
