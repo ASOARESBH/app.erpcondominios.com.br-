@@ -129,7 +129,7 @@ TARGET_CREATED_BY_RUNNER = False
 
 
 def as_postgres(*command):
-    return ["runuser", "-u", "postgres", "--", "env", "-i", "PATH=/usr/bin:/bin",
+    return ["/usr/sbin/runuser", "-u", "postgres", "--", "env", "-i", "PATH=/usr/bin:/bin",
             "HOME=/var/lib/postgresql", "LANG=C.UTF-8", "LC_ALL=C.UTF-8",
             f"PYTHONPATH={CODE_ROOT}", "PYTHONDONTWRITEBYTECODE=1", *map(str, command)]
 

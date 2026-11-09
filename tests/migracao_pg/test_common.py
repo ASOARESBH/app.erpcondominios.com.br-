@@ -286,8 +286,10 @@ class TypeMappingTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not descended from the approved baseline"):
                 verify_baseline_ancestry(Path("/repo"), "b" * 40)
 
-    def test_postgres_python_environment_exposes_migration_modules_without_bytecode(self):
+    def test_as_postgres_uses_absolute_runuser_and_isolated_environment(self):
         command = as_postgres("/venv/python3", "-s")
+        self.assertEqual(command[:4], ["/usr/sbin/runuser", "-u", "postgres", "--"])
+        self.assertIn("PATH=/usr/bin:/bin", command)
         self.assertIn(f"PYTHONPATH={ROOT}", command)
         self.assertIn("PYTHONDONTWRITEBYTECODE=1", command)
 
