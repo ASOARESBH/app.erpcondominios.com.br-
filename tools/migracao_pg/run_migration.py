@@ -19,7 +19,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 from common import (generated_name, REHEARSAL_DATABASES, V9_DATABASE,
-                    PRESERVED_PARTIAL_V10_DATABASE, V10B_DATABASE)
+                    PRESERVED_PARTIAL_DATABASES, V10C_DATABASE)
 
 PGDATA = Path("/var/lib/erp-pg-rehearsal/pg-data")
 PGSOCKET = Path("/var/lib/erp-pg-rehearsal/pg-socket")
@@ -39,9 +39,9 @@ APPROVED_POST_FK_MANIFEST = Path("/root/erp_pg_v9_post_fk_20261108_manifest.json
 V9_ROOT = Path("/var/lib/erp-pg-rehearsal/v9")
 RUN_ROOT = Path("/var/lib/erp-pg-rehearsal/v9/runs")
 TMPFS_ROOT = Path("/dev/shm/erp-pg-v9")
-V10B_ROOT = Path("/var/lib/erp-pg-rehearsal/v10b")
-V10B_RUN_ROOT = V10B_ROOT / "runs"
-V10B_TMPFS_ROOT = Path("/dev/shm/erp-pg-v10b")
+V10C_ROOT = Path("/var/lib/erp-pg-rehearsal/v10c")
+V10C_RUN_ROOT = V10C_ROOT / "runs"
+V10C_TMPFS_ROOT = Path("/dev/shm/erp-pg-v10c")
 V10_SOURCE_MANIFEST = Path("/root/erp_pg_v10_source_manifest.json")
 V10_SOURCE_DUMP = Path("/var/backups/erpcondominios/ensaio-20261107T233109Z/inlaud99_erpcondor.mysql.sql.gz")
 V10_SOURCE_COPY = Path("/var/lib/erp-pg-rehearsal/evidence/source-copy.sql.gz")
@@ -735,7 +735,7 @@ def verify_reconciliation_acceptance(summary: dict, csv_path: Path, expected_tab
 
 def validate_v10_execution_history(records: list[dict], *, require_cluster_stopped: bool = False):
     started = [item for item in records if item.get("event") == "pipeline_started"]
-    if (len(started) != 1 or started[0].get("database") != V10B_DATABASE
+    if (len(started) != 1 or started[0].get("database") != V10C_DATABASE
             or started[0].get("clean_start") is not True
             or started[0].get("resume_source_run") is not None
             or started[0].get("post_fk_source_run") is not None):
@@ -753,7 +753,7 @@ def validate_v10_execution_history(records: list[dict], *, require_cluster_stopp
             or len([item for item in records if item.get("event") == "mysql_restore_lineage_verified"]) != 1
             or len([item for item in records if item.get("event") == "catalog_semantics_verified"]) != 1
             or len([item for item in records if item.get("event") == "empty_target_created"
-                    and item.get("database") == V10B_DATABASE]) != 1
+                    and item.get("database") == V10C_DATABASE]) != 1
             or len([item for item in records if item.get("event") == "postgres_cluster_ready"]) != 1):
         raise RuntimeError("v10 execution history is missing a required integrity or target event")
     loader = [item for item in records if item.get("event") == "loader_summary"]
@@ -839,7 +839,7 @@ def write_v10_conversion_report(run_dir: Path, run_id: str, code_commit: str,
     report = {
         "schema_version": 1,
         "run_id": run_id,
-        "database": V10B_DATABASE,
+        "database": V10C_DATABASE,
         "code_commit": code_commit,
         "source_artifact": {
             "size_bytes": source_size_bytes,
@@ -907,7 +907,7 @@ def write_v10_conversion_report(run_dir: Path, run_id: str, code_commit: str,
             "elapsed_seconds": reconciliation.get("elapsed_seconds"),
         },
     }
-    path = run_dir / "v10b_conversion_report.json"
+    path = run_dir / "v10c_conversion_report.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     path.chmod(0o600)
     os.chown(path, run_dir.stat().st_uid, run_dir.stat().st_gid)
@@ -1633,7 +1633,7 @@ def apply_sql(dbname: str, path: Path, phase: str, log: Path):
 
 
 def run_reconciliation_step(base, dbname: str, mysql_config: Path, run_dir: Path, log: Path):
-    version = "v10b" if dbname == V10B_DATABASE else "v9"
+    version = "v10c" if dbname == V10C_DATABASE else "v9"
     return run_step([*base, str(CODE_ROOT / "reconcile.py"), "--mysql-config", str(mysql_config),
                      "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", dbname,
                      "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / f"reconciliacao_{version}.csv"),
@@ -1672,13 +1672,13 @@ def main():
     ap.add_argument("--resume-post-fk-reconciliation", action="store_true")
     ap.add_argument("--source-run-id")
     args = ap.parse_args()
-    if args.database == PRESERVED_PARTIAL_V10_DATABASE:
-        raise SystemExit("erp_ensaio_v10 is a preserved partial target and is quarantined from all runner modes")
+    if args.database in PRESERVED_PARTIAL_DATABASES:
+        raise SystemExit("requested target is a preserved partial database and is quarantined from all runner modes")
     if args.database not in REHEARSAL_DATABASES:
-        raise SystemExit("refusing any destination except the approved isolated v9/v10b rehearsal databases")
-    is_v10 = args.database == V10B_DATABASE
+        raise SystemExit("refusing any destination except the approved isolated v9/v10c rehearsal databases")
+    is_v10 = args.database == V10C_DATABASE
     if is_v10 and (args.resume_partial_target or args.resume_post_fk_reconciliation or args.source_run_id):
-        raise SystemExit("v10b must start from zero and cannot use a resume mode")
+        raise SystemExit("v10c must start from zero and cannot use a resume mode")
     if args.batch_size < 1 or args.batch_size > 10000:
         raise SystemExit("batch size out of range")
     if args.resume_partial_target and args.resume_post_fk_reconciliation:
@@ -1695,7 +1695,7 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     os.umask(0o077)
-    expected_branch = "pg/03-1-ensaio-integral-v10" if is_v10 else "pg/03-conversao-schema"
+    expected_branch = "pg/03-1-ensaio-integral-v10c" if is_v10 else "pg/03-conversao-schema"
     verify_code_provenance(args.expected_commit, expected_branch)
     if args.resume_partial_target:
         verify_resume_code_ancestry(CODE_ROOT.parents[1], args.expected_commit)
@@ -1714,9 +1714,9 @@ def main():
     if not REPO_ROOT.is_dir() or not PG_PYTHON.is_file():
         raise SystemExit("official source clone or private run root is unavailable")
     postgres = __import__("pwd").getpwnam("postgres")
-    active_root = V10B_ROOT if is_v10 else V9_ROOT
-    active_run_root = V10B_RUN_ROOT if is_v10 else RUN_ROOT
-    active_tmpfs_root = V10B_TMPFS_ROOT if is_v10 else TMPFS_ROOT
+    active_root = V10C_ROOT if is_v10 else V9_ROOT
+    active_run_root = V10C_RUN_ROOT if is_v10 else RUN_ROOT
+    active_tmpfs_root = V10C_TMPFS_ROOT if is_v10 else TMPFS_ROOT
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     log = None
     run_dir = None
@@ -1926,7 +1926,7 @@ def main():
         accepted_totals = None
         if is_v10:
             CURRENT_PHASE = "acceptance_gate"
-            csv_path = run_dir / "reconciliacao_v10b.csv"
+            csv_path = run_dir / "reconciliacao_v10c.csv"
             accepted_totals = verify_reconciliation_acceptance(
                 summary, csv_path, set(catalog_summary["table_names"]),
                 set(catalog_summary["legacy_tables"]))
@@ -1935,7 +1935,7 @@ def main():
                 raise RuntimeError("reconciliation foreign key type manifest differs from the catalog")
             emit_log(log, "table_level_reconciliation_verified", **accepted_totals)
             if not TARGET_CREATED_BY_RUNNER:
-                raise RuntimeError("v10 target was not created by this clean runner execution")
+                raise RuntimeError("v10c target was not created by this clean runner execution")
             validate_v10_execution_history(read_v10_execution_log(log))
         elif (summary.get("tables") != 270
               or summary.get("source_rows") != loader_summary.get("source_rows_loaded")
@@ -1962,8 +1962,8 @@ def main():
             report_path = write_v10_conversion_report(run_dir, run_id, args.expected_commit,
                                                       source_sha256, source_size_bytes,
                                                       catalog_summary, summary, accepted_totals, elapsed)
-            emit_log(log, "sanitized_report_written", report="v10b_conversion_report.json",
-                     table_metrics="reconciliacao_v10b.csv", mode="0600")
+            emit_log(log, "sanitized_report_written", report="v10c_conversion_report.json",
+                     table_metrics="reconciliacao_v10c.csv", mode="0600")
         emit_log(log, "pipeline_accepted", database=args.database, tables=270,
                  rows=summary.get("source_rows"), status=status,
                  foreign_keys_valid=summary.get("foreign_keys_valid"),
@@ -1978,7 +1978,7 @@ def main():
                           "source_hash_verified": bool(source_sha256), "source_size_bytes": source_size_bytes,
                           "identity_columns": summary.get("identity_columns"),
                           "report": str(report_path) if is_v10 else None,
-                          "table_metrics": str(run_dir / "reconciliacao_v10b.csv") if is_v10 else None,
+                          "table_metrics": str(run_dir / "reconciliacao_v10c.csv") if is_v10 else None,
                           "elapsed_seconds": elapsed,
                           "run_dir": str(run_dir), "log": str(log)}, ensure_ascii=False), flush=True)
     except Exception as exc:

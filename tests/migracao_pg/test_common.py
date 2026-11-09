@@ -17,7 +17,8 @@ sys.path.insert(0, str(ROOT))
 
 from common import (ambiguous_sao_paulo_wall_time, convert_temporal, generated_name, mysql_type_to_pg, parse_mysql_enum, row_digest,
                     json_contains_nul, verify_v9_postgres_connection, zero_date, V9_DATABASE,
-                    PRESERVED_PARTIAL_V10_DATABASE, V10B_DATABASE, REHEARSAL_DATABASES)
+                    PRESERVED_PARTIAL_V10_DATABASE, PRESERVED_PARTIAL_V10B_DATABASE,
+                    V10C_DATABASE, REHEARSAL_DATABASES)
 from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, time_conversion_risks, validate_on_update_snapshot,
                      expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
                      verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES,
@@ -44,7 +45,8 @@ from run_migration import (APPROVED_POST_FK_RUN_ID, APPROVED_POST_FK_SOURCE_COMM
                            V10_EXPECTED_SOURCE_COLLATION_COUNTS, V10_EXPECTED_TENANT_SIGNATURE_SHA256,
                            V10_EXPECTED_NO_TENANT_NAMES_SHA256, V10_EXPECTED_COLLATE_C_COLUMNS_SHA256,
                            V10_RESTORE_SCRIPT_SHA256, V10_SOURCE_SCHEMA, V10_PHASE_SEQUENCE,
-                           V10_EXPECTED_SYNTHETIC_TESTS)
+                           V10_EXPECTED_SYNTHETIC_TESTS, V10C_ROOT, V10C_RUN_ROOT,
+                           V10C_TMPFS_ROOT)
 
 
 class TypeMappingTests(unittest.TestCase):
@@ -202,14 +204,14 @@ class TypeMappingTests(unittest.TestCase):
         self.assertFalse(any(token in str(item) for item in command
                              for token in ("loader.py", "trigger_harness.py", "002_foreign_keys.sql", "ANALYZE")))
 
-    def test_v10b_reconciliation_uses_an_isolated_csv_name(self):
+    def test_v10c_reconciliation_uses_an_isolated_csv_name(self):
         with patch("run_migration.run_step") as runner:
-            run_reconciliation_step(["nsenter", "python"], V10B_DATABASE, Path("/tmp/client.cnf"),
-                                    Path("/tmp/run_v10b"), Path("/tmp/run_v10b.jsonl"))
+            run_reconciliation_step(["nsenter", "python"], V10C_DATABASE, Path("/tmp/client.cnf"),
+                                    Path("/tmp/run_v10c"), Path("/tmp/run_v10c.jsonl"))
         command, phase, _log = runner.call_args.args
         self.assertEqual(phase, "reconciliation")
-        self.assertIn("/tmp/run_v10b/reconciliacao_v10b.csv", command)
-        self.assertIn("/tmp/run_v10b/reconciliation_summary.json", command)
+        self.assertIn("/tmp/run_v10c/reconciliacao_v10c.csv", command)
+        self.assertIn("/tmp/run_v10c/reconciliation_summary.json", command)
 
     def test_post_fk_target_requires_exact_initial_fk_state_and_counts(self):
         names = [f"fixture_{index:03d}" for index in range(270)]
@@ -1123,17 +1125,27 @@ class V10FullRunTests(unittest.TestCase):
             writer.writeheader()
             writer.writerows(rows)
 
-    def test_v10b_database_contract_is_separate_and_partial_v10_is_quarantined(self):
+    def test_v10c_database_contract_quarantines_partial_targets_and_has_private_paths(self):
         self.assertEqual(PRESERVED_PARTIAL_V10_DATABASE, "erp_ensaio_v10")
-        self.assertEqual(V10B_DATABASE, "erp_ensaio_v10b")
-        self.assertEqual(REHEARSAL_DATABASES, frozenset({V9_DATABASE, V10B_DATABASE}))
-        with patch("sys.argv", ["run_migration.py", "--database", PRESERVED_PARTIAL_V10_DATABASE,
-                                "--expected-commit", "a" * 40]):
-            with self.assertRaisesRegex(SystemExit, "preserved partial target"):
-                main()
-        with patch("sys.argv", ["run_migration.py", "--database", V10B_DATABASE,
+        self.assertEqual(PRESERVED_PARTIAL_V10B_DATABASE, "erp_ensaio_v10b")
+        self.assertEqual(V10C_DATABASE, "erp_ensaio_v10c")
+        self.assertEqual(REHEARSAL_DATABASES, frozenset({V9_DATABASE, V10C_DATABASE}))
+        self.assertEqual(V10C_ROOT, Path("/var/lib/erp-pg-rehearsal/v10c"))
+        self.assertEqual(V10C_RUN_ROOT, V10C_ROOT / "runs")
+        self.assertEqual(V10C_TMPFS_ROOT, Path("/dev/shm/erp-pg-v10c"))
+        for partial in (PRESERVED_PARTIAL_V10_DATABASE, PRESERVED_PARTIAL_V10B_DATABASE):
+            with patch("sys.argv", ["run_migration.py", "--database", partial,
+                                    "--expected-commit", "a" * 40]):
+                with self.assertRaisesRegex(SystemExit, "preserved partial database"):
+                    main()
+        with patch("sys.argv", ["run_migration.py", "--database", V10C_DATABASE,
                                 "--expected-commit", "a" * 40, "--resume-partial-target"]):
-            with self.assertRaisesRegex(SystemExit, "v10b must start from zero"):
+            with self.assertRaisesRegex(SystemExit, "v10c must start from zero"):
+                main()
+        with patch("sys.argv", ["run_migration.py", "--database", V10C_DATABASE,
+                                "--expected-commit", "a" * 40,
+                                "--resume-post-fk-reconciliation", "--source-run-id", APPROVED_POST_FK_RUN_ID]):
+            with self.assertRaisesRegex(SystemExit, "v10c must start from zero"):
                 main()
 
     def test_private_runner_directories_are_reusable_but_fail_closed(self):
@@ -1228,7 +1240,7 @@ class V10FullRunTests(unittest.TestCase):
 
     def test_reconciliation_gate_checks_all_270_tables_and_232_sequences(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "reconciliacao_v10b.csv"
+            path = Path(directory) / "reconciliacao_v10c.csv"
             rows = self.reconciliation_rows()
             self.write_reconciliation_csv(path, rows)
             expected_tables = {row["table"] for row in rows}
@@ -1245,7 +1257,7 @@ class V10FullRunTests(unittest.TestCase):
 
     def test_reconciliation_gate_rejects_wrong_table_names_and_legacy_schema(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "reconciliacao_v10b.csv"
+            path = Path(directory) / "reconciliacao_v10c.csv"
             rows = self.reconciliation_rows()
             expected_tables = {row["table"] for row in rows}
             legacy_tables = {f"synthetic_{index:03d}" for index in range(8)}
@@ -1264,7 +1276,7 @@ class V10FullRunTests(unittest.TestCase):
 
     def test_reconciliation_gate_rejects_orphaned_foreign_keys(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "reconciliacao_v10b.csv"
+            path = Path(directory) / "reconciliacao_v10c.csv"
             rows = self.reconciliation_rows()
             self.write_reconciliation_csv(path, rows)
             expected_tables = {row["table"] for row in rows}
@@ -1286,10 +1298,12 @@ class V10FullRunTests(unittest.TestCase):
                 create_target_database("production")
             with self.assertRaises(RuntimeError):
                 create_target_database(PRESERVED_PARTIAL_V10_DATABASE)
+            with self.assertRaises(RuntimeError):
+                create_target_database(PRESERVED_PARTIAL_V10B_DATABASE)
             mocked.assert_not_called()
 
     def execution_history(self):
-        records = [{"event": "pipeline_started", "database": V10B_DATABASE, "clean_start": True,
+        records = [{"event": "pipeline_started", "database": V10C_DATABASE, "clean_start": True,
                     "resume_source_run": None, "post_fk_source_run": None}]
         extras = {
             "source_integrity": [
@@ -1308,7 +1322,7 @@ class V10FullRunTests(unittest.TestCase):
         for phase in V10_PHASE_SEQUENCE:
             records.append({"event": "phase_started", "phase": phase})
             if phase == "target_create":
-                records.append({"event": "empty_target_created", "database": V10B_DATABASE})
+                records.append({"event": "empty_target_created", "database": V10C_DATABASE})
             if phase != "catalog":
                 records.extend(extras.get(phase, []))
             records.append({"event": "step_complete", "phase": phase, "exit_code": 0})
@@ -1379,8 +1393,8 @@ class V10FullRunTests(unittest.TestCase):
                 Path(directory), "20261108T000000Z", "a" * 40, "b" * 64, 355697322,
                 catalog, self.accepted_summary(), {"tables": 270, "identities": 232}, 2.5)
             payload = json.loads(report.read_text(encoding="utf-8"))
-            self.assertEqual(payload["database"], V10B_DATABASE)
-            self.assertEqual(report.name, "v10b_conversion_report.json")
+            self.assertEqual(payload["database"], V10C_DATABASE)
+            self.assertEqual(report.name, "v10c_conversion_report.json")
             self.assertTrue(payload["source_artifact"]["sha256_verified_against_root_manifest"])
             self.assertEqual(payload["source_restore_lineage"]["schema"], V10_SOURCE_SCHEMA)
             self.assertTrue(payload["source_restore_lineage"]["container_identity_verified"])
