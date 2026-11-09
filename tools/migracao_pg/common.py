@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 SAO_PAULO = ZoneInfo("America/Sao_Paulo")
 UTC = timezone.utc
 V9_DATABASE = "erp_ensaio_v9"
+V10_DATABASE = "erp_ensaio_v10"
+REHEARSAL_DATABASES = frozenset({V9_DATABASE, V10_DATABASE})
 V9_PGDATA = "/var/lib/erp-pg-rehearsal/pg-data"
 V9_PGSOCKET = "/var/lib/erp-pg-rehearsal/pg-socket"
 V9_PGPORT = 55432
@@ -248,16 +250,22 @@ def ambiguous_sao_paulo_wall_time(value: datetime) -> bool:
     return value.replace(tzinfo=SAO_PAULO, fold=0).utcoffset() != value.replace(tzinfo=SAO_PAULO, fold=1).utcoffset()
 
 
-def verify_v9_postgres_connection(conn) -> None:
+def verify_rehearsal_postgres_connection(conn, expected_database: str) -> None:
+    if expected_database not in REHEARSAL_DATABASES:
+        raise RuntimeError("PostgreSQL target database is not an approved isolated rehearsal")
     with conn.cursor() as cur:
         cur.execute("SELECT current_database(),current_setting('listen_addresses'),current_setting('port'),"
                     "current_setting('data_directory'),current_setting('unix_socket_directories'),"
                     "current_setting('server_version_num'),current_setting('TimeZone'),current_setting('server_encoding')")
         row = cur.fetchone()
-    if (row is None or row[0] != V9_DATABASE or row[1] != "" or int(row[2]) != V9_PGPORT
+    if (row is None or row[0] != expected_database or row[1] != "" or int(row[2]) != V9_PGPORT
             or row[3] != V9_PGDATA or row[4] != V9_PGSOCKET or not 180000 <= int(row[5]) < 190000
             or row[6] != "America/Sao_Paulo" or row[7] != "UTF8"):
-        raise RuntimeError("PostgreSQL connection is not the approved isolated v9 rehearsal")
+        raise RuntimeError("PostgreSQL connection is not the approved isolated rehearsal")
+
+
+def verify_v9_postgres_connection(conn) -> None:
+    verify_rehearsal_postgres_connection(conn, V9_DATABASE)
 
 
 def canonical(value: object, data_type: str, *, side: str = "source", generated: bool = False) -> bytes:

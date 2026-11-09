@@ -15,7 +15,8 @@ import pymysql
 from pymysql.constants import FIELD_TYPE
 
 from common import (collate_class, generated_name, json_contains_nul, mysql_type_to_pg,
-                    parse_mysql_enum, pg_name, qi, ql, mysql_qi)
+                    parse_mysql_enum, pg_name, qi, ql, mysql_qi, REHEARSAL_DATABASES,
+                    V10_DATABASE)
 
 SCHEMA = "inlaud99_erpcondor"
 OFFICIAL_ORIGIN = "https://github.com/ASOARESBH/app.erpcondominios.com.br-.git"
@@ -689,6 +690,8 @@ def build_sql(catalog: dict, target_database: str = "erp_ensaio_v9") -> dict[str
         if key in seen:
             raise ValueError("PostgreSQL identifier collision")
         seen[key] = t
+    if target_database not in REHEARSAL_DATABASES:
+        raise ValueError("target database is not an approved isolated rehearsal")
     target_database = pg_name(target_database)
     zero_cols = set(catalog["zero_value_counts"])
     invalid = catalog["invalid_enum_counts"]
@@ -908,7 +911,7 @@ def main():
     ap.add_argument("--target-database", required=True)
     ap.add_argument("--routine-snapshot", required=True)
     args = ap.parse_args()
-    if args.target_database != "erp_ensaio_v9":
+    if args.target_database not in REHEARSAL_DATABASES:
         raise SystemExit("refusing any target database except the approved isolated rehearsal")
     conn = mysql_connection(args.mysql_config)
     try:
@@ -972,7 +975,7 @@ def main():
             raise RuntimeError("trigger-related tenant references require review before translation")
         identity_failures = identity_range_failures(conn, columns)
         if identity_failures:
-            raise RuntimeError("AUTO_INCREMENT values exceed PostgreSQL bigint on " + ",".join(identity_failures))
+            raise RuntimeError("AUTO_INCREMENT values exceed PostgreSQL bigint")
         nul_counts = text_nul_counts(conn, columns)
         if nul_counts:
             Path(args.summary).write_text(json.dumps({"status": "blocked_textual_nul", "text_nul_counts": nul_counts,
@@ -995,7 +998,8 @@ def main():
         safe_invalid_enum = enum_counts_for_summary(invalid_enum)
         fk_normalization_json = json.dumps(fk_type_normalizations, ensure_ascii=False,
                                            sort_keys=True, separators=(",", ":"))
-        summary = {"mysql_schema": SCHEMA, "object_types": object_types, "tables": len(tables), "views": 0, "columns": sum(map(len, columns.values())),
+        summary = {"mysql_schema": SCHEMA, "object_types": object_types, "tables": len(tables),
+                   "views": 0, "columns": sum(map(len, columns.values())),
                    "indexes": sum(len(v) for v in indexes.values()), "primary_keys": sum(1 for t in indexes.values() if "PRIMARY" in t),
                    "foreign_keys": len(fks), "fk_type_normalizations": fk_type_normalizations,
                    "fk_type_normalizations_sha256": hashlib.sha256(fk_normalization_json.encode()).hexdigest(),
@@ -1024,6 +1028,9 @@ def main():
                    "zero_date_counts": zero_counts, "invalid_enum_counts": safe_invalid_enum,
                    "time_conversion_risks": time_risks,
                    "collate_c_columns": sorted(f"{t}.{c['name']}" for t, cs in columns.items() for c in cs if c["collate"] == '"C"'),
+                   "collate_c_columns_sha256": hashlib.sha256("\n".join(sorted(
+                       f"{t}.{c['name']}" for t, cs in columns.items() for c in cs if c["collate"] == '"C"'
+                   )).encode("utf-8")).hexdigest(),
                    "prefix_indexes": [{"table": t, "index": name, "column": part["column"], "prefix_characters": part["sub_part"]}
                                       for t, idxs in indexes.items() for name, parts in idxs.items() for part in parts if part["sub_part"]],
                    "float_money_columns": sorted(f"{t}.{c['name']}" for t, cs in columns.items() for c in cs if c["data_type"] in {"float", "double"} and re.search(r"valor|preco|preço|custo|saldo|dinheiro|total|taxa", f"{t}.{c['name']}", re.I)),
@@ -1031,6 +1038,8 @@ def main():
                    "zero_default_cols": [f"{t}.{c['name']}" for t, cs in columns.items() for c in cs if c["data_type"] in TEMPORAL_TYPES and c["default"] is not None and re.match(r"^(0000|\d{4}-00-|\d{4}-\d{2}-00)", str(c["default"]))],
                    "source_estimated_bytes": catalog["source_bytes"],
                    "ddl_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.glob("*.sql"))}}
+        if args.target_database == V10_DATABASE:
+            summary["table_names"] = sorted(tables)
         Path(args.summary).write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
     finally:
         conn.rollback()
@@ -1042,6 +1051,7 @@ CATALOG_ERROR_CODES = {
     "catalog shape differs from approved rehearsal snapshot": "catalog_shape_mismatch",
     "ENUM outside-domain count could not be reconciled to values": "enum_domain_count_mismatch",
     "ENUM value is not valid UTF-8": "enum_value_not_utf8",
+    "AUTO_INCREMENT values exceed PostgreSQL bigint": "identity_range_exceeded",
     "checklist ON DUPLICATE KEY target differs from the approved primary-key contract": "checklist_upsert_contract_mismatch",
     "foreign key crosses the approved erp/legado boundary": "foreign_key_schema_boundary_mismatch",
     "foreign key signature differs from approved rehearsal snapshot": "foreign_key_signature_mismatch",

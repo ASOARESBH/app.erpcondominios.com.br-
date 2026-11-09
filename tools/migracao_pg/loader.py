@@ -16,7 +16,8 @@ from psycopg import sql
 from pymysql.constants import FIELD_TYPE
 
 from common import (ambiguous_sao_paulo_wall_time, convert_temporal, qi, row_digest,
-                    json_contains_nul, mysql_qi, verify_v9_postgres_connection)
+                    json_contains_nul, mysql_qi, verify_rehearsal_postgres_connection,
+                    REHEARSAL_DATABASES)
 from catalog import (SCHEMA, classify_legacy_tables, mysql_connection, query, table_inventory,
                      columns_inventory, indexes_inventory, text_nul_counts_for_table)
 
@@ -164,7 +165,7 @@ def main():
     ap.add_argument("--evidence", required=True)
     ap.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     args = ap.parse_args()
-    if args.database != "erp_ensaio_v9":
+    if args.database not in REHEARSAL_DATABASES:
         raise SystemExit("refusing unexpected rehearsal database name")
     if args.batch_size < 1 or args.batch_size > 10000:
         raise SystemExit("batch size out of approved range")
@@ -182,7 +183,7 @@ def main():
             flags = cur.fetchone()
             if tuple(map(str, flags)) != ("1", "1", "OFF", "+00:00"):
                 raise RuntimeError("source MySQL safety flags changed")
-        verify_v9_postgres_connection(pg_conn)
+        verify_rehearsal_postgres_connection(pg_conn, args.database)
         with pg_conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM pg_tables WHERE schemaname IN ('erp','legado')")
             if cur.fetchone()[0] != 270:

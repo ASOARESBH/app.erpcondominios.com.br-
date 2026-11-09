@@ -14,7 +14,7 @@ from psycopg import sql
 
 from catalog import (classify_legacy_tables, columns_inventory, indexes_inventory,
                      mysql_connection, table_inventory)
-from common import verify_v9_postgres_connection
+from common import verify_rehearsal_postgres_connection, REHEARSAL_DATABASES
 NUMERIC = {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "float", "double"}
 TEXT = {"char", "varchar", "tinytext", "text", "mediumtext", "longtext", "enum", "set"}
 BINARY = {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}
@@ -473,8 +473,8 @@ def main():
     ap.add_argument("--pg-port", type=int, required=True)
     ap.add_argument("--database", required=True)
     args = ap.parse_args()
-    if args.database != "erp_ensaio_v9" or args.pg_port != 55432:
-        raise SystemExit("refusing non-v9 target")
+    if args.database not in REHEARSAL_DATABASES or args.pg_port != 55432:
+        raise SystemExit("refusing non-approved rehearsal target")
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     mysql = None
@@ -497,7 +497,7 @@ def main():
         catalog = {"tables": tables, "columns": columns_inventory(mysql), "indexes": indexes_inventory(mysql)}
         pg = psycopg.connect(host=args.pg_socket, port=args.pg_port, dbname=args.database,
                              user="postgres", autocommit=True, connect_timeout=10)
-        verify_v9_postgres_connection(pg)
+        verify_rehearsal_postgres_connection(pg, args.database)
         with pg.cursor() as cur:
             cur.execute("SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
                         "WHERE c.relkind='S' AND n.nspname IN ('erp','legado') ORDER BY n.nspname,c.relname")

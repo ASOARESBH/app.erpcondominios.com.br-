@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import hashlib
+import csv
 import io
 import tempfile
 import unittest
@@ -15,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[2] / "tools" / "migracao_pg"
 sys.path.insert(0, str(ROOT))
 
 from common import (ambiguous_sao_paulo_wall_time, convert_temporal, generated_name, mysql_type_to_pg, parse_mysql_enum, row_digest,
-                    json_contains_nul, verify_v9_postgres_connection, zero_date)
+                    json_contains_nul, verify_v9_postgres_connection, zero_date, V9_DATABASE, V10_DATABASE,
+                    REHEARSAL_DATABASES)
 from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, time_conversion_risks, validate_on_update_snapshot,
                      expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
                      verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES,
@@ -30,7 +32,19 @@ from run_migration import (APPROVED_POST_FK_RUN_ID, APPROVED_POST_FK_SOURCE_COMM
                            validate_resume_table_inventory, validate_resume_catalog_transition,
                            validate_catalog_artifact_snapshot, verify_post_fk_run_manifest, safe_summary_scalars,
                            verify_baseline_ancestry, verify_resume_code_ancestry, verify_resume_target,
-                           verify_post_fk_target)
+                           verify_post_fk_target, verify_v10_source_manifest_payload,
+                           validate_v10_source_restore_payload, validate_v10_catalog_semantics,
+                           verify_reconciliation_acceptance, validate_v10_execution_history,
+                           read_v10_execution_log,
+                           write_v10_conversion_report, create_target_database, ensure_private_directory, main,
+                           V10_EXPECTED_CATALOG_COUNTS, V10_EXPECTED_TRIGGER_NAMES,
+                           V10_EXPECTED_PROCEDURE_NAMES,
+                           V10_EXPECTED_ZERO_DATE_COUNTS, V10_EXPECTED_ENUM_COUNTS,
+                           V10_EXPECTED_LEGACY_TABLES, V10_EXPECTED_BACKUP_CANDIDATES,
+                           V10_EXPECTED_SOURCE_COLLATION_COUNTS, V10_EXPECTED_TENANT_SIGNATURE_SHA256,
+                           V10_EXPECTED_NO_TENANT_NAMES_SHA256, V10_EXPECTED_COLLATE_C_COLUMNS_SHA256,
+                           V10_RESTORE_SCRIPT_SHA256, V10_SOURCE_SCHEMA, V10_PHASE_SEQUENCE,
+                           V10_EXPECTED_SYNTHETIC_TESTS)
 
 
 class TypeMappingTests(unittest.TestCase):
@@ -54,6 +68,7 @@ class TypeMappingTests(unittest.TestCase):
 
     def test_catalog_error_codes_cover_enum_and_on_update_gates(self):
         cases = {
+            "AUTO_INCREMENT values exceed PostgreSQL bigint": "identity_range_exceeded",
             "ENUM outside-domain count could not be reconciled to values": "enum_domain_count_mismatch",
             "ENUM value is not valid UTF-8": "enum_value_not_utf8",
             "NULL encountered while inspecting ENUM domain": "enum_null_member",
@@ -111,7 +126,7 @@ class TypeMappingTests(unittest.TestCase):
             with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(RuntimeError, "phase catalog failed"):
                     run_step(["catalog"], "catalog", log, whitelist_json=True)
-            record = json.loads(log.read_text(encoding="utf-8"))
+            record = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])
         self.assertEqual(record["error_code"], "source_collation_mismatch")
         self.assertEqual(record["error_type"], "RuntimeError")
 
@@ -127,7 +142,7 @@ class TypeMappingTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "phase reconciliation failed"):
                     run_step(["reconcile"], "reconciliation", log, whitelist_json=True)
             content = log.read_text(encoding="utf-8")
-            record = json.loads(content)
+            record = json.loads(content.splitlines()[-1])
         self.assertEqual(record["error_type"], "RuntimeError")
         self.assertEqual(record["error_code"], "reconciliation_table_destination_hash")
         self.assertEqual(record["error_stage"], "table_destination_hash")
@@ -144,7 +159,7 @@ class TypeMappingTests(unittest.TestCase):
             with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(RuntimeError, "phase reconciliation failed"):
                     run_step(["reconcile"], "reconciliation", log, whitelist_json=True)
-            record = json.loads(log.read_text(encoding="utf-8"))
+            record = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])
         self.assertEqual(record["error_type"], "ReconciliationBlocked")
         self.assertEqual(record["error_stage"], "metrics_gate")
         self.assertEqual(record["error_code"], "reconciliation_metrics_mismatch")
@@ -161,7 +176,7 @@ class TypeMappingTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "phase foreign_keys_not_valid failed"):
                     run_step(["psql"], "foreign_keys_not_valid", log)
             content = log.read_text(encoding="utf-8")
-            record = json.loads(content)
+            record = json.loads(content.splitlines()[-1])
         self.assertEqual(record["error_type"], "PostgreSQLError")
         self.assertEqual(record["error_code"], "postgresql_error")
         self.assertEqual(record["sqlstate"], "42501")
@@ -1013,6 +1028,352 @@ class DdlTests(unittest.TestCase):
         self.assertIn("VALIDATE CONSTRAINT", sql["002_validate_constraints.sql"])
         self.assertIn("CHECK (\"id\" >= 0)", sql["001_schema.sql"])
         self.assertIn("GENERATED BY DEFAULT AS IDENTITY", sql["001_schema.sql"])
+
+
+class V10FullRunTests(unittest.TestCase):
+    def catalog_summary(self):
+        table_names = sorted(V10_EXPECTED_LEGACY_TABLES) + [f"synthetic_{index:03d}" for index in range(262)]
+        collate_c_columns = [f"table_{index}.column" for index in range(83)]
+        legacy_classification = {}
+        for table in sorted(V10_EXPECTED_BACKUP_CANDIDATES):
+            if table in V10_EXPECTED_LEGACY_TABLES:
+                legacy_classification[table] = {
+                    "schema": "legado", "reason": "backup_name_no_active_code_reference", "paths": []}
+            else:
+                legacy_classification[table] = {
+                    "schema": "erp", "reason": "active_code_reference", "paths": ["tools/example.php"]}
+        return {
+            **V10_EXPECTED_CATALOG_COUNTS,
+            "object_types": {"BASE TABLE": 270},
+            "table_names": table_names,
+            "trigger_names": sorted(V10_EXPECTED_TRIGGER_NAMES),
+            "procedure_names": sorted(V10_EXPECTED_PROCEDURE_NAMES),
+            "function_names": [],
+            "tenant_id_tables": table_names[:228],
+            "no_tenant_id_tables": table_names[228:],
+            "tenant_signature_sha256": V10_EXPECTED_TENANT_SIGNATURE_SHA256,
+            "no_tenant_names_sha256": V10_EXPECTED_NO_TENANT_NAMES_SHA256,
+            "collate_c_columns": collate_c_columns,
+            "collate_c_columns_sha256": hashlib.sha256(
+                "\n".join(sorted(collate_c_columns)).encode("utf-8")).hexdigest(),
+            "source_collation_counts": dict(V10_EXPECTED_SOURCE_COLLATION_COUNTS),
+            "on_update_current_timestamp_columns": [f"table_{index}.updated_at" for index in range(111)],
+            "on_update_columns_sha256": hashlib.sha256(
+                (ROOT / "expected_on_update_columns.json").read_bytes()).hexdigest(),
+            "zero_date_counts": dict(V10_EXPECTED_ZERO_DATE_COUNTS),
+            "invalid_enum_counts": {key: dict(value) for key, value in V10_EXPECTED_ENUM_COUNTS.items()},
+            "legacy_tables": sorted(V10_EXPECTED_LEGACY_TABLES),
+            "legacy_classification": legacy_classification,
+        }
+
+    def validate_synthetic_catalog(self, summary):
+        digest = hashlib.sha256("\n".join(sorted(summary["collate_c_columns"])).encode("utf-8")).hexdigest()
+        with patch("run_migration.V10_EXPECTED_COLLATE_C_COLUMNS_SHA256", digest):
+            return validate_v10_catalog_semantics(summary)
+
+    def accepted_summary(self):
+        return {
+            "status": "ACCEPTED", "tables": 270, "source_rows": 202609,
+            "destination_rows": 202609, "foreign_keys": 11, "foreign_keys_valid": 11,
+            "foreign_keys_with_orphans": 0, "fk_orphan_count_total": 0,
+            "identity_columns": 232, "row_count_mismatches": 0,
+            "tables_with_row_hash_divergence": 0, "row_hash_divergent_total": 0,
+            "pk_max_mismatches": 0, "identity_max_mismatches": 0,
+            "sequences_not_ready": 0, "numeric_sum_mismatches": 0,
+            "binary_mismatches": 0, "tenant_bucket_mismatches": 0,
+            "timestamp_mismatches": 0, "fk_tenant_mismatch_count": 0,
+            "primary_key_columns": 252, "timestamp_samples": 1281,
+            "elapsed_seconds": 1.0,
+        }
+
+    def reconciliation_rows(self):
+        rows = []
+        for index in range(270):
+            identity_count = int(index < 232)
+            rows.append({
+                "table": f"synthetic_{index:03d}", "schema": "legado" if index < 8 else "erp",
+                "source_rows": 202609 if index == 0 else 0,
+                "destination_rows": 202609 if index == 0 else 0,
+                "row_count_match": True, "rows_divergent": 0,
+                "pk_max_mismatch_count": 0,
+                "identity_max_match_count": identity_count, "identity_count": identity_count,
+                "sequence_ready_count": identity_count, "numeric_sum_mismatches": 0,
+                "binary_mismatches": 0, "tenant_bucket_mismatches": 0,
+                "foreign_keys": 11 if index == 0 else 0,
+                "foreign_keys_valid": 11 if index == 0 else 0,
+                "foreign_keys_with_orphans": 0, "fk_orphan_count": 0,
+                "fk_tenant_mismatches": 0, "timestamp_mismatches": 0,
+            })
+        return rows
+
+    def write_reconciliation_csv(self, path, rows):
+        with path.open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def test_v10_database_contract_is_separate_from_v9_and_forbids_resume(self):
+        self.assertEqual(V10_DATABASE, "erp_ensaio_v10")
+        self.assertEqual(REHEARSAL_DATABASES, frozenset({V9_DATABASE, V10_DATABASE}))
+        with patch("sys.argv", ["run_migration.py", "--database", V10_DATABASE,
+                                "--expected-commit", "a" * 40, "--resume-partial-target"]):
+            with self.assertRaisesRegex(SystemExit, "v10 must start from zero"):
+                main()
+
+    def test_private_runner_directories_are_reusable_but_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            private = root / "runs"
+            ensure_private_directory(private, os.geteuid(), os.getegid(), 0o700)
+            ensure_private_directory(private, os.geteuid(), os.getegid(), 0o700)
+            self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+            symlink = root / "runs-link"
+            symlink.symlink_to(private, target_is_directory=True)
+            with self.assertRaises(RuntimeError):
+                ensure_private_directory(symlink, os.geteuid(), os.getegid(), 0o700)
+            unsafe = root / "unsafe"
+            unsafe.mkdir(mode=0o755)
+            with self.assertRaises(RuntimeError):
+                ensure_private_directory(unsafe, os.geteuid(), os.getegid(), 0o700)
+
+    def test_v10_source_manifest_requires_byte_identity_and_exact_size(self):
+        digest = "a" * 64
+        manifest = {"schema_version": 1, "sha256": digest, "size_bytes": 355697322}
+        self.assertEqual(verify_v10_source_manifest_payload(
+            manifest, digest, 355697322, digest, 355697322), digest)
+        with self.assertRaises(RuntimeError):
+            verify_v10_source_manifest_payload(manifest, digest, 355697321, digest, 355697321)
+        with self.assertRaises(RuntimeError):
+            verify_v10_source_manifest_payload(manifest, digest, 355697322, "b" * 64, 355697322)
+
+    def test_v10_restore_attestation_binds_dump_restore_status_and_live_container(self):
+        digest = "a" * 64
+        container_id = "b" * 64
+        attestation = {
+            "schema_version": 1, "source_schema": V10_SOURCE_SCHEMA,
+            "source_sha256": digest, "source_size_bytes": 355697322,
+            "restore_pipeline_exit": 0, "restore_script_sha256": V10_RESTORE_SCRIPT_SHA256,
+            "container_id": container_id,
+        }
+        validate_v10_source_restore_payload(
+            attestation, digest, 355697322, container_id, "RESTORE_PIPE_EXIT=0", container_id)
+        cases = [
+            (dict(attestation, source_sha256="c" * 64), "RESTORE_PIPE_EXIT=0", container_id),
+            (dict(attestation, container_id="c" * 64), "RESTORE_PIPE_EXIT=0", container_id),
+            (attestation, "RESTORE_PIPE_EXIT=1", container_id),
+            (attestation, "RESTORE_PIPE_EXIT=0", "c" * 64),
+            (dict(attestation, restore_script_sha256="c" * 64), "RESTORE_PIPE_EXIT=0", container_id),
+        ]
+        for payload, status, recorded_id in cases:
+            with self.subTest(status=status, recorded_id_matches=recorded_id == container_id):
+                with self.assertRaises(RuntimeError):
+                    validate_v10_source_restore_payload(
+                        payload, digest, 355697322, container_id, status, recorded_id)
+
+    def test_catalog_semantics_are_exact_and_legacy_inventory_is_closed(self):
+        metrics = self.validate_synthetic_catalog(self.catalog_summary())
+        self.assertEqual(metrics["zero_date_cells"], 434)
+        self.assertEqual(metrics["empty_enum_cells"], 213)
+        self.assertEqual(metrics["nonempty_enum_anomalies"], 0)
+        self.assertEqual(metrics["tables"], 270)
+        self.assertEqual(metrics["columns"], 3339)
+        self.assertEqual(metrics["tenant_id_tables"], 228)
+        self.assertEqual(metrics["without_tenant_id_tables"], 42)
+        summary = self.catalog_summary()
+        summary["invalid_enum_counts"]["email_log.tipo"]["out_of_domain_values"] += 1
+        with self.assertRaises(RuntimeError):
+            self.validate_synthetic_catalog(summary)
+
+    def test_catalog_semantics_bind_all_structural_fingerprints_and_classifications(self):
+        mutators = [
+            lambda s: s.update(source_collation_counts={"utf8_unicode_ci": 126,
+                                                         "utf8mb4_general_ci": 147,
+                                                         "utf8mb4_unicode_ci": 1099}),
+            lambda s: s.update(tenant_signature_sha256="a" * 64),
+            lambda s: s.update(no_tenant_names_sha256="a" * 64),
+            lambda s: s.update(on_update_columns_sha256="a" * 64),
+            lambda s: s.update(collate_c_columns=["drift"] + s["collate_c_columns"][1:]),
+            lambda s: s["legacy_classification"].pop(next(iter(s["legacy_classification"]))),
+        ]
+        for mutate in mutators:
+            with self.subTest(mutate=mutate.__code__.co_firstlineno):
+                summary = self.catalog_summary()
+                mutate(summary)
+                with self.assertRaises(RuntimeError):
+                    self.validate_synthetic_catalog(summary)
+
+    def test_catalog_semantics_reject_structural_count_drift(self):
+        for key in V10_EXPECTED_CATALOG_COUNTS:
+            with self.subTest(key=key):
+                summary = self.catalog_summary()
+                summary[key] += 1
+                with self.assertRaises(RuntimeError):
+                    self.validate_synthetic_catalog(summary)
+
+    def test_reconciliation_gate_checks_all_270_tables_and_232_sequences(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reconciliacao_v10.csv"
+            rows = self.reconciliation_rows()
+            self.write_reconciliation_csv(path, rows)
+            expected_tables = {row["table"] for row in rows}
+            legacy_tables = {f"synthetic_{index:03d}" for index in range(8)}
+            totals = verify_reconciliation_acceptance(
+                self.accepted_summary(), path, expected_tables, legacy_tables)
+            self.assertEqual(totals["tables"], 270)
+            self.assertEqual(totals["identities"], 232)
+            rows[-1]["rows_divergent"] = 1
+            self.write_reconciliation_csv(path, rows)
+            with self.assertRaises(RuntimeError):
+                verify_reconciliation_acceptance(
+                    self.accepted_summary(), path, expected_tables, legacy_tables)
+
+    def test_reconciliation_gate_rejects_wrong_table_names_and_legacy_schema(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reconciliacao_v10.csv"
+            rows = self.reconciliation_rows()
+            expected_tables = {row["table"] for row in rows}
+            legacy_tables = {f"synthetic_{index:03d}" for index in range(8)}
+            self.write_reconciliation_csv(path, rows)
+            wrong_expected = set(expected_tables)
+            wrong_expected.remove("synthetic_269")
+            wrong_expected.add("not_in_catalog")
+            with self.assertRaises(RuntimeError):
+                verify_reconciliation_acceptance(
+                    self.accepted_summary(), path, wrong_expected, legacy_tables)
+            rows[0]["schema"] = "erp"
+            self.write_reconciliation_csv(path, rows)
+            with self.assertRaises(RuntimeError):
+                verify_reconciliation_acceptance(
+                    self.accepted_summary(), path, expected_tables, legacy_tables)
+
+    def test_reconciliation_gate_rejects_orphaned_foreign_keys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reconciliacao_v10.csv"
+            rows = self.reconciliation_rows()
+            self.write_reconciliation_csv(path, rows)
+            expected_tables = {row["table"] for row in rows}
+            legacy_tables = {f"synthetic_{index:03d}" for index in range(8)}
+            summary = self.accepted_summary()
+            summary["foreign_keys_valid"] = 10
+            summary["foreign_keys_with_orphans"] = 1
+            with self.assertRaises(RuntimeError):
+                verify_reconciliation_acceptance(summary, path, expected_tables, legacy_tables)
+
+            summary = self.accepted_summary()
+            summary["primary_key_columns"] = 251
+            with self.assertRaises(RuntimeError):
+                verify_reconciliation_acceptance(summary, path, expected_tables, legacy_tables)
+
+    def test_target_database_creator_rejects_unlisted_database_without_psql(self):
+        with patch("run_migration.subprocess.run") as mocked:
+            with self.assertRaises(RuntimeError):
+                create_target_database("production")
+            mocked.assert_not_called()
+
+    def execution_history(self):
+        records = [{"event": "pipeline_started", "database": V10_DATABASE, "clean_start": True,
+                    "resume_source_run": None, "post_fk_source_run": None}]
+        extras = {
+            "source_integrity": [
+                {"event": "source_artifacts_integrity_verified"},
+                {"event": "mysql_restore_lineage_verified"},
+            ],
+            "catalog": [{"event": "catalog_semantics_verified"}],
+            "load": [{"event": "loader_summary", "tables_loaded": 270, "source_rows_loaded": 202609}],
+            "business_trigger_tests": [
+                {"event": "synthetic_test_pass", "test": name}
+                for name in sorted(V10_EXPECTED_SYNTHETIC_TESTS)
+            ],
+            "reconciliation": [{"event": "reconciliation_summary", "status": "ACCEPTED",
+                                "tables": 270, "source_rows": 202609, "destination_rows": 202609}],
+        }
+        for phase in V10_PHASE_SEQUENCE:
+            records.append({"event": "phase_started", "phase": phase})
+            if phase == "target_create":
+                records.append({"event": "empty_target_created", "database": V10_DATABASE})
+            if phase != "catalog":
+                records.extend(extras.get(phase, []))
+            records.append({"event": "step_complete", "phase": phase, "exit_code": 0})
+            if phase == "catalog":
+                records.extend(extras.get(phase, []))
+                records.append({"event": "postgres_cluster_ready"})
+        records.append({"event": "table_level_reconciliation_verified"})
+        return records
+
+    def test_v10_execution_history_requires_complete_order_and_cluster_stop(self):
+        records = self.execution_history()
+        validate_v10_execution_history(records)
+        records.append({"event": "postgres_cluster_stopped", "reason": "pipeline_success"})
+        validate_v10_execution_history(records, require_cluster_stopped=True)
+
+    def test_v10_execution_history_rejects_resume_reordering_and_missing_tests(self):
+        records = self.execution_history()
+        records[0]["resume_source_run"] = "old-run"
+        with self.assertRaises(RuntimeError):
+            validate_v10_execution_history(records)
+
+        records = self.execution_history()
+        records[1], records[3] = records[3], records[1]
+        with self.assertRaises(RuntimeError):
+            validate_v10_execution_history(records)
+
+        records = self.execution_history()
+        records.remove(next(item for item in records if item.get("event") == "synthetic_test_pass"))
+        with self.assertRaises(RuntimeError):
+            validate_v10_execution_history(records)
+
+    def test_v10_execution_history_rejects_failed_phase_or_missing_cluster_stop(self):
+        records = self.execution_history()
+        records.append({"event": "step_failed", "phase": "load"})
+        with self.assertRaises(RuntimeError):
+            validate_v10_execution_history(records)
+
+        records = self.execution_history()
+        with self.assertRaises(RuntimeError):
+            validate_v10_execution_history(records, require_cluster_stopped=True)
+
+    def test_v10_execution_log_requires_private_regular_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            log = root / "run.jsonl"
+            log.write_text('{"event":"pipeline_started"}\n', encoding="utf-8")
+            log.chmod(0o600)
+            records = read_v10_execution_log(log, root_uid=os.geteuid())
+            self.assertEqual(records[0]["event"], "pipeline_started")
+            link = root / "run-link.jsonl"
+            link.symlink_to(log)
+            with self.assertRaises(RuntimeError):
+                read_v10_execution_log(link, root_uid=os.geteuid())
+
+    def test_v10_conversion_report_is_aggregate_and_private(self):
+        with tempfile.TemporaryDirectory() as directory:
+            catalog = {
+                "tables": 270, "columns": 3339, "views": 0, "triggers": 7,
+                "procedure_names": ["p1", "p2"], "function_names": [], "events": 0,
+                "auto_increment_columns": 232, "tenant_id_tables": [f"t{i}" for i in range(228)],
+                "no_tenant_id_tables": [f"n{i}" for i in range(42)], "collate_c_columns": ["a.c"],
+                "legacy_tables": sorted(V10_EXPECTED_LEGACY_TABLES),
+                "zero_date_counts": V10_EXPECTED_ZERO_DATE_COUNTS,
+                "invalid_enum_counts": V10_EXPECTED_ENUM_COUNTS,
+                "fk_type_normalizations": [],
+            }
+            report = write_v10_conversion_report(
+                Path(directory), "20261108T000000Z", "a" * 40, "b" * 64, 355697322,
+                catalog, self.accepted_summary(), {"tables": 270, "identities": 232}, 2.5)
+            payload = json.loads(report.read_text(encoding="utf-8"))
+            self.assertTrue(payload["source_artifact"]["sha256_verified_against_root_manifest"])
+            self.assertEqual(payload["source_restore_lineage"]["schema"], V10_SOURCE_SCHEMA)
+            self.assertTrue(payload["source_restore_lineage"]["container_identity_verified"])
+            self.assertTrue(payload["source_restore_lineage"]["restore_script_sha256_verified"])
+            self.assertEqual(payload["source_artifact"]["sha256"], "b" * 64)
+            with self.assertRaises(RuntimeError):
+                write_v10_conversion_report(
+                    Path(directory), "20261108T000000Z", "a" * 40, "invalid", 355697322,
+                    catalog, self.accepted_summary(), {"tables": 270, "identities": 232}, 2.5)
+            self.assertEqual(len(payload["zero_date_normalization"]), 5)
+            self.assertEqual(len(payload["enum_compatibility"]), 6)
+            self.assertEqual(payload["catalog"]["legacy_tables"], sorted(V10_EXPECTED_LEGACY_TABLES))
+            self.assertEqual(report.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":

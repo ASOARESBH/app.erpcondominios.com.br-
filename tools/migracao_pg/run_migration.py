@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import csv
 import fcntl
 import hashlib
 import json
@@ -17,7 +18,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-from common import generated_name
+from common import generated_name, REHEARSAL_DATABASES, V9_DATABASE, V10_DATABASE
 
 PGDATA = Path("/var/lib/erp-pg-rehearsal/pg-data")
 PGSOCKET = Path("/var/lib/erp-pg-rehearsal/pg-socket")
@@ -37,10 +38,94 @@ APPROVED_POST_FK_MANIFEST = Path("/root/erp_pg_v9_post_fk_20261108_manifest.json
 V9_ROOT = Path("/var/lib/erp-pg-rehearsal/v9")
 RUN_ROOT = Path("/var/lib/erp-pg-rehearsal/v9/runs")
 TMPFS_ROOT = Path("/dev/shm/erp-pg-v9")
+V10_ROOT = Path("/var/lib/erp-pg-rehearsal/v10")
+V10_RUN_ROOT = V10_ROOT / "runs"
+V10_TMPFS_ROOT = Path("/dev/shm/erp-pg-v10")
+V10_SOURCE_MANIFEST = Path("/root/erp_pg_v10_source_manifest.json")
+V10_SOURCE_DUMP = Path("/var/backups/erpcondominios/ensaio-20261107T233109Z/inlaud99_erpcondor.mysql.sql.gz")
+V10_SOURCE_COPY = Path("/var/lib/erp-pg-rehearsal/evidence/source-copy.sql.gz")
+V10_SOURCE_RESTORE_STATUS = Path("/var/lib/erp-pg-rehearsal/evidence/mysql_source_restore.status")
+V10_SOURCE_CONTAINER_ID_EVIDENCE = Path("/var/lib/erp-pg-rehearsal/evidence/mysql_source_container_id.txt")
+V10_SOURCE_RESTORE_ATTESTATION = Path("/root/erp_pg_v10_source_restore_attestation.json")
+V10_SOURCE_SCHEMA = "inlaud99_erpcondor"
+V10_RESTORE_SCRIPT_SHA256 = "68148cb8f6edefd35ea96d326994d40e85d314914b690a3a78a16b4eb9c01fcc"
+V10_EXPECTED_ZERO_DATE_COUNTS = {
+    "contas_pagar.data_emissao": 1,
+    "contratos.data_vencimento": 9,
+    "dependentes.data_nascimento": 213,
+    "inventario.data_baixa": 208,
+    "inventario.data_compra": 3,
+}
+V10_EXPECTED_ENUM_COUNTS = {
+    "contas_pagar.forma_pagamento": {"empty_enum_values": 1, "out_of_domain_values": 1},
+    "contrato_documentos.tipo_documento": {"empty_enum_values": 25, "out_of_domain_values": 25},
+    "email_log.tipo": {"empty_enum_values": 19, "out_of_domain_values": 19},
+    "produtos_estoque.unidade_medida": {"empty_enum_values": 157, "out_of_domain_values": 157},
+    "registros_acesso.tipo": {"empty_enum_values": 10, "out_of_domain_values": 10},
+    "rh_banco_horas.tipo": {"empty_enum_values": 1, "out_of_domain_values": 1},
+}
+V10_EXPECTED_CATALOG_COUNTS = {
+    "tables": 270,
+    "columns": 3339,
+    "views": 0,
+    "indexes": 503,
+    "primary_keys": 240,
+    "foreign_keys": 11,
+    "triggers": 7,
+    "routines": 2,
+    "events": 0,
+    "auto_increment_columns": 232,
+}
+V10_PHASE_SEQUENCE = (
+    "source_integrity", "catalog", "target_create", "schema", "constraints_indexes", "load",
+    "on_update_triggers", "business_objects", "grants", "business_trigger_tests",
+    "foreign_keys_not_valid", "identity_sequences", "analyze", "reconciliation",
+)
+V10_EXPECTED_SYNTHETIC_TESTS = frozenset({
+    "erp_app_minimum_privileges", "on_update_timestamp_semantics",
+    "after_qrcode_token_insert", "after_validacao_dispositivo_insert",
+    "trg_alerta_estoque_baixo", "trg_atualizar_km_acumulado", "tr_dependente_ativar_veiculos",
+    "tr_dependente_inativar_veiculos", "tr_dependente_deletar_veiculos",
+    "corrigir_moradores_anexos_tenant", "mt_adicionar_coluna",
+})
+V10_EXPECTED_SOURCE_COLLATION_COUNTS = {
+    "utf8_unicode_ci": 127,
+    "utf8mb4_general_ci": 147,
+    "utf8mb4_unicode_ci": 1098,
+}
+V10_EXPECTED_TENANT_SIGNATURE_SHA256 = "d51a1cdc300c7730eaf92bbee6ee6debaf3e947b3831390749d342efb7401f77"
+V10_EXPECTED_NO_TENANT_NAMES_SHA256 = "70b1a0fee9e2686abb45bfd10330399a818b4ecf71ec908406a37bf249a4d5ca"
+V10_EXPECTED_COLLATE_C_COLUMNS_SHA256 = "556e667799062d5038382723fa50fd7f08d68813ae3e1c02270da9f6d1818741"
+V10_EXPECTED_BACKUP_CANDIDATES = {
+    "avaliacoes_backup", "documentos_departamentos_migrado_bkp", "mt_os_chamados_id_zero_backup",
+    "mt_protocolos_id_zero_backup", "rbac_sessoes_bkp_ids_a_partir_15_20261027",
+    "rbac_usuario_grupos_bkp_ids_a_partir_15_20261027", "rbac_usuario_permissoes_bkp_ids_a_partir_15_20261027",
+    "sessoes_usuarios_bkp_ids_a_partir_15_20261027", "usuarios_bkp_duplicata_admin_20261027",
+    "usuarios_bkp_ids_a_partir_15_20261027", "usuario_modulos_bkp_ids_a_partir_15_20261027",
+    "usuario_tenant_bkp_ids_a_partir_15_20261027",
+}
+V10_EXPECTED_TRIGGER_NAMES = {
+    "after_qrcode_token_insert", "after_validacao_dispositivo_insert", "trg_alerta_estoque_baixo",
+    "trg_atualizar_km_acumulado", "tr_dependente_ativar_veiculos",
+    "tr_dependente_deletar_veiculos", "tr_dependente_inativar_veiculos",
+}
+V10_EXPECTED_PROCEDURE_NAMES = {"corrigir_moradores_anexos_tenant", "mt_adicionar_coluna"}
+V10_EXPECTED_LEGACY_TABLES = {
+    "rbac_sessoes_bkp_ids_a_partir_15_20261027",
+    "rbac_usuario_grupos_bkp_ids_a_partir_15_20261027",
+    "rbac_usuario_permissoes_bkp_ids_a_partir_15_20261027",
+    "sessoes_usuarios_bkp_ids_a_partir_15_20261027",
+    "usuario_modulos_bkp_ids_a_partir_15_20261027",
+    "usuario_tenant_bkp_ids_a_partir_15_20261027",
+    "usuarios_bkp_duplicata_admin_20261027",
+    "usuarios_bkp_ids_a_partir_15_20261027",
+}
 CODE_ROOT = Path(__file__).resolve().parent
 ACTIVE_PROCESS = None
 RUN_LOCK_FD = None
 CLUSTER_STARTED_BY_RUNNER = False
+CURRENT_PHASE = "preflight"
+TARGET_CREATED_BY_RUNNER = False
 
 
 def as_postgres(*command):
@@ -49,7 +134,7 @@ def as_postgres(*command):
             f"PYTHONPATH={CODE_ROOT}", "PYTHONDONTWRITEBYTECODE=1", *map(str, command)]
 
 
-def verify_code_provenance(expected_commit: str):
+def verify_code_provenance(expected_commit: str, expected_branch: str = "pg/03-conversao-schema"):
     repository = CODE_ROOT.parents[1]
     if not re.fullmatch(r"[0-9a-f]{40}", expected_commit):
         raise RuntimeError("an exact code commit is required")
@@ -63,7 +148,7 @@ def verify_code_provenance(expected_commit: str):
                 and branch.returncode == 0 and branch.stdout.strip() == branch_name
                 and head.returncode == 0 and head.stdout.strip() == commit
                 and status.returncode == 0 and not status.stdout.strip())
-    if not verify_repo(repository, "pg/03-conversao-schema", expected_commit):
+    if not verify_repo(repository, expected_branch, expected_commit):
         raise RuntimeError("migration code provenance is not the reviewed clean official commit")
     if not verify_repo(REPO_ROOT, "main", BASELINE_MAIN_COMMIT):
         raise RuntimeError("source classification repository is not the approved clean main baseline")
@@ -195,23 +280,37 @@ def cleanup_tmpfs_run(path: Path, postgres_gid: int):
     path.rmdir()
 
 
-def prepare_credential_tmpfs(postgres_gid: int):
+def cleanup_tmpfs_root(path: Path, postgres_gid: int):
+    if not path.exists() and not path.is_symlink():
+        return
+    if path.is_symlink():
+        raise RuntimeError("credential tmpfs root cannot be a symlink")
+    st = path.lstat()
+    if (not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_gid != postgres_gid
+            or stat.S_IMODE(st.st_mode) != 0o710):
+        raise RuntimeError("credential tmpfs root has unsafe ownership or mode")
+    if any(path.iterdir()):
+        raise RuntimeError("credential tmpfs root is not empty after cleanup")
+    path.rmdir()
+
+
+def prepare_credential_tmpfs(postgres_gid: int, tmpfs_root: Path = TMPFS_ROOT):
     mount = subprocess.run(["findmnt", "-n", "-o", "FSTYPE", "--target", "/dev/shm"],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if mount.returncode or mount.stdout.strip() != "tmpfs" or not Path("/dev/shm").is_mount():
         raise RuntimeError("credential directory is not on a verified tmpfs mount")
-    if TMPFS_ROOT.is_symlink():
+    if tmpfs_root.is_symlink():
         raise RuntimeError("credential tmpfs root cannot be a symlink")
-    if TMPFS_ROOT.exists():
-        st = TMPFS_ROOT.lstat()
+    if tmpfs_root.exists():
+        st = tmpfs_root.lstat()
         if (not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_gid != postgres_gid
                 or stat.S_IMODE(st.st_mode) != 0o710):
             raise RuntimeError("credential tmpfs root has unsafe ownership or mode")
     else:
-        TMPFS_ROOT.mkdir(mode=0o710)
-        os.chown(TMPFS_ROOT, 0, postgres_gid)
-        TMPFS_ROOT.chmod(0o710)
-    for child in TMPFS_ROOT.iterdir():
+        tmpfs_root.mkdir(mode=0o710)
+        os.chown(tmpfs_root, 0, postgres_gid)
+        tmpfs_root.chmod(0o710)
+    for child in tmpfs_root.iterdir():
         if not re.fullmatch(r"\d{8}T\d{6}Z", child.name):
             raise RuntimeError("unexpected directory in credential tmpfs root")
         cleanup_tmpfs_run(child, postgres_gid)
@@ -225,9 +324,9 @@ def release_runner_lock():
         RUN_LOCK_FD = None
 
 
-def acquire_runner_lock():
+def acquire_runner_lock(run_root: Path = RUN_ROOT):
     global RUN_LOCK_FD
-    path = RUN_ROOT / ".runner.lock"
+    path = run_root / ".runner.lock"
     flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags, 0o600)
     st = os.fstat(fd)
@@ -238,9 +337,23 @@ def acquire_runner_lock():
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         os.close(fd)
-        raise RuntimeError("another v9 runner is active")
+        raise RuntimeError("another rehearsal runner is active")
     RUN_LOCK_FD = fd
     atexit.register(release_runner_lock)
+
+
+def ensure_private_directory(path: Path, uid: int, gid: int, mode: int):
+    if path.is_symlink():
+        raise RuntimeError("private runner directory cannot be a symlink")
+    try:
+        path.mkdir(mode=mode)
+        os.chown(path, uid, gid)
+    except FileExistsError:
+        pass
+    item = path.lstat()
+    if (not stat.S_ISDIR(item.st_mode) or item.st_uid != uid or item.st_gid != gid
+            or stat.S_IMODE(item.st_mode) != mode):
+        raise RuntimeError("private runner directory has unsafe ownership or mode")
 
 
 def emit_log(path: Path, event: str, **fields):
@@ -260,8 +373,10 @@ def handle_signal(signum, frame):
 
 
 def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False):
-    global ACTIVE_PROCESS
+    global ACTIVE_PROCESS, CURRENT_PHASE
+    CURRENT_PHASE = phase
     started = time.monotonic()
+    emit_log(log, "phase_started", phase=phase)
     print(json.dumps({"event": "phase_started", "phase": phase}), flush=True)
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             bufsize=1, start_new_session=True)
@@ -372,6 +487,432 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
     return proc.stdout
 
 
+def verify_v10_source_manifest_payload(manifest: dict, source_sha256: str, source_bytes: int,
+                                       copy_sha256: str, copy_bytes: int) -> str:
+    if (set(manifest) != {"schema_version", "sha256", "size_bytes"}
+            or manifest.get("schema_version") != 1
+            or not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("sha256", "")))
+            or source_sha256 != copy_sha256
+            or source_sha256 != manifest.get("sha256")
+            or source_bytes != copy_bytes
+            or source_bytes != manifest.get("size_bytes")
+            or source_bytes != 355697322):
+        raise RuntimeError("source dump or evidence copy differs from the approved integrity manifest")
+    return source_sha256
+
+
+def verify_v10_source_integrity() -> tuple[str, int]:
+    manifest_stat = V10_SOURCE_MANIFEST.lstat()
+    if (not stat.S_ISREG(manifest_stat.st_mode) or stat.S_ISLNK(manifest_stat.st_mode)
+            or manifest_stat.st_uid != 0 or stat.S_IMODE(manifest_stat.st_mode) != 0o600):
+        raise RuntimeError("source integrity manifest has unsafe ownership or mode")
+    manifest = json.loads(V10_SOURCE_MANIFEST.read_text(encoding="utf-8"))
+
+    def inspect_source(path: Path):
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_uid != 0
+                or info.st_size <= 0 or stat.S_IMODE(info.st_mode) & 0o077):
+            raise RuntimeError("source dump artifact has unsafe ownership or mode")
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        gzip_check = subprocess.run(["/usr/bin/gzip", "-t", str(path)],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if gzip_check.returncode:
+            raise RuntimeError("source dump gzip integrity check failed")
+        return digest.hexdigest(), info.st_size
+
+    source_sha, source_size = inspect_source(V10_SOURCE_DUMP)
+    copy_sha, copy_size = inspect_source(V10_SOURCE_COPY)
+    compared = subprocess.run(["/usr/bin/cmp", "-s", str(V10_SOURCE_DUMP), str(V10_SOURCE_COPY)])
+    if compared.returncode:
+        raise RuntimeError("source dump and evidence copy are not byte-identical")
+    digest = verify_v10_source_manifest_payload(manifest, source_sha, source_size, copy_sha, copy_size)
+    return digest, source_size
+
+
+def verify_v10_source_restore_lineage(source_sha256: str, source_size_bytes: int,
+                                      live_container_id: str) -> None:
+    def read_root_private(path: Path) -> str:
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)
+                or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600):
+            raise RuntimeError("source restore evidence has unsafe ownership or mode")
+        return path.read_text(encoding="utf-8").strip()
+
+    try:
+        attestation = json.loads(read_root_private(V10_SOURCE_RESTORE_ATTESTATION))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise RuntimeError("source restore attestation is malformed") from None
+    validate_v10_source_restore_payload(
+        attestation, source_sha256, source_size_bytes, live_container_id,
+        read_root_private(V10_SOURCE_RESTORE_STATUS),
+        read_root_private(V10_SOURCE_CONTAINER_ID_EVIDENCE))
+
+
+def validate_v10_source_restore_payload(attestation: dict, source_sha256: str,
+                                       source_size_bytes: int, live_container_id: str,
+                                       restore_status: str, recorded_container_id: str) -> None:
+    expected_fields = {
+        "schema_version", "source_schema", "source_sha256", "source_size_bytes",
+        "restore_pipeline_exit", "restore_script_sha256", "container_id",
+    }
+    if (set(attestation) != expected_fields or attestation.get("schema_version") != 1
+            or attestation.get("source_schema") != V10_SOURCE_SCHEMA
+            or attestation.get("source_sha256") != source_sha256
+            or attestation.get("source_size_bytes") != source_size_bytes
+            or attestation.get("restore_pipeline_exit") != 0
+            or attestation.get("restore_script_sha256") != V10_RESTORE_SCRIPT_SHA256
+            or not re.fullmatch(r"[0-9a-f]{64}", str(live_container_id))
+            or attestation.get("container_id") != live_container_id
+            or restore_status != "RESTORE_PIPE_EXIT=0"
+            or not re.fullmatch(r"[0-9a-f]{64}", recorded_container_id)
+            or recorded_container_id != live_container_id):
+        raise RuntimeError("MySQL source is not attested as the validated dump restoration")
+
+
+def validate_v10_catalog_semantics(summary: dict) -> dict:
+    if any(summary.get(key) != value for key, value in V10_EXPECTED_CATALOG_COUNTS.items()):
+        raise RuntimeError("v10 structural catalog counts differ from the reviewed snapshot")
+    tables = summary.get("table_names")
+    if (not isinstance(tables, list) or len(tables) != 270 or len(set(tables)) != 270
+            or any(not isinstance(table, str) or not table for table in tables)):
+        raise RuntimeError("v10 catalog table-name inventory is incomplete or malformed")
+    if summary.get("object_types") != {"BASE TABLE": 270}:
+        raise RuntimeError("v10 catalog contains a non-table object or an unexpected object count")
+    procedures = summary.get("procedure_names")
+    functions = summary.get("function_names")
+    triggers = summary.get("trigger_names")
+    if (not isinstance(procedures, list) or set(procedures) != V10_EXPECTED_PROCEDURE_NAMES
+            or not isinstance(functions, list) or functions
+            or not isinstance(triggers, list) or set(triggers) != V10_EXPECTED_TRIGGER_NAMES):
+        raise RuntimeError("v10 routine or trigger inventory differs from the reviewed snapshot")
+    tenant_tables = summary.get("tenant_id_tables")
+    no_tenant_tables = summary.get("no_tenant_id_tables")
+    collate_c_columns = summary.get("collate_c_columns")
+    on_update_columns = summary.get("on_update_current_timestamp_columns")
+    if (not isinstance(tenant_tables, list) or len(tenant_tables) != 228
+            or len(set(tenant_tables)) != 228 or not isinstance(no_tenant_tables, list)
+            or len(no_tenant_tables) != 42 or len(set(no_tenant_tables)) != 42
+            or set(tenant_tables) & set(no_tenant_tables)
+            or set(tenant_tables) | set(no_tenant_tables) != set(tables)):
+        raise RuntimeError("v10 tenant coverage differs from the reviewed table inventory")
+    collate_c_sha256 = (hashlib.sha256("\n".join(sorted(collate_c_columns)).encode("utf-8")).hexdigest()
+                        if isinstance(collate_c_columns, list)
+                        and all(isinstance(item, str) for item in collate_c_columns) else None)
+    if (not isinstance(collate_c_columns, list) or len(collate_c_columns) != 83
+            or len(set(collate_c_columns)) != 83
+            or collate_c_sha256 != V10_EXPECTED_COLLATE_C_COLUMNS_SHA256
+            or summary.get("collate_c_columns_sha256") != collate_c_sha256):
+        raise RuntimeError("v10 C-collation column inventory differs from the reviewed snapshot")
+    if (not isinstance(on_update_columns, list) or len(on_update_columns) != 111
+            or len(set(on_update_columns)) != 111
+            or summary.get("on_update_columns_sha256") != hashlib.sha256(
+                (CODE_ROOT / "expected_on_update_columns.json").read_bytes()).hexdigest()):
+        raise RuntimeError("v10 ON UPDATE column inventory differs from the reviewed snapshot")
+    if summary.get("source_collation_counts") != V10_EXPECTED_SOURCE_COLLATION_COUNTS:
+        raise RuntimeError("v10 source collation counts differ from the reviewed snapshot")
+    if (summary.get("tenant_signature_sha256") != V10_EXPECTED_TENANT_SIGNATURE_SHA256
+            or summary.get("no_tenant_names_sha256") != V10_EXPECTED_NO_TENANT_NAMES_SHA256):
+        raise RuntimeError("v10 tenant metadata fingerprints differ from the reviewed snapshot")
+    if summary.get("zero_date_counts") != V10_EXPECTED_ZERO_DATE_COUNTS:
+        raise RuntimeError("v10 zero-date inventory differs from its reviewed snapshot")
+    if summary.get("invalid_enum_counts") != V10_EXPECTED_ENUM_COUNTS:
+        raise RuntimeError("v10 ENUM anomaly counts differ from the reviewed snapshot")
+    enum_counts = summary.get("invalid_enum_counts", {})
+    if any(item["out_of_domain_values"] != item["empty_enum_values"]
+           for item in enum_counts.values()):
+        raise RuntimeError("v10 ENUM values outside the domain are not limited to the reviewed empty values")
+    legacy = summary.get("legacy_tables")
+    if not isinstance(legacy, list) or len(legacy) != len(set(legacy)) or set(legacy) != V10_EXPECTED_LEGACY_TABLES:
+        raise RuntimeError("v10 legacy table classification differs from the reviewed eight-table inventory")
+    decisions = summary.get("legacy_classification")
+    if not isinstance(decisions, dict) or set(decisions) != V10_EXPECTED_BACKUP_CANDIDATES:
+        raise RuntimeError("v10 backup-candidate classification is incomplete")
+    for table, decision in decisions.items():
+        expected_schema = "legado" if table in V10_EXPECTED_LEGACY_TABLES else "erp"
+        expected_reason = ("backup_name_no_active_code_reference" if expected_schema == "legado"
+                           else "active_code_reference")
+        if (not isinstance(decision, dict) or decision.get("schema") != expected_schema
+                or decision.get("reason") != expected_reason
+                or not isinstance(decision.get("paths"), list)
+                or (expected_schema == "legado" and decision["paths"])
+                or (expected_schema == "erp" and not decision["paths"])):
+            raise RuntimeError("v10 backup-candidate decision differs from the reviewed classification")
+    return {
+        "zero_date_cells": sum(V10_EXPECTED_ZERO_DATE_COUNTS.values()),
+        "zero_date_columns": len(V10_EXPECTED_ZERO_DATE_COUNTS),
+        "empty_enum_cells": sum(item["empty_enum_values"] for item in V10_EXPECTED_ENUM_COUNTS.values()),
+        "enum_columns": len(V10_EXPECTED_ENUM_COUNTS),
+        "nonempty_enum_anomalies": 0,
+        "legacy_tables": len(V10_EXPECTED_LEGACY_TABLES),
+        "tables": len(tables),
+        "columns": V10_EXPECTED_CATALOG_COUNTS["columns"],
+        "triggers": V10_EXPECTED_CATALOG_COUNTS["triggers"],
+        "procedures": V10_EXPECTED_CATALOG_COUNTS["routines"],
+        "identities": V10_EXPECTED_CATALOG_COUNTS["auto_increment_columns"],
+        "tenant_id_tables": len(tenant_tables),
+        "without_tenant_id_tables": len(no_tenant_tables),
+        "collate_c_columns": len(collate_c_columns),
+        "on_update_columns": len(on_update_columns),
+    }
+
+
+def verify_reconciliation_acceptance(summary: dict, csv_path: Path, expected_tables: set[str],
+                                     legacy_tables: set[str], expected_rows: int = 202609) -> dict:
+    required_zero = (
+        "row_count_mismatches", "tables_with_row_hash_divergence", "row_hash_divergent_total",
+        "pk_max_mismatches", "identity_max_mismatches", "sequences_not_ready",
+        "numeric_sum_mismatches", "binary_mismatches", "tenant_bucket_mismatches",
+        "timestamp_mismatches", "fk_tenant_mismatch_count", "fk_orphan_count_total",
+    )
+    if (summary.get("status") != "ACCEPTED" or summary.get("tables") != 270
+            or summary.get("source_rows") != expected_rows or summary.get("destination_rows") != expected_rows
+            or summary.get("foreign_keys") != 11 or summary.get("foreign_keys_valid") != 11
+            or summary.get("foreign_keys_with_orphans") != 0
+            or any(summary.get(key) != 0 for key in required_zero)
+            or summary.get("identity_columns") != 232
+            or summary.get("primary_key_columns") != 252):
+        raise RuntimeError("reconciliation summary did not meet all v10 acceptance criteria")
+    expected_fields = {
+        "table", "schema", "source_rows", "destination_rows", "row_count_match", "rows_divergent",
+        "pk_max_mismatch_count", "identity_max_match_count", "identity_count", "sequence_ready_count",
+        "numeric_sum_mismatches", "binary_mismatches", "tenant_bucket_mismatches", "foreign_keys",
+        "foreign_keys_valid", "foreign_keys_with_orphans", "fk_orphan_count", "fk_tenant_mismatches",
+        "timestamp_mismatches",
+    }
+    with csv_path.open("r", newline="", encoding="utf-8") as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames is None or not expected_fields.issubset(reader.fieldnames):
+            raise RuntimeError("reconciliation CSV is missing required table-level metrics")
+        rows = list(reader)
+    if (len(rows) != 270 or len({row.get("table") for row in rows}) != 270
+            or len(expected_tables) != 270 or len(legacy_tables) != 8
+            or not legacy_tables.issubset(expected_tables)):
+        raise RuntimeError("reconciliation CSV does not contain exactly 270 unique tables")
+    actual_schemas = {row["table"]: row["schema"] for row in rows}
+    expected_schemas = {table: "legado" if table in legacy_tables else "erp" for table in expected_tables}
+    if actual_schemas != expected_schemas:
+        raise RuntimeError("reconciliation table names or schema assignments differ from the source catalog")
+    numeric_fields = expected_fields - {"table", "schema", "row_count_match"}
+    for row in rows:
+        try:
+            values = {key: int(row[key]) for key in numeric_fields}
+        except (KeyError, TypeError, ValueError):
+            raise RuntimeError("reconciliation table-level metrics are malformed") from None
+        if (row["row_count_match"] != "True" or row["schema"] not in {"erp", "legado"}
+                or values["source_rows"] != values["destination_rows"]
+                or values["rows_divergent"] != 0 or values["pk_max_mismatch_count"] != 0
+                or values["identity_max_match_count"] != values["identity_count"]
+                or values["sequence_ready_count"] != values["identity_count"]
+                or any(values[key] != 0 for key in (
+                    "numeric_sum_mismatches", "binary_mismatches", "tenant_bucket_mismatches",
+                    "foreign_keys_with_orphans", "fk_orphan_count", "fk_tenant_mismatches",
+                    "timestamp_mismatches"))):
+            raise RuntimeError("a table-level reconciliation metric did not pass")
+    totals = {
+        "tables": len(rows),
+        "source_rows": sum(int(row["source_rows"]) for row in rows),
+        "destination_rows": sum(int(row["destination_rows"]) for row in rows),
+        "identities": sum(int(row["identity_count"]) for row in rows),
+        "identity_max_matches": sum(int(row["identity_max_match_count"]) for row in rows),
+        "sequences_ready": sum(int(row["sequence_ready_count"]) for row in rows),
+        "foreign_keys": sum(int(row["foreign_keys"]) for row in rows),
+        "foreign_keys_valid": sum(int(row["foreign_keys_valid"]) for row in rows),
+        "foreign_keys_with_orphans": sum(int(row["foreign_keys_with_orphans"]) for row in rows),
+        "fk_orphan_count": sum(int(row["fk_orphan_count"]) for row in rows),
+    }
+    if (totals["source_rows"] != expected_rows or totals["destination_rows"] != expected_rows
+            or totals["identities"] != 232 or totals["identity_max_matches"] != 232
+            or totals["sequences_ready"] != 232 or totals["foreign_keys"] != 11
+            or totals["foreign_keys_valid"] != 11 or totals["foreign_keys_with_orphans"] != 0
+            or totals["fk_orphan_count"] != 0):
+        raise RuntimeError("table-level reconciliation totals differ from the approved source snapshot")
+    return totals
+
+
+def validate_v10_execution_history(records: list[dict], *, require_cluster_stopped: bool = False):
+    started = [item for item in records if item.get("event") == "pipeline_started"]
+    if (len(started) != 1 or started[0].get("database") != V10_DATABASE
+            or started[0].get("clean_start") is not True
+            or started[0].get("resume_source_run") is not None
+            or started[0].get("post_fk_source_run") is not None):
+        raise RuntimeError("v10 execution history does not prove a clean target run")
+    if any(item.get("event") in {"step_failed", "pipeline_setup_blocked", "pipeline_blocked"}
+           for item in records):
+        raise RuntimeError("v10 execution history contains a failed or blocked phase")
+    phase_history = [(item.get("event"), item.get("phase")) for item in records
+                     if item.get("event") in {"phase_started", "step_complete"}]
+    expected_phase_history = [(event, phase) for phase in V10_PHASE_SEQUENCE
+                               for event in ("phase_started", "step_complete")]
+    if phase_history != expected_phase_history:
+        raise RuntimeError("v10 execution history does not match the complete approved phase order")
+    if (len([item for item in records if item.get("event") == "source_artifacts_integrity_verified"]) != 1
+            or len([item for item in records if item.get("event") == "mysql_restore_lineage_verified"]) != 1
+            or len([item for item in records if item.get("event") == "catalog_semantics_verified"]) != 1
+            or len([item for item in records if item.get("event") == "empty_target_created"
+                    and item.get("database") == V10_DATABASE]) != 1
+            or len([item for item in records if item.get("event") == "postgres_cluster_ready"]) != 1):
+        raise RuntimeError("v10 execution history is missing a required integrity or target event")
+    loader = [item for item in records if item.get("event") == "loader_summary"]
+    if (len(loader) != 1 or loader[0].get("tables_loaded") != 270
+            or loader[0].get("source_rows_loaded") != 202609):
+        raise RuntimeError("v10 execution history does not prove the complete load")
+    tests = [item.get("test") for item in records if item.get("event") == "synthetic_test_pass"]
+    if len(tests) != len(V10_EXPECTED_SYNTHETIC_TESTS) or set(tests) != V10_EXPECTED_SYNTHETIC_TESTS:
+        raise RuntimeError("v10 execution history does not prove every synthetic business-object test")
+    reconciliation = [item for item in records if item.get("event") == "reconciliation_summary"]
+    if (len(reconciliation) != 1 or reconciliation[0].get("status") != "ACCEPTED"
+            or reconciliation[0].get("tables") != 270
+            or reconciliation[0].get("source_rows") != 202609
+            or reconciliation[0].get("destination_rows") != 202609):
+        raise RuntimeError("v10 execution history does not prove a complete reconciliation")
+    if len([item for item in records if item.get("event") == "table_level_reconciliation_verified"]) != 1:
+        raise RuntimeError("v10 table-level reconciliation gate is missing")
+    if any(item.get("event") == "pipeline_accepted" for item in records):
+        raise RuntimeError("v10 execution history already contains a terminal acceptance event")
+    def event_index(event: str, phase: str | None = None) -> int:
+        matches = [index for index, item in enumerate(records)
+                   if item.get("event") == event and (phase is None or item.get("phase") == phase)]
+        if len(matches) != 1:
+            raise RuntimeError("v10 execution history contains a missing or repeated milestone")
+        return matches[0]
+
+    ordered_milestones = [
+        event_index("pipeline_started"), event_index("source_artifacts_integrity_verified"),
+        event_index("mysql_restore_lineage_verified"), event_index("phase_started", "catalog"),
+        event_index("step_complete", "catalog"), event_index("catalog_semantics_verified"),
+        event_index("postgres_cluster_ready"), event_index("phase_started", "target_create"),
+        event_index("empty_target_created"), event_index("step_complete", "target_create"),
+        event_index("step_complete", "constraints_indexes"), event_index("step_complete", "load"),
+        event_index("step_complete", "business_trigger_tests"),
+        event_index("step_complete", "foreign_keys_not_valid"),
+        event_index("step_complete", "identity_sequences"), event_index("step_complete", "analyze"),
+        event_index("reconciliation_summary"), event_index("table_level_reconciliation_verified"),
+    ]
+    if ordered_milestones != sorted(ordered_milestones):
+        raise RuntimeError("v10 execution milestones are out of order")
+    if require_cluster_stopped:
+        stopped = [item for item in records if item.get("event") in {
+            "postgres_cluster_stopped", "postgres_cluster_already_stopped"}]
+        if (len(stopped) != 1 or stopped[0].get("reason") != "pipeline_success"
+                or records.index(stopped[0]) < ordered_milestones[-1]):
+            raise RuntimeError("v10 execution history does not prove the rehearsal cluster stopped")
+
+
+def read_v10_execution_log(path: Path, root_uid: int = 0) -> list[dict]:
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        raise RuntimeError("v10 execution log cannot be opened safely") from None
+    try:
+        item = os.fstat(fd)
+        if (not stat.S_ISREG(item.st_mode) or item.st_uid != root_uid
+                or stat.S_IMODE(item.st_mode) != 0o600):
+            raise RuntimeError("v10 execution log ownership or mode is unsafe")
+        with os.fdopen(fd, "r", encoding="utf-8") as stream:
+            fd = -1
+            lines = stream.read().splitlines()
+    finally:
+        if fd >= 0:
+            os.close(fd)
+    records = []
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            raise RuntimeError("v10 execution log is malformed") from None
+        if not isinstance(record, dict):
+            raise RuntimeError("v10 execution log contains a malformed record")
+        records.append(record)
+    return records
+
+
+def write_v10_conversion_report(run_dir: Path, run_id: str, code_commit: str,
+                               source_sha256: str, source_size_bytes: int,
+                               catalog_summary: dict, reconciliation: dict,
+                               table_totals: dict, elapsed_seconds: float) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{64}", source_sha256):
+        raise RuntimeError("source artifact digest is malformed")
+    report = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "database": V10_DATABASE,
+        "code_commit": code_commit,
+        "source_artifact": {
+            "size_bytes": source_size_bytes,
+            "sha256": source_sha256,
+            "sha256_verified_against_root_manifest": True,
+            "gzip_valid": True,
+            "source_and_copy_byte_identical": True,
+        },
+        "source_restore_lineage": {
+            "schema": V10_SOURCE_SCHEMA,
+            "restore_pipeline_exit": 0,
+            "container_identity_verified": True,
+            "restore_script_sha256_verified": True,
+        },
+        "pipeline_elapsed_seconds": elapsed_seconds,
+        "catalog": {
+            "tables": catalog_summary.get("tables"),
+            "columns": catalog_summary.get("columns"),
+            "views": catalog_summary.get("views"),
+            "indexes": catalog_summary.get("indexes"),
+            "primary_key_tables": catalog_summary.get("primary_keys"),
+            "triggers": catalog_summary.get("triggers"),
+            "procedures": len(catalog_summary.get("procedure_names", [])),
+            "functions": len(catalog_summary.get("function_names", [])),
+            "events": catalog_summary.get("events"),
+            "identity_columns": catalog_summary.get("auto_increment_columns"),
+            "on_update_columns": len(catalog_summary.get("on_update_current_timestamp_columns", [])),
+            "tenant_id_tables": len(catalog_summary.get("tenant_id_tables", [])),
+            "without_tenant_id_tables": len(catalog_summary.get("no_tenant_id_tables", [])),
+            "collate_c_columns": len(catalog_summary.get("collate_c_columns", [])),
+            "legacy_tables": catalog_summary.get("legacy_tables"),
+        },
+        "zero_date_normalization": [
+            {"table_column": name, "cells": count, "target": "NULL", "status": "NORMALIZED_ZERO_DATE"}
+            for name, count in sorted(catalog_summary.get("zero_date_counts", {}).items())
+        ],
+        "enum_compatibility": [
+            {"table_column": name, **counts, "target_type": "TEXT + CHECK",
+             "empty_literal_preserved": True, "status": "PRESERVED_EMPTY_ENUM_VALUE"}
+            for name, counts in sorted(catalog_summary.get("invalid_enum_counts", {}).items())
+        ],
+        "foreign_key_type_normalizations": catalog_summary.get("fk_type_normalizations"),
+        "reconciliation": {
+            "status": reconciliation.get("status"),
+            "source_rows": reconciliation.get("source_rows"),
+            "destination_rows": reconciliation.get("destination_rows"),
+            "tables": reconciliation.get("tables"),
+            "row_count_mismatches": reconciliation.get("row_count_mismatches"),
+            "tables_with_row_hash_divergence": reconciliation.get("tables_with_row_hash_divergence"),
+            "row_hash_divergent_total": reconciliation.get("row_hash_divergent_total"),
+            "primary_key_columns": reconciliation.get("primary_key_columns"),
+            "identity_columns": reconciliation.get("identity_columns"),
+            "identity_max_mismatches": reconciliation.get("identity_max_mismatches"),
+            "sequences_not_ready": reconciliation.get("sequences_not_ready"),
+            "numeric_sum_mismatches": reconciliation.get("numeric_sum_mismatches"),
+            "binary_mismatches": reconciliation.get("binary_mismatches"),
+            "tenant_bucket_mismatches": reconciliation.get("tenant_bucket_mismatches"),
+            "timestamp_samples": reconciliation.get("timestamp_samples"),
+            "timestamp_mismatches": reconciliation.get("timestamp_mismatches"),
+            "foreign_keys": reconciliation.get("foreign_keys"),
+            "foreign_keys_valid": reconciliation.get("foreign_keys_valid"),
+            "foreign_keys_with_orphans": reconciliation.get("foreign_keys_with_orphans"),
+            "fk_orphan_count_total": reconciliation.get("fk_orphan_count_total"),
+            "table_level_totals": table_totals,
+            "elapsed_seconds": reconciliation.get("elapsed_seconds"),
+        },
+    }
+    path = run_dir / "v10_conversion_report.json"
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.chmod(0o600)
+    os.chown(path, run_dir.stat().st_uid, run_dir.stat().st_gid)
+    return path
+
+
 def start_cluster(log: Path, run_dir: Path):
     global CLUSTER_STARTED_BY_RUNNER
     expected = {
@@ -461,13 +1002,20 @@ def check_mysql_namespace():
     pid = int(state.get("Pid") or 0)
     if pid <= 1 or not Path(f"/proc/{pid}/ns/net").exists():
         raise RuntimeError("MySQL network namespace is unavailable")
-    return pid
+    container_id = info.get("Id")
+    if not isinstance(container_id, str) or not re.fullmatch(r"[0-9a-f]{64}", container_id):
+        raise RuntimeError("MySQL source container identity is unavailable")
+    return pid, container_id
 
 
 def create_target_database(dbname: str):
+    if dbname not in REHEARSAL_DATABASES:
+        raise RuntimeError("target database is not an approved isolated rehearsal")
+    db_ident = '"' + dbname.replace('"', '""') + '"'
+    db_literal = "'" + dbname.replace("'", "''") + "'"
     check = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-At", "-h", PGSOCKET,
                             "-p", str(PGPORT), "-U", "postgres", "-d", "postgres", "-c",
-                            "SELECT COUNT(*) FROM pg_database WHERE datname='erp_ensaio_v9'"),
+                            f"SELECT COUNT(*) FROM pg_database WHERE datname={db_literal}"),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if check.returncode or check.stdout.strip() != "0":
         raise RuntimeError("target database already exists or catalog query failed; refusing to drop or reuse it")
@@ -478,9 +1026,9 @@ def create_target_database(dbname: str):
         raise RuntimeError("failed to create new isolated target database")
     alter = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
                             "-h", PGSOCKET, "-p", PGPORT, "-U", "postgres", "-d", "postgres", "-c",
-                            "ALTER DATABASE erp_ensaio_v9 SET timezone TO 'America/Sao_Paulo'; "
-                            "ALTER DATABASE erp_ensaio_v9 CONNECTION LIMIT 1; "
-                            "REVOKE CONNECT,TEMPORARY ON DATABASE erp_ensaio_v9 FROM PUBLIC"),
+                            f"ALTER DATABASE {db_ident} SET timezone TO 'America/Sao_Paulo'; "
+                            f"ALTER DATABASE {db_ident} CONNECTION LIMIT 1; "
+                            f"REVOKE CONNECT,TEMPORARY ON DATABASE {db_ident} FROM PUBLIC"),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if alter.returncode:
         raise RuntimeError("failed to set rehearsal database timezone")
@@ -1084,9 +1632,10 @@ def apply_sql(dbname: str, path: Path, phase: str, log: Path):
 
 
 def run_reconciliation_step(base, dbname: str, mysql_config: Path, run_dir: Path, log: Path):
+    version = "v10" if dbname == V10_DATABASE else "v9"
     return run_step([*base, str(CODE_ROOT / "reconcile.py"), "--mysql-config", str(mysql_config),
                      "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", dbname,
-                     "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / "reconciliacao_v9.csv"),
+                     "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / f"reconciliacao_{version}.csv"),
                      "--summary", str(run_dir / "reconciliation_summary.json")],
                     "reconciliation", log, whitelist_json=True)
 
@@ -1113,7 +1662,8 @@ def stop_rehearsal_cluster(log: Path, reason: str):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Run a clean, isolated MySQL→PostgreSQL v9 rehearsal")
+    global CURRENT_PHASE, TARGET_CREATED_BY_RUNNER
+    ap = argparse.ArgumentParser(description="Run a clean, isolated MySQL→PostgreSQL rehearsal")
     ap.add_argument("--database", required=True)
     ap.add_argument("--expected-commit", required=True)
     ap.add_argument("--batch-size", type=int, default=1000)
@@ -1121,8 +1671,11 @@ def main():
     ap.add_argument("--resume-post-fk-reconciliation", action="store_true")
     ap.add_argument("--source-run-id")
     args = ap.parse_args()
-    if args.database != "erp_ensaio_v9":
-        raise SystemExit("refusing any destination except the approved empty rehearsal database erp_ensaio_v9")
+    if args.database not in REHEARSAL_DATABASES:
+        raise SystemExit("refusing any destination except the approved isolated v9/v10 rehearsal databases")
+    is_v10 = args.database == V10_DATABASE
+    if is_v10 and (args.resume_partial_target or args.resume_post_fk_reconciliation or args.source_run_id):
+        raise SystemExit("v10 must start from zero and cannot use a resume mode")
     if args.batch_size < 1 or args.batch_size > 10000:
         raise SystemExit("batch size out of range")
     if args.resume_partial_target and args.resume_post_fk_reconciliation:
@@ -1139,7 +1692,8 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     os.umask(0o077)
-    verify_code_provenance(args.expected_commit)
+    expected_branch = "pg/03-1-ensaio-integral-v10" if is_v10 else "pg/03-conversao-schema"
+    verify_code_provenance(args.expected_commit, expected_branch)
     if args.resume_partial_target:
         verify_resume_code_ancestry(CODE_ROOT.parents[1], args.expected_commit)
     elif args.resume_post_fk_reconciliation:
@@ -1147,46 +1701,84 @@ def main():
                                     APPROVED_POST_FK_SOURCE_COMMIT)
     verify_private_mysql_config(MYSQL_SECRET_SOURCE)
     verify_private_mysql_config(MYSQL_ADMIN_CONFIG)
+    source_sha256 = None
+    source_size_bytes = None
+    mysql_pid = None
+    if is_v10:
+        source_sha256, source_size_bytes = verify_v10_source_integrity()
+        mysql_pid, mysql_container_id = check_mysql_namespace()
+        verify_v10_source_restore_lineage(source_sha256, source_size_bytes, mysql_container_id)
     if not REPO_ROOT.is_dir() or not PG_PYTHON.is_file():
         raise SystemExit("official source clone or private run root is unavailable")
     postgres = __import__("pwd").getpwnam("postgres")
-    if not V9_ROOT.exists():
-        V9_ROOT.mkdir(mode=0o700)
-        os.chown(V9_ROOT, postgres.pw_uid, postgres.pw_gid)
-    if V9_ROOT.stat().st_uid != postgres.pw_uid or V9_ROOT.stat().st_mode & 0o077:
-        raise SystemExit("private v9 root has unsafe ownership or mode")
-    if not RUN_ROOT.exists():
-        RUN_ROOT.mkdir(mode=0o700)
-        os.chown(RUN_ROOT, postgres.pw_uid, postgres.pw_gid)
-    if RUN_ROOT.stat().st_uid != postgres.pw_uid or RUN_ROOT.stat().st_mode & 0o077:
-        raise SystemExit("private PostgreSQL run root has unsafe ownership or mode")
-    acquire_runner_lock()
+    active_root = V10_ROOT if is_v10 else V9_ROOT
+    active_run_root = V10_RUN_ROOT if is_v10 else RUN_ROOT
+    active_tmpfs_root = V10_TMPFS_ROOT if is_v10 else TMPFS_ROOT
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    log = RUN_ROOT / (run_id + ".jsonl")
-    log.touch(mode=0o600, exist_ok=False)
-    log.chmod(0o600)
-    run_dir = RUN_ROOT / ("run_" + run_id)
-    run_dir.mkdir(mode=0o700, exist_ok=False)
-    (run_dir / "sql").mkdir(mode=0o700)
-    for directory in (run_dir, run_dir / "sql"):
-        os.chown(directory, postgres.pw_uid, postgres.pw_gid)
-    prepare_credential_tmpfs(postgres.pw_gid)
-    tmpfs_run = TMPFS_ROOT / run_id
-    tmpfs_run.mkdir(mode=0o710, exist_ok=False)
-    os.chown(tmpfs_run, 0, postgres.pw_gid)
-    tmpfs_run.chmod(0o710)
+    log = None
+    run_dir = None
+    tmpfs_run = None
+    started = time.monotonic()
+    CURRENT_PHASE = "runner_setup"
+    try:
+        ensure_private_directory(active_root, postgres.pw_uid, postgres.pw_gid, 0o700)
+        ensure_private_directory(active_run_root, postgres.pw_uid, postgres.pw_gid, 0o700)
+        acquire_runner_lock(active_run_root)
+        log = active_run_root / (run_id + ".jsonl")
+        log.touch(mode=0o600, exist_ok=False)
+        log.chmod(0o600)
+        run_dir = active_run_root / ("run_" + run_id)
+        run_dir.mkdir(mode=0o700, exist_ok=False)
+        (run_dir / "sql").mkdir(mode=0o700)
+        for directory in (run_dir, run_dir / "sql"):
+            os.chown(directory, postgres.pw_uid, postgres.pw_gid)
+        prepare_credential_tmpfs(postgres.pw_gid, active_tmpfs_root)
+        tmpfs_run = active_tmpfs_root / run_id
+        tmpfs_run.mkdir(mode=0o710, exist_ok=False)
+        os.chown(tmpfs_run, 0, postgres.pw_gid)
+        tmpfs_run.chmod(0o710)
+    except Exception as exc:
+        cleanup_error = None
+        try:
+            if tmpfs_run is not None:
+                cleanup_tmpfs_run(tmpfs_run, postgres.pw_gid)
+            cleanup_tmpfs_root(active_tmpfs_root, postgres.pw_gid)
+        except Exception as cleanup_exc:
+            cleanup_error = type(cleanup_exc).__name__
+        if log is not None:
+            try:
+                emit_log(log, "pipeline_setup_blocked", phase=CURRENT_PHASE,
+                         error_type=type(exc).__name__, error_code="runner_setup_failed",
+                         cleanup_error=cleanup_error, target_database=args.database,
+                         target_created=False)
+            except Exception:
+                cleanup_error = cleanup_error or "LogWriteError"
+        print("PIPELINE_BLOCKED phase=runner_setup code=runner_setup_failed target_created=false",
+              file=sys.stderr, flush=True)
+        if cleanup_error:
+            print("PIPELINE_CLEANUP_INCOMPLETE see private run log", file=sys.stderr, flush=True)
+        raise SystemExit(1)
     mysql_config = tmpfs_run / "client.cnf"
     cluster_started_here = False
     resume_run_dir = None
     resume_source_snapshot = None
-    started = time.monotonic()
     emit_log(log, "pipeline_started", database=args.database, batch_size=args.batch_size,
              mysql_container=MYSQL_CONTAINER, code_commit=args.expected_commit,
+             branch=expected_branch, clean_start=is_v10,
              resume_source_run=APPROVED_RESUME_RUN_ID if args.resume_partial_target else None,
              post_fk_source_run=args.source_run_id if args.resume_post_fk_reconciliation else None)
     try:
+        if is_v10:
+            CURRENT_PHASE = "source_integrity"
+            emit_log(log, "phase_started", phase=CURRENT_PHASE)
+            emit_log(log, "source_artifacts_integrity_verified", size_bytes=source_size_bytes,
+                     hash_verified=True, byte_identical=True, gzip_valid=True)
+            emit_log(log, "mysql_restore_lineage_verified", source_schema=V10_SOURCE_SCHEMA,
+                     restore_pipeline_exit=0, container_identity_match=True)
+            emit_log(log, "step_complete", phase=CURRENT_PHASE, exit_code=0)
         copy_private_config(MYSQL_SECRET_SOURCE, mysql_config, postgres.pw_gid)
-        mysql_pid = check_mysql_namespace()
+        if not is_v10:
+            mysql_pid, _mysql_container_id = check_mysql_namespace()
         emit_log(log, "mysql_source_isolated", container=MYSQL_CONTAINER, network_mode="none",
                  read_only_source=True)
         snapshot = read_verified_routine_snapshot()
@@ -1277,15 +1869,26 @@ def main():
                 path = ddl_dir / name
                 if not path.is_file() or path.stat().st_mode & 0o077:
                     raise RuntimeError("generated SQL file is missing or not private")
+            catalog_summary = json.loads(catalog.read_text(encoding="utf-8"))
+            if is_v10:
+                CURRENT_PHASE = "catalog_semantics_gate"
+                catalog_metrics = validate_v10_catalog_semantics(catalog_summary)
+                emit_log(log, "catalog_semantics_verified", **catalog_metrics)
             cluster_started_here = start_cluster(log, run_dir)
+            CURRENT_PHASE = "target_create"
+            emit_log(log, "phase_started", phase=CURRENT_PHASE)
             create_target_database(args.database)
+            TARGET_CREATED_BY_RUNNER = True
             emit_log(log, "empty_target_created", database=args.database)
+            emit_log(log, "step_complete", phase=CURRENT_PHASE, exit_code=0)
+            CURRENT_PHASE = "schema"
             apply_sql(args.database, ddl_dir / "001_schema.sql", "schema", log)
+            if is_v10:
+                apply_sql(args.database, ddl_dir / "002_constraints_indexes.sql", "constraints_indexes", log)
             run_step([*base, str(CODE_ROOT / "loader.py"), "--mysql-config", str(mysql_config),
                       "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database,
                       "--repo-root", str(REPO_ROOT), "--evidence", str(run_dir / "loader_summary.json"),
                       "--batch-size", str(args.batch_size)], "load", log, whitelist_json=True)
-            catalog_summary = json.loads(catalog.read_text(encoding="utf-8"))
             loader_summary = json.loads((run_dir / "loader_summary.json").read_text(encoding="utf-8"))
             if (loader_summary.get("tables_loaded") != 270
                     or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")
@@ -1296,8 +1899,9 @@ def main():
             emit_log(log, "loader_metrics_verified", tables=270,
                      rows=loader_summary.get("source_rows_loaded"),
                      zero_date_columns=len(loader_summary.get("zero_date_conversions", {})))
-            apply_sql(args.database, ddl_dir / "002_constraints_indexes.sql", "constraints_indexes", log)
-            apply_sql(args.database, ddl_dir / "003_identity_sequences.sql", "identity_sequences", log)
+            if not is_v10:
+                apply_sql(args.database, ddl_dir / "002_constraints_indexes.sql", "constraints_indexes", log)
+                apply_sql(args.database, ddl_dir / "003_identity_sequences.sql", "identity_sequences", log)
             apply_sql(args.database, ddl_dir / "004_on_update_timestamp.sql", "on_update_triggers", log)
             apply_sql(args.database, ddl_dir / "005_business_triggers_routines.sql", "business_objects", log)
             apply_sql(args.database, ddl_dir / "006_grants.sql", "grants", log)
@@ -1308,40 +1912,70 @@ def main():
                       "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database],
                      "business_trigger_tests", log, whitelist_json=True)
             apply_sql(args.database, ddl_dir / "002_foreign_keys.sql", "foreign_keys_not_valid", log)
+            if is_v10:
+                apply_sql(args.database, ddl_dir / "003_identity_sequences.sql", "identity_sequences", log)
             run_step(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET,
                       "-p", str(PGPORT), "-U", "postgres", "-d", args.database, "-c", "ANALYZE;"),
                      "analyze", log)
         run_reconciliation_step(base, args.database, mysql_config, run_dir, log)
         summary_path = run_dir / "reconciliation_summary.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        if (summary.get("tables") != 270
-                or summary.get("source_rows") != loader_summary.get("source_rows_loaded")
-                or summary.get("destination_rows") != loader_summary.get("source_rows_loaded")
-                or summary.get("foreign_keys_valid", 0) + summary.get("foreign_keys_with_orphans", 0) != 11
-                or summary.get("fk_type_normalizations") != catalog_summary.get("fk_type_normalizations")
-                or summary.get("fk_type_normalizations_sha256") != catalog_summary.get("fk_type_normalizations_sha256")
-                or any(summary.get(k) != 0 for k in (
-                    "row_count_mismatches", "tables_with_row_hash_divergence", "pk_max_mismatches",
-                    "identity_max_mismatches", "sequences_not_ready", "numeric_sum_mismatches",
-                    "binary_mismatches", "tenant_bucket_mismatches", "timestamp_mismatches",
-                    "fk_tenant_mismatch_count"))):
+        accepted_totals = None
+        if is_v10:
+            CURRENT_PHASE = "acceptance_gate"
+            csv_path = run_dir / "reconciliacao_v10.csv"
+            accepted_totals = verify_reconciliation_acceptance(
+                summary, csv_path, set(catalog_summary["table_names"]),
+                set(catalog_summary["legacy_tables"]))
+            if (summary.get("fk_type_normalizations") != catalog_summary.get("fk_type_normalizations")
+                    or summary.get("fk_type_normalizations_sha256") != catalog_summary.get("fk_type_normalizations_sha256")):
+                raise RuntimeError("reconciliation foreign key type manifest differs from the catalog")
+            emit_log(log, "table_level_reconciliation_verified", **accepted_totals)
+            if not TARGET_CREATED_BY_RUNNER:
+                raise RuntimeError("v10 target was not created by this clean runner execution")
+            validate_v10_execution_history(read_v10_execution_log(log))
+        elif (summary.get("tables") != 270
+              or summary.get("source_rows") != loader_summary.get("source_rows_loaded")
+              or summary.get("destination_rows") != loader_summary.get("source_rows_loaded")
+              or summary.get("foreign_keys_valid", 0) + summary.get("foreign_keys_with_orphans", 0) != 11
+              or summary.get("fk_type_normalizations") != catalog_summary.get("fk_type_normalizations")
+              or summary.get("fk_type_normalizations_sha256") != catalog_summary.get("fk_type_normalizations_sha256")
+              or any(summary.get(k) != 0 for k in (
+                  "row_count_mismatches", "tables_with_row_hash_divergence", "pk_max_mismatches",
+                  "identity_max_mismatches", "sequences_not_ready", "numeric_sum_mismatches",
+                  "binary_mismatches", "tenant_bucket_mismatches", "timestamp_mismatches",
+                  "fk_tenant_mismatch_count"))):
             raise RuntimeError("reconciliation summary did not meet v9 acceptance")
         if cluster_started_here:
             stop_rehearsal_cluster(log, "pipeline_success")
             cluster_started_here = False
         cleanup_tmpfs_run(tmpfs_run, postgres.pw_gid)
+        if is_v10:
+            cleanup_tmpfs_root(active_tmpfs_root, postgres.pw_gid)
+            validate_v10_execution_history(read_v10_execution_log(log), require_cluster_stopped=True)
         elapsed = round(time.monotonic() - started, 3)
         status = summary.get("status", "ACCEPTED")
+        if is_v10:
+            report_path = write_v10_conversion_report(run_dir, run_id, args.expected_commit,
+                                                      source_sha256, source_size_bytes,
+                                                      catalog_summary, summary, accepted_totals, elapsed)
+            emit_log(log, "sanitized_report_written", report="v10_conversion_report.json",
+                     table_metrics="reconciliacao_v10.csv", mode="0600")
         emit_log(log, "pipeline_accepted", database=args.database, tables=270,
                  rows=summary.get("source_rows"), status=status,
                  foreign_keys_valid=summary.get("foreign_keys_valid"),
                  foreign_keys_with_orphans=summary.get("foreign_keys_with_orphans"),
-                 fk_orphan_count_total=summary.get("fk_orphan_count_total"), elapsed_seconds=elapsed)
+                 fk_orphan_count_total=summary.get("fk_orphan_count_total"), elapsed_seconds=elapsed,
+                 source_hash_verified=bool(source_sha256), source_size_bytes=source_size_bytes)
         print(json.dumps({"status": status, "database": args.database,
                           "tables": 270, "rows": summary.get("source_rows"),
                           "foreign_keys_valid": summary.get("foreign_keys_valid"),
                           "foreign_keys_with_orphans": summary.get("foreign_keys_with_orphans"),
                           "fk_orphan_count_total": summary.get("fk_orphan_count_total"),
+                          "source_hash_verified": bool(source_sha256), "source_size_bytes": source_size_bytes,
+                          "identity_columns": summary.get("identity_columns"),
+                          "report": str(report_path) if is_v10 else None,
+                          "table_metrics": str(run_dir / "reconciliacao_v10.csv") if is_v10 else None,
                           "elapsed_seconds": elapsed,
                           "run_dir": str(run_dir), "log": str(log)}, ensure_ascii=False), flush=True)
     except Exception as exc:
@@ -1358,10 +1992,12 @@ def main():
         except Exception as cleanup_exc:
             cleanup_error = type(cleanup_exc).__name__
         emit_log(log, "pipeline_blocked", error_type=type(exc).__name__,
+                 phase=CURRENT_PHASE, error_code="runner_exception",
                  stop_error=stop_error, cleanup_error=cleanup_error,
                  elapsed_seconds=round(time.monotonic() - started, 3),
-                 partial_database=args.database)
-        print(f"PIPELINE_BLOCKED type={type(exc).__name__} database={args.database}", file=sys.stderr, flush=True)
+                 target_database=args.database, target_created=TARGET_CREATED_BY_RUNNER)
+        print(f"PIPELINE_BLOCKED phase={CURRENT_PHASE} code=runner_exception "
+              f"target_created={str(TARGET_CREATED_BY_RUNNER).lower()}", file=sys.stderr, flush=True)
         if stop_error or cleanup_error:
             print("PIPELINE_CLEANUP_INCOMPLETE see private run log", file=sys.stderr, flush=True)
         raise SystemExit(1)
@@ -1376,6 +2012,11 @@ def main():
             cleanup_tmpfs_run(tmpfs_run, postgres.pw_gid)
         except Exception as cleanup_exc:
             emit_log(log, "credential_tmpfs_cleanup_failed_finally", error_type=type(cleanup_exc).__name__)
+        if is_v10:
+            try:
+                cleanup_tmpfs_root(active_tmpfs_root, postgres.pw_gid)
+            except Exception as cleanup_exc:
+                emit_log(log, "credential_tmpfs_root_cleanup_failed_finally", error_type=type(cleanup_exc).__name__)
 
 
 if __name__ == "__main__":
