@@ -54,6 +54,30 @@ def reset_fixture_sequence(cur, sequence_name, value):
         cur.execute("SET LOCAL ROLE erp_app")
 
 
+def prepare_fixture_sequences(cur, catalog):
+    prepared = 0
+    for table, columns in catalog["columns"].items():
+        schema = catalog["tables"][table]["schema"]
+        for column in columns:
+            if not column.get("auto_increment"):
+                continue
+            name = column["name"]
+            cur.execute("SELECT pg_get_serial_sequence(format('%I.%I', %s, %s), %s)",
+                        (schema, table, name))
+            row = cur.fetchone()
+            sequence_name = row[0] if row else None
+            if not sequence_name:
+                raise RuntimeError("identity sequence is missing before synthetic trigger tests")
+            cur.execute(sql.SQL("SELECT COALESCE(MAX({}),0) FROM {}.{}").format(
+                sql.Identifier(name), sql.Identifier(schema), sql.Identifier(table)))
+            maximum = int(cur.fetchone()[0] or 0)
+            sequence_value, is_called = (maximum, True) if maximum > 0 else (1, False)
+            cur.execute("SELECT setval(%s::regclass,%s,%s)",
+                        (sequence_name, sequence_value, is_called))
+            prepared += 1
+    return prepared
+
+
 def next_pk(cur, table, cols, indexes):
     pk = indexes.get(table, {}).get("PRIMARY", [])
     values = {}
@@ -505,6 +529,9 @@ def main():
                 cur.execute(sql.SQL("SELECT last_value,is_called FROM {}.{}").format(
                     sql.Identifier(seq_schema), sql.Identifier(seq_name)))
                 sequence_states.append((seq_schema, seq_name, *cur.fetchone()))
+            prepared_sequences = prepare_fixture_sequences(cur, catalog)
+            if prepared_sequences != len(sequence_states):
+                raise RuntimeError("identity sequence inventory differs before synthetic trigger tests")
             cur.execute("BEGIN")
             try:
                 verify_role_contract(cur)

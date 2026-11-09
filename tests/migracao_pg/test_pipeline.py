@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 
 from loader import TextualNulError, check_text_nul, convert_value
 from reconcile import fk_metrics_for_table, hash_divergence
-from trigger_harness import reset_fixture_sequence, trigger_failure_marker
+from trigger_harness import prepare_fixture_sequences, reset_fixture_sequence, trigger_failure_marker
 
 
 class LoaderValueTests(unittest.TestCase):
@@ -41,6 +41,35 @@ class LoaderValueTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "synthetic"):
             reset_fixture_sequence(failing_cursor, "erp.fixture_id_seq", -17)
         self.assertEqual(failing_cursor.execute.call_args_list[-1], call("SET LOCAL ROLE erp_app"))
+
+    def test_fixture_sequences_are_aligned_to_table_max_and_empty_starts_at_one(self):
+        cursor = MagicMock()
+        cursor.fetchone.side_effect = [
+            ("erp.fixture_id_seq",), (73,),
+            ("legado.empty_fixture_id_seq",), (0,),
+        ]
+        catalog = {
+            "tables": {"fixture": {"schema": "erp"}, "empty_fixture": {"schema": "legado"}},
+            "columns": {
+                "fixture": [{"name": "id", "auto_increment": True}],
+                "empty_fixture": [{"name": "id", "auto_increment": True}],
+            },
+        }
+        self.assertEqual(prepare_fixture_sequences(cursor, catalog), 2)
+        self.assertEqual(cursor.execute.call_count, 6)
+        self.assertEqual(cursor.execute.call_args_list[2],
+                         call("SELECT setval(%s::regclass,%s,%s)", ("erp.fixture_id_seq", 73, True)))
+        self.assertEqual(cursor.execute.call_args_list[5],
+                         call("SELECT setval(%s::regclass,%s,%s)", ("legado.empty_fixture_id_seq", 1, False)))
+
+    def test_fixture_sequence_alignment_fails_closed_when_identity_sequence_is_missing(self):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (None,)
+        catalog = {"tables": {"fixture": {"schema": "erp"}},
+                   "columns": {"fixture": [{"name": "id", "auto_increment": True}]}}
+        with self.assertRaisesRegex(RuntimeError, "identity sequence is missing"):
+            prepare_fixture_sequences(cursor, catalog)
+        self.assertEqual(cursor.execute.call_count, 1)
 
     def test_business_trigger_uses_verified_primary_key_conflict_target(self):
         business_sql = (ROOT / "business_objects.sql").read_text(encoding="utf-8")
