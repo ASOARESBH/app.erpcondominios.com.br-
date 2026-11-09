@@ -62,7 +62,7 @@ def prepare_fixture_sequences(cur, catalog):
             if not column.get("auto_increment"):
                 continue
             name = column["name"]
-            cur.execute("SELECT pg_get_serial_sequence(format('%I.%I', %s, %s), %s)",
+            cur.execute("SELECT pg_get_serial_sequence(format('%%I.%%I', %s, %s), %s)",
                         (schema, table, name))
             row = cur.fetchone()
             sequence_name = row[0] if row else None

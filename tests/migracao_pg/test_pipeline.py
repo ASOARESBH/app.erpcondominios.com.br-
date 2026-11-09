@@ -57,6 +57,9 @@ class LoaderValueTests(unittest.TestCase):
         }
         self.assertEqual(prepare_fixture_sequences(cursor, catalog), 2)
         self.assertEqual(cursor.execute.call_count, 6)
+        self.assertEqual(cursor.execute.call_args_list[0],
+                         call("SELECT pg_get_serial_sequence(format('%%I.%%I', %s, %s), %s)",
+                              ("erp", "fixture", "id")))
         self.assertEqual(cursor.execute.call_args_list[2],
                          call("SELECT setval(%s::regclass,%s,%s)", ("erp.fixture_id_seq", 73, True)))
         self.assertEqual(cursor.execute.call_args_list[5],
