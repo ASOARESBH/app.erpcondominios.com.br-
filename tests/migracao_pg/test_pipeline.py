@@ -4,12 +4,15 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, call
 
+from psycopg import sql
+
 ROOT = Path(__file__).resolve().parents[2] / "tools" / "migracao_pg"
 sys.path.insert(0, str(ROOT))
 
 from loader import TextualNulError, check_text_nul, convert_value
 from reconcile import fk_metrics_for_table, hash_divergence
-from trigger_harness import reset_fixture_sequence, trigger_failure_marker
+from trigger_harness import (capture_fixture_sequences, prepare_fixture_sequences, reset_fixture_sequence,
+                             restore_fixture_sequences, trigger_failure_marker)
 
 
 class LoaderValueTests(unittest.TestCase):
@@ -33,7 +36,7 @@ class LoaderValueTests(unittest.TestCase):
         reset_fixture_sequence(cursor, "erp.fixture_id_seq", -17)
         self.assertEqual(cursor.execute.call_args_list, [
             call("RESET ROLE"),
-            call("SELECT setval(%s::regclass,%s,false)", ("erp.fixture_id_seq", -17)),
+            call("SELECT setval(%s::regclass,%s::bigint,false)", ("erp.fixture_id_seq", -17)),
             call("SET LOCAL ROLE erp_app"),
         ])
         failing_cursor = MagicMock()
@@ -41,6 +44,68 @@ class LoaderValueTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "synthetic"):
             reset_fixture_sequence(failing_cursor, "erp.fixture_id_seq", -17)
         self.assertEqual(failing_cursor.execute.call_args_list[-1], call("SET LOCAL ROLE erp_app"))
+
+    def test_fixture_sequence_capture_quotes_nonstandard_schema_and_relation_names(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [("schema with space", 'table"quoted_id')]
+        cursor.fetchone.return_value = (31, True)
+
+        states = capture_fixture_sequences(cursor)
+
+        self.assertEqual(states, [("schema with space", 'table"quoted_id', 31, True)])
+        query = cursor.execute.call_args_list[1].args[0]
+        identifiers = [item for item in query if isinstance(item, sql.Identifier)]
+        self.assertEqual([repr(item) for item in identifiers],
+                         ["Identifier('schema with space')", 'Identifier(\'table"quoted_id\')'])
+
+    def test_fixture_sequence_capture_fails_closed_if_sequence_state_disappears(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [("erp", "fixture_id_seq")]
+        cursor.fetchone.return_value = None
+
+        with self.assertRaisesRegex(RuntimeError, "sequence state is unavailable"):
+            capture_fixture_sequences(cursor)
+
+    def test_fixture_sequence_restore_uses_explicit_parameter_types_and_quoted_relation(self):
+        cursor = MagicMock()
+        restore_fixture_sequences(cursor, [("schema with space", 'table"quoted_id', 31, True)])
+        self.assertEqual(cursor.execute.call_args_list, [
+            call("SELECT setval(format('%%I.%%I', %s::text, %s::text)::regclass,%s::bigint,%s::boolean)",
+                 ("schema with space", 'table"quoted_id', 31, True)),
+        ])
+
+    def test_fixture_sequence_lookup_types_all_parameters_and_quotes_dynamic_names(self):
+        cursor = MagicMock()
+        cursor.fetchone.side_effect = [("erp.fixture_id_seq",), (9,)]
+        catalog = {
+            "tables": {"table\"quoted": {"schema": "schema with space"}},
+            "columns": {"table\"quoted": [{"name": "id\"value", "auto_increment": True}]},
+        }
+
+        self.assertEqual(prepare_fixture_sequences(cursor, catalog), 1)
+
+        self.assertEqual(cursor.execute.call_args_list[0],
+                         call("SELECT pg_get_serial_sequence(format('%%I.%%I', %s::text, %s::text), %s::text)",
+                              ("schema with space", 'table"quoted', 'id"value')))
+        max_query = cursor.execute.call_args_list[1].args[0]
+        identifiers = [item for item in max_query if isinstance(item, sql.Identifier)]
+        self.assertEqual([repr(item) for item in identifiers],
+                         ['Identifier(\'id"value\')', "Identifier('schema with space')",
+                          'Identifier(\'table"quoted\')'])
+        self.assertEqual(cursor.execute.call_args_list[2],
+                         call("SELECT setval(%s::regclass,%s::bigint,%s::boolean)",
+                              ("erp.fixture_id_seq", 9, True)))
+
+    def test_fixture_sequence_lookup_fails_closed_when_sequence_is_missing_or_unassociated(self):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (None,)
+        catalog = {"tables": {"fixture": {"schema": "erp"}},
+                   "columns": {"fixture": [{"name": "id", "auto_increment": True}]}}
+
+        with self.assertRaisesRegex(RuntimeError, "identity sequence is missing"):
+            prepare_fixture_sequences(cursor, catalog)
+
+        self.assertEqual(cursor.execute.call_count, 1)
 
     def test_business_trigger_uses_verified_primary_key_conflict_target(self):
         business_sql = (ROOT / "business_objects.sql").read_text(encoding="utf-8")

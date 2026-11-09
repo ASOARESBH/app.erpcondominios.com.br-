@@ -49,9 +49,53 @@ def fixture_token():
 def reset_fixture_sequence(cur, sequence_name, value):
     cur.execute("RESET ROLE")
     try:
-        cur.execute("SELECT setval(%s::regclass,%s,false)", (sequence_name, value))
+        cur.execute("SELECT setval(%s::regclass,%s::bigint,false)", (sequence_name, value))
     finally:
         cur.execute("SET LOCAL ROLE erp_app")
+
+
+def capture_fixture_sequences(cur):
+    cur.execute("SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+                "WHERE c.relkind='S' AND n.nspname IN ('erp','legado') ORDER BY n.nspname,c.relname")
+    states = []
+    for schema, name in cur.fetchall():
+        cur.execute(sql.SQL("SELECT last_value,is_called FROM {}.{}").format(
+            sql.Identifier(schema), sql.Identifier(name)))
+        row = cur.fetchone()
+        if row is None or len(row) != 2:
+            raise RuntimeError("identity sequence state is unavailable before synthetic trigger tests")
+        states.append((schema, name, row[0], row[1]))
+    return states
+
+
+def prepare_fixture_sequences(cur, catalog):
+    prepared = 0
+    for table, columns in catalog["columns"].items():
+        schema = catalog["tables"][table]["schema"]
+        for column in columns:
+            if not column.get("auto_increment"):
+                continue
+            name = column["name"]
+            cur.execute("SELECT pg_get_serial_sequence(format('%%I.%%I', %s::text, %s::text), %s::text)",
+                        (schema, table, name))
+            row = cur.fetchone()
+            sequence_name = row[0] if row else None
+            if not sequence_name:
+                raise RuntimeError("identity sequence is missing before synthetic trigger tests")
+            cur.execute(sql.SQL("SELECT COALESCE(MAX({}),0) FROM {}.{}").format(
+                sql.Identifier(name), sql.Identifier(schema), sql.Identifier(table)))
+            maximum = int(cur.fetchone()[0] or 0)
+            sequence_value, is_called = (maximum, True) if maximum > 0 else (1, False)
+            cur.execute("SELECT setval(%s::regclass,%s::bigint,%s::boolean)",
+                        (sequence_name, sequence_value, is_called))
+            prepared += 1
+    return prepared
+
+
+def restore_fixture_sequences(cur, sequence_states):
+    for schema, name, last_value, is_called in sequence_states:
+        cur.execute("SELECT setval(format('%%I.%%I', %s::text, %s::text)::regclass,"
+                    "%s::bigint,%s::boolean)", (schema, name, last_value, is_called))
 
 
 def next_pk(cur, table, cols, indexes):
@@ -499,12 +543,10 @@ def main():
                              user="postgres", autocommit=True, connect_timeout=10)
         verify_v9_postgres_connection(pg)
         with pg.cursor() as cur:
-            cur.execute("SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
-                        "WHERE c.relkind='S' AND n.nspname IN ('erp','legado') ORDER BY n.nspname,c.relname")
-            for seq_schema, seq_name in cur.fetchall():
-                cur.execute(sql.SQL("SELECT last_value,is_called FROM {}.{}").format(
-                    sql.Identifier(seq_schema), sql.Identifier(seq_name)))
-                sequence_states.append((seq_schema, seq_name, *cur.fetchone()))
+            sequence_states = capture_fixture_sequences(cur)
+            prepared_sequences = prepare_fixture_sequences(cur, catalog)
+            if prepared_sequences != len(sequence_states):
+                raise RuntimeError("identity sequence inventory differs before synthetic trigger tests")
             cur.execute("BEGIN")
             try:
                 verify_role_contract(cur)
@@ -525,9 +567,7 @@ def main():
         try:
             if pg is not None and sequence_states:
                 with pg.cursor() as cur:
-                    for seq_schema, seq_name, last_value, is_called in sequence_states:
-                        qualified = f'{sql.Identifier(seq_schema).as_string(cur)}.{sql.Identifier(seq_name).as_string(cur)}'
-                        cur.execute("SELECT setval(%s::regclass,%s,%s)", (qualified, last_value, is_called))
+                    restore_fixture_sequences(cur, sequence_states)
         finally:
             try:
                 if mysql is not None:
