@@ -15,7 +15,8 @@ import pymysql
 from pymysql.constants import FIELD_TYPE
 
 from common import (collate_class, generated_name, json_contains_nul, mysql_type_to_pg,
-                    parse_mysql_enum, pg_name, qi, ql, mysql_qi)
+                    parse_mysql_enum, pg_name, qi, ql, mysql_qi, V10D_DATABASE,
+                    require_v10d_database)
 
 SCHEMA = "inlaud99_erpcondor"
 OFFICIAL_ORIGIN = "https://github.com/ASOARESBH/app.erpcondominios.com.br-.git"
@@ -677,7 +678,9 @@ def expression_sql(expression: str) -> str:
     return f"{qi(m.group(1))} {m.group(2)} {qi(m.group(3))}"
 
 
-def build_sql(catalog: dict, target_database: str = "erp_ensaio_v9") -> dict[str, str]:
+def build_sql(catalog: dict, target_database: str = V10D_DATABASE) -> dict[str, str]:
+    if target_database != V10D_DATABASE:
+        raise ValueError("DDL generation is restricted to the exclusive v10d database")
     tables, columns, indexes, fks = (catalog[k] for k in ("tables", "columns", "indexes", "foreign_keys"))
     names = {}
     for t, info in tables.items():
@@ -908,8 +911,7 @@ def main():
     ap.add_argument("--target-database", required=True)
     ap.add_argument("--routine-snapshot", required=True)
     args = ap.parse_args()
-    if args.target_database != "erp_ensaio_v9":
-        raise SystemExit("refusing any target database except the approved isolated rehearsal")
+    require_v10d_database(args.target_database)
     conn = mysql_connection(args.mysql_config)
     try:
         tables = table_inventory(conn)

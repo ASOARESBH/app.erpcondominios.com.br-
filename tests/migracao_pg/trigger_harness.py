@@ -14,7 +14,7 @@ from psycopg import sql
 
 from catalog import (classify_legacy_tables, columns_inventory, indexes_inventory,
                      mysql_connection, table_inventory)
-from common import verify_v9_postgres_connection
+from common import verify_v10d_postgres_connection, require_v10d_endpoint
 NUMERIC = {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "float", "double"}
 TEXT = {"char", "varchar", "tinytext", "text", "mediumtext", "longtext", "enum", "set"}
 BINARY = {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}
@@ -43,7 +43,7 @@ def trigger_failure_marker(test_label, exc):
 
 
 def fixture_token():
-    return "v9qa_" + secrets.token_hex(8)
+    return "v10dqa_" + secrets.token_hex(8)
 
 
 def reset_fixture_sequence(cur, sequence_name, value):
@@ -396,10 +396,10 @@ def test_dependent_delete(cur, catalog):
 
 
 def test_correct_moradores_anexos_tenant(cur, catalog):
-    cur.execute("SELECT to_regclass('erp._v9_moradores_anexos_original')")
+    cur.execute("SELECT to_regclass('erp._v10d_moradores_anexos_original')")
     if cur.fetchone()[0] is not None:
         raise RuntimeError("procedure fixture relation already exists")
-    cur.execute("ALTER TABLE erp.moradores_anexos RENAME TO _v9_moradores_anexos_original")
+    cur.execute("ALTER TABLE erp.moradores_anexos RENAME TO _v10d_moradores_anexos_original")
     cur.execute("CREATE TABLE erp.moradores_anexos (id integer PRIMARY KEY)")
     cur.execute("INSERT INTO erp.moradores_anexos (id) VALUES (%s)", (FIXTURE_MORADOR,))
     cur.execute("CALL legado.corrigir_moradores_anexos_tenant()")
@@ -415,10 +415,10 @@ def test_correct_moradores_anexos_tenant(cur, catalog):
 
 
 def test_mt_adicionar_coluna(cur, catalog):
-    cur.execute("SELECT to_regclass('erp._v9_proc_fixture')")
+    cur.execute("SELECT to_regclass('erp._v10d_proc_fixture')")
     if cur.fetchone()[0] is not None:
         raise RuntimeError("procedure fixture relation already exists")
-    table = "_v9_proc_fixture"
+    table = "_v10d_proc_fixture"
     cur.execute(sql.SQL("CREATE TABLE erp.{} (id integer)").format(sql.Identifier(table)))
     cur.execute("CALL legado.mt_adicionar_coluna(%s,%s,%s)",
                 (table, "tenant_id", "INT(11) NOT NULL DEFAULT 1 AFTER `id`"))
@@ -517,8 +517,7 @@ def main():
     ap.add_argument("--pg-port", type=int, required=True)
     ap.add_argument("--database", required=True)
     args = ap.parse_args()
-    if args.database != "erp_ensaio_v9" or args.pg_port != 55432:
-        raise SystemExit("refusing non-v9 target")
+    require_v10d_endpoint(args.database, args.pg_socket, args.pg_port)
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     mysql = None
@@ -541,7 +540,7 @@ def main():
         catalog = {"tables": tables, "columns": columns_inventory(mysql), "indexes": indexes_inventory(mysql)}
         pg = psycopg.connect(host=args.pg_socket, port=args.pg_port, dbname=args.database,
                              user="postgres", autocommit=True, connect_timeout=10)
-        verify_v9_postgres_connection(pg)
+        verify_v10d_postgres_connection(pg)
         with pg.cursor() as cur:
             sequence_states = capture_fixture_sequences(cur)
             prepared_sequences = prepare_fixture_sequences(cur, catalog)
@@ -554,7 +553,7 @@ def main():
                 print(json.dumps({"test": "erp_app_minimum_privileges", "status": "PASS"}), flush=True)
                 for index, (label, fn, role) in enumerate(tests):
                     ACTIVE_TEST = label
-                    savepoint = f"sp_v9_test_{index}"
+                    savepoint = f"sp_v10d_test_{index}"
                     cur.execute(sql.SQL("SAVEPOINT {}").format(sql.Identifier(savepoint)))
                     cur.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
                     fn(cur, catalog)

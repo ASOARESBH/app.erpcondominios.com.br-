@@ -17,26 +17,29 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-from common import generated_name
+from common import (generated_name, V10D_DATABASE, V10D_PGDATA, V10D_PGSOCKET,
+                    V10D_PGPORT)
 
-PGDATA = Path("/var/lib/erp-pg-rehearsal/pg-data")
-PGSOCKET = Path("/var/lib/erp-pg-rehearsal/pg-socket")
-PGPORT = 55432
-PG_PYTHON = Path("/var/lib/erp-pg-rehearsal/v9/venv/bin/python3")
-MYSQL_CONTAINER = "erp-mysql-source-20261108"
-MYSQL_SECRET_SOURCE = Path("/var/lib/erp-pg-rehearsal/secrets/pgloader.cnf")
-MYSQL_ADMIN_CONFIG = Path("/var/lib/erp-pg-rehearsal/secrets/client.cnf")
+V10D_ROOT = Path("/var/lib/erp-pg-rehearsal/v10d")
+V10D_SECRETS = V10D_ROOT / "secrets"
+PGDATA = Path(V10D_PGDATA)
+PGSOCKET = Path(V10D_PGSOCKET)
+PGPORT = V10D_PGPORT
+PG_PYTHON = V10D_ROOT / "venv/bin/python3"
+MYSQL_CONTAINER = "erp-mysql-source-v10d"
+MYSQL_SECRET_SOURCE = V10D_SECRETS / "pgloader.cnf"
+MYSQL_ADMIN_CONFIG = V10D_SECRETS / "client.cnf"
 REPO_ROOT = Path("/opt/erpcondominios/source")
 BASELINE_MAIN_COMMIT = "f60739713e6de3f2473b79ecd14a70fd700e5462"
+APPROVED_C2_COMMIT = "c4703e9e153fd2d156f8c9dab398c12d72dd19cf"
 APPROVED_RESUME_RUN_ID = "20261108T181755Z"
 APPROVED_RESUME_SOURCE_COMMIT = "95fbf8a458cf86d2fe2d70679ba613526ca1b1de"
 APPROVED_RESUME_SOURCE_ROWS = 202609
 APPROVED_POST_FK_RUN_ID = "20261108T203651Z"
 APPROVED_POST_FK_SOURCE_COMMIT = "d4447f9867cda910122f9b3b9e4d797b425cf5a4"
 APPROVED_POST_FK_MANIFEST = Path("/root/erp_pg_v9_post_fk_20261108_manifest.json")
-V9_ROOT = Path("/var/lib/erp-pg-rehearsal/v9")
-RUN_ROOT = Path("/var/lib/erp-pg-rehearsal/v9/runs")
-TMPFS_ROOT = Path("/dev/shm/erp-pg-v9")
+RUN_ROOT = V10D_ROOT / "runs"
+TMPFS_ROOT = Path("/dev/shm/erp-pg-v10d")
 CODE_ROOT = Path(__file__).resolve().parent
 ACTIVE_PROCESS = None
 RUN_LOCK_FD = None
@@ -63,8 +66,9 @@ def verify_code_provenance(expected_commit: str):
                 and branch.returncode == 0 and branch.stdout.strip() == branch_name
                 and head.returncode == 0 and head.stdout.strip() == commit
                 and status.returncode == 0 and not status.stdout.strip())
-    if not verify_repo(repository, "pg/03-conversao-schema", expected_commit):
-        raise RuntimeError("migration code provenance is not the reviewed clean official commit")
+    if not verify_repo(repository, "pg/03-3-ensaio-integral-v10d", expected_commit):
+        raise RuntimeError("v10d code provenance is not the reviewed clean official branch and commit")
+    verify_approved_c2_ancestry(repository, expected_commit)
     if not verify_repo(REPO_ROOT, "main", BASELINE_MAIN_COMMIT):
         raise RuntimeError("source classification repository is not the approved clean main baseline")
 
@@ -74,6 +78,13 @@ def verify_baseline_ancestry(repository: Path, commit: str):
                                BASELINE_MAIN_COMMIT, commit], capture_output=True, text=True)
     if ancestry.returncode != 0:
         raise RuntimeError("migration code commit is not descended from the approved baseline")
+
+
+def verify_approved_c2_ancestry(repository: Path, commit: str):
+    ancestry = subprocess.run(["git", "-C", str(repository), "merge-base", "--is-ancestor",
+                               APPROVED_C2_COMMIT, commit], capture_output=True, text=True)
+    if ancestry.returncode != 0:
+        raise RuntimeError("v10d code commit is not descended from the C.2 harness fix")
 
 
 def verify_resume_code_ancestry(repository: Path, commit: str,
@@ -238,7 +249,7 @@ def acquire_runner_lock():
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         os.close(fd)
-        raise RuntimeError("another v9 runner is active")
+        raise RuntimeError("another v10d runner is active")
     RUN_LOCK_FD = fd
     atexit.register(release_runner_lock)
 
@@ -453,7 +464,7 @@ def check_mysql_namespace():
             or info.get("AppArmorProfile") != "erp-mysql-rehearsal"):
         raise RuntimeError("MySQL source isolation guard failed")
     if (len(secret_mounts) != 1 or secret_mounts[0].get("Type") != "bind"
-            or secret_mounts[0].get("Source") != "/var/lib/erp-pg-rehearsal/secrets"
+            or secret_mounts[0].get("Source") != str(V10D_SECRETS)
             or secret_mounts[0].get("RW") is not False):
         raise RuntimeError("MySQL secret mount must be the expected read-only private bind mount")
     if "--bind-address=127.0.0.1" not in args or "--event-scheduler=OFF" not in args:
@@ -465,12 +476,15 @@ def check_mysql_namespace():
 
 
 def create_target_database(dbname: str):
+    if dbname != V10D_DATABASE:
+        raise RuntimeError("refusing any database creation except the exclusive v10d target")
     check = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-At", "-h", PGSOCKET,
                             "-p", str(PGPORT), "-U", "postgres", "-d", "postgres", "-c",
-                            "SELECT COUNT(*) FROM pg_database WHERE datname='erp_ensaio_v9'"),
+                            f"SELECT COUNT(*) FROM pg_database WHERE datname={quote_pg_literal(V10D_DATABASE)} "
+                            "OR (NOT datistemplate AND datname<>'postgres')"),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if check.returncode or check.stdout.strip() != "0":
-        raise RuntimeError("target database already exists or catalog query failed; refusing to drop or reuse it")
+        raise RuntimeError("v10d cluster contains a user database or target already exists; refusing reuse")
     create = subprocess.run(as_postgres("/usr/bin/createdb", "-h", PGSOCKET,
                              "-p", str(PGPORT), "-U", "postgres", "-T", "template0", "-E", "UTF8", dbname),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -478,9 +492,9 @@ def create_target_database(dbname: str):
         raise RuntimeError("failed to create new isolated target database")
     alter = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
                             "-h", PGSOCKET, "-p", PGPORT, "-U", "postgres", "-d", "postgres", "-c",
-                            "ALTER DATABASE erp_ensaio_v9 SET timezone TO 'America/Sao_Paulo'; "
-                            "ALTER DATABASE erp_ensaio_v9 CONNECTION LIMIT 1; "
-                            "REVOKE CONNECT,TEMPORARY ON DATABASE erp_ensaio_v9 FROM PUBLIC"),
+                            "ALTER DATABASE erp_ensaio_v10d SET timezone TO 'America/Sao_Paulo'; "
+                            "ALTER DATABASE erp_ensaio_v10d CONNECTION LIMIT 1; "
+                            "REVOKE CONNECT,TEMPORARY ON DATABASE erp_ensaio_v10d FROM PUBLIC"),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if alter.returncode:
         raise RuntimeError("failed to set rehearsal database timezone")
@@ -957,6 +971,35 @@ def safe_summary_scalars(item: dict) -> dict:
             and not key.endswith("_sha256") and not key.endswith("_fingerprint")}
 
 
+def validate_v10d_acceptance(catalog_summary: dict, loader_summary: dict, summary: dict):
+    metrics = loader_summary.get("table_metrics", [])
+    expected_tables = {"tables": 270, "columns": 3339, "primary_keys": 240,
+                       "foreign_keys": 11, "triggers": 7, "routines": 2,
+                       "events": 0, "auto_increment_columns": 232}
+    if any(catalog_summary.get(key) != value for key, value in expected_tables.items()):
+        raise RuntimeError("v10d catalog summary differs from the approved source snapshot")
+    if (loader_summary.get("tables_loaded") != 270 or loader_summary.get("source_rows_loaded") != 202609
+            or len(metrics) != 270 or len({item.get("table") for item in metrics}) != 270
+            or sum(item.get("source_rows", 0) for item in metrics) != 202609
+            or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")
+            or loader_summary.get("dst_ambiguous_local_times")):
+        raise RuntimeError("v10d loader did not meet the exact 270-table and 202609-row contract")
+    required_zero = ("row_count_mismatches", "tables_with_row_hash_divergence", "row_hash_divergent_total",
+                     "pk_max_mismatches", "identity_max_mismatches", "sequences_not_ready",
+                     "numeric_sum_mismatches", "binary_mismatches", "tenant_bucket_mismatches",
+                     "timestamp_mismatches", "fk_tenant_mismatch_count", "foreign_keys_with_orphans",
+                     "fk_orphan_count_total")
+    if (summary.get("status") != "ACCEPTED" or summary.get("tables") != 270
+            or summary.get("columns") != 3339 or summary.get("tables_with_primary_key") != 240
+            or summary.get("source_rows") != 202609 or summary.get("destination_rows") != 202609
+            or summary.get("identity_columns") != 232 or summary.get("foreign_keys") != 11
+            or summary.get("foreign_keys_valid") != 11
+            or summary.get("fk_type_normalizations") != catalog_summary.get("fk_type_normalizations")
+            or summary.get("fk_type_normalizations_sha256") != catalog_summary.get("fk_type_normalizations_sha256")
+            or any(summary.get(key) != 0 for key in required_zero)):
+        raise RuntimeError("v10d reconciliation did not meet the exact zero-divergence acceptance contract")
+
+
 def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dict):
     legacy_tables = set(catalog_summary["legacy_tables"])
     metrics = loader_summary["table_metrics"]
@@ -1075,6 +1118,8 @@ def verify_post_fk_target(dbname: str, catalog_summary: dict, loader_summary: di
 
 
 def apply_sql(dbname: str, path: Path, phase: str, log: Path):
+    if dbname != V10D_DATABASE:
+        raise RuntimeError("refusing SQL application to any database except the exclusive v10d target")
     command = as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose",
                           "-h", PGSOCKET, "-p", str(PGPORT), "-U", "postgres", "-d", dbname)
     if phase == "foreign_keys_not_valid":
@@ -1084,9 +1129,11 @@ def apply_sql(dbname: str, path: Path, phase: str, log: Path):
 
 
 def run_reconciliation_step(base, dbname: str, mysql_config: Path, run_dir: Path, log: Path):
+    if dbname != V10D_DATABASE:
+        raise RuntimeError("refusing reconciliation of any database except the exclusive v10d target")
     return run_step([*base, str(CODE_ROOT / "reconcile.py"), "--mysql-config", str(mysql_config),
                      "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", dbname,
-                     "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / "reconciliacao_v9.csv"),
+                     "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / "reconciliacao_v10d.csv"),
                      "--summary", str(run_dir / "reconciliation_summary.json")],
                     "reconciliation", log, whitelist_json=True)
 
@@ -1112,53 +1159,41 @@ def stop_rehearsal_cluster(log: Path, reason: str):
     emit_log(log, "postgres_cluster_stopped", reason=reason, mode="fast")
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Run a clean, isolated MySQL→PostgreSQL v9 rehearsal")
+def parse_arguments(argv=None):
+    ap = argparse.ArgumentParser(description="Run a clean, isolated MySQL→PostgreSQL v10d rehearsal")
     ap.add_argument("--database", required=True)
     ap.add_argument("--expected-commit", required=True)
     ap.add_argument("--batch-size", type=int, default=1000)
-    ap.add_argument("--resume-partial-target", action="store_true")
-    ap.add_argument("--resume-post-fk-reconciliation", action="store_true")
-    ap.add_argument("--source-run-id")
-    args = ap.parse_args()
-    if args.database != "erp_ensaio_v9":
-        raise SystemExit("refusing any destination except the approved empty rehearsal database erp_ensaio_v9")
+    args = ap.parse_args(argv)
+    if args.database != V10D_DATABASE:
+        raise SystemExit("refusing any destination except the exclusive empty rehearsal database erp_ensaio_v10d")
     if args.batch_size < 1 or args.batch_size > 10000:
         raise SystemExit("batch size out of range")
-    if args.resume_partial_target and args.resume_post_fk_reconciliation:
-        raise SystemExit("resume modes are mutually exclusive")
-    if (args.resume_partial_target or args.resume_post_fk_reconciliation) and args.batch_size != 1000:
-        raise SystemExit("approved partial target can only resume with its original batch size")
-    if args.resume_post_fk_reconciliation:
-        if args.source_run_id != APPROVED_POST_FK_RUN_ID:
-            raise SystemExit("post-FK reconciliation requires its exact approved source run id")
-    elif args.source_run_id is not None:
-        raise SystemExit("source run id is accepted only in post-FK reconciliation mode")
+    return args
+
+
+def main():
+    args = parse_arguments()
     if os.geteuid() != 0:
         raise SystemExit("runner must start as root so it can verify container namespace")
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     os.umask(0o077)
     verify_code_provenance(args.expected_commit)
-    if args.resume_partial_target:
-        verify_resume_code_ancestry(CODE_ROOT.parents[1], args.expected_commit)
-    elif args.resume_post_fk_reconciliation:
-        verify_resume_code_ancestry(CODE_ROOT.parents[1], args.expected_commit,
-                                    APPROVED_POST_FK_SOURCE_COMMIT)
     verify_private_mysql_config(MYSQL_SECRET_SOURCE)
     verify_private_mysql_config(MYSQL_ADMIN_CONFIG)
     if not REPO_ROOT.is_dir() or not PG_PYTHON.is_file():
-        raise SystemExit("official source clone or private run root is unavailable")
+        raise SystemExit("official source clone or private v10d runtime is unavailable")
     postgres = __import__("pwd").getpwnam("postgres")
-    if not V9_ROOT.exists():
-        V9_ROOT.mkdir(mode=0o700)
-        os.chown(V9_ROOT, postgres.pw_uid, postgres.pw_gid)
-    if V9_ROOT.stat().st_uid != postgres.pw_uid or V9_ROOT.stat().st_mode & 0o077:
-        raise SystemExit("private v9 root has unsafe ownership or mode")
-    if not RUN_ROOT.exists():
-        RUN_ROOT.mkdir(mode=0o700)
-        os.chown(RUN_ROOT, postgres.pw_uid, postgres.pw_gid)
-    if RUN_ROOT.stat().st_uid != postgres.pw_uid or RUN_ROOT.stat().st_mode & 0o077:
+    root_stat = V10D_ROOT.lstat()
+    if (not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != postgres.pw_uid
+            or stat.S_IMODE(root_stat.st_mode) != 0o700):
+        raise SystemExit("private v10d root has unsafe ownership or mode")
+    if RUN_ROOT.exists() or RUN_ROOT.is_symlink():
+        raise SystemExit("v10d run root already exists; refusing rerun or resume")
+    RUN_ROOT.mkdir(mode=0o700, exist_ok=False)
+    os.chown(RUN_ROOT, postgres.pw_uid, postgres.pw_gid)
+    if RUN_ROOT.stat().st_uid != postgres.pw_uid or stat.S_IMODE(RUN_ROOT.stat().st_mode) != 0o700:
         raise SystemExit("private PostgreSQL run root has unsafe ownership or mode")
     acquire_runner_lock()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -1177,13 +1212,9 @@ def main():
     tmpfs_run.chmod(0o710)
     mysql_config = tmpfs_run / "client.cnf"
     cluster_started_here = False
-    resume_run_dir = None
-    resume_source_snapshot = None
     started = time.monotonic()
     emit_log(log, "pipeline_started", database=args.database, batch_size=args.batch_size,
-             mysql_container=MYSQL_CONTAINER, code_commit=args.expected_commit,
-             resume_source_run=APPROVED_RESUME_RUN_ID if args.resume_partial_target else None,
-             post_fk_source_run=args.source_run_id if args.resume_post_fk_reconciliation else None)
+             mysql_container=MYSQL_CONTAINER, code_commit=args.expected_commit, execution_mode="from_zero")
     try:
         copy_private_config(MYSQL_SECRET_SOURCE, mysql_config, postgres.pw_gid)
         mysql_pid = check_mysql_namespace()
@@ -1196,136 +1227,56 @@ def main():
         os.chown(routine_snapshot, postgres.pw_uid, postgres.pw_gid)
         emit_log(log, "routine_fingerprints_verified", count=2)
         base = ["nsenter", f"--net=/proc/{mysql_pid}/ns/net", "--", *as_postgres(PG_PYTHON, "-s")]
-        if args.resume_post_fk_reconciliation:
-            post_fk_run_dir, _post_fk_log, post_fk_summary, post_fk_snapshot = load_post_fk_artifacts(
-                args.source_run_id, postgres.pw_uid)
-            verify_post_fk_run_manifest(args.source_run_id, postgres.pw_uid)
-            resume_run_dir, _resume_log, base_summary, loader_summary, base_snapshot = load_resume_artifacts(
-                APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, args.batch_size, postgres.pw_uid)
-            if snapshot != post_fk_snapshot or snapshot != base_snapshot:
-                raise RuntimeError("routine snapshot changed after the post-FK source run")
-            validate_resume_catalog_transition(base_summary, post_fk_summary,
-                                               resume_run_dir / "sql", post_fk_run_dir / "sql",
-                                               postgres.pw_uid)
-            emit_log(log, "post_fk_artifacts_verified", source_run=args.source_run_id,
-                     tables=270, rows=loader_summary.get("source_rows_loaded"))
-            regenerated_catalog = run_dir / "catalog.json"
-            run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
-                      "--output", str(run_dir / "sql"), "--summary", str(regenerated_catalog),
-                      "--repo-root", str(REPO_ROOT), "--target-database", args.database,
-                      "--routine-snapshot", str(routine_snapshot)],
-                     "post_fk_catalog_regeneration", log, whitelist_json=True)
-            summary_info = regenerated_catalog.lstat()
-            if (not stat.S_ISREG(summary_info.st_mode) or stat.S_ISLNK(summary_info.st_mode)
-                    or summary_info.st_uid != postgres.pw_uid or stat.S_IMODE(summary_info.st_mode) != 0o600):
-                raise RuntimeError("regenerated post-FK catalog summary ownership or mode is unsafe")
-            catalog_summary = json.loads(regenerated_catalog.read_text(encoding="utf-8"))
-            validate_catalog_artifact_snapshot(post_fk_summary, catalog_summary,
-                                               post_fk_run_dir / "sql", run_dir / "sql", postgres.pw_uid)
-            ddl_dir = run_dir / "sql"
-            emit_log(log, "post_fk_catalog_verified", source_run=args.source_run_id,
-                     fk_type_normalizations=3, source_rows=loader_summary.get("source_rows_loaded"))
-            cluster_started_here = start_cluster(log, run_dir)
-            existing_fk_count = verify_post_fk_target(args.database, catalog_summary, loader_summary)
-            emit_log(log, "post_fk_target_verified", tables=270,
-                     rows=loader_summary.get("source_rows_loaded"), existing_foreign_keys=existing_fk_count)
-            if existing_fk_count != 11:
-                raise RuntimeError("post-FK target lacks the exact reviewed foreign key count")
-        elif args.resume_partial_target:
-            if args.expected_commit == APPROVED_RESUME_SOURCE_COMMIT:
-                raise RuntimeError("resume code must be a new commit descended from the partial-run commit")
-            resume_run_dir, _resume_log, catalog_summary, loader_summary, resume_source_snapshot = load_resume_artifacts(
-                APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, args.batch_size, postgres.pw_uid)
-            if snapshot != resume_source_snapshot:
-                raise RuntimeError("routine snapshot changed since the approved partial run")
-            emit_log(log, "resume_artifacts_verified", source_run=APPROVED_RESUME_RUN_ID,
-                     tables=270, rows=loader_summary.get("source_rows_loaded"))
-            regenerated_catalog = run_dir / "catalog.json"
-            run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
-                      "--output", str(run_dir / "sql"), "--summary", str(regenerated_catalog),
-                      "--repo-root", str(REPO_ROOT), "--target-database", args.database,
-                      "--routine-snapshot", str(routine_snapshot)],
-                     "resume_catalog_regeneration", log, whitelist_json=True)
-            summary_info = regenerated_catalog.lstat()
-            if (not stat.S_ISREG(summary_info.st_mode) or stat.S_ISLNK(summary_info.st_mode)
-                    or summary_info.st_uid != postgres.pw_uid or stat.S_IMODE(summary_info.st_mode) != 0o600):
-                raise RuntimeError("regenerated catalog summary ownership or mode is unsafe")
-            regenerated_summary = json.loads(regenerated_catalog.read_text(encoding="utf-8"))
-            validate_resume_catalog_transition(catalog_summary, regenerated_summary,
-                                               resume_run_dir / "sql", run_dir / "sql", postgres.pw_uid)
-            catalog_summary = regenerated_summary
-            ddl_dir = run_dir / "sql"
-            emit_log(log, "resume_catalog_delta_verified", source_run=APPROVED_RESUME_RUN_ID,
-                     fk_type_normalizations=3, source_rows=loader_summary.get("source_rows_loaded"))
-            cluster_started_here = start_cluster(log, run_dir)
-            existing_fk_count = verify_resume_target(args.database, catalog_summary, loader_summary)
-            emit_log(log, "resume_target_counts_verified", tables=270,
-                     rows=loader_summary.get("source_rows_loaded"), existing_foreign_keys=existing_fk_count)
-            if existing_fk_count != 0:
-                raise RuntimeError("partial target contains foreign keys before the approved resume boundary")
-        else:
-            catalog = run_dir / "catalog.json"
-            run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
-                      "--output", str(run_dir / "sql"), "--summary", str(catalog),
-                      "--repo-root", str(REPO_ROOT), "--target-database", args.database,
-                      "--routine-snapshot", str(routine_snapshot)],
-                     "catalog", log, whitelist_json=True)
-            ddl_dir = run_dir / "sql"
-            for name in ("001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql", "002_validate_constraints.sql",
-                         "003_identity_sequences.sql", "004_on_update_timestamp.sql",
-                         "005_business_triggers_routines.sql", "006_grants.sql"):
-                path = ddl_dir / name
-                if not path.is_file() or path.stat().st_mode & 0o077:
-                    raise RuntimeError("generated SQL file is missing or not private")
-            cluster_started_here = start_cluster(log, run_dir)
-            create_target_database(args.database)
-            emit_log(log, "empty_target_created", database=args.database)
-            apply_sql(args.database, ddl_dir / "001_schema.sql", "schema", log)
-            run_step([*base, str(CODE_ROOT / "loader.py"), "--mysql-config", str(mysql_config),
-                      "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database,
-                      "--repo-root", str(REPO_ROOT), "--evidence", str(run_dir / "loader_summary.json"),
-                      "--batch-size", str(args.batch_size)], "load", log, whitelist_json=True)
-            catalog_summary = json.loads(catalog.read_text(encoding="utf-8"))
-            loader_summary = json.loads((run_dir / "loader_summary.json").read_text(encoding="utf-8"))
-            if (loader_summary.get("tables_loaded") != 270
-                    or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")
-                    or loader_summary.get("dst_ambiguous_local_times")):
-                raise RuntimeError("loader transformations differ from metadata preflight or require review")
-            if sum(item.get("source_rows", 0) for item in loader_summary.get("table_metrics", [])) != loader_summary.get("source_rows_loaded"):
-                raise RuntimeError("loader row totals are internally inconsistent")
-            emit_log(log, "loader_metrics_verified", tables=270,
-                     rows=loader_summary.get("source_rows_loaded"),
-                     zero_date_columns=len(loader_summary.get("zero_date_conversions", {})))
-            apply_sql(args.database, ddl_dir / "002_constraints_indexes.sql", "constraints_indexes", log)
-            apply_sql(args.database, ddl_dir / "003_identity_sequences.sql", "identity_sequences", log)
-            apply_sql(args.database, ddl_dir / "004_on_update_timestamp.sql", "on_update_triggers", log)
-            apply_sql(args.database, ddl_dir / "005_business_triggers_routines.sql", "business_objects", log)
-            apply_sql(args.database, ddl_dir / "006_grants.sql", "grants", log)
-        if not args.resume_post_fk_reconciliation:
-            harness = CODE_ROOT.parents[1] / "tests" / "migracao_pg" / "trigger_harness.py"
-            run_step([*base, str(harness),
-                      "--mysql-config", str(mysql_config), "--repo-root", str(REPO_ROOT),
-                      "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database],
-                     "business_trigger_tests", log, whitelist_json=True)
-            apply_sql(args.database, ddl_dir / "002_foreign_keys.sql", "foreign_keys_not_valid", log)
-            run_step(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET,
-                      "-p", str(PGPORT), "-U", "postgres", "-d", args.database, "-c", "ANALYZE;"),
-                     "analyze", log)
+        catalog = run_dir / "catalog.json"
+        run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
+                  "--output", str(run_dir / "sql"), "--summary", str(catalog),
+                  "--repo-root", str(REPO_ROOT), "--target-database", args.database,
+                  "--routine-snapshot", str(routine_snapshot)],
+                 "catalog", log, whitelist_json=True)
+        ddl_dir = run_dir / "sql"
+        for name in ("001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql", "002_validate_constraints.sql",
+                     "003_identity_sequences.sql", "004_on_update_timestamp.sql",
+                     "005_business_triggers_routines.sql", "006_grants.sql"):
+            path = ddl_dir / name
+            if not path.is_file() or path.stat().st_mode & 0o077:
+                raise RuntimeError("generated SQL file is missing or not private")
+        cluster_started_here = start_cluster(log, run_dir)
+        create_target_database(args.database)
+        emit_log(log, "empty_target_created", database=args.database)
+        apply_sql(args.database, ddl_dir / "001_schema.sql", "schema", log)
+        run_step([*base, str(CODE_ROOT / "loader.py"), "--mysql-config", str(mysql_config),
+                  "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database,
+                  "--repo-root", str(REPO_ROOT), "--evidence", str(run_dir / "loader_summary.json"),
+                  "--batch-size", str(args.batch_size)], "load", log, whitelist_json=True)
+        catalog_summary = json.loads(catalog.read_text(encoding="utf-8"))
+        loader_summary = json.loads((run_dir / "loader_summary.json").read_text(encoding="utf-8"))
+        if (loader_summary.get("tables_loaded") != 270
+                or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")
+                or loader_summary.get("dst_ambiguous_local_times")):
+            raise RuntimeError("loader transformations differ from metadata preflight or require review")
+        if sum(item.get("source_rows", 0) for item in loader_summary.get("table_metrics", [])) != loader_summary.get("source_rows_loaded"):
+            raise RuntimeError("loader row totals are internally inconsistent")
+        emit_log(log, "loader_metrics_verified", tables=270,
+                 rows=loader_summary.get("source_rows_loaded"),
+                 zero_date_columns=len(loader_summary.get("zero_date_conversions", {})))
+        apply_sql(args.database, ddl_dir / "002_constraints_indexes.sql", "constraints_indexes", log)
+        apply_sql(args.database, ddl_dir / "003_identity_sequences.sql", "identity_sequences", log)
+        apply_sql(args.database, ddl_dir / "004_on_update_timestamp.sql", "on_update_triggers", log)
+        apply_sql(args.database, ddl_dir / "005_business_triggers_routines.sql", "business_objects", log)
+        apply_sql(args.database, ddl_dir / "006_grants.sql", "grants", log)
+        harness = CODE_ROOT.parents[1] / "tests" / "migracao_pg" / "trigger_harness.py"
+        run_step([*base, str(harness),
+                  "--mysql-config", str(mysql_config), "--repo-root", str(REPO_ROOT),
+                  "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database],
+                 "business_trigger_tests", log, whitelist_json=True)
+        apply_sql(args.database, ddl_dir / "002_foreign_keys.sql", "foreign_keys_not_valid", log)
+        run_step(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET,
+                  "-p", str(PGPORT), "-U", "postgres", "-d", args.database, "-c", "ANALYZE;"),
+                 "analyze", log)
         run_reconciliation_step(base, args.database, mysql_config, run_dir, log)
         summary_path = run_dir / "reconciliation_summary.json"
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        if (summary.get("tables") != 270
-                or summary.get("source_rows") != loader_summary.get("source_rows_loaded")
-                or summary.get("destination_rows") != loader_summary.get("source_rows_loaded")
-                or summary.get("foreign_keys_valid", 0) + summary.get("foreign_keys_with_orphans", 0) != 11
-                or summary.get("fk_type_normalizations") != catalog_summary.get("fk_type_normalizations")
-                or summary.get("fk_type_normalizations_sha256") != catalog_summary.get("fk_type_normalizations_sha256")
-                or any(summary.get(k) != 0 for k in (
-                    "row_count_mismatches", "tables_with_row_hash_divergence", "pk_max_mismatches",
-                    "identity_max_mismatches", "sequences_not_ready", "numeric_sum_mismatches",
-                    "binary_mismatches", "tenant_bucket_mismatches", "timestamp_mismatches",
-                    "fk_tenant_mismatch_count"))):
-            raise RuntimeError("reconciliation summary did not meet v9 acceptance")
+        validate_v10d_acceptance(catalog_summary, loader_summary, summary)
         if cluster_started_here:
             stop_rehearsal_cluster(log, "pipeline_success")
             cluster_started_here = False

@@ -2,6 +2,13 @@
 
 Registro de alterações significativas no ERP.
 
+## [3.0.0-pre.1] - 2026-11-10
+### Validado
+- **Fase C.3 — integração do harness:** o commit `c4703e9e153fd2d156f8c9dab398c12d72dd19cf` foi exercitado em PostgreSQL 18.6 real com Psycopg 3.3.8; os cenários sintéticos cobriram casts do preflight, identificadores quoted, captura/alinhamento/restauração de sequences, trigger sem colisão, sequence ausente, rollback e cleanup. A execução C.3 passou; o cluster temporário foi parado e removido. Um relatório técnico sanitizado foi produzido para a entrega.
+- **Fase C.4 — runner preparado para v10d:** a branch `pg/03-3-ensaio-integral-v10d`, derivada de C.2, define paths/socket/porta/segredos/container/lock exclusivos, aceita apenas `erp_ensaio_v10d`, rejeita resume e alvos históricos antes de efeitos, exige ancestralidade C.2 e passa gate exato de 270 tabelas, 3.339 colunas, 240 PKs, 232 identities, 202.609 linhas, 11 FKs validadas e zero órfãos/divergências. Catálogo, loader, harness e reconciliação também recusam outros endpoints. A suíte herdada de 90 testes foi preservada sem remoções; sete novos testes fail-closed elevam a suíte para 97/97. AST (8 arquivos) e `git diff --check` passaram. Runbook em `tools/migracao_pg/README_V10D.md`.
+### Limites
+- A alteração de código e os testes sintéticos não executam o pipeline C.4. Não foi criado cluster/database v10d, não houve acesso ao MySQL de origem, e os ambientes `v9`, `v10`, `v10b` e `v10c` não foram alterados. O manifesto/proveniência do dump e a disponibilidade do runtime/container v10d ainda precisam de validação verificável antes de qualquer execução integral; este commit não autoriza a execução.
+
 ## [3.0.0-pre] - 2026-11-08
 ### Adicionado
 - **Migração PostgreSQL — Fase C (ensaio privado):** pipeline v9 em `tools/migracao_pg/` para catálogo MySQL read-only, DDL revisável, carga streaming, testes de triggers e reconciliação agregada. Fonte é o snapshot autorizado do dump 2026-11-07; o dump, dados e segredos não são versionados.

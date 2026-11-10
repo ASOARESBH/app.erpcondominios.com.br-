@@ -17,7 +17,8 @@ from psycopg import sql
 from catalog import (SCHEMA, classify_legacy_tables, columns_inventory, foreign_keys_inventory, indexes_inventory,
                      mysql_connection, normalize_fk_types, query, table_inventory,
                      validate_foreign_key_snapshot)
-from common import canonical, convert_temporal, generated_name, mysql_qi, qi, row_digest, verify_v9_postgres_connection
+from common import (canonical, convert_temporal, generated_name, mysql_qi, qi, row_digest,
+                    verify_v10d_postgres_connection, require_v10d_endpoint)
 
 NUMERIC_TYPES = {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "float", "double"}
 BINARY_TYPES = {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}
@@ -486,8 +487,7 @@ def main():
     ap.add_argument("--csv", required=True)
     ap.add_argument("--summary", required=True)
     args = ap.parse_args()
-    if args.database != "erp_ensaio_v9" or args.pg_port != 55432:
-        raise SystemExit("refusing non-v9 or non-rehearsal target")
+    require_v10d_endpoint(args.database, args.pg_socket, args.pg_port)
     mysql = None
     pg = None
     try:
@@ -517,7 +517,7 @@ def main():
                 or sum("PRIMARY" not in indexes.get(t, {}) for t in tables) != 30):
             raise RuntimeError("identity or primary-key counts changed during reconciliation")
         set_reconciliation_stage("postgres_connection_contract")
-        verify_v9_postgres_connection(pg)
+        verify_v10d_postgres_connection(pg)
         with pg.cursor() as cur:
             set_reconciliation_stage("postgres_table_count")
             cur.execute("SELECT COUNT(*) FROM pg_tables WHERE schemaname IN ('erp','legado')")
@@ -616,6 +616,8 @@ def main():
         summary = {
             "source_schema": SCHEMA, "tables": len(results), "source_rows": sum(r["source_rows"] for r in results),
             "destination_rows": sum(r["destination_rows"] for r in results),
+            "columns": sum(map(len, cols.values())),
+            "tables_with_primary_key": sum("PRIMARY" in indexes.get(table, {}) for table in tables),
             "row_count_mismatches": sum(not r["row_count_match"] for r in results),
             "tables_with_row_hash_divergence": sum(r["rows_divergent"] != 0 for r in results),
             "row_hash_divergent_total": sum(r["rows_divergent"] for r in results),

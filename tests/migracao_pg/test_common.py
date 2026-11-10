@@ -5,7 +5,7 @@ import hashlib
 import io
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -15,7 +15,9 @@ ROOT = Path(__file__).resolve().parents[2] / "tools" / "migracao_pg"
 sys.path.insert(0, str(ROOT))
 
 from common import (ambiguous_sao_paulo_wall_time, convert_temporal, generated_name, mysql_type_to_pg, parse_mysql_enum, row_digest,
-                    json_contains_nul, verify_v9_postgres_connection, zero_date)
+                    json_contains_nul, verify_v9_postgres_connection, verify_v10d_postgres_connection,
+                    require_v10d_database, require_v10d_endpoint, V10D_DATABASE,
+                    V10D_PGDATA, V10D_PGSOCKET, V10D_PGPORT, zero_date)
 from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, time_conversion_risks, validate_on_update_snapshot,
                      expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
                      verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES,
@@ -24,12 +26,14 @@ from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, ti
 from reconcile import (numeric_equal, sequence_status, verify_destination_fk, verify_destination_fk_types,
                        verify_signed_integer_range_checks, normalize_postgres_type)
 from run_migration import (APPROVED_POST_FK_RUN_ID, APPROVED_POST_FK_SOURCE_COMMIT,
-                           APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT,
+                           APPROVED_C2_COMMIT, APPROVED_RESUME_RUN_ID, APPROVED_RESUME_SOURCE_COMMIT, BASELINE_MAIN_COMMIT,
                            apply_sql, as_postgres, run_reconciliation_step, run_step,
                            quote_pg_literal, validate_post_fk_resume_history, validate_resume_history,
                            validate_resume_table_inventory, validate_resume_catalog_transition,
                            validate_catalog_artifact_snapshot, verify_post_fk_run_manifest, safe_summary_scalars,
-                           verify_baseline_ancestry, verify_resume_code_ancestry, verify_resume_target,
+                           validate_v10d_acceptance, create_target_database,
+                           verify_approved_c2_ancestry, verify_baseline_ancestry, verify_resume_code_ancestry,
+                           verify_resume_target, parse_arguments,
                            verify_post_fk_target)
 
 
@@ -170,15 +174,19 @@ class TypeMappingTests(unittest.TestCase):
     def test_foreign_key_sql_is_atomic_and_sqlstate_only(self):
         with patch("run_migration.as_postgres", side_effect=lambda *args: [str(arg) for arg in args]):
             with patch("run_migration.run_step") as runner:
-                apply_sql("erp_ensaio_v9", Path("/tmp/fks.sql"), "foreign_keys_not_valid", Path("/tmp/run.jsonl"))
+                apply_sql(V10D_DATABASE, Path("/tmp/fks.sql"), "foreign_keys_not_valid", Path("/tmp/run.jsonl"))
         command = runner.call_args.args[0]
         self.assertIn("-1", command)
         self.assertIn("VERBOSITY=verbose", command)
         self.assertEqual(command[-2:], ["-f", Path("/tmp/fks.sql")])
+        with patch("run_migration.run_step") as runner:
+            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10d target"):
+                apply_sql("erp_ensaio_v9", Path("/tmp/fks.sql"), "foreign_keys_not_valid", Path("/tmp/run.jsonl"))
+            runner.assert_not_called()
 
     def test_post_fk_execution_helper_invokes_only_reconciliation(self):
         with patch("run_migration.run_step") as runner:
-            run_reconciliation_step(["nsenter", "python"], "erp_ensaio_v9", Path("/tmp/client.cnf"),
+            run_reconciliation_step(["nsenter", "python"], V10D_DATABASE, Path("/tmp/client.cnf"),
                                     Path("/tmp/run"), Path("/tmp/run.jsonl"))
         self.assertEqual(runner.call_count, 1)
         command, phase, _log = runner.call_args.args
@@ -186,6 +194,12 @@ class TypeMappingTests(unittest.TestCase):
         self.assertTrue(any(str(item).endswith("reconcile.py") for item in command))
         self.assertFalse(any(token in str(item) for item in command
                              for token in ("loader.py", "trigger_harness.py", "002_foreign_keys.sql", "ANALYZE")))
+        self.assertTrue(any(str(item).endswith("reconciliacao_v10d.csv") for item in command))
+        with patch("run_migration.run_step") as runner:
+            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10d target"):
+                run_reconciliation_step(["nsenter", "python"], "erp_ensaio_v9", Path("/tmp/client.cnf"),
+                                        Path("/tmp/run"), Path("/tmp/run.jsonl"))
+            runner.assert_not_called()
 
     def test_post_fk_target_requires_exact_initial_fk_state_and_counts(self):
         names = [f"fixture_{index:03d}" for index in range(270)]
@@ -270,6 +284,108 @@ class TypeMappingTests(unittest.TestCase):
             run.return_value.returncode = 1
             with self.assertRaisesRegex(RuntimeError, "not descended from the approved baseline"):
                 verify_baseline_ancestry(Path("/repo"), "b" * 40)
+
+    def test_v10d_commit_requires_c2_harness_fix_as_ancestor(self):
+        with patch("run_migration.subprocess.run") as run:
+            run.return_value.returncode = 0
+            verify_approved_c2_ancestry(Path("/repo"), "a" * 40)
+            self.assertEqual(run.call_args.args[0][3:6],
+                             ["merge-base", "--is-ancestor", APPROVED_C2_COMMIT])
+            run.return_value.returncode = 1
+            with self.assertRaisesRegex(RuntimeError, "not descended from the C.2 harness fix"):
+                verify_approved_c2_ancestry(Path("/repo"), "b" * 40)
+
+    def test_v10d_cli_accepts_only_its_database_and_rejects_resume(self):
+        valid = parse_arguments(["--database", V10D_DATABASE, "--expected-commit", "a" * 40])
+        self.assertEqual(valid.database, "erp_ensaio_v10d")
+        for argv in (
+            ["--database", "erp_ensaio_v9", "--expected-commit", "a" * 40],
+            ["--database", "erp_ensaio_v10c", "--expected-commit", "a" * 40],
+            ["--database", V10D_DATABASE, "--expected-commit", "a" * 40, "--resume-partial-target"],
+            ["--database", V10D_DATABASE, "--expected-commit", "a" * 40, "--resume-post-fk-reconciliation"],
+            ["--database", V10D_DATABASE, "--expected-commit", "a" * 40,
+             "--source-run-id", "20261108T203651Z"],
+        ):
+            with self.subTest(argv=argv), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                parse_arguments(argv)
+
+    def test_v10d_database_creation_refuses_wrong_or_nonempty_cluster(self):
+        with patch("run_migration.subprocess.run") as run:
+            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10d target"):
+                create_target_database("erp_ensaio_v9")
+            run.assert_not_called()
+        with patch("run_migration.subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = "1\n"
+            with self.assertRaisesRegex(RuntimeError, "contains a user database"):
+                create_target_database(V10D_DATABASE)
+            self.assertEqual(run.call_count, 1)
+            query = run.call_args.args[0][-1]
+            self.assertIn("datistemplate", query)
+            self.assertIn("erp_ensaio_v10d", query)
+        with patch("run_migration.subprocess.run") as run:
+            run.side_effect = [
+                MagicMock(returncode=0, stdout="0\n"),
+                MagicMock(returncode=0, stdout=""),
+                MagicMock(returncode=0, stdout=""),
+                MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8\n"),
+            ]
+            create_target_database(V10D_DATABASE)
+            self.assertEqual(run.call_count, 4)
+            create_args = run.call_args_list[1].args[0]
+            self.assertEqual(create_args[-1], V10D_DATABASE)
+
+    def test_v10d_runtime_paths_and_port_are_separate_from_v9(self):
+        self.assertEqual((V10D_DATABASE, V10D_PGDATA, V10D_PGSOCKET, V10D_PGPORT),
+                         ("erp_ensaio_v10d", "/var/lib/erp-pg-rehearsal/v10d/pg-data",
+                          "/var/lib/erp-pg-rehearsal/v10d/pg-socket", 55433))
+        self.assertNotEqual(V10D_PGPORT, 55432)
+        self.assertNotIn("/v9/", V10D_PGDATA)
+
+    def test_pipeline_components_reject_non_v10d_database_or_endpoint(self):
+        require_v10d_database(V10D_DATABASE)
+        require_v10d_endpoint(V10D_DATABASE, V10D_PGSOCKET, V10D_PGPORT)
+        for database in ("erp_ensaio_v9", "erp_ensaio_v10", "erp_ensaio_v10b", "erp_ensaio_v10c"):
+            with self.subTest(database=database), self.assertRaises(SystemExit):
+                require_v10d_database(database)
+        for socket, port in ((V10D_PGSOCKET, 55432), ("/var/lib/erp-pg-rehearsal/pg-socket", V10D_PGPORT)):
+            with self.subTest(socket=socket, port=port), self.assertRaises(SystemExit):
+                require_v10d_endpoint(V10D_DATABASE, socket, port)
+
+    def test_v10d_acceptance_requires_exact_catalog_rows_and_zero_fk_orphans(self):
+        catalog = {"tables": 270, "columns": 3339, "primary_keys": 240, "foreign_keys": 11,
+                   "triggers": 7, "routines": 2, "events": 0, "auto_increment_columns": 232,
+                   "zero_date_counts": {}, "fk_type_normalizations": [{"coordinate": "reviewed"}],
+                   "fk_type_normalizations_sha256": "reviewed"}
+        metrics = [{"table": f"table_{index}", "source_rows": 202609 if index == 0 else 0}
+                   for index in range(270)]
+        loader = {"tables_loaded": 270, "source_rows_loaded": 202609,
+                  "table_metrics": metrics, "zero_date_conversions": {},
+                  "dst_ambiguous_local_times": {}}
+        summary = {"status": "ACCEPTED", "tables": 270, "columns": 3339,
+                   "tables_with_primary_key": 240, "source_rows": 202609,
+                   "destination_rows": 202609, "identity_columns": 232,
+                   "foreign_keys": 11, "foreign_keys_valid": 11,
+                   "foreign_keys_with_orphans": 0, "fk_orphan_count_total": 0,
+                   "fk_type_normalizations": catalog["fk_type_normalizations"],
+                   "fk_type_normalizations_sha256": "reviewed"}
+        for key in ("row_count_mismatches", "tables_with_row_hash_divergence", "row_hash_divergent_total",
+                    "pk_max_mismatches", "identity_max_mismatches", "sequences_not_ready",
+                    "numeric_sum_mismatches", "binary_mismatches", "tenant_bucket_mismatches",
+                    "timestamp_mismatches", "fk_tenant_mismatch_count"):
+            summary[key] = 0
+        validate_v10d_acceptance(catalog, loader, summary)
+        failures = (
+            (catalog, loader, {**summary, "columns": 3338}),
+            (catalog, {**loader, "source_rows_loaded": 202608}, summary),
+            (catalog, loader, {**summary, "foreign_keys_valid": 10}),
+            (catalog, loader, {**summary, "foreign_keys_with_orphans": 1,
+                               "fk_orphan_count_total": 1, "status": "ACCEPTED_WITH_ORPHANED_FKS"}),
+            (catalog, loader, {**summary, "row_hash_divergent_total": 1}),
+        )
+        for bad_catalog, bad_loader, bad_summary in failures:
+            with self.subTest(summary=bad_summary), self.assertRaises(RuntimeError):
+                validate_v10d_acceptance(bad_catalog, bad_loader, bad_summary)
 
     def test_postgres_python_environment_exposes_migration_modules_without_bytecode(self):
         command = as_postgres("/venv/python3", "-s")
@@ -690,6 +806,31 @@ class TypeMappingTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             verify_v9_postgres_connection(connection)
 
+    def test_v10d_postgres_target_guard_checks_database_port_data_and_socket(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = (
+            V10D_DATABASE, "", str(V10D_PGPORT), V10D_PGDATA, V10D_PGSOCKET,
+            "180006", "America/Sao_Paulo", "UTF8",
+        )
+        verify_v10d_postgres_connection(connection)
+        for changed in (
+            ("erp_ensaio_v9", "", str(V10D_PGPORT), V10D_PGDATA, V10D_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+            (V10D_DATABASE, "*", str(V10D_PGPORT), V10D_PGDATA, V10D_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+            (V10D_DATABASE, "", "55432", V10D_PGDATA, V10D_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+            (V10D_DATABASE, "", str(V10D_PGPORT), "/var/lib/erp-pg-rehearsal/pg-data", V10D_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+            (V10D_DATABASE, "", str(V10D_PGPORT), V10D_PGDATA, "/var/lib/erp-pg-rehearsal/pg-socket",
+             "180006", "America/Sao_Paulo", "UTF8"),
+        ):
+            with self.subTest(row=changed):
+                cursor.fetchone.return_value = changed
+                with self.assertRaises(RuntimeError):
+                    verify_v10d_postgres_connection(connection)
+
     def test_mysql_reader_grants_require_exact_allowlist(self):
         allowed = [
             "GRANT USAGE ON *.* TO 'pgloader'@'127.0.0.1'",
@@ -947,9 +1088,14 @@ class DdlTests(unittest.TestCase):
                    "invalid_enum_counts": {}}
         generated = build_sql(catalog)
         constraints = generated["002_constraints_indexes.sql"]
+        grants = generated["006_grants.sql"]
         self.assertIn('ADD CONSTRAINT "usuarios_bkp_20261107_pkey" PRIMARY KEY ("id")', constraints)
         self.assertIn('CREATE UNIQUE INDEX "ux_usuarios_bkp_20261107_uq_email" ON "legado"."usuarios_bkp_20261107"', constraints)
         self.assertIn('CREATE INDEX "ix_usuarios_bkp_20261107_ix_observacao" ON "legado"."usuarios_bkp_20261107"', constraints)
+        self.assertIn('GRANT CONNECT ON DATABASE "erp_ensaio_v10d" TO erp_app', grants)
+        self.assertNotIn("erp_ensaio_v9", grants)
+        with self.assertRaisesRegex(ValueError, "restricted to the exclusive v10d database"):
+            build_sql(catalog, "erp_ensaio_v9")
 
     def test_on_update_timestamp_only_changes_when_other_columns_change(self):
         catalog = {

@@ -13,6 +13,21 @@ V9_DATABASE = "erp_ensaio_v9"
 V9_PGDATA = "/var/lib/erp-pg-rehearsal/pg-data"
 V9_PGSOCKET = "/var/lib/erp-pg-rehearsal/pg-socket"
 V9_PGPORT = 55432
+V10D_DATABASE = "erp_ensaio_v10d"
+V10D_PGDATA = "/var/lib/erp-pg-rehearsal/v10d/pg-data"
+V10D_PGSOCKET = "/var/lib/erp-pg-rehearsal/v10d/pg-socket"
+V10D_PGPORT = 55433
+
+
+def require_v10d_database(database: str) -> None:
+    if database != V10D_DATABASE:
+        raise SystemExit("refusing any database except the exclusive v10d rehearsal target")
+
+
+def require_v10d_endpoint(database: str, socket: str, port: int) -> None:
+    require_v10d_database(database)
+    if socket != V10D_PGSOCKET or port != V10D_PGPORT:
+        raise SystemExit("refusing any PostgreSQL endpoint except the isolated v10d target")
 
 
 def qi(value: str) -> str:
@@ -258,6 +273,18 @@ def verify_v9_postgres_connection(conn) -> None:
             or row[3] != V9_PGDATA or row[4] != V9_PGSOCKET or not 180000 <= int(row[5]) < 190000
             or row[6] != "America/Sao_Paulo" or row[7] != "UTF8"):
         raise RuntimeError("PostgreSQL connection is not the approved isolated v9 rehearsal")
+
+
+def verify_v10d_postgres_connection(conn) -> None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT current_database(),current_setting('listen_addresses'),current_setting('port'),"
+                    "current_setting('data_directory'),current_setting('unix_socket_directories'),"
+                    "current_setting('server_version_num'),current_setting('TimeZone'),current_setting('server_encoding')")
+        row = cur.fetchone()
+    if (row is None or row[0] != V10D_DATABASE or row[1] != "" or int(row[2]) != V10D_PGPORT
+            or row[3] != V10D_PGDATA or row[4] != V10D_PGSOCKET or not 180000 <= int(row[5]) < 190000
+            or row[6] != "America/Sao_Paulo" or row[7] != "UTF8"):
+        raise RuntimeError("PostgreSQL connection is not the approved isolated v10d rehearsal")
 
 
 def canonical(value: object, data_type: str, *, side: str = "source", generated: bool = False) -> bytes:
