@@ -16,8 +16,8 @@ from psycopg import sql
 from pymysql.constants import FIELD_TYPE
 
 from common import (ambiguous_sao_paulo_wall_time, convert_temporal, qi, row_digest,
-                    json_contains_nul, mysql_qi, verify_v10d_postgres_connection,
-                    require_v10d_endpoint)
+                    json_contains_nul, mysql_qi, verify_v10e_postgres_connection,
+                    require_v10e_endpoint)
 from catalog import (SCHEMA, classify_legacy_tables, mysql_connection, query, table_inventory,
                      columns_inventory, indexes_inventory, text_nul_counts_for_table)
 
@@ -165,7 +165,7 @@ def main():
     ap.add_argument("--evidence", required=True)
     ap.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     args = ap.parse_args()
-    require_v10d_endpoint(args.database, args.pg_socket, args.pg_port)
+    require_v10e_endpoint(args.database, args.pg_socket, args.pg_port)
     if args.batch_size < 1 or args.batch_size > 10000:
         raise SystemExit("batch size out of approved range")
     mysql_conn = mysql_connection(args.mysql_config)
@@ -182,7 +182,7 @@ def main():
             flags = cur.fetchone()
             if tuple(map(str, flags)) != ("1", "1", "OFF", "+00:00"):
                 raise RuntimeError("source MySQL safety flags changed")
-        verify_v10d_postgres_connection(pg_conn)
+        verify_v10e_postgres_connection(pg_conn)
         with pg_conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM pg_tables WHERE schemaname IN ('erp','legado')")
             if cur.fetchone()[0] != 270:

@@ -18,7 +18,7 @@ from catalog import (SCHEMA, classify_legacy_tables, columns_inventory, foreign_
                      mysql_connection, normalize_fk_types, query, table_inventory,
                      validate_foreign_key_snapshot)
 from common import (canonical, convert_temporal, generated_name, mysql_qi, qi, row_digest,
-                    verify_v10d_postgres_connection, require_v10d_endpoint)
+                    verify_v10e_postgres_connection, require_v10e_endpoint)
 
 NUMERIC_TYPES = {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "float", "double"}
 BINARY_TYPES = {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}
@@ -487,7 +487,7 @@ def main():
     ap.add_argument("--csv", required=True)
     ap.add_argument("--summary", required=True)
     args = ap.parse_args()
-    require_v10d_endpoint(args.database, args.pg_socket, args.pg_port)
+    require_v10e_endpoint(args.database, args.pg_socket, args.pg_port)
     mysql = None
     pg = None
     try:
@@ -517,7 +517,7 @@ def main():
                 or sum("PRIMARY" not in indexes.get(t, {}) for t in tables) != 30):
             raise RuntimeError("identity or primary-key counts changed during reconciliation")
         set_reconciliation_stage("postgres_connection_contract")
-        verify_v10d_postgres_connection(pg)
+        verify_v10e_postgres_connection(pg)
         with pg.cursor() as cur:
             set_reconciliation_stage("postgres_table_count")
             cur.execute("SELECT COUNT(*) FROM pg_tables WHERE schemaname IN ('erp','legado')")

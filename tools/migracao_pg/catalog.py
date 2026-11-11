@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import subprocess
+import stat
 from collections import defaultdict
 from pathlib import Path
 
@@ -15,8 +16,8 @@ import pymysql
 from pymysql.constants import FIELD_TYPE
 
 from common import (collate_class, generated_name, json_contains_nul, mysql_type_to_pg,
-                    parse_mysql_enum, pg_name, qi, ql, mysql_qi, V10D_DATABASE,
-                    require_v10d_database)
+                    parse_mysql_enum, pg_name, qi, ql, mysql_qi, V10E_DATABASE,
+                    require_v10e_database, open_file_from_directory)
 
 SCHEMA = "inlaud99_erpcondor"
 OFFICIAL_ORIGIN = "https://github.com/ASOARESBH/app.erpcondominios.com.br-.git"
@@ -127,10 +128,14 @@ def mysql_connection(config_path: str):
             cur.execute("SET SESSION time_zone = '+00:00'")
             cur.execute("SELECT CURRENT_USER()")
             current_user = cur.fetchone()[0]
+            cur.execute("SELECT PASSWORD(%s)", (opt.get("password"),))
+            password_hash = cur.fetchone()[0]
+            if isinstance(password_hash, bytes):
+                password_hash = password_hash.decode("ascii", errors="strict")
             cur.execute("SHOW GRANTS")
             grants = [row[0].decode("utf-8") if isinstance(row[0], bytes) else str(row[0])
                       for row in cur.fetchall()]
-            validate_reader_grants(current_user, grants)
+            validate_reader_grants(current_user, grants, password_hash)
             cur.execute("SELECT @@read_only,@@super_read_only,@@event_scheduler,@@session.time_zone")
             flags = cur.fetchone()
             if tuple(map(str, flags)) != ("1", "1", "OFF", "+00:00"):
@@ -143,13 +148,31 @@ def mysql_connection(config_path: str):
         raise
 
 
-def validate_reader_grants(current_user: str, grants: list[str]) -> None:
+def validate_reader_grants(current_user: str, grants: list[str], expected_password_hash: str) -> None:
     expected = {
-        "GRANT USAGE ON *.* TO 'PGLOADER'@'127.0.0.1'",
-        "GRANT SELECT, SHOW VIEW, TRIGGER ON INLAUD99_ERPCONDOR.* TO 'PGLOADER'@'127.0.0.1'",
+        ("USAGE", "*.*", "pgloader", "127.0.0.1", expected_password_hash),
+        ("SELECT, SHOW VIEW, TRIGGER", "inlaud99_erpcondor.*", "pgloader", "127.0.0.1", None),
     }
-    normalized = {re.sub(r"\s+", " ", grant.strip()).replace("`", "").upper() for grant in grants}
-    if current_user.lower() != "pgloader@127.0.0.1" or normalized != expected or len(grants) != 2:
+    if not isinstance(expected_password_hash, str) or not re.fullmatch(r"\*[0-9A-Fa-f]{40}", expected_password_hash):
+        raise RuntimeError("source MySQL grants are not the exact approved read-only set")
+    actual = set()
+    for grant in grants:
+        normalized = re.sub(r"\s+", " ", grant.strip())
+        match = re.fullmatch(
+            r"GRANT\s+(.+?)\s+ON\s+([^ ]+)\s+TO\s+'([^']+)'@'([^']+)'"
+            r"(?:\s+IDENTIFIED BY PASSWORD\s+'([^']*)')?",
+            normalized,
+            flags=re.IGNORECASE,
+        )
+        if match is None:
+            raise RuntimeError("source MySQL grants are not the exact approved read-only set")
+        privileges = re.sub(r"\s+", " ", match.group(1)).upper()
+        password_hash = match.group(5)
+        if password_hash is not None and (
+                privileges != "USAGE" or not re.fullmatch(r"\*[0-9A-Fa-f]{40}", password_hash)):
+            raise RuntimeError("source MySQL grants are not the exact approved read-only set")
+        actual.add((privileges, match.group(2).replace("`", ""), match.group(3), match.group(4), password_hash))
+    if current_user != "pgloader@127.0.0.1" or actual != expected or len(grants) != 2:
         raise RuntimeError("source MySQL grants are not the exact approved read-only set")
 
 
@@ -184,7 +207,8 @@ def classify_legacy_tables(tables, repo_root: str):
         raise RuntimeError("backup candidate set differs from the reviewed rehearsal snapshot")
     root = Path(repo_root)
     def git(*args):
-        return subprocess.run(["git", "-c", f"safe.directory={root}", "-C", str(root), *args], capture_output=True, text=True)
+        return subprocess.run(["git", "-c", f"safe.directory={root}", "-C", str(root), *args],
+                              capture_output=True, text=True, timeout=15)
     origin = git("remote", "get-url", "origin")
     head = git("rev-parse", "HEAD")
     branch = git("branch", "--show-current")
@@ -394,12 +418,47 @@ def routines_inventory(conn):
 
 def verified_routine_snapshot(snapshot_path):
     expected_path = Path(__file__).with_name("expected_routines.json")
-    expected_bytes = expected_path.read_bytes()
-    expected = json.loads(expected_bytes)
-    observed = json.loads(Path(snapshot_path).read_text(encoding="utf-8"))
+    expected, expected_bytes = read_checked_json(expected_path)
+    observed, _ = read_checked_json(snapshot_path, private=True)
     if observed != expected or expected.get("schema") != SCHEMA or len(expected.get("routines", [])) != 2:
         raise RuntimeError("stored procedure definitions differ from approved metadata fingerprint")
     return expected["routines"], hashlib.sha256(expected_bytes).hexdigest()
+
+
+def read_checked_bytes(path, *, private=False, max_bytes=16 * 1024 * 1024):
+    fd = None
+    try:
+        fd = open_file_from_directory(
+            path, expected_parent_uid=os.geteuid() if private else None,
+            expected_parent_mode=0o700 if private else None,
+        )
+        info = os.fstat(fd)
+        mode = stat.S_IMODE(info.st_mode)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1
+                or (mode != 0o600 if private else bool(mode & 0o022)) or info.st_size > max_bytes):
+            raise RuntimeError("catalog artifact has unsafe metadata")
+        with os.fdopen(fd, "rb") as stream:
+            fd = None
+            payload = stream.read(max_bytes + 1)
+        if len(payload) > max_bytes:
+            raise RuntimeError("catalog artifact exceeds its size limit")
+        return payload
+    except OSError:
+        raise RuntimeError("catalog artifact is unavailable or is a symlink") from None
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def read_checked_json(path, *, private=False, max_bytes=1024 * 1024):
+    try:
+        raw = read_checked_bytes(path, private=private, max_bytes=max_bytes)
+        parsed = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        raise RuntimeError("catalog JSON artifact is malformed") from None
+    if not isinstance(parsed, dict):
+        raise RuntimeError("catalog JSON artifact has an invalid shape")
+    return parsed, raw
 
 
 def routine_parameter_signature(routine):
@@ -430,8 +489,10 @@ def validate_trigger_snapshot(triggers):
 
 def validate_on_update_snapshot(columns, manifest_path=None):
     path = Path(manifest_path) if manifest_path is not None else Path(__file__).with_name("expected_on_update_columns.json")
-    raw = path.read_bytes()
-    expected = json.loads(raw)
+    try:
+        expected, raw = read_checked_json(path, private=manifest_path is not None)
+    except RuntimeError:
+        raise RuntimeError("ON UPDATE CURRENT_TIMESTAMP manifest metadata differs from approved rehearsal snapshot") from None
     if expected.get("schema") != SCHEMA or expected.get("count") != 111:
         raise RuntimeError("ON UPDATE CURRENT_TIMESTAMP manifest metadata differs from approved rehearsal snapshot")
     expected_columns = expected.get("columns")
@@ -678,9 +739,9 @@ def expression_sql(expression: str) -> str:
     return f"{qi(m.group(1))} {m.group(2)} {qi(m.group(3))}"
 
 
-def build_sql(catalog: dict, target_database: str = V10D_DATABASE) -> dict[str, str]:
-    if target_database != V10D_DATABASE:
-        raise ValueError("DDL generation is restricted to the exclusive v10d database")
+def build_sql(catalog: dict, target_database: str = V10E_DATABASE) -> dict[str, str]:
+    if target_database != V10E_DATABASE:
+        raise ValueError("DDL generation is restricted to the exclusive v10e database")
     tables, columns, indexes, fks = (catalog[k] for k in ("tables", "columns", "indexes", "foreign_keys"))
     names = {}
     for t, info in tables.items():
@@ -893,9 +954,10 @@ def build_sql(catalog: dict, target_database: str = V10D_DATABASE) -> dict[str, 
         if s is not s002_fk:
             s.append("COMMIT;")
     business_sql_path = Path(__file__).with_name("business_objects.sql")
-    if not business_sql_path.is_file():
-        raise ValueError("manual business trigger translation is missing")
-    business_sql = business_sql_path.read_text(encoding="utf-8")
+    try:
+        business_sql = read_checked_bytes(business_sql_path).decode("utf-8")
+    except (RuntimeError, UnicodeError):
+        raise ValueError("manual business trigger translation is missing or unsafe") from None
     return {"001_schema.sql": "\n".join(s001) + "\n", "002_constraints_indexes.sql": "\n".join(s002) + "\n",
             "002_foreign_keys.sql": "\n".join(s002_fk) + "\n",
             "002_validate_constraints.sql": "\n".join(s002_validate) + "\n", "003_identity_sequences.sql": "\n".join(s003) + "\n", "004_on_update_timestamp.sql": "\n".join(s004) + "\n",
@@ -911,7 +973,7 @@ def main():
     ap.add_argument("--target-database", required=True)
     ap.add_argument("--routine-snapshot", required=True)
     args = ap.parse_args()
-    require_v10d_database(args.target_database)
+    require_v10e_database(args.target_database)
     conn = mysql_connection(args.mysql_config)
     try:
         tables = table_inventory(conn)

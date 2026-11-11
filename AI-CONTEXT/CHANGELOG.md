@@ -2,6 +2,10 @@
 
 Registro de alterações significativas no ERP.
 
+## [3.0.0-pre.2] - 2026-11-11
+### Em validação
+- **Fase C.4.2 — provisionamento v10e:** branch dedicada `pg/03-4-fix-mysql-source-provisioning`, derivada do C.4 publicado, cria provisionador idempotente para `pgloader`@`127.0.0.1` no clone MySQL exclusivo. A implementação exige manifesto/dump autenticados, checkout Git oficial/limpo, identidade e namespace do container, bundle administrativo separado dos segredos do leitor, grants exatos `SELECT`, `SHOW VIEW` e `TRIGGER`, validação pelo helper oficial e restauração confirmada de `read_only`/`super_read_only`. O runner oferece apenas `--mode prepare-source`; o entrypoint não inicia PostgreSQL, não cria database e não pode executar loader, triggers, FKs, ANALYZE ou reconciliação. Revisão encontrou e motivou correções de grants case-sensitive e hash vinculado em memória à senha usada, conteúdo do bundle consumido aberto pelo mesmo descritor, validação do dump por SHA-256 e gzip no mesmo fd, timeout fail-closed por selector para process groups e em preflights, leitura O_NOFOLLOW/fstat de JSON e DDLs, verificação da cadeia de diretórios sem symlinks e eventos estáticos para auditar mudanças e restauração dos flags read-only. A comparação AST confirma 97/97 testes C.4 preservados; cinco nomes foram atualizados e 47 testes foram adicionados (144 definidos/aprovados localmente). AST e `git diff --check` passaram. A validação Hetzner do clone, helper e catálogo ainda está pendente; portanto o estado não é READY. Runbook: `tools/migracao_pg/README_V10E.md`. Nenhuma migração integral foi executada.
+
 ## [3.0.0-pre.1] - 2026-11-10
 ### Validado
 - **Fase C.3 — integração do harness:** o commit `c4703e9e153fd2d156f8c9dab398c12d72dd19cf` foi exercitado em PostgreSQL 18.6 real com Psycopg 3.3.8; os cenários sintéticos cobriram casts do preflight, identificadores quoted, captura/alinhamento/restauração de sequences, trigger sem colisão, sequence ausente, rollback e cleanup. A execução C.3 passou; o cluster temporário foi parado e removido. Um relatório técnico sanitizado foi produzido para a entrega.

@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import selectors
 import signal
 import stat
 import subprocess
@@ -17,18 +18,23 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-from common import (generated_name, V10D_DATABASE, V10D_PGDATA, V10D_PGSOCKET,
-                    V10D_PGPORT)
+from common import (generated_name, V10E_DATABASE, V10E_PGDATA, V10E_PGSOCKET,
+                    V10E_PGPORT, open_directory_chain, open_file_from_directory)
 
-V10D_ROOT = Path("/var/lib/erp-pg-rehearsal/v10d")
-V10D_SECRETS = V10D_ROOT / "secrets"
-PGDATA = Path(V10D_PGDATA)
-PGSOCKET = Path(V10D_PGSOCKET)
-PGPORT = V10D_PGPORT
-PG_PYTHON = V10D_ROOT / "venv/bin/python3"
-MYSQL_CONTAINER = "erp-mysql-source-v10d"
-MYSQL_SECRET_SOURCE = V10D_SECRETS / "pgloader.cnf"
-MYSQL_ADMIN_CONFIG = V10D_SECRETS / "client.cnf"
+V10E_ROOT = Path("/var/lib/erp-pg-rehearsal/v10e")
+V10E_SECRETS = V10E_ROOT / "secrets"
+V10E_CONTAINER_SECRETS = V10E_ROOT / "mysql-secrets"
+V10E_SOURCE_MANIFEST = V10E_SECRETS / "source-manifest.json"
+V10E_DUMP = V10E_ROOT / "source-copy.sql.gz"
+V10E_MYSQL_DATA = V10E_ROOT / "mysql-data"
+V10E_MYSQL_SOCKET = V10E_ROOT / "mysql-socket"
+PGDATA = Path(V10E_PGDATA)
+PGSOCKET = Path(V10E_PGSOCKET)
+PGPORT = V10E_PGPORT
+PG_PYTHON = V10E_ROOT / "venv/bin/python3"
+MYSQL_CONTAINER = "erp-mysql-source-v10e"
+MYSQL_SECRET_SOURCE = V10E_SECRETS / "pgloader.cnf"
+MYSQL_ADMIN_CONFIG = V10E_CONTAINER_SECRETS / "client.cnf"
 REPO_ROOT = Path("/opt/erpcondominios/source")
 BASELINE_MAIN_COMMIT = "f60739713e6de3f2473b79ecd14a70fd700e5462"
 APPROVED_C2_COMMIT = "c4703e9e153fd2d156f8c9dab398c12d72dd19cf"
@@ -38,8 +44,10 @@ APPROVED_RESUME_SOURCE_ROWS = 202609
 APPROVED_POST_FK_RUN_ID = "20261108T203651Z"
 APPROVED_POST_FK_SOURCE_COMMIT = "d4447f9867cda910122f9b3b9e4d797b425cf5a4"
 APPROVED_POST_FK_MANIFEST = Path("/root/erp_pg_v9_post_fk_20261108_manifest.json")
-RUN_ROOT = V10D_ROOT / "runs"
-TMPFS_ROOT = Path("/dev/shm/erp-pg-v10d")
+RUN_ROOT = V10E_ROOT / "runs"
+PREPARATION_ROOT = V10E_ROOT / "preparations"
+PREPARATION_LOCK = PREPARATION_ROOT / ".source-provision.lock"
+TMPFS_ROOT = Path("/dev/shm/erp-pg-v10e")
 CODE_ROOT = Path(__file__).resolve().parent
 ACTIVE_PROCESS = None
 RUN_LOCK_FD = None
@@ -59,15 +67,15 @@ def verify_code_provenance(expected_commit: str):
     verify_baseline_ancestry(repository, expected_commit)
     def verify_repo(path: Path, branch_name: str, commit: str):
         def git(*args):
-            return subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True)
+            return subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True, timeout=30)
         origin, branch, head, status = (git("remote", "get-url", "origin"), git("branch", "--show-current"),
                                         git("rev-parse", "HEAD"), git("status", "--porcelain", "--untracked-files=all"))
         return (origin.returncode == 0 and origin.stdout.strip() == "https://github.com/ASOARESBH/app.erpcondominios.com.br-.git"
                 and branch.returncode == 0 and branch.stdout.strip() == branch_name
                 and head.returncode == 0 and head.stdout.strip() == commit
                 and status.returncode == 0 and not status.stdout.strip())
-    if not verify_repo(repository, "pg/03-3-ensaio-integral-v10d", expected_commit):
-        raise RuntimeError("v10d code provenance is not the reviewed clean official branch and commit")
+    if not verify_repo(repository, "pg/03-4-fix-mysql-source-provisioning", expected_commit):
+        raise RuntimeError("v10e code provenance is not the reviewed clean provisioning branch and commit")
     verify_approved_c2_ancestry(repository, expected_commit)
     if not verify_repo(REPO_ROOT, "main", BASELINE_MAIN_COMMIT):
         raise RuntimeError("source classification repository is not the approved clean main baseline")
@@ -75,16 +83,16 @@ def verify_code_provenance(expected_commit: str):
 
 def verify_baseline_ancestry(repository: Path, commit: str):
     ancestry = subprocess.run(["git", "-C", str(repository), "merge-base", "--is-ancestor",
-                               BASELINE_MAIN_COMMIT, commit], capture_output=True, text=True)
+                               BASELINE_MAIN_COMMIT, commit], capture_output=True, text=True, timeout=30)
     if ancestry.returncode != 0:
         raise RuntimeError("migration code commit is not descended from the approved baseline")
 
 
 def verify_approved_c2_ancestry(repository: Path, commit: str):
     ancestry = subprocess.run(["git", "-C", str(repository), "merge-base", "--is-ancestor",
-                               APPROVED_C2_COMMIT, commit], capture_output=True, text=True)
+                               APPROVED_C2_COMMIT, commit], capture_output=True, text=True, timeout=30)
     if ancestry.returncode != 0:
-        raise RuntimeError("v10d code commit is not descended from the C.2 harness fix")
+        raise RuntimeError("v10e code commit is not descended from the C.2 harness fix")
 
 
 def verify_resume_code_ancestry(repository: Path, commit: str,
@@ -108,6 +116,173 @@ def verify_private_mysql_config(path: Path):
             raise RuntimeError("private MySQL configuration is unsafe")
     finally:
         os.close(fd)
+
+
+def validate_v10e_source_manifest(manifest: dict, expected_commit: str) -> None:
+    required = {
+        "target_database", "code_branch", "code_commit", "source_schema", "dump_sha256",
+        "dump_bytes", "mysql_version", "container_name", "container_id", "image_name",
+        "image_id", "restore_status", "restored_at_utc",
+    }
+    if (not isinstance(manifest, dict) or set(manifest) != required
+            or manifest.get("target_database") != V10E_DATABASE
+            or manifest.get("code_branch") != "pg/03-4-fix-mysql-source-provisioning"
+            or manifest.get("code_commit") != expected_commit
+            or not re.fullmatch(r"[0-9a-f]{40}", str(manifest.get("code_commit", "")))
+            or manifest.get("source_schema") != "inlaud99_erpcondor"
+            or not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("dump_sha256", "")))
+            or type(manifest.get("dump_bytes")) is not int or manifest["dump_bytes"] <= 0
+            or not str(manifest.get("mysql_version", "")).startswith("5.7.")
+            or manifest.get("container_name") != MYSQL_CONTAINER
+            or not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("container_id", "")))
+            or manifest.get("image_name") != "docker.io/library/mysql:5.7"
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(manifest.get("image_id", "")))
+            or manifest.get("restore_status") != "complete"):
+        raise RuntimeError("v10e source manifest differs from the reviewed target contract")
+    if not isinstance(manifest.get("restored_at_utc"), str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", manifest["restored_at_utc"]):
+        raise RuntimeError("v10e source manifest timestamp is invalid")
+
+
+def load_v10e_source_manifest(path: Path, expected_commit: str, expected_uid: int = 0) -> dict:
+    fd = None
+    try:
+        fd = open_file_from_directory(path, expected_parent_uid=expected_uid, expected_parent_mode=0o700)
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != expected_uid or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > 4096):
+            raise RuntimeError("v10e source manifest has unsafe ownership or permissions")
+        with os.fdopen(fd, "r", encoding="utf-8") as stream:
+            fd = None
+            manifest = json.load(stream)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise RuntimeError("v10e source manifest is unavailable or malformed") from None
+    finally:
+        if fd is not None:
+            os.close(fd)
+    validate_v10e_source_manifest(manifest, expected_commit)
+    return manifest
+
+
+def verify_v10e_container_secret_bundle(expected_uid: int = 0):
+    directory_fd = None
+    try:
+        directory_fd = open_directory_chain(V10E_CONTAINER_SECRETS)
+        directory = os.fstat(directory_fd)
+        with os.scandir(directory_fd) as stream:
+            names = {entry.name for entry in stream}
+        if (not stat.S_ISDIR(directory.st_mode) or stat.S_ISLNK(directory.st_mode)
+                or directory.st_uid != expected_uid or stat.S_IMODE(directory.st_mode) != 0o700
+                or names != {"client.cnf", "root.pass"}):
+            raise RuntimeError("v10e MySQL container secret bundle is unsafe")
+        for name in names:
+            item_fd = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd)
+            try:
+                item = os.fstat(item_fd)
+                if (not stat.S_ISREG(item.st_mode) or item.st_uid != expected_uid or item.st_nlink != 1
+                        or stat.S_IMODE(item.st_mode) != 0o400 or item.st_size > 4096):
+                    raise RuntimeError("v10e MySQL container secret bundle is unsafe")
+            finally:
+                os.close(item_fd)
+    except OSError:
+        raise RuntimeError("v10e MySQL container secret bundle is unavailable") from None
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def verify_v10e_source_artifacts(expected_commit: str, expected_uid: int = 0,
+                                  expected_root_uid: int | None = None) -> dict:
+    manifest = load_v10e_source_manifest(V10E_SOURCE_MANIFEST, expected_commit, expected_uid)
+    if expected_root_uid is None:
+        expected_root_uid = __import__("pwd").getpwnam("postgres").pw_uid
+    root_fd = open_directory_chain(V10E_ROOT)
+    try:
+        root_info = os.fstat(root_fd)
+        if (not stat.S_ISDIR(root_info.st_mode) or root_info.st_uid != expected_root_uid
+                or stat.S_IMODE(root_info.st_mode) != 0o700):
+            raise RuntimeError("v10e private root has unsafe ownership or permissions")
+    finally:
+        os.close(root_fd)
+    fd = None
+    try:
+        fd = open_file_from_directory(V10E_DUMP, expected_parent_uid=expected_root_uid,
+                                      expected_parent_mode=0o700)
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != expected_uid
+                or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o400
+                or info.st_size != manifest["dump_bytes"]):
+            raise RuntimeError("v10e dump copy has unsafe metadata")
+        digest = hashlib.sha256()
+        with os.fdopen(fd, "rb") as stream:
+            fd = None
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+    except OSError:
+        raise RuntimeError("v10e dump copy is unavailable") from None
+    finally:
+        if fd is not None:
+            os.close(fd)
+    if digest.hexdigest() != manifest["dump_sha256"]:
+        raise RuntimeError("v10e dump copy differs from its private source manifest")
+    verify_v10e_container_secret_bundle(expected_uid)
+    result = subprocess.run(["podman", "inspect", MYSQL_CONTAINER], capture_output=True, text=True, timeout=30)
+    if result.returncode:
+        raise RuntimeError("v10e MySQL clone is unavailable")
+    try:
+        container = json.loads(result.stdout)[0]
+    except (json.JSONDecodeError, IndexError, KeyError, TypeError, AttributeError):
+        raise RuntimeError("v10e MySQL clone metadata is unreadable") from None
+    if (not isinstance(container, dict) or not isinstance(container.get("HostConfig"), dict)
+            or not isinstance(container.get("State"), dict) or not isinstance(container.get("Config"), dict)
+            or not isinstance(container.get("Mounts"), list)
+            or any(not isinstance(item, dict) for item in container.get("Mounts", []))
+            or not isinstance(container.get("Args"), list)
+            or any(not isinstance(item, str) for item in container.get("Args", []))
+            or not isinstance(container["Config"].get("Env"), list)
+            or any(not isinstance(item, str) for item in container["Config"].get("Env", []))):
+        raise RuntimeError("v10e MySQL clone metadata is unreadable")
+    mounts = container.get("Mounts", [])
+    expected_mounts = {
+        ("bind", "/var/lib/mysql", str(V10E_MYSQL_DATA), True),
+        ("bind", "/var/run/mysqld", str(V10E_MYSQL_SOCKET), True),
+        ("bind", "/run/rehearsal-secrets", str(V10E_CONTAINER_SECRETS), False),
+    }
+    actual_mounts = {(item.get("Type"), item.get("Destination"), item.get("Source"), item.get("RW"))
+                     for item in mounts}
+    host = container.get("HostConfig", {})
+    state = container.get("State", {})
+    config_env = set((container.get("Config") or {}).get("Env") or [])
+    isolation_ok = (
+        container.get("Name") == f"/{MYSQL_CONTAINER}"
+        and container.get("Id") == manifest["container_id"]
+        and container.get("Image") == manifest["image_id"]
+        and container.get("ImageName") == manifest["image_name"]
+        and state.get("Running") is True
+        and int(state.get("Pid") or 0) > 1
+        and Path(f"/proc/{int(state.get('Pid') or 0)}/ns/net").exists()
+        and container.get("AppArmorProfile") == "erp-mysql-rehearsal"
+        and host.get("NetworkMode") == "none"
+        and host.get("PortBindings") in (None, {})
+        and host.get("Privileged") is False
+        and host.get("CapAdd") in (None, [])
+        and "no-new-privileges" in (host.get("SecurityOpt") or [])
+        and "apparmor=erp-mysql-rehearsal" in (host.get("SecurityOpt") or [])
+        and actual_mounts == expected_mounts
+        and "--bind-address=127.0.0.1" in (container.get("Args") or [])
+        and "--event-scheduler=OFF" in (container.get("Args") or [])
+        and "--local-infile=0" in (container.get("Args") or [])
+        and "--secure-file-priv=NULL" in (container.get("Args") or [])
+        and "--default-time-zone=-03:00" in (container.get("Args") or [])
+        and "--innodb-buffer-pool-size=512M" in (container.get("Args") or [])
+        and "--max-allowed-packet=256M" in (container.get("Args") or [])
+        and "MYSQL_DATABASE=inlaud99_erpcondor" in config_env
+        and "MYSQL_ROOT_PASSWORD_FILE=/run/rehearsal-secrets/root.pass" in config_env
+        and "MYSQL_INITDB_SKIP_TZINFO=1" in config_env
+    )
+    if not isolation_ok:
+        raise RuntimeError("v10e MySQL source isolation differs from its manifest")
+    return manifest
 
 
 def copy_private_config(source: Path, destination: Path, postgres_gid: int):
@@ -179,7 +354,7 @@ ROLLBACK;"""
     if parameters:
         raise RuntimeError("unexpected stored procedure parameter metadata")
     snapshot["routines"].sort(key=lambda item: item["name"])
-    expected = json.loads((CODE_ROOT / "expected_routines.json").read_text(encoding="utf-8"))
+    expected = load_v10e_code_json(CODE_ROOT / "expected_routines.json")
     if snapshot != expected:
         raise RuntimeError("stored procedure fingerprint differs from the approved versioned manifest")
     return snapshot
@@ -236,9 +411,9 @@ def release_runner_lock():
         RUN_LOCK_FD = None
 
 
-def acquire_runner_lock():
+def acquire_runner_lock(path: Path | None = None):
     global RUN_LOCK_FD
-    path = RUN_ROOT / ".runner.lock"
+    path = path or RUN_ROOT / ".runner.lock"
     flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags, 0o600)
     st = os.fstat(fd)
@@ -249,7 +424,7 @@ def acquire_runner_lock():
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         os.close(fd)
-        raise RuntimeError("another v10d runner is active")
+        raise RuntimeError("another v10e runner is active")
     RUN_LOCK_FD = fd
     atexit.register(release_runner_lock)
 
@@ -266,27 +441,121 @@ class PipelineSignal(Exception):
     pass
 
 
+class StepTimeout(Exception):
+    pass
+
+
+def iter_process_lines(proc, deadline: float):
+    selector = selectors.DefaultSelector()
+    buffer = bytearray()
+    selector.register(proc.stdout, selectors.EVENT_READ)
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise StepTimeout
+            if not selector.select(min(remaining, 0.25)):
+                continue
+            chunk = os.read(proc.stdout.fileno(), 65536)
+            if not chunk:
+                if buffer:
+                    yield buffer.decode("utf-8", errors="replace")
+                return
+            buffer.extend(chunk)
+            newline = buffer.find(b"\n")
+            if (newline > 4 * 1024 * 1024 or
+                    (newline < 0 and len(buffer) > 4 * 1024 * 1024)):
+                raise RuntimeError("subprocess output line exceeded its safety limit")
+            while True:
+                position = buffer.find(b"\n")
+                if position < 0:
+                    break
+                line = bytes(buffer[:position])
+                del buffer[:position + 1]
+                yield line.decode("utf-8", errors="replace")
+    finally:
+        selector.close()
+
+
+def terminate_process_group(proc):
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    deadline = time.monotonic() + 2
+    try:
+        proc.wait(timeout=max(0, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired:
+        pass
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(proc.pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.05)
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=5)
+
+
+def process_group_exists(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
 def handle_signal(signum, frame):
     raise PipelineSignal(f"signal {signum}")
 
 
-def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False):
+def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False, timeout=900):
     global ACTIVE_PROCESS
+    if type(timeout) is not int or timeout < 1 or timeout > 3600:
+        raise ValueError("phase timeout is outside the approved bound")
     started = time.monotonic()
     print(json.dumps({"event": "phase_started", "phase": phase}), flush=True)
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             bufsize=1, start_new_session=True)
     ACTIVE_PROCESS = proc
+    deadline = time.monotonic() + timeout
     error_type = "unknown"
     error_code = "unknown"
     error_stage = "none"
     sqlstate = "none"
     try:
-        for raw_line in proc.stdout:
+        for raw_line in iter_process_lines(proc, deadline):
             line = raw_line.rstrip("\r\n")
+            if line.startswith("MYSQL_SOURCE_FREEZE_EVENT "):
+                fields = {}
+                for token in line.split()[1:]:
+                    if "=" in token:
+                        key, value = token.split("=", 1)
+                        fields[key] = value
+                allowed_steps = {
+                    "super_read_only_off_applied", "read_only_off_applied",
+                    "read_only_restore_failed", "read_only_restore_unverified",
+                    "read_only_restored_verified",
+                }
+                if (set(fields) == {"step", "target"} and fields.get("target") == "erp_ensaio_v10e"
+                        and fields.get("step") in allowed_steps):
+                    emit_log(log, "mysql_source_freeze_event", phase=phase,
+                             target=fields["target"], step=fields["step"])
+                    print(json.dumps({"event": "mysql_source_freeze_event", "phase": phase,
+                                      "target": fields["target"], "step": fields["step"]}), flush=True)
+                continue
             if not whitelist_json:
                 for marker in ("CATALOG_GENERATION_FAILED type=", "LOAD_FAILED type=",
-                               "RECONCILIATION_FAILED type=", "TRIGGER_TEST_FAILED type="):
+                               "RECONCILIATION_FAILED type=", "TRIGGER_TEST_FAILED type=",
+                               "MYSQL_READER_PROVISION_FAILED type="):
                     if marker in line:
                         error_type = line.split(marker, 1)[1].split()[0]
                 if line.startswith("RECONCILIATION_BLOCKED "):
@@ -309,7 +578,8 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                 item = json.loads(line)
             except (TypeError, json.JSONDecodeError):
                 for marker in ("CATALOG_GENERATION_FAILED type=", "LOAD_FAILED type=",
-                               "RECONCILIATION_FAILED type=", "TRIGGER_TEST_FAILED type="):
+                               "RECONCILIATION_FAILED type=", "TRIGGER_TEST_FAILED type=",
+                               "MYSQL_READER_PROVISION_FAILED type="):
                     if marker in line:
                         error_type = line.split(marker, 1)[1].split()[0]
                 if line.startswith("RECONCILIATION_BLOCKED "):
@@ -353,38 +623,103 @@ def run_step(command: list[str], phase: str, log: Path, *, whitelist_json=False)
                 print(json.dumps({"event": "loader_summary", "tables_loaded": item.get("tables_loaded"),
                                   "source_rows_loaded": item.get("source_rows_loaded"),
                                   "elapsed_seconds": item.get("elapsed_seconds")}), flush=True)
-        return_code = proc.wait()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise StepTimeout
+        try:
+            return_code = proc.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            raise StepTimeout from None
+        if return_code == 0 and process_group_exists(proc.pid):
+            terminate_process_group(proc)
+            return_code = 125
+            error_type = "ChildProcessLeak"
+            error_code = "step_child_process"
+            error_stage = phase
+    except StepTimeout:
+        terminate_process_group(proc)
+        return_code = 124
+        error_type = "TimeoutExpired"
+        error_code = "step_timeout"
+        error_stage = phase
     except BaseException:
-        if proc.poll() is None:
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            try:
-                proc.wait(timeout=120)
-            except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                proc.wait()
+        terminate_process_group(proc)
         raise
     finally:
+        close_stdout = getattr(proc.stdout, "close", None)
+        if callable(close_stdout):
+            close_stdout()
         if ACTIVE_PROCESS is proc:
             ACTIVE_PROCESS = None
     elapsed = round(time.monotonic() - started, 3)
     if return_code:
-        emit_log(log, "step_failed", phase=phase, exit_code=proc.returncode,
+        emit_log(log, "step_failed", phase=phase, exit_code=return_code,
                  error_type=error_type, error_code=error_code, error_stage=error_stage,
                  sqlstate=sqlstate, elapsed_seconds=elapsed)
         raise RuntimeError(f"phase {phase} failed; see private aggregate log")
     emit_log(log, "step_complete", phase=phase, exit_code=0, elapsed_seconds=elapsed)
     print(json.dumps({"event": "phase_complete", "phase": phase, "elapsed_seconds": elapsed}), flush=True)
-    return proc.stdout
+    return None
+
+
+def prepare_v10e_cluster_directories():
+    postgres = __import__("pwd").getpwnam("postgres")
+    if PGDATA.is_symlink():
+        raise RuntimeError("v10e PGDATA cannot be a symlink")
+    if not PGDATA.exists():
+        initdb = subprocess.run(as_postgres(
+            "/usr/lib/postgresql/18/bin/initdb", "-D", PGDATA, "--username=postgres",
+            "--encoding=UTF8", "--locale=C.UTF-8", "--auth-local=peer", "--auth-host=reject",
+            "--no-instructions"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if initdb.returncode:
+            raise RuntimeError("isolated v10e PostgreSQL initdb failed")
+    data = PGDATA.lstat()
+    if (not stat.S_ISDIR(data.st_mode) or data.st_uid != postgres.pw_uid
+            or stat.S_IMODE(data.st_mode) & 0o077):
+        raise RuntimeError("v10e PGDATA has unsafe ownership or mode")
+    config = PGDATA / "postgresql.conf"
+    config_info = config.lstat()
+    if (not stat.S_ISREG(config_info.st_mode) or stat.S_ISLNK(config_info.st_mode)
+            or config_info.st_uid != postgres.pw_uid or stat.S_IMODE(config_info.st_mode) & 0o077):
+        raise RuntimeError("v10e PostgreSQL configuration has unsafe ownership or mode")
+    configured = {}
+    for line in config.read_text(encoding="utf-8").splitlines():
+        if not line.lstrip().startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            configured[key.strip()] = value.split("#", 1)[0].strip()
+    expected_config = {
+        "listen_addresses": "''", "port": str(PGPORT),
+        "unix_socket_directories": f"'{PGSOCKET}'", "timezone": "'America/Sao_Paulo'",
+    }
+    missing = []
+    for setting, value in expected_config.items():
+        if setting not in configured:
+            missing.append(f"{setting} = {value}")
+        elif configured[setting] != value:
+            raise RuntimeError("v10e PostgreSQL configuration has a conflicting active setting")
+    if missing:
+        with config.open("a", encoding="utf-8") as stream:
+            stream.write("\n" + "\n".join(missing) + "\n")
+    os.chown(config, postgres.pw_uid, postgres.pw_gid)
+    os.chmod(config, 0o600)
+    if PGSOCKET.is_symlink():
+        raise RuntimeError("v10e socket directory cannot be a symlink")
+    if not PGSOCKET.exists():
+        PGSOCKET.mkdir(mode=0o700)
+        os.chown(PGSOCKET, postgres.pw_uid, postgres.pw_gid)
+    socket_dir = PGSOCKET.lstat()
+    if (not stat.S_ISDIR(socket_dir.st_mode) or socket_dir.st_uid != postgres.pw_uid
+            or stat.S_IMODE(socket_dir.st_mode) != 0o700):
+        raise RuntimeError("v10e PostgreSQL socket directory has unsafe ownership or mode")
+    status = subprocess.run(as_postgres("/usr/lib/postgresql/18/bin/pg_ctl", "-D", PGDATA, "status"),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if status.returncode == 0 or PGDATA.joinpath("postmaster.pid").exists():
+        raise RuntimeError("v10e PostgreSQL cluster must remain stopped during source preparation")
 
 
 def start_cluster(log: Path, run_dir: Path):
     global CLUSTER_STARTED_BY_RUNNER
+    prepare_v10e_cluster_directories()
     expected = {
         "data_directory": str(PGDATA),
         "listen_addresses": "",
@@ -441,33 +776,47 @@ def start_cluster(log: Path, run_dir: Path):
     return started_here
 
 
-def check_mysql_namespace():
+def check_mysql_namespace(source_manifest: dict):
     check = subprocess.run(["podman", "inspect", MYSQL_CONTAINER], stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE, text=True)
+                           stderr=subprocess.PIPE, text=True, timeout=30)
     if check.returncode:
         raise RuntimeError("isolated MySQL source container is unavailable")
     try:
         info = json.loads(check.stdout)[0]
-    except (json.JSONDecodeError, IndexError, KeyError):
+    except (json.JSONDecodeError, IndexError, KeyError, TypeError, AttributeError):
+        raise RuntimeError("isolated MySQL source container metadata is unreadable")
+    if (not isinstance(info, dict) or not isinstance(info.get("HostConfig"), dict)
+            or not isinstance(info.get("State"), dict) or not isinstance(info.get("Mounts"), list)
+            or any(not isinstance(item, dict) for item in info.get("Mounts", []))
+            or not isinstance(info.get("Args"), list)
+            or any(not isinstance(item, str) for item in info.get("Args", []))):
         raise RuntimeError("isolated MySQL source container metadata is unreadable")
     host = info.get("HostConfig", {})
     state = info.get("State", {})
     args = info.get("Args", [])
     security_opts = host.get("SecurityOpt") or []
-    secret_mounts = [mount for mount in info.get("Mounts", [])
-                     if mount.get("Destination") == "/run/rehearsal-secrets"]
-    if (info.get("ImageName") != "docker.io/library/mysql:5.7" or not state.get("Running")
+    expected_mounts = {
+        ("bind", "/var/lib/mysql", str(V10E_MYSQL_DATA), True),
+        ("bind", "/var/run/mysqld", str(V10E_MYSQL_SOCKET), True),
+        ("bind", "/run/rehearsal-secrets", str(V10E_CONTAINER_SECRETS), False),
+    }
+    actual_mounts = {(mount.get("Type"), mount.get("Destination"), mount.get("Source"), mount.get("RW"))
+                     for mount in info.get("Mounts", [])}
+    if (info.get("Name") != f"/{MYSQL_CONTAINER}"
+            or info.get("Id") != source_manifest.get("container_id")
+            or info.get("ImageName") != "docker.io/library/mysql:5.7" or not state.get("Running")
             or host.get("NetworkMode") != "none" or host.get("PortBindings") not in (None, {})
             or host.get("Privileged") is not False or host.get("CapAdd") not in (None, [])
             or "no-new-privileges" not in security_opts
             or "apparmor=erp-mysql-rehearsal" not in security_opts
-            or info.get("AppArmorProfile") != "erp-mysql-rehearsal"):
+            or info.get("AppArmorProfile") != "erp-mysql-rehearsal"
+            or actual_mounts != expected_mounts):
         raise RuntimeError("MySQL source isolation guard failed")
-    if (len(secret_mounts) != 1 or secret_mounts[0].get("Type") != "bind"
-            or secret_mounts[0].get("Source") != str(V10D_SECRETS)
-            or secret_mounts[0].get("RW") is not False):
-        raise RuntimeError("MySQL secret mount must be the expected read-only private bind mount")
-    if "--bind-address=127.0.0.1" not in args or "--event-scheduler=OFF" not in args:
+    if ("--bind-address=127.0.0.1" not in args or "--event-scheduler=OFF" not in args
+            or "--local-infile=0" not in args or "--secure-file-priv=NULL" not in args
+            or "--default-time-zone=-03:00" not in args
+            or "--innodb-buffer-pool-size=512M" not in args
+            or "--max-allowed-packet=256M" not in args):
         raise RuntimeError("MySQL source loopback or event-scheduler guard failed")
     pid = int(state.get("Pid") or 0)
     if pid <= 1 or not Path(f"/proc/{pid}/ns/net").exists():
@@ -476,15 +825,15 @@ def check_mysql_namespace():
 
 
 def create_target_database(dbname: str):
-    if dbname != V10D_DATABASE:
-        raise RuntimeError("refusing any database creation except the exclusive v10d target")
+    if dbname != V10E_DATABASE:
+        raise RuntimeError("refusing any database creation except the exclusive v10e target")
     check = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-At", "-h", PGSOCKET,
                             "-p", str(PGPORT), "-U", "postgres", "-d", "postgres", "-c",
-                            f"SELECT COUNT(*) FROM pg_database WHERE datname={quote_pg_literal(V10D_DATABASE)} "
+                            f"SELECT COUNT(*) FROM pg_database WHERE datname={quote_pg_literal(V10E_DATABASE)} "
                             "OR (NOT datistemplate AND datname<>'postgres')"),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if check.returncode or check.stdout.strip() != "0":
-        raise RuntimeError("v10d cluster contains a user database or target already exists; refusing reuse")
+        raise RuntimeError("v10e cluster contains a user database or target already exists; refusing reuse")
     create = subprocess.run(as_postgres("/usr/bin/createdb", "-h", PGSOCKET,
                              "-p", str(PGPORT), "-U", "postgres", "-T", "template0", "-E", "UTF8", dbname),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -492,9 +841,9 @@ def create_target_database(dbname: str):
         raise RuntimeError("failed to create new isolated target database")
     alter = subprocess.run(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
                             "-h", PGSOCKET, "-p", PGPORT, "-U", "postgres", "-d", "postgres", "-c",
-                            "ALTER DATABASE erp_ensaio_v10d SET timezone TO 'America/Sao_Paulo'; "
-                            "ALTER DATABASE erp_ensaio_v10d CONNECTION LIMIT 1; "
-                            "REVOKE CONNECT,TEMPORARY ON DATABASE erp_ensaio_v10d FROM PUBLIC"),
+                            "ALTER DATABASE erp_ensaio_v10e SET timezone TO 'America/Sao_Paulo'; "
+                            "ALTER DATABASE erp_ensaio_v10e CONNECTION LIMIT 1; "
+                            "REVOKE CONNECT,TEMPORARY ON DATABASE erp_ensaio_v10e FROM PUBLIC"),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if alter.returncode:
         raise RuntimeError("failed to set rehearsal database timezone")
@@ -971,19 +1320,19 @@ def safe_summary_scalars(item: dict) -> dict:
             and not key.endswith("_sha256") and not key.endswith("_fingerprint")}
 
 
-def validate_v10d_acceptance(catalog_summary: dict, loader_summary: dict, summary: dict):
+def validate_v10e_acceptance(catalog_summary: dict, loader_summary: dict, summary: dict):
     metrics = loader_summary.get("table_metrics", [])
     expected_tables = {"tables": 270, "columns": 3339, "primary_keys": 240,
                        "foreign_keys": 11, "triggers": 7, "routines": 2,
                        "events": 0, "auto_increment_columns": 232}
     if any(catalog_summary.get(key) != value for key, value in expected_tables.items()):
-        raise RuntimeError("v10d catalog summary differs from the approved source snapshot")
+        raise RuntimeError("v10e catalog summary differs from the approved source snapshot")
     if (loader_summary.get("tables_loaded") != 270 or loader_summary.get("source_rows_loaded") != 202609
             or len(metrics) != 270 or len({item.get("table") for item in metrics}) != 270
             or sum(item.get("source_rows", 0) for item in metrics) != 202609
             or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")
             or loader_summary.get("dst_ambiguous_local_times")):
-        raise RuntimeError("v10d loader did not meet the exact 270-table and 202609-row contract")
+        raise RuntimeError("v10e loader did not meet the exact 270-table and 202609-row contract")
     required_zero = ("row_count_mismatches", "tables_with_row_hash_divergence", "row_hash_divergent_total",
                      "pk_max_mismatches", "identity_max_mismatches", "sequences_not_ready",
                      "numeric_sum_mismatches", "binary_mismatches", "tenant_bucket_mismatches",
@@ -997,7 +1346,7 @@ def validate_v10d_acceptance(catalog_summary: dict, loader_summary: dict, summar
             or summary.get("fk_type_normalizations") != catalog_summary.get("fk_type_normalizations")
             or summary.get("fk_type_normalizations_sha256") != catalog_summary.get("fk_type_normalizations_sha256")
             or any(summary.get(key) != 0 for key in required_zero)):
-        raise RuntimeError("v10d reconciliation did not meet the exact zero-divergence acceptance contract")
+        raise RuntimeError("v10e reconciliation did not meet the exact zero-divergence acceptance contract")
 
 
 def verify_resume_target(dbname: str, catalog_summary: dict, loader_summary: dict):
@@ -1118,8 +1467,8 @@ def verify_post_fk_target(dbname: str, catalog_summary: dict, loader_summary: di
 
 
 def apply_sql(dbname: str, path: Path, phase: str, log: Path):
-    if dbname != V10D_DATABASE:
-        raise RuntimeError("refusing SQL application to any database except the exclusive v10d target")
+    if dbname != V10E_DATABASE:
+        raise RuntimeError("refusing SQL application to any database except the exclusive v10e target")
     command = as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose",
                           "-h", PGSOCKET, "-p", str(PGPORT), "-U", "postgres", "-d", dbname)
     if phase == "foreign_keys_not_valid":
@@ -1129,11 +1478,11 @@ def apply_sql(dbname: str, path: Path, phase: str, log: Path):
 
 
 def run_reconciliation_step(base, dbname: str, mysql_config: Path, run_dir: Path, log: Path):
-    if dbname != V10D_DATABASE:
-        raise RuntimeError("refusing reconciliation of any database except the exclusive v10d target")
+    if dbname != V10E_DATABASE:
+        raise RuntimeError("refusing reconciliation of any database except the exclusive v10e target")
     return run_step([*base, str(CODE_ROOT / "reconcile.py"), "--mysql-config", str(mysql_config),
                      "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", dbname,
-                     "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / "reconciliacao_v10d.csv"),
+                     "--repo-root", str(REPO_ROOT), "--csv", str(run_dir / "reconciliacao_v10e.csv"),
                      "--summary", str(run_dir / "reconciliation_summary.json")],
                     "reconciliation", log, whitelist_json=True)
 
@@ -1159,174 +1508,233 @@ def stop_rehearsal_cluster(log: Path, reason: str):
     emit_log(log, "postgres_cluster_stopped", reason=reason, mode="fast")
 
 
+def verify_v10e_toolchain():
+    version = subprocess.run(["/usr/lib/postgresql/18/bin/postgres", "--version"],
+                             capture_output=True, text=True, timeout=30)
+    if version.returncode or not re.search(r"\b18\.6\b", version.stdout):
+        raise RuntimeError("PostgreSQL 18.6 runtime is unavailable")
+    python = subprocess.run([
+        str(PG_PYTHON), "-B", "-c",
+        "import importlib.metadata,json,psycopg; print(json.dumps({"
+        "'pymysql':importlib.metadata.version('PyMySQL'),'psycopg':psycopg.__version__}))",
+    ], capture_output=True, text=True, timeout=30)
+    if python.returncode:
+        raise RuntimeError("v10e Python runtime is unavailable")
+    try:
+        versions = json.loads(python.stdout)
+    except json.JSONDecodeError:
+        raise RuntimeError("v10e Python package metadata is invalid") from None
+    if versions != {"pymysql": "1.2.3", "psycopg": "3.3.8"}:
+        raise RuntimeError("v10e Python dependency versions differ from the reviewed pins")
+    return {"postgresql": "18.6", **versions}
+
+
+def validate_v10e_catalog_preflight(summary: dict, output_dir: Path, expected_uid: int = 0) -> None:
+    expected = {
+        "mysql_schema": "inlaud99_erpcondor", "tables": 270, "views": 0, "columns": 3339,
+        "primary_keys": 240, "foreign_keys": 11, "triggers": 7, "routines": 2,
+        "events": 0, "auto_increment_columns": 232,
+    }
+    if any(summary.get(key) != value for key, value in expected.items()):
+        raise RuntimeError("v10e read-only catalog differs from the reviewed source snapshot")
+    expected_files = {
+        "001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql",
+        "002_validate_constraints.sql", "003_identity_sequences.sql",
+        "004_on_update_timestamp.sql", "005_business_triggers_routines.sql", "006_grants.sql",
+    }
+    hashes = summary.get("ddl_sha256")
+    if (not isinstance(hashes, dict) or set(hashes) != expected_files
+            or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+                   for value in hashes.values())):
+        raise RuntimeError("v10e catalog SQL artifact set differs from the reviewed output contract")
+    directory_fd = None
+    try:
+        directory_fd = open_directory_chain(output_dir)
+        output_info = os.fstat(directory_fd)
+        with os.scandir(directory_fd) as stream:
+            names = {entry.name for entry in stream}
+        if (not stat.S_ISDIR(output_info.st_mode) or output_info.st_uid != expected_uid
+                or stat.S_IMODE(output_info.st_mode) != 0o700 or names != expected_files):
+            raise RuntimeError("v10e catalog SQL artifact set or directory permissions are unsafe")
+        for name in names:
+            fd = None
+            try:
+                fd = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd)
+                info = os.fstat(fd)
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != expected_uid or info.st_nlink != 1
+                        or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > 64 * 1024 * 1024):
+                    raise RuntimeError("v10e catalog SQL artifact has unsafe metadata")
+                digest = hashlib.sha256()
+                with os.fdopen(fd, "rb") as artifact:
+                    fd = None
+                    for block in iter(lambda: artifact.read(1024 * 1024), b""):
+                        digest.update(block)
+            except OSError:
+                raise RuntimeError("v10e catalog SQL artifact is unavailable or is a symlink") from None
+            finally:
+                if fd is not None:
+                    os.close(fd)
+            if digest.hexdigest() != hashes[name]:
+                raise RuntimeError("v10e catalog SQL artifact hash or privacy check failed")
+    except OSError:
+        raise RuntimeError("v10e catalog output directory is unavailable or is a symlink") from None
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def load_v10e_private_json(path: Path, expected_uid: int = 0, max_bytes: int = 32 * 1024 * 1024) -> dict:
+    fd = None
+    try:
+        fd = open_file_from_directory(path, expected_parent_uid=expected_uid, expected_parent_mode=0o700)
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != expected_uid or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > max_bytes):
+            raise RuntimeError("v10e private JSON artifact has unsafe metadata")
+        with os.fdopen(fd, "rb") as stream:
+            fd = None
+            payload = stream.read(max_bytes + 1)
+        if len(payload) > max_bytes:
+            raise RuntimeError("v10e private JSON artifact exceeds its size limit")
+        value = json.loads(payload.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise RuntimeError("v10e private JSON artifact is unavailable or malformed") from None
+    finally:
+        if fd is not None:
+            os.close(fd)
+    if not isinstance(value, dict):
+        raise RuntimeError("v10e private JSON artifact has an invalid shape")
+    return value
+
+
+def load_v10e_code_json(path: Path, expected_uid: int = 0, max_bytes: int = 1024 * 1024) -> dict:
+    fd = None
+    try:
+        fd = open_file_from_directory(path, expected_parent_uid=expected_uid)
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != expected_uid or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) & 0o022 or info.st_size > max_bytes):
+            raise RuntimeError("v10e versioned JSON artifact has unsafe metadata")
+        with os.fdopen(fd, "rb") as stream:
+            fd = None
+            payload = stream.read(max_bytes + 1)
+        if len(payload) > max_bytes:
+            raise RuntimeError("v10e versioned JSON artifact exceeds its size limit")
+        value = json.loads(payload.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise RuntimeError("v10e versioned JSON artifact is unavailable or malformed") from None
+    finally:
+        if fd is not None:
+            os.close(fd)
+    if not isinstance(value, dict):
+        raise RuntimeError("v10e versioned JSON artifact has an invalid shape")
+    return value
+
+
 def parse_arguments(argv=None):
-    ap = argparse.ArgumentParser(description="Run a clean, isolated MySQL→PostgreSQL v10d rehearsal")
+    ap = argparse.ArgumentParser(description="Prepare and validate only the isolated MySQL v10e source")
+    ap.add_argument("--mode", required=True, choices=("prepare-source",))
     ap.add_argument("--database", required=True)
     ap.add_argument("--expected-commit", required=True)
-    ap.add_argument("--batch-size", type=int, default=1000)
+    ap.add_argument("--step-timeout", type=int, default=900)
     args = ap.parse_args(argv)
-    if args.database != V10D_DATABASE:
-        raise SystemExit("refusing any destination except the exclusive empty rehearsal database erp_ensaio_v10d")
-    if args.batch_size < 1 or args.batch_size > 10000:
-        raise SystemExit("batch size out of range")
+    if args.database != V10E_DATABASE:
+        raise SystemExit("refusing any destination except the exclusive v10e rehearsal target")
+    if args.step_timeout < 1 or args.step_timeout > 3600:
+        raise SystemExit("phase timeout must be an integer between 1 and 3600 seconds")
     return args
 
 
 def main():
     args = parse_arguments()
     if os.geteuid() != 0:
-        raise SystemExit("runner must start as root so it can verify container namespace")
+        raise SystemExit("source preparation must start as root")
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
     os.umask(0o077)
     verify_code_provenance(args.expected_commit)
+    source_manifest = verify_v10e_source_artifacts(args.expected_commit)
+    versions = verify_v10e_toolchain()
     verify_private_mysql_config(MYSQL_SECRET_SOURCE)
     verify_private_mysql_config(MYSQL_ADMIN_CONFIG)
     if not REPO_ROOT.is_dir() or not PG_PYTHON.is_file():
-        raise SystemExit("official source clone or private v10d runtime is unavailable")
+        raise SystemExit("official source clone or private v10e runtime is unavailable")
     postgres = __import__("pwd").getpwnam("postgres")
-    root_stat = V10D_ROOT.lstat()
+    root_stat = V10E_ROOT.lstat()
     if (not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != postgres.pw_uid
             or stat.S_IMODE(root_stat.st_mode) != 0o700):
-        raise SystemExit("private v10d root has unsafe ownership or mode")
-    if RUN_ROOT.exists() or RUN_ROOT.is_symlink():
-        raise SystemExit("v10d run root already exists; refusing rerun or resume")
-    RUN_ROOT.mkdir(mode=0o700, exist_ok=False)
-    os.chown(RUN_ROOT, postgres.pw_uid, postgres.pw_gid)
-    if RUN_ROOT.stat().st_uid != postgres.pw_uid or stat.S_IMODE(RUN_ROOT.stat().st_mode) != 0o700:
-        raise SystemExit("private PostgreSQL run root has unsafe ownership or mode")
-    acquire_runner_lock()
+        raise SystemExit("private v10e root has unsafe ownership or mode")
+    if (PGDATA.exists() or PGDATA.is_symlink() or PGSOCKET.exists() or PGSOCKET.is_symlink()
+            or RUN_ROOT.exists() or RUN_ROOT.is_symlink()):
+        raise SystemExit("v10e PostgreSQL data/socket/run paths already exist; refusing reuse or database creation")
+    listener = subprocess.run(["ss", "-H", "-ltn", "sport", "=", ":55434"],
+                              capture_output=True, text=True, timeout=10)
+    if listener.returncode or listener.stdout.strip():
+        raise SystemExit("v10e PostgreSQL port 55434 is unavailable or already listening")
+    if PREPARATION_ROOT.exists() or PREPARATION_ROOT.is_symlink():
+        raise SystemExit("v10e source preparation root already exists; refusing rerun or resume")
+    PREPARATION_ROOT.mkdir(mode=0o700, exist_ok=False)
+    if stat.S_IMODE(PREPARATION_ROOT.stat().st_mode) != 0o700 or PREPARATION_ROOT.stat().st_uid != 0:
+        raise SystemExit("v10e preparation root has unsafe owner or mode")
+    acquire_runner_lock(PREPARATION_LOCK)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    log = RUN_ROOT / (run_id + ".jsonl")
+    run_dir = PREPARATION_ROOT / ("source_" + run_id)
+    run_dir.mkdir(mode=0o700, exist_ok=False)
+    log = run_dir / "preparation.jsonl"
     log.touch(mode=0o600, exist_ok=False)
     log.chmod(0o600)
-    run_dir = RUN_ROOT / ("run_" + run_id)
-    run_dir.mkdir(mode=0o700, exist_ok=False)
-    (run_dir / "sql").mkdir(mode=0o700)
-    for directory in (run_dir, run_dir / "sql"):
-        os.chown(directory, postgres.pw_uid, postgres.pw_gid)
-    prepare_credential_tmpfs(postgres.pw_gid)
-    tmpfs_run = TMPFS_ROOT / run_id
-    tmpfs_run.mkdir(mode=0o710, exist_ok=False)
-    os.chown(tmpfs_run, 0, postgres.pw_gid)
-    tmpfs_run.chmod(0o710)
-    mysql_config = tmpfs_run / "client.cnf"
-    cluster_started_here = False
+    output_dir = run_dir / "sql"
     started = time.monotonic()
-    emit_log(log, "pipeline_started", database=args.database, batch_size=args.batch_size,
-             mysql_container=MYSQL_CONTAINER, code_commit=args.expected_commit, execution_mode="from_zero")
+    emit_log(log, "v10e_source_manifest_verified", dump_bytes=source_manifest["dump_bytes"],
+             mysql_version=source_manifest["mysql_version"])
+    emit_log(log, "v10e_toolchain_verified", **versions)
+    emit_log(log, "source_preparation_started", code_commit=args.expected_commit)
     try:
-        copy_private_config(MYSQL_SECRET_SOURCE, mysql_config, postgres.pw_gid)
-        mysql_pid = check_mysql_namespace()
+        mysql_pid = check_mysql_namespace(source_manifest)
+        mysql_netns_inode = os.stat(f"/proc/{mysql_pid}/ns/net").st_ino
         emit_log(log, "mysql_source_isolated", container=MYSQL_CONTAINER, network_mode="none",
-                 read_only_source=True)
+                 read_only_source=True, ports_published=False)
+        provision = ["nsenter", f"--net=/proc/{mysql_pid}/ns/net", "--", str(PG_PYTHON), "-B",
+                     str(CODE_ROOT / "mysql_source.py"), "--admin-config", str(MYSQL_ADMIN_CONFIG),
+                     "--reader-config", str(MYSQL_SECRET_SOURCE), "--expected-commit", args.expected_commit,
+                     "--expected-mysql-version", source_manifest["mysql_version"],
+                     "--expected-netns-inode", str(mysql_netns_inode)]
+        run_step(provision, "mysql_reader_provision", log, timeout=args.step_timeout)
+        emit_log(log, "mysql_reader_provisioned", identity_validated=True, grants_minimal=True,
+                 read_only_source=True, catalog_tables=270)
         snapshot = read_verified_routine_snapshot()
         routine_snapshot = run_dir / "routine_snapshot.json"
         routine_snapshot.write_text(json.dumps(snapshot, sort_keys=True) + "\n", encoding="utf-8")
         routine_snapshot.chmod(0o600)
-        os.chown(routine_snapshot, postgres.pw_uid, postgres.pw_gid)
-        emit_log(log, "routine_fingerprints_verified", count=2)
-        base = ["nsenter", f"--net=/proc/{mysql_pid}/ns/net", "--", *as_postgres(PG_PYTHON, "-s")]
+        emit_log(log, "routine_fingerprints_verified", count=len(snapshot["routines"]))
+        output_dir.mkdir(mode=0o700, exist_ok=False)
         catalog = run_dir / "catalog.json"
-        run_step([*base, str(CODE_ROOT / "catalog.py"), "--mysql-config", str(mysql_config),
-                  "--output", str(run_dir / "sql"), "--summary", str(catalog),
-                  "--repo-root", str(REPO_ROOT), "--target-database", args.database,
-                  "--routine-snapshot", str(routine_snapshot)],
-                 "catalog", log, whitelist_json=True)
-        ddl_dir = run_dir / "sql"
-        for name in ("001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql", "002_validate_constraints.sql",
-                     "003_identity_sequences.sql", "004_on_update_timestamp.sql",
-                     "005_business_triggers_routines.sql", "006_grants.sql"):
-            path = ddl_dir / name
-            if not path.is_file() or path.stat().st_mode & 0o077:
-                raise RuntimeError("generated SQL file is missing or not private")
-        cluster_started_here = start_cluster(log, run_dir)
-        create_target_database(args.database)
-        emit_log(log, "empty_target_created", database=args.database)
-        apply_sql(args.database, ddl_dir / "001_schema.sql", "schema", log)
-        run_step([*base, str(CODE_ROOT / "loader.py"), "--mysql-config", str(mysql_config),
-                  "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database,
-                  "--repo-root", str(REPO_ROOT), "--evidence", str(run_dir / "loader_summary.json"),
-                  "--batch-size", str(args.batch_size)], "load", log, whitelist_json=True)
-        catalog_summary = json.loads(catalog.read_text(encoding="utf-8"))
-        loader_summary = json.loads((run_dir / "loader_summary.json").read_text(encoding="utf-8"))
-        if (loader_summary.get("tables_loaded") != 270
-                or loader_summary.get("zero_date_conversions") != catalog_summary.get("zero_date_counts")
-                or loader_summary.get("dst_ambiguous_local_times")):
-            raise RuntimeError("loader transformations differ from metadata preflight or require review")
-        if sum(item.get("source_rows", 0) for item in loader_summary.get("table_metrics", [])) != loader_summary.get("source_rows_loaded"):
-            raise RuntimeError("loader row totals are internally inconsistent")
-        emit_log(log, "loader_metrics_verified", tables=270,
-                 rows=loader_summary.get("source_rows_loaded"),
-                 zero_date_columns=len(loader_summary.get("zero_date_conversions", {})))
-        apply_sql(args.database, ddl_dir / "002_constraints_indexes.sql", "constraints_indexes", log)
-        apply_sql(args.database, ddl_dir / "003_identity_sequences.sql", "identity_sequences", log)
-        apply_sql(args.database, ddl_dir / "004_on_update_timestamp.sql", "on_update_triggers", log)
-        apply_sql(args.database, ddl_dir / "005_business_triggers_routines.sql", "business_objects", log)
-        apply_sql(args.database, ddl_dir / "006_grants.sql", "grants", log)
-        harness = CODE_ROOT.parents[1] / "tests" / "migracao_pg" / "trigger_harness.py"
-        run_step([*base, str(harness),
-                  "--mysql-config", str(mysql_config), "--repo-root", str(REPO_ROOT),
-                  "--pg-socket", str(PGSOCKET), "--pg-port", str(PGPORT), "--database", args.database],
-                 "business_trigger_tests", log, whitelist_json=True)
-        apply_sql(args.database, ddl_dir / "002_foreign_keys.sql", "foreign_keys_not_valid", log)
-        run_step(as_postgres("/usr/bin/psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", PGSOCKET,
-                  "-p", str(PGPORT), "-U", "postgres", "-d", args.database, "-c", "ANALYZE;"),
-                 "analyze", log)
-        run_reconciliation_step(base, args.database, mysql_config, run_dir, log)
-        summary_path = run_dir / "reconciliation_summary.json"
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        validate_v10d_acceptance(catalog_summary, loader_summary, summary)
-        if cluster_started_here:
-            stop_rehearsal_cluster(log, "pipeline_success")
-            cluster_started_here = False
-        cleanup_tmpfs_run(tmpfs_run, postgres.pw_gid)
-        elapsed = round(time.monotonic() - started, 3)
-        status = summary.get("status", "ACCEPTED")
-        emit_log(log, "pipeline_accepted", database=args.database, tables=270,
-                 rows=summary.get("source_rows"), status=status,
-                 foreign_keys_valid=summary.get("foreign_keys_valid"),
-                 foreign_keys_with_orphans=summary.get("foreign_keys_with_orphans"),
-                 fk_orphan_count_total=summary.get("fk_orphan_count_total"), elapsed_seconds=elapsed)
-        print(json.dumps({"status": status, "database": args.database,
-                          "tables": 270, "rows": summary.get("source_rows"),
-                          "foreign_keys_valid": summary.get("foreign_keys_valid"),
-                          "foreign_keys_with_orphans": summary.get("foreign_keys_with_orphans"),
-                          "fk_orphan_count_total": summary.get("fk_orphan_count_total"),
-                          "elapsed_seconds": elapsed,
-                          "run_dir": str(run_dir), "log": str(log)}, ensure_ascii=False), flush=True)
+        command = ["nsenter", f"--net=/proc/{mysql_pid}/ns/net", "--", str(PG_PYTHON), "-B",
+                   str(CODE_ROOT / "catalog.py"), "--mysql-config", str(MYSQL_SECRET_SOURCE),
+                   "--output", str(output_dir), "--summary", str(catalog),
+                   "--repo-root", str(REPO_ROOT), "--target-database", args.database,
+                   "--routine-snapshot", str(routine_snapshot)]
+        run_step(command, "read_only_catalog", log, whitelist_json=True, timeout=args.step_timeout)
+        catalog_summary = load_v10e_private_json(catalog)
+        validate_v10e_catalog_preflight(catalog_summary, output_dir)
+        emit_log(log, "v10e_read_only_catalog_verified", tables=270, columns=3339,
+                 primary_keys=240, foreign_keys=11, triggers=7, routines=2,
+                 auto_increment_columns=232, ddl_files=8)
+        emit_log(log, "source_preparation_ready", migration_started=False,
+                 target_database_created=False, elapsed_seconds=round(time.monotonic() - started, 3))
+        print(json.dumps({"status": "SOURCE_PREPARATION_READY", "mode": args.mode,
+                          "database": args.database, "migration_started": False,
+                          "target_database_created": False, "tables": 270, "columns": 3339,
+                          "foreign_keys": 11, "run_dir": str(run_dir), "log": str(log)},
+                         ensure_ascii=False), flush=True)
     except Exception as exc:
-        stop_error = None
-        if cluster_started_here or CLUSTER_STARTED_BY_RUNNER:
-            try:
-                stop_rehearsal_cluster(log, "pipeline_failure")
-                cluster_started_here = False
-            except Exception as stop_exc:
-                stop_error = type(stop_exc).__name__
-        cleanup_error = None
-        try:
-            cleanup_tmpfs_run(tmpfs_run, postgres.pw_gid)
-        except Exception as cleanup_exc:
-            cleanup_error = type(cleanup_exc).__name__
-        emit_log(log, "pipeline_blocked", error_type=type(exc).__name__,
-                 stop_error=stop_error, cleanup_error=cleanup_error,
+        emit_log(log, "source_preparation_blocked", error_type=type(exc).__name__,
                  elapsed_seconds=round(time.monotonic() - started, 3),
-                 partial_database=args.database)
-        print(f"PIPELINE_BLOCKED type={type(exc).__name__} database={args.database}", file=sys.stderr, flush=True)
-        if stop_error or cleanup_error:
-            print("PIPELINE_CLEANUP_INCOMPLETE see private run log", file=sys.stderr, flush=True)
+                 target_database_created=False)
+        print(f"SOURCE_PREPARATION_BLOCKED type={type(exc).__name__}", file=sys.stderr, flush=True)
         raise SystemExit(1)
     finally:
-        if cluster_started_here or CLUSTER_STARTED_BY_RUNNER:
-            try:
-                stop_rehearsal_cluster(log, "runner_finally")
-                cluster_started_here = False
-            except Exception as stop_exc:
-                emit_log(log, "cluster_stop_failed_finally", error_type=type(stop_exc).__name__)
-        try:
-            cleanup_tmpfs_run(tmpfs_run, postgres.pw_gid)
-        except Exception as cleanup_exc:
-            emit_log(log, "credential_tmpfs_cleanup_failed_finally", error_type=type(cleanup_exc).__name__)
+        release_runner_lock()
 
 
 if __name__ == "__main__":

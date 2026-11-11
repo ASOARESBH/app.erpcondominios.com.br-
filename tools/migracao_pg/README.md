@@ -1,6 +1,6 @@
 # Pipeline MySQL → PostgreSQL 18 (ensaio v9)
 
-> **Runbook histórico.** Nesta branch, não execute os comandos v9 deste arquivo. O runner foi preparado para uma execução única e limpa `erp_ensaio_v10d`; consulte [`README_V10D.md`](README_V10D.md). O histórico v9 fica preservado apenas para auditoria.
+> **Runbook histórico.** Nesta branch, não execute os comandos v9 deste arquivo. O runner está restrito à preparação da nova tentativa isolada `erp_ensaio_v10e`; consulte [`README_V10E.md`](README_V10E.md). O v10d e o histórico v9 permanecem em quarentena e preservados.
 
 O pipeline é exclusivo para a cópia de ensaio restaurada do dump autorizado e para um database novo do cluster PostgreSQL 18 socket-only. Não serve para produção/virada. No estado atual, a API/ERP não se conecta ao PostgreSQL.
 

@@ -1,4 +1,5 @@
 import sys
+import ast
 import os
 import json
 import hashlib
@@ -16,11 +17,14 @@ sys.path.insert(0, str(ROOT))
 
 from common import (ambiguous_sao_paulo_wall_time, convert_temporal, generated_name, mysql_type_to_pg, parse_mysql_enum, row_digest,
                     json_contains_nul, verify_v9_postgres_connection, verify_v10d_postgres_connection,
-                    require_v10d_database, require_v10d_endpoint, V10D_DATABASE,
-                    V10D_PGDATA, V10D_PGSOCKET, V10D_PGPORT, zero_date)
+                    verify_v10e_postgres_connection, require_v10d_database, require_v10d_endpoint,
+                     require_v10e_database, require_v10e_endpoint, V10D_DATABASE, V10E_DATABASE,
+                     V10D_PGDATA, V10D_PGSOCKET, V10D_PGPORT, V10E_PGDATA, V10E_PGSOCKET,
+                     V10E_PGPORT, open_directory_chain, zero_date)
 from catalog import (build_sql, enum_counts_for_summary, invalid_enum_counts, time_conversion_risks, validate_on_update_snapshot,
-                     expression_sql, validate_checklist_upsert_contract, validate_reader_grants, catalog_error_code,
-                     verified_routine_snapshot, routine_parameter_signature, EXPECTED_BACKUP_CANDIDATES,
+                     expression_sql, validate_checklist_upsert_contract, validate_reader_grants, mysql_connection, catalog_error_code,
+                     verified_routine_snapshot, routine_parameter_signature, read_checked_json,
+                     EXPECTED_BACKUP_CANDIDATES,
                      EXPECTED_FK_TYPE_NORMALIZATIONS, normalize_fk_types, tenant_contract,
                      text_nul_counts_for_table, validate_sensitive_column_defaults)
 from reconcile import (numeric_equal, sequence_status, verify_destination_fk, verify_destination_fk_types,
@@ -31,10 +35,15 @@ from run_migration import (APPROVED_POST_FK_RUN_ID, APPROVED_POST_FK_SOURCE_COMM
                            quote_pg_literal, validate_post_fk_resume_history, validate_resume_history,
                            validate_resume_table_inventory, validate_resume_catalog_transition,
                            validate_catalog_artifact_snapshot, verify_post_fk_run_manifest, safe_summary_scalars,
-                           validate_v10d_acceptance, create_target_database,
+                           validate_v10e_acceptance, create_target_database,
                            verify_approved_c2_ancestry, verify_baseline_ancestry, verify_resume_code_ancestry,
-                           verify_resume_target, parse_arguments,
+                           verify_resume_target, parse_arguments, validate_v10e_source_manifest,
+                           load_v10e_source_manifest, verify_v10e_source_artifacts,
+                           verify_v10e_container_secret_bundle, validate_v10e_catalog_preflight,
+                           load_v10e_private_json, load_v10e_code_json,
+                           check_mysql_namespace,
                            verify_post_fk_target)
+import run_migration
 
 
 class TypeMappingTests(unittest.TestCase):
@@ -112,12 +121,71 @@ class TypeMappingTests(unittest.TestCase):
         proc.returncode = 1
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "run.jsonl"
-            with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
+            with patch("run_migration.subprocess.Popen", return_value=proc), \
+                    patch("run_migration.iter_process_lines", return_value=iter(["CATALOG_GENERATION_FAILED type=RuntimeError code=source_collation_mismatch\n"])), \
+                    redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(RuntimeError, "phase catalog failed"):
                     run_step(["catalog"], "catalog", log, whitelist_json=True)
             record = json.loads(log.read_text(encoding="utf-8"))
         self.assertEqual(record["error_code"], "source_collation_mismatch")
         self.assertEqual(record["error_type"], "RuntimeError")
+
+    def test_runner_timeout_kills_process_group_and_logs_only_static_code(self):
+        commands = (
+            ("import os,time; pid=os.fork(); os._exit(0) if pid else time.sleep(10)",
+             "TimeoutExpired", "step_timeout", 124),
+            ("import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(10)",
+             "TimeoutExpired", "step_timeout", 124),
+            ("import os,time; pid=os.fork(); os._exit(0) if pid else (os.close(1),os.close(2),time.sleep(10))",
+             "ChildProcessLeak", "step_child_process", 125),
+        )
+        for index, (code, error_type, error_code, exit_code) in enumerate(commands):
+            with self.subTest(index=index), tempfile.TemporaryDirectory() as directory:
+                log = Path(directory) / "run.jsonl"
+                with redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(RuntimeError, "phase synthetic_timeout failed"):
+                        run_step([sys.executable, "-c", code], "synthetic_timeout", log, timeout=1)
+                content = log.read_text(encoding="utf-8")
+                records = [json.loads(line) for line in content.splitlines()]
+                failed = records[-1]
+                self.assertEqual(failed["event"], "step_failed")
+                self.assertEqual(failed["error_type"], error_type)
+                self.assertEqual(failed["error_code"], error_code)
+                self.assertEqual(failed["exit_code"], exit_code)
+                self.assertIsNone(run_migration.ACTIVE_PROCESS)
+                self.assertNotIn("sleep(10)", content)
+
+    def test_runner_records_whitelisted_mysql_read_only_window_events(self):
+        lines = [
+            "MYSQL_SOURCE_FREEZE_EVENT step=super_read_only_off_applied target=erp_ensaio_v10e\n",
+            "MYSQL_SOURCE_FREEZE_EVENT step=read_only_off_applied target=erp_ensaio_v10e\n",
+            "MYSQL_SOURCE_FREEZE_EVENT step=read_only_restored_verified target=erp_ensaio_v10e\n",
+            "private-password must not be propagated\n",
+        ]
+        proc = MagicMock()
+        proc.wait.return_value = 0
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "run.jsonl"
+            with patch("run_migration.subprocess.Popen", return_value=proc), \
+                    patch("run_migration.iter_process_lines", return_value=iter(lines)), \
+                    patch("run_migration.process_group_exists", return_value=False), \
+                    redirect_stdout(io.StringIO()):
+                run_step(["provision"], "mysql_reader_provision", log, timeout=5)
+            content = log.read_text(encoding="utf-8")
+            records = [json.loads(line) for line in content.splitlines()]
+        freeze = [item for item in records if item["event"] == "mysql_source_freeze_event"]
+        self.assertEqual([item["step"] for item in freeze], [
+            "super_read_only_off_applied", "read_only_off_applied", "read_only_restored_verified",
+        ])
+        self.assertTrue(all(item["target"] == "erp_ensaio_v10e" for item in freeze))
+        self.assertNotIn("private-password", content)
+
+    def test_runner_rejects_unbounded_or_unreasonable_step_timeout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "run.jsonl"
+            for timeout in (0, -1, 3601, True):
+                with self.subTest(timeout=timeout), self.assertRaisesRegex(ValueError, "timeout"):
+                    run_step(["not-started"], "synthetic", log, timeout=timeout)
 
     def test_runner_records_only_reconciliation_stage_code_and_sqlstate(self):
         proc = MagicMock()
@@ -127,7 +195,9 @@ class TypeMappingTests(unittest.TestCase):
         proc.returncode = 1
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "run.jsonl"
-            with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
+            with patch("run_migration.subprocess.Popen", return_value=proc), \
+                    patch("run_migration.iter_process_lines", return_value=iter([next(proc.stdout)])), \
+                    redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(RuntimeError, "phase reconciliation failed"):
                     run_step(["reconcile"], "reconciliation", log, whitelist_json=True)
             content = log.read_text(encoding="utf-8")
@@ -145,7 +215,9 @@ class TypeMappingTests(unittest.TestCase):
         proc.returncode = 2
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "run.jsonl"
-            with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
+            with patch("run_migration.subprocess.Popen", return_value=proc), \
+                    patch("run_migration.iter_process_lines", return_value=iter([next(proc.stdout)])), \
+                    redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(RuntimeError, "phase reconciliation failed"):
                     run_step(["reconcile"], "reconciliation", log, whitelist_json=True)
             record = json.loads(log.read_text(encoding="utf-8"))
@@ -161,7 +233,9 @@ class TypeMappingTests(unittest.TestCase):
         proc.returncode = 1
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "run.jsonl"
-            with patch("run_migration.subprocess.Popen", return_value=proc), redirect_stdout(io.StringIO()):
+            with patch("run_migration.subprocess.Popen", return_value=proc), \
+                    patch("run_migration.iter_process_lines", return_value=iter([next(proc.stdout)])), \
+                    redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(RuntimeError, "phase foreign_keys_not_valid failed"):
                     run_step(["psql"], "foreign_keys_not_valid", log)
             content = log.read_text(encoding="utf-8")
@@ -171,22 +245,42 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(record["sqlstate"], "42501")
         self.assertNotIn("permission denied", content)
 
+    def test_runner_records_only_sanitized_mysql_provisioning_failure(self):
+        proc = MagicMock()
+        proc.stdout = iter(["MYSQL_READER_PROVISION_FAILED type=ProvisioningError "
+                            "code=reader_authentication_or_catalog_failed\n"])
+        proc.wait.return_value = 1
+        proc.returncode = 1
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "run.jsonl"
+            with patch("run_migration.subprocess.Popen", return_value=proc), \
+                    patch("run_migration.iter_process_lines", return_value=iter([next(proc.stdout)])), \
+                    redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError, "phase mysql_reader_provision failed"):
+                    run_step(["mysql_source.py"], "mysql_reader_provision", log)
+            content = log.read_text(encoding="utf-8")
+            record = json.loads(content)
+        self.assertEqual(record["error_type"], "ProvisioningError")
+        self.assertEqual(record["error_code"], "reader_authentication_or_catalog_failed")
+        self.assertNotIn("password", content)
+        self.assertNotIn("ERROR:", content)
+
     def test_foreign_key_sql_is_atomic_and_sqlstate_only(self):
         with patch("run_migration.as_postgres", side_effect=lambda *args: [str(arg) for arg in args]):
             with patch("run_migration.run_step") as runner:
-                apply_sql(V10D_DATABASE, Path("/tmp/fks.sql"), "foreign_keys_not_valid", Path("/tmp/run.jsonl"))
+                apply_sql(V10E_DATABASE, Path("/tmp/fks.sql"), "foreign_keys_not_valid", Path("/tmp/run.jsonl"))
         command = runner.call_args.args[0]
         self.assertIn("-1", command)
         self.assertIn("VERBOSITY=verbose", command)
         self.assertEqual(command[-2:], ["-f", Path("/tmp/fks.sql")])
         with patch("run_migration.run_step") as runner:
-            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10d target"):
+            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10e target"):
                 apply_sql("erp_ensaio_v9", Path("/tmp/fks.sql"), "foreign_keys_not_valid", Path("/tmp/run.jsonl"))
             runner.assert_not_called()
 
     def test_post_fk_execution_helper_invokes_only_reconciliation(self):
         with patch("run_migration.run_step") as runner:
-            run_reconciliation_step(["nsenter", "python"], V10D_DATABASE, Path("/tmp/client.cnf"),
+            run_reconciliation_step(["nsenter", "python"], V10E_DATABASE, Path("/tmp/client.cnf"),
                                     Path("/tmp/run"), Path("/tmp/run.jsonl"))
         self.assertEqual(runner.call_count, 1)
         command, phase, _log = runner.call_args.args
@@ -194,9 +288,9 @@ class TypeMappingTests(unittest.TestCase):
         self.assertTrue(any(str(item).endswith("reconcile.py") for item in command))
         self.assertFalse(any(token in str(item) for item in command
                              for token in ("loader.py", "trigger_harness.py", "002_foreign_keys.sql", "ANALYZE")))
-        self.assertTrue(any(str(item).endswith("reconciliacao_v10d.csv") for item in command))
+        self.assertTrue(any(str(item).endswith("reconciliacao_v10e.csv") for item in command))
         with patch("run_migration.run_step") as runner:
-            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10d target"):
+            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10e target"):
                 run_reconciliation_step(["nsenter", "python"], "erp_ensaio_v9", Path("/tmp/client.cnf"),
                                         Path("/tmp/run"), Path("/tmp/run.jsonl"))
             runner.assert_not_called()
@@ -295,34 +389,71 @@ class TypeMappingTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not descended from the C.2 harness fix"):
                 verify_approved_c2_ancestry(Path("/repo"), "b" * 40)
 
-    def test_v10d_cli_accepts_only_its_database_and_rejects_resume(self):
-        valid = parse_arguments(["--database", V10D_DATABASE, "--expected-commit", "a" * 40])
-        self.assertEqual(valid.database, "erp_ensaio_v10d")
+    def test_v10e_cli_accepts_only_its_database_and_rejects_resume(self):
+        valid = parse_arguments(["--mode", "prepare-source", "--database", V10E_DATABASE,
+                                 "--expected-commit", "a" * 40])
+        self.assertEqual(valid.database, "erp_ensaio_v10e")
+        self.assertEqual(valid.mode, "prepare-source")
+        self.assertEqual(valid.step_timeout, 900)
+        maximum = parse_arguments(["--mode", "prepare-source", "--database", V10E_DATABASE,
+                                   "--expected-commit", "a" * 40, "--step-timeout", "3600"])
+        self.assertEqual(maximum.step_timeout, 3600)
         for argv in (
-            ["--database", "erp_ensaio_v9", "--expected-commit", "a" * 40],
-            ["--database", "erp_ensaio_v10c", "--expected-commit", "a" * 40],
-            ["--database", V10D_DATABASE, "--expected-commit", "a" * 40, "--resume-partial-target"],
-            ["--database", V10D_DATABASE, "--expected-commit", "a" * 40, "--resume-post-fk-reconciliation"],
-            ["--database", V10D_DATABASE, "--expected-commit", "a" * 40,
+            ["--mode", "prepare-source", "--database", "erp_ensaio_v9", "--expected-commit", "a" * 40],
+            ["--mode", "prepare-source", "--database", "erp_ensaio_v10", "--expected-commit", "a" * 40],
+            ["--mode", "prepare-source", "--database", "erp_ensaio_v10b", "--expected-commit", "a" * 40],
+            ["--mode", "prepare-source", "--database", "erp_ensaio_v10c", "--expected-commit", "a" * 40],
+            ["--mode", "prepare-source", "--database", "erp_ensaio_v10d", "--expected-commit", "a" * 40],
+            ["--mode", "prepare-source", "--database", "erp_ensaio_arbitrary", "--expected-commit", "a" * 40],
+            ["--mode", "full-migration", "--database", V10E_DATABASE, "--expected-commit", "a" * 40],
+            ["--mode", "prepare-source", "--database", V10E_DATABASE, "--expected-commit", "a" * 40,
+             "--resume-partial-target"],
+            ["--mode", "prepare-source", "--database", V10E_DATABASE, "--expected-commit", "a" * 40,
+             "--resume-post-fk-reconciliation"],
+            ["--mode", "prepare-source", "--database", V10E_DATABASE, "--expected-commit", "a" * 40,
              "--source-run-id", "20261108T203651Z"],
+            ["--mode", "prepare-source", "--database", V10E_DATABASE, "--expected-commit", "a" * 40,
+             "--batch-size", "1000"],
+            ["--mode", "prepare-source", "--database", V10E_DATABASE, "--expected-commit", "a" * 40,
+             "--step-timeout", "0"],
+            ["--mode", "prepare-source", "--database", V10E_DATABASE, "--expected-commit", "a" * 40,
+             "--step-timeout", "3601"],
         ):
             with self.subTest(argv=argv), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 parse_arguments(argv)
 
-    def test_v10d_database_creation_refuses_wrong_or_nonempty_cluster(self):
+    def test_v10e_preparation_entrypoint_cannot_start_migration_or_create_database(self):
+        source = (ROOT / "run_migration.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
+        call_nodes = [node for node in ast.walk(main) if isinstance(node, ast.Call)]
+        calls = {node.func.id if isinstance(node.func, ast.Name) else node.func.attr for node in call_nodes}
+        forbidden = {"start_cluster", "create_target_database", "apply_sql", "run_reconciliation_step",
+                     "validate_v10e_acceptance", "create_target_schema", "apply_business_objects"}
+        self.assertFalse(calls & forbidden)
+        run_steps = [node for node in call_nodes if isinstance(node.func, ast.Name) and node.func.id == "run_step"]
+        self.assertEqual(len(run_steps), 2)
+        self.assertEqual({ast.literal_eval(node.args[1]) for node in run_steps},
+                         {"mysql_reader_provision", "read_only_catalog"})
+        literals = {node.value for node in ast.walk(main) if isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)}
+        self.assertFalse({"initdb", "pg_ctl", "createdb", "CREATE DATABASE", "loader.py",
+                          "trigger_harness.py", "ANALYZE", "reconcile.py", "foreign_keys.py"} & literals)
+
+    def test_v10e_database_creation_refuses_wrong_or_nonempty_cluster(self):
         with patch("run_migration.subprocess.run") as run:
-            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10d target"):
-                create_target_database("erp_ensaio_v9")
+            with self.assertRaisesRegex(RuntimeError, "except the exclusive v10e target"):
+                create_target_database(V10D_DATABASE)
             run.assert_not_called()
         with patch("run_migration.subprocess.run") as run:
             run.return_value.returncode = 0
             run.return_value.stdout = "1\n"
             with self.assertRaisesRegex(RuntimeError, "contains a user database"):
-                create_target_database(V10D_DATABASE)
+                create_target_database(V10E_DATABASE)
             self.assertEqual(run.call_count, 1)
             query = run.call_args.args[0][-1]
             self.assertIn("datistemplate", query)
-            self.assertIn("erp_ensaio_v10d", query)
+            self.assertIn("erp_ensaio_v10e", query)
         with patch("run_migration.subprocess.run") as run:
             run.side_effect = [
                 MagicMock(returncode=0, stdout="0\n"),
@@ -330,29 +461,249 @@ class TypeMappingTests(unittest.TestCase):
                 MagicMock(returncode=0, stdout=""),
                 MagicMock(returncode=0, stdout="America/Sao_Paulo|UTF8\n"),
             ]
-            create_target_database(V10D_DATABASE)
+            create_target_database(V10E_DATABASE)
             self.assertEqual(run.call_count, 4)
             create_args = run.call_args_list[1].args[0]
-            self.assertEqual(create_args[-1], V10D_DATABASE)
+            self.assertEqual(create_args[-1], V10E_DATABASE)
 
-    def test_v10d_runtime_paths_and_port_are_separate_from_v9(self):
-        self.assertEqual((V10D_DATABASE, V10D_PGDATA, V10D_PGSOCKET, V10D_PGPORT),
-                         ("erp_ensaio_v10d", "/var/lib/erp-pg-rehearsal/v10d/pg-data",
-                          "/var/lib/erp-pg-rehearsal/v10d/pg-socket", 55433))
-        self.assertNotEqual(V10D_PGPORT, 55432)
-        self.assertNotIn("/v9/", V10D_PGDATA)
+    def test_v10e_runtime_paths_and_port_are_separate_from_all_previous_targets(self):
+        self.assertEqual((V10E_DATABASE, V10E_PGDATA, V10E_PGSOCKET, V10E_PGPORT),
+                         ("erp_ensaio_v10e", "/var/lib/erp-pg-rehearsal/v10e/pg-data",
+                          "/var/lib/erp-pg-rehearsal/v10e/pg-socket", 55434))
+        self.assertNotIn("/v10d/", V10E_PGDATA)
+        self.assertNotEqual(V10E_PGPORT, 55433)
 
-    def test_pipeline_components_reject_non_v10d_database_or_endpoint(self):
-        require_v10d_database(V10D_DATABASE)
-        require_v10d_endpoint(V10D_DATABASE, V10D_PGSOCKET, V10D_PGPORT)
-        for database in ("erp_ensaio_v9", "erp_ensaio_v10", "erp_ensaio_v10b", "erp_ensaio_v10c"):
+    def v10e_source_manifest_fixture(self, dump_bytes=42, dump_sha256="a" * 64):
+        return {
+            "target_database": "erp_ensaio_v10e",
+            "code_branch": "pg/03-4-fix-mysql-source-provisioning",
+            "code_commit": "b" * 40,
+            "source_schema": "inlaud99_erpcondor",
+            "dump_sha256": dump_sha256,
+            "dump_bytes": dump_bytes,
+            "mysql_version": "5.7.44-log",
+            "container_name": "erp-mysql-source-v10e",
+            "container_id": "c" * 64,
+            "image_name": "docker.io/library/mysql:5.7",
+            "image_id": "sha256:" + "d" * 64,
+            "restore_status": "complete",
+            "restored_at_utc": "2026-11-11T00:00:00Z",
+        }
+
+    def v10e_container_fixture(self, manifest):
+        return {
+            "Name": "/erp-mysql-source-v10e",
+            "Id": manifest["container_id"],
+            "Image": manifest["image_id"],
+            "ImageName": manifest["image_name"],
+            "AppArmorProfile": "erp-mysql-rehearsal",
+            "Args": ["--bind-address=127.0.0.1", "--event-scheduler=OFF",
+                     "--local-infile=0", "--secure-file-priv=NULL", "--default-time-zone=-03:00",
+                     "--innodb-buffer-pool-size=512M", "--max-allowed-packet=256M"],
+            "Config": {"Env": ["MYSQL_DATABASE=inlaud99_erpcondor",
+                                "MYSQL_ROOT_PASSWORD_FILE=/run/rehearsal-secrets/root.pass",
+                                "MYSQL_INITDB_SKIP_TZINFO=1"]},
+            "HostConfig": {
+                "NetworkMode": "none", "PortBindings": {}, "Privileged": False,
+                "CapAdd": [], "SecurityOpt": ["no-new-privileges", "apparmor=erp-mysql-rehearsal"],
+            },
+            "State": {"Running": True, "Pid": os.getpid()},
+            "Mounts": [
+                {"Type": "bind", "Destination": "/var/lib/mysql", "Source": "/var/lib/erp-pg-rehearsal/v10e/mysql-data", "RW": True},
+                {"Type": "bind", "Destination": "/var/run/mysqld", "Source": "/var/lib/erp-pg-rehearsal/v10e/mysql-socket", "RW": True},
+                {"Type": "bind", "Destination": "/run/rehearsal-secrets", "Source": str(run_migration.V10E_CONTAINER_SECRETS), "RW": False},
+            ],
+        }
+
+    def make_container_secret_bundle(self, root):
+        bundle = root / "mysql-secrets"
+        bundle.mkdir(mode=0o700)
+        for name in ("client.cnf", "root.pass"):
+            path = bundle / name
+            path.write_text("synthetic secret", encoding="utf-8")
+            path.chmod(0o400)
+        return bundle
+
+    def test_v10e_source_manifest_accepts_exact_reviewed_shape(self):
+        manifest = self.v10e_source_manifest_fixture()
+        validate_v10e_source_manifest(manifest, "b" * 40)
+
+    def test_v10e_source_manifest_rejects_other_targets_and_provenance(self):
+        base = self.v10e_source_manifest_fixture()
+        mutations = (
+            {"target_database": "erp_ensaio_v10d"},
+            {"code_branch": "pg/03-3-ensaio-integral-v10d"},
+            {"code_commit": "a" * 40},
+            {"source_schema": "other"},
+            {"container_name": "erp-mysql-source-v10d"},
+            {"restore_status": "partial"},
+            {"extra": "not-allowed"},
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                validate_v10e_source_manifest({**base, **mutation}, "b" * 40)
+
+    def test_v10e_source_manifest_file_requires_private_regular_file(self):
+        manifest = self.v10e_source_manifest_fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "source-manifest.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            path.chmod(0o600)
+            self.assertEqual(load_v10e_source_manifest(path, "b" * 40, os.getuid()), manifest)
+            link = Path(directory) / "source-link.json"
+            link.symlink_to(path)
+            with self.assertRaises(RuntimeError):
+                load_v10e_source_manifest(link, "b" * 40, os.getuid())
+
+    def test_v10e_container_secret_bundle_has_exactly_two_regular_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "mysql-secrets"
+            bundle.mkdir(mode=0o700)
+            for name in ("client.cnf", "root.pass"):
+                item = bundle / name
+                item.write_text("synthetic", encoding="utf-8")
+                item.chmod(0o400)
+            with patch("run_migration.V10E_CONTAINER_SECRETS", bundle):
+                verify_v10e_container_secret_bundle(os.getuid())
+                (bundle / "unexpected.cnf").write_text("synthetic", encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "bundle is unsafe"):
+                    verify_v10e_container_secret_bundle(os.getuid())
+                (bundle / "unexpected.cnf").unlink()
+                (bundle / "client.cnf").rename(bundle / "client.real")
+                (bundle / "client.cnf").symlink_to(bundle / "client.real")
+                with self.assertRaisesRegex(RuntimeError, "bundle is unsafe"):
+                    verify_v10e_container_secret_bundle(os.getuid())
+
+    def test_v10e_private_catalog_json_rejects_symlink_and_permissive_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "catalog.json"
+            source.write_text('{"tables":270}', encoding="utf-8")
+            source.chmod(0o600)
+            self.assertEqual(load_v10e_private_json(source, os.getuid()), {"tables": 270})
+            link = root / "catalog-link.json"
+            link.symlink_to(source)
+            with self.assertRaisesRegex(RuntimeError, "unavailable or malformed"):
+                load_v10e_private_json(link, os.getuid())
+            source.chmod(0o644)
+            with self.assertRaisesRegex(RuntimeError, "unsafe metadata"):
+                load_v10e_private_json(source, os.getuid())
+
+    def test_v10e_versioned_json_loader_rejects_symlink_and_writable_asset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "expected.json"
+            source.write_text('{"schema":"synthetic"}', encoding="utf-8")
+            source.chmod(0o644)
+            self.assertEqual(load_v10e_code_json(source, os.getuid()), {"schema": "synthetic"})
+            link = Path(directory) / "expected-link.json"
+            link.symlink_to(source)
+            with self.assertRaisesRegex(RuntimeError, "unavailable or malformed"):
+                load_v10e_code_json(link, os.getuid())
+            source.chmod(0o664)
+            with self.assertRaisesRegex(RuntimeError, "unsafe metadata"):
+                load_v10e_code_json(source, os.getuid())
+
+    def test_v10e_catalog_preflight_rejects_symlink_ddl(self):
+        names = {
+            "001_schema.sql", "002_constraints_indexes.sql", "002_foreign_keys.sql",
+            "002_validate_constraints.sql", "003_identity_sequences.sql",
+            "004_on_update_timestamp.sql", "005_business_triggers_routines.sql", "006_grants.sql",
+        }
+        summary = {"mysql_schema": "inlaud99_erpcondor", "tables": 270, "views": 0,
+                   "columns": 3339, "primary_keys": 240, "foreign_keys": 11,
+                   "triggers": 7, "routines": 2, "events": 0,
+                   "auto_increment_columns": 232, "ddl_sha256": {}}
+        payload = b"-- synthetic DDL\n"
+        digest = hashlib.sha256(payload).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "sql"
+            output.mkdir(mode=0o700)
+            for name in names:
+                item = output / name
+                item.write_bytes(payload)
+                item.chmod(0o600)
+                summary["ddl_sha256"][name] = digest
+            validate_v10e_catalog_preflight(summary, output, os.getuid())
+            external = root / "external.sql"
+            external.write_bytes(payload)
+            (output / "006_grants.sql").unlink()
+            (output / "006_grants.sql").symlink_to(external)
+            with self.assertRaisesRegex(RuntimeError, "symlink"):
+                validate_v10e_catalog_preflight(summary, output, os.getuid())
+
+    def test_v10e_source_artifacts_match_manifest_and_container(self):
+        dump = b"synthetic compressed dump bytes"
+        manifest = self.v10e_source_manifest_fixture(len(dump), hashlib.sha256(dump).hexdigest())
+        container = self.v10e_container_fixture(manifest)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secrets = root / "secrets"
+            secrets.mkdir(mode=0o700)
+            manifest_path = secrets / "source-manifest.json"
+            dump_path = root / "source-copy.sql.gz"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            manifest_path.chmod(0o600)
+            dump_path.write_bytes(dump)
+            dump_path.chmod(0o400)
+            bundle = self.make_container_secret_bundle(root)
+            container["Mounts"][2]["Source"] = str(bundle)
+            with patch("run_migration.V10E_SOURCE_MANIFEST", manifest_path), \
+                    patch("run_migration.V10E_DUMP", dump_path), \
+                    patch("run_migration.V10E_ROOT", root), \
+                    patch("run_migration.V10E_CONTAINER_SECRETS", bundle), \
+                    patch("run_migration.subprocess.run", return_value=MagicMock(
+                        returncode=0, stdout=json.dumps([container]))):
+                self.assertEqual(verify_v10e_source_artifacts("b" * 40, os.getuid(), os.getuid()), manifest)
+
+    def test_v10e_source_artifacts_reject_changed_dump_bytes(self):
+        manifest = self.v10e_source_manifest_fixture(3, hashlib.sha256(b"abc").hexdigest())
+        container = self.v10e_container_fixture(manifest)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secrets = root / "secrets"
+            secrets.mkdir(mode=0o700)
+            manifest_path = secrets / "source-manifest.json"
+            dump_path = root / "source-copy.sql.gz"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            manifest_path.chmod(0o600)
+            dump_path.write_bytes(b"bad")
+            dump_path.chmod(0o400)
+            bundle = self.make_container_secret_bundle(root)
+            with patch("run_migration.V10E_SOURCE_MANIFEST", manifest_path), \
+                    patch("run_migration.V10E_DUMP", dump_path), \
+                    patch("run_migration.V10E_ROOT", root), \
+                    patch("run_migration.V10E_CONTAINER_SECRETS", bundle), \
+                    patch("run_migration.subprocess.run", return_value=MagicMock(
+                        returncode=0, stdout=json.dumps([container]))):
+                with self.assertRaisesRegex(RuntimeError, "differs from its private source manifest"):
+                    verify_v10e_source_artifacts("b" * 40, os.getuid(), os.getuid())
+
+    def test_v10e_mysql_container_guard_checks_exact_container_and_network_isolation(self):
+        manifest = self.v10e_source_manifest_fixture()
+        container = self.v10e_container_fixture(manifest)
+        with patch("run_migration.subprocess.run", return_value=MagicMock(
+                returncode=0, stdout=json.dumps([container]))) as run:
+            self.assertEqual(check_mysql_namespace(manifest), os.getpid())
+        self.assertEqual(run.call_args.args[0], ["podman", "inspect", "erp-mysql-source-v10e"])
+        container["HostConfig"]["PortBindings"] = {"3306/tcp": [{"HostPort": "3306"}]}
+        with patch("run_migration.subprocess.run", return_value=MagicMock(
+                returncode=0, stdout=json.dumps([container]))):
+            with self.assertRaisesRegex(RuntimeError, "isolation guard failed"):
+                check_mysql_namespace(manifest)
+
+    def test_pipeline_components_reject_non_v10e_database_or_endpoint(self):
+        require_v10e_database(V10E_DATABASE)
+        require_v10e_endpoint(V10E_DATABASE, V10E_PGSOCKET, V10E_PGPORT)
+        for database in ("erp_ensaio_v9", "erp_ensaio_v10", "erp_ensaio_v10b", "erp_ensaio_v10c",
+                         "erp_ensaio_v10d", "erp_ensaio_arbitrary"):
             with self.subTest(database=database), self.assertRaises(SystemExit):
-                require_v10d_database(database)
-        for socket, port in ((V10D_PGSOCKET, 55432), ("/var/lib/erp-pg-rehearsal/pg-socket", V10D_PGPORT)):
+                require_v10e_database(database)
+        for socket, port in ((V10E_PGSOCKET, 55433), ("/var/lib/erp-pg-rehearsal/v10d/pg-socket", V10E_PGPORT)):
             with self.subTest(socket=socket, port=port), self.assertRaises(SystemExit):
-                require_v10d_endpoint(V10D_DATABASE, socket, port)
+                require_v10e_endpoint(V10E_DATABASE, socket, port)
 
-    def test_v10d_acceptance_requires_exact_catalog_rows_and_zero_fk_orphans(self):
+    def test_v10e_acceptance_requires_exact_catalog_rows_and_zero_fk_orphans(self):
         catalog = {"tables": 270, "columns": 3339, "primary_keys": 240, "foreign_keys": 11,
                    "triggers": 7, "routines": 2, "events": 0, "auto_increment_columns": 232,
                    "zero_date_counts": {}, "fk_type_normalizations": [{"coordinate": "reviewed"}],
@@ -374,7 +725,7 @@ class TypeMappingTests(unittest.TestCase):
                     "numeric_sum_mismatches", "binary_mismatches", "tenant_bucket_mismatches",
                     "timestamp_mismatches", "fk_tenant_mismatch_count"):
             summary[key] = 0
-        validate_v10d_acceptance(catalog, loader, summary)
+        validate_v10e_acceptance(catalog, loader, summary)
         failures = (
             (catalog, loader, {**summary, "columns": 3338}),
             (catalog, {**loader, "source_rows_loaded": 202608}, summary),
@@ -385,7 +736,7 @@ class TypeMappingTests(unittest.TestCase):
         )
         for bad_catalog, bad_loader, bad_summary in failures:
             with self.subTest(summary=bad_summary), self.assertRaises(RuntimeError):
-                validate_v10d_acceptance(bad_catalog, bad_loader, bad_summary)
+                validate_v10e_acceptance(bad_catalog, bad_loader, bad_summary)
 
     def test_postgres_python_environment_exposes_migration_modules_without_bytecode(self):
         command = as_postgres("/venv/python3", "-s")
@@ -831,17 +1182,99 @@ class TypeMappingTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     verify_v10d_postgres_connection(connection)
 
+    def test_v10e_postgres_target_guard_rejects_v10d_and_mismatched_endpoints(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = (
+            V10E_DATABASE, "", str(V10E_PGPORT), V10E_PGDATA, V10E_PGSOCKET,
+            "180006", "America/Sao_Paulo", "UTF8",
+        )
+        verify_v10e_postgres_connection(connection)
+        for changed in (
+            (V10D_DATABASE, "", str(V10E_PGPORT), V10E_PGDATA, V10E_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+            (V10E_DATABASE, "*", str(V10E_PGPORT), V10E_PGDATA, V10E_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+            (V10E_DATABASE, "", str(V10D_PGPORT), V10E_PGDATA, V10E_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+            (V10E_DATABASE, "", str(V10E_PGPORT), V10D_PGDATA, V10E_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+            (V10E_DATABASE, "", str(V10E_PGPORT), V10E_PGDATA, V10D_PGSOCKET,
+             "180006", "America/Sao_Paulo", "UTF8"),
+        ):
+            with self.subTest(row=changed):
+                cursor.fetchone.return_value = changed
+                with self.assertRaises(RuntimeError):
+                    verify_v10e_postgres_connection(connection)
+
     def test_mysql_reader_grants_require_exact_allowlist(self):
+        password_hash = "*" + "a" * 40
         allowed = [
-            "GRANT USAGE ON *.* TO 'pgloader'@'127.0.0.1'",
+            f"GRANT USAGE ON *.* TO 'pgloader'@'127.0.0.1' IDENTIFIED BY PASSWORD '{password_hash}'",
             "GRANT SELECT, SHOW VIEW, TRIGGER ON `inlaud99_erpcondor`.* TO 'pgloader'@'127.0.0.1'",
         ]
-        validate_reader_grants("pgloader@127.0.0.1", allowed)
+        validate_reader_grants("pgloader@127.0.0.1", allowed, password_hash)
         for extra in ("PROCESS ON *.*", "FILE ON *.*", "REPLICATION CLIENT ON *.*", "GRANT OPTION"):
             with self.subTest(extra=extra), self.assertRaises(RuntimeError):
-                validate_reader_grants("pgloader@127.0.0.1", allowed + [f"GRANT {extra} TO 'pgloader'@'127.0.0.1'"])
+                validate_reader_grants("pgloader@127.0.0.1", allowed + [f"GRANT {extra} TO 'pgloader'@'127.0.0.1'"], password_hash)
+        invalid_cases = (
+            ("other@127.0.0.1", allowed),
+            ("PGLOADER@127.0.0.1", allowed),
+            ("pgloader@localhost", allowed),
+            ("pgloader@127.0.0.1", [allowed[0], allowed[1].replace("inlaud99_erpcondor", "INLAUD99_ERPCONDOR")]),
+            ("pgloader@127.0.0.1", [allowed[0].replace("pgloader", "PGLOADER"), allowed[1]]),
+            ("pgloader@127.0.0.1", [allowed[0], allowed[1].replace("'127.0.0.1'", "'localhost'")]),
+            ("pgloader@127.0.0.1", [allowed[0].replace(password_hash, "*" + "b" * 40), allowed[1]]),
+            ("pgloader@127.0.0.1", ["GRANT USAGE ON *.* TO 'pgloader'@'127.0.0.1' IDENTIFIED BY PASSWORD ''", allowed[1]]),
+            ("pgloader@127.0.0.1", ["GRANT USAGE ON *.* TO 'pgloader'@'127.0.0.1' IDENTIFIED BY PASSWORD 'not-a-hash'", allowed[1]]),
+        )
+        for current_user, grants in invalid_cases:
+            with self.subTest(current_user=current_user, grants=grants), self.assertRaises(RuntimeError):
+                validate_reader_grants(current_user, grants, password_hash)
         with self.assertRaises(RuntimeError):
-            validate_reader_grants("other@127.0.0.1", allowed)
+            validate_reader_grants("pgloader@127.0.0.1", allowed, "not-a-hash")
+
+    def test_official_mysql_helper_binds_grants_to_configured_password_hash(self):
+        password = "synthetic-reader-password"
+        password_hash = "*" + "c" * 40
+        grants = [
+            f"GRANT USAGE ON *.* TO 'pgloader'@'127.0.0.1' IDENTIFIED BY PASSWORD '{password_hash}'",
+            "GRANT SELECT, SHOW VIEW, TRIGGER ON `inlaud99_erpcondor`.* TO 'pgloader'@'127.0.0.1'",
+        ]
+
+        class Cursor:
+            def __init__(self):
+                self.executed = []
+                self.responses = iter([
+                    ("pgloader@127.0.0.1",), (password_hash,),
+                    ("1", "1", "OFF", "+00:00"),
+                ])
+
+            def __enter__(self): return self
+            def __exit__(self, *_args): return False
+            def execute(self, query, args=None): self.executed.append((query, args))
+            def fetchone(self): return next(self.responses)
+            def fetchall(self): return [(grant,) for grant in grants]
+
+        class Connection:
+            def __init__(self):
+                self.fake_cursor = Cursor()
+                self.closed = False
+            def cursor(self): return self.fake_cursor
+            def close(self): self.closed = True
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "client.cnf"
+            config.write_text(f"[client]\nuser=pgloader\npassword={password}\n", encoding="utf-8")
+            connection = Connection()
+            with patch("catalog.pymysql.connect", return_value=connection):
+                self.assertIs(mysql_connection(str(config)), connection)
+        password_queries = [(query, args) for query, args in connection.fake_cursor.executed
+                            if query == "SELECT PASSWORD(%s)"]
+        self.assertEqual(password_queries, [("SELECT PASSWORD(%s)", (password,))])
+        self.assertIn(("SET SESSION TRANSACTION READ ONLY", None), connection.fake_cursor.executed)
+        self.assertIn(("START TRANSACTION READ ONLY", None), connection.fake_cursor.executed)
+        self.assertFalse(connection.closed)
 
     def test_enum_escaped_quote_and_backslash(self):
         self.assertEqual(parse_mysql_enum("enum('a','can\\'t','slash\\\\x','line\\nfeed')"),
@@ -1054,16 +1487,52 @@ class DdlTests(unittest.TestCase):
 
     def test_routine_snapshot_requires_exact_approved_fingerprints(self):
         expected_path = ROOT / "expected_routines.json"
-        snapshot, fingerprint = verified_routine_snapshot(expected_path)
-        self.assertEqual(len(snapshot), 2)
-        self.assertEqual(len(fingerprint), 64)
-        changed = json.loads(expected_path.read_text(encoding="utf-8"))
-        changed["routines"][0]["definition_sha256"] = "0" * 64
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8") as stream:
-            json.dump(changed, stream)
-            stream.flush()
+        expected = json.loads(expected_path.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as directory:
+            observed = Path(directory) / "routine_snapshot.json"
+            observed.write_bytes(expected_path.read_bytes())
+            observed.chmod(0o600)
+            snapshot, fingerprint = verified_routine_snapshot(observed)
+            self.assertEqual(len(snapshot), 2)
+            self.assertEqual(len(fingerprint), 64)
+            changed = json.loads(observed.read_text(encoding="utf-8"))
+            changed["routines"][0]["definition_sha256"] = "0" * 64
+            observed.write_text(json.dumps(changed), encoding="utf-8")
+            observed.chmod(0o600)
             with self.assertRaises(RuntimeError):
-                verified_routine_snapshot(stream.name)
+                verified_routine_snapshot(observed)
+
+    def test_catalog_json_reader_enforces_private_and_versioned_asset_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "manifest.json"
+            source.write_text('{"schema":"synthetic"}', encoding="utf-8")
+            source.chmod(0o600)
+            self.assertEqual(read_checked_json(source, private=True)[0], {"schema": "synthetic"})
+            link = Path(directory) / "manifest-link.json"
+            link.symlink_to(source)
+            with self.assertRaisesRegex(RuntimeError, "symlink"):
+                read_checked_json(link, private=True)
+            source.chmod(0o644)
+            self.assertEqual(read_checked_json(source)[0], {"schema": "synthetic"})
+            with self.assertRaisesRegex(RuntimeError, "unsafe metadata"):
+                read_checked_json(source, private=True)
+
+    def test_open_directory_chain_rejects_symlinks_and_shared_writable_ancestors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            safe = root / "safe"
+            safe.mkdir(mode=0o700)
+            fd = open_directory_chain(safe)
+            os.close(fd)
+            link = root / "safe-link"
+            link.symlink_to(safe, target_is_directory=True)
+            with self.assertRaises(OSError):
+                open_directory_chain(link)
+            unsafe = root / "unsafe"
+            unsafe.mkdir(mode=0o700)
+            unsafe.chmod(0o777)
+            with self.assertRaisesRegex(RuntimeError, "writable directory"):
+                open_directory_chain(unsafe)
 
     def test_legacy_table_keeps_primary_unique_and_normal_indexes(self):
         table = "usuarios_bkp_20261107"
@@ -1092,9 +1561,9 @@ class DdlTests(unittest.TestCase):
         self.assertIn('ADD CONSTRAINT "usuarios_bkp_20261107_pkey" PRIMARY KEY ("id")', constraints)
         self.assertIn('CREATE UNIQUE INDEX "ux_usuarios_bkp_20261107_uq_email" ON "legado"."usuarios_bkp_20261107"', constraints)
         self.assertIn('CREATE INDEX "ix_usuarios_bkp_20261107_ix_observacao" ON "legado"."usuarios_bkp_20261107"', constraints)
-        self.assertIn('GRANT CONNECT ON DATABASE "erp_ensaio_v10d" TO erp_app', grants)
+        self.assertIn('GRANT CONNECT ON DATABASE "erp_ensaio_v10e" TO erp_app', grants)
         self.assertNotIn("erp_ensaio_v9", grants)
-        with self.assertRaisesRegex(ValueError, "restricted to the exclusive v10d database"):
+        with self.assertRaisesRegex(ValueError, "restricted to the exclusive v10e database"):
             build_sql(catalog, "erp_ensaio_v9")
 
     def test_on_update_timestamp_only_changes_when_other_columns_change(self):

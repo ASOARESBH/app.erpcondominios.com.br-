@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 SAO_PAULO = ZoneInfo("America/Sao_Paulo")
@@ -17,6 +20,49 @@ V10D_DATABASE = "erp_ensaio_v10d"
 V10D_PGDATA = "/var/lib/erp-pg-rehearsal/v10d/pg-data"
 V10D_PGSOCKET = "/var/lib/erp-pg-rehearsal/v10d/pg-socket"
 V10D_PGPORT = 55433
+V10E_DATABASE = "erp_ensaio_v10e"
+V10E_PGDATA = "/var/lib/erp-pg-rehearsal/v10e/pg-data"
+V10E_PGSOCKET = "/var/lib/erp-pg-rehearsal/v10e/pg-socket"
+V10E_PGPORT = 55434
+
+
+def open_directory_chain(path) -> int:
+    directory = Path(path)
+    if not directory.is_absolute() or any(part in {".", ".."} for part in directory.parts[1:]):
+        raise RuntimeError("directory path is not a safe absolute path")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open("/", flags)
+    try:
+        for component in directory.parts[1:]:
+            next_fd = os.open(component, flags, dir_fd=fd)
+            info = os.fstat(next_fd)
+            mode = stat.S_IMODE(info.st_mode)
+            shared_write = bool(mode & 0o022)
+            safe_sticky_tmp = info.st_uid == 0 and bool(info.st_mode & stat.S_ISVTX)
+            if (not stat.S_ISDIR(info.st_mode) or (shared_write and not safe_sticky_tmp)):
+                os.close(next_fd)
+                raise RuntimeError("directory path crosses an unsafe writable directory")
+            os.close(fd)
+            fd = next_fd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def open_file_from_directory(path, *, expected_parent_uid=None, expected_parent_mode=None,
+                             flags=None) -> int:
+    file_path = Path(path)
+    parent_fd = open_directory_chain(file_path.parent)
+    try:
+        parent = os.fstat(parent_fd)
+        if (expected_parent_uid is not None and parent.st_uid != expected_parent_uid
+                or expected_parent_mode is not None and stat.S_IMODE(parent.st_mode) != expected_parent_mode):
+            raise RuntimeError("file parent directory has unsafe ownership or permissions")
+        file_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) if flags is None else flags
+        return os.open(file_path.name, file_flags, dir_fd=parent_fd)
+    finally:
+        os.close(parent_fd)
 
 
 def require_v10d_database(database: str) -> None:
@@ -28,6 +74,17 @@ def require_v10d_endpoint(database: str, socket: str, port: int) -> None:
     require_v10d_database(database)
     if socket != V10D_PGSOCKET or port != V10D_PGPORT:
         raise SystemExit("refusing any PostgreSQL endpoint except the isolated v10d target")
+
+
+def require_v10e_database(database: str) -> None:
+    if database != V10E_DATABASE:
+        raise SystemExit("refusing any database except the exclusive v10e rehearsal target")
+
+
+def require_v10e_endpoint(database: str, socket: str, port: int) -> None:
+    require_v10e_database(database)
+    if socket != V10E_PGSOCKET or port != V10E_PGPORT:
+        raise SystemExit("refusing any PostgreSQL endpoint except the isolated v10e target")
 
 
 def qi(value: str) -> str:
@@ -285,6 +342,18 @@ def verify_v10d_postgres_connection(conn) -> None:
             or row[3] != V10D_PGDATA or row[4] != V10D_PGSOCKET or not 180000 <= int(row[5]) < 190000
             or row[6] != "America/Sao_Paulo" or row[7] != "UTF8"):
         raise RuntimeError("PostgreSQL connection is not the approved isolated v10d rehearsal")
+
+
+def verify_v10e_postgres_connection(conn) -> None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT current_database(),current_setting('listen_addresses'),current_setting('port'),"
+                    "current_setting('data_directory'),current_setting('unix_socket_directories'),"
+                    "current_setting('server_version_num'),current_setting('TimeZone'),current_setting('server_encoding')")
+        row = cur.fetchone()
+    if (row is None or row[0] != V10E_DATABASE or row[1] != "" or int(row[2]) != V10E_PGPORT
+            or row[3] != V10E_PGDATA or row[4] != V10E_PGSOCKET or not 180000 <= int(row[5]) < 190000
+            or row[6] != "America/Sao_Paulo" or row[7] != "UTF8"):
+        raise RuntimeError("PostgreSQL connection is not the approved isolated v10e rehearsal")
 
 
 def canonical(value: object, data_type: str, *, side: str = "source", generated: bool = False) -> bytes:
