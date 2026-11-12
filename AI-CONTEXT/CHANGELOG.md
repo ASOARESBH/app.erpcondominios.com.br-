@@ -8,7 +8,7 @@ Registro de alterações significativas no ERP.
 - PostgreSQL e o projeto de conversão seguem pausados; os alvos/artefatos históricos não foram apagados ou reutilizados.
 ### Bloqueado
 - H2: dump verificado por SHA-256 e gzip, mas a importação parou com erro MySQL `1419/HY000` durante criação de rotinas/triggers (`log_bin=1`, `log_bin_trust_function_creators=0`). O schema HML ficou parcial (41 tabelas base); contagem de linhas e aceites H2 não foram confirmados.
-- H3: a triagem estática das 54 migrations de `origin/main` foi concluída, sem executar SQL. A reconciliação item a item contra o schema e a identificação do subconjunto realmente necessário ficam bloqueadas até H2 ser aceita. Nenhuma migration foi aplicada; não houve deploy, DNS ou cutover.
+- H3: a triagem estática das 54 migrations de `origin/main` foi concluída, sem executar SQL: 20 estruturais idempotentes, 29 mistas, 4 estruturais não idempotentes e 1 bloqueada/requer revisão. A matriz está em `docs/infraestrutura/hetzner/MATRIZ_MIGRATIONS_H3.md`. A reconciliação item a item contra o schema e a identificação do subconjunto realmente necessário ficam bloqueadas até H2 ser aceita. Nenhuma migration foi aplicada; não houve deploy, DNS ou cutover.
 - Logs brutos permanecem privados e root-only; reset/overwrite da HML aguarda decisão explícita sobre recuperação.
 
 ## [2.1.26] - 2026-11-05
