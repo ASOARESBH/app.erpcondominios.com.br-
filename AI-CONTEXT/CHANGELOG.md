@@ -5,11 +5,16 @@ Registro de alterações significativas no ERP.
 ## Infraestrutura Hetzner — 2026-11-12
 ### Validado
 - H1: MySQL 8.4.13 instalado e configurado para acesso local por socket/127.0.0.1, `NO_ENGINE_SUBSTITUTION`, timezone `-03:00`, `utf8mb4`/`utf8mb4_unicode_ci`, binlog, retenção de 7 dias e slow log. PHP `mysqli` conectou com sucesso à HML; porta 3306 sem regra UFW.
-- PostgreSQL e o projeto de conversão seguem pausados; os alvos/artefatos históricos não foram apagados ou reutilizados.
-### Bloqueado
-- H2: dump verificado por SHA-256 e gzip, mas a importação parou com erro MySQL `1419/HY000` durante criação de rotinas/triggers (`log_bin=1`, `log_bin_trust_function_creators=0`). O schema HML ficou parcial (41 tabelas base); contagem de linhas e aceites H2 não foram confirmados.
-- H3: a triagem estática das 54 migrations de `origin/main` foi concluída, sem executar SQL: 20 estruturais idempotentes, 29 mistas, 4 estruturais não idempotentes e 1 bloqueada/requer revisão. A matriz está em `docs/infraestrutura/hetzner/MATRIZ_MIGRATIONS_H3.md`. A reconciliação item a item contra o schema e a identificação do subconjunto realmente necessário ficam bloqueadas até H2 ser aceita. Nenhuma migration foi aplicada; não houve deploy, DNS ou cutover.
-- Logs brutos permanecem privados e root-only; reset/overwrite da HML aguarda decisão explícita sobre recuperação.
+- H2: restauração aceita — 270 tabelas, 202.609 linhas reconciliadas em 270/270 tabelas, 7 triggers, 2 procedures, zero divergências, zero erros e zero definers incorretos. Evidência root-only; integrações externas neutralizadas apenas no HML.
+- H3: reconciliação estrutural de 54 migrations contra catálogo live. Aplicadas somente quatro lacunas comprovadas: cinco tabelas de `alertas_acesso`, coluna de observação de abastecimento, `client_uuid`/índices únicos de leituras móveis e dois índices de O.S. Contagens pós-DDL preservaram as 270 tabelas de origem e 202.609 registros; cinco tabelas vazias novas. Script idempotente MySQL 8.4 em `sql/deploy/hetzner_cutover_migrations.sql`.
+- O backup lógico imediatamente pré-DDL, os logs de aplicação e as evidências de reconciliação são root-only na VM. Nenhuma linha de negócio foi incluída em Git ou relatório.
+### Pendente / gates
+- H3 permanece parcial: migrations mistas/não idempotentes e seeds/backfills não aprovados seguem sem execução. `assembleias.tenant_id` já existe e a contagem nula/zero é 0. A v2 de notificações não foi aplicada; `protocolo_id` é `NOT NULL`, existem 643 registros e zero duplicidades na chave candidata. A migration `migration_consolidar_erpserra_para_erpcondor_mysql57.sql` permanece desativada e não executada.
+- H4 deve começar pelo IP `2.29.161.106`, a partir de `origin/main`; DNS e HostGator não foram alterados. Aguardar os ZIPs de `uploads/` e `config/firebase/` antes de importar esses arquivos. Não tentar Certbot sem hostname apontado.
+- PostgreSQL e o projeto de conversão continuam pausados; branches `pg/*`, dumps e ensaios históricos permanecem preservados. Não houve merge em `main` nem cutover.
+### Histórico da falha inicial (resolvida)
+- A primeira restauração H2 parou em `1419/HY000` ao criar rotinas/triggers com `log_bin=1` e `log_bin_trust_function_creators=0`; H3 e H4 foram suspensas até correção permanente autorizada e nova restauração. A HML parcial e os logs root-only dessa tentativa foram preservados; depois disso a restauração integral foi refeita e aceita.
+- A triagem estática original encontrou 20 migrations estruturais idempotentes, 29 mistas, 4 estruturais não idempotentes e 1 bloqueada/requer revisão. O resultado efetivo por migration está na matriz `docs/infraestrutura/hetzner/MATRIZ_MIGRATIONS_H3.md`.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado
