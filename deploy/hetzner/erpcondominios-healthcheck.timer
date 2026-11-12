@@ -1,0 +1,10 @@
+[Unit]
+Description=Agendamento periódico do healthcheck ERP Condomínios HML
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=erpcondominios-healthcheck.service
+
+[Install]
+WantedBy=timers.target

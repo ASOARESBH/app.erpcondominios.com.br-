@@ -1,0 +1,11 @@
+[Unit]
+Description=Agendamento diário do backup lógico HML ERP Condomínios
+
+[Timer]
+OnCalendar=*-*-* 06:15:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+Unit=erpcondominios-backup.service
+
+[Install]
+WantedBy=timers.target

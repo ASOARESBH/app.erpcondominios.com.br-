@@ -1,0 +1,17 @@
+[Unit]
+Description=Validação de integridade dos backups do ERP Condomínios HML
+After=erpcondominios-backup.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/erpcondominios-backup-integrity.sh
+TimeoutStartSec=30min
+StateDirectory=erpcondominios
+StateDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true

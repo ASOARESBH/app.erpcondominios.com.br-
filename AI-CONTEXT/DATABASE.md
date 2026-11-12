@@ -126,10 +126,20 @@ Chave opcional `pwa_configuracoes.push_chatin_ativo` = '0' desliga o push do Cha
 
 ## 16. Hetzner HML — estado da restauração (2026-11-12)
 
-A HML usa MySQL 8.4.13 local-only e foi criada para validar o dump de origem sem alterar HostGator/produção. Dump verificado: SHA-256 `1e79b7172c8d0141e63b90400d91baae084f99ab1ecf47661a8990b4e5dd5fe8`, tamanho 355.697.322 bytes, `gzip -t` aprovado.
+A HML usa MySQL 8.4.13 local-only e foi criada para validar o dump de origem sem alterar HostGator/produção. Integridade gzip e checksum do dump foram verificados; digest e cópias permanecem em armazenamento privado, não versionados.
 
 O banco foi restaurado após a correção autorizada de `log_bin_trust_function_creators=ON` e aceito em 12/11: 270 tabelas, 202.609 linhas reconciliadas em 270/270 tabelas com o catálogo do loader, sete triggers, duas procedures, zero definers incorretos, zero divergências e zero erros de importação. As integrações externas foram neutralizadas somente no HML. A evidência e os logs são root-only em `/var/log/erpcondominios/h2-restore-accepted-20261112/`.
 
 Antes de H3 foi criado o backup lógico root-only `/var/backups/erpcondominios/h3-pre-ddl-20261112T200850Z/`; manifesto e hash não são públicos. Após H3, a reconciliação exata por `COUNT(*)` preservou as 270 tabelas de origem e os 202.609 registros; foram acrescentadas cinco tabelas vazias de alertas de acesso, totalizando 275 tabelas base. O delta aplicado contém somente DDL estrutural aprovado, versionado em `sql/deploy/hetzner_cutover_migrations.sql`: cinco tabelas `alertas_acesso_*`; `abastecimento_lancamentos.observacao`; `client_uuid` e índices únicos nas tabelas `leituras` e `leituras_fotos`; e os índices `os_chamados.idx_origem_portal` e `idx_morador_id`. O script é compatível com MySQL 8.4 por guards `INFORMATION_SCHEMA` e SQL preparado; não contém DML ou DROP.
 
 H3 permanece parcial quanto às demais migrations. `assembleias.tenant_id` e `idx_assembleias_tenant_data` já existem, e a contagem de registros sem tenant é zero; nenhum backfill foi executado. A mudança de nulabilidade/índice de `notificacoes_morador` também não foi executada (`protocolo_id` permanece `NOT NULL`; 643 linhas e zero duplicidades na chave candidata). Para migrations mistas, não idempotentes ou com dados/seed pendentes, consultar a matriz H3 e obter autorização antes de qualquer alteração. A migration desativada `migration_consolidar_erpserra_para_erpcondor_mysql57.sql` nunca deve ser executada.
+
+## 17. H4/H6 — aplicação HML por IP e backup (2026-11-12)
+
+O código servido é exatamente `origin/main` em `f60739713e6de3f2473b79ecd14a70fd700e5462`. A aplicação conecta somente ao schema HML `erpcondominios`; MySQL escuta apenas localmente/socket e não foi aberto para rede. O caminho `/api/api_usuarios.php` sem sessão retorna 401 JSON; nenhum cadastro/login funcional ou DML foi executado nesta validação.
+
+A contagem agregada confirmou 275/275 tabelas-base InnoDB. O backup lógico diário usa `mysqldump --single-transaction --routines --triggers --events --hex-blob`, gzip, verificação de checksum e arquivos `root:root 0600`. O timer de backup é 06:15 UTC; recusa iniciar com menos de 10 GiB livres e não expurga cópias. A unit separada de integridade diária valida gzip, SHA-256 e permissões; healthcheck passivo de cinco minutos verifica o marcador de integridade/frescor e não inicia serviços. Evitar DDL concorrente durante o backup.
+
+Os backups estão apenas no mesmo host, sem retenção automática ou cópia off-host; restore drill isolado, armazenamento externo criptografado, política de retenção e alertas externos permanecem pendentes. Testar restauração apenas em alvo temporário novo, nunca sobre o HML.
+
+O delta H3 exato está em `sql/deploy/hetzner_cutover_migrations.sql`. A matriz/resultado por 54 migrations está em `docs/infraestrutura/hetzner/MATRIZ_MIGRATIONS_H3.md` e `docs/infraestrutura/hetzner/H3_RECONCILIACAO_LIVE_2026-11-12.md`. Evidências root-only não devem ser transferidas para Git.
