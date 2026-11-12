@@ -2,6 +2,15 @@
 
 Registro de alterações significativas no ERP.
 
+## Infraestrutura Hetzner — 2026-11-12
+### Validado
+- H1: MySQL 8.4.13 instalado e configurado para acesso local por socket/127.0.0.1, `NO_ENGINE_SUBSTITUTION`, timezone `-03:00`, `utf8mb4`/`utf8mb4_unicode_ci`, binlog, retenção de 7 dias e slow log. PHP `mysqli` conectou com sucesso à HML; porta 3306 sem regra UFW.
+- PostgreSQL e o projeto de conversão seguem pausados; os alvos/artefatos históricos não foram apagados ou reutilizados.
+### Bloqueado
+- H2: dump verificado por SHA-256 e gzip, mas a importação parou com erro MySQL `1419/HY000` durante criação de rotinas/triggers (`log_bin=1`, `log_bin_trust_function_creators=0`). O schema HML ficou parcial (41 tabelas base); contagem de linhas e aceites H2 não foram confirmados.
+- H3: a triagem estática das 54 migrations de `origin/main` foi concluída, sem executar SQL. A reconciliação item a item contra o schema e a identificação do subconjunto realmente necessário ficam bloqueadas até H2 ser aceita. Nenhuma migration foi aplicada; não houve deploy, DNS ou cutover.
+- Logs brutos permanecem privados e root-only; reset/overwrite da HML aguarda decisão explícita sobre recuperação.
+
 ## [2.1.26] - 2026-11-05
 ### Adicionado
 - **Chat-In** (menu abaixo de Recursos Humanos): comunicador interno entre usuários do painel e moradores (Portal e app). Botão flutuante + painel lateral fixável/minimizável, página do painel, status online, busca por nome/unidade, histórico permanente, bloqueio, ocultar-se da busca, emojis, push FCM no app com deep link. Detalhes em `AI-CONTEXT/CHATIN.md`. Migration `sql/migration_chatin_mysql57.sql`.

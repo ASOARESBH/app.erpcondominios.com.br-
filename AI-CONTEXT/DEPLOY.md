@@ -23,3 +23,13 @@ Após backup, deploy dos arquivos e aplicação de `sql/migration_alertas_unidad
 
 ## 6. Chat-In (2026-11-05)
 Após backup: executar no phpMyAdmin `sql/migration_chatin_mysql57.sql` e `sql/migration_assembleia_tenant_mysql57.sql` (conferir `assembleias_sem_tenant = 0`). Enviar os arquivos web. O widget se desativa sozinho enquanto a migration não existir. Para desligar o push do Chat-In em um condomínio: `pwa_configuracoes` chave `push_chatin_ativo` = '0'. App: `flutter analyze` + novo build para o push/telas do Chat-In.
+
+## 7. Hetzner — HML MySQL lift-and-shift (2026-11-12)
+
+A decisão operacional é hospedar a aplicação atual sobre MySQL 8.4.13; o projeto PostgreSQL fica pausado. A VM possui MySQL local-only em `127.0.0.1:3306`/socket, `NO_ENGINE_SUBSTITUTION`, timezone `-03:00`, servidor `utf8mb4`/`utf8mb4_unicode_ci`, binlog com retenção de 7 dias, slow log ativo e Event Scheduler desligado. PHP `mysqli` autenticou por socket com `erp_app`; a porta 3306 não tem regra UFW.
+
+H1 foi validada para o runtime MySQL. H2 **não foi aceita**: o dump autorizado (SHA-256 `1e79b7172c8d0141e63b90400d91baae084f99ab1ecf47661a8990b4e5dd5fe8`, 355.697.322 bytes, gzip íntegro) começou a ser importado em `erpcondominios`, mas a criação de rotina/trigger falhou com MySQL `1419/HY000` porque `log_bin=1` e `log_bin_trust_function_creators=0`. O schema de HML está parcial: 41 tabelas base, zero views, triggers, routines ou events; a contagem de linhas não foi validada. O log bruto foi mantido privado em `/var/log/erpcondominios/h2-restore-failure-20261112/`, root-only.
+
+Como H2 falhou, interromper H3/H4/H5/H6. Não reaplicar o dump, remover objetos, executar migrations ou avançar deploy/DNS sem resolver o gate e obter autorização para qualquer reset/overwrite do schema parcial. Nenhuma migration foi aplicada. A triagem estática das 54 migrations de `origin/main` foi concluída, mas a determinação de quais faltam permanece pendente da comparação com uma restauração H2 aceita. Os quatro arquivos explicitamente protegidos em H3 foram conferidos: os dois de correção de IDs não existem em `origin/main`; `migration_assembleia_tenant_mysql57.sql` e `migration_consolidar_erpserra_para_erpcondor_mysql57.sql` existem e permanecem não aplicados.
+
+Estado: `H1_OK / H2_BLOCKED / H3-H6_NOT_STARTED`. PostgreSQL e ensaios históricos permanecem pausados/preservados; nenhuma virada, deploy ou alteração DNS foi feita.

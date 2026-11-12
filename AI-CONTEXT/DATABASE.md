@@ -123,3 +123,11 @@ A migration `sql/migration_rh_banco_horas_mapeamento_mysql57.sql` pressupõe a m
 `sql/migration_chatin_mysql57.sql` cria: `chatin_conversas`, `chatin_participantes`, `chatin_mensagens`, `chatin_presenca`, `chatin_preferencias`, `chatin_bloqueios`, `notificacao_canais_config`, `eventos_condominio`. Todas com `tenant_id` e índices iniciando por ele; só `CREATE TABLE IF NOT EXISTS` (compatível com phpMyAdmin sem acesso a `INFORMATION_SCHEMA`). Detalhes em `CHATIN.md` §3.
 `sql/migration_assembleia_tenant_mysql57.sql` adiciona `assembleias.tenant_id` + índice `idx_assembleias_tenant_data` com backfill (criador → `usuarios.tenant_id`; vínculo único em `usuario_tenant`; instalação com um único `tenants`). Idempotente por handlers 1060/1061, sem `INFORMATION_SCHEMA`. Linhas sem tenant ficam invisíveis na API.
 Chave opcional `pwa_configuracoes.push_chatin_ativo` = '0' desliga o push do Chat-In no tenant.
+
+## 16. Hetzner HML — estado da restauração (2026-11-12)
+
+A HML usa MySQL 8.4.13 local-only e foi criada para validar o dump de origem sem alterar HostGator/produção. Dump verificado: SHA-256 `1e79b7172c8d0141e63b90400d91baae084f99ab1ecf47661a8990b4e5dd5fe8`, tamanho 355.697.322 bytes, `gzip -t` aprovado.
+
+A importação parou com `1419/HY000` durante a criação de objeto sob binlog (`log_bin=1`, `log_bin_trust_function_creators=0`). O schema `erpcondominios` está **parcial**: 41 tabelas base; zero views, triggers, rotinas e events observados no momento do diagnóstico. A contagem de linhas e os aceites H2 não foram obtidos. Não executar migrations H3, não apontar a aplicação para essa base e não presumir que ela esteja consistente.
+
+O log bruto da tentativa é privado e root-only em `/var/log/erpcondominios/h2-restore-failure-20261112/`. A carga parcial deve ser preservada até aprovação explícita de uma estratégia de recuperação; não usar `DROP`, `TRUNCATE` ou rerun como tentativa de correção automática. H3 depende de H2 aceita e de comparação efetiva com o schema instalado.
