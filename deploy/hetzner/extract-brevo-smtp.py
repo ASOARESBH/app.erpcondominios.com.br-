@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract the authorized Brevo SMTP relay credential from a private SQL dump."""
+"""Extract the authorized Brevo fallback credential from a private SQL dump."""
 from __future__ import annotations
 
 import gzip
@@ -17,9 +17,12 @@ COLUMNS = [
     "data_atualizacao",
 ]
 SENDER = b"noreply@erpcondominios.com.br"
+TITAN_HOST = "smtp.titan.email"
+BREVO_HOST = "smtp-relay.brevo.com"
 DEST_DIR = Path("/etc/erpcondominios/secrets")
 CONFIG_PATH = DEST_DIR / "msmtprc"
 PASSWORD_PATH = DEST_DIR / "smtp-password"
+TITAN_PASSWORD_PATH = DEST_DIR / "titan-app-password"
 
 
 def _parse_values(data: bytes) -> list[list[bytes | None]]:
@@ -161,6 +164,18 @@ def _write_new(path: Path, content: bytes) -> None:
             pass
 
 
+def _secure_password_file(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_gid != 0
+                or stat.S_IMODE(metadata.st_mode) != 0o600 or path.is_symlink()):
+            return False
+        value = path.read_bytes()
+        return 1 <= len(value) <= 1024 and bool(re.fullmatch(rb"[!-~]+", value))
+    except OSError:
+        return False
+
+
 def _config(host: str, port: str, user: str, from_address: str) -> bytes:
     if port == "587":
         starttls = "on"
@@ -172,20 +187,30 @@ def _config(host: str, port: str, user: str, from_address: str) -> bytes:
         "defaults\n"
         "auth on\n"
         "tls on\n"
-        f"tls_starttls {starttls}\n"
         "tls_trust_file system\n"
         "tls_certcheck on\n"
         "syslog off\n"
         "allow_from_override off\n"
         "set_from_header on\n"
-        "timeout 20\n"
-        "account default\n"
+        "timeout 10\n"
+        "\n"
+        "account titan\n"
+        f"host {TITAN_HOST}\n"
+        "port 465\n"
+        "tls_starttls off\n"
+        f"user {from_address}\n"
+        f"from {from_address}\n"
+        f"passwordeval /bin/cat {DEST_DIR / 'titan-app-password'}\n"
+        "\n"
+        "account brevo\n"
         f"host {host}\n"
         f"port {port}\n"
+        f"tls_starttls {starttls}\n"
         f"user {user}\n"
         f"from {from_address}\n"
         f"passwordeval /bin/cat {PASSWORD_PATH}\n"
         "\n"
+        "account default : titan\n"
     )
     return text.encode("ascii")
 
@@ -206,8 +231,11 @@ def main() -> int:
             print("credential_extract=failed reason=secret_directory")
             return 4
         dst = DEST_DIR.lstat()
-        if dst.st_uid != 0 or stat.S_IMODE(dst.st_mode) != 0o700:
+        if dst.st_uid != 0 or dst.st_gid != 0 or stat.S_IMODE(dst.st_mode) != 0o700:
             print("credential_extract=failed reason=secret_directory")
+            return 4
+        if not _secure_password_file(TITAN_PASSWORD_PATH):
+            print("credential_extract=failed reason=titan_credential_missing_or_invalid")
             return 4
         if CONFIG_PATH.exists() or CONFIG_PATH.is_symlink() or PASSWORD_PATH.exists() or PASSWORD_PATH.is_symlink():
             print("credential_extract=failed reason=refusing_overwrite")
@@ -244,7 +272,8 @@ def main() -> int:
         active = _text(row.get("smtp_ativo")).lower() in {"1", "true", "yes", "on", "ativo", "active"}
         security = _text(row.get("smtp_seguranca")).lower()
         valid_host = bool(re.fullmatch(r"(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}", host))
-        if ("brevo" not in provider or not valid_host or port not in {"587", "465"}
+        if ("brevo" not in provider or not valid_host or host.lower() != BREVO_HOST
+                or port not in {"587", "465"}
                 or not re.fullmatch(r"[A-Za-z0-9@._+-]{1,254}", user)
                 or not password_ascii or not re.fullmatch(r"[!-~]{1,512}", password_ascii)
                 or password == api_key or not active

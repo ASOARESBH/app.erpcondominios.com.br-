@@ -20,6 +20,11 @@ O ERP possui serviços que rodam em background ou de forma independente:
 - Suporta múltiplos gateways: Brevo, Resend, SMTP genérico.
 - Possui fallback automático (se Brevo falhar, tenta SMTP).
 
+### Alertas de infraestrutura Hetzner
+- Transporte separado do e-mail do ERP: o dispatcher usa msmtp com TITAN primário e Brevo como fallback automático após falha conclusiva; timeout ambíguo não aciona fallback para evitar duplicidade.
+- Usa o mesmo endereço `noreply@erpcondominios.com.br` como remetente e destinatário de resumo/alertas. A app password TITAN e a credencial SMTP Brevo são arquivos distintos, root-only; não são lidas da HML nem colocadas em Git/logs.
+- Essa configuração pertence à VM Hetzner e não altera os gateways da aplicação.
+
 
 ### Eventos automáticos de Controle de Acesso
 

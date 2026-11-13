@@ -28,7 +28,8 @@ STATE_FILE = STATE_DIR / "alerts-state.json"
 LOCK_FILE = STATE_DIR / ".alerts.lock"
 MSMTP = Path("/usr/bin/msmtp")
 MSMTP_CONFIG = Path("/etc/erpcondominios/secrets/msmtprc")
-SMTP_PASSWORD = Path("/etc/erpcondominios/secrets/smtp-password")
+BREVO_PASSWORD = Path("/etc/erpcondominios/secrets/smtp-password")
+TITAN_PASSWORD = Path("/etc/erpcondominios/secrets/titan-app-password")
 SMTP_FAILURE_MARKER = STATE_DIR / "smtp-delivery-failure"
 RECIPIENT = "noreply@erpcondominios.com.br"
 SENDER = "noreply@erpcondominios.com.br"
@@ -59,6 +60,7 @@ ITEMS = {
     "healthcheck_runtime": "Execução do healthcheck",
     "smtp_delivery_failure": "Entrega SMTP",
     "smtp_config": "Configuração local do alerta SMTP",
+    "titan_primary_credential": "Credencial primária TITAN",
     "disk_space_simulation": "Simulação controlada de espaço em disco",
 }
 
@@ -90,6 +92,7 @@ def _safe_file(path: Path, expected_mode: int = 0o600) -> bool:
         return (
             stat.S_ISREG(st.st_mode)
             and st.st_uid == 0
+            and st.st_gid == 0
             and stat.S_IMODE(st.st_mode) == expected_mode
             and not path.is_symlink()
         )
@@ -97,15 +100,78 @@ def _safe_file(path: Path, expected_mode: int = 0o600) -> bool:
         return False
 
 
+def _safe_password_file(path: Path) -> bool:
+    if not _safe_file(path):
+        return False
+    try:
+        value = path.read_bytes()
+        return 1 <= len(value) <= 1024 and all(33 <= byte <= 126 for byte in value)
+    except OSError:
+        return False
+
+
+def _directives(block: str) -> dict[str, str] | None:
+    result: dict[str, str] = {}
+    for line in block.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2 or parts[0] in result:
+            return None
+        result[parts[0]] = parts[1]
+    return result
+
+
+def _msmtp_config_valid(config: str) -> bool:
+    headers = list(re.finditer(r"(?m)^account\s+([A-Za-z0-9_-]+)(?:\s*:\s*([A-Za-z0-9_-]+))?\s*$", config))
+    if [match.group(1) for match in headers] != ["titan", "brevo", "default"]:
+        return False
+    if headers[-1].group(2) != "titan" or config.count("account ") != 3:
+        return False
+
+    defaults = _directives(config[:headers[0].start()].removeprefix("defaults\n"))
+    titan = _directives(config[headers[0].end():headers[1].start()])
+    brevo = _directives(config[headers[1].end():headers[2].start()])
+    default = _directives(config[headers[2].end():])
+    if defaults is None or titan is None or brevo is None or default is None:
+        return False
+    required_defaults = {
+        "auth": "on", "tls": "on", "tls_trust_file": "system",
+        "tls_certcheck": "on", "syslog": "off",
+        "allow_from_override": "off", "set_from_header": "on",
+        "timeout": "10",
+    }
+    if set(defaults) != set(required_defaults) or not all(defaults.get(key) == value for key, value in required_defaults.items()):
+        return False
+    titan_keys = {"host", "port", "tls_starttls", "user", "from", "passwordeval"}
+    if set(default) or set(titan) != titan_keys or titan.get("host") != "smtp.titan.email" or titan.get("port") != "465":
+        return False
+    if (titan.get("tls_starttls") != "off" or titan.get("user") != SENDER
+            or titan.get("from") != SENDER
+            or titan.get("passwordeval") != f"/bin/cat {TITAN_PASSWORD}"):
+        return False
+    if (set(brevo) != titan_keys or brevo.get("host") != "smtp-relay.brevo.com"
+            or brevo.get("port") not in {"465", "587"}
+            or brevo.get("tls_starttls") != ("on" if brevo.get("port") == "587" else "off")
+            or not re.fullmatch(r"[A-Za-z0-9@._+-]{1,254}", brevo.get("user", ""))
+            or brevo.get("from") != SENDER
+            or brevo.get("passwordeval") != f"/bin/cat {BREVO_PASSWORD}"):
+        return False
+    return "password " not in config and "syslog on" not in config
+
+
 def _smtp_ready() -> bool:
     try:
+        if os.geteuid() != 0 or not MSMTP.is_file() or not _safe_file(MSMTP_CONFIG):
+            return False
+        directory = MSMTP_CONFIG.parent.stat()
+        if directory.st_uid != 0 or directory.st_gid != 0 or stat.S_IMODE(directory.st_mode) != 0o700:
+            return False
+        config = MSMTP_CONFIG.read_text(encoding="ascii")
         return (
-            os.geteuid() == 0
-            and MSMTP.is_file()
-            and _safe_file(MSMTP_CONFIG)
-            and _safe_file(SMTP_PASSWORD)
-            and stat.S_IMODE(MSMTP_CONFIG.parent.stat().st_mode) == 0o700
-            and MSMTP_CONFIG.parent.stat().st_uid == 0
+            _msmtp_config_valid(config)
+            and _safe_password_file(TITAN_PASSWORD)
         )
     except OSError:
         return False
@@ -163,9 +229,18 @@ def _smtp_failure_class(diagnostic: bytes) -> str:
         return "tls"
     if any(token in diagnostic for token in (b"resolve", b"name or service", b"dns")):
         return "dns"
-    if any(token in diagnostic for token in (b"connect", b"timed out", b"refused", b"unreachable")):
+    if any(token in diagnostic for token in (b"timed out", b"timeout", b"timedout")):
+        return "ambiguous_timeout"
+    if any(token in diagnostic for token in (b"connection reset", b"broken pipe", b"connection closed", b"unexpected eof")):
+        return "ambiguous_transport"
+    if any(token in diagnostic for token in (
+        b"connection refused", b"failed to connect", b"could not connect",
+        b"cannot connect", b"network is unreachable", b"no route to host",
+    )):
         return "connection"
-    return "relay_rejected"
+    if re.search(rb"(?m)(?:^|\s)(?:[45][0-9]{2})(?:[ -]|$)", diagnostic):
+        return "relay_rejected"
+    return "ambiguous_unknown"
 
 
 def _record_smtp_status(failing: bool) -> None:
@@ -182,8 +257,8 @@ def _smtp_failure_present() -> bool:
     try:
         if not _safe_file(SMTP_FAILURE_MARKER):
             return SMTP_FAILURE_MARKER.exists() or SMTP_FAILURE_MARKER.is_symlink()
-        return SMTP_FAILURE_MARKER.read_text(encoding="ascii") != "smtp_delivery_failed\n"
-    except (OSError, UnicodeError):
+        return True
+    except OSError:
         return True
 
 
@@ -191,6 +266,8 @@ def _send(category: str, item: str, body_lines: list[str]) -> bool:
     if category not in {"ALERTA", "OK", "RESUMO"} or item not in ITEMS and item not in {"teste SMTP", "status diário"}:
         return False
     if not _smtp_ready():
+        _record_smtp_status(True)
+        print("smtp_delivery=failed reason=config")
         return False
     message = email.message.EmailMessage()
     message["From"] = f"ERP Condomínios <{SENDER}>"
@@ -199,26 +276,41 @@ def _send(category: str, item: str, body_lines: list[str]) -> bool:
     display_item = ITEMS.get(item, item)
     message["Subject"] = f"[ERP Hetzner][{category}] {display_item}"
     message.set_content("\n".join(body_lines) + "\n", subtype="plain", charset="utf-8")
-    try:
-        result = subprocess.run(
-            [str(MSMTP), f"--file={MSMTP_CONFIG}", "--account=default", RECIPIENT],
-            input=message.as_bytes(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=25,
-            check=False,
-        )
-        if result.returncode == 0:
-            _record_smtp_status(False)
-            return True
-        reason = _smtp_failure_class(result.stdout + result.stderr)
+    payload = message.as_bytes()
+    failures: list[tuple[str, str]] = []
+    titan_available = _safe_password_file(TITAN_PASSWORD)
+    brevo_available = _safe_password_file(BREVO_PASSWORD)
+    if not titan_available:
         _record_smtp_status(True)
-        print(f"smtp_delivery=failed reason={reason}")
+        print("smtp_delivery=failed reason=titan_primary_unavailable")
         return False
-    except (OSError, subprocess.TimeoutExpired):
-        _record_smtp_status(True)
-        print("smtp_delivery=failed reason=client")
-        return False
+    accounts = ("titan", "brevo") if brevo_available else ("titan",)
+    for account in accounts:
+        try:
+            result = subprocess.run(
+                [str(MSMTP), f"--file={MSMTP_CONFIG}", f"--account={account}", "--timeout=10", RECIPIENT],
+                input=payload,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=12,
+                check=False,
+            )
+            if result.returncode == 0:
+                _record_smtp_status(False)
+                print(f"smtp_delivery=accepted provider={'titan' if account == 'titan' else 'brevo_fallback'}")
+                return True
+            reason = _smtp_failure_class(result.stdout + result.stderr)
+        except subprocess.TimeoutExpired:
+            reason = "ambiguous_timeout"
+        except OSError:
+            reason = "ambiguous_client"
+        failures.append((account, reason))
+        if account == "titan" and reason.startswith("ambiguous_"):
+            failures.append(("brevo", "skipped_ambiguous_acceptance"))
+            break
+    _record_smtp_status(True)
+    print("smtp_delivery=failed " + " ".join(f"{account}={reason}" for account, reason in failures))
+    return False
 
 
 def _emit_transition(data: dict, item: str, failing: bool, detail: str) -> None:
@@ -392,6 +484,7 @@ def _collect() -> dict:
     statuses["summary_delivery_failure"] = _unit_failed("erpcondominios-summary.service")
     statuses["healthcheck_runtime"] = _unit_failed("erpcondominios-healthcheck.service")
     statuses["smtp_delivery_failure"] = _smtp_failure_present()
+    statuses["titan_primary_credential"] = not _safe_password_file(TITAN_PASSWORD)
     details = {
         "nginx_service": "unit nginx.service ativa" if statuses["nginx_service"] else "unit nginx.service inativa",
         "php_fpm_service": "unit php8.3-fpm.service ativa" if statuses["php_fpm_service"] else "unit php8.3-fpm.service inativa",
@@ -411,6 +504,7 @@ def _collect() -> dict:
         "summary_delivery_failure": "último envio do resumo falhou" if statuses["summary_delivery_failure"] else "último envio do resumo concluído",
         "healthcheck_runtime": "última execução do healthcheck falhou" if statuses["healthcheck_runtime"] else "última execução do healthcheck concluída",
         "smtp_delivery_failure": "última submissão SMTP falhou" if statuses["smtp_delivery_failure"] else "última submissão SMTP aceita",
+        "titan_primary_credential": "credencial TITAN ausente ou inválida" if statuses["titan_primary_credential"] else "credencial TITAN instalada",
     }
     return {
         "now": now,
@@ -448,6 +542,8 @@ def _summary_lines(snapshot: dict) -> list[str]:
             "integridade=" + ("ALERTA" if statuses["integrity_job_failure"] or statuses["backup_integrity_expired"] else "OK"),
             "Certbot timer=" + ("ALERTA" if statuses["certbot_timer"] else "OK"),
         )) + ".",
+        "Email de alertas: TITAN primário=" + ("ALERTA" if statuses.get("titan_primary_credential", True) else "OK") +
+        "; fallback Brevo=" + ("OK" if not statuses.get("smtp_config", True) else "ALERTA") + ".",
         f"Ping MySQL={'OK' if statuses['mysql_ping'] is False else 'ALERTA'}; HTTPS local={'OK' if statuses['https_local'] is False else 'ALERTA'}.",
     ]
     backup = snapshot["backup"]
@@ -540,6 +636,9 @@ def action_summary() -> int:
 def action_test() -> int:
     if os.geteuid() != 0:
         print("test_email=failed reason=privilege")
+        return 2
+    if not _safe_password_file(TITAN_PASSWORD):
+        print("test_email=failed reason=titan_credential_missing")
         return 2
     ok = _send("RESUMO", "teste SMTP", [
         "Teste de transporte de alertas do ERP Condomínios.",
