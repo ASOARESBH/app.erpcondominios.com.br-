@@ -2,6 +2,14 @@
 
 Registro de alterações significativas no ERP.
 
+## Infraestrutura Hetzner — Alertas SMTP — 2026-11-13
+### Implementado
+- Monitoramento local envia alertas por item, recuperações e resumo diário às 08:00 `America/Sao_Paulo`, usando msmtp e relay Brevo TLS. Segredos root-only extraídos do snapshot confirmado pelo administrador; não foram incluídos no Git ou em logs.
+- Verificações incluem serviços, MySQL/ping, HTTPS, certificado (<72 h), disco (<15 GiB), idade de backup/integridade (>36 h) e resultado das services Certbot/backup/integridade/healthcheck/resumo. `OnFailure` usa corpo sanitizado; alertas de falha têm cooldown de 60 minutos por item, e uma normalização é enviada quando aplicável.
+- Healthcheck termina com status de serviço saudável após avaliar todos os itens; cada condição degrada seu item próprio, evitando duplicar e rotular incorretamente uma falha como defeito do healthcheck. Falha de envio do resumo aciona OnFailure e retry a cada 15 minutos até aceite.
+- Gate atual: instalação e TLS/DNS de conexão estão funcionais, porém o teste de e-mail foi recusado em autenticação SMTP. Nenhum dos três e-mails foi aceito pelo relay. A credencial não será exibida, versionada nem substituída por API key; aguardar SMTP key ativa correta por canal seguro antes de re-testar. O timer de resumo está temporariamente desabilitado; o healthcheck continua ativo e registra somente marcador sanitizado root-only de falha SMTP.
+- A documentação oficial Brevo exige SMTP key, não API key; o aceite SMTP não comprova entrega final/leitura na caixa postal.
+
 ## Infraestrutura Hetzner — 2026-11-12
 ### Validado
 - H1: MySQL 8.4.13 instalado e configurado para acesso local por socket/127.0.0.1, `NO_ENGINE_SUBSTITUTION`, timezone `-03:00`, `utf8mb4`/`utf8mb4_unicode_ci`, binlog, retenção de 7 dias e slow log. PHP `mysqli` conectou com sucesso à HML; porta 3306 sem regra UFW.

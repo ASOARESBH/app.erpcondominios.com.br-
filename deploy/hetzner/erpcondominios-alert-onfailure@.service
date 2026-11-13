@@ -1,0 +1,17 @@
+[Unit]
+Description=Notificação sanitizada de falha do ERP Condomínios (%i)
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+StateDirectory=erpcondominios
+StateDirectoryMode=0700
+ExecStart=/usr/bin/python3 /usr/local/lib/erpcondominios/alert-manager.py event-failure %i
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/erpcondominios
+LimitCORE=0

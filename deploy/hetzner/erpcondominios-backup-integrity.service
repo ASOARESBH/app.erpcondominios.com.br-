@@ -1,6 +1,7 @@
 [Unit]
 Description=Validação de integridade dos backups do ERP Condomínios HML
 After=erpcondominios-backup.service
+OnFailure=erpcondominios-alert-onfailure@integrity_job_failure.service
 
 [Service]
 Type=oneshot

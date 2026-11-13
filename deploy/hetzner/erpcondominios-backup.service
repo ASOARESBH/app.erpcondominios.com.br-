@@ -1,6 +1,7 @@
 [Unit]
 Description=Backup lógico local do ERP Condomínios HML
 After=mysql.service
+OnFailure=erpcondominios-alert-onfailure@backup_job_failure.service
 
 [Service]
 Type=oneshot

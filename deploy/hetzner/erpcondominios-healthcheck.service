@@ -1,6 +1,7 @@
 [Unit]
 Description=Healthcheck local do ERP Condomínios HML
 After=nginx.service php8.3-fpm.service mysql.service
+OnFailure=erpcondominios-alert-onfailure@healthcheck_runtime.service
 
 [Service]
 Type=oneshot
@@ -8,7 +9,11 @@ User=root
 Group=root
 UMask=0077
 ExecStart=/usr/local/sbin/erpcondominios-healthcheck.sh
+StateDirectory=erpcondominios
+StateDirectoryMode=0700
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 NoNewPrivileges=true
+ReadWritePaths=/var/lib/erpcondominios
+LimitCORE=0

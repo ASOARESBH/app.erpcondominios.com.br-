@@ -1,0 +1,22 @@
+[Unit]
+Description=Resumo diário sanitizado do ERP Condomínios Hetzner
+After=network-online.target
+OnFailure=erpcondominios-alert-onfailure@summary_delivery_failure.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+StateDirectory=erpcondominios
+StateDirectoryMode=0700
+ExecStart=/usr/bin/python3 /usr/local/lib/erpcondominios/alert-manager.py summary
+Restart=on-failure
+RestartSec=15min
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/erpcondominios
+LimitCORE=0
