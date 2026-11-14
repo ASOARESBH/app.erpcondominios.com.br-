@@ -42,3 +42,7 @@ Os alertas de operação usam `msmtp` separado da configuração de e-mail do ER
 O Nginx serve `app.erpcondominios.com.br` por vhost TLS separado com certificado Let's Encrypt próprio. O vhost por IP permanece como contingência; o certificado IP não foi reutilizado para o domínio. A renovação via Certbot Snap passou `--dry-run`, e `snap.certbot.renew.timer` está ativo. A alteração DNS limitou-se ao A de `app`; um TTL TXT do apex foi normalizado sem alteração do conteúdo e MX/Titan permaneceu intacto.
 
 Alertas SMTP continuam sem credencial app-password TITAN instalada; o resumo diário está pausado. Não guardar credenciais no repositório, nem executar envio de teste até a instalação segura por TTY e nova autorização para retomar essa etapa.
+
+## Firebase Web/PWA — estado em 14/11/2026
+
+A configuração client-side do Portal foi atualizada pela Central PWA autenticada após o registro do app Web e geração de VAPID pública no projeto Firebase correto. O endpoint público foi validado por comparações booleanas, sem registrar valores. Esses campos públicos do SDK não substituem a configuração server-side usada para FCM HTTP v1; Service Account/envio e o teste autenticado do Portal continuam independentes e não foram alterados nesta etapa. Nunca versionar chaves ou tokens, mesmo quando destinados ao SDK client-side.

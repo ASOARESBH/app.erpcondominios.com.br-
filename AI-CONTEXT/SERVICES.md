@@ -10,6 +10,12 @@ O ERP possui serviços que rodam em background ou de forma independente:
 - Push notifications enviadas pelo PHP via Firebase Cloud Messaging (Service Account).
 - Service Worker (`sw.js`) no frontend intercepta e exibe a notificação no dispositivo do morador.
 
+### Configuração Web do Portal — 2026-11-14
+- O app Web Firebase e a chave pública Web Push/VAPID foram registrados/gerados no Console. A configuração client-side do Portal foi salva pela Central PWA autenticada; não guardar valores de configuração no Git, relatório ou console.
+- A divergência anterior de Sender ID/App ID foi corrigida. O endpoint público retornou HTTP 200, PWA/Firebase configurados e todos os campos conferiram por comparação booleana com o app Web registrado.
+- Isso valida apenas a configuração client-side. Não comprova geração de token nem entrega FCM: o teste ponta a ponta requer login de morador, consentimento explícito do navegador e configuração server-side válida para FCM HTTP v1.
+- Se persistir `403 PERMISSION_DENIED` em Firebase Installations após uma sessão nova, conferir as restrições da API key e APIs habilitadas no Google Cloud; não ampliar restrições/origens nem alterar credenciais sem autorização.
+
 ### Atualização de versão do Portal
 - Quando uma nova versão do Service Worker é detectada, o Portal do Morador não exibe barra visual e não força recarregamento durante o uso.
 - O novo worker permanece em espera e assume no próximo ciclo seguro do navegador; o listener `controllerchange` continua responsável pelo reload quando a troca efetivamente ocorrer.

@@ -116,3 +116,9 @@ Ambiente descartável MariaDB 10.11 + PHP 8.3 (`php -S`) com stubs de sessão; m
 - **Interface Playwright (21/21)**: widget no portal (abrir, buscar, enviar, emoji, fixar/minimizar), página Chat-In embutida no painel com online e resposta chegando por polling, Eventos (criar por unidade, validação no modal, aviso no morador, avisos somente leitura), Controle de Acesso (Em breve, salvar), celular 390 px sem rolagem horizontal, sem erros de JS.
 - Migration de assembleia executada com usuário MySQL sem privilégios globais; guard 409 validado sem a coluna.
 - Não executado: `flutter analyze`/build do app (sem SDK), push FCM real, sessão real do painel/produção.
+
+
+## Firebase Web — Portal do Morador (2026-11-14)
+A configuração Web foi salva pela Central PWA autenticada após registrar o app Web e gerar a VAPID pública. A verificação read-only do endpoint de configuração passou em 11/11 comparações booleanas (HTTP 200, flags de PWA/Firebase e correspondência de todos os campos esperados); os valores foram mantidos fora dos registros. Não foi solicitada permissão de notificação nem gerado token FCM nesta validação.
+
+Pendente: abrir uma sessão nova do Portal com uma conta de morador de teste, confirmar que Firebase Installations não retorna 403, obter token somente após consentimento explícito e validar recebimento de push. Validar separadamente envio server-side FCM HTTP v1/Service Account. Um teste público sem sessão não comprova esses fluxos.
