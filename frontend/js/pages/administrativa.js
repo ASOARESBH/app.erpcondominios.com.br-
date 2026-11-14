@@ -1,8 +1,7 @@
 /**
  * administrativa.js — Hub de Módulos Administrativos v2.1
  *
- * Navegação por clique: tratada pelo listener global do layout-base.html
- * que detecta qualquer elemento com [data-page] no DOM.
+ * Cards e abas usam handlers locais que encaminham a rota ao AppRouter.
  *
  * Este módulo é responsável apenas por:
  *   1. Acessibilidade: ativar cards com Enter/Espaço via teclado
@@ -24,6 +23,7 @@ let _listeners = [];
 
 export function init() {
     console.log('[Administrativa] Inicializando módulo v2.1...');
+    _setupClickNavigation();
     _setupKeyboardNavigation();
     console.log('[Administrativa] Cards disponíveis:', _getCardList());
     console.log('[Administrativa] Módulo pronto.');
@@ -36,9 +36,24 @@ export function destroy() {
     console.log('[Administrativa] Módulo destruído.');
 }
 
+function _setupClickNavigation() {
+    const controls = document.querySelectorAll('.page-administrativa [data-page]');
+
+    controls.forEach(control => {
+        const fn = () => {
+            const pageName = control.dataset.page;
+            if (pageName && window.AppRouter) {
+                console.log(`[Administrativa] Navegação por clique: ${pageName}`);
+                window.AppRouter.loadPage(pageName);
+            }
+        };
+        control.addEventListener('click', fn);
+        _listeners.push({ el: control, ev: 'click', fn });
+    });
+}
+
 /**
  * Acessibilidade: permite navegar pelos cards usando Enter ou Espaço no teclado.
- * A navegação por clique é tratada pelo listener global do layout-base.html.
  */
 function _setupKeyboardNavigation() {
     const cards = document.querySelectorAll('.page-administrativa .page-card[data-page]');

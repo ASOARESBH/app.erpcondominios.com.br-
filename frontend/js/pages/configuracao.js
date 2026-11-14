@@ -2,8 +2,7 @@
  * configuracao.js — Hub de Configurações do Sistema v2.1
  *
  * Esta página atua como "hub" de navegação para os módulos de configuração.
- * A navegação entre cards é gerenciada pelo listener global do layout-base.html
- * que detecta cliques em elementos com atributo [data-page].
+ * Cards e abas usam handlers locais que encaminham a rota ao AppRouter.
  *
  * Sub-páginas disponíveis (cada uma com seu próprio HTML + JS + CSS):
  *   - empresa       → /pages/empresa.html + /js/pages/empresa.js
@@ -20,6 +19,9 @@ let _listeners = [];
 export function init() {
     console.log('[Configuracao Hub] Inicializando módulo v2.1...');
 
+    _setupCardNavigation();
+    _setupTabNavigation();
+
     // Acessibilidade: ativar cards com Enter/Espaço via teclado
     _setupKeyboardNavigation();
 
@@ -31,6 +33,22 @@ export function destroy() {
     _listeners.forEach(({ el, ev, fn }) => el.removeEventListener(ev, fn));
     _listeners = [];
     console.log('[Configuracao Hub] Módulo destruído.');
+}
+
+function _setupCardNavigation() {
+    const cards = document.querySelectorAll('.page-configuracao .page-card.interactive[data-page]');
+
+    cards.forEach(card => {
+        const fn = () => {
+            const pageName = card.dataset.page;
+            if (pageName && window.AppRouter) {
+                console.log(`[Configuracao Hub] Navegação por clique: ${pageName}`);
+                window.AppRouter.loadPage(pageName);
+            }
+        };
+        card.addEventListener('click', fn);
+        _listeners.push({ el: card, ev: 'click', fn });
+    });
 }
 
 // ============================================================
