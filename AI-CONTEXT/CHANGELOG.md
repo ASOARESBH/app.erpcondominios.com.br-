@@ -11,8 +11,10 @@ Registro de alterações significativas no ERP.
 - Chat-In do Portal: caminhos de widget/API absolutos e estabilidade sob paths de navegação.
 - Logo do Portal: endpoint de descoberta agora autentica o token Bearer do morador e deriva o tenant da sessão Portal ativa, sem depender de cookie PHP de backoffice; sem Bearer apenas a sessão ERP permanece autorizada.
 - Firebase do Portal: `pwa_ativo` ausente/inativo, placeholders, campos fora dos formatos aceitos e instância default divergente deixam o push desativado antes da permissão/token. Aviso sanitizado para 403 Firebase Installations; habilitação da API e restrições da chave continuam sendo responsabilidade da configuração Google Cloud.
+- Hubs de Configuração e Administrativo: cartões e abas agora navegam por clique via handlers locais; acesso direto, autorização RBAC do AppRouter e atalhos por teclado permanecem preservados.
 ### Validação
 - Testes estáticos locais e `php -l`/`node --check` aprovados; nomes de colunas do Marketplace confirmados por `INFORMATION_SCHEMA` no MySQL ativo sem ler linhas de negócio. Para esta correção, suíte Portal (9 testes), lint PHP/JS e `git diff --check` aprovados; leitura autenticada da logo e FCM consentido continuam pendentes antes de declarar validação runtime.
+- Para os hubs, `tests/hub_navigation/hub-navigation.test.mjs`, a regressão `tests/clean_urls/app-router.test.mjs`, `node --check` e `git diff --check` passaram.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado

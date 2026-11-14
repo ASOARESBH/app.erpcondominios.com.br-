@@ -95,3 +95,9 @@ export function destroy() {
 ## Login público na raiz do domínio — URL limpa
 
 `frontend/login.html` define `<base href="/frontend/">` como primeiro elemento do `<head>`. Assim, quando o Nginx servir esse arquivo como conteúdo da raiz `/`, referências relativas continuam resolvendo para `/frontend/js/config.js`, `/frontend/js/i18n.js`, `/frontend/i18n/<locale>.json` e `../assets`/`../api` em `/assets` e `/api`. Referências já iniciadas em `/` e URLs baseadas em `window.location.origin` permanecem no domínio. A alteração não muda redirects JavaScript nem `app-router.js`; o comportamento da raiz depende do vhost Nginx e só deve ser ativado depois de esse release estar publicado.
+
+## 12. Hubs de Configuração e Administrativo
+
+- `frontend/js/pages/configuracao.js` e `frontend/js/pages/administrativa.js` registram localmente a navegação por clique nos elementos `[data-page]`; o `AppRouter` global intercepta links `<a href>` e não trata `<div>`/`<button>` apenas por terem `data-page`.
+- Os cards mantêm navegação por Enter/Espaço e as abas por clique. Todos os listeners são removidos em `destroy()` para evitar handlers duplicados entre rotas.
+- O roteador continua aplicando `MenuController.autorizarPagina()` antes de carregar cada subpágina; os handlers locais não concedem permissão e não substituem a autorização das APIs.
