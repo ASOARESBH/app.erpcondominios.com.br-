@@ -2,6 +2,13 @@
 
 Registro de alterações significativas no ERP.
 
+## Portal do Morador — PR #11 e diagnóstico Firebase — 2026-11-14
+### Implantado / investigado
+- PR #11 mesclado em `main`; release `79fc38f2e24672af767b6bb038aeced5ad076b7e` ativada na Hetzner. Smoke público/TLS de páginas e assets do portal passou; Nginx, PHP-FPM e MySQL permaneceram ativos. A release anterior foi preservada para rollback.
+- Firebase Installations e FCM Registration estão habilitadas; a Browser key analisada não tem restrição HTTP referrer e inclui essas APIs. O Console mostra somente app Android, sem app Web nem par VAPID visível.
+- A configuração Web que o ERP entrega é sintaticamente válida, mas os identificadores de app/sender/authDomain não são coerentes com o projeto aberto. Hipótese principal para o 403: configuração Web incorreta/antiga. Não houve alteração no Firebase nem exposição de chaves/tokens. Reparo depende de registrar app Web, atualizar a configuração no armazenamento seguro e gerar VAPID; validar em sessão autenticada com consentimento.
+- Smoke autenticado de login, abas, push e Chat-In continua pendente. Os detalhes sanitizados e fontes consultadas estão em relatório privado, fora do Git.
+
 ## Infraestrutura Hetzner — Alertas SMTP — 2026-11-13
 ### Implementado
 - Monitoramento local prepara alertas por item, recuperações e resumo diário às 08:00 `America/Sao_Paulo`, usando msmtp com TITAN primário (465/SSL-TLS) e Brevo como fallback após falha. Cada senha fica em arquivo root-only próprio; não foram incluídos segredos no Git ou em logs.
