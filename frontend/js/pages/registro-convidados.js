@@ -288,9 +288,12 @@ function setDisplay(element, visible) {
 function updateUrlForTab(tab) {
     try {
         const url = new URL(window.location.href);
-        url.searchParams.set('page', 'registro');
+        url.searchParams.delete('page');
         url.searchParams.set('aba', tab);
-        window.history.replaceState({ ...(window.history.state || {}), page: 'registro', aba: tab }, '', url.href);
+        const nextUrl = window.AppRouter && typeof window.AppRouter.cleanURLForPage === 'function'
+            ? window.AppRouter.cleanURLForPage('registro', url.searchParams, url.hash)
+            : `/registro?${url.searchParams.toString()}${url.hash}`;
+        window.history.replaceState({ ...(window.history.state || {}), page: 'registro', aba: tab }, '', nextUrl);
     } catch (_) {
         // URL/sessionStorage são apenas uma conveniência; a navegação continua funcionando sem eles.
     }

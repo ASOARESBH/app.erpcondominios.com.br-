@@ -8,17 +8,17 @@
     };
 
     const pageToHrefFallback = {
-        dashboard: 'dashboard.html',
-        moradores: 'moradores.html',
-        veiculos: 'layout-base.html?page=veiculos',
-        visitantes: 'layout-base.html?page=visitantes',
-        registro: 'layout-base.html?page=registro',
-        acesso: 'layout-base.html?page=acesso',
-        relatorios: 'layout-base.html?page=relatorios',
-        financeiro: 'layout-base.html?page=financeiro',
-        configuracao: 'configuracao.html',
-        manutencao: 'manutencao.html',
-        administrativa: 'administrativa.html'
+        dashboard: '/frontend/layout-base.html?page=dashboard',
+        moradores: '/frontend/layout-base.html?page=moradores',
+        veiculos: '/frontend/layout-base.html?page=veiculos',
+        visitantes: '/frontend/layout-base.html?page=visitantes',
+        registro: '/frontend/layout-base.html?page=registro',
+        acesso: '/frontend/layout-base.html?page=acesso',
+        relatorios: '/frontend/layout-base.html?page=relatorios',
+        financeiro: '/frontend/layout-base.html?page=financeiro',
+        configuracao: '/frontend/layout-base.html?page=configuracao',
+        manutencao: '/frontend/layout-base.html?page=manutencao',
+        administrativa: '/frontend/layout-base.html?page=administrativa'
     };
 
     function log(message, data) {
@@ -48,7 +48,9 @@
 
     function markActiveByHref(links) {
         const currentFile = (window.location.pathname.split('/').pop() || '').toLowerCase();
-        const currentPageParam = new URLSearchParams(window.location.search).get('page');
+        const currentPageParam = window.AppRouter && typeof window.AppRouter.getPageFromURL === 'function'
+            ? window.AppRouter.getPageFromURL('')
+            : new URLSearchParams(window.location.search).get('page');
         const legacyFinancialPages = ['contas_pagar.html', 'contas_receber.html', 'planos_contas.html'];
 
         links.forEach((link) => link.classList.remove('active'));
@@ -130,7 +132,7 @@
         }
 
         try {
-            const response = await fetch('components/sidebar.html');
+            const response = await fetch('/frontend/components/sidebar.html');
             if (!response.ok) {
                 throw new Error('HTTP ' + response.status);
             }

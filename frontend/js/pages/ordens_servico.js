@@ -525,14 +525,16 @@ function _coletarFiltros() {
 
 function atualizarURLFiltrosOS(aba = 'chamados') {
     const params = new URLSearchParams(window.location.search);
-    params.set('page', 'ordens_servico');
+    params.delete('page');
     params.set('aba', aba);
     ['status', 'prioridade', 'departamento', 'busca', 'data_ini', 'data_fim', 'unidade', 'morador_id'].forEach(chave => {
         const valor = String(state.filtros[chave] || '').trim();
         if (valor) params.set(chave, valor);
         else params.delete(chave);
     });
-    const url = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    const url = window.AppRouter && typeof window.AppRouter.cleanURLForPage === 'function'
+        ? window.AppRouter.cleanURLForPage('ordens_servico', params, window.location.hash)
+        : `/ordens_servico${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
     window.history.replaceState({ ...(window.history.state || {}), page: 'ordens_servico', aba }, '', url);
 }
 
