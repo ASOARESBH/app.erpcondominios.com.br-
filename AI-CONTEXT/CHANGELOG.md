@@ -9,8 +9,10 @@ Registro de alterações significativas no ERP.
 - Marketplace do Portal: consultas compatibilizadas com o schema ativo (`preco_venda` e colunas de avaliação específicas), tenant derivado da sessão, pedidos/histórico tenant-aware, binds ajustados e erro técnico substituído por JSON genérico.
 - PWA: token FCM só é solicitado após `navigator.serviceWorker.ready`, passando a registration ativa explicitamente; removido logging de prefixos de token.
 - Chat-In do Portal: caminhos de widget/API absolutos e estabilidade sob paths de navegação.
+- Logo do Portal: endpoint de descoberta agora autentica o token Bearer do morador e deriva o tenant da sessão Portal ativa, sem depender de cookie PHP de backoffice; sem Bearer apenas a sessão ERP permanece autorizada.
+- Firebase do Portal: `pwa_ativo` ausente/inativo, placeholders, campos fora dos formatos aceitos e instância default divergente deixam o push desativado antes da permissão/token. Aviso sanitizado para 403 Firebase Installations; habilitação da API e restrições da chave continuam sendo responsabilidade da configuração Google Cloud.
 ### Validação
-- Testes estáticos locais e `php -l`/`node --check` aprovados; nomes de colunas do Marketplace confirmados por `INFORMATION_SCHEMA` no MySQL ativo sem ler linhas de negócio. QA autenticado e deploy em produção ainda pendentes.
+- Testes estáticos locais e `php -l`/`node --check` aprovados; nomes de colunas do Marketplace confirmados por `INFORMATION_SCHEMA` no MySQL ativo sem ler linhas de negócio. Para esta correção, suíte Portal (9 testes), lint PHP/JS e `git diff --check` aprovados; leitura autenticada da logo e FCM consentido continuam pendentes antes de declarar validação runtime.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado

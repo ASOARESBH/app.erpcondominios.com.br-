@@ -3335,9 +3335,9 @@ function carregarLogoTenantPortal() {
     };
 
     fetch(window.location.origin + '/api/get_logo_empresa.php', {
-        // A API resolve o tenant pela sessão PHP criada no login do morador.
-        // Não enviar tenant nem token de outro contexto pelo navegador.
-        credentials: 'include'
+        headers: { 'Authorization': 'Bearer ' + Portal.token },
+        credentials: 'omit',
+        cache: 'no-store'
     })
     .then(response => response.ok ? response.json() : Promise.reject(new Error('HTTP ' + response.status)))
     .then(async data => {
@@ -3346,8 +3346,11 @@ function carregarLogoTenantPortal() {
             return;
         }
 
-        let logoSrc = data.logo_url;
         const logoUrl = new URL(data.logo_url, window.location.origin);
+        if (logoUrl.origin !== window.location.origin) {
+            throw new Error('Origem da logo inválida.');
+        }
+        let logoSrc = logoUrl.href;
         if (logoUrl.origin === window.location.origin &&
             logoUrl.pathname === '/api/api_arquivos_tenant.php' &&
             logoUrl.searchParams.get('acao') === 'conteudo') {

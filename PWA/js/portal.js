@@ -33,14 +33,26 @@ const PWAPortal = (() => {
             const r = await fetch(API_SW_CFG, { cache: 'no-store' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const cfg = await r.json();
-            // firebaseConfigurado = false quando credenciais são placeholder ou estão vazias
-            if (cfg.firebaseConfigurado && cfg.firebase && cfg.firebase.apiKey) {
-                FIREBASE_CONFIG = cfg.firebase;
-                VAPID_KEY       = cfg.vapidKey || null;
-                console.log('[PWA] Config carregada do banco. Projeto:', FIREBASE_CONFIG.projectId);
+            const firebase = cfg.firebase || {};
+            const valorPronto = value => typeof value === 'string' && value.trim() !== '' &&
+                !/(?:^|[^A-Z0-9])(?:SUBSTITUA|PLACEHOLDER|YOUR|CHANGE[_ -]?ME|EXEMPLO|SEU|INFORME)(?:$|[^A-Z0-9])/i.test(value);
+            const apiKeyValida = /^AIza[0-9A-Za-z_-]{35}$/.test(firebase.apiKey || '');
+            const authDomainValido = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(firebase.authDomain || '');
+            const projectIdValido = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(firebase.projectId || '');
+            const senderIdValido = /^[0-9]{6,20}$/.test(firebase.messagingSenderId || '');
+            const appIdValido = /^1:[0-9]{6,20}:web:[A-Za-z0-9_-]+$/.test(firebase.appId || '');
+            const vapidKeyValida = /^[A-Za-z0-9_-]{40,128}={0,2}$/.test(cfg.vapidKey || '');
+            if (cfg.sucesso && cfg.pwaAtivo && cfg.firebaseConfigurado &&
+                valorPronto(firebase.apiKey) && valorPronto(firebase.authDomain) &&
+                valorPronto(firebase.projectId) && valorPronto(firebase.messagingSenderId) &&
+                valorPronto(firebase.appId) && valorPronto(cfg.vapidKey) && apiKeyValida &&
+                authDomainValido && projectIdValido && senderIdValido && appIdValido && vapidKeyValida) {
+                FIREBASE_CONFIG = firebase;
+                VAPID_KEY       = cfg.vapidKey;
+                console.log('[PWA] Config Firebase completa carregada.');
                 return true;
             }
-            console.warn('[PWA] Firebase não configurado — acesse o Super-Admin → Aplicativos → Central PWA para configurar.');
+            console.warn('[PWA] Configuração Firebase/PWA ausente ou incompleta; push desativado.');
             return false;
         } catch (e) {
             console.error('[PWA] Erro ao carregar config:', e);
@@ -68,9 +80,15 @@ const PWAPortal = (() => {
         }
 
         // Inicializar Firebase apenas se config disponível
-        if (configOk) {
-            _inicializarFirebase();
-            _verificarPermissao();
+        if (configOk && _swRegistration) {
+            const firebaseOk = await _inicializarFirebase();
+            if (firebaseOk) {
+                _verificarPermissao();
+            } else {
+                console.warn('[PWA] Push indisponível: SDK, suporte do navegador ou Service Worker não pronto.');
+            }
+        } else if (configOk) {
+            console.warn('[PWA] Push adiado porque o Service Worker ainda não está ativo.');
         } else {
             console.warn('[PWA] Notificações push desativadas — Firebase não configurado.');
         }
@@ -150,16 +168,25 @@ const PWAPortal = (() => {
     }
 
     // ── Inicializar Firebase ─────────────────────────────────
-    function _inicializarFirebase() {
+    async function _inicializarFirebase() {
         try {
             if (typeof firebase === 'undefined') {
-                console.error('[PWA] SDK Firebase não carregado. Verifique os scripts no HTML.');
-                return;
+                console.warn('[PWA] SDK Firebase não carregado; push desativado.');
+                return false;
             }
 
-            // Verificar se já foi inicializado
-            if (!firebase.apps.length) {
-                firebase.initializeApp(FIREBASE_CONFIG);
+            if (typeof firebase.messaging.isSupported === 'function' && !(await firebase.messaging.isSupported())) {
+                console.warn('[PWA] Este navegador não oferece suporte ao Firebase Messaging.');
+                return false;
+            }
+
+            let app = firebase.apps.find(item => item.name === '[DEFAULT]');
+            if (!app) app = firebase.initializeApp(FIREBASE_CONFIG);
+            if (app.options.apiKey !== FIREBASE_CONFIG.apiKey ||
+                app.options.projectId !== FIREBASE_CONFIG.projectId ||
+                app.options.appId !== FIREBASE_CONFIG.appId) {
+                console.error('[PWA] A instância Firebase ativa não corresponde à configuração do portal.');
+                return false;
             }
 
             _messaging = firebase.messaging();
@@ -170,9 +197,11 @@ const PWAPortal = (() => {
                 console.log('[PWA] Mensagem recebida em foreground:', payload);
                 _exibirNotificacaoForeground(payload);
             });
+            return true;
 
         } catch (err) {
-            console.error('[PWA] Erro ao inicializar Firebase:', err);
+            console.error('[PWA] Falha ao inicializar Firebase Messaging:', err?.code || 'erro não classificado.');
+            return false;
         }
     }
 
@@ -248,7 +277,12 @@ const PWAPortal = (() => {
             await _registrarTokenNaAPI(token);
 
         } catch (err) {
-            console.error('[PWA] Erro ao obter token FCM:', err);
+            const erro = String(err?.message || err?.code || '');
+            if (/403|PERMISSION_DENIED|API_KEY_SERVICE_BLOCKED/i.test(erro)) {
+                console.warn('[PWA] Firebase Installations negou a criação da instalação. Verifique a API habilitada e as restrições da chave no projeto Firebase.');
+            } else {
+                console.warn('[PWA] Não foi possível obter o token FCM.', err?.code || 'erro não classificado.');
+            }
         }
     }
 
