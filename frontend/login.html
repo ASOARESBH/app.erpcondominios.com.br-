@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - ERP Condomínio — Gestão Inteligente</title>
+    <title data-i18n="login.document_title">Login - ERP Condomínio — Gestão Inteligente</title>
     <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/logos/logo_padrao.png">
@@ -42,12 +42,41 @@
         })();
     </script>
     <script>
+        function textoLogin(chave, padrao) {
+            var traducao = window.ERP_I18N && window.ERP_I18N.t(chave);
+            return traducao && traducao !== chave ? traducao : padrao;
+        }
+
         function atualizarAltBannerLogin() {
             var banner = document.getElementById('loginBanner');
-            var chave = 'login.banner_alt';
-            if (!banner || !window.ERP_I18N) return;
-            var traducao = window.ERP_I18N.t(chave);
-            if (traducao && traducao !== chave) banner.alt = traducao;
+            var visual = document.querySelector('.login-visual');
+            var controleIdioma = document.querySelector('.login-language-control');
+            var toggleSenha = document.getElementById('btnToggleSenha');
+            if (banner) banner.alt = textoLogin('login.banner_alt', banner.alt);
+            if (visual) visual.setAttribute('aria-label', textoLogin('login.banner_label', visual.getAttribute('aria-label')));
+            if (controleIdioma) controleIdioma.setAttribute('aria-label', textoLogin('login.language_label', controleIdioma.getAttribute('aria-label')));
+            if (toggleSenha) {
+                var label = document.getElementById('senha').type === 'text' ? 'login.hide_password' : 'login.show_password';
+                var fallback = label === 'login.hide_password' ? 'Ocultar senha' : 'Mostrar senha';
+                toggleSenha.setAttribute('aria-label', textoLogin(label, fallback));
+                toggleSenha.title = textoLogin(label, fallback);
+            }
+        }
+
+        function restaurarBotaoLogin() {
+            btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> ' + textoLogin('auth.login', 'Entrar');
+        }
+
+        function botaoLoginCarregando() {
+            btnLogin.innerHTML = '<span class="spinner"></span> ' + textoLogin('auth.authenticating', 'Autenticando...');
+        }
+
+        function botaoRecuperacaoCarregando(botao) {
+            botao.innerHTML = '<span class="spinner"></span> ' + textoLogin('login.sending', 'Enviando...');
+        }
+
+        function restaurarBotaoRecuperacao(botao) {
+            botao.innerHTML = '<i class="fas fa-paper-plane"></i> ' + textoLogin('login.send_reset_link', 'Enviar Link de Redefinição');
         }
     </script>
     <link rel="stylesheet" href="/assets/css/pages/login.css">
@@ -111,50 +140,50 @@
                             <input type="password" id="senha" name="senha"
                                    placeholder="Digite sua senha" data-i18n-placeholder="auth.password"
                                    required autocomplete="current-password">
-                            <button type="button" class="btn-toggle-senha" id="btnToggleSenha" title="Mostrar/ocultar senha" aria-label="Mostrar senha" aria-controls="senha">
+                    <button type="button" class="btn-toggle-senha" id="btnToggleSenha" title="Mostrar senha" aria-label="Mostrar senha" aria-controls="senha" data-i18n-title="login.show_password">
                                 <i class="fas fa-eye" id="iconToggleSenha"></i>
                             </button>
                         </div>
                     </div>
 
                     <button type="submit" class="btn-login" id="btnLogin">
-                        <i class="fas fa-sign-in-alt"></i> Entrar
+                        <i class="fas fa-sign-in-alt"></i> <span data-i18n="auth.login">Entrar</span>
                     </button>
                 </form>
 
                 <!-- Link "Esqueceu sua senha?" — exibido após 1ª tentativa falha -->
                 <div class="link-esqueceu" id="linkEsqueceu">
                     <button type="button" onclick="RecuperacaoSenha.mostrarPainel()">
-                        <i class="fas fa-key"></i> Esqueceu sua senha?
+                        <i class="fas fa-key"></i> <span data-i18n="login.forgot_password">Esqueceu sua senha?</span>
                     </button>
                 </div>
 
                 <!-- Painel de recuperação de senha -->
                 <div class="recovery-panel" id="painelRecuperacao">
-                    <h3><i class="fas fa-lock-open"></i> Recuperar Senha</h3>
-                    <p>Informe seu CPF ou e-mail cadastrado. Enviaremos um link seguro para redefinir sua senha.</p>
+                    <h3><i class="fas fa-lock-open"></i> <span data-i18n="login.recovery_title">Recuperar Senha</span></h3>
+                    <p data-i18n="login.recovery_description">Informe seu CPF ou e-mail cadastrado. Enviaremos um link seguro para redefinir sua senha.</p>
                     <form id="formRecuperacao" onsubmit="RecuperacaoSenha.enviar(event)" novalidate>
                         <div class="form-group">
-                            <label for="recuperacaoCpfEmail">CPF ou E-mail</label>
+                            <label for="recuperacaoCpfEmail" data-i18n="login.recovery_identifier">CPF ou E-mail</label>
                             <div class="input-wrapper">
                                 <i class="fas fa-id-card"></i>
                                 <input type="text" id="recuperacaoCpfEmail"
-                                       placeholder="Digite seu CPF ou e-mail"
+                                       placeholder="Digite seu CPF ou e-mail" data-i18n-placeholder="login.recovery_identifier_placeholder"
                                        autocomplete="off"
                                        inputmode="email">
                             </div>
                         </div>
                         <button type="submit" class="btn-recovery" id="btnRecuperar">
-                            <i class="fas fa-paper-plane"></i> Enviar Link de Redefinição
+                            <i class="fas fa-paper-plane"></i> <span data-i18n="login.send_reset_link">Enviar Link de Redefinição</span>
                         </button>
                         <button type="button" class="btn-cancel-recovery" onclick="RecuperacaoSenha.ocultarPainel()">
-                            Cancelar
+                            <span data-i18n="common.cancel">Cancelar</span>
                         </button>
                     </form>
                 </div>
 
                 <div class="footer">
-                    <p>&copy; 2025 ERP Condomínio. Todos os direitos reservados.</p>
+                    <p data-i18n="login.footer">&copy; 2025 ERP Condomínio. Todos os direitos reservados.</p>
                 </div>
             </div>
         </main>
@@ -191,8 +220,10 @@
                 var visivel = inputSenha.type === 'text';
                 inputSenha.type = visivel ? 'password' : 'text';
                 iconToggle.className = visivel ? 'fas fa-eye' : 'fas fa-eye-slash';
-                btnToggle.setAttribute('aria-label', visivel ? 'Mostrar senha' : 'Ocultar senha');
-                btnToggle.title = visivel ? 'Mostrar senha' : 'Ocultar senha';
+                var label = visivel ? 'login.show_password' : 'login.hide_password';
+                var fallback = visivel ? 'Mostrar senha' : 'Ocultar senha';
+                btnToggle.setAttribute('aria-label', textoLogin(label, fallback));
+                btnToggle.title = textoLogin(label, fallback);
             });
         })();
 
@@ -235,8 +266,8 @@
                     '<div style="width:56px;height:56px;background:#eff6ff;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto .75rem;">' +
                       '<i class="fas fa-question-circle" style="font-size:1.6rem;color:#2563eb;"></i>' +
                     '</div>' +
-                    '<h2 style="font-size:1.15rem;color:#1e293b;margin-bottom:.4rem;">Qual tipo de acesso?</h2>' +
-                    '<p style="font-size:.87rem;color:#64748b;">Este e-mail está vinculado a dois perfis.<br>Selecione como deseja entrar:</p>' +
+                    '<h2 style="font-size:1.15rem;color:#1e293b;margin-bottom:.4rem;">' + textoLogin('login.profile_choice_title', 'Qual tipo de acesso?') + '</h2>' +
+                    '<p style="font-size:.87rem;color:#64748b;">' + textoLogin('login.profile_choice_description', 'Este e-mail está vinculado a dois perfis. Selecione como deseja entrar:') + '</p>' +
                   '</div>' +
                   '<div style="display:grid;gap:.75rem;">' +
                     '<button id="__btnErp" onclick="_escolher(\'erp\')" style="border:2px solid #e2e8f0;border-radius:12px;padding:1rem 1.25rem;background:#fff;cursor:pointer;text-align:left;display:flex;align-items:center;gap:.9rem;width:100%;font-family:inherit;">' +
@@ -244,8 +275,8 @@
                         '<i class="fas fa-desktop" style="color:#2563eb;font-size:1.1rem;"></i>' +
                       '</div>' +
                       '<div>' +
-                        '<div style="font-weight:700;color:#1e293b;font-size:.95rem;">Acessar o ERP</div>' +
-                        '<div style="font-size:.8rem;color:#64748b;margin-top:.15rem;">Sistema de gestão · ' + (nomeErp || 'Usuário') + '</div>' +
+                        '<div style="font-weight:700;color:#1e293b;font-size:.95rem;">' + textoLogin('login.access_erp', 'Acessar o ERP') + '</div>' +
+                        '<div style="font-size:.8rem;color:#64748b;margin-top:.15rem;">' + textoLogin('login.management_system', 'Sistema de gestão') + ' · ' + (nomeErp || textoLogin('login.user_fallback', 'Usuário')) + '</div>' +
                       '</div>' +
                     '</button>' +
                     '<button id="__btnPortal" onclick="_escolher(\'portal\')" style="border:2px solid #e2e8f0;border-radius:12px;padding:1rem 1.25rem;background:#fff;cursor:pointer;text-align:left;display:flex;align-items:center;gap:.9rem;width:100%;font-family:inherit;">' +
@@ -253,13 +284,13 @@
                         '<i class="fas fa-home" style="color:#16a34a;font-size:1.1rem;"></i>' +
                       '</div>' +
                       '<div>' +
-                        '<div style="font-weight:700;color:#1e293b;font-size:.95rem;">Acessar o Portal do Morador</div>' +
-                        '<div style="font-size:.8rem;color:#64748b;margin-top:.15rem;">Área do morador · ' + (nomeMorador || 'Morador') + '</div>' +
+                        '<div style="font-weight:700;color:#1e293b;font-size:.95rem;">' + textoLogin('login.access_resident_portal', 'Acessar o Portal do Morador') + '</div>' +
+                        '<div style="font-size:.8rem;color:#64748b;margin-top:.15rem;">' + textoLogin('login.resident_area', 'Área do morador') + ' · ' + (nomeMorador || textoLogin('login.resident_fallback', 'Morador')) + '</div>' +
                       '</div>' +
                     '</button>' +
                   '</div>' +
                   '<button onclick="_fecharPopup()" style="width:100%;margin-top:1rem;padding:.65rem;border:none;background:transparent;color:#94a3b8;font-size:.85rem;cursor:pointer;font-family:inherit;">' +
-                    '<i class="fas fa-times"></i> Cancelar' +
+                    '<i class="fas fa-times"></i> ' + textoLogin('common.cancel', 'Cancelar') +
                   '</button>' +
                 '</div>';
 
@@ -280,13 +311,13 @@
         function _fecharPopup() {
             if (_popupEl) { _popupEl.remove(); _popupEl = null; }
             btnLogin.disabled = false;
-            btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+            restaurarBotaoLogin();
         }
 
         function _escolher(tipo) {
             if (_popupEl) { _popupEl.remove(); _popupEl = null; }
             btnLogin.disabled = true;
-            btnLogin.innerHTML = '<span class="spinner"></span> Autenticando...';
+            botaoLoginCarregando();
 
             fetch(window.location.origin + '/api/api_verificar_tipo_login.php', {
                 method: 'POST',
@@ -298,9 +329,9 @@
             .then(function(data) { _processarResposta(data); })
             .catch(function(err) {
                 console.error('[Login] Erro:', err);
-                mostrarAlerta('Erro ao processar login. Tente novamente.', 'error');
+                mostrarAlerta(textoLogin('login.login_error', 'Erro ao processar login. Tente novamente.'), 'error');
                 btnLogin.disabled = false;
-                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+                restaurarBotaoLogin();
             });
         }
 
@@ -308,7 +339,7 @@
             if (!data.sucesso) {
                 mostrarAlerta(data.mensagem, 'error');
                 btnLogin.disabled = false;
-                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+                restaurarBotaoLogin();
                 return;
             }
 
@@ -317,7 +348,7 @@
             if (tipo === 'ambos') {
                 // Exibir popup de seleção sem desabilitar botão
                 btnLogin.disabled = false;
-                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+                restaurarBotaoLogin();
                 _criarPopup(
                     data.dados && data.dados.nome_erp     ? data.dados.nome_erp     : '',
                     data.dados && data.dados.nome_morador ? data.dados.nome_morador : ''
@@ -326,7 +357,7 @@
             }
 
             if (tipo === 'erp') {
-                mostrarAlerta('Login realizado! Redirecionando...', 'success');
+                mostrarAlerta(textoLogin('login.erp_success', 'Login realizado! Redirecionando...'), 'success');
                 if (data.dados) {
                     if (data.dados.nome)        localStorage.setItem('usuario_nome',       data.dados.nome);
                     if (data.dados.permissao)   localStorage.setItem('usuario_permissao',  data.dados.permissao);
@@ -359,7 +390,7 @@
             }
 
             if (tipo === 'morador') {
-                mostrarAlerta('Login realizado! Acessando portal...', 'success');
+                mostrarAlerta(textoLogin('login.portal_success', 'Login realizado! Acessando portal...'), 'success');
                 if (data.dados) {
                     localStorage.setItem('portal_token',    data.dados.token      || '');
                     localStorage.setItem('morador_id',      data.dados.morador_id || '');
@@ -380,14 +411,14 @@
             }
 
             // Fallback genérico
-            mostrarAlerta(data.mensagem || 'Login realizado!', 'success');
+            mostrarAlerta(data.mensagem || textoLogin('login.generic_success', 'Login realizado!'), 'success');
         }
 
         loginForm.addEventListener('submit', function (e) {
             e.preventDefault();
 
             btnLogin.disabled = true;
-            btnLogin.innerHTML = '<span class="spinner"></span> Autenticando...';
+            botaoLoginCarregando();
 
             // trim() no email para remover espaços do autocomplete mobile
             // NÃO aplicar trim() na senha — espaços fazem parte da senha
@@ -410,9 +441,9 @@
             })
             .catch(function (error) {
                 console.error('[Login] Erro:', error);
-                mostrarAlerta('Erro ao processar login. Tente novamente.', 'error');
+                mostrarAlerta(textoLogin('login.login_error', 'Erro ao processar login. Tente novamente.'), 'error');
                 btnLogin.disabled = false;
-                btnLogin.innerHTML = '<i class="fas fa-sign-in-alt"></i> Entrar';
+                restaurarBotaoLogin();
             });
         });
 
@@ -423,10 +454,10 @@
             const urlParams = new URLSearchParams(window.location.search);
             const erro = urlParams.get('erro');
             const msgs = {
-                '1': 'E-mail ou senha incorretos!',
-                '2': 'Usuário inativo. Entre em contato com o administrador.',
-                '3': 'Preencha todos os campos!',
-                '4': 'Sessão expirada. Faça login novamente.'
+                '1': textoLogin('login.error.credentials', 'E-mail ou senha incorretos!'),
+                '2': textoLogin('login.error.inactive', 'Usuário inativo. Entre em contato com o administrador.'),
+                '3': textoLogin('login.error.required', 'Preencha todos os campos!'),
+                '4': textoLogin('login.error.session_expired', 'Sessão expirada. Faça login novamente.')
             };
             if (msgs[erro]) mostrarAlerta(msgs[erro], 'error');
         })();
@@ -463,13 +494,13 @@
                 e.preventDefault();
                 var cpfEmail = document.getElementById('recuperacaoCpfEmail').value.trim();
                 if (!cpfEmail) {
-                    mostrarAlerta('Informe seu CPF ou e-mail.', 'error');
+                    mostrarAlerta(textoLogin('login.recovery_required', 'Informe seu CPF ou e-mail.'), 'error');
                     return;
                 }
 
                 var btn = document.getElementById('btnRecuperar');
                 btn.disabled = true;
-                btn.innerHTML = '<span class="spinner"></span> Enviando...';
+                botaoRecuperacaoCarregando(btn);
 
                 fetch(window.location.origin + '/api/api_recuperar_senha.php', {
                     method: 'POST',
@@ -479,22 +510,22 @@
                 .then(function (r) {
                     return r.json().then(function (data) {
                         if (!r.ok || data.sucesso === false) {
-                            throw new Error(data.mensagem || 'Não foi possível processar a solicitação.');
+                            throw new Error(data.mensagem || textoLogin('login.recovery_error', 'Não foi possível processar a solicitação.'));
                         }
                         return data;
                     });
                 })
                 .then(function (data) {
                     // A mensagem continua genérica para não revelar se a conta existe.
-                    mostrarAlerta(data.mensagem || 'Se os dados informados estiverem cadastrados, você receberá instruções por e-mail em breve.', 'success');
+                    mostrarAlerta(data.mensagem || textoLogin('login.recovery_success', 'Se os dados informados estiverem cadastrados, você receberá instruções por e-mail em breve.'), 'success');
                     ocultarPainel();
                 })
                 .catch(function (erro) {
-                    mostrarAlerta(erro && erro.message ? erro.message : 'Erro ao processar. Tente novamente.', 'error');
+                    mostrarAlerta(erro && erro.message ? erro.message : textoLogin('login.recovery_error', 'Não foi possível processar a solicitação.'), 'error');
                 })
                 .finally(function () {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Link de Redefinição';
+                    restaurarBotaoRecuperacao(btn);
                 });
             }
 
