@@ -8,7 +8,7 @@ Registro de alterações significativas no ERP.
 - O endpoint público de configuração retornou HTTP 200, `pwaAtivo`/`firebaseConfigurado` verdadeiros e 11/11 comparações booleanas passaram contra a configuração do app Web correto. A divergência anterior de Sender ID/App ID foi corrigida. Nenhum valor de configuração foi registrado.
 - O erro 403 de Firebase Installations tem agora sua causa mais provável corrigida, mas FCM end-to-end ainda requer login real de morador, consentimento de notificação, aquisição do token e teste de entrega. A configuração server-side FCM HTTP v1/Service Account não foi validada nesta etapa.
 
-## Portal do Morador — PR #11 e diagnóstico Firebase — 2026-11-14
+## Portal do Morador — PR #11 e diagnóstico Firebase preliminar (pré-correção) — 2026-11-14
 ### Implantado / investigado
 - PR #11 mesclado em `main`; release `79fc38f2e24672af767b6bb038aeced5ad076b7e` ativada na Hetzner. Smoke público/TLS de páginas e assets do portal passou; Nginx, PHP-FPM e MySQL permaneceram ativos. A release anterior foi preservada para rollback.
 - Firebase Installations e FCM Registration estão habilitadas; a Browser key analisada não tem restrição HTTP referrer e inclui essas APIs. O Console mostra somente app Android, sem app Web nem par VAPID visível.
