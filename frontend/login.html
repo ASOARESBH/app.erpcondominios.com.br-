@@ -20,7 +20,7 @@
     <!-- Branding institucional: o login NÃO consulta nem aplica logo de tenant. -->
     <script>
         var LogoManager = (function () {
-            var LOGO_INSTITUCIONAL = '/assets/img/logos/logo_padrao.png';
+            var LOGO_INSTITUCIONAL = '/assets/img/logos/logo_padrao_login.png';
             var logoBox, logoImg;
             function init() {
                 logoBox = document.getElementById('logoBox');
@@ -104,7 +104,7 @@
                     <!-- Logo ERP Condomínio -->
                     <div class="logo-box" id="logoBox">
                         <img id="loginLogo"
-                             src="/assets/img/logos/logo_padrao.png"
+                             src="/assets/img/logos/logo_padrao_login.png"
                              alt="ERP Condomínio"
                              style="display:block;"
                              onload="LogoManager.onLoad()"
@@ -183,7 +183,7 @@
                 </div>
 
                 <div class="footer">
-                    <p data-i18n="login.footer">&copy; 2025 ERP Condomínio. Todos os direitos reservados.</p>
+                    <p><a href="/frontend/direitos-e-privacidade.html" target="_blank" rel="noopener noreferrer" data-i18n="login.footer">&copy; 2025 ERP Condomínio. Todos os direitos reservados.</a></p>
                 </div>
             </div>
         </main>
