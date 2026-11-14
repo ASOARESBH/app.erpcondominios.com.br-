@@ -51,3 +51,16 @@ O mesmo item tem no máximo uma notificação de falha a cada 60 minutos; recupe
 ## Estado em 12/11/2026
 
 H2 foi aceita; H3 aplicou e reconciliou apenas DDL estrutural idempotente aprovado. H4 responde por HTTPS no IP, sem DNS. Smoke não autenticado passou; login funcional, uploads, Firebase e QA completo dependem de conta de teste autorizada e dos ZIPs. Backup e healthcheck passaram após atualização e o dry-run Certbot staging também; não houve restore drill nem cópia off-host. PostgreSQL e artefatos `pg/*` continuam pausados/preservados.
+
+
+## Estado do cutover — 14/11/2026
+
+O dump mais recente foi importado em schema isolado `erpcondominios_stage_20261114` (275 tabelas) e a configuração ativa foi comutada atomicamente. O schema antigo `erpcondominios` e uma cópia root-only da configuração anterior permanecem como rollback. Contagens agregadas: 204.965 no schema novo e 202.630 no anterior, com diferenças em 27 tabelas; nenhuma linha de negócio deve ser copiada para Git, log ou relatório. PostgreSQL 18 continua parado.
+
+Em 14/11, Nginx, PHP-FPM e MySQL estavam ativos; o healthcheck passivo foi executado. O backup do schema ativo e a verificação de integridade retornaram sucesso; o marcador root-only tinha modo `0600`. Cópias e manifesto permanecem privados.
+
+O A de `app.erpcondominios.com.br` não foi alterado. O Zone Editor recusou a alteração individual por TTLs divergentes nos TXT de apex (3600/300); o DNS público ainda aponta para o endereço anterior e não apresentou AAAA para esse hostname. O formulário não salvo foi descartado. Nenhum registro MX/Titan ou outro registro DNS foi alterado. Não normalizar TTL de TXT sem autorização específica.
+
+Preparação versionada: `nginx-ip.conf` aceita o hostname no vhost HTTP, com a localização ACME antes do redirect; o vhost TLS de IP permanece separado. `nginx-domain-tls.conf` define um vhost TLS dedicado e repete as regras de segurança, rewrites, PHP-FPM e `/uploads/` do vhost de IP. A paridade estática passou; Nginx no sandbox não está instalado, portanto a configuração ainda requer `nginx -t` na VM antes de qualquer reload. Nenhum dos arquivos candidatos foi instalado na VM.
+
+Próximos passos depois de resolver o gate DNS: instalar/testar o HTTP ACME mantendo rollback; mudar somente o A autorizado para `2.29.161.106`; aguardar confirmação pública; emitir Let’s Encrypt HTTP-01 via `/var/www/letsencrypt`; instalar o vhost TLS de domínio só depois de os arquivos de certificado existirem; `nginx -t`, reload e smoke SNI/SAN, redirect, login/assets, rota PHP e bloqueios; por fim `certbot renew --dry-run`. Rollback de DNS, se necessário, restringe-se a devolver esse A ao valor anterior. MX/Titan, `www.app` e outros registros não fazem parte do escopo.

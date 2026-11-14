@@ -11,6 +11,13 @@ Registro de alterações significativas no ERP.
 - Gate atual: André escolheu TITAN primário e Brevo fallback. O teste anterior do Brevo foi recusado na autenticação; app password TITAN ainda não foi instalada e a VM permanece com `msmtprc` single-account. Nenhum dos três e-mails foi aceito. O timer de resumo está desabilitado até teste válido; healthcheck continua ativo e registra somente marcador sanitizado root-only de falha SMTP.
 - Documentação oficial Brevo exige SMTP key, não API key; documentação oficial TITAN confirma app password para clientes terceiros com 2FA. O aceite SMTP não comprova entrega/leitura na caixa postal.
 
+## Infraestrutura Hetzner — import atualizado e hostname pendente — 2026-11-14
+### Confirmado
+- Dump mais recente importado em schema isolado com 275 tabelas; as contagens agregadas foram 204.965 no schema novo e 202.630 no anterior, com diferenças em 27 tabelas. A configuração privada ativa foi comutada atomicamente; rollback da configuração e schema antigo foram preservados. MySQL 8.4 continua ativo local-only e PostgreSQL 18 inativo.
+- Teste PHP CLI como `www-data`, probe temporário por Nginx/PHP-FPM e backup/integridade pós-switch passaram. O probe foi removido. Nenhuma linha de negócio, credencial ou conteúdo do dump foi publicada.
+- Tentativa de mudar apenas o A do hostname foi recusada pelo Zone Editor por TTLs incompatíveis (3600/300) em TXT do apex. Nenhum registro DNS foi alterado; o DNS público ainda aponta ao IP anterior e não retorna AAAA para o hostname. MX/Titan permaneceram intocados.
+- Preparados na branch `infra/hetzner-go-live` vhost HTTP para ACME e vhost TLS de domínio separado, com paridade de regras e rotas em relação ao vhost IP. Os candidatos ainda não foram instalados e o certificado do hostname não foi emitido. DNS/TLS/cutover do hostname não estão concluídos.
+
 ## Infraestrutura Hetzner — 2026-11-12
 ### Validado
 - H1: MySQL 8.4.13 instalado e configurado para acesso local por socket/127.0.0.1, `NO_ENGINE_SUBSTITUTION`, timezone `-03:00`, `utf8mb4`/`utf8mb4_unicode_ci`, binlog, retenção de 7 dias e slow log. PHP `mysqli` conectou com sucesso à HML; porta 3306 sem regra UFW.

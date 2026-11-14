@@ -143,3 +143,10 @@ A contagem agregada confirmou 275/275 tabelas-base InnoDB. O backup lógico diá
 Os backups estão apenas no mesmo host, sem retenção automática ou cópia off-host; restore drill isolado, armazenamento externo criptografado, política de retenção e alertas externos permanecem pendentes. Testar restauração apenas em alvo temporário novo, nunca sobre o HML.
 
 O delta H3 exato está em `sql/deploy/hetzner_cutover_migrations.sql`. A matriz/resultado por 54 migrations está em `docs/infraestrutura/hetzner/MATRIZ_MIGRATIONS_H3.md` e `docs/infraestrutura/hetzner/H3_RECONCILIACAO_LIVE_2026-11-12.md`. Evidências root-only não devem ser transferidas para Git.
+
+
+## 18. Banco ativo após import — 2026-11-14
+
+O dump mais recente foi importado no schema isolado `erpcondominios_stage_20261114`, com 275 tabelas. A comparação agregada encontrou 204.965 linhas no novo schema e 202.630 no schema anterior; 27 tabelas têm contagens diferentes. Nenhuma linha de negócio foi exibida. A configuração privada ativa foi comutada atomicamente para o schema novo; sua versão anterior permanece em rollback root-only e o schema `erpcondominios` anterior permanece intacto. PHP CLI como `www-data` e probe temporário Nginx/PHP-FPM confirmaram acesso às 275 tabelas; o probe foi removido.
+
+MySQL 8.4 continua sendo o banco ativo, local-only. PostgreSQL 18 permanece parado e branches/dados `pg/*` seguem preservados. Backup pós-switch e verificação de integridade executados em 14/11 terminaram com sucesso. O dump original e os backups anteriores foram preservados. O hostname ainda depende de DNS e certificado próprio.

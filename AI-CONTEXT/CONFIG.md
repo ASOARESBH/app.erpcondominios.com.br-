@@ -28,6 +28,10 @@ H3 aplicou apenas DDL estrutural idempotente comprovadamente necessário; os ite
 
 Os dados em `configuracoes` continuam com as integrações externas neutralizadas nesta cópia. Os artefatos ZIP de `uploads/` e `config/firebase/` ainda não foram fornecidos e não foram importados; `shared/uploads` permanece vazio. Manter Firebase/FCM, SMTP/Brevo/Resend e webhooks neutralizados até autorização específica e QA HML autenticado.
 
+## Estado da configuração ativa após import — 14/11/2026
+
+A configuração privada da aplicação foi atualizada atomicamente para conectar ao schema importado mais recente na Hetzner. A cópia de rollback da configuração anterior é root-only, e o schema anterior segue preservado como rollback do banco. O arquivo de configuração e quaisquer credenciais permanecem fora do repositório e do webroot. PHP-FPM foi recarregado e a conexão ao novo schema foi validada por CLI e Nginx/PHP-FPM sem exibir valores privados.
+
 ## 5. Alertas de infraestrutura Hetzner (2026-11-13)
 
 Os alertas de operação usam `msmtp` separado da configuração de e-mail do ERP. `/etc/erpcondominios/secrets/msmtprc`, `smtp-password` (Brevo) e `titan-app-password` ficam em `root:root 0600`, no diretório `root:root 0700`; nenhuma credencial ou parâmetro de conexão é versionado. André definiu TITAN como primário e Brevo como fallback automático, com remetente/destinatário `noreply@erpcondominios.com.br`. Os scripts de provisionamento dual foram instalados a partir do commit `6cdca818b99984042f4bf9f75b711edf7b3b8a59`. A credencial Brevo extraída privadamente do snapshot confirmado não autenticou; `titan-app-password` ainda não existe e aguarda geração/instalação direta via TTY na VM. O `msmtprc` permanece single-account até a conversão protegida ser validada; não substituir por API key. O timer do resumo permanece desabilitado; o healthcheck mantém um marcador sanitizado root-only de falha de entrega.
