@@ -24,7 +24,10 @@ body {
 }
 
 body {
+    display: block;
     margin: 0;
+    padding: 0;
+    width: 100%;
     min-height: 100vh;
     min-height: 100svh;
     color: var(--login-ink);
@@ -34,6 +37,7 @@ body {
 
 .login-shell {
     display: grid;
+    width: 100%;
     grid-template-columns: minmax(0, 60%) minmax(430px, 40%);
     min-height: 100vh;
     min-height: 100svh;
@@ -443,6 +447,31 @@ body {
         padding-right: clamp(20px, 2.4vw, 30px);
         padding-left: clamp(20px, 2.4vw, 30px);
     }
+
+    .login-language-control {
+        margin-bottom: 16px;
+    }
+
+    .login-header {
+        margin-bottom: 24px;
+    }
+
+    .logo-box {
+        width: 250px;
+        height: 110px;
+    }
+
+    .login-tagline {
+        margin-bottom: 18px;
+    }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .footer {
+        margin-top: 20px;
+    }
 }
 
 @media (min-width: 768px) and (max-width: 999px) {
@@ -451,18 +480,64 @@ body {
     }
 
     .login-visual {
+        height: clamp(180px, 24vh, 220px);
         min-height: 0;
     }
 
     .login-visual img {
-        height: auto;
+        height: 100%;
         min-height: 0;
-        object-fit: contain;
+        object-fit: cover;
+        object-position: center top;
     }
 
     .login-panel {
-        min-height: 620px;
-        padding: 32px 24px;
+        min-height: calc(100vh - clamp(180px, 24vh, 220px));
+        min-height: calc(100svh - clamp(180px, 24vh, 220px));
+        padding: 16px 24px;
+    }
+
+    .login-language-control {
+        margin-bottom: 10px;
+    }
+
+    .login-header {
+        margin-bottom: 14px;
+    }
+
+    .logo-box {
+        width: 210px;
+        height: 88px;
+        margin-bottom: 4px;
+    }
+
+    .login-tagline {
+        margin-bottom: 12px;
+    }
+
+    .form-group {
+        margin-bottom: 12px;
+    }
+
+    .footer {
+        margin-top: 14px;
+    }
+}
+
+@media (min-width: 768px) {
+    html[lang="en-US"] .login-visual,
+    html[lang="es-ES"] .login-visual {
+        display: flex;
+        align-items: flex-start;
+        background: linear-gradient(155deg, #063b75 0%, #0b4d98 55%, #1554d1 100%);
+    }
+
+    html[lang="en-US"] .login-visual img,
+    html[lang="es-ES"] .login-visual img {
+        height: clamp(170px, 22vh, 260px);
+        min-height: 0;
+        object-fit: cover;
+        object-position: center top;
     }
 }
 

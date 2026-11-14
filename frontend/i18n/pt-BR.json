@@ -38,5 +38,6 @@
   "status.inactive": "Inativo",
   "login.tagline": "Software de gestão de condomínios e associações",
   "login.welcome": "Bem-vindo ao ERP Condomínio",
-  "login.subtitle": "Entre com suas credenciais para acessar sua plataforma de gestão."
+  "login.subtitle": "Entre com suas credenciais para acessar sua plataforma de gestão.",
+  "login.banner_alt": "Condomínio moderno com portaria, paisagismo e módulos de gestão."
 }

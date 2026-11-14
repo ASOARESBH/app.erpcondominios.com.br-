@@ -41,13 +41,22 @@
             return { init: init, onLoad: onLoad, onError: onError };
         })();
     </script>
+    <script>
+        function atualizarAltBannerLogin() {
+            var banner = document.getElementById('loginBanner');
+            var chave = 'login.banner_alt';
+            if (!banner || !window.ERP_I18N) return;
+            var traducao = window.ERP_I18N.t(chave);
+            if (traducao && traducao !== chave) banner.alt = traducao;
+        }
+    </script>
     <link rel="stylesheet" href="/assets/css/pages/login.css">
 </head>
 
 <body>
     <div class="login-shell">
         <section class="login-visual" aria-label="Apresentação do ERP Condomínio">
-            <img src="/assets/img/login/banner-gestao-condominio.png" alt="Condomínio com portaria, áreas comuns e gestão integrada">
+            <img id="loginBanner" src="/assets/img/login/banner-gestao-condominio.png" alt="Banner institucional do ERP Condomínio com condomínio, portaria e módulos de gestão">
         </section>
         <main class="login-panel">
             <div class="login-container">
@@ -160,7 +169,10 @@
             if (!languageSelect || !window.ERP_I18N) return;
             languageSelect.value = window.ERP_I18N.getLocale();
             languageSelect.addEventListener('change', function () { window.ERP_I18N.load(languageSelect.value); });
-            document.addEventListener('erp:locale-changed', function (event) { languageSelect.value = event.detail.locale; });
+            document.addEventListener('erp:locale-changed', function (event) {
+                languageSelect.value = event.detail.locale;
+                atualizarAltBannerLogin();
+            });
         });
         const loginForm = document.getElementById('loginForm');
         const btnLogin  = document.getElementById('btnLogin');

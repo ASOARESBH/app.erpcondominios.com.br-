@@ -38,5 +38,6 @@
   "status.inactive": "Inactive",
   "login.tagline": "Software for condominium and association management",
   "login.welcome": "Welcome to ERP Condominium",
-  "login.subtitle": "Sign in with your credentials to access your management platform."
+  "login.subtitle": "Sign in with your credentials to access your management platform.",
+  "login.banner_alt": "Modern condominium with a gated entrance, landscaping and management modules."
 }
