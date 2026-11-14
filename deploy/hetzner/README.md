@@ -84,3 +84,15 @@ Nos vhosts TLS do domínio e do IP, `location = /` serve `current/frontend/login
 Smoke com TLS validado passou para raiz, `<base>`, HTTP→HTTPS, redirects 301 dos caminhos legados com query string preservada, assets de login/config/i18n/CSS e os dois logins alternativos. Font Awesome externo foi verificado no hostname CDN correto. Browser isolado confirmou troca dos catálogos en-US/es-ES/pt-BR; o POST de preferência foi bloqueado localmente. Console sem erros. Não submeter formulário de login, não acionar recuperação por e-mail e não declarar logout/login de sucesso testados sem credencial e conta de homologação expressamente disponibilizadas.
 
 Para rollback, restaurar ambas as cópias root-only correspondentes para `sites-available`, validar `nginx -t` e recarregar Nginx. O rollback do código aponta `current` ao symlink da release anterior; manter releases, MySQL, shared/uploads, certificados, DNS e outros registros intactos.
+
+
+## Rotas limpas SPA — release `980a4f70e00ebb4178b291d549b51bbb11b5f45e`
+
+O PR #9 adiciona rotas `/<slug>` para os fragments HTML ativos em `frontend/pages/`. `deploy/hetzner/generate-clean-page-routes.py` gera e valida `deploy/hetzner/erp-pages.conf`, que deve ser instalado como `/etc/nginx/snippets/erp-pages.conf` e incluído nos vhosts de domínio e IP depois dos bloqueios explícitos e antes das regex genéricas de assets/PHP. O rewrite legado de `/dashboard` sai dos vhosts; `/dashboard` passa pela allowlist. `/layout-base.html` retorna 302 para `/frontend/layout-base.html$is_args$args`; o router converte a URL legada no cliente. A raiz/login e os redirects existentes permanecem sem mudança.
+
+Procedimento de produção: (1) backup root-only dos dois arquivos `sites-available` e do estado anterior do snippet; (2) copiar snippet e ambos vhosts candidatos; (3) `nginx -t` e verificar os includes pelo `nginx -T`; (4) reload Nginx; (5) publicar o código do SHA exato em release nova e trocar `current` atomicamente preservando `shared/uploads`; (6) smoke hostname/IP. Não substituir configuração privada, `shared/uploads`, certificados ou schema. Rollback Nginx: restaurar as cópias root-only, remover apenas o snippet novo se não existia antes, `nginx -t` e reload. Rollback de código: apontar `current` para a release imediatamente anterior preservada.
+
+O smoke deve cobrir raiz/login, `/dashboard`, `/moradores`, `/financeiro`, `/registro?aba=convidados`, F5/deep links, assets do shell, `/frontend/layout-base.html?page=moradores&aba=alertas`, `/layout-base.html` com query, API protegida sem sessão (401 JSON), bloqueios, `/projetos`, `/frontend/login_morador.html` e `/frontend/login_fornecedor.html`. QA autenticado com sessão de teste não produtiva é separado e não deve usar nem gravar credenciais em relatórios.
+
+
+O código de aplicação desta mudança vem exclusivamente do commit mesclado em `main` `980a4f70e00ebb4178b291d549b51bbb11b5f45e`; a configuração operacional Nginx e este runbook são versionados separadamente em `infra/hetzner-go-live`. Não fazer merge dessa branch na `main` como parte do deploy.

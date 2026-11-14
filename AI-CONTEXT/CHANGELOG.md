@@ -373,3 +373,10 @@ PR #8 foi mesclado em `main` pelo commit `f416876d3dc6596b069475651f795b1b3e7073
 ## Validação final da URL limpa de login — 2026-11-14
 
 A tentativa inicial de servir `/` com `alias` retornou HTTP 500; foi substituída por `root` + `try_files` nos vhosts TLS de domínio e IP (infra commit `6651d15bf7ef816e36a6caffe94eb7f96eb9caac`). `nginx -t` e reload passaram. Com TLS validado, smoke confirmou `/` 200 com `<base href="/frontend/">`, HTTP→HTTPS 301, `/frontend/login.html` e `/login.html` 301 relativo para `/`, preservando `?expired=1`; config.js, i18n.js, catálogos, CSS locais, login_morador e login_fornecedor retornam 200. Font Awesome foi verificado no host CDN real (200). O navegador isolado carregou a tela na raiz, alternou os catálogos en-US/es-ES/pt-BR e foi retornado a pt-BR; três POSTs de preferência foram bloqueados pelo interceptador local, sem escrita no banco. O interceptador foi removido e o `fetch` restaurado. Console sem erros observados. Login autenticado, logout, painel e recuperação de senha não foram testados por ausência de conta/endereço de homologação autorizado; nenhuma credencial foi submetida. Nginx/PHP-FPM/MySQL seguem ativos, `current` permanece na release do merge commit `f416876d3dc6596b069475651f795b1b3e70738a`; releases antigas, `shared/uploads`, banco e configuração privada foram preservados.
+
+
+## Rotas limpas SPA — 14/11/2026
+
+- PR #9 mesclado na `main`: `980a4f70e00ebb4178b291d549b51bbb11b5f45e`; inclui navegação SPA por `/<slug>`, compatibilidade legada, allowlist gerada e testes.
+- Preparado na branch `infra/hetzner-go-live` o snippet allowlisted e a alteração mínima de vhosts domínio/IP: remover rewrite especial de dashboard, incluir `erp-pages.conf` após bloqueios e preservar o handler de URL legada.
+- Testes Nginx isolados e smoke público de produção ainda serão registrados somente após serem efetivamente executados; não declarar produção concluída neste registro preliminar.
