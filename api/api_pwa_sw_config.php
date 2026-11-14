@@ -68,9 +68,32 @@ $pwa_cache_version = $cfg['pwa_cache_version'] ?? 'portal-morador-v1.0.0';
 $pwa_vapid_key     = $cfg['fcm_vapid_key']     ?? '';
 $pwa_nome_app      = $cfg['pwa_nome_app']      ?? 'Portal do Morador';
 $pwa_tema_cor      = $cfg['pwa_tema_cor']      ?? '#2563eb';
-$pwa_ativo         = ($cfg['pwa_ativo']        ?? '1') === '1';
+$pwa_ativo         = isset($cfg['pwa_ativo']) && $cfg['pwa_ativo'] === '1';
 
-$firebase_configurado = !empty($firebase_config['apiKey']) && $firebase_config['apiKey'] !== 'SUBSTITUA_PELO_SEU_API_KEY';
+function _pwa_config_value_ready($value) {
+    if (!is_string($value) || trim($value) === '') return false;
+    return !preg_match('/(?:^|[^A-Z0-9])(?:SUBSTITUA|PLACEHOLDER|YOUR|CHANGE[_ -]?ME|EXEMPLO|SEU|INFORME)(?:$|[^A-Z0-9])/i', $value);
+}
+
+$api_key_valida = (bool)preg_match('/^AIza[0-9A-Za-z_-]{35}$/D', (string)$firebase_config['apiKey']);
+$auth_domain_valido = (bool)preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/iD', (string)$firebase_config['authDomain']);
+$project_id_valido = (bool)preg_match('/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/D', (string)$firebase_config['projectId']);
+$sender_id_valido = (bool)preg_match('/^[0-9]{6,20}$/D', (string)$firebase_config['messagingSenderId']);
+$app_id_valido = (bool)preg_match('/^1:[0-9]{6,20}:web:[A-Za-z0-9_-]+$/D', (string)$firebase_config['appId']);
+$vapid_key_valida = (bool)preg_match('/^[A-Za-z0-9_-]{40,128}={0,2}$/D', (string)$pwa_vapid_key);
+$firebase_configurado = $pwa_ativo
+    && _pwa_config_value_ready($firebase_config['apiKey'])
+    && _pwa_config_value_ready($firebase_config['authDomain'])
+    && _pwa_config_value_ready($firebase_config['projectId'])
+    && _pwa_config_value_ready($firebase_config['messagingSenderId'])
+    && _pwa_config_value_ready($firebase_config['appId'])
+    && _pwa_config_value_ready($pwa_vapid_key)
+    && $api_key_valida
+    && $auth_domain_valido
+    && $project_id_valido
+    && $sender_id_valido
+    && $app_id_valido
+    && $vapid_key_valida;
 
 // ── Formatos de saída ────────────────────────────────────────
 

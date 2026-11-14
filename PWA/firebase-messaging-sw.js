@@ -32,18 +32,50 @@ const STATIC_ASSETS = [
     '/assets/css/app.css',
 ];
 
-// Verifica se credenciais são reais (não placeholder)
-const _firebaseOk = FIREBASE_CONFIG.apiKey
-    && FIREBASE_CONFIG.projectId
-    && !FIREBASE_CONFIG.apiKey.startsWith('SUBSTITUA')
-    && self.PWA_CONFIG && self.PWA_CONFIG.firebaseConfigurado;
+const _valorPronto = value => typeof value === 'string' && value.trim() !== '' &&
+    !/(?:^|[^A-Z0-9])(?:SUBSTITUA|PLACEHOLDER|YOUR|CHANGE[_ -]?ME|EXEMPLO|SEU|INFORME)(?:$|[^A-Z0-9])/i.test(value);
+const _apiKeyValida = /^AIza[0-9A-Za-z_-]{35}$/.test(FIREBASE_CONFIG.apiKey || '');
+const _authDomainValido = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(FIREBASE_CONFIG.authDomain || '');
+const _projectIdValido = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(FIREBASE_CONFIG.projectId || '');
+const _senderIdValido = /^[0-9]{6,20}$/.test(FIREBASE_CONFIG.messagingSenderId || '');
+const _appIdValido = /^1:[0-9]{6,20}:web:[A-Za-z0-9_-]+$/.test(FIREBASE_CONFIG.appId || '');
+const _vapidKeyValida = _valorPronto(self.PWA_CONFIG && self.PWA_CONFIG.vapidKey)
+    && /^[A-Za-z0-9_-]{40,128}={0,2}$/.test(self.PWA_CONFIG.vapidKey);
+const _firebaseOk = Boolean(
+    typeof firebase !== 'undefined'
+    && self.PWA_CONFIG
+    && self.PWA_CONFIG.pwaAtivo
+    && self.PWA_CONFIG.firebaseConfigurado
+    && _valorPronto(FIREBASE_CONFIG.apiKey)
+    && _valorPronto(FIREBASE_CONFIG.authDomain)
+    && _valorPronto(FIREBASE_CONFIG.projectId)
+    && _valorPronto(FIREBASE_CONFIG.messagingSenderId)
+    && _valorPronto(FIREBASE_CONFIG.appId)
+    && _apiKeyValida
+    && _authDomainValido
+    && _projectIdValido
+    && _senderIdValido
+    && _appIdValido
+    && _vapidKeyValida
+);
 
 // Inicializar Firebase apenas se credenciais disponíveis e válidas
 let messaging = null;
 if (_firebaseOk) {
-    firebase.initializeApp(FIREBASE_CONFIG);
-    messaging = firebase.messaging();
-    console.log('[SW] Firebase inicializado. Projeto:', FIREBASE_CONFIG.projectId);
+    try {
+        if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+        const app = firebase.apps.find(item => item.name === '[DEFAULT]');
+        if (app && app.options.apiKey === FIREBASE_CONFIG.apiKey &&
+            app.options.projectId === FIREBASE_CONFIG.projectId &&
+            app.options.appId === FIREBASE_CONFIG.appId) {
+            messaging = firebase.messaging();
+            console.log('[SW] Firebase Messaging inicializado.');
+        } else {
+            console.warn('[SW] A instância Firebase não corresponde à configuração; push desativado.');
+        }
+    } catch (err) {
+        console.warn('[SW] Falha ao inicializar Firebase Messaging; push desativado.', err?.code || 'erro não classificado.');
+    }
 } else {
     console.warn('[SW] Firebase não configurado — push desativado. Configure em Portal PWA → Central PWA.');
 }

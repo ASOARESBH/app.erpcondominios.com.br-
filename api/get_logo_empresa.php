@@ -23,7 +23,7 @@ if (in_array($origin, $origens_permitidas, true)) {
 header('Vary: Origin');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: private, no-store, max-age=0');
 
@@ -37,17 +37,44 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_helper.php';
 ob_end_clean();
 
-// O Portal do Morador possui sessão PHP própria, sem usuario_logado de
-// backoffice. Ambos os fluxos recebem o tenant exclusivamente da sessão;
-// nunca de GET/POST/header enviado pelo navegador.
-if (session_status() === PHP_SESSION_NONE) session_start();
-if (!empty($_SESSION['morador_logado']) && is_numeric($_SESSION['tenant_id'] ?? null)) {
-    $tenant_id = (int)$_SESSION['tenant_id'];
-} else {
+function logo_portal_bearer_token() {
+    $authorization = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    if (!$authorization && function_exists('getallheaders')) {
+        foreach (getallheaders() as $name => $value) {
+            if (strtolower($name) === 'authorization') {
+                $authorization = $value;
+                break;
+            }
+        }
+    }
+    if (trim($authorization) === '') return null;
+    return preg_match('/^Bearer\s+(\S+)$/i', trim($authorization), $match) ? $match[1] : '';
+}
+
+function logo_portal_tenant_id($conexao, $token) {
+    $stmt = $conexao->prepare("SELECT m.tenant_id
+                               FROM sessoes_portal sp
+                               JOIN moradores m ON m.id = sp.morador_id AND m.tenant_id = sp.tenant_id
+                               WHERE sp.token = ? AND sp.ativo = 1 AND sp.data_expiracao > NOW() AND m.ativo = 1
+                               LIMIT 1");
+    if (!$stmt) return null;
+    $stmt->bind_param('s', $token);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ? (int)$row['tenant_id'] : null;
+}
+
+$portal_token = logo_portal_bearer_token();
+$tenant_id = 0;
+$base_dir = dirname(__DIR__);
+if ($portal_token === null) {
+    // Sem Bearer, aceitar somente a sessão ERP validada pelo helper.
+    // A sessão PHP do Portal não substitui a revalidação de sessoes_portal.
+    if (session_status() === PHP_SESSION_NONE) session_start();
     $auth = verificarAutenticacao(true);
     $tenant_id = (int)$auth['tenant_id'];
 }
-$base_dir = dirname(__DIR__);
 
 function responder_logo($sucesso, $mensagem, $dados = [], $status = 200) {
     http_response_code($status);
@@ -85,6 +112,14 @@ try {
     $conexao = conectar_banco();
     if (!$conexao) {
         throw new RuntimeException('Não foi possível conectar ao banco de dados.');
+    }
+
+    if ($portal_token !== null) {
+        $tenant_id = $portal_token !== '' ? (int)(logo_portal_tenant_id($conexao, $portal_token) ?? 0) : 0;
+        if ($tenant_id <= 0) {
+            $conexao->close();
+            responder_logo(false, 'Sessão expirada. Faça login novamente.', [], 401);
+        }
     }
 
     // Fonte primária: cadastro mestre do tenant ativo.
