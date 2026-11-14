@@ -150,3 +150,10 @@ O delta H3 exato está em `sql/deploy/hetzner_cutover_migrations.sql`. A matriz/
 O dump mais recente foi importado no schema isolado `erpcondominios_stage_20261114`, com 275 tabelas. A comparação agregada encontrou 204.965 linhas no novo schema e 202.630 no schema anterior; 27 tabelas têm contagens diferentes. Nenhuma linha de negócio foi exibida. A configuração privada ativa foi comutada atomicamente para o schema novo; sua versão anterior permanece em rollback root-only e o schema `erpcondominios` anterior permanece intacto. PHP CLI como `www-data` e probe temporário Nginx/PHP-FPM confirmaram acesso às 275 tabelas; o probe foi removido.
 
 MySQL 8.4 continua sendo o banco ativo, local-only. PostgreSQL 18 permanece parado e branches/dados `pg/*` seguem preservados. Backup pós-switch e verificação de integridade executados em 14/11 terminaram com sucesso. O dump original e os backups anteriores foram preservados. O hostname ainda depende de DNS e certificado próprio.
+
+
+## Estado MySQL ativo na Hetzner — 2026-11-14
+
+A aplicação continua conectada pelo arquivo privado fora do webroot ao schema importado mais recente; o MySQL 8.4 é o único banco ativo, local-only. A contagem agregada validada é 275 tabelas. O schema anterior e a configuração anterior permanecem como rollback; PostgreSQL 18, dumps e branches `pg/*` continuam preservados e pausados. Nenhum DML foi executado como parte do DNS/TLS.
+
+Após o switch, foi produzido um backup root-only e validado por `gzip -t`, manifesto SHA-256 e modos/permissões, seguido da atualização do marcador de integridade. O artefato e o hash permanecem privados e não são citados neste documento. Restore drill isolado e cópia off-host ainda são pendências operacionais.

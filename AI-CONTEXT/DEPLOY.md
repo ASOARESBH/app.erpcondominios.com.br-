@@ -67,3 +67,16 @@ O dump de produção mais recente foi importado isoladamente em `erpcondominios_
 O A de `app.erpcondominios.com.br` ainda aponta ao IP antigo. O cPanel recusou salvar a edição individual por TXT do apex com TTLs inconsistentes (3600/300); nenhuma mudança em DNS ocorreu e MX/Titan continuam intactos. Não alterar TXT sem autorização específica.
 
 A branch de infraestrutura prepara o nome no vhost HTTP para ACME e um vhost TLS separado com regras equivalentes ao vhost IP. Estes arquivos ainda não foram instalados. Após resolver o gate DNS: validar e instalar o vhost HTTP, alterar somente o A autorizado, confirmar propagação, emitir certificado HTTP-01, ativar TLS separado, validar SNI/SAN, redirect, login/assets, PHP e bloqueios, e executar `certbot renew --dry-run`. Não considerar o cutover do hostname concluído antes desses testes.
+
+
+## Estado confirmado do hostname Hetzner — 2026-11-14
+
+O registro `app.erpcondominios.com.br A` foi atualizado para `2.29.161.106` (TTL 14400) e confirmado nos dois nameservers autoritativos e em resolvedores públicos. Para ultrapassar a validação global do cPanel, foi alterado somente o TTL de um TXT existente no apex de 300 para 3600 segundos, sem mudar seu conteúdo. MX/Titan, `www.app.erpcondominios.com.br` e os demais registros permaneceram intocados; não há AAAA publicado para `app`.
+
+O vhost HTTP continua aceitando o HTTP-01 no webroot `/var/www/letsencrypt` e redireciona a raiz para HTTPS. Foi emitido certificado Let's Encrypt específico com SAN `app.erpcondominios.com.br`; o vhost TLS está em arquivo separado. `nginx -t` e reload passaram, preservando o vhost/certificado por IP e o catchall. `certbot renew --dry-run` passou e `snap.certbot.renew.timer` está enabled/active.
+
+Smoke público não autenticado pelo domínio e pelo IP passou para login, CSS/imagens, página de direitos, redirecionamento HTTP→HTTPS, API PHP protegida (401 JSON) e bloqueio de caminhos internos. Nenhuma credencial foi submetida e nenhum DML foi executado. A tela de login raiz ainda solicita `/js/config.js` (404); os fluxos de login usam URLs absolutas e o arquivo versionado `/frontend/js/config.js` responde, por isso o achado não bloqueia o smoke, mas precisa ser corrigido em branch própria.
+
+O backup do schema ativo pós-switch passou `gzip -t`, verificação pelo manifesto SHA-256, proprietário/modo root `0600`; o serviço de integridade atualizou o marcador. O schema ativo continua com 275 tabelas e MySQL local-only; PostgreSQL 18 continua pausado. A entrega completa em produção ainda depende da revisão das integrações de produção, dos ZIPs ausentes de uploads/Firebase, de QA autenticado autorizado e da conclusão dos alertas SMTP. Não declarar os alertas e resumo diário ativos: TITAN app-password falta e `erpcondominios-summary.timer` permanece inativo.
+
+A reconciliação do healthcheck encontrou e está corrigindo na branch `infra/hetzner-go-live` uma inversão no mapa dos probes MySQL/HTTPS (resultado saudável era contabilizado como falha). O deploy da correção e novo healthcheck devem ser registrados somente após revisão, publicação e validação. Nenhum teste de e-mail foi enviado nesta etapa.

@@ -457,8 +457,8 @@ def _collect() -> dict:
     statuses: dict[str, bool] = {}
     for item, unit in UNITS.items():
         statuses[item] = not _unit_active(unit)
-    statuses["mysql_ping"] = _mysql_ping()
-    statuses["https_local"] = _https_local()
+    statuses["mysql_ping"] = not _mysql_ping()
+    statuses["https_local"] = not _https_local()
     cert_hours = _cert_hours()
     statuses["cert_under_72h"] = cert_hours is None or cert_hours < CERT_WARN_SECONDS // 3600
     free = _free_bytes()
@@ -489,8 +489,8 @@ def _collect() -> dict:
         "nginx_service": "unit nginx.service ativa" if statuses["nginx_service"] else "unit nginx.service inativa",
         "php_fpm_service": "unit php8.3-fpm.service ativa" if statuses["php_fpm_service"] else "unit php8.3-fpm.service inativa",
         "mysql_service": "unit mysql.service ativa" if statuses["mysql_service"] else "unit mysql.service inativa",
-        "mysql_ping": "resposta local confirmada" if statuses["mysql_ping"] else "sem resposta local",
-        "https_local": "rota HTTPS local respondeu" if statuses["https_local"] else "rota HTTPS local falhou",
+        "mysql_ping": "sem resposta local" if statuses["mysql_ping"] else "resposta local confirmada",
+        "https_local": "rota HTTPS local falhou" if statuses["https_local"] else "rota HTTPS local respondeu",
         "cert_under_72h": "validade restante indisponível" if cert_hours is None else f"validade restante: {cert_hours} horas",
         "disk_under_15gib": "espaço livre indisponível" if free is None else f"espaço livre: {free // 1024**3} GiB",
         "backup_over_36h": "backup ausente" if backup is None else f"idade do backup: {max(0, (now - backup['mtime']) // 3600)} horas",

@@ -35,3 +35,10 @@ A configuração privada da aplicação foi atualizada atomicamente para conecta
 ## 5. Alertas de infraestrutura Hetzner (2026-11-13)
 
 Os alertas de operação usam `msmtp` separado da configuração de e-mail do ERP. `/etc/erpcondominios/secrets/msmtprc`, `smtp-password` (Brevo) e `titan-app-password` ficam em `root:root 0600`, no diretório `root:root 0700`; nenhuma credencial ou parâmetro de conexão é versionado. André definiu TITAN como primário e Brevo como fallback automático, com remetente/destinatário `noreply@erpcondominios.com.br`. Os scripts de provisionamento dual foram instalados a partir do commit `6cdca818b99984042f4bf9f75b711edf7b3b8a59`. A credencial Brevo extraída privadamente do snapshot confirmado não autenticou; `titan-app-password` ainda não existe e aguarda geração/instalação direta via TTY na VM. O `msmtprc` permanece single-account até a conversão protegida ser validada; não substituir por API key. O timer do resumo permanece desabilitado; o healthcheck mantém um marcador sanitizado root-only de falha de entrega.
+
+
+## Hostname e TLS Hetzner — 2026-11-14
+
+O Nginx serve `app.erpcondominios.com.br` por vhost TLS separado com certificado Let's Encrypt próprio. O vhost por IP permanece como contingência; o certificado IP não foi reutilizado para o domínio. A renovação via Certbot Snap passou `--dry-run`, e `snap.certbot.renew.timer` está ativo. A alteração DNS limitou-se ao A de `app`; um TTL TXT do apex foi normalizado sem alteração do conteúdo e MX/Titan permaneceu intacto.
+
+Alertas SMTP continuam sem credencial app-password TITAN instalada; o resumo diário está pausado. Não guardar credenciais no repositório, nem executar envio de teste até a instalação segura por TTY e nova autorização para retomar essa etapa.

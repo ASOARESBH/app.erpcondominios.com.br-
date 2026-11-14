@@ -34,6 +34,32 @@ class AlertManagerTests(unittest.TestCase):
         manager.time.time = self.old_time
         manager._send = self.old_send
 
+    def test_collect_inverts_mysql_and_https_probe_results(self):
+        common = {
+            "_unit_active": lambda unit: True,
+            "_cert_hours": lambda: 100,
+            "_free_bytes": lambda: 20 * 1024**3,
+            "_latest_backup": lambda: None,
+            "_integrity_marker": lambda: self.now,
+            "_certbot_timer_active": lambda: True,
+            "_smtp_ready": lambda: True,
+            "_unit_failed": lambda unit: False,
+            "_smtp_failure_present": lambda: False,
+            "_safe_password_file": lambda path: True,
+        }
+        for healthy, expected in ((True, False), (False, True)):
+            with mock.patch.multiple(manager, **common), \
+                 mock.patch.object(manager, "_mysql_ping", return_value=healthy), \
+                 mock.patch.object(manager, "_https_local", return_value=healthy):
+                collected = manager._collect()
+            statuses = collected["statuses"]
+            self.assertIs(statuses["mysql_ping"], expected)
+            self.assertIs(statuses["https_local"], expected)
+            mysql_detail = collected["details"]["mysql_ping"]
+            https_detail = collected["details"]["https_local"]
+            self.assertEqual(mysql_detail, "resposta local confirmada" if healthy else "sem resposta local")
+            self.assertEqual(https_detail, "rota HTTPS local respondeu" if healthy else "rota HTTPS local falhou")
+
     def test_first_failure_sends_once(self):
         manager._emit_transition(self.data, "disk_space_simulation", True, "limiar sintético")
         self.assertEqual(len(self.sent), 1)

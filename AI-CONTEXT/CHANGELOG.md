@@ -343,3 +343,12 @@ Registro de alterações significativas no ERP.
 - QR de tenant diferente é recusado com HTTP 403, e a API revalida vínculo do vigilante, agenda, janela de ciclo e índice de duplicidade antes da gravação.
 - Validadas sintaxe PHP, regras de ciclo/SLA, análise direcionada dos arquivos Flutter e testes Flutter. O detalhe técnico e roteiro pós-deploy estão em `ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md`.
 - H6: backup lógico root-only diário por systemd ativo; a execução passou `gzip -t` e SHA-256, arquivo `0600`, com threshold de 10 GiB livres. Healthcheck passivo de cinco minutos verifica serviços sem iniciá-los, TLS, espaço, backup até 36 horas e `gzip -t`/SHA-256/modo 0600 da cópia mais recente. Logrotate nativo e regra MySQL de error/slow log configurados; arquivos MySQL novos `mysql:mysql 0600`. MySQL general log permanece desligado. Backups ainda são apenas locais, sem expurgo nem cópia off-host; restore drill, política de retenção e alerta externo são pendentes; falhas são registradas no journal.
+
+
+## Infraestrutura Hetzner — DNS/TLS e diagnóstico do healthcheck — 2026-11-14
+### Confirmado
+- O A de `app.erpcondominios.com.br` aponta para `2.29.161.106` e foi confirmado nos dois nameservers autoritativos e em resolvedores públicos. O TTL de um TXT existente no apex foi alinhado de 300 para 3600, preservando o conteúdo; MX/Titan e demais registros não foram alterados. `www.app` permanece fora do escopo.
+- Certificado Let's Encrypt próprio do hostname emitido e servido pelo vhost TLS dedicado; vhost IP e catchall preservados. Teste de renovação e timer Snap passaram.
+- Smoke público não autenticado no domínio e no IP passou; API protegida retorna JSON 401 e os caminhos internos testados retornam 404. O login raiz ainda referencia `/js/config.js` ausente; achado não bloqueante porque as chamadas de autenticação usam URLs absolutas.
+- Backup do schema ativo validado por gzip, manifesto e permissões root-only; marcador de integridade atualizado.
+- O healthcheck revelou inversão de true/false nos probes locais MySQL/HTTPS. Correção e teste regressivo foram preparados na branch infra, aguardando revisão e deployment. SMTP continua incompleto por falta da app-password TITAN e o resumo diário permanece pausado. Não foram enviados e-mails de teste.
