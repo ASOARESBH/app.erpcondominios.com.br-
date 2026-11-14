@@ -80,3 +80,10 @@ Smoke público não autenticado pelo domínio e pelo IP passou para login, CSS/i
 O backup do schema ativo pós-switch passou `gzip -t`, verificação pelo manifesto SHA-256, proprietário/modo root `0600`; o serviço de integridade atualizou o marcador. O schema ativo continua com 275 tabelas e MySQL local-only; PostgreSQL 18 continua pausado. A entrega completa em produção ainda depende da revisão das integrações de produção, dos ZIPs ausentes de uploads/Firebase, de QA autenticado autorizado e da conclusão dos alertas SMTP. Não declarar os alertas e resumo diário ativos: TITAN app-password falta e `erpcondominios-summary.timer` permanece inativo.
 
 O healthcheck corrigido foi revisado e publicado na branch `infra/hetzner-go-live` pelo commit `16d477097c5311e6aa17da77bedcac9d97b6b50a`, com 22 testes aprovados, e instalado na VM com cópia anterior root-only para rollback. O coletor agora marca probes MySQL/HTTPS saudáveis como normais; as únicas condições pendentes são configuração SMTP, falha de entrega anterior e app-password TITAN ausente. Healthcheck, backup e timers Certbot estão ativos; o resumo diário segue inativo. Nenhum teste de e-mail foi enviado nesta etapa.
+
+
+## Raiz do hostname — redirecionamento para login — 2026-11-14
+
+No vhost TLS de `app.erpcondominios.com.br`, somente o caminho exato `/` responde com HTTP 302 para `https://2.29.161.106/frontend/login.html`. O redirecionamento não é permanente para evitar cache duradouro durante o cutover; os demais caminhos seguem no vhost de domínio e o login por IP continua diretamente acessível. O vhost HTTP faz 301 para HTTPS antes dessa regra.
+
+Após a troca do A, o TTL configurado é 14400 segundos (até quatro horas de cache DNS). Nameservers/resolvedores públicos verificados retornam o IP Hetzner; uma rede ou navegador que ainda resolva o IP anterior pode continuar recebendo a página do HostGator até expirar/limpar o cache. No Windows, executar `ipconfig /flushdns` e limpar o cache DNS/sockets do navegador ou testar em janela privada. Não é necessário alterar DNS novamente.

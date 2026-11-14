@@ -75,3 +75,10 @@ O HTTP vhost permite HTTP-01 em `/var/www/letsencrypt`; um probe público foi re
 Smoke público não autenticado em domínio e IP aprovou login/landing, CSS/logo, página de direitos, HTTP→HTTPS, API protegida (401 JSON) e caminhos internos bloqueados. Nenhuma credencial foi enviada e nenhum DML foi executado. Achado não bloqueante: o login raiz contém referência relativa a `/js/config.js` (404), embora a API use URLs absolutas e `/frontend/js/config.js` responda. Corrigir somente em branch e validar antes de eventual implantação.
 
 Backup pós-switch concluído; `gzip -t`, manifesto SHA-256, modo/proprietário `0600` root e marcador de integridade foram verificados. O schema ativo segue com 275 tabelas. A correção do alert-manager está publicada e instalada pelo commit `16d477097c5311e6aa17da77bedcac9d97b6b50a`; 22 testes passaram, os probes MySQL/HTTPS foram reclassificados corretamente, e o healthcheck atual termina com três pendências SMTP (`smtp_config`, `smtp_delivery_failure`, `titan_primary_credential`). O timer de resumo permanece inativo e nenhum e-mail de teste foi enviado. A versão anterior do alert-manager permanece em rollback root-only.
+
+
+## Redirecionamento da raiz do hostname — 2026-11-14
+
+No vhost TLS do domínio, `location = /` retorna 302 para `https://2.29.161.106/frontend/login.html`. O `location =` corresponde somente à raiz; qualquer outro caminho, inclusive `/frontend/login.html`, permanece atendido pelo vhost do hostname. HTTP ainda redireciona primeiro para HTTPS. Validar `curl -I https://app.erpcondominios.com.br/` com status 302 e `Location` exato, e seguir o redirect até obter 200 no destino. O IP continua acessível diretamente.
+
+Para rollback, remover apenas esse bloco `location = /` do vhost TLS de domínio, testar `nginx -t` e recarregar Nginx; não alterar DNS, o vhost por IP ou o certificado. O A tem TTL 14400; caches externos podem continuar encaminhando usuários ao HostGator por até quatro horas após a alteração, embora os resolvedores públicos consultados já retornem a Hetzner.

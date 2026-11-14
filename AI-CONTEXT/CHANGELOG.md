@@ -352,3 +352,9 @@ Registro de alterações significativas no ERP.
 - Smoke público não autenticado no domínio e no IP passou; API protegida retorna JSON 401 e os caminhos internos testados retornam 404. O login raiz ainda referencia `/js/config.js` ausente; achado não bloqueante porque as chamadas de autenticação usam URLs absolutas.
 - Backup do schema ativo validado por gzip, manifesto e permissões root-only; marcador de integridade atualizado.
 - A inversão de true/false nos probes locais MySQL/HTTPS foi corrigida, incluindo descrições correspondentes e teste regressivo. A suíte completa de 22 testes passou; revisão independente não encontrou problemas. Commit `16d477097c5311e6aa17da77bedcac9d97b6b50a` foi publicado na branch `infra/hetzner-go-live` e instalado na VM com rollback root-only. Os probes estão normais; permanecem apenas `smtp_config`, `smtp_delivery_failure` e `titan_primary_credential`. O timer do resumo diário segue pausado. Não foram enviados e-mails de teste.
+
+
+## Infraestrutura Hetzner — raiz do hostname direciona ao login — 2026-11-14
+### Alterado
+
+O caminho exato `/` no vhost TLS de `app.erpcondominios.com.br` agora responde com 302 para `https://2.29.161.106/frontend/login.html`, sem alterar as demais rotas. O HTTP continua redirecionando a HTTPS. A validação pública identificou que resolvedores consultados já apontam para a Hetzner, mas o registro tem TTL de 14400 segundos; a página HostGator vista pelo usuário é compatível com cache DNS local/recursivo que ainda usa o endereço anterior. Após o deploy, validar o `Location` e o status 200 do destino; orientar flush do cache DNS/navegador, sem nova alteração DNS.
