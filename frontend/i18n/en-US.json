@@ -35,5 +35,8 @@
   "auth.error.invalid_email": "Invalid email.",
   "auth.error.inactive": "User is inactive. Contact an administrator.",
   "status.active": "Active",
-  "status.inactive": "Inactive"
+  "status.inactive": "Inactive",
+  "login.tagline": "Software for condominium and association management",
+  "login.welcome": "Welcome to ERP Condominium",
+  "login.subtitle": "Sign in with your credentials to access your management platform."
 }

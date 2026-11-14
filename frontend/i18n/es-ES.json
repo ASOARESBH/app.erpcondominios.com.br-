@@ -35,5 +35,8 @@
   "auth.error.invalid_email": "Correo electrónico no válido.",
   "auth.error.inactive": "El usuario está inactivo. Contacta con un administrador.",
   "status.active": "Activo",
-  "status.inactive": "Inactivo"
+  "status.inactive": "Inactivo",
+  "login.tagline": "Software de gestión de condominios y asociaciones",
+  "login.welcome": "Bienvenido al ERP Condominio",
+  "login.subtitle": "Inicia sesión con tus credenciales para acceder a tu plataforma de gestión."
 }

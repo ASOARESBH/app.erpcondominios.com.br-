@@ -25,6 +25,7 @@ export function destroy() {
 
 ## 4. Branding por Tenant
 - As telas de login usam somente `assets/img/logos/logo_padrao.png` e não recebem logo do tenant.
+- `frontend/login.html` mantém o login público fora da SPA: o layout split-screen usa `assets/css/pages/login.css`, o banner institucional `assets/img/login/banner-gestao-condominio.png` e o logo padrão. Campos, endpoint de autenticação ERP/Portal, recuperação, seleção de perfil e checagem de sessão permanecem os existentes; os novos textos do cabeçalho têm chaves nos catálogos pt-BR/en-US/es-ES.
 - Em áreas autenticadas, previews e cabeçalhos devem preferir URLs BLOB autenticadas devolvidas pela API, nunca montar caminhos `uploads/...` manualmente.
 - O Portal do Morador consulta `get_logo_empresa.php` com a sessão PHP do morador e deve restaurar a marca institucional ou ícone padrão quando a logo não existir ou falhar.
 
