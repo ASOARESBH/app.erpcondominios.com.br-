@@ -45,6 +45,9 @@ body {
 
 .login-visual {
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-width: 0;
     min-height: 100vh;
     min-height: 100svh;
@@ -55,11 +58,12 @@ body {
 .login-visual img {
     display: block;
     width: 100%;
-    height: 100%;
-    min-height: 100vh;
-    min-height: 100svh;
-    object-fit: cover;
-    object-position: left center;
+    height: auto;
+    max-height: 100vh;
+    max-height: 100svh;
+    min-height: 0;
+    object-fit: contain;
+    object-position: center;
 }
 
 .login-panel {
@@ -119,8 +123,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: min(100%, 300px);
-    height: 132px;
+    width: min(100%, 380px);
+    height: 148px;
     margin: 0 auto 10px;
     overflow: hidden;
     background: transparent;
@@ -131,6 +135,7 @@ body {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    object-position: center;
 }
 
 .logo-box.loading {
@@ -420,6 +425,29 @@ body {
     text-align: center;
 }
 
+.footer p {
+    margin: 0;
+}
+
+.footer a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+    transition: color 160ms ease, text-decoration-color 160ms ease;
+}
+
+.footer a:hover,
+.footer a:focus-visible {
+    color: var(--login-blue);
+    text-decoration-color: currentColor;
+}
+
+.footer a:focus-visible {
+    outline: 2px solid rgb(21 84 209 / 32%);
+    outline-offset: 3px;
+}
+
 .spinner {
     display: inline-block;
     width: 17px;
@@ -440,7 +468,8 @@ body {
     }
 
     .login-visual img {
-        object-position: left center;
+        object-fit: contain;
+        object-position: center;
     }
 
     .login-panel {
@@ -457,8 +486,8 @@ body {
     }
 
     .logo-box {
-        width: 250px;
-        height: 110px;
+        width: min(100%, 320px);
+        height: 126px;
     }
 
     .login-tagline {
@@ -480,20 +509,21 @@ body {
     }
 
     .login-visual {
-        height: clamp(180px, 24vh, 220px);
+        height: auto;
         min-height: 0;
     }
 
     .login-visual img {
-        height: 100%;
+        width: 100%;
+        height: auto;
+        max-height: none;
         min-height: 0;
-        object-fit: cover;
-        object-position: center top;
+        object-fit: contain;
+        object-position: center;
     }
 
     .login-panel {
-        min-height: calc(100vh - clamp(180px, 24vh, 220px));
-        min-height: calc(100svh - clamp(180px, 24vh, 220px));
+        min-height: 0;
         padding: 16px 24px;
     }
 
@@ -506,8 +536,8 @@ body {
     }
 
     .logo-box {
-        width: 210px;
-        height: 88px;
+        width: min(100%, 260px);
+        height: 100px;
         margin-bottom: 4px;
     }
 
@@ -528,16 +558,20 @@ body {
     html[lang="en-US"] .login-visual,
     html[lang="es-ES"] .login-visual {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
+        justify-content: center;
         background: linear-gradient(155deg, #063b75 0%, #0b4d98 55%, #1554d1 100%);
     }
 
     html[lang="en-US"] .login-visual img,
     html[lang="es-ES"] .login-visual img {
-        height: clamp(170px, 22vh, 260px);
+        width: 100%;
+        height: auto;
+        max-height: 100vh;
+        max-height: 100svh;
         min-height: 0;
-        object-fit: cover;
-        object-position: center top;
+        object-fit: contain;
+        object-position: center;
     }
 }
 
@@ -572,8 +606,8 @@ body {
     }
 
     .logo-box {
-        width: 260px;
-        height: 114px;
+        width: min(100%, 330px);
+        height: 132px;
     }
 }
 
