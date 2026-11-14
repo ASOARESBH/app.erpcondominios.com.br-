@@ -382,3 +382,12 @@ A tentativa inicial de servir `/` com `alias` retornou HTTP 500; foi substituíd
 - Primeira tentativa de deploy fez rollback automático ao detectar falha do smoke no redirect legado. A causa foi `absolute_redirect` gerar URL absoluta quando o contrato de compatibilidade exigia `Location` relativo; corrigido nos dois vhosts e no runbook pelo commit de infra `6d1db127f12409a172168bfaba659ff65339fae3` (`absolute_redirect off`).
 - Deploy de produção concluído no release `980a4f70e00ebb4178b291d549b51bbb11b5f45e`; Nginx `nginx -t`, reload, raiz/login, rotas SPA e legado, assets, endpoint protegido, bloqueio de configuração e logins alternativos foram validados no hostname e/ou IP conforme o caso. Redirects preservam query e hostname; TLS público válido.
 - Testes JS do AppRouter, 10 testes Python de rotas, gerador `--check` e smoke público passaram. Release anterior e backup root-only dos vhosts/snippet estão preservados; nenhum dado, DNS, banco, SMTP ou integração foi alterado. QA autenticado de login/logout, recuperação de senha e idioma permanece pendente, pois não foram usadas credenciais.
+
+
+## Portal do Morador/Fornecedor — PR #10 — 2026-11-14
+
+- PR #10 mesclado na `main`; release `590bd4e8a9ef1af4472314aff7ae771b34f0e281` ativada atomicamente na Hetzner. Release anterior `980a4f70e00ebb4178b291d549b51bbb11b5f45e` preservada para rollback.
+- 6 testes de regressão, sintaxe PHP/JS, gerador de rotas `--check`, `git diff --check` e `nginx -t` passaram. Nginx, PHP-FPM e MySQL permaneceram ativos.
+- Smoke TLS público: raiz, portal do morador, CSS/PWA/Chat-In, logins morador/fornecedor e painel canônico `/frontend/painel_fornecedor.html` retornaram 200; Marketplace sem Bearer retornou 401 e config PHP permaneceu 404.
+- Configuração local/API, Firebase, `.claude`, log existente e symlink de uploads foram preservados; nenhuma credencial, dado MySQL, migration, DNS, certificado ou integração foi alterado.
+- Login real, validação de cada aba, FCM, Chat-In autenticado e teste visual responsivo continuam pendentes de QA autenticado autorizado.

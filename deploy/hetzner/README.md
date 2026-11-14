@@ -96,3 +96,12 @@ Smoke de produção aprovado: raiz/login, `/dashboard`, `/moradores`, `/financei
 
 
 O código de aplicação desta mudança vem exclusivamente do commit mesclado em `main` `980a4f70e00ebb4178b291d549b51bbb11b5f45e`; a configuração operacional Nginx e este runbook são versionados separadamente em `infra/hetzner-go-live`. Não fazer merge dessa branch na `main` como parte do deploy.
+
+
+## Portal do Morador/Fornecedor — release `590bd4e8a9ef1af4472314aff7ae771b34f0e281`
+
+Deploy concluído em 14/11/2026 após merge do PR #10. O código veio exclusivamente de `main`; o pacote foi criado a partir do SHA mergeado, excluindo configuração privada/runtime e `uploads`. Na nova release foram preservados por cópia opaca `api/config.php`, `config/firebase`, `.claude` e `api/logs`; `uploads` continua como symlink para `shared/uploads`. A comparação prévia encontrou zero arquivos regulares locais inesperados fora desses itens preservados. O backup do destino anterior foi guardado em diretório root-only; a release anterior `980a4f70e00ebb4178b291d549b51bbb11b5f45e` não foi removida.
+
+Validações pré-deploy: 6 testes Python de regressão, `php -l` dos três endpoints alterados, `node --check` dos scripts, gerador de rotas em modo `--check`, `git diff --check` e auditoria do archive passaram. Após a troca atômica, `nginx -t` passou e Nginx, PHP-FPM e MySQL ficaram ativos. Smoke HTTPS local e público: raiz, portal morador, CSS, PWA JS, widget Chat-In, logins de morador/fornecedor e painel fornecedor responderam 200; Marketplace sem autenticação retornou 401; `api/config.php` retornou 404. A rota canônica do painel fornecedor é `/frontend/painel_fornecedor.html`.
+
+QA autenticado de login, carregamento individual das 14 abas, push/FCM, uso interativo do Chat-In e responsividade visual não foi feito por não haver credencial de teste fornecida. Para rollback, reaponte atomicamente `current` para `980a4f70e00ebb4178b291d549b51bbb11b5f45e`, recarregue PHP-FPM e confirme `nginx -t`/serviços. Não apague nenhuma release, backup, log, configuração ou conteúdo compartilhado.
