@@ -10,7 +10,7 @@ Registro de alterações significativas no ERP.
 - PWA: token FCM só é solicitado após `navigator.serviceWorker.ready`, passando a registration ativa explicitamente; removido logging de prefixos de token.
 - Chat-In do Portal: caminhos de widget/API absolutos e estabilidade sob paths de navegação.
 ### Validação
-- Testes estáticos locais e `php -l`/`node --check` aprovados; QA autenticado e deploy em produção ainda pendentes.
+- Testes estáticos locais e `php -l`/`node --check` aprovados; nomes de colunas do Marketplace confirmados por `INFORMATION_SCHEMA` no MySQL ativo sem ler linhas de negócio. QA autenticado e deploy em produção ainda pendentes.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado
