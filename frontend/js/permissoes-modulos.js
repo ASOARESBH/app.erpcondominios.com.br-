@@ -376,14 +376,14 @@
     function verificarPaginaAtual(perms) {
         if (!perms || perms.is_admin || perms.carregamento_falhou) return;
 
-        var params = new URLSearchParams(window.location.search);
-        var pageParam = params.get('page');
+        var pageParam = window.AppRouter && typeof window.AppRouter.getPageFromURL === 'function'
+            ? window.AppRouter.getPageFromURL('')
+            : new URLSearchParams(window.location.search).get('page');
         if (!pageParam) return;
 
         if (!temAcesso(pageParam, perms)) {
             console.warn('[PermissoesModulos v2] Acesso negado à página:', pageParam);
-            var base = window.location.pathname;
-            var url = base + '?page=dashboard&acesso_negado=' + encodeURIComponent(pageParam);
+            var url = '/dashboard?acesso_negado=' + encodeURIComponent(pageParam);
             window.location.replace(url);
         }
     }
@@ -435,8 +435,9 @@
             return;
         }
 
-        var params = new URLSearchParams(window.location.search);
-        var page = params.get('page');
+        var page = window.AppRouter && typeof window.AppRouter.getPageFromURL === 'function'
+            ? window.AppRouter.getPageFromURL('')
+            : new URLSearchParams(window.location.search).get('page');
         if (!page) return;
 
         var chave = chavePermissaoDaPagina(page, perms);

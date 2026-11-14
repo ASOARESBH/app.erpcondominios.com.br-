@@ -43,7 +43,7 @@
                 label:     'Super Admin',
                 icon:      'fas fa-crown',
                 page:      'superadmin',
-                href:      'layout-base.html?page=superadmin',
+                href:      '/superadmin',
                 order:     99,
                 separator: true,
                 style:     'color: #f59e0b; font-weight: 700;'
@@ -77,7 +77,7 @@
             var li = document.createElement('li');
             li.className = 'nav-item nav-item-superadmin';
             li.innerHTML = [
-                '<a href="layout-base.html?page=superadmin" data-page="superadmin" class="nav-link" ',
+                '<a href="/superadmin" data-page="superadmin" class="nav-link" ',
                 '   style="color:#f59e0b;font-weight:700;border-top:1px solid rgba(255,255,255,0.1);margin-top:0.5rem;padding-top:0.75rem;">',
                 '<i class="fas fa-crown"></i>',
                 '<span>Super Admin</span>',
@@ -233,14 +233,14 @@
         .then(function (res) {
             if (res.sucesso) {
                 try { localStorage.removeItem('superadmin_tenant_original'); } catch (e) {}
-                window.location.href = '/frontend/layout-base.html?page=superadmin';
+                window.location.href = '/superadmin';
             } else {
                 alert('Erro ao sair: ' + (res.mensagem || 'Tente novamente'));
             }
         })
         .catch(function () {
             try { localStorage.removeItem('superadmin_tenant_original'); } catch (e) {}
-            window.location.href = '/frontend/layout-base.html?page=superadmin';
+            window.location.href = '/superadmin';
         });
     }
 

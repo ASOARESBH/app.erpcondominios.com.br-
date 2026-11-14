@@ -5,13 +5,11 @@
 const AppRouter = {
     // Armazena a referência ao módulo da página atual para limpeza
     currentPageModule: null,
+    initialized: false,
 
     // Configurações
     config: {
-        pagesPath: 'pages/',
-        // O router é carregado em /frontend/layout-base.html; import() resolve
-        // caminhos relativos à página, não ao arquivo /frontend/js/app-router.js.
-        // Os módulos vivem em /frontend/js/pages/.
+        pagesPath: '/frontend/pages/',
         scriptsPath: '/frontend/js/pages/',
         contentContainerId: 'appContent',
         titleElementId: 'pageTitle'
@@ -21,28 +19,42 @@ const AppRouter = {
      * Inicializa o router
      */
     init() {
+        if (this.initialized) return;
+        this.initialized = true;
         console.log('[Router] Inicializando...');
 
         // Listener para navegação via botões back/forward
-        window.addEventListener('popstate', (event) => {
-            console.log('[Router] popstate detectado:', event.state);
-            if (event.state && event.state.page) {
-                // Navegar sem atualizar histórico (updateHistory: false)
-                this.loadPage(event.state.page, false);
-            }
+        window.addEventListener('popstate', () => {
+            const page = this.getPageFromURL('dashboard');
+            console.log('[Router] popstate detectado:', page);
+            this.canonicalizeCurrentURL(page);
+            this.loadPage(page, false);
         });
+
+        document.addEventListener('click', (event) => this.handleDocumentClick(event));
+        this.canonicalizeCurrentURL(this.getPageFromURL('dashboard'));
 
         console.log('[Router] Pronto (URL management habilitado)');
     },
 
     /**
-     * Obtém a página da URL (?page=X) ou retorna página padrão
+     * Obtém a página do caminho limpo ou da URL legada (?page=X).
      * @param {string} defaultPage - Página padrão se não houver parâmetro
      * @returns {string} Nome da página
      */
     getPageFromURL(defaultPage = 'dashboard') {
+        const pathname = window.location.pathname;
+        let routePath = pathname;
+        try { routePath = decodeURIComponent(pathname); } catch (_) { /* nome inválido será rejeitado */ }
         const urlParams = new URLSearchParams(window.location.search);
-        const page = urlParams.get('page');
+        const cleanRoute = routePath.match(/^\/([a-z0-9_-]+)\/?$/);
+        const legacyLayout = /^\/(?:frontend\/)?layout-base\.html\/?$/i.test(routePath);
+        const invalidSingleSegment = !cleanRoute && !legacyLayout
+            ? routePath.match(/^\/([^/]+)\/?$/)
+            : null;
+        const page = cleanRoute
+            ? cleanRoute[1]
+            : (legacyLayout ? urlParams.get('page') : (invalidSingleSegment ? invalidSingleSegment[1] : null));
         const permissoes = String(localStorage.getItem('usuario_permissao') || '').toLowerCase();
         const emContextoDeTenant = !!localStorage.getItem('superadmin_tenant_original');
 
@@ -53,6 +65,92 @@ const AppRouter = {
             return 'superadmin';
         }
         return page || defaultPage;
+    },
+
+    isValidPageName(pageName) {
+        return typeof pageName === 'string' && /^[a-z0-9_-]+$/.test(pageName);
+    },
+
+    normalizePageQuery(pageName, sourceParams) {
+        const params = new URLSearchParams(sourceParams || '');
+        params.delete('page');
+
+        if (pageName === 'registro' || pageName === 'moradores') {
+            const allowedTabs = pageName === 'registro' ? ['manual', 'convidados'] : ['alertas'];
+            if (params.has('aba') && !allowedTabs.includes(params.get('aba'))) params.delete('aba');
+        }
+
+        if (pageName === 'registro') {
+            const registroId = params.get('registro_id') || '';
+            const numericId = Number(registroId);
+            if (!/^\d+$/.test(registroId) || !Number.isSafeInteger(numericId) || numericId <= 0) params.delete('registro_id');
+        } else {
+            params.delete('registro_id');
+        }
+
+        return params;
+    },
+
+    cleanURLForPage(pageName, sourceParams, hash = '') {
+        const params = this.normalizePageQuery(pageName, sourceParams);
+        const query = params.toString();
+        return `/${pageName}${query ? `?${query}` : ''}${hash || ''}`;
+    },
+
+    canonicalizeCurrentURL(pageName) {
+        if (!this.isValidPageName(pageName)) return false;
+
+        const current = new URL(window.location.href);
+        const legacyLayout = /^\/(?:frontend\/)?layout-base\.html\/?$/i.test(current.pathname);
+        const route = current.pathname.match(/^\/([a-z0-9_-]+)\/?$/);
+        const shouldCanonicalize = legacyLayout || !route || current.pathname !== `/${pageName}` || current.searchParams.has('page');
+        if (!shouldCanonicalize) return false;
+
+        const params = this.normalizePageQuery(pageName, current.searchParams);
+        const cleanURL = this.cleanURLForPage(pageName, params, current.hash);
+        const state = { ...(window.history.state || {}), page: pageName, aba: params.get('aba') || null };
+        window.history.replaceState(state, '', cleanURL);
+        return true;
+    },
+
+    handleDocumentClick(event) {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        const target = event.target;
+        const link = target && typeof target.closest === 'function' ? target.closest('a[href]') : null;
+        if (!link || link.hasAttribute('download')) return;
+        const targetName = (link.getAttribute('target') || '').toLowerCase();
+        if (targetName && targetName !== '_self') return;
+
+        let url;
+        try {
+            url = new URL(link.href, window.location.href);
+        } catch (_) {
+            return;
+        }
+        if (url.origin !== window.location.origin) return;
+
+        const legacyLayout = /^\/(?:frontend\/)?layout-base\.html\/?$/i.test(url.pathname);
+        const pageFromLegacyLink = legacyLayout ? url.searchParams.get('page') : null;
+        const pageFromData = link.dataset && link.dataset.page;
+        if (!pageFromData && !pageFromLegacyLink) return;
+
+        const pageName = pageFromData || pageFromLegacyLink;
+        if (!this.isValidPageName(pageName)) return;
+        event.preventDefault();
+        this.loadPage(pageName, true, { searchParams: url.searchParams, hash: url.hash });
+    },
+
+    getNavigationParams(pageName, navigation = {}) {
+        if (navigation.searchParams && [...navigation.searchParams.keys()].some((key) => key !== 'page')) {
+            return this.normalizePageQuery(pageName, navigation.searchParams);
+        }
+
+        const currentParams = new URLSearchParams(window.location.search);
+        const currentPage = this.getPageFromURL('');
+        if (currentPage === pageName) return this.normalizePageQuery(pageName, currentParams);
+
+        return new URLSearchParams();
     },
 
     /**
@@ -89,11 +187,23 @@ const AppRouter = {
      * @param {string} pageName - Nome do arquivo (sem extensão)
      * @param {boolean} updateHistory - Se true, atualiza URL com pushState (default: true)
      */
-    async loadPage(pageName, updateHistory = true) {
+    async loadPage(pageName, updateHistory = true, navigation = {}) {
         console.log(`[Router] Carregando página: ${pageName} (updateHistory: ${updateHistory})`);
 
         const container = document.getElementById(this.config.contentContainerId);
         if (!container) return;
+
+        if (!this.isValidPageName(pageName)) {
+            container.innerHTML = `
+                <div class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Erro ao carregar página</h3>
+                    <p>Nome de página inválido.</p>
+                </div>
+            `;
+            console.warn('[Router] Nome de página inválido rejeitado');
+            return;
+        }
 
         // Guard visual: o backend continua sendo a fonte de verdade, mas o router
         // evita carregar uma página que o usuário não pode sequer visualizar.
@@ -137,6 +247,14 @@ const AppRouter = {
             // 6. Atualizar Título (se houver metadados)
             this.updatePageMeta();
 
+            // Atualizar a URL antes de init() para que os módulos leiam seus filtros/abas.
+            if (updateHistory) {
+                const params = this.getNavigationParams(pageName, navigation);
+                const newUrl = this.cleanURLForPage(pageName, params, navigation.hash || '');
+                history.pushState({ page: pageName, aba: params.get('aba') || null }, '', newUrl);
+                console.log(`[Router] URL atualizada: ${newUrl}`);
+            }
+
             // 6. Carregar Script da Página (Lifecycle: init)
             // Usa import dinâmico do ES6
             try {
@@ -159,28 +277,7 @@ const AppRouter = {
                 }
             }
 
-            // 7. Atualizar URL (se solicitado)
-            if (updateHistory) {
-                const urlParams = new URLSearchParams({ page: pageName });
-                if (pageName === 'registro' || pageName === 'moradores') {
-                    const abaSolicitada = new URLSearchParams(window.location.search).get('aba');
-                    const abasPermitidas = pageName === 'registro'
-                        ? ['manual', 'convidados']
-                        : ['alertas'];
-                    if (abasPermitidas.includes(abaSolicitada)) {
-                        urlParams.set('aba', abaSolicitada);
-                    }
-                }
-                if (pageName === 'registro') {
-                    const registroId = new URLSearchParams(window.location.search).get('registro_id') || '';
-                    if (/^\d+$/.test(registroId) && Number(registroId) > 0) urlParams.set('registro_id', registroId);
-                }
-                const newUrl = `?${urlParams.toString()}`;
-                history.pushState({ page: pageName, aba: urlParams.get('aba') || null }, '', newUrl);
-                console.log(`[Router] URL atualizada: ${newUrl}`);
-            }
-
-            // 8. Disparar evento pageLoaded para guard de permissões e outros listeners
+            // 7. Disparar evento pageLoaded para guard de permissões e outros listeners
             document.dispatchEvent(new CustomEvent('pageLoaded', {
                 detail: { page: pageName },
                 bubbles: false

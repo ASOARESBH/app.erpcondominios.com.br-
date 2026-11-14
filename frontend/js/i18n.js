@@ -28,14 +28,14 @@
     async function load(locale = state.locale) {
         if (!localStorage.getItem('erp_locale')) {
             try {
-                const preference = await fetch('../api/api_i18n.php?acao=preferencia', { credentials: 'include' }).then(response => response.ok ? response.json() : null);
+                const preference = await fetch('/api/api_i18n.php?acao=preferencia', { credentials: 'include' }).then(response => response.ok ? response.json() : null);
                 if (preference?.sucesso && preference.dados?.locale) locale = preference.dados.locale;
             } catch (_) { /* sessão pública ou migration ausente: segue com fallback */ }
         }
         state.locale = normalize(locale);
         localStorage.setItem('erp_locale', state.locale);
         try {
-            const response = await fetch(`i18n/${state.locale}.json`, { cache: 'no-cache' });
+            const response = await fetch(`/frontend/i18n/${state.locale}.json`, { cache: 'no-cache' });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             state.catalog = await response.json(); state.loaded = true;
         } catch (error) {
@@ -43,7 +43,7 @@
             state.catalog = state.locale === DEFAULT_LOCALE ? (window.ERP_I18N_CATALOG || {}) : {};
         }
         translate();
-        try { await fetch('../api/api_i18n.php?acao=preferencia', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ locale: state.locale }) }); } catch (_) { /* login público ou API indisponível: localStorage mantém a preferência */ }
+        try { await fetch('/api/api_i18n.php?acao=preferencia', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ locale: state.locale }) }); } catch (_) { /* login público ou API indisponível: localStorage mantém a preferência */ }
         return state.locale;
     }
     function formatNumber(value, options = {}) { return new Intl.NumberFormat(state.locale, options).format(Number(value) || 0); }

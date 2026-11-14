@@ -117,8 +117,9 @@
     }
 
     function detectCurrentPage() {
-        const params = new URLSearchParams(window.location.search);
-        const pageParam = params.get('page');
+        const pageParam = window.AppRouter && typeof window.AppRouter.getPageFromURL === 'function'
+            ? window.AppRouter.getPageFromURL('')
+            : new URLSearchParams(window.location.search).get('page');
         const itensAtuais = state.mode === 'superadmin' ? state.superadminItems : state.items;
         const paginasAtuais = itensAtuais.flatMap((item) => [item, ...(item.children || [])]);
         if (pageParam && paginasAtuais.some((item) => item.page === pageParam)) {
@@ -145,20 +146,22 @@
     }
     function renderItem(item, activePage) {
         const itemLabel = labelTraduzido(item);
+        const itemHref = /^[a-z0-9_-]+$/.test(String(item.page || '')) ? `/${item.page}` : item.href;
         const ativoFilho = (item.children || []).some((child) => child.page === activePage);
         const activeClass = item.page === activePage || ativoFilho ? ' active' : '';
         const styleAttr = item.style ? ` style="${item.style}"` : '';
         const liStyle = item.liStyle ? ` style="${item.liStyle}"` : '';
         const separator = item.separator ? '<li class="nav-item"><hr style="border:none;border-top:1px solid rgba(255,255,255,0.1);margin:0.5rem 0.75rem;"></li>' : '';
         const filhos = (item.children || []).map((child) => {
+            const childHref = /^[a-z0-9_-]+$/.test(String(child.page || '')) ? `/${child.page}` : child.href;
             const childActive = child.page === activePage ? ' active' : '';
             const childLabel = labelTraduzido(child);
-            return `<li class="nav-item nav-subitem"><a href="${child.href}" data-page="${child.page}" class="nav-link nav-sublink${childActive}" title="${childLabel}"><i class="${child.icon}"></i><span>${childLabel}</span></a></li>`;
+            return `<li class="nav-item nav-subitem"><a href="${childHref}" data-page="${child.page}" class="nav-link nav-sublink${childActive}" title="${childLabel}"><i class="${child.icon}"></i><span>${childLabel}</span></a></li>`;
         }).join('');
         return [
             separator,
             `<li class="nav-item"${liStyle}>`,
-            `<a href="${item.href}" data-page="${item.page}" class="nav-link${activeClass}"${styleAttr} title="${itemLabel}">`,
+            `<a href="${itemHref}" data-page="${item.page}" class="nav-link${activeClass}"${styleAttr} title="${itemLabel}">`,
             `<i class="${item.icon}"></i>`,
             `<span>${itemLabel}</span>`,
             '</a>',
@@ -194,7 +197,7 @@
         if (!container) return false;
         container.innerHTML = [
             '<li class="nav-item">',
-            '<a href="dashboard.html" data-page="dashboard" class="nav-link">',
+            '<a href="/dashboard" data-page="dashboard" class="nav-link">',
             '<i class="fas fa-chart-line"></i>',
             '<span>Dashboard</span>',
             '</a>',
@@ -316,8 +319,10 @@
         const mapping = {};
         const itens = state.mode === 'superadmin' ? state.superadminItems : state.items;
         itens.forEach((item) => {
-            mapping[item.page] = item.href;
-            (item.children || []).forEach((child) => { mapping[child.page] = child.href; });
+            mapping[item.page] = /^[a-z0-9_-]+$/.test(String(item.page || '')) ? `/${item.page}` : item.href;
+            (item.children || []).forEach((child) => {
+                mapping[child.page] = /^[a-z0-9_-]+$/.test(String(child.page || '')) ? `/${child.page}` : child.href;
+            });
         });
         return mapping;
     }

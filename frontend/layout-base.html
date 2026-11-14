@@ -14,17 +14,17 @@
     <!-- Design System CSS -->
     <link rel="stylesheet" href="/assets/css/app.css">
     <link rel="stylesheet" href="/assets/css/themes/theme-blue.css">
-    <link rel="stylesheet" href="components/user-menu/user-menu.css">
+    <link rel="stylesheet" href="/frontend/components/user-menu/user-menu.css">
     <link rel="stylesheet" href="/assets/css/chatin.css?v=20261105-chatin-1">
 
     <!-- Auth Guard: verifica sessão ANTES de renderizar a página -->
     <!-- IMPORTANTE: deve estar no HEAD para bloquear o carregamento se não autenticado -->
-    <script src="js/auth-guard.js"></script>
+    <script src="/frontend/js/auth-guard.js"></script>
 
     <!-- Session Manager Core: gerencia a sessão após autenticação -->
-    <script src="js/session-manager-core.js"></script>
+    <script src="/frontend/js/session-manager-core.js"></script>
     <!-- Internacionalização global: fallback pt-BR e catálogos pt-BR/en-US/es-ES -->
-    <script src="js/i18n.js"></script>
+    <script src="/frontend/js/i18n.js"></script>
 </head>
 
 <body>
@@ -60,18 +60,18 @@
     </main>
 
     <!-- Base Scripts (Body End) -->
-    <script src="components/user-menu/user-menu.js" defer></script>
-    <script src="js/user-profile-sidebar.js"></script>
-    <script src="js/sidebar-controller.js"></script>
+    <script src="/frontend/components/user-menu/user-menu.js" defer></script>
+    <script src="/frontend/js/user-profile-sidebar.js"></script>
+    <script src="/frontend/js/sidebar-controller.js"></script>
     <!-- Super Admin: exibe item no menu apenas para super_admin -->
-    <script src="js/sidebar-superadmin.js"></script>
+    <script src="/frontend/js/sidebar-superadmin.js"></script>
 
     <!-- App Router (Professional Loader) -->
-    <script type="module" src="js/app-router.js?v=20261012-relatorio-ocupantes-1"></script>
+    <script type="module" src="/frontend/js/app-router.js?v=20261114-clean-urls-1"></script>
 
     <!-- App Initialization -->
     <script type="module">
-        import { AppRouter } from './js/app-router.js?v=20261012-relatorio-ocupantes-1';
+        import { AppRouter } from '/frontend/js/app-router.js?v=20261114-clean-urls-1';
 
         // Menu Toggle — Mobile: abre/fecha sidebar; Desktop: recolhe/expande sidebar
         window.toggleMenu = function () {
@@ -100,22 +100,12 @@
                 document.addEventListener('erp:locale-changed', event => { languageSelect.value = event.detail.locale; });
             }
 
-            // Load initial page from URL (?page=X) or default to dashboard
+            // Load the initial page from a clean URL or the legacy ?page=X URL.
             const initialPage = AppRouter.getPageFromURL('dashboard');
             console.log(`[App] Página inicial: ${initialPage}`);
             AppRouter.loadPage(initialPage, false);
         });
 
-        // Navigation Handler
-        document.addEventListener('click', function (e) {
-            const link = e.target.closest('[data-page]');
-            if (link) {
-                e.preventDefault();
-                const pageName = link.dataset.page;
-                console.log(`[App] Navegação solicitada: ${pageName}`);
-                AppRouter.loadPage(pageName);
-            }
-        });
     </script>
 
     <!-- Modal Logout -->
@@ -136,15 +126,15 @@
     </div>
 
     <!-- Notificações Global Bell -->
-    <script src="js/notif-bell.js" defer></script>
+    <script src="/frontend/js/notif-bell.js" defer></script>
     <!-- Menu Controller (Single Source of Truth) -->
-    <script src="js/menu-controller.js"></script>
+    <script src="/frontend/js/menu-controller.js"></script>
     <!-- Legacy Bridge v2 (Compatibilidade) -->
-    <script src="js/legacy-sidebar-bridge-v2.js"></script>
+    <script src="/frontend/js/legacy-sidebar-bridge-v2.js"></script>
     <!-- Controle de Acesso por Módulo (filtra menu conforme permissões do usuário) -->
-    <script src="js/permissoes-modulos.js"></script>
+    <script src="/frontend/js/permissoes-modulos.js"></script>
     <!-- Chat-In: comunicador interno (botão flutuante + painel lateral fixável) -->
-    <script src="js/chatin-widget.js?v=20261105-chatin-1"></script>
+    <script src="/frontend/js/chatin-widget.js?v=20261105-chatin-1"></script>
     <script>
         (function () {
             function iniciarChatIn() { if (window.ChatIn) window.ChatIn.iniciar({ plataforma: 'painel' }); }

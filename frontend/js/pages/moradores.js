@@ -544,7 +544,7 @@ function _renderResumoBuscaMoradores() {
 
 function _sincronizarURLMoradores() {
     const params = new URLSearchParams(window.location.search);
-    params.set('page', params.get('page') || 'moradores');
+    params.delete('page');
     const filtros = {
         busca: _termoBusca,
         unidade: _unidadeFiltro,
@@ -555,7 +555,9 @@ function _sincronizarURLMoradores() {
         if (valor) params.set(chave, valor);
         else params.delete(chave);
     });
-    const url = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    const url = window.AppRouter && typeof window.AppRouter.cleanURLForPage === 'function'
+        ? window.AppRouter.cleanURLForPage('moradores', params, window.location.hash)
+        : `/moradores${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
     window.history.replaceState({ ...(window.history.state || {}), page: 'moradores' }, '', url);
 }
 

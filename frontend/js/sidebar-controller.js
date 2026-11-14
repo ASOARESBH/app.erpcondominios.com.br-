@@ -47,7 +47,7 @@
         if (!sidebar) return;
 
         try {
-            const response = await fetch('components/sidebar.html');
+            const response = await fetch('/frontend/components/sidebar.html');
             if (!response.ok) {
                 throw new Error('Falha ao carregar sidebar');
             }

@@ -6,10 +6,12 @@
 ## 2. Roteamento (AppRouter)
 O arquivo `frontend/js/app-router.js` gerencia a navegação.
 - As páginas ficam em `frontend/pages/*.html` (apenas o miolo, sem `<html>` ou `<body>`).
-- Ao navegar para `?page=clientes`, o Router:
-  1. Carrega `frontend/pages/clientes.html` no `#appContent`.
-  2. Carrega `assets/css/pages/clientes.css` dinamicamente.
-  3. Executa `import { init } from './pages/clientes.js'` e chama `init()`.
+- A forma canônica é `/<slug>`; `/<slug>/` é normalizada por `history.replaceState` sem reload. O Nginx admite apenas os slugs presentes em `frontend/pages/*.html` e serve internamente `frontend/layout-base.html` sem alterar o endereço visível; caminhos não allowlisted preservam o fallback Nginx existente.
+- `/frontend/layout-base.html?page=<slug>` continua compatível; no primeiro carregamento o router troca apenas a URL visível para `/<slug>`, preservando filtros/abas e parâmetros de contexto permitidos.
+- Ao navegar para `/<slug>` ou `?page=<slug>`, o Router carrega `frontend/pages/<slug>.html` no `#appContent`, carrega `assets/css/pages/<slug>.css` dinamicamente e importa `frontend/js/pages/<slug>.js` quando existir.
+- A navegação SPA intercepta somente clique primário sem modificadores em links internos `data-page`/`layout-base.html`. Ctrl/Cmd/Shift+clique, target diferente de `_self`, downloads e links externos permanecem nativos do navegador.
+- Como o shell pode ser servido numa URL de primeiro nível, referências documentais a scripts, componentes, catálogos e fragments devem usar paths absolutos começando por `/frontend/`; APIs devem usar `/api/` ou origem explícita. `../api/` também resolve ao diretório `/api` nas URLs de primeiro nível e em `/frontend/layout-base.html`, mas não converter imports relativos entre módulos JS, resolvidos em relação ao próprio módulo.
+- O gerador `deploy/hetzner/generate-clean-page-routes.py` deriva o snippet `deploy/hetzner/erp-pages.conf` dos fragments diretos `frontend/pages/*.html`, falha diante de slug reservado/inválido/colisão e valida o snippet com `--check`. Na VM, o destino é `/etc/nginx/snippets/erp-pages.conf`. Rotas especiais como `/projetos`, `/api`, `/uploads`, `/config`, `/frontend` e logins não entram nessa allowlist.
 
 ## 3. Padrão de Arquivos JS de Página
 Todo arquivo JS de página DEVE ser um ES Module:
@@ -32,7 +34,7 @@ export function destroy() {
 ### Registro — Lista de Convidados
 - `frontend/js/pages/registro-convidados.js` é um módulo ES separado, montado dentro de `.page-registro`; `destroy()` cancela a lista em andamento, invalida cascatas e remove listeners antes de outra rota ser carregada.
 - Respostas de unidades, moradores, dependentes, busca documental, detalhe e gravações devem confirmar que ainda pertencem à mesma raiz SPA conectada antes de modificar o DOM.
-- A aba ativa persiste em `?page=registro&aba=manual|convidados`; `frontend/js/app-router.js` preserva `aba` durante a primeira carga/atualização da rota Registro.
+- A aba ativa persiste em `/registro?aba=manual|convidados`; a forma legada `?page=registro&aba=...` continua aceita. `registro_id` permanece somente no deep link de Registro e é validado antes de ser mantido.
 
 ## 5. UI Components
 - **Modais**: Usar as classes padronizadas `.modal-overlay`, `.modal-content`.
@@ -47,7 +49,7 @@ export function destroy() {
 
 ## 6. Alertas da Unidade (web)
 
-- A rota `moradores` inclui a aba `Alertas`, carregada pelo módulo `frontend/js/pages/moradores-alertas.js`; o ciclo `init()`/`destroy()` limpa listeners e respostas obsoletas. O deep-link `?page=moradores&aba=alertas` é preservado pelo roteador. Filtros são persistidos por usuário em `localStorage` com falha não bloqueante; exportação CSV e impressão/PDF do log de ciências respeitam a permissão `moradores.exportar`.
+- A rota `/moradores` inclui a aba `Alertas`, carregada pelo módulo `frontend/js/pages/moradores-alertas.js`; o ciclo `init()`/`destroy()` limpa listeners e respostas obsoletas. O deep-link `/moradores?aba=alertas` é canônico; `?page=moradores&aba=alertas` permanece compatível. Filtros são persistidos por usuário em `localStorage` com falha não bloqueante; exportação CSV e impressão/PDF do log de ciências respeitam a permissão `moradores.exportar`.
 - KPIs ficam limitados ao tenant autenticado. O detalhe de alerta é dividido em Visão geral, Acionamentos/Ciências e Histórico, com tablist acessível por teclado. A timeline mostra operador, decisão, justificativa, pessoa e link para a linha de `registros_acesso`; o GET de Registro a filtra por ID sob RBAC/tenant e a destaca após abertura. Alertas podem ser duplicados somente por usuário com permissão de criar e editar.
 - Registro Manual e Controle de Acesso exibem alertas antes de confirmar Entrada e retomam a gravação somente após ciência/token válido. Leitura automática via QR devolve eventos/decisão ao console; `BLOQUEAR` retorna negação explícita.
 - O Portal do Morador inclui Meus Alertas e consulta `api_portal_alertas.php` com Bearer; o formulário de QR verifica conflito antes de gerar e exige confirmação do usuário. A busca de alvos só lista visitantes vinculados ao morador e mascara documentos; o formulário oferece modelos rápidos e resumo natural. O detalhe exibe timeline de acionamentos do mesmo tenant/unidade. Uma opção individual controla push de acionamentos/lembretes; desativá-la preserva a notificação interna na caixa do Portal. Ao criar convite pela Lista de Convidados, um preflight usa a data prevista às 12h locais, pede confirmação se houver alerta e esclarece que a portaria reavalia no horário efetivo.
