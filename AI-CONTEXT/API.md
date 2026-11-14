@@ -247,3 +247,13 @@ Referência completa em `AI-CONTEXT/CHATIN.md`.
 - `api/api_notificacao_canais.php` — `GET` (visitantes/visualizar) catálogo + canais ativos por evento; `PUT {evento, canais}` (sistema/configurar), auditado.
 - `api/api_assembleia.php` — `criar`/`atualizar` aceitam `notificar_chatin`; nova ação `notificar_chatin {id}`; todas as ações principais filtram `tenant_id`; 409 se a coluna não existir.
 - `api/api_documentos.php` — `documento_salvar` aceita `notificar_chatin=1` (resposta inclui `notificados_chatin`; -1 = visibilidade só usuários).
+
+
+## 21. Portal — Marketplace e logo do tenant (2026-11-14)
+
+- `api/api_portal_marketplace.php` exige `Authorization: Bearer` válido em `sessoes_portal` para vitrine, ramos, detalhe e ações de pedidos. O tenant é derivado da sessão Portal + cadastro ativo do morador; não aceitar token em query/body nem tenant/morador informados pelo cliente. Catálogo, avaliações, pedidos e histórico são sempre filtrados por tenant/morador conforme a ação. Falha técnica retorna JSON genérico e detalhe técnico limitado à categoria/ação vai somente ao log protegido.
+- `api/get_logo_empresa.php` resolve o tenant pela sessão PHP do morador ou pela sessão ERP e retorna a logo desse tenant. Para arquivos em `tenant_arquivos`, só considera `tipo='logo_tenant'` ativo.
+- `api/api_arquivos_tenant.php?acao=conteudo&id=N` tem exceção estrita para o Bearer de morador: retorna somente um conteúdo `logo_tenant`, imagem ativa, cujo `tenant_id` coincide com o da sessão Portal. Um token de morador não lê documentos/anexos gerais; IDs de outros tipos/tenants não são revelados (404). A rota administrativa continua sob a sessão e RBAC já existentes.
+- O Portal baixa a logo via `fetch` same-origin com Bearer e converte o BLOB em URL de objeto temporária; token nunca vai em query string ou console. O BLOB não é persistido em cache local pelo código da página.
+- `api/api_portal_marketplace.php` captura falhas do bootstrap da conexão, valida preparação SQL e responde JSON sem mensagem de driver. `pm_auth()` exige apenas header Bearer, morador ativo, sessão não expirada e vínculo tenant coerente. CORS espelha somente origens ERP permitidas e localhost, com `Vary: Origin`; chamadas same-origin não dependem de CORS.
+- Confirmação read-only de `INFORMATION_SCHEMA.COLUMNS` no MySQL ativo da Hetzner, com fingerprint SSH validada, encontrou `produtos_servicos.preco_venda`, `pedidos.valor_proposto`, campos atuais de avaliação, `ramos_atividade.icone` e os vínculos `tenant_id` usados por esses handlers. Nenhuma linha de negócio foi consultada. O `sql/database_marketplace.sql` versionado representa um contrato legado (ex.: `produtos_servicos.valor`) e não deve ser tratado como prova do schema instalado nem reaplicado para esta correção.

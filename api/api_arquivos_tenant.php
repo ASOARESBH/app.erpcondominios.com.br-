@@ -82,6 +82,33 @@ function tf_is_superadmin() {
     return $permission === 'super_admin';
 }
 
+function tf_bearer_token() {
+    $authorization = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    if (!$authorization && function_exists('getallheaders')) {
+        foreach (getallheaders() as $name => $value) {
+            if (strtolower($name) === 'authorization') {
+                $authorization = $value;
+                break;
+            }
+        }
+    }
+    return preg_match('/^Bearer\s+(\S+)$/i', trim($authorization), $match) ? $match[1] : null;
+}
+
+function tf_portal_tenant_for_token($db, $token) {
+    $stmt = $db->prepare("SELECT m.tenant_id
+                          FROM sessoes_portal sp
+                          JOIN moradores m ON m.id = sp.morador_id AND m.tenant_id = sp.tenant_id
+                          WHERE sp.token = ? AND sp.ativo = 1 AND sp.data_expiracao > NOW() AND m.ativo = 1
+                          LIMIT 1");
+    if (!$stmt) return null;
+    $stmt->bind_param('s', $token);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ? (int)$row['tenant_id'] : null;
+}
+
 $acao = $_GET['acao'] ?? $_POST['acao'] ?? '';
 $db = conectar_banco();
 
@@ -126,6 +153,28 @@ try {
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         if (!$row) tf_json(false, 'Arquivo legado não encontrado ou sem permissão', null, 404);
+        tf_stream($row, false);
+    }
+
+    // O portal recebe somente logos do próprio tenant. A rota não permite
+    // que um token de morador leia documentos ou outros anexos privados.
+    if ($acao === 'conteudo' && ($portalToken = tf_bearer_token()) !== null) {
+        $portalTenantId = tf_portal_tenant_for_token($db, $portalToken);
+        if (!$portalTenantId) tf_json(false, 'Sessão expirada. Faça login novamente.', null, 401);
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) tf_json(false, 'Identificador de arquivo inválido', null, 400);
+        $stmt = $db->prepare("SELECT nome_original, mime_type, tamanho_bytes, conteudo
+                              FROM tenant_arquivos
+                              WHERE id = ? AND tenant_id = ? AND tipo = 'logo_tenant' AND ativo = 1
+                              LIMIT 1");
+        if (!$stmt) tf_json(false, 'Arquivo não encontrado ou sem permissão', null, 404);
+        $stmt->bind_param('ii', $id, $portalTenantId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row || strpos((string)$row['mime_type'], 'image/') !== 0) {
+            tf_json(false, 'Arquivo não encontrado ou sem permissão', null, 404);
+        }
         tf_stream($row, false);
     }
 

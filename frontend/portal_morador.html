@@ -1728,9 +1728,10 @@
             .card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
         }
     </style>
+    <link rel="stylesheet" href="/assets/css/pages/portal_morador.css?v=20261114-nav-1">
     <!-- Chat-In: comunicador interno com a administração e vizinhos -->
     <link rel="stylesheet" href="/assets/css/chatin.css?v=20261105-chatin-1">
-    <script src="js/chatin-widget.js?v=20261105-chatin-1"></script>
+    <script src="/frontend/js/chatin-widget.js?v=20261114-portal-nav-1"></script>
 </head>
 <body>
 
@@ -1772,7 +1773,7 @@
      ================================================================ -->
 <nav id="mainNav" role="navigation" aria-label="Menu principal">
     <div class="nav-inner">
-        <button class="nav-tab active" onclick="abrirAba('perfil', this)" aria-label="Meu Perfil">
+        <button class="nav-tab active" onclick="abrirAba('perfil', this)" aria-label="Meu Perfil" aria-current="page">
             <i class="fas fa-user" aria-hidden="true"></i>
             <span>Meu Perfil</span>
         </button>
@@ -1845,78 +1846,78 @@
 </div>
 
 <!-- Overlay escuro ao abrir o menu mobile -->
-<div id="mobileNavOverlay" onclick="fecharMobileMenu()" aria-hidden="true"></div>
+<div id="mobileNavOverlay" onclick="fecharMobileMenu(true)" aria-hidden="true"></div>
 
 <!-- Dropdown do menu mobile -->
-<div id="mobileNavDropdown" role="menu" aria-label="Navegação">
+<div id="mobileNavDropdown" role="dialog" aria-modal="false" aria-label="Navegação do portal" aria-hidden="true">
     <div class="mobile-menu-grid">
-        <button class="mobile-menu-item active" id="mmi-perfil"
-            onclick="abrirAbaMobile('perfil', 'fa-user', 'Meu Perfil', this)" role="menuitem">
+        <button class="mobile-menu-item active" id="mmi-perfil" aria-current="page"
+            onclick="abrirAbaMobile('perfil', 'fa-user', 'Meu Perfil', this)">
             <i class="fas fa-user" aria-hidden="true"></i>
             <span>Meu Perfil</span>
         </button>
         <button class="mobile-menu-item" id="mmi-visitantes"
-            onclick="abrirAbaMobile('visitantes', 'fa-users', 'Visitantes', this)" role="menuitem">
+            onclick="abrirAbaMobile('visitantes', 'fa-users', 'Visitantes', this)">
             <i class="fas fa-users" aria-hidden="true"></i>
             <span>Visitantes</span>
         </button>
         <button class="mobile-menu-item" id="mmi-acessos"
-            onclick="abrirAbaMobile('acessos', 'fa-qrcode', 'Acessos', this)" role="menuitem">
+            onclick="abrirAbaMobile('acessos', 'fa-qrcode', 'Acessos', this)">
             <i class="fas fa-qrcode" aria-hidden="true"></i>
             <span>Acessos</span>
         </button>
         <button class="mobile-menu-item" id="mmi-dependentes"
-            onclick="abrirAbaMobile('dependentes', 'fa-people-arrows', 'Dependentes', this)" role="menuitem">
+            onclick="abrirAbaMobile('dependentes', 'fa-people-arrows', 'Dependentes', this)">
             <i class="fas fa-people-arrows" aria-hidden="true"></i>
             <span>Dependentes</span>
         </button>
         <button class="mobile-menu-item" id="mmi-convidados"
-            onclick="abrirAbaMobile('convidados', 'fa-user-check', 'Convidados', this)" role="menuitem">
+            onclick="abrirAbaMobile('convidados', 'fa-user-check', 'Convidados', this)">
             <i class="fas fa-user-check" aria-hidden="true"></i>
             <span>Convidados</span>
         </button>
         <button class="mobile-menu-item" id="mmi-alertas"
-            onclick="abrirAbaMobile('alertas', 'fa-bell', 'Meus Alertas', this)" role="menuitem">
+            onclick="abrirAbaMobile('alertas', 'fa-bell', 'Meus Alertas', this)">
             <i class="fas fa-bell" aria-hidden="true"></i>
             <span>Meus Alertas</span>
         </button>
         <button class="mobile-menu-item" id="mmi-protocolos"
-            onclick="abrirAbaMobile('protocolos', 'fa-box', 'Protocolos', this)" role="menuitem">
+            onclick="abrirAbaMobile('protocolos', 'fa-box', 'Protocolos', this)">
             <i class="fas fa-box" aria-hidden="true"></i>
             <span>Protocolos</span>
         </button>
         <button class="mobile-menu-item" id="mmi-hidrometro"
-            onclick="abrirAbaMobile('hidrometro', 'fa-tint', 'Hidrômetro', this)" role="menuitem">
+            onclick="abrirAbaMobile('hidrometro', 'fa-tint', 'Hidrômetro', this)">
             <i class="fas fa-tint" aria-hidden="true"></i>
             <span>Hidrômetro</span>
         </button>
         <button class="mobile-menu-item" id="mmi-veiculos"
-            onclick="abrirAbaMobile('veiculos', 'fa-car', 'Veículos', this)" role="menuitem">
+            onclick="abrirAbaMobile('veiculos', 'fa-car', 'Veículos', this)">
             <i class="fas fa-car" aria-hidden="true"></i>
             <span>Veículos</span>
         </button>
         <button class="mobile-menu-item" id="mmi-documentos"
-            onclick="abrirAbaMobile('documentos', 'fa-folder-open', 'Documentos', this)" role="menuitem">
+            onclick="abrirAbaMobile('documentos', 'fa-folder-open', 'Documentos', this)">
             <i class="fas fa-folder-open" aria-hidden="true"></i>
             <span>Documentos</span>
         </button>
         <button class="mobile-menu-item mobile-menu-item-projetos" id="mmi-projetos"
-            onclick="abrirAbaMobile('projetos', 'fa-hard-hat', 'Projetos', this)" role="menuitem">
+            onclick="abrirAbaMobile('projetos', 'fa-hard-hat', 'Projetos', this)">
             <i class="fas fa-hard-hat" aria-hidden="true"></i>
             <span>Projetos</span>
         </button>
         <button class="mobile-menu-item" id="mmi-controle_acesso"
-            onclick="abrirAbaMobile('controle_acesso', 'fa-shield-alt', 'Controle de Acesso', this)" role="menuitem">
+            onclick="abrirAbaMobile('controle_acesso', 'fa-shield-alt', 'Controle de Acesso', this)">
             <i class="fas fa-shield-alt" aria-hidden="true"></i>
             <span>Controle de Acesso</span>
         </button>
         <button class="mobile-menu-item mobile-menu-item-os" id="mmi-ordens_servico"
-            onclick="abrirAbaMobile('ordens_servico', 'fa-tools', 'Chamados', this)" role="menuitem">
+            onclick="abrirAbaMobile('ordens_servico', 'fa-tools', 'Chamados', this)">
             <i class="fas fa-tools" aria-hidden="true"></i>
             <span>Chamados</span>
         </button>
         <button class="mobile-menu-item mobile-menu-item-marketplace" id="mmi-marketplace"
-            onclick="abrirAbaMobile('marketplace', 'fa-store', 'Marketplace', this)" role="menuitem">
+            onclick="abrirAbaMobile('marketplace', 'fa-store', 'Marketplace', this)">
             <i class="fas fa-store" aria-hidden="true"></i>
             <span>Marketplace</span>
         </button>
@@ -3274,7 +3275,7 @@ const Portal = {
     Portal.moradorNome    = localStorage.getItem('morador_nome');
     Portal.moradorUnidade = localStorage.getItem('morador_unidade');
 
-    console.log('[Portal] Iniciando... Token:', Portal.token ? Portal.token.substring(0,16)+'...' : 'null');
+    console.log('[Portal] Iniciando. Sessão do portal presente:', Boolean(Portal.token));
 
     if (!Portal.token || !Portal.moradorId) {
         redirecionarLogin('Sessão não encontrada. Faça login novamente.');
@@ -3322,6 +3323,10 @@ function carregarLogoTenantPortal() {
     if (!areaLogo) return;
 
     const restaurarIcone = () => {
+        if (areaLogo.dataset.logoObjectUrl) {
+            URL.revokeObjectURL(areaLogo.dataset.logoObjectUrl);
+            delete areaLogo.dataset.logoObjectUrl;
+        }
         areaLogo.replaceChildren();
         const icone = document.createElement('i');
         icone.className = 'fas fa-home';
@@ -3335,19 +3340,41 @@ function carregarLogoTenantPortal() {
         credentials: 'include'
     })
     .then(response => response.ok ? response.json() : Promise.reject(new Error('HTTP ' + response.status)))
-    .then(data => {
+    .then(async data => {
         if (!data.sucesso || data.fonte === 'plataforma_fallback' || !data.logo_url) {
             restaurarIcone();
             return;
         }
+
+        let logoSrc = data.logo_url;
+        const logoUrl = new URL(data.logo_url, window.location.origin);
+        if (logoUrl.origin === window.location.origin &&
+            logoUrl.pathname === '/api/api_arquivos_tenant.php' &&
+            logoUrl.searchParams.get('acao') === 'conteudo') {
+            const respostaArquivo = await fetch(logoUrl.href, {
+                headers: { 'Authorization': 'Bearer ' + Portal.token },
+                credentials: 'omit',
+                cache: 'no-store'
+            });
+            if (!respostaArquivo.ok) throw new Error('Logo do tenant indisponível.');
+            const blob = await respostaArquivo.blob();
+            if (!blob.type.startsWith('image/')) throw new Error('Formato de logo inválido.');
+            logoSrc = URL.createObjectURL(blob);
+            areaLogo.dataset.logoObjectUrl = logoSrc;
+        }
+
         const imagem = document.createElement('img');
-        imagem.src = data.logo_url;
+        imagem.src = logoSrc;
         imagem.alt = data.nome_empresa ? 'Logo de ' + data.nome_empresa : 'Logo do condomínio';
         imagem.width = 38;
         imagem.height = 38;
         imagem.loading = 'eager';
         imagem.style.cssText = 'width:38px;height:38px;object-fit:contain;display:block;';
         imagem.addEventListener('error', () => {
+            if (areaLogo.dataset.logoObjectUrl) {
+                URL.revokeObjectURL(areaLogo.dataset.logoObjectUrl);
+                delete areaLogo.dataset.logoObjectUrl;
+            }
             console.warn('[Portal] Falha ao carregar logo do tenant; restaurando ícone padrão.');
             restaurarIcone();
         }, { once: true });
@@ -3410,8 +3437,14 @@ function abrirAba(aba, btnEl) {
         return;
     }
 
-    document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
-    if (btnEl) btnEl.classList.add('active');
+    document.querySelectorAll('.nav-tab').forEach(b => {
+        b.classList.remove('active');
+        b.removeAttribute('aria-current');
+    });
+    if (btnEl) {
+        btnEl.classList.add('active');
+        btnEl.setAttribute('aria-current', 'page');
+    }
 
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById('panel-' + aba);
@@ -3524,6 +3557,7 @@ function toggleMobileMenu() {
     const overlay  = document.getElementById('mobileNavOverlay');
     const btn      = document.getElementById('btnMobileMenu');
     const icon     = document.getElementById('iconMobileMenu');
+    if (!dropdown || !overlay || !btn || !icon) return;
     const isOpen   = dropdown.classList.contains('show');
 
     if (isOpen) {
@@ -3531,30 +3565,42 @@ function toggleMobileMenu() {
     } else {
         dropdown.classList.add('show');
         overlay.classList.add('show');
+        dropdown.setAttribute('aria-hidden', 'false');
+        dropdown.setAttribute('aria-modal', 'true');
+        document.body.classList.add('portal-nav-open');
         btn.classList.add('open');
         btn.setAttribute('aria-expanded', 'true');
+        btn.setAttribute('aria-label', 'Fechar menu');
         icon.className = 'fas fa-times';
+        const primeiroItem = dropdown.querySelector('.mobile-menu-item:not([disabled])');
+        if (primeiroItem) requestAnimationFrame(() => primeiroItem.focus());
     }
 }
 
 /** Fecha o dropdown do menu mobile */
-function fecharMobileMenu() {
+function fecharMobileMenu(restaurarFoco = false) {
     const dropdown = document.getElementById('mobileNavDropdown');
     const overlay  = document.getElementById('mobileNavOverlay');
     const btn      = document.getElementById('btnMobileMenu');
     const icon     = document.getElementById('iconMobileMenu');
+    if (!dropdown || !overlay || !btn || !icon) return;
 
     dropdown.classList.remove('show');
     overlay.classList.remove('show');
+    dropdown.setAttribute('aria-hidden', 'true');
+    dropdown.setAttribute('aria-modal', 'false');
+    document.body.classList.remove('portal-nav-open');
     btn.classList.remove('open');
     btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-label', 'Abrir menu');
     icon.className = 'fas fa-th';
+    if (restaurarFoco) btn.focus();
 }
 
 /** Navega para uma aba pelo menu mobile e fecha o dropdown */
 function abrirAbaMobile(aba, icone, label, btnEl) {
     // Fechar o menu imediatamente
-    fecharMobileMenu();
+    fecharMobileMenu(true);
 
     // Atualizar indicador da aba atual na barra mobile
     const navIcon  = document.getElementById('mobileNavIcon');
@@ -3578,15 +3624,48 @@ function sincronizarNavMobile(aba) {
     const navLabel = document.getElementById('mobileNavLabel');
     if (navIcon)  navIcon.className  = 'fas ' + info.icon;
     if (navLabel) navLabel.textContent = info.label;
-    // Atualizar item ativo no dropdown
-    document.querySelectorAll('.mobile-menu-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.mobile-menu-item').forEach(b => {
+        b.classList.remove('active');
+        b.removeAttribute('aria-current');
+    });
     const mmi = document.getElementById('mmi-' + aba);
-    if (mmi) mmi.classList.add('active');
+    if (mmi) {
+        mmi.classList.add('active');
+        mmi.setAttribute('aria-current', 'page');
+    }
+
+    document.querySelectorAll('#mainNav .nav-tab').forEach(b => {
+        b.classList.remove('active');
+        b.removeAttribute('aria-current');
+    });
+    const desktopItem = Array.from(document.querySelectorAll('#mainNav .nav-tab'))
+        .find(b => b.textContent.trim() === info.label);
+    if (desktopItem) {
+        desktopItem.classList.add('active');
+        desktopItem.setAttribute('aria-current', 'page');
+    }
 }
 
 /** Fechar menu mobile ao pressionar Escape */
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') fecharMobileMenu();
+    const dropdown = document.getElementById('mobileNavDropdown');
+    const aberto = dropdown && dropdown.classList.contains('show');
+    if (e.key === 'Escape' && aberto) {
+        fecharMobileMenu(true);
+        return;
+    }
+    if (e.key !== 'Tab' || !aberto) return;
+    const itens = Array.from(dropdown.querySelectorAll('.mobile-menu-item:not([disabled])'));
+    if (!itens.length) return;
+    const primeiro = itens[0];
+    const ultimo = itens[itens.length - 1];
+    if (e.shiftKey && (document.activeElement === primeiro || !dropdown.contains(document.activeElement))) {
+        e.preventDefault();
+        ultimo.focus();
+    } else if (!e.shiftKey && (document.activeElement === ultimo || !dropdown.contains(document.activeElement))) {
+        e.preventDefault();
+        primeiro.focus();
+    }
 });
 
 /* ──────────────────────────────────────────────────────────────────
@@ -5071,12 +5150,19 @@ function mktApi(params, metodo, body) {
     const url = MKT.API + '?' + new URLSearchParams(params).toString();
     const opts = {
         method: metodo || 'GET',
+        credentials: 'include',
         headers: { 'Authorization': 'Bearer ' + Portal.token }
     };
     if (body) {
         opts.body = body;
     }
-    return fetch(url, opts).then(r => r.json());
+    return fetch(url, opts).then(async response => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data || typeof data.sucesso !== 'boolean') {
+            throw new Error('Resposta inválida do Marketplace.');
+        }
+        return data;
+    });
 }
 
 function mktAbrirSubAba(aba, btn) {
@@ -5093,12 +5179,10 @@ function mktAbrirSubAba(aba, btn) {
 }
 
 function mktInicializar() {
-    MKT.carregado = true;
     // Carregar ramos
-    fetch(MKT.API + '?acao=ramos')
-        .then(r => r.json())
+    mktApi({ acao: 'ramos' })
         .then(data => {
-            if (!data.sucesso) return;
+            if (!data.sucesso) throw new Error('Não foi possível carregar os filtros.');
             const sel = document.getElementById('mktRamo');
             data.dados.forEach(r => {
                 const opt = document.createElement('option');
@@ -5106,6 +5190,11 @@ function mktInicializar() {
                 opt.textContent = r.nome;
                 sel.appendChild(opt);
             });
+            MKT.carregado = true;
+        })
+        .catch(() => {
+            MKT.carregado = false;
+            console.error('[Marketplace] Falha ao carregar categorias.');
         });
     mktCarregarVitrine(1);
 }
@@ -5131,8 +5220,7 @@ function mktCarregarVitrine(pagina) {
         por_pagina: 12
     };
 
-    fetch(MKT.API + '?' + new URLSearchParams(params).toString())
-        .then(r => r.json())
+    mktApi(params)
         .then(data => {
             if (!data.sucesso) {
                 grid.innerHTML = '<div class="mkt-empty"><i class="fas fa-exclamation-circle"></i><p>Erro ao carregar ofertas.</p></div>';
@@ -5210,8 +5298,7 @@ function mktAbrirModalContratar(id) {
     document.getElementById('contratarValor').value = '';
 
     // Carregar detalhe
-    fetch(MKT.API + '?acao=detalhe&id=' + id)
-        .then(r => r.json())
+    mktApi({ acao: 'detalhe', id })
         .then(data => {
             if (!data.sucesso) { alert('Oferta não encontrada.'); return; }
             const d = data.dados;
@@ -5261,6 +5348,9 @@ function mktAbrirModalContratar(id) {
                 });
             }
             document.getElementById('mktDetAvaliacoes').innerHTML = avHtml;
+        })
+        .catch(() => {
+            document.getElementById('mktDetAvaliacoes').textContent = 'Não foi possível carregar os detalhes desta oferta.';
         });
 
     modal.style.display = 'flex';
@@ -5287,6 +5377,7 @@ function mktEnviarPedido(event) {
 
     fetch(MKT.API, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Authorization': 'Bearer ' + Portal.token },
         body: fd
     })
@@ -5320,6 +5411,7 @@ function mktCarregarPedidos(status) {
     if (status) params.status = status;
 
     fetch(MKT.API + '?' + new URLSearchParams(params).toString(), {
+        credentials: 'include',
         headers: { 'Authorization': 'Bearer ' + Portal.token }
     })
     .then(r => r.json())
@@ -5410,12 +5502,13 @@ function mktCancelarPedido(id) {
     const fd = new FormData();
     fd.append('acao', 'cancelar');
     fd.append('pedido_id', id);
-    fetch(MKT.API, { method:'POST', headers:{'Authorization':'Bearer '+Portal.token}, body:fd })
+    fetch(MKT.API, { method:'POST', credentials:'include', headers:{'Authorization':'Bearer '+Portal.token}, body:fd })
         .then(r => r.json())
         .then(data => {
             if (data.sucesso) { mostrarAlerta('success', data.mensagem); mktCarregarPedidos(''); }
             else mostrarAlerta('error', data.mensagem);
-        });
+        })
+        .catch(() => mostrarAlerta('error', 'Erro de conexão. Tente novamente.'));
 }
 
 function mktConfirmarConclusao(id) {
@@ -5423,12 +5516,13 @@ function mktConfirmarConclusao(id) {
     const fd = new FormData();
     fd.append('acao', 'confirmar_conclusao');
     fd.append('pedido_id', id);
-    fetch(MKT.API, { method:'POST', headers:{'Authorization':'Bearer '+Portal.token}, body:fd })
+    fetch(MKT.API, { method:'POST', credentials:'include', headers:{'Authorization':'Bearer '+Portal.token}, body:fd })
         .then(r => r.json())
         .then(data => {
             if (data.sucesso) { mostrarAlerta('success', data.mensagem); mktCarregarPedidos(''); }
             else mostrarAlerta('error', data.mensagem);
-        });
+        })
+        .catch(() => mostrarAlerta('error', 'Erro de conexão. Tente novamente.'));
 }
 
 function mktAbrirModalAvaliar(pedidoId, fornecedorNome) {
@@ -5470,7 +5564,7 @@ function mktEnviarAvaliacao() {
     fd.append('nota',       MKT.notaEscolhida);
     fd.append('comentario', document.getElementById('avaliarComentario').value.trim());
 
-    fetch(MKT.API, { method:'POST', headers:{'Authorization':'Bearer '+Portal.token}, body:fd })
+    fetch(MKT.API, { method:'POST', credentials:'include', headers:{'Authorization':'Bearer '+Portal.token}, body:fd })
         .then(r => r.json())
         .then(data => {
             btn.disabled = false;

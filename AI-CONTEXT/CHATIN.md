@@ -61,6 +61,7 @@ Cartão em Sistema → página `config_controle_acesso` (módulo `sistema`). `GE
 
 ## 8. Interface
 - **Widget** (painel e portal): botão flutuante com contador; painel à direita com abas Conversas / Nova conversa, preferências, **fixar** (empurra o conteúdo ≥1100 px, lembrado em `localStorage` `chatin_fixado`) e **minimizar** (volta ao botão e desafixa). Enter envia, Shift+Enter quebra linha, seletor de emojis, mensagens pendentes/falhas com reenvio idempotente, "carregar anteriores".
+- No Portal, carregar o script como `/frontend/js/chatin-widget.js` e chamar `ChatIn.iniciar({plataforma:'portal', token: () => Portal.token})` somente depois de a sessão Bearer ser validada. O widget usa `/api/api_chatin.php`, não coloca credencial em URL/log e encerra polling/widget no logout.
 - **Página Chat-In** (painel): o mesmo componente em modo embutido (`ChatIn.montarEmbutido`); o botão flutuante fica oculto enquanto a página está aberta.
 - Menu: item `chatin` (order 13.5) e `SEMPRE_VISIVEIS` em `permissoes-modulos.js` — disponível a todo usuário autenticado (sem módulo RBAC próprio).
 - **App**: item no menu lateral e card no Início; ícone com badge de não lidas na AppBar (ping de presença a cada 30 s no `HomeScreen`); telas lista/contatos/preferências e conversa (polling 5 s, pausa em segundo plano); toque no push abre a conversa (inclusive com o app fechado, via `getInitialMessage`).

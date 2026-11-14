@@ -72,7 +72,7 @@ function caminho_logo_valido($base_dir, $url) {
 
 function url_logo_banco($conexao, $tenant_id, $caminho_legado) {
     if (!$caminho_legado || !is_string($caminho_legado)) return null;
-    $stmt = $conexao->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+    $stmt = $conexao->prepare("SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND tipo = 'logo_tenant' AND ativo = 1 LIMIT 1");
     if (!$stmt) return null;
     $stmt->bind_param('is', $tenant_id, $caminho_legado);
     $stmt->execute();

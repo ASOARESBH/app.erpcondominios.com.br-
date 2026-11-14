@@ -1,0 +1,218 @@
+/* Navegação lateral do Portal do Morador */
+:root {
+    --portal-sidebar-width: 252px;
+    --portal-sidebar-mobile-width: min(86vw, 330px);
+}
+
+@media (min-width: 769px) {
+    #mainNav.visible.nav-ativo {
+        position: fixed;
+        top: var(--header-h);
+        bottom: 0;
+        left: 0;
+        z-index: 90;
+        display: flex !important;
+        width: var(--portal-sidebar-width);
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        background: var(--bg-card);
+        border: 0;
+        border-right: 1px solid var(--border);
+        box-shadow: 2px 0 10px rgba(15, 23, 42, .06);
+    }
+
+    #mainNav.visible:not(.nav-ativo) {
+        display: none !important;
+    }
+
+    #mainNav .nav-inner {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        margin: 0;
+        padding: 1rem .75rem calc(1.5rem + var(--safe-bottom));
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: .3rem;
+    }
+
+    #mainNav .nav-tab {
+        width: 100%;
+        min-height: 44px;
+        padding: .7rem .85rem;
+        justify-content: flex-start;
+        text-align: left;
+        border: 0;
+        border-radius: var(--radius-md);
+        border-left: 3px solid transparent;
+        white-space: normal;
+        line-height: 1.25;
+    }
+
+    #mainNav .nav-tab:hover {
+        background: var(--primary-light);
+    }
+
+    #mainNav .nav-tab.active {
+        color: var(--primary-dark);
+        background: var(--primary-light);
+        border-left-color: var(--primary);
+    }
+
+    #mainNav .nav-tab i {
+        width: 1.2rem;
+        flex: 0 0 1.2rem;
+        text-align: center;
+    }
+
+    #mainContent.visible {
+        width: calc(100% - var(--portal-sidebar-width));
+        max-width: none;
+        margin: 0 0 0 var(--portal-sidebar-width);
+        padding: 1.5rem clamp(1.25rem, 2.2vw, 2.25rem) calc(2rem + var(--safe-bottom));
+    }
+
+    #mobileNavBar,
+    #mobileNavOverlay,
+    #mobileNavDropdown {
+        display: none !important;
+    }
+}
+
+@media (max-width: 768px) {
+    #mainNav {
+        display: none !important;
+    }
+
+    #mobileNavBar.nav-ativo {
+        position: sticky;
+        top: var(--header-h);
+        z-index: 94;
+        display: flex !important;
+        background: var(--bg-card);
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
+    }
+
+    #mobileNavOverlay.show {
+        display: block;
+        position: fixed;
+        inset: calc(var(--header-h) + 52px) 0 0;
+        z-index: 92;
+        background: rgba(15, 23, 42, .48);
+        animation: portalNavFade .18s ease-out;
+    }
+
+    #mobileNavDropdown {
+        display: block;
+        position: fixed;
+        top: calc(var(--header-h) + 52px);
+        bottom: 0;
+        left: 0;
+        right: auto;
+        z-index: 93;
+        width: var(--portal-sidebar-mobile-width);
+        max-width: 330px;
+        padding: .85rem .75rem calc(1rem + var(--safe-bottom));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border: 0;
+        border-right: 1px solid var(--border);
+        border-radius: 0;
+        background: var(--bg-card);
+        box-shadow: 8px 0 24px rgba(15, 23, 42, .18);
+        transform: translateX(-105%);
+        transition: transform .22s ease-out;
+        visibility: hidden;
+    }
+
+    #mobileNavDropdown.show {
+        display: block;
+        transform: translateX(0);
+        visibility: visible;
+    }
+
+    #mobileNavDropdown .mobile-menu-grid {
+        display: flex;
+        flex-direction: column;
+        gap: .25rem;
+    }
+
+    #mobileNavDropdown .mobile-menu-item {
+        width: 100%;
+        min-height: 46px;
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: .75rem;
+        padding: .65rem .85rem;
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        background: transparent;
+        text-align: left;
+    }
+
+    #mobileNavDropdown .mobile-menu-item i {
+        width: 1.2rem;
+        flex: 0 0 1.2rem;
+        font-size: 1rem;
+        text-align: center;
+    }
+
+    #mobileNavDropdown .mobile-menu-item span {
+        color: var(--text-secondary);
+        font-size: .88rem;
+        font-weight: 600;
+        text-align: left;
+    }
+
+    #mobileNavDropdown .mobile-menu-item.active {
+        border-color: var(--border);
+        background: var(--primary-light);
+        color: var(--primary-dark);
+    }
+
+    #mobileNavDropdown .mobile-menu-item.active span {
+        color: var(--primary-dark);
+    }
+
+    #mainContent.visible {
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+    }
+
+    body.portal-nav-open {
+        overflow: hidden;
+    }
+}
+
+@keyframes portalNavFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #mobileNavDropdown,
+    #mobileNavOverlay.show {
+        transition: none;
+        animation: none;
+    }
+}
+
+@media print {
+    #mainNav,
+    #mobileNavBar,
+    #mobileNavOverlay,
+    #mobileNavDropdown {
+        display: none !important;
+    }
+
+    #mainContent.visible {
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+    }
+}

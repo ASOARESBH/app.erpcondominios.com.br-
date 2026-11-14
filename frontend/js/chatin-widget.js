@@ -25,7 +25,7 @@
     const CHAVE_FIXADO = 'chatin_fixado';
 
     const S = {
-        api: '../api/api_chatin.php',
+        api: '/api/api_chatin.php',
         plataforma: 'painel',
         token: null,
         ativo: false,

@@ -20,7 +20,12 @@ require_once 'auth_helper.php';
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (preg_match('/^https?:\/\/([a-z0-9-]+\.)?erpcondominios\.com\.br$/i', $origin) || preg_match('/^https?:\/\/localhost(:\d+)?$/i', $origin)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+}
+header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
@@ -28,7 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 // ========== HELPERS ==========
 function pm_json($ok, $msg, $dados = null, $code = 200) {
+    if (ob_get_level() > 0 && ob_get_length() !== false) ob_clean();
     http_response_code($code);
+    header('Content-Type: application/json; charset=utf-8');
     $r = ['sucesso' => $ok, 'mensagem' => $msg];
     if ($dados !== null) $r['dados'] = $dados;
     echo json_encode($r, JSON_UNESCAPED_UNICODE);
@@ -41,42 +48,50 @@ function pm_token() {
         $h = getallheaders();
         foreach ($h as $k => $v) {
             if (strtolower($k) === 'authorization') {
-                if (preg_match('/Bearer\s+(.+)/i', $v, $m)) return trim($m[1]);
+                if (preg_match('/^Bearer\s+(\S+)$/i', trim($v), $m)) return $m[1];
             }
         }
     }
     // Método 2: $_SERVER fallback
     $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    if ($auth && preg_match('/Bearer\s+(.+)/i', $auth, $m)) return trim($m[1]);
-    // Método 3: query string / POST
-    return $_GET['token'] ?? $_POST['token'] ?? null;
+    if ($auth && preg_match('/^Bearer\s+(\S+)$/i', trim($auth), $m)) return $m[1];
+    return null;
 }
 
 function pm_auth($conexao) {
     $token = pm_token();
     if (!$token) pm_json(false, 'Token não informado.', null, 401);
-    $stmt = $conexao->prepare("SELECT morador_id FROM sessoes_portal WHERE token = ? AND ativo = 1 AND data_expiracao > NOW() LIMIT 1");
+    $stmt = $conexao->prepare("SELECT sp.morador_id, m.tenant_id
+                               FROM sessoes_portal sp
+                               JOIN moradores m ON m.id = sp.morador_id AND m.tenant_id = sp.tenant_id
+                               WHERE sp.token = ? AND sp.ativo = 1 AND sp.data_expiracao > NOW() AND m.ativo = 1
+                               LIMIT 1");
+    if (!$stmt) throw new RuntimeException('Falha ao validar a sessão do portal.');
     $stmt->bind_param('s', $token);
     $stmt->execute();
     $r = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     if (!$r) pm_json(false, 'Sessão expirada. Faça login novamente.', null, 401);
-    return (int)$r['morador_id'];
+    return ['morador_id' => (int)$r['morador_id'], 'tenant_id' => (int)$r['tenant_id']];
 }
 
 // ========== INICIALIZAÇÃO ==========
-$conexao = conectar_banco();
 $acao    = $_GET['acao'] ?? $_POST['acao'] ?? '';
 $metodo  = $_SERVER['REQUEST_METHOD'];
 
 try {
+    $conexao = conectar_banco();
+    if (!$conexao) throw new RuntimeException('Falha de conexão com o banco do portal.');
+
 
     // ============================================================
     // VITRINE — lista produtos/serviços ativos com filtros
     // GET ?acao=vitrine [&busca=] [&tipo=produto|servico] [&ramo_id=] [&pagina=] [&por_pagina=]
-    // Não requer autenticação (vitrine pública)
+    // Requer sessão de morador; o catálogo é isolado pelo tenant validado no servidor.
     // ============================================================
     if ($acao === 'vitrine' && $metodo === 'GET') {
+        $auth     = pm_auth($conexao);
+        $tenant_id = $auth['tenant_id'];
         $busca    = trim($_GET['busca'] ?? '');
         $tipo     = trim($_GET['tipo']  ?? '');
         $ramo_id  = intval($_GET['ramo_id'] ?? 0);
@@ -84,8 +99,8 @@ try {
         $por_pag  = max(1, min(50, intval($_GET['por_pagina'] ?? 12)));
         $offset   = ($pagina - 1) * $por_pag;
 
-        $where = "ps.ativo = 1 AND f.ativo = 1 AND f.aprovado = 1";
-        $params = []; $types = '';
+        $where = "ps.tenant_id = ? AND f.tenant_id = ps.tenant_id AND ps.ativo = 1 AND f.ativo = 1 AND f.aprovado = 1";
+        $params = [$tenant_id]; $types = 'i';
 
         if ($busca !== '') {
             $where .= " AND (ps.nome LIKE ? OR ps.descricao LIKE ? OR f.nome_estabelecimento LIKE ?)";
@@ -118,7 +133,7 @@ try {
                     ps.nome,
                     ps.tipo,
                     ps.descricao,
-                    ps.valor,
+                    ps.preco_venda AS valor,
                     ps.valor_negociavel,
                     ps.imagem,
                     ps.fornecedor_id,
@@ -128,22 +143,26 @@ try {
                     f.logo                 AS fornecedor_logo,
                     r.nome                 AS ramo_nome,
                     r.icone                AS ramo_icone,
-                    COALESCE(ROUND(AVG(av.nota),1), 0)  AS media_nota,
-                    COUNT(DISTINCT av.id)               AS total_avaliacoes
+                    COALESCE(ROUND(av.media_nota,1), 0) AS media_nota,
+                    COALESCE(av.total_avaliacoes, 0) AS total_avaliacoes
                 FROM produtos_servicos ps
-                JOIN fornecedores f    ON ps.fornecedor_id = f.id
-                JOIN ramos_atividade r ON f.ramo_atividade_id = r.id
-                LEFT JOIN avaliacoes av ON av.avaliado_id = f.id AND av.avaliado_tipo = 'fornecedor'
+                JOIN fornecedores f ON ps.fornecedor_id = f.id AND f.tenant_id = ps.tenant_id
+                JOIN ramos_atividade r ON f.ramo_atividade_id = r.id AND r.tenant_id = f.tenant_id
+                LEFT JOIN (
+                    SELECT tenant_id, fornecedor_id, AVG(nota_morador) AS media_nota, COUNT(*) AS total_avaliacoes
+                    FROM avaliacoes
+                    WHERE tenant_id = ? AND nota_morador IS NOT NULL
+                    GROUP BY tenant_id, fornecedor_id
+                ) av ON av.tenant_id = f.tenant_id AND av.fornecedor_id = f.id
                 WHERE {$where}
-                GROUP BY ps.id
                 ORDER BY media_nota DESC, ps.data_criacao DESC
                 LIMIT ? OFFSET ?";
 
-        $params[] = $por_pag; $types .= 'i';
-        $params[] = $offset;  $types .= 'i';
+        $dataParams = array_merge([$tenant_id], $params, [$por_pag, $offset]);
+        $dataTypes = 'i' . $types . 'ii';
 
         $st = $conexao->prepare($sql);
-        $st->bind_param($types, ...$params);
+        $st->bind_param($dataTypes, ...$dataParams);
         $st->execute();
         $res = $st->get_result();
         $itens = [];
@@ -164,7 +183,10 @@ try {
     // GET ?acao=ramos
     // ============================================================
     if ($acao === 'ramos' && $metodo === 'GET') {
-        $st = $conexao->prepare("SELECT id, nome, icone FROM ramos_atividade WHERE ativo = 1 ORDER BY nome ASC");
+        $auth = pm_auth($conexao);
+        $st = $conexao->prepare("SELECT id, nome, icone FROM ramos_atividade WHERE tenant_id = ? AND ativo = 1 ORDER BY nome ASC");
+        if (!$st) throw new RuntimeException('Falha ao preparar os filtros do Marketplace.');
+        $st->bind_param('i', $auth['tenant_id']);
         $st->execute();
         $res = $st->get_result();
         $ramos = [];
@@ -178,11 +200,13 @@ try {
     // GET ?acao=detalhe&id=X
     // ============================================================
     if ($acao === 'detalhe' && $metodo === 'GET') {
+        $auth = pm_auth($conexao);
+        $tenant_id = $auth['tenant_id'];
         $id = intval($_GET['id'] ?? 0);
         if ($id <= 0) pm_json(false, 'ID inválido', null, 400);
 
         $st = $conexao->prepare("
-            SELECT ps.id, ps.nome, ps.tipo, ps.descricao, ps.valor, ps.valor_negociavel, ps.imagem,
+            SELECT ps.id, ps.nome, ps.tipo, ps.descricao, ps.preco_venda AS valor, ps.valor_negociavel, ps.imagem,
                    ps.fornecedor_id,
                    f.nome_estabelecimento AS fornecedor_nome,
                    f.telefone             AS fornecedor_telefone,
@@ -192,16 +216,21 @@ try {
                    f.horario_funcionamento AS fornecedor_horario,
                    r.nome  AS ramo_nome,
                    r.icone AS ramo_icone,
-                   COALESCE(ROUND(AVG(av.nota),1),0) AS media_nota,
-                   COUNT(DISTINCT av.id)             AS total_avaliacoes
+                   COALESCE(ROUND(av.media_nota,1),0) AS media_nota,
+                   COALESCE(av.total_avaliacoes,0) AS total_avaliacoes
             FROM produtos_servicos ps
-            JOIN fornecedores f    ON ps.fornecedor_id = f.id
-            JOIN ramos_atividade r ON f.ramo_atividade_id = r.id
-            LEFT JOIN avaliacoes av ON av.avaliado_id = f.id AND av.avaliado_tipo = 'fornecedor'
-            WHERE ps.id = ? AND ps.ativo = 1 AND f.ativo = 1 AND f.aprovado = 1
-            GROUP BY ps.id
+            JOIN fornecedores f ON ps.fornecedor_id = f.id AND f.tenant_id = ps.tenant_id
+            JOIN ramos_atividade r ON f.ramo_atividade_id = r.id AND r.tenant_id = f.tenant_id
+            LEFT JOIN (
+                SELECT tenant_id, fornecedor_id, AVG(nota_morador) AS media_nota, COUNT(*) AS total_avaliacoes
+                FROM avaliacoes
+                WHERE tenant_id = ? AND nota_morador IS NOT NULL
+                GROUP BY tenant_id, fornecedor_id
+            ) av ON av.tenant_id = f.tenant_id AND av.fornecedor_id = f.id
+            WHERE ps.id = ? AND ps.tenant_id = ? AND ps.ativo = 1 AND f.ativo = 1 AND f.aprovado = 1
         ");
-        $st->bind_param('i', $id);
+        if (!$st) throw new RuntimeException('Falha ao preparar os detalhes da oferta.');
+        $st->bind_param('iii', $tenant_id, $id, $tenant_id);
         $st->execute();
         $item = $st->get_result()->fetch_assoc();
         $st->close();
@@ -209,13 +238,13 @@ try {
 
         // Avaliações recentes do fornecedor
         $st2 = $conexao->prepare("
-            SELECT av.nota, av.comentario, av.data_avaliacao, m.nome AS morador_nome
-            FROM avaliacoes av
-            JOIN moradores m ON av.avaliador_id = m.id
-            WHERE av.avaliado_id = ? AND av.avaliado_tipo = 'fornecedor' AND av.avaliador_tipo = 'morador'
-            ORDER BY av.data_avaliacao DESC LIMIT 5
+            SELECT nota_morador AS nota, comentario_morador AS comentario, data_avaliacao_morador AS data_avaliacao
+            FROM avaliacoes
+            WHERE tenant_id = ? AND fornecedor_id = ? AND nota_morador IS NOT NULL
+            ORDER BY data_avaliacao_morador DESC LIMIT 5
         ");
-        $st2->bind_param('i', $item['fornecedor_id']);
+        if (!$st2) throw new RuntimeException('Falha ao preparar as avaliações da oferta.');
+        $st2->bind_param('ii', $tenant_id, $item['fornecedor_id']);
         $st2->execute();
         $res2 = $st2->get_result();
         $avs = [];
@@ -232,7 +261,9 @@ try {
     // Body: produto_servico_id, descricao_pedido, valor_proposto (opcional)
     // ============================================================
     if ($acao === 'contratar' && $metodo === 'POST') {
-        $morador_id = pm_auth($conexao);
+        $auth = pm_auth($conexao);
+        $morador_id = $auth['morador_id'];
+        $tenant_id = $auth['tenant_id'];
 
         $produto_id      = intval($_POST['produto_servico_id'] ?? 0);
         $descricao       = trim($_POST['descricao_pedido'] ?? '');
@@ -242,8 +273,11 @@ try {
         if ($descricao === '') pm_json(false, 'Descreva o que você precisa', null, 400);
 
         // Buscar produto
-        $st = $conexao->prepare("SELECT id, fornecedor_id, valor FROM produtos_servicos WHERE id = ? AND ativo = 1");
-        $st->bind_param('i', $produto_id);
+        $st = $conexao->prepare("SELECT ps.id, ps.fornecedor_id, ps.preco_venda AS valor
+                                 FROM produtos_servicos ps
+                                 JOIN fornecedores f ON f.id = ps.fornecedor_id AND f.tenant_id = ps.tenant_id
+                                 WHERE ps.id = ? AND ps.tenant_id = ? AND ps.ativo = 1 AND f.ativo = 1 AND f.aprovado = 1");
+        $st->bind_param('ii', $produto_id, $tenant_id);
         $st->execute();
         $prod = $st->get_result()->fetch_assoc();
         $st->close();
@@ -256,21 +290,21 @@ try {
         // CORREÇÃO: bind_param era 'iiids' (errado), correto é 'iiisd'
         // Ordem: morador_id(i), fornecedor_id(i), produto_id(i), descricao(s), valor_proposto(d)
         $st = $conexao->prepare("
-            INSERT INTO pedidos (morador_id, fornecedor_id, produto_servico_id, descricao_pedido, valor_proposto, status, data_pedido)
-            VALUES (?, ?, ?, ?, ?, 'enviado', NOW())
+            INSERT INTO pedidos (tenant_id, morador_id, fornecedor_id, produto_servico_id, descricao_pedido, valor_proposto, status, data_pedido)
+            VALUES (?, ?, ?, ?, ?, ?, 'enviado', NOW())
         ");
-        $st->bind_param('iiisd', $morador_id, $fornecedor_id, $produto_id, $descricao, $valor_proposto);
-        if (!$st->execute()) pm_json(false, 'Erro ao criar pedido: ' . $st->error, null, 500);
+        $st->bind_param('iiiisd', $tenant_id, $morador_id, $fornecedor_id, $produto_id, $descricao, $valor_proposto);
+        if (!$st->execute()) throw new RuntimeException('Falha ao criar pedido do Marketplace.');
         $pedido_id = $st->insert_id;
         $st->close();
 
         // Registrar histórico
         // CORREÇÃO: status 'aguardando' não existe no ENUM — usar 'enviado'
         $st = $conexao->prepare("
-            INSERT INTO historico_status_pedido (pedido_id, status_anterior, status_novo, usuario_tipo, usuario_id, observacao)
-            VALUES (?, NULL, 'enviado', 'morador', ?, 'Pedido criado pelo morador')
+            INSERT INTO historico_status_pedido (tenant_id, pedido_id, status_anterior, status_novo, usuario_tipo, usuario_id, observacao)
+            VALUES (?, ?, NULL, 'enviado', 'morador', ?, 'Pedido criado pelo morador')
         ");
-        $st->bind_param('ii', $pedido_id, $morador_id);
+        $st->bind_param('iii', $tenant_id, $pedido_id, $morador_id);
         $st->execute(); $st->close();
 
         pm_json(true, 'Pedido enviado com sucesso! O fornecedor será notificado.', ['pedido_id' => $pedido_id, 'status' => 'enviado'], 201);
@@ -281,11 +315,13 @@ try {
     // GET ?acao=meus_pedidos [&status=]
     // ============================================================
     if ($acao === 'meus_pedidos' && $metodo === 'GET') {
-        $morador_id = pm_auth($conexao);
+        $auth = pm_auth($conexao);
+        $morador_id = $auth['morador_id'];
+        $tenant_id = $auth['tenant_id'];
         $status_filtro = trim($_GET['status'] ?? '');
 
-        $where = "p.morador_id = ?";
-        $params = [$morador_id]; $types = 'i';
+        $where = "p.tenant_id = ? AND p.morador_id = ?";
+        $params = [$morador_id, $tenant_id, $morador_id]; $types = 'iii';
 
         if ($status_filtro !== '') {
             $where .= " AND p.status = ?";
@@ -305,11 +341,11 @@ try {
                    f.logo                 AS fornecedor_logo,
                    r.nome  AS ramo_nome,
                    r.icone AS ramo_icone,
-                   (SELECT COUNT(*) FROM avaliacoes av WHERE av.pedido_id = p.id AND av.avaliador_tipo = 'morador') AS ja_avaliou
+                   (SELECT COUNT(*) FROM avaliacoes av WHERE av.tenant_id = p.tenant_id AND av.pedido_id = p.id AND av.morador_id = ? AND av.nota_morador IS NOT NULL) AS ja_avaliou
             FROM pedidos p
-            LEFT JOIN produtos_servicos ps ON p.produto_servico_id = ps.id
-            JOIN fornecedores f       ON p.fornecedor_id = f.id
-            JOIN ramos_atividade r    ON f.ramo_atividade_id = r.id
+            LEFT JOIN produtos_servicos ps ON p.produto_servico_id = ps.id AND ps.tenant_id = p.tenant_id
+            JOIN fornecedores f ON p.fornecedor_id = f.id AND f.tenant_id = p.tenant_id
+            JOIN ramos_atividade r ON f.ramo_atividade_id = r.id AND r.tenant_id = f.tenant_id
             WHERE {$where}
             ORDER BY p.data_pedido DESC
         ");
@@ -329,14 +365,16 @@ try {
     // Body: pedido_id, motivo (opcional)
     // ============================================================
     if ($acao === 'cancelar' && $metodo === 'POST') {
-        $morador_id = pm_auth($conexao);
+        $auth = pm_auth($conexao);
+        $morador_id = $auth['morador_id'];
+        $tenant_id = $auth['tenant_id'];
         $pedido_id  = intval($_POST['pedido_id'] ?? 0);
         $motivo     = trim($_POST['motivo'] ?? 'Cancelado pelo morador');
 
         if ($pedido_id <= 0) pm_json(false, 'Pedido inválido', null, 400);
 
-        $st = $conexao->prepare("SELECT id, status FROM pedidos WHERE id = ? AND morador_id = ?");
-        $st->bind_param('ii', $pedido_id, $morador_id);
+        $st = $conexao->prepare("SELECT id, status FROM pedidos WHERE id = ? AND tenant_id = ? AND morador_id = ?");
+        $st->bind_param('iii', $pedido_id, $tenant_id, $morador_id);
         $st->execute();
         $ped = $st->get_result()->fetch_assoc();
         $st->close();
@@ -350,15 +388,15 @@ try {
 
         $status_anterior = $ped['status'];
 
-        $st = $conexao->prepare("UPDATE pedidos SET status = 'cancelado', motivo_recusa = ? WHERE id = ?");
-        $st->bind_param('si', $motivo, $pedido_id);
+        $st = $conexao->prepare("UPDATE pedidos SET status = 'cancelado', motivo_recusa = ? WHERE id = ? AND tenant_id = ? AND morador_id = ?");
+        $st->bind_param('siii', $motivo, $pedido_id, $tenant_id, $morador_id);
         $st->execute(); $st->close();
 
         $st = $conexao->prepare("
-            INSERT INTO historico_status_pedido (pedido_id, status_anterior, status_novo, usuario_tipo, usuario_id, observacao)
-            VALUES (?, ?, 'cancelado', 'morador', ?, ?)
+            INSERT INTO historico_status_pedido (tenant_id, pedido_id, status_anterior, status_novo, usuario_tipo, usuario_id, observacao)
+            VALUES (?, ?, ?, 'cancelado', 'morador', ?, ?)
         ");
-        $st->bind_param('isis', $pedido_id, $status_anterior, $morador_id, $motivo);
+        $st->bind_param('iisis', $tenant_id, $pedido_id, $status_anterior, $morador_id, $motivo);
         $st->execute(); $st->close();
 
         pm_json(true, 'Pedido cancelado com sucesso');
@@ -370,13 +408,15 @@ try {
     // Body: pedido_id
     // ============================================================
     if ($acao === 'confirmar_conclusao' && $metodo === 'POST') {
-        $morador_id = pm_auth($conexao);
+        $auth = pm_auth($conexao);
+        $morador_id = $auth['morador_id'];
+        $tenant_id = $auth['tenant_id'];
         $pedido_id  = intval($_POST['pedido_id'] ?? 0);
 
         if ($pedido_id <= 0) pm_json(false, 'Pedido inválido', null, 400);
 
-        $st = $conexao->prepare("SELECT id, status FROM pedidos WHERE id = ? AND morador_id = ?");
-        $st->bind_param('ii', $pedido_id, $morador_id);
+        $st = $conexao->prepare("SELECT id, status FROM pedidos WHERE id = ? AND tenant_id = ? AND morador_id = ?");
+        $st->bind_param('iii', $pedido_id, $tenant_id, $morador_id);
         $st->execute();
         $ped = $st->get_result()->fetch_assoc();
         $st->close();
@@ -389,16 +429,16 @@ try {
         }
 
         // CORREÇÃO: status correto do ENUM é 'finalizado_morador' (não 'finalizado')
-        $st = $conexao->prepare("UPDATE pedidos SET status = 'finalizado_morador', data_finalizacao = NOW() WHERE id = ?");
-        $st->bind_param('i', $pedido_id);
+        $st = $conexao->prepare("UPDATE pedidos SET status = 'finalizado_morador', data_finalizacao = NOW() WHERE id = ? AND tenant_id = ? AND morador_id = ?");
+        $st->bind_param('iii', $pedido_id, $tenant_id, $morador_id);
         $st->execute(); $st->close();
 
         $obs = 'Conclusão confirmada pelo morador';
         $st = $conexao->prepare("
-            INSERT INTO historico_status_pedido (pedido_id, status_anterior, status_novo, usuario_tipo, usuario_id, observacao)
-            VALUES (?, 'em_execucao', 'finalizado_morador', 'morador', ?, ?)
+            INSERT INTO historico_status_pedido (tenant_id, pedido_id, status_anterior, status_novo, usuario_tipo, usuario_id, observacao)
+            VALUES (?, ?, 'em_execucao', 'finalizado_morador', 'morador', ?, ?)
         ");
-        $st->bind_param('iis', $pedido_id, $morador_id, $obs);
+        $st->bind_param('iiis', $tenant_id, $pedido_id, $morador_id, $obs);
         $st->execute(); $st->close();
 
         pm_json(true, 'Serviço confirmado! Agora você pode avaliar o fornecedor.');
@@ -410,7 +450,9 @@ try {
     // Body: pedido_id, nota (1-5), comentario (opcional)
     // ============================================================
     if ($acao === 'avaliar' && $metodo === 'POST') {
-        $morador_id = pm_auth($conexao);
+        $auth = pm_auth($conexao);
+        $morador_id = $auth['morador_id'];
+        $tenant_id = $auth['tenant_id'];
         $pedido_id  = intval($_POST['pedido_id'] ?? 0);
         $nota       = intval($_POST['nota'] ?? 0);
         $comentario = trim($_POST['comentario'] ?? '');
@@ -419,8 +461,8 @@ try {
         if ($nota < 1 || $nota > 5) pm_json(false, 'Nota deve ser entre 1 e 5', null, 400);
 
         // Verificar pedido
-        $st = $conexao->prepare("SELECT id, fornecedor_id, status FROM pedidos WHERE id = ? AND morador_id = ?");
-        $st->bind_param('ii', $pedido_id, $morador_id);
+        $st = $conexao->prepare("SELECT id, fornecedor_id, produto_servico_id, status FROM pedidos WHERE id = ? AND tenant_id = ? AND morador_id = ?");
+        $st->bind_param('iii', $pedido_id, $tenant_id, $morador_id);
         $st->execute();
         $ped = $st->get_result()->fetch_assoc();
         $st->close();
@@ -436,8 +478,8 @@ try {
         $fornecedor_id = (int)$ped['fornecedor_id'];
 
         // Verificar se já avaliou
-        $st = $conexao->prepare("SELECT id FROM avaliacoes WHERE pedido_id = ? AND avaliador_tipo = 'morador' AND avaliador_id = ?");
-        $st->bind_param('ii', $pedido_id, $morador_id);
+        $st = $conexao->prepare("SELECT id FROM avaliacoes WHERE tenant_id = ? AND pedido_id = ? AND morador_id = ? AND nota_morador IS NOT NULL");
+        $st->bind_param('iii', $tenant_id, $pedido_id, $morador_id);
         $st->execute();
         $ja = $st->get_result()->fetch_assoc();
         $st->close();
@@ -446,25 +488,27 @@ try {
 
         // Inserir avaliação
         $st = $conexao->prepare("
-            INSERT INTO avaliacoes (pedido_id, avaliador_tipo, avaliador_id, avaliado_tipo, avaliado_id, nota, comentario)
-            VALUES (?, 'morador', ?, 'fornecedor', ?, ?, ?)
+            INSERT INTO avaliacoes (tenant_id, pedido_id, morador_id, fornecedor_id, produto_servico_id, nota_morador, comentario_morador, data_avaliacao_morador)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
         ");
-        $st->bind_param('iiiis', $pedido_id, $morador_id, $fornecedor_id, $nota, $comentario);
-        if (!$st->execute()) pm_json(false, 'Erro ao salvar avaliação: ' . $st->error, null, 500);
+        $produto_id = (int)$ped['produto_servico_id'];
+        if ($produto_id <= 0) pm_json(false, 'Oferta não encontrada para este pedido.', null, 409);
+        $st->bind_param('iiiiiis', $tenant_id, $pedido_id, $morador_id, $fornecedor_id, $produto_id, $nota, $comentario);
+        if (!$st->execute()) pm_json(false, 'Não foi possível salvar sua avaliação.', null, 500);
         $st->close();
 
         // Atualizar status para concluido
         $status_anterior = $ped['status'];
-        $st = $conexao->prepare("UPDATE pedidos SET status = 'concluido', data_conclusao = NOW() WHERE id = ?");
-        $st->bind_param('i', $pedido_id);
+        $st = $conexao->prepare("UPDATE pedidos SET status = 'concluido', data_conclusao = NOW() WHERE id = ? AND tenant_id = ? AND morador_id = ?");
+        $st->bind_param('iii', $pedido_id, $tenant_id, $morador_id);
         $st->execute(); $st->close();
 
         $obs = 'Avaliação registrada pelo morador';
         $st = $conexao->prepare("
-            INSERT INTO historico_status_pedido (pedido_id, status_anterior, status_novo, usuario_tipo, usuario_id, observacao)
-            VALUES (?, ?, 'concluido', 'morador', ?, ?)
+            INSERT INTO historico_status_pedido (tenant_id, pedido_id, status_anterior, status_novo, usuario_tipo, usuario_id, observacao)
+            VALUES (?, ?, ?, 'concluido', 'morador', ?, ?)
         ");
-        $st->bind_param('isis', $pedido_id, $status_anterior, $morador_id, $obs);
+        $st->bind_param('iisis', $tenant_id, $pedido_id, $status_anterior, $morador_id, $obs);
         $st->execute(); $st->close();
 
         pm_json(true, 'Avaliação registrada! Obrigado pelo feedback.');
@@ -475,14 +519,16 @@ try {
     // GET ?acao=historico&pedido_id=X
     // ============================================================
     if ($acao === 'historico' && $metodo === 'GET') {
-        $morador_id = pm_auth($conexao);
+        $auth = pm_auth($conexao);
+        $morador_id = $auth['morador_id'];
+        $tenant_id = $auth['tenant_id'];
         $pedido_id  = intval($_GET['pedido_id'] ?? 0);
 
         if ($pedido_id <= 0) pm_json(false, 'Pedido inválido', null, 400);
 
         // Verificar que pedido pertence ao morador
-        $st = $conexao->prepare("SELECT id FROM pedidos WHERE id = ? AND morador_id = ?");
-        $st->bind_param('ii', $pedido_id, $morador_id);
+        $st = $conexao->prepare("SELECT id FROM pedidos WHERE id = ? AND tenant_id = ? AND morador_id = ?");
+        $st->bind_param('iii', $pedido_id, $tenant_id, $morador_id);
         $st->execute();
         if (!$st->get_result()->fetch_assoc()) pm_json(false, 'Pedido não encontrado', null, 404);
         $st->close();
@@ -490,10 +536,10 @@ try {
         $st = $conexao->prepare("
             SELECT status_anterior, status_novo, usuario_tipo, observacao, data_mudanca
             FROM historico_status_pedido
-            WHERE pedido_id = ?
+            WHERE tenant_id = ? AND pedido_id = ?
             ORDER BY data_mudanca ASC
         ");
-        $st->bind_param('i', $pedido_id);
+        $st->bind_param('ii', $tenant_id, $pedido_id);
         $st->execute();
         $res = $st->get_result();
         $hist = [];
@@ -505,9 +551,11 @@ try {
 
     pm_json(false, 'Ação inválida', null, 400);
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
+    $acaoLog = preg_replace('/[^a-z_]/i', '', (string)$acao);
+    error_log('[api_portal_marketplace] falha técnica na ação ' . $acaoLog . ' (' . get_class($e) . ').');
     fechar_conexao($conexao ?? null);
-    pm_json(false, $e->getMessage(), null, 500);
+    pm_json(false, 'Não foi possível concluir a operação do Marketplace.', null, 500);
 }
 
 fechar_conexao($conexao);

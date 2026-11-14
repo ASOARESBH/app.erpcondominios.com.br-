@@ -22,6 +22,7 @@ const PWAPortal = (() => {
 
     let _messaging    = null;
     let _swRegistered = false;
+    let _swRegistration = null;
     let _fcmToken     = null;
     let _initialized  = false;
     let _recarregandoParaAtualizar = false; // evita reload duplicado ao trocar de Service Worker
@@ -110,6 +111,23 @@ const PWAPortal = (() => {
             _swRegistered = true;
             console.log('[PWA] Service Worker registrado com sucesso. Scope:', registration.scope);
 
+            let readyTimeout;
+            try {
+                _swRegistration = await Promise.race([
+                    navigator.serviceWorker.ready,
+                    new Promise((_, reject) => {
+                        readyTimeout = setTimeout(() => reject(new Error('timeout')), 12000);
+                    })
+                ]);
+            } finally {
+                clearTimeout(readyTimeout);
+            }
+            if (_swRegistration.scope !== registration.scope ||
+                !_swRegistration.active || _swRegistration.active.state !== 'activated') {
+                _swRegistration = null;
+                throw new Error('not-active');
+            }
+
             // Verificar atualizações
             registration.addEventListener('updatefound', () => {
                 console.log('[PWA] Nova versão do Service Worker disponível.');
@@ -126,7 +144,8 @@ const PWAPortal = (() => {
             });
 
         } catch (err) {
-            console.error('[PWA] Erro ao registrar Service Worker:', err);
+            _swRegistration = null;
+            console.warn('[PWA] Service Worker ainda não está ativo; push será tentado no próximo carregamento.');
         }
     }
 
@@ -206,16 +225,23 @@ const PWAPortal = (() => {
     // ── Obter e registrar token FCM ──────────────────────────
     async function _obterERegistrarToken() {
         if (!_messaging) return;
+        if (!_swRegistration || !_swRegistration.active || _swRegistration.active.state !== 'activated') {
+            console.warn('[PWA] Token push adiado: Service Worker sem estado ativo.');
+            return;
+        }
 
         try {
-            const token = await _messaging.getToken({ vapidKey: VAPID_KEY });
+            const token = await _messaging.getToken({
+                vapidKey: VAPID_KEY,
+                serviceWorkerRegistration: _swRegistration
+            });
 
             if (!token) {
                 console.warn('[PWA] Não foi possível obter token FCM. Verifique a VAPID Key.');
                 return;
             }
 
-            console.log('[PWA] Token FCM obtido:', token.substring(0, 20) + '...');
+            console.log('[PWA] Token FCM obtido.');
             _fcmToken = token;
 
             // Registrar token na API
