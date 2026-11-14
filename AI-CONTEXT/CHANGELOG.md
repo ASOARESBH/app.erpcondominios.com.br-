@@ -358,3 +358,8 @@ Registro de alterações significativas no ERP.
 ### Alterado
 
 O caminho exato `/` no vhost TLS de `app.erpcondominios.com.br` responde com 302 para `https://2.29.161.106/frontend/login.html`, sem alterar as demais rotas. A mudança foi publicada no commit `8fa1c3f1b1ac8ab8466c07dee98a668f723fb4b2`, instalada com rollback root-only e validada com `nginx -t`/reload. Testes públicos confirmaram HTTP 301 para HTTPS, HTTPS 302 com `Location` correto e HTTP 200 no destino final. Cloudflare e Google DNS retornam `2.29.161.106`; com TTL 14400, a página HostGator vista no navegador é compatível com cache DNS/sockets ainda apontando para o destino anterior. Não é necessária nova mudança DNS; limpar cache local do sistema/navegador.
+
+
+## Correção do destino do login pelo hostname — 2026-11-14
+
+Após esclarecimento, a raiz deixa de apontar o navegador para o IP. O vhost TLS agora responde à raiz com 302 relativo a `/frontend/login.html`; o Nginx devolve `Location: https://app.erpcondominios.com.br/frontend/login.html`, mantendo o hostname na barra. A mudança está no commit `0aa1286d22e9ef84cd0f7597291f8c739f2e6d68`, foi instalada após backup root-only, `nginx -t` e reload. Smoke confirma HTTP 301 para HTTPS, HTTPS 302 para o path correto, URL final `https://app.erpcondominios.com.br/frontend/login.html` com HTTP 200 (resolvida para o IP Hetzner) e status 200 nos assets essenciais. O A já resolve para a Hetzner em resolvers públicos; caches antigos ainda podem mostrar HostGator até expirarem.
