@@ -310,3 +310,8 @@ Registro de alterações significativas no ERP.
 - O parser possui fallback para ambientes PHP sem `mbstring`; consultas usam `tenant_id` exclusivamente da sessão e ordenações utilizam lista branca.
 - QR de tenant diferente é recusado com HTTP 403, e a API revalida vínculo do vigilante, agenda, janela de ciclo e índice de duplicidade antes da gravação.
 - Validadas sintaxe PHP, regras de ciclo/SLA, análise direcionada dos arquivos Flutter e testes Flutter. O detalhe técnico e roteiro pós-deploy estão em `ANALISE_MODULO_VIGILANTE_RONDAS_MOBILE_20260813.md`.
+
+
+## [Unreleased] Login na raiz com URL limpa
+
+Adicionado `<base href="/frontend/">` como primeiro elemento do `<head>` em `frontend/login.html`, para permitir servir o login na raiz sem quebrar assets, configuração, i18n ou referências relativas à API. Atualizados os guias de frontend e deploy. A branch `fix/url-limpa-login` foi criada a partir da `main` atual e será submetida por PR; não houve merge nem mudança em Nginx/produção nesta etapa. Ativação das locations Nginx fica bloqueada até o release estar publicado; os fluxos autenticados de login/logout, sessão expirada, recuperação e idioma ainda requerem QA após a publicação.
