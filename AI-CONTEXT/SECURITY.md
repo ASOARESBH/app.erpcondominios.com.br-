@@ -90,3 +90,9 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - `strip_tags` + limite de tamanho no corpo; o frontend escapa todo conteúdo (sem HTML). Rate limit 20/min, idempotência por chave, bloqueio bilateral.
 - Push só com dados mínimos (`conversa_id`, `rota`); o app aceita apenas rotas internas `/home/...` vindas do push.
 - Assembleia passou a isolar por tenant e exigir `permissao` admin/gerente para escrita (antes a checagem lia campo inexistente).
+
+## 11. Portal do Morador — BLOB de logo e Marketplace
+- `api/api_arquivos_tenant.php` aceita Bearer do Portal somente para `acao=conteudo` de imagem `logo_tenant` ativa do tenant derivado pela sessão `sessoes_portal` + morador ativo. O fluxo não autoriza documentos, anexos ou outros tipos; ids fora do escopo respondem 404 sem revelar existência.
+- A página obtém o BLOB por `fetch` same-origin com header Bearer, usa URL de objeto temporária e a revoga ao substituir/restaurar o ícone. Nunca transportar token em query string nem registrá-lo em console/log.
+- `api/api_portal_marketplace.php` deriva morador/tenant do Bearer validado; pedidos e avaliações são vinculados ao morador autenticado e ao tenant da sessão. Ignorar ids/tenant confiáveis fornecidos pelo cliente; erros SQL não são devolvidos na resposta.
+- O escopo administrativo existente de `api/api_arquivos_tenant.php` permanece protegido por sessão ERP e RBAC; a exceção Portal não altera a autorização para arquivos de backoffice.

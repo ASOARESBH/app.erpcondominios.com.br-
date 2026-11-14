@@ -2,6 +2,16 @@
 
 Registro de alterações significativas no ERP.
 
+## [Unreleased]
+### Corrigido
+- Portal do Morador: layout de abas convertido em sidebar vertical responsiva/drawer, preservando os 14 módulos e seus loaders.
+- Logo: corrigido o acesso do Portal à imagem `logo_tenant` com Bearer do morador e filtro simultâneo por tenant, tipo ativo e MIME de imagem; demais anexos continuam inacessíveis por essa exceção.
+- Marketplace do Portal: consultas compatibilizadas com o schema ativo (`preco_venda` e colunas de avaliação específicas), tenant derivado da sessão, pedidos/histórico tenant-aware, binds ajustados e erro técnico substituído por JSON genérico.
+- PWA: token FCM só é solicitado após `navigator.serviceWorker.ready`, passando a registration ativa explicitamente; removido logging de prefixos de token.
+- Chat-In do Portal: caminhos de widget/API absolutos e estabilidade sob paths de navegação.
+### Validação
+- Testes estáticos locais e `php -l`/`node --check` aprovados; QA autenticado e deploy em produção ainda pendentes.
+
 ## [2.1.26] - 2026-11-05
 ### Adicionado
 - **Chat-In** (menu abaixo de Recursos Humanos): comunicador interno entre usuários do painel e moradores (Portal e app). Botão flutuante + painel lateral fixável/minimizável, página do painel, status online, busca por nome/unidade, histórico permanente, bloqueio, ocultar-se da busca, emojis, push FCM no app com deep link. Detalhes em `AI-CONTEXT/CHATIN.md`. Migration `sql/migration_chatin_mysql57.sql`.
