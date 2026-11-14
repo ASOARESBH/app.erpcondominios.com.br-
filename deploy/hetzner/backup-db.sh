@@ -2,10 +2,28 @@
 set -euo pipefail
 umask 077
 
-readonly DB_NAME='erpcondominios'
+readonly CONFIG_PATH='/etc/erpcondominios/erp_config.php'
 readonly BACKUP_DIR='/var/backups/erpcondominios/daily'
 readonly LOCK_FILE='/run/lock/erpcondominios-backup.lock'
 readonly MIN_FREE_BYTES=$((10 * 1024 * 1024 * 1024))
+
+if [[ ! -r "$CONFIG_PATH" ]]; then
+    printf '%s\n' 'backup failed: private database config is unavailable' >&2
+    exit 1
+fi
+
+DB_NAME=$(/usr/bin/php8.3 -d display_errors=0 -r 'require $argv[1]; if (!defined("ERP_DB_NAME")) { exit(2); } echo constant("ERP_DB_NAME");' "$CONFIG_PATH" 2>/dev/null) || {
+    printf '%s\n' 'backup failed: private database config could not be read' >&2
+    exit 1
+}
+if [[ ! "$DB_NAME" =~ ^erpcondominios(_stage_[0-9]{8})?$ ]]; then
+    printf '%s\n' 'backup failed: configured database name is outside the allowlist' >&2
+    exit 1
+fi
+if [[ $(mysql --protocol=socket --user=root --batch --skip-column-names -e "SELECT COUNT(*) FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='${DB_NAME}'") != 1 ]]; then
+    printf '%s\n' 'backup failed: configured database does not exist' >&2
+    exit 1
+fi
 
 install -d -o root -g root -m 0700 "$BACKUP_DIR"
 exec 9>"$LOCK_FILE"
