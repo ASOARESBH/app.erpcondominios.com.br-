@@ -10,8 +10,8 @@
  * MINIMIZADO (volta ao botão). A página "Chat-In" do painel usa o mesmo componente
  * em modo embutido (ChatIn.montarEmbutido).
  *
- * Tempo real: polling de ~5 s quando o chat está visível, ~20 s quando minimizado e
- * pausa com a aba oculta. Push no app é feito pelo servidor (FCM).
+ * Tempo real: polling de 2,5–5 s quando ativo, ~20 s quando minimizado e pausa em segundo
+ * plano; com notificação do navegador consentida, mantém polling discreto em 20 s.
  * Privacidade: a API só devolve nome + unidade/função; nada de CPF, telefone ou e-mail.
  */
 (function () {
@@ -19,6 +19,7 @@
     if (window.ChatIn) return;
 
     const INTERVALO_ATIVO = 5000;
+    const INTERVALO_FOCO = 2500;
     const INTERVALO_FECHADO = 20000;
     const MAX_CARACTERES = 2000;
     const EMOJIS = ['😀', '😂', '😊', '😍', '🙏', '👍', '👏', '🎉', '😉', '😢', '😮', '🤔', '❤️', '✅', '🚗', '📦', '🏠', '🔑', '⚠️', '👋'];
@@ -46,6 +47,21 @@
         buscaTimer: null,
         contatos: [],
         preferencias: null,
+        config: null,
+        eventosCursor: 0,
+        syncInicializado: false,
+        ultimaNotificacaoSom: 0,
+        tituloOriginal: '',
+        tituloTimer: null,
+        tituloAlternado: false,
+        dicaAudioMostrada: false,
+        typingTimer: null,
+        cutucarTimer: null,
+        cutucarAtePorConversa: Object.create(null),
+        typingUltimoEnvio: 0,
+        typingAtivo: false,
+        contatoDigitando: false,
+        metricasSync: [],
         raiz: null,                  // elemento raiz da UI (dock ou embutido)
         embutido: false,
         dock: null,
@@ -114,6 +130,7 @@
         if (!resp.ok || !dados.sucesso) {
             const erro = new Error(dados.mensagem || 'Falha no Chat-In.');
             erro.status = resp.status; erro.codigo = dados.codigo;
+            erro.retryAfter = Math.max(0, parseInt(resp.headers.get('Retry-After') || '0', 10) || 0);
             throw erro;
         }
         return dados.dados || {};
@@ -133,38 +150,230 @@
 
     // ── polling ────────────────────────────────────────────────────
     function visivel() { return S.embutido || (S.aberto && !S.dock.hidden); }
-    function agendar(ms) {
+    function agendar(ms, permitirOculta = false) {
         pararPolling();
-        if (S.bloqueado || document.hidden) return;
+        if (S.bloqueado || (document.hidden && !permitirOculta)) return;
         S.timer = setTimeout(sincronizar, ms);
     }
     function pararPolling() { if (S.timer) { clearTimeout(S.timer); S.timer = null; } }
 
+    function pararDigitando() {
+        if (S.typingTimer) clearTimeout(S.typingTimer);
+        S.typingTimer = null;
+        if (!S.typingAtivo || !S.conversa || !S.conversa.id) return;
+        const conversaId = S.conversa.id;
+        S.typingAtivo = false;
+        api('digitando', { metodo: 'POST', corpo: { conversa_id: conversaId, ativo: false } }).catch(() => {});
+    }
+    function enviarDigitando() {
+        if (!S.conversa || !S.conversa.id || S.conversa.tipo !== 'DIRETA' || !S.config?.recurso_digitando || S.preferencias?.mostrar_online === false) return;
+        const agora = Date.now();
+        if (!S.typingAtivo) {
+            S.typingAtivo = true;
+            S.typingUltimoEnvio = agora;
+            api('digitando', { metodo: 'POST', corpo: { conversa_id: S.conversa.id, ativo: true } }).catch(() => { S.typingAtivo = false; });
+        } else if (agora - S.typingUltimoEnvio >= 3000) {
+            S.typingUltimoEnvio = agora;
+            api('digitando', { metodo: 'POST', corpo: { conversa_id: S.conversa.id, ativo: true } }).catch(() => {});
+        }
+        if (S.typingTimer) clearTimeout(S.typingTimer);
+        S.typingTimer = setTimeout(() => pararDigitando(), 6000);
+    }
+
+    function atualizarIndicadorDigitando() {
+        const alvo = S.raiz && S.raiz.querySelector('[data-ci="mensagens"]');
+        if (!alvo) return;
+        const atual = alvo.querySelector('.chatin-digitando');
+        if (S.contatoDigitando) {
+            if (!atual) {
+                const indicador = document.createElement('div');
+                indicador.className = 'chatin-digitando';
+                indicador.setAttribute('aria-live', 'polite');
+                indicador.textContent = `${S.conversa?.contato?.nome || 'Contato'} está digitando`;
+                indicador.innerHTML = `${esc(S.conversa?.contato?.nome || 'Contato')} está digitando<span aria-hidden="true"><i></i><i></i><i></i></span>`;
+                alvo.appendChild(indicador);
+            }
+        } else if (atual) atual.remove();
+    }
+
+    function garantirTituloOriginal() {
+        if (!S.tituloOriginal) S.tituloOriginal = document.title || 'ERP Condomínio';
+    }
+    function piscarTitulo() {
+        garantirTituloOriginal();
+        if (!document.hidden) return;
+        if (S.tituloTimer) return;
+        S.tituloAlternado = false;
+        S.tituloTimer = setInterval(() => {
+            if (!document.hidden || S.bloqueado) { pararTitulo(); return; }
+            S.tituloAlternado = !S.tituloAlternado;
+            document.title = S.tituloAlternado ? `(${Math.max(1, S.totalNaoLidas)}) Nova mensagem — ${S.tituloOriginal}` : S.tituloOriginal;
+        }, 800);
+    }
+    function pararTitulo() {
+        if (S.tituloTimer) clearInterval(S.tituloTimer);
+        S.tituloTimer = null;
+        if (S.tituloOriginal) document.title = S.tituloOriginal;
+    }
+    function mostrarDicaAudio() {
+        if (S.dicaAudioMostrada || !document.body) return;
+        S.dicaAudioMostrada = true;
+        const dica = document.createElement('div');
+        dica.className = 'chatin-audio-hint';
+        dica.setAttribute('role', 'status');
+        dica.textContent = 'Clique em qualquer lugar da página para ativar os sons do Chat-In.';
+        document.body.appendChild(dica);
+        setTimeout(() => dica.remove(), 7000);
+    }
+    function tocarSom(tipo, previsualizacao = false) {
+        if (!S.config || !S.config.recurso_sons || !S.preferencias || (!previsualizacao && !S.preferencias.som_ativo)) return;
+        if (Number(S.preferencias.som_volume) <= 0) return;
+        const agora = Date.now();
+        if (!previsualizacao && agora - S.ultimaNotificacaoSom < 2000) return;
+        if (!previsualizacao) S.ultimaNotificacaoSom = agora;
+        const ok = window.ChatInSons && window.ChatInSons.tocar(tipo || S.preferencias.som_tipo, S.preferencias.som_volume);
+        if (!ok) mostrarDicaAudio();
+    }
+    function notificarNavegador(ev) {
+        if (!S.preferencias || !S.preferencias.notificacao_navegador || !document.hidden || !('Notification' in window) || Notification.permission !== 'granted') return;
+        try {
+            const n = new Notification(ev.remetente_nome || 'ERP Condomínio', {
+                body: 'Nova mensagem', tag: `chatin-${Number(ev.conversa_id) || 0}`, renotify: false,
+            });
+            n.onclick = () => {
+                try { window.focus(); } catch (_) { /* foco da janela pode ser recusado pelo navegador */ }
+                abrir();
+                const id = Number(ev.conversa_id) || 0;
+                if (id) abrirConversaExistente(id);
+                n.close();
+            };
+        } catch (_) { /* Notification API indisponível ou bloqueada pelo navegador */ }
+    }
+    function vibrarPainel() {
+        if (!S.dock || S.embutido || !S.dock.isConnected) return;
+        S.dock.classList.remove('chatin-cutucar-tremor');
+        void S.dock.offsetWidth;
+        S.dock.classList.add('chatin-cutucar-tremor');
+        setTimeout(() => S.dock && S.dock.classList.remove('chatin-cutucar-tremor'), 650);
+    }
+    function atualizarCooldownCutucar() {
+        if (S.cutucarTimer) clearTimeout(S.cutucarTimer);
+        S.cutucarTimer = null;
+        const conversaId = Number(S.conversa?.id || 0);
+        if (!conversaId || !S.raiz) return;
+        const chave = String(conversaId);
+        const ate = Number(S.cutucarAtePorConversa[chave] || 0);
+        const restante = Math.max(0, Math.ceil((ate - Date.now()) / 1000));
+        const botao = S.raiz.querySelector('[data-ci="cutucar"]');
+        const status = S.raiz.querySelector('.chatin-cutucar-status');
+        if (botao) {
+            botao.disabled = restante > 0;
+            botao.title = restante > 0 ? `Aguarde ${restante} s para cutucar novamente` : 'Cutucar para chamar atenção';
+            botao.setAttribute('aria-label', botao.title);
+        }
+        if (status) {
+            status.hidden = restante <= 0;
+            status.textContent = restante > 0 ? `Aguarde ${restante} s para enviar outra cutucada.` : '';
+        }
+        if (restante > 0) S.cutucarTimer = setTimeout(atualizarCooldownCutucar, 1000);
+        else delete S.cutucarAtePorConversa[chave];
+    }
+    function processarEventos(novos) {
+        if (!Array.isArray(novos) || !novos.length) return;
+        const porId = new Map(S.conversas.map(c => [Number(c.id), c]));
+        for (const ev of novos) {
+            if (S.eu && ev.remetente_tipo === S.eu.tipo && Number(ev.remetente_id) === Number(S.eu.id)) continue;
+            const c = porId.get(Number(ev.conversa_id));
+            const cutucar = ev.tipo === 'CUTUCAR';
+            if (ev.silenciado || (c && c.silenciado) || (cutucar && ev.permitir_cutucar === false)) continue;
+            const aviso = ev.tipo === 'AVISO';
+            const conversaVisivelEFocada = S.vista === 'conversa' && S.conversa && Number(S.conversa.id) === Number(ev.conversa_id) && !document.hidden && document.hasFocus();
+            if (!conversaVisivelEFocada || cutucar) {
+                tocarSom(cutucar ? 'cutucar' : (aviso ? 'suave' : S.preferencias?.som_tipo));
+            }
+            if (document.hidden) {
+                piscarTitulo();
+                notificarNavegador(ev);
+            }
+            if (cutucar) {
+                if (!S.embutido) abrir();
+                vibrarPainel();
+                const conversa = S.conversas.find(item => Number(item.id) === Number(ev.conversa_id));
+                if (conversa) abrirConversaExistente(Number(conversa.id));
+            }
+        }
+    }
+
+    function processarFallbackNaoLidas(contagensAntes, eventos) {
+        const recebidosPorConversa = new Map();
+        (Array.isArray(eventos) ? eventos : []).forEach(ev => {
+            if (S.eu && ev.remetente_tipo === S.eu.tipo && Number(ev.remetente_id) === Number(S.eu.id)) return;
+            if (ev.silenciado || ev.tipo === 'CUTUCAR' && ev.permitir_cutucar === false) return;
+            const id = Number(ev.conversa_id) || 0;
+            recebidosPorConversa.set(id, (recebidosPorConversa.get(id) || 0) + 1);
+        });
+        for (const conversa of S.conversas) {
+            if (conversa.silenciado) continue;
+            const id = Number(conversa.id) || 0;
+            const anterior = Number(contagensAntes.get(id) || 0);
+            const atual = Number(conversa.nao_lidas) || 0;
+            const faltantes = atual - anterior - (recebidosPorConversa.get(id) || 0);
+            if (faltantes <= 0) continue;
+            const abertaComFoco = S.vista === 'conversa' && S.conversa && Number(S.conversa.id) === id && !document.hidden && document.hasFocus();
+            if (!abertaComFoco) tocarSom(S.preferencias?.som_tipo);
+            if (document.hidden) {
+                piscarTitulo();
+                const remetente = conversa.ultima?.remetente_nome || conversa.contato?.nome || 'Administração';
+                notificarNavegador({ conversa_id: id, remetente_nome: remetente });
+            }
+            break;
+        }
+    }
+
     async function sincronizar() {
         if (S.bloqueado || S.sincronizando) return;
         S.sincronizando = true;
+        const inicioSync = performance.now();
         try {
+            const contagensAntes = new Map(S.conversas.map(c => [Number(c.id), Number(c.nao_lidas) || 0]));
             const params = { plataforma: S.plataforma, versao: S.versao };
+            if (S.eventosCursor > 0) params.eventos_desde_id = S.eventosCursor;
             const conv = S.vista === 'conversa' && S.conversa && visivel() ? S.conversa : null;
             if (conv) {
                 params.conversa_id = conv.id;
                 params.apos_id = S.ultimoId;
-                if (!document.hidden) params.marcar_lida = 1;
             }
             const d = await api('sync', { params });
             S.eu = d.eu || S.eu;
             S.versao = d.versao || S.versao;
+            S.config = d.config || S.config;
+            S.preferencias = d.preferencias || S.preferencias;
             if (Array.isArray(d.conversas)) {
                 S.conversas = d.conversas;
                 if (S.vista === 'conversas') renderLista();
             }
+            if (d.eventos_cursor !== undefined) S.eventosCursor = Math.max(S.eventosCursor, Number(d.eventos_cursor) || 0);
             atualizarContador(d.total_nao_lidas || 0);
+            processarEventos(d.eventos_novos);
+            if (S.syncInicializado) processarFallbackNaoLidas(contagensAntes, d.eventos_novos);
+            S.syncInicializado = true;
             if (conv && S.conversa && S.conversa.id === conv.id) {
                 if (Array.isArray(d.mensagens) && d.mensagens.length) anexarMensagens(d.mensagens);
+                const atual = S.conversas.find(item => Number(item.id) === Number(conv.id));
+                if (!document.hidden && document.hasFocus() && atual && Number(atual.nao_lidas) > 0) {
+                    const naoLidasAntes = Number(atual.nao_lidas) || 0;
+                    try {
+                        await api('lida', { metodo: 'POST', corpo: { conversa_id: Number(conv.id), ate_id: Number(S.ultimoId) || 0 } });
+                        atual.nao_lidas = 0;
+                        atualizarContador(Math.max(0, Number(S.totalNaoLidas) - naoLidasAntes));
+                    } catch (e) { console.warn('[Chat-In] leitura não confirmada:', e.message); }
+                }
                 if (S.conversa.contato && typeof d.contato_online === 'boolean' && S.conversa.contato.online !== d.contato_online) {
                     S.conversa.contato.online = d.contato_online;
                     atualizarCabecalhoConversa();
                 }
+                const digitando = Boolean(d.contato_digitando);
+                if (digitando !== S.contatoDigitando) { S.contatoDigitando = digitando; atualizarIndicadorDigitando(); }
             }
         } catch (e) {
             if (e.status === 401 || e.status === 403 || e.codigo === 'NAO_INSTALADO') {
@@ -173,8 +382,16 @@
             }
             console.warn('[Chat-In] sync falhou:', e.message);
         } finally {
+            const duracao = Math.max(0, performance.now() - inicioSync);
+            S.metricasSync.push(duracao);
+            if (S.metricasSync.length > 100) S.metricasSync.shift();
             S.sincronizando = false;
-            if (!S.bloqueado) agendar(visivel() ? INTERVALO_ATIVO : INTERVALO_FECHADO);
+            if (!S.bloqueado) {
+                if (document.hidden) {
+                    const notificacoesAtivas = S.preferencias?.notificacao_navegador && ('Notification' in window) && Notification.permission === 'granted';
+                    if (notificacoesAtivas) agendar(INTERVALO_FECHADO, true);
+                } else agendar(visivel() && S.vista === 'conversa' && document.hasFocus() ? INTERVALO_FOCO : (visivel() ? INTERVALO_ATIVO : INTERVALO_FECHADO));
+            }
         }
     }
 
@@ -210,9 +427,9 @@
             <header class="chatin-dock-topo">
                 <span class="chatin-marca"><i class="fas fa-comments"></i> Chat-In</span>
                 <span class="chatin-dock-acoes">
-                    <button type="button" class="chatin-icone-btn" data-ci="preferencias" title="Preferências"><i class="fas fa-sliders-h"></i></button>
-                    <button type="button" class="chatin-icone-btn" data-ci="fixar" title="Fixar painel"><i class="fas fa-thumbtack"></i></button>
-                    <button type="button" class="chatin-icone-btn" data-ci="minimizar" title="Minimizar"><i class="fas fa-minus"></i></button>
+                    <button type="button" class="chatin-icone-btn" data-ci="preferencias" title="Preferências" aria-label="Preferências do Chat-In"><i class="fas fa-sliders-h" aria-hidden="true"></i></button>
+                    <button type="button" class="chatin-icone-btn" data-ci="fixar" title="Fixar painel" aria-label="Fixar painel do Chat-In"><i class="fas fa-thumbtack" aria-hidden="true"></i></button>
+                    <button type="button" class="chatin-icone-btn" data-ci="minimizar" title="Minimizar" aria-label="Minimizar Chat-In"><i class="fas fa-minus" aria-hidden="true"></i></button>
                 </span>
             </header>
             <div class="chatin-corpo"></div>`;
@@ -236,6 +453,7 @@
         sincronizar();
     }
     function minimizar() {
+        pararDigitando();
         S.aberto = false;
         fixar(false);   // minimizar também desafixa (preferência lembrada neste navegador)
         S.dock.classList.remove('aberto');
@@ -250,6 +468,7 @@
             const btn = S.dock.querySelector('[data-ci="fixar"]');
             btn.classList.toggle('ativo', S.fixado);
             btn.title = S.fixado ? 'Desafixar painel' : 'Fixar painel';
+            btn.setAttribute('aria-label', S.fixado ? 'Desafixar painel do Chat-In' : 'Fixar painel do Chat-In');
             S.dock.classList.toggle('fixado', S.fixado);
         }
         if (!silencioso) lsSet(CHAVE_FIXADO, S.fixado ? '1' : '0');
@@ -265,6 +484,7 @@
     }
 
     function irPara(vista) {
+        if (S.vista === 'conversa' && vista !== 'conversa') pararDigitando();
         S.vista = vista;
         if (vista !== 'conversa') { S.conversa = null; S.mensagens = []; S.ultimoId = 0; }
         if (vista === 'conversas') renderLista();
@@ -273,9 +493,9 @@
     }
 
     function abas(ativa) {
-        return `<nav class="chatin-abas" role="tablist">
-            <button type="button" role="tab" class="${ativa === 'conversas' ? 'ativa' : ''}" data-ci="aba-conversas"><i class="fas fa-comment-dots"></i> Conversas</button>
-            <button type="button" role="tab" class="${ativa === 'contatos' ? 'ativa' : ''}" data-ci="aba-contatos"><i class="fas fa-user-plus"></i> Nova conversa</button>
+        return `<nav class="chatin-abas" aria-label="Navegação do Chat-In">
+            <button type="button" aria-current="${ativa === 'conversas' ? 'page' : 'false'}" class="${ativa === 'conversas' ? 'ativa' : ''}" data-ci="aba-conversas"><i class="fas fa-comment-dots" aria-hidden="true"></i> Conversas</button>
+            <button type="button" aria-current="${ativa === 'contatos' ? 'page' : 'false'}" class="${ativa === 'contatos' ? 'ativa' : ''}" data-ci="aba-contatos"><i class="fas fa-user-plus" aria-hidden="true"></i> Nova conversa</button>
         </nav>`;
     }
 
@@ -363,30 +583,36 @@
     }
 
     function prepararConversa(c) {
+        pararDigitando();
+        S.contatoDigitando = false;
         S.vista = 'conversa';
         S.conversa = c; S.mensagens = []; S.ultimoId = 0; S.temMais = false;
         const leitura = c.somente_leitura;
         const bloqueado = c.contato && (c.contato.bloqueado_por_mim || c.contato.ativo === false);
         S.raiz.innerHTML = `
             <div class="chatin-conversa-topo">
-                <button type="button" class="chatin-icone-btn" data-ci="voltar" title="Voltar"><i class="fas fa-arrow-left"></i></button>
+                <button type="button" class="chatin-icone-btn" data-ci="voltar" title="Voltar" aria-label="Voltar à lista de conversas"><i class="fas fa-arrow-left" aria-hidden="true"></i></button>
                 <div class="chatin-conversa-id"></div>
-                ${c.tipo === 'DIRETA' && c.contato ? `<button type="button" class="chatin-icone-btn" data-ci="menu-conversa" title="Opções"><i class="fas fa-ellipsis-v"></i></button>
+                ${c.tipo === 'DIRETA' && !leitura && !bloqueado && S.config?.recurso_cutucar ? '<button type="button" class="chatin-icone-btn chatin-cutucar-btn" data-ci="cutucar" title="Cutucar para chamar atenção" aria-label="Cutucar para chamar atenção"><i class="fas fa-hand-point-right"></i></button>' : ''}
+                ${c.tipo === 'DIRETA' && c.contato ? `<button type="button" class="chatin-icone-btn" data-ci="menu-conversa" title="Opções" aria-label="Opções da conversa"><i class="fas fa-ellipsis-v" aria-hidden="true"></i></button>
                 <div class="chatin-menu" hidden>
                     <button type="button" data-ci="bloquear">${c.contato.bloqueado_por_mim ? '<i class="fas fa-unlock"></i> Desbloquear contato' : '<i class="fas fa-ban"></i> Bloquear contato'}</button>
                     <button type="button" data-ci="arquivar"><i class="fas fa-archive"></i> Arquivar conversa</button>
                 </div>` : ''}
             </div>
+            <p class="chatin-cutucar-status" role="status" aria-live="polite" hidden></p>
             <div class="chatin-mensagens" data-ci="mensagens" aria-live="polite"><div class="chatin-carregando"><i class="fas fa-spinner fa-spin"></i></div></div>
-            ${leitura ? '<div class="chatin-somente-leitura"><i class="fas fa-info-circle"></i> Canal de avisos da portaria e administração — somente leitura.</div>'
+            ${c.tipo === 'AVISOS' ? '<div class="chatin-somente-leitura"><i class="fas fa-info-circle"></i> Canal de avisos da portaria e administração — somente leitura.</div>'
+                : leitura ? `<div class="chatin-somente-leitura"><i class="fas fa-info-circle"></i> ${esc(c.avisos_leitura?.[0] || 'A configuração atual do condomínio deixou esta conversa somente para leitura.')}</div>`
                 : bloqueado ? `<div class="chatin-somente-leitura"><i class="fas fa-ban"></i> ${c.contato.ativo === false ? 'Este contato não está mais disponível.' : 'Você bloqueou este contato. Desbloqueie para enviar mensagens.'}</div>`
                 : `<form class="chatin-composer" data-ci="composer" autocomplete="off">
-                    <div class="chatin-emojis" hidden>${EMOJIS.map(em => `<button type="button" data-ci="emoji" data-emoji="${em}">${em}</button>`).join('')}</div>
-                    <button type="button" class="chatin-icone-btn" data-ci="toggle-emojis" title="Emojis"><i class="far fa-smile"></i></button>
+                    ${S.config?.recurso_emojis ? `<div class="chatin-emojis" hidden>${EMOJIS.map(em => `<button type="button" data-ci="emoji" data-emoji="${em}">${em}</button>`).join('')}</div>
+                    <button type="button" class="chatin-icone-btn" data-ci="toggle-emojis" title="Emojis" aria-label="Abrir emojis"><i class="far fa-smile"></i></button>` : ''}
                     <textarea rows="1" maxlength="${MAX_CARACTERES}" placeholder="Escreva uma mensagem…" data-ci="texto" aria-label="Mensagem"></textarea>
-                    <button type="submit" class="chatin-enviar" title="Enviar (Enter)"><i class="fas fa-paper-plane"></i></button>
+                    <button type="submit" class="chatin-enviar" title="Enviar (Enter)" aria-label="Enviar mensagem"><i class="fas fa-paper-plane" aria-hidden="true"></i></button>
                 </form>`}`;
         atualizarCabecalhoConversa();
+        atualizarCooldownCutucar();
     }
 
     function atualizarCabecalhoConversa() {
@@ -411,6 +637,11 @@
                 <div class="chatin-aviso-topo"><i class="fas fa-bullhorn"></i> ${esc(m.remetente.nome)}<small>${esc(hora(m.criado_em))}</small></div>
                 ${m.titulo ? `<strong>${esc(m.titulo)}</strong>` : ''}<p>${esc(m.corpo)}</p></div>`;
         }
+        if (m.tipo === 'CUTUCAR') {
+            const texto = m.minha ? `Você cutucou ${S.conversa?.contato?.nome || 'o contato'}` : `${m.remetente?.nome || 'Contato'} cutucou você`;
+            return sep + `<div class="chatin-msg-cutucar ${m.minha ? 'minha' : ''}" data-mid="${esc(m.id)}" role="status">
+                <i class="fas fa-hand-point-right" aria-hidden="true"></i><span>${esc(texto)}</span><small>${esc(hora(m.criado_em))}</small></div>`;
+        }
         const mostrarNome = !m.minha && S.conversa && S.conversa.tipo !== 'DIRETA';
         return sep + `<div class="chatin-msg ${m.minha ? 'minha' : ''} ${m.pendente ? 'pendente' : ''} ${m.falhou ? 'falhou' : ''}" data-mid="${esc(m.id)}">
             ${mostrarNome ? `<small class="chatin-msg-autor">${esc(m.remetente.nome)}</small>` : ''}
@@ -425,6 +656,7 @@
         const html = S.mensagens.map((m, i) => htmlMensagem(m, S.mensagens[i - 1])).join('');
         alvo.innerHTML = (S.temMais ? '<button type="button" class="chatin-mais" data-ci="mais">Carregar mensagens anteriores</button>' : '')
             + (html || `<div class="chatin-vazio"><i class="far fa-paper-plane"></i><p>${S.conversa && S.conversa.somente_leitura ? 'Nenhum aviso por enquanto.' : 'Diga olá! As mensagens ficam guardadas no histórico.'}</p></div>`);
+        atualizarIndicadorDigitando();
         if (rolarFim) alvo.scrollTop = alvo.scrollHeight;
     }
 
@@ -493,21 +725,41 @@
     // ── preferências ───────────────────────────────────────────────
     async function renderPreferencias() {
         S.raiz.innerHTML = `<div class="chatin-conversa-topo">
-                <button type="button" class="chatin-icone-btn" data-ci="voltar" title="Voltar"><i class="fas fa-arrow-left"></i></button>
+                <button type="button" class="chatin-icone-btn" data-ci="voltar" title="Voltar" aria-label="Voltar à lista de conversas"><i class="fas fa-arrow-left" aria-hidden="true"></i></button>
                 <div class="chatin-conversa-id"><span><strong>Preferências</strong><small>Privacidade e notificações</small></span></div></div>
             <div class="chatin-prefs"><div class="chatin-carregando"><i class="fas fa-spinner fa-spin"></i></div></div>`;
         try {
             const p = await api('preferencias');
             S.preferencias = p;
+            const volume = Number.isFinite(Number(p.som_volume)) ? Math.max(0, Math.min(100, Number(p.som_volume))) : 70;
             const morador = S.eu ? S.eu.tipo === 'MORADOR' : S.plataforma !== 'painel';
             const item = (chave, titulo, desc) => `<label class="chatin-pref">
                 <input type="checkbox" data-pref="${chave}" ${p[chave] ? 'checked' : ''}>
                 <span><strong>${titulo}</strong><small>${desc}</small></span></label>`;
+            const som = S.config?.recurso_sons ? `<section class="chatin-prefs-som" aria-labelledby="chatin-som-titulo">
+                ${item('som_ativo', 'Avisos sonoros', 'Tocar um som original quando chegar mensagem, respeitando conversas silenciadas.')}
+                <label class="chatin-pref chatin-pref-controle"><span><strong>Som padrão</strong><small>Escolha um dos três sons originais do Chat-In.</small></span>
+                    <select data-pref="som_tipo" aria-label="Tipo de som">
+                        <option value="classico" ${p.som_tipo === 'classico' ? 'selected' : ''}>Clássico</option>
+                        <option value="campainha" ${p.som_tipo === 'campainha' ? 'selected' : ''}>Campainha</option>
+                        <option value="suave" ${p.som_tipo === 'suave' ? 'selected' : ''}>Suave</option>
+                    </select>
+                </label>
+                <div class="chatin-pref-previews">
+                    <button type="button" class="chatin-preview-som" data-ci="ouvir-som" data-som="classico">Ouvir Clássico</button>
+                    <button type="button" class="chatin-preview-som" data-ci="ouvir-som" data-som="campainha">Ouvir Campainha</button>
+                    <button type="button" class="chatin-preview-som" data-ci="ouvir-som" data-som="suave">Ouvir Suave</button>
+                </div>
+                <label class="chatin-pref chatin-pref-controle"><span><strong>Volume</strong><small data-volume-label>${volume}%</small></span><input type="range" min="0" max="100" step="5" value="${volume}" data-pref="som_volume" aria-label="Volume do Chat-In"></label>
+            </section>` : '';
             S.raiz.querySelector('.chatin-prefs').innerHTML =
                 (morador ? item('visivel_busca', 'Aparecer na busca de moradores', 'Desligado: outros moradores não encontram você. A administração continua podendo falar com você.') : '')
                 + item('mostrar_online', 'Mostrar quando estou online', 'Desligado: ninguém vê seu status online.')
-                + (morador ? item('notificar_push', 'Notificações no aplicativo', 'Receber push no celular quando chegar mensagem.') : '')
-                + '<p class="chatin-prefs-nota"><i class="fas fa-shield-alt"></i> O Chat-In mostra apenas seu nome e unidade. Você pode bloquear qualquer contato pelo menu da conversa.</p>';
+                + (morador && S.config?.recurso_push_app ? item('notificar_push', 'Notificações no aplicativo', 'Receber push no celular quando chegar mensagem.') : '')
+                + item('notificacao_navegador', 'Notificações do navegador', 'Quando a aba estiver oculta, mostrar o nome do remetente e “Nova mensagem”, sem o conteúdo.')
+                + (S.config?.recurso_cutucar ? item('permitir_cutucar', 'Permitir Cutucar', 'Permite que participantes desta conversa enviem um sinal temporário para chamar sua atenção.') : '')
+                + som
+                + '<p class="chatin-prefs-nota"><i class="fas fa-shield-alt"></i> O Chat-In mostra apenas nome e unidade/função. Você pode bloquear qualquer contato pelo menu da conversa. Os sons são gerados localmente e nunca enviados ao servidor.</p>';
         } catch (e) {
             S.raiz.querySelector('.chatin-prefs').innerHTML = `<div class="chatin-vazio chatin-erro"><p>${esc(e.message)}</p></div>`;
         }
@@ -528,6 +780,8 @@
         else if (acao === 'abrir-contato') { const p = S.contatos[Number(el.dataset.idx)]; if (p) abrirComContato(p.tipo, p.id); }
         else if (acao === 'voltar') { irPara('conversas'); S.versao = ''; sincronizar(); }
         else if (acao === 'mais') carregarAnteriores();
+        else if (acao === 'cutucar') { e.preventDefault(); enviarCutucada(el); }
+        else if (acao === 'ouvir-som') { e.preventDefault(); tocarSom(el.dataset.som || S.preferencias?.som_tipo, true); }
         else if (acao === 'toggle-emojis') { const p = S.raiz.querySelector('.chatin-emojis'); if (p) p.hidden = !p.hidden; }
         else if (acao === 'emoji') {
             const ta = S.raiz.querySelector('[data-ci="texto"]');
@@ -551,9 +805,13 @@
             clearTimeout(S.buscaTimer);
             const q = e.target.value.trim();
             S.buscaTimer = setTimeout(() => buscarContatos(q), 300);
+        } else if (e.target.matches('[data-pref="som_volume"]')) {
+            const label = S.raiz.querySelector('[data-volume-label]');
+            if (label) label.textContent = `${Math.max(0, Math.min(100, Number(e.target.value) || 0))}%`;
         } else if (e.target.matches('[data-ci="texto"]')) {
             e.target.style.height = 'auto';
             e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            if (e.target.value.trim()) enviarDigitando(); else pararDigitando();
         }
     }
     function aoTeclar(e) {
@@ -565,10 +823,64 @@
     function aoAlterar(e) {
         const chave = e.target.dataset.pref;
         if (!chave) return;
-        const corpo = { [chave]: e.target.checked };
-        api('preferencias', { metodo: 'POST', corpo }).then(p => { S.preferencias = p; }).catch(err => {
-            e.target.checked = !e.target.checked; alert(err.message);
+        salvarPreferencia(chave, e.target);
+    }
+
+    async function salvarPreferencia(chave, elemento) {
+        const anterior = S.preferencias ? S.preferencias[chave] : undefined;
+        let valor = elemento.type === 'checkbox' ? elemento.checked : (elemento.type === 'range' ? Number(elemento.value) : elemento.value);
+        if (chave === 'notificacao_navegador' && valor) {
+            if (!('Notification' in window)) {
+                elemento.checked = false;
+                alert('Este navegador não oferece notificações do sistema.');
+                return;
+            }
+            if (Notification.permission === 'default') {
+                try { await Notification.requestPermission(); } catch (_) { /* permissão pode ser bloqueada pelo navegador */ }
+            }
+            if (Notification.permission !== 'granted') {
+                elemento.checked = false;
+                alert('A permissão de notificação não foi concedida. Você pode ativá-la nas configurações do navegador.');
+                return;
+            }
+        }
+        const corpo = { [chave]: valor };
+        api('preferencias', { metodo: 'POST', corpo }).then(p => {
+            S.preferencias = p;
+            if (chave === 'mostrar_online' && !p.mostrar_online) pararDigitando();
+        }).catch(err => {
+            if (elemento.type === 'checkbox') elemento.checked = Boolean(anterior);
+            else if (anterior !== undefined) elemento.value = String(anterior);
+            alert(err.message);
         });
+    }
+
+    async function enviarCutucada(botao) {
+        if (!S.conversa || !S.conversa.id || S.conversa.tipo !== 'DIRETA' || S.conversa.somente_leitura) return;
+        const conversaId = Number(S.conversa.id);
+        if (botao) botao.disabled = true;
+        try {
+            const d = await api('cutucar', { metodo: 'POST', corpo: { conversa_id: conversaId } });
+            if (d.mensagem && Number(S.conversa?.id) === conversaId) {
+                S.mensagens.push(d.mensagem);
+                S.ultimoId = Math.max(S.ultimoId, Number(d.mensagem.id) || 0);
+                renderMensagens(true);
+            }
+            S.cutucarAtePorConversa[String(conversaId)] = Date.now() + 30000;
+            atualizarCooldownCutucar();
+            S.versao = '';
+        } catch (e) {
+            if (e.codigo === 'CUTUCAR_LIMITE' && e.retryAfter > 0) {
+                S.cutucarAtePorConversa[String(conversaId)] = Date.now() + e.retryAfter * 1000;
+                atualizarCooldownCutucar();
+            } else {
+                const form = S.raiz && S.raiz.querySelector('[data-ci="composer"]');
+                if (form) mostrarAvisoComposer(e.message); else alert(e.message);
+            }
+        } finally {
+            if (botao && botao.isConnected && Number(S.conversa?.id) === conversaId
+                && !(S.cutucarAtePorConversa[String(conversaId)] > Date.now())) botao.disabled = false;
+        }
     }
     function aoRolar(e) {
         if (e.target.matches && e.target.matches('[data-ci="mensagens"]') && e.target.scrollTop < 20 && S.temMais && !S._carregandoMais) {
@@ -584,6 +896,7 @@
         if (!ta) return;
         const texto = ta.value;
         ta.value = ''; ta.style.height = 'auto';
+        pararDigitando();
         const emo = form.querySelector('.chatin-emojis'); if (emo) emo.hidden = true;
         enviar(texto);
     }
@@ -613,7 +926,11 @@
     // ── ciclo de vida ──────────────────────────────────────────────
     document.addEventListener('visibilitychange', () => {
         if (S.bloqueado || !S.ativo) return;
-        if (document.hidden) pararPolling(); else sincronizar();
+        if (document.hidden) {
+            pararPolling();
+            const notificacoesAtivas = S.preferencias?.notificacao_navegador && ('Notification' in window) && Notification.permission === 'granted';
+            if (notificacoesAtivas) agendar(INTERVALO_FECHADO, true);
+        } else { pararTitulo(); sincronizar(); }
     });
 
     /**
@@ -651,6 +968,7 @@
     }
     function desmontarEmbutido(container) {
         if (!S.embutido) return;
+        pararDigitando();
         S.embutido = false;
         if (container) {
             container.removeEventListener('click', aoClicar);
@@ -666,7 +984,9 @@
     }
 
     function encerrar() {
+        pararDigitando();
         pararPolling();
+        pararTitulo();
         S.ativo = false; S.bloqueado = true;
         if (S.dock) S.dock.remove();
         if (S.launcher) S.launcher.remove();
@@ -676,5 +996,10 @@
     window.ChatIn = {
         iniciar, abrir, minimizar, abrirComContato, montarEmbutido, desmontarEmbutido, encerrar,
         get totalNaoLidas() { return S.totalNaoLidas; },
+        obterMetricasSync() {
+            const amostras = S.metricasSync.slice();
+            const total = amostras.reduce((soma, valor) => soma + valor, 0);
+            return { amostras: amostras.length, media_ms: amostras.length ? Math.round(total / amostras.length) : null, maior_ms: amostras.length ? Math.round(Math.max(...amostras)) : null };
+        },
     };
 })();

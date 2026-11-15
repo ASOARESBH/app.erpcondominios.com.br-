@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="/assets/css/app.css">
     <link rel="stylesheet" href="/assets/css/themes/theme-blue.css">
     <link rel="stylesheet" href="/frontend/components/user-menu/user-menu.css">
-    <link rel="stylesheet" href="/assets/css/chatin.css?v=20261105-chatin-1">
+    <link rel="stylesheet" href="/assets/css/chatin.css?v=20261114-chatin-v2">
 
     <!-- Auth Guard: verifica sessão ANTES de renderizar a página -->
     <!-- IMPORTANTE: deve estar no HEAD para bloquear o carregamento se não autenticado -->
@@ -134,7 +134,8 @@
     <!-- Controle de Acesso por Módulo (filtra menu conforme permissões do usuário) -->
     <script src="/frontend/js/permissoes-modulos.js"></script>
     <!-- Chat-In: comunicador interno (botão flutuante + painel lateral fixável) -->
-    <script src="/frontend/js/chatin-widget.js?v=20261105-chatin-1"></script>
+    <script src="/frontend/js/chatin-sons.js?v=20261114-chatin-v2"></script>
+    <script src="/frontend/js/chatin-widget.js?v=20261114-chatin-v2"></script>
     <script>
         (function () {
             function iniciarChatIn() { if (window.ChatIn) window.ChatIn.iniciar({ plataforma: 'painel' }); }

@@ -16,7 +16,10 @@ export function destroy() {
 
 function on(el, ev, fn) { if (!el) return; el.addEventListener(ev, fn); _listeners.push({ el, ev, fn }); }
 function _setupBtnBack() {
-    document.querySelectorAll('[data-page]').forEach(el => on(el, 'click', () => window.AppRouter?.loadPage(el.dataset.page)));
+    document.querySelectorAll('.page-sistema [data-page]').forEach(el => {
+        if (el instanceof HTMLAnchorElement && el.hasAttribute('href')) return;
+        on(el, 'click', () => window.AppRouter?.loadPage(el.dataset.page));
+    });
 }
 function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
 async function api(acao, options = {}) {

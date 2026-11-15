@@ -1,0 +1,59 @@
+.page-config-chatin { --chatin-ink:#172554; --chatin-muted:#64748b; --chatin-line:#e2e8f0; --chatin-accent:#0e7490; }
+.page-config-chatin .stub-breadcrumb a { color:#4f46e5; text-decoration:none; cursor:pointer; }
+.page-config-chatin .stub-breadcrumb a:hover { text-decoration:underline; }
+.page-config-chatin .config-chatin-card { padding:clamp(18px,3vw,32px); border:1px solid #dbe4f0; border-radius:16px; box-shadow:0 8px 24px rgba(15,23,42,.06); }
+.page-config-chatin [hidden] { display:none!important; }
+.page-config-chatin .config-chatin-loading { display:flex; align-items:center; justify-content:center; gap:10px; min-height:180px; color:var(--chatin-muted); }
+.page-config-chatin .config-chatin-loading i { color:var(--chatin-accent); }
+.page-config-chatin .config-chatin-intro { display:flex; align-items:center; gap:16px; padding:4px 0 24px; border-bottom:1px solid var(--chatin-line); }
+.page-config-chatin .config-chatin-intro-icon,.page-config-chatin .config-chatin-section-icon { display:grid; flex:0 0 46px; width:46px; height:46px; place-items:center; border-radius:14px; background:#ecfeff; color:var(--chatin-accent); font-size:1.2rem; }
+.page-config-chatin .config-chatin-intro h2,.page-config-chatin .config-chatin-section-heading h2 { margin:0; color:var(--chatin-ink); font-size:1.12rem; }
+.page-config-chatin .config-chatin-intro p,.page-config-chatin .config-chatin-section-heading p { margin:5px 0 0; color:var(--chatin-muted); line-height:1.5; }
+.page-config-chatin .config-chatin-master { margin-left:auto; }
+.page-config-chatin .config-chatin-section { padding:24px 0; border-bottom:1px solid var(--chatin-line); }
+.page-config-chatin .config-chatin-section-heading { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+.page-config-chatin .config-chatin-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.page-config-chatin .config-chatin-option { display:flex; min-width:0; align-items:center; gap:12px; padding:14px; border:1px solid var(--chatin-line); border-radius:12px; background:#fff; cursor:pointer; transition:border-color .15s,background .15s; }
+.page-config-chatin .config-chatin-option:has(input:checked) { border-color:#67e8f9; background:#f0fdff; }
+.page-config-chatin .config-chatin-option:has(input:disabled) { cursor:default; }
+.page-config-chatin .config-chatin-option-icon { display:grid; flex:0 0 36px; width:36px; height:36px; place-items:center; border-radius:10px; background:#f1f5f9; color:#475569; }
+.page-config-chatin .config-chatin-option-copy { display:flex; min-width:0; flex:1; flex-direction:column; gap:4px; }
+.page-config-chatin .config-chatin-option-copy strong { color:#1e293b; font-size:.93rem; }
+.page-config-chatin .config-chatin-option-copy small { color:var(--chatin-muted); font-size:.8rem; line-height:1.4; }
+.page-config-chatin .config-chatin-switch { position:relative; display:inline-flex; flex:0 0 44px; width:44px; height:25px; align-items:center; }
+.page-config-chatin .config-chatin-switch input { position:absolute; z-index:1; width:44px; height:25px; margin:0; opacity:0; cursor:pointer; }
+.page-config-chatin .config-chatin-switch input:disabled { cursor:not-allowed; }
+.page-config-chatin .config-chatin-switch-track { position:absolute; inset:0; border-radius:99px; background:#cbd5e1; transition:background .18s; }
+.page-config-chatin .config-chatin-switch-track::after { position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.22); content:""; transition:transform .18s; }
+.page-config-chatin .config-chatin-switch input:checked + .config-chatin-switch-track { background:#0891b2; }
+.page-config-chatin .config-chatin-switch input:checked + .config-chatin-switch-track::after { transform:translateX(19px); }
+.page-config-chatin .config-chatin-switch input:focus-visible + .config-chatin-switch-track { outline:3px solid #67e8f9; outline-offset:2px; }
+.page-config-chatin .config-chatin-switch input:disabled + .config-chatin-switch-track { opacity:.65; }
+.page-config-chatin .config-chatin-note { display:flex; gap:9px; margin:14px 2px 0; color:#475569; font-size:.85rem; line-height:1.55; }
+.page-config-chatin .config-chatin-note i { margin-top:3px; color:#0284c7; }
+.page-config-chatin .config-chatin-groups { display:flex; flex-wrap:wrap; gap:9px; }
+.page-config-chatin .config-chatin-group { display:inline-flex; align-items:center; gap:9px; padding:10px 13px; border:1px solid var(--chatin-line); border-radius:10px; color:#334155; cursor:pointer; }
+.page-config-chatin .config-chatin-group:has(input:checked) { border-color:#67e8f9; background:#f0fdff; }
+.page-config-chatin .config-chatin-group input { accent-color:#0891b2; }
+.page-config-chatin .config-chatin-group input:disabled { cursor:not-allowed; }
+.page-config-chatin .config-chatin-empty { margin:0; padding:12px 14px; border-radius:10px; background:#f8fafc; color:var(--chatin-muted); }
+.page-config-chatin .config-chatin-proposal { display:flex; align-items:flex-start; gap:11px; padding:14px; border:1px solid #bae6fd; border-radius:12px; background:#f0f9ff; color:#334155; }
+.page-config-chatin .config-chatin-proposal i { margin-top:3px; color:#0369a1; }
+.page-config-chatin .config-chatin-proposal p { margin:0; line-height:1.55; }
+.page-config-chatin .config-chatin-permission { display:flex; gap:9px; align-items:center; margin-top:20px; padding:12px 14px; border-radius:10px; background:#f8fafc; color:#475569; }
+.page-config-chatin .config-chatin-permission i { color:#64748b; }
+.page-config-chatin .config-chatin-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; padding-top:22px; }
+.page-config-chatin .config-chatin-actions a { display:inline-flex; align-items:center; gap:8px; text-decoration:none; }
+.page-config-chatin .config-chatin-alerta { margin-bottom:14px; }
+.page-config-chatin .config-chatin-alert { display:flex; gap:10px; align-items:flex-start; padding:13px 15px; border:1px solid transparent; border-radius:10px; }
+.page-config-chatin .config-chatin-alert-success { border-color:#86efac; background:#f0fdf4; color:#166534; }
+.page-config-chatin .config-chatin-alert-warning { border-color:#fde68a; background:#fffbeb; color:#92400e; }
+.page-config-chatin .config-chatin-alert-error { border-color:#fecaca; background:#fef2f2; color:#991b1b; }
+.page-config-chatin .sr-only { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
+@media(max-width:760px) {
+    .page-config-chatin .config-chatin-options { grid-template-columns:1fr; }
+    .page-config-chatin .config-chatin-intro { align-items:flex-start; }
+    .page-config-chatin .config-chatin-master { margin-top:8px; }
+    .page-config-chatin .config-chatin-actions { flex-direction:column-reverse; align-items:stretch; }
+    .page-config-chatin .config-chatin-actions>* { justify-content:center; }
+}

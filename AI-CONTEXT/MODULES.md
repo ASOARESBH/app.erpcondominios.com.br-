@@ -53,3 +53,7 @@ A aba Alertas pertence à rota Moradores e ao RBAC `moradores`; suas APIs e dado
 
 ## 10. Chat-In, Eventos e canais de notificação
 Comunicador interno (menu abaixo de Recursos Humanos) para usuários e moradores, com avisos automáticos de Documentos, Assembleia, Eventos e chegada de visitante. Eventos (Administrativo) agora é funcional. Sistema › Controle de Acesso define os canais (E-mail, App, Chat-In; WhatsApp/SMS preparados). Ver `CHATIN.md`.
+
+
+## 11. Chat-In v2 — configuração por condomínio
+A página SPA `config_chatin` é acessada pelo cartão Chat-In em Sistema. `chatin.visualizar` habilita uso do widget/menu; o configurador pode ler por `chatin.visualizar` ou `sistema.visualizar` e gravar por `chatin.configurar` ou `sistema.configurar`. A migration concede somente `chatin.visualizar` a todos os grupos tenant-scoped existentes, preservando o acesso anterior, e a tela controla pares de conversa, funções visíveis e recursos. O enforcement fica em `api/api_chatin.php` e `api/api_chatin_config.php`; ver `AI-CONTEXT/CHATIN.md` para limites, códigos e ressalvas de migration/produção.

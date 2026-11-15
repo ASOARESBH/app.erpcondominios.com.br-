@@ -69,6 +69,8 @@
 
         // RH
         recursos_humanos:       'recursos_humanos',
+        chatin:                 'chatin',
+        config_chatin:          'chatin',
 
         // CRM
         crm:                    'crm',
@@ -122,7 +124,7 @@
     };
 
     // Páginas sempre visíveis (independente de permissão)
-    const SEMPRE_VISIVEIS = ['dashboard', 'meu_perfil', 'chatin']; // Chat-In: comunicador de todos os usuários autenticados
+    const SEMPRE_VISIVEIS = ['dashboard', 'meu_perfil'];
 
     // Cache de permissões (carregado uma vez por sessão)
     let _cache = null;
@@ -288,6 +290,7 @@
         if (p.carregamento_falhou) return true;      // preservar menu; escrita fica bloqueada e APIs validam no servidor
         if (p.is_admin) return true;                 // admin tem tudo
         if (SEMPRE_VISIVEIS.indexOf(page) !== -1) return true;
+        if (page === 'config_chatin') return temAcesso('chatin', p) || temAcesso('sistema', p);
 
         var chave = chavePermissaoDaPagina(page, p);
         if (!chave) return false;

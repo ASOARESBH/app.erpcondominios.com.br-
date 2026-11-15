@@ -45,12 +45,28 @@ if (!function_exists('notif_canais_catalogo')) {
         return $existe;
     }
 
+    function notif_canais_chatin_disponivel(mysqli $c, $tenantId) {
+        $tab = $c->query("SHOW TABLES LIKE 'chatin_configuracoes'");
+        $existe = $tab && $tab->num_rows > 0;
+        if ($tab instanceof mysqli_result) $tab->free();
+        if (!$existe) return true; // compatibilidade até a migration Chat-In v2
+        $stmt = $c->prepare('SELECT ativo FROM chatin_configuracoes WHERE tenant_id = ? LIMIT 1');
+        if (!$stmt) return false;
+        $tenantId = (int)$tenantId;
+        $stmt->bind_param('i', $tenantId);
+        if (!$stmt->execute()) { $stmt->close(); return false; }
+        $linha = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $linha ? (int)$linha['ativo'] === 1 : true;
+    }
+
     /** Mapa canal => bool para um evento (padrões do catálogo quando não configurado). */
     function notif_canais_do_evento(mysqli $c, $tenantId, $evento) {
         $cat = notif_canais_catalogo();
         $padrao = $cat['eventos'][$evento]['padrao'] ?? [];
         $mapa = [];
-        foreach ($cat['canais'] as $canal => $meta) $mapa[$canal] = !empty($padrao[$canal]) && $meta['disponivel'];
+        $chatinDisponivel = notif_canais_chatin_disponivel($c, $tenantId);
+        foreach ($cat['canais'] as $canal => $meta) $mapa[$canal] = !empty($padrao[$canal]) && $meta['disponivel'] && ($canal !== 'CHATIN' || $chatinDisponivel);
         if (!notif_canais_tabela_existe($c)) return $mapa;
         $stmt = $c->prepare('SELECT canal, ativo FROM notificacao_canais_config WHERE tenant_id = ? AND evento = ?');
         if (!$stmt) return $mapa;
@@ -58,7 +74,7 @@ if (!function_exists('notif_canais_catalogo')) {
         $stmt->bind_param('is', $tenantId, $evento);
         $stmt->execute();
         foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $l) {
-            if (isset($mapa[$l['canal']])) $mapa[$l['canal']] = (int)$l['ativo'] === 1 && $cat['canais'][$l['canal']]['disponivel'];
+            if (isset($mapa[$l['canal']])) $mapa[$l['canal']] = (int)$l['ativo'] === 1 && $cat['canais'][$l['canal']]['disponivel'] && ($l['canal'] !== 'CHATIN' || $chatinDisponivel);
         }
         $stmt->close();
         return $mapa;
@@ -72,6 +88,11 @@ if (!function_exists('notif_canais_catalogo')) {
     /** Configuração completa para a tela Sistema > Controle de Acesso. */
     function notif_canais_config_tela(mysqli $c, $tenantId) {
         $cat = notif_canais_catalogo();
+        $chatinDisponivel = notif_canais_chatin_disponivel($c, $tenantId);
+        if (!$chatinDisponivel) {
+            $cat['canais']['CHATIN']['disponivel'] = false;
+            $cat['canais']['CHATIN']['descricao'] = 'Indisponível: o Chat-In foi desativado nas configurações deste condomínio.';
+        }
         $eventos = [];
         foreach ($cat['eventos'] as $chave => $meta) {
             $eventos[] = $meta + ['chave' => $chave, 'canais_ativos' => notif_canais_do_evento($c, $tenantId, $chave)];
@@ -85,15 +106,20 @@ if (!function_exists('notif_canais_catalogo')) {
         $cat = notif_canais_catalogo();
         if (!isset($cat['eventos'][$evento])) throw new InvalidArgumentException('Evento de notificação desconhecido.');
         if (!notif_canais_tabela_existe($c)) throw new RuntimeException('Tabela notificacao_canais_config ausente (rode a migration do Chat-In).');
+        $chatinDisponivel = notif_canais_chatin_disponivel($c, $tenantId);
         $stmt = $c->prepare('INSERT INTO notificacao_canais_config (tenant_id, evento, canal, ativo, atualizado_por) VALUES (?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE ativo = VALUES(ativo), atualizado_por = VALUES(atualizado_por)');
         if (!$stmt) throw new RuntimeException('Falha ao preparar gravação dos canais.');
         foreach ($cat['canais'] as $canal => $meta) {
             if (!array_key_exists($canal, $canais)) continue;
-            $ativo = (!empty($canais[$canal]) && $meta['disponivel']) ? 1 : 0; // canal indisponível nunca é ativado
+            $ativo = ((int)$canais[$canal] === 1 && $meta['disponivel'] && ($canal !== 'CHATIN' || $chatinDisponivel)) ? 1 : 0; // canal indisponível nunca é ativado
             $t = (int)$tenantId; $u = (int)$usuarioId;
             $stmt->bind_param('issii', $t, $evento, $canal, $ativo, $u);
-            $stmt->execute();
+            if (!$stmt->execute()) {
+                $codigo = (int)$stmt->errno;
+                $stmt->close();
+                throw new RuntimeException('Falha ao gravar canais de notificação.', $codigo);
+            }
         }
         $stmt->close();
         return notif_canais_do_evento($c, $tenantId, $evento);
