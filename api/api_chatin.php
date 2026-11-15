@@ -20,11 +20,14 @@
  * POST ?acao=arquivar     {conversa_id, arquivar: true|false}
  * POST ?acao=preferencias {visivel_busca, mostrar_online, notificar_push}
  * POST ?acao=bloquear     {tipo, id, bloquear: true|false}
+ * POST ?acao=cutucar      {conversa_id}
+ * POST ?acao=digitando    {conversa_id, ativo: true|false}
  */
 
 ob_start();
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_helper.php';
+require_once __DIR__ . '/rbac_helper.php';
 require_once __DIR__ . '/helpers/chatin_helper.php';
 ob_end_clean();
 date_default_timezone_set('America/Sao_Paulo');
@@ -32,14 +35,6 @@ date_default_timezone_set('America/Sao_Paulo');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
-$origemHttp = (string)($_SERVER['HTTP_ORIGIN'] ?? '');
-if (preg_match('/^https?:\/\/([a-z0-9-]+\.)?erpcondominios\.com\.br$/i', $origemHttp) || preg_match('/^https?:\/\/localhost(:\d+)?$/i', $origemHttp)) {
-    header('Access-Control-Allow-Origin: ' . $origemHttp);
-    header('Access-Control-Allow-Credentials: true');
-    header('Vary: Origin');
-}
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { http_response_code(204); exit; }
 
 function chatin_responder($sucesso, $mensagem, $dados = null, $status = 200, $codigo = null) {
@@ -57,19 +52,58 @@ set_exception_handler(function (Throwable $e) {
 });
 
 function chatin_token_bearer() {
-    $cab = '';
+    $cab = null;
     if (function_exists('getallheaders')) {
         $h = getallheaders();
-        $cab = $h['Authorization'] ?? $h['authorization'] ?? '';
+        if (isset($h['Authorization'])) $cab = (string)$h['Authorization'];
+        elseif (isset($h['authorization'])) $cab = (string)$h['authorization'];
     }
-    if ($cab === '') $cab = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-    if (!preg_match('/^Bearer\s+([A-Za-z0-9._~+\/=-]{20,256})$/i', trim($cab), $m)) return null;
+    if ($cab === null && isset($_SERVER['HTTP_AUTHORIZATION'])) $cab = (string)$_SERVER['HTTP_AUTHORIZATION'];
+    if ($cab === null && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) $cab = (string)$_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    if ($cab === null) return null;
+    if (trim($cab) === '') return false;
+    if (!preg_match('/^Bearer\s+([A-Za-z0-9._~+\/=-]{20,256})$/i', trim($cab), $m)) return false;
     return $m[1];
+}
+
+/** POSTs com cookie administrativo só aceitam origem da mesma origem da página. */
+function chatin_validar_origem_sessao() {
+    $metodo = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    $acaoGet = strtolower(trim((string)($_GET['acao'] ?? 'sync')));
+    if ($metodo !== 'POST' && !($metodo === 'GET' && $acaoGet === 'sync')) return;
+    $origem = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
+    $fetchSite = strtolower(trim((string)($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '')));
+    $hostAtual = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+    if ($origem !== '') {
+        $partesOrigem = parse_url($origem);
+        $partesAtual = parse_url((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://') . $hostAtual);
+        if (!is_array($partesOrigem) || !is_array($partesAtual)) {
+            chatin_responder(false, 'Origem da solicitação não autorizada.', null, 403, 'ORIGIN_DENIED');
+        }
+        $schemeOrigem = strtolower((string)($partesOrigem['scheme'] ?? ''));
+        $schemeAtual = strtolower((string)($partesAtual['scheme'] ?? ''));
+        $portaOrigem = (int)($partesOrigem['port'] ?? ($schemeOrigem === 'https' ? 443 : 80));
+        $portaAtual = (int)($partesAtual['port'] ?? ($schemeAtual === 'https' ? 443 : 80));
+        $hostOrigem = strtolower((string)($partesOrigem['host'] ?? ''));
+        $pathOrigem = (string)($partesOrigem['path'] ?? '');
+        $igual = in_array($schemeOrigem, ['http', 'https'], true)
+            && $hostOrigem !== ''
+            && !isset($partesOrigem['query']) && !isset($partesOrigem['fragment'])
+            && ($pathOrigem === '' || $pathOrigem === '/')
+            && $schemeOrigem === $schemeAtual
+            && $hostOrigem === strtolower((string)($partesAtual['host'] ?? ''))
+            && $portaOrigem === $portaAtual
+            && empty($partesOrigem['user']) && empty($partesOrigem['pass']);
+        if (!$igual) chatin_responder(false, 'Origem da solicitação não autorizada.', null, 403, 'ORIGIN_DENIED');
+        return;
+    }
+    if ($fetchSite !== 'same-origin') chatin_responder(false, 'Origem da solicitação não confirmada.', null, 403, 'ORIGIN_REQUIRED');
 }
 
 /** Resolve quem está usando o chat: morador (Bearer) ou usuário do painel (sessão). */
 function chatin_autenticar(mysqli $c) {
     $token = chatin_token_bearer();
+    if ($token === false) chatin_responder(false, 'Credencial Bearer inválida.', null, 401, 'AUTH_INVALID');
     if ($token !== null) {
         $sql = chatin_coluna_existe($c, 'sessoes_portal', 'tenant_id')
             ? 'SELECT sp.morador_id, m.tenant_id FROM sessoes_portal sp INNER JOIN moradores m ON m.id = sp.morador_id AND m.ativo = 1 AND (sp.tenant_id IS NULL OR m.tenant_id = sp.tenant_id)
@@ -85,6 +119,7 @@ function chatin_autenticar(mysqli $c) {
     }
     $auth = verificarAutenticacao(false);
     if (!$auth || empty($auth['id'])) chatin_responder(false, 'Autenticação necessária. Faça login novamente.', null, 401, 'AUTH_REQUIRED');
+    chatin_validar_origem_sessao();
     $tenantId = (int)($auth['tenant_id'] ?? 0);
     if ($tenantId <= 0) chatin_responder(false, 'Contexto de condomínio não identificado.', null, 403, 'TENANT_REQUIRED');
     $pessoa = chatin_pessoa($c, $tenantId, 'USUARIO', (int)$auth['id']);
@@ -102,7 +137,9 @@ function chatin_pessoa_param(array $dados) {
 $metodo = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $dados = [];
 if ($metodo === 'POST') {
-    $json = json_decode(file_get_contents('php://input'), true);
+    $jsonBruto = file_get_contents('php://input', false, null, 0, 65537);
+    if (strlen((string)$jsonBruto) > 65536) chatin_responder(false, 'A requisição excede o tamanho permitido.', null, 413, 'PAYLOAD_MUITO_GRANDE');
+    $json = json_decode((string)$jsonBruto, true);
     if (!is_array($json)) chatin_responder(false, 'Envie um JSON válido.', null, 400, 'JSON_INVALIDO');
     $dados = $json;
 }
@@ -114,22 +151,45 @@ try {
     $c->set_charset('utf8mb4');
     if (!chatin_instalado($c)) chatin_responder(false, 'Chat-In ainda não foi instalado neste servidor (migration pendente).', ['instalado' => false], 503, 'NAO_INSTALADO');
     list($tenantId, $eu) = chatin_autenticar($c);
+    if ($eu['tipo'] === 'USUARIO' && !chatin_usuario_tem_acesso($c, $eu['id'], $tenantId)) {
+        chatin_responder(false, 'Você não possui permissão para usar o Chat-In.', null, 403, 'CHATIN_SEM_ACESSO');
+    }
+    if (!chatin_config_tenant($c, $tenantId)['ativo']) {
+        chatin_responder(false, 'O Chat-In está desativado neste condomínio.', null, 403, 'CHATIN_DESATIVADO');
+    }
     $euPublico = ['tipo' => $eu['tipo'], 'id' => $eu['id'], 'nome' => $eu['nome'], 'subtitulo' => $eu['subtitulo']];
 
     if ($metodo === 'GET' && $acao === 'sync') {
         $plataforma = (string)($_GET['plataforma'] ?? ($eu['tipo'] === 'USUARIO' ? 'painel' : 'portal'));
         $conversaId = (int)($_GET['conversa_id'] ?? 0);
         $aposId = (int)($_GET['apos_id'] ?? 0);
+        $eventosDesde = max(0, (int)($_GET['eventos_desde_id'] ?? 0));
         if ($conversaId > 0 && !chatin_participacao($c, $tenantId, $conversaId, $eu)) $conversaId = 0;
         chatin_tocar_presenca($c, $tenantId, $eu, $plataforma, $conversaId ?: null);
-        $saida = ['eu' => $euPublico];
+        $saida = [
+            'eu' => $euPublico,
+            'config' => chatin_config_publica($c, $tenantId),
+            'preferencias' => chatin_preferencias($c, $tenantId, $eu['tipo'], $eu['id']),
+        ];
+        if ($eventosDesde > 0 && chatin_v2_instalado($c)) {
+            $saida['eventos_novos'] = chatin_eventos_novos($c, $tenantId, $eu, $eventosDesde);
+            $ultimoEvento = $eventosDesde;
+            if ($saida['eventos_novos']) {
+                $ultimoItem = $saida['eventos_novos'][count($saida['eventos_novos']) - 1];
+                $ultimoEvento = (int)($ultimoItem['id'] ?? $eventosDesde);
+            }
+            $saida['eventos_cursor'] = max($eventosDesde, $ultimoEvento);
+        } else {
+            // Primeiro sync estabelece baseline sem notificar o histórico antigo.
+            $saida['eventos_cursor'] = chatin_max_mensagem_visivel($c, $tenantId, $eu);
+        }
         if ($conversaId > 0) {
             $saida['mensagens'] = chatin_mensagens($c, $tenantId, $eu, $conversaId, $aposId > 0 ? $aposId : 0, 0, $aposId > 0 ? 100 : 40);
-            if (!empty($_GET['marcar_lida'])) chatin_marcar_lida($c, $tenantId, $eu, $conversaId);
             $outros = chatin_outros($c, $tenantId, $conversaId, $eu);
             $mapa = chatin_online_mapa($c, $tenantId, array_values(array_filter($outros, function ($o) { return $o['tipo'] !== 'SISTEMA'; })));
             $saida['conversa_id'] = $conversaId;
             $saida['contato_online'] = $outros && $outros[0]['tipo'] !== 'SISTEMA' ? ($mapa[chatin_sigla($outros[0]['tipo']) . (int)$outros[0]['id']] ?? false) : false;
+            $saida['contato_digitando'] = chatin_v2_instalado($c) && $outros && $outros[0]['tipo'] !== 'SISTEMA' ? chatin_contato_digitando($c, $tenantId, $eu, $conversaId) : false;
         }
         $versao = chatin_versao($c, $tenantId, $eu);
         $saida['versao'] = $versao;
@@ -156,17 +216,21 @@ try {
         $conversaId = chatin_abrir_direta($c, $tenantId, $eu, $outro);
         $pessoa = chatin_pessoa($c, $tenantId, $outro['tipo'], $outro['id']);
         $online = chatin_online_mapa($c, $tenantId, [$outro]);
+        $somenteLeitura = !chatin_conversa_pode_enviar($c, $tenantId, $eu, $outro, $conversaId) || chatin_bloqueado($c, $tenantId, $eu, $outro);
         chatin_responder(true, 'Conversa aberta.', [
             'conversa' => [
                 'id' => $conversaId, 'tipo' => 'DIRETA', 'titulo' => $pessoa['nome'], 'subtitulo' => $pessoa['subtitulo'],
                 'contato' => $pessoa + ['online' => $online[chatin_sigla($outro['tipo']) . $outro['id']] ?? false, 'ativo' => true, 'bloqueado_por_mim' => chatin_eu_bloqueei($c, $tenantId, $eu, $outro)],
-                'somente_leitura' => false,
+                'somente_leitura' => $somenteLeitura,
+                'avisos_leitura' => $somenteLeitura ? ['A configuração atual do condomínio deixou esta conversa somente para leitura.'] : [],
             ],
             'mensagens' => chatin_mensagens($c, $tenantId, $eu, $conversaId),
         ]);
     }
     if ($metodo === 'POST' && $acao === 'enviar') {
-        $msg = chatin_enviar($c, $tenantId, $eu, (int)($dados['conversa_id'] ?? 0), (string)($dados['corpo'] ?? ''), $dados['idempotency_key'] ?? null);
+        if (!isset($dados['corpo']) || !is_string($dados['corpo'])) chatin_responder(false, 'O corpo da mensagem deve ser texto.', null, 422, 'MENSAGEM_INVALIDA');
+        if (array_key_exists('idempotency_key', $dados) && !is_string($dados['idempotency_key'])) chatin_responder(false, 'Chave idempotente inválida.', null, 422, 'IDEMPOTENCY_INVALIDA');
+        $msg = chatin_enviar($c, $tenantId, $eu, (int)($dados['conversa_id'] ?? 0), $dados['corpo'], $dados['idempotency_key'] ?? null);
         chatin_responder(true, 'Mensagem enviada.', ['mensagem' => $msg], empty($msg['idempotente']) ? 201 : 200);
     }
     if ($metodo === 'POST' && $acao === 'lida') {
@@ -186,8 +250,24 @@ try {
         chatin_definir_bloqueio($c, $tenantId, $eu, $outro, $bloquear);
         chatin_responder(true, $bloquear ? 'Contato bloqueado.' : 'Contato desbloqueado.', ['bloqueado' => $bloquear]);
     }
+    if ($metodo === 'POST' && $acao === 'cutucar') {
+        if (!chatin_v2_instalado($c)) chatin_responder(false, 'Atualize a migration do Chat-In antes de usar Cutucar.', null, 409, 'MIGRATION_V2_PENDENTE');
+        $conversaId = (int)($dados['conversa_id'] ?? 0);
+        if ($conversaId <= 0) throw new ChatInErro('Conversa inválida.', 422, 'CONVERSA_INVALIDA');
+        $mensagem = chatin_emitir_cutucada($c, $tenantId, $eu, $conversaId);
+        chatin_responder(true, 'Cutucada enviada.', ['mensagem' => $mensagem], 201);
+    }
+    if ($metodo === 'POST' && $acao === 'digitando') {
+        if (!chatin_v2_instalado($c)) chatin_responder(false, 'Atualize a migration do Chat-In antes de usar o indicador de digitação.', null, 409, 'MIGRATION_V2_PENDENTE');
+        $conversaId = (int)($dados['conversa_id'] ?? 0);
+        if ($conversaId <= 0 || !array_key_exists('ativo', $dados) || !is_bool($dados['ativo'])) throw new ChatInErro('Conversa ou estado inválido.', 422, 'DIGITANDO_INVALIDO');
+        $plataforma = $eu['tipo'] === 'USUARIO' ? 'painel' : 'portal';
+        $alterado = chatin_digitando_atualizar($c, $tenantId, $eu, $conversaId, $dados['ativo'], $plataforma);
+        chatin_responder(true, 'OK', ['digitando' => (bool)$alterado]);
+    }
     chatin_responder(false, 'Ação não permitida.', null, 405, 'ACAO_NAO_PERMITIDA');
 } catch (ChatInErro $e) {
+    if ($e->status === 429 && $e->retryAfter > 0) header('Retry-After: ' . $e->retryAfter);
     chatin_responder(false, $e->getMessage(), null, $e->status, $e->codigo);
 } catch (Throwable $e) {
     error_log('[ChatIn][Fatal] acao=' . $acao . ' ' . get_class($e) . ' codigo=' . (int)$e->getCode());

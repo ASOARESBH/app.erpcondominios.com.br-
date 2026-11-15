@@ -1,0 +1,92 @@
+<div id="page-metadata" data-title="Configuração Chat-In" data-icon="fa-comments" style="display:none"></div>
+
+
+<div class="page-wrapper page-config-chatin">
+    <nav class="stub-breadcrumb" aria-label="Navegação estrutural">
+        <a href="/configuracao" data-page="configuracao"><i class="fas fa-cog" aria-hidden="true"></i> Configurações</a>
+        <span class="stub-sep"><i class="fas fa-chevron-right" aria-hidden="true"></i></span>
+        <a href="/sistema" data-page="sistema">Sistema</a>
+        <span class="stub-sep"><i class="fas fa-chevron-right" aria-hidden="true"></i></span>
+        <span aria-current="page">Chat-In</span>
+    </nav>
+
+    <div class="page-header">
+        <h1><i class="fas fa-comments" aria-hidden="true"></i> Configuração Chat-In</h1>
+        <p>Defina como moradores e equipe podem conversar neste condomínio.</p>
+    </div>
+
+    <div id="configChatinAlerta" class="config-chatin-alerta" aria-live="polite" role="status"></div>
+
+    <div class="page-card config-chatin-card">
+        <div id="configChatinLoading" class="config-chatin-loading" role="status">
+            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+            <span>Carregando configuração Chat-In…</span>
+        </div>
+
+        <div id="configChatinConteudo" hidden>
+            <div class="config-chatin-intro">
+                <span class="config-chatin-intro-icon"><i class="fas fa-sliders-h" aria-hidden="true"></i></span>
+                <div>
+                    <h2>Disponibilidade do Chat-In</h2>
+                    <p>Desativar bloqueia o Chat-In no painel e no portal enquanto estiver desligado; não apaga conversas nem mensagens existentes.</p>
+                </div>
+                <label class="config-chatin-switch config-chatin-master">
+                    <span class="sr-only">Ativar Chat-In</span>
+                    <input type="checkbox" data-config-flag="ativo" aria-label="Ativar Chat-In">
+                    <span class="config-chatin-switch-track" aria-hidden="true"></span>
+                </label>
+            </div>
+
+            <section class="config-chatin-section" aria-labelledby="configChatinConversasTitulo">
+                <div class="config-chatin-section-heading">
+                    <span class="config-chatin-section-icon"><i class="fas fa-comments" aria-hidden="true"></i></span>
+                    <div><h2 id="configChatinConversasTitulo">Quem pode conversar</h2><p>Escolha as modalidades de conversa disponíveis para moradores e equipe.</p></div>
+                </div>
+                <div class="config-chatin-options">
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="fas fa-user-tie" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Equipe com equipe</strong><small>Permite conversas diretas entre usuários da equipe.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="usuario_usuario" aria-label="Permitir conversas entre equipe"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="fas fa-user-friends" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Equipe com morador</strong><small>Permite conversas diretas entre equipe e moradores.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="usuario_morador" aria-label="Permitir conversas entre equipe e moradores"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="fas fa-comment-dots" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Morador inicia conversa com equipe</strong><small>Controla apenas o início de novas conversas pelo morador.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="morador_inicia_com_equipe" aria-label="Permitir que o morador inicie conversa com a equipe"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="fas fa-users" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Morador com morador</strong><small>Permite conversas diretas entre moradores, conforme grupos visíveis abaixo.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="morador_morador" aria-label="Permitir conversas entre moradores"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                </div>
+                <p class="config-chatin-note"><i class="fas fa-info-circle" aria-hidden="true"></i> Conversas existentes permanecem legíveis; se a nova matriz deixar uma relação proibida, ela passa a somente leitura, sem apagar mensagens. Desativar apenas o início pelo morador ainda permite resposta a uma conversa iniciada pela equipe.</p>
+            </section>
+
+            <section class="config-chatin-section" aria-labelledby="configChatinGruposTitulo">
+                <div class="config-chatin-section-heading">
+                    <span class="config-chatin-section-icon"><i class="fas fa-user-shield" aria-hidden="true"></i></span>
+                    <div><h2 id="configChatinGruposTitulo">Grupos visíveis aos moradores</h2><p>Moradores poderão localizar e iniciar conversas com usuários dos grupos selecionados. Se nenhum grupo for selecionado, todos os usuários ativos da equipe ficam visíveis.</p></div>
+                </div>
+                <div id="configChatinGrupos" class="config-chatin-groups" aria-live="polite"></div>
+            </section>
+
+            <section class="config-chatin-section" aria-labelledby="configChatinRecursosTitulo">
+                <div class="config-chatin-section-heading">
+                    <span class="config-chatin-section-icon"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></span>
+                    <div><h2 id="configChatinRecursosTitulo">Recursos do Chat-In</h2><p>Escolha quais recursos ficam disponíveis na experiência de conversa.</p></div>
+                </div>
+                <div class="config-chatin-options config-chatin-options-compact">
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="fas fa-volume-up" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Sons</strong><small>Reproduzir sons de mensagens e notificações.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="recurso_sons" aria-label="Ativar sons"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="fas fa-hand-point-up" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Cutucar</strong><small>Permitir o envio de uma sinalização para chamar atenção.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="recurso_cutucar" aria-label="Ativar Cutucar"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="fas fa-keyboard" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Digitando…</strong><small>Mostrar quando a outra pessoa está escrevendo.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="recurso_digitando" aria-label="Ativar indicador de digitação"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="far fa-smile" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Emojis</strong><small>Disponibilizar emojis nas mensagens.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="recurso_emojis" aria-label="Ativar emojis"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                    <label class="config-chatin-option"><span class="config-chatin-option-icon"><i class="fas fa-bell" aria-hidden="true"></i></span><span class="config-chatin-option-copy"><strong>Push no aplicativo</strong><small>Habilitar notificações push do Chat-In no aplicativo.</small></span><span class="config-chatin-switch"><input type="checkbox" data-config-flag="recurso_push_app" aria-label="Ativar notificações push no aplicativo"><span class="config-chatin-switch-track" aria-hidden="true"></span></span></label>
+                </div>
+            </section>
+
+            <section class="config-chatin-section config-chatin-filter-section" aria-labelledby="configChatinFiltrosTitulo">
+                <div class="config-chatin-section-heading">
+                    <span class="config-chatin-section-icon"><i class="fas fa-filter" aria-hidden="true"></i></span>
+                    <div><h2 id="configChatinFiltrosTitulo">Filtros de moradores</h2><p>Por enquanto, somente moradores ativos é um filtro aplicável pelo Chat-In.</p></div>
+                </div>
+                <div class="config-chatin-proposal"><i class="fas fa-clipboard-list" aria-hidden="true"></i><p>Filtros por titular, dependente, proprietário ou inquilino são propostas e estão fora do escopo até a confirmação de colunas confiáveis no schema. Nenhuma classificação de perfil é presumida ou aplicada.</p></div>
+            </section>
+
+            <div class="config-chatin-permission" id="configChatinPermissao" hidden><i class="fas fa-lock" aria-hidden="true"></i><span>Você pode consultar as opções, mas somente editores autorizados podem alterá-las.</span></div>
+
+            <div class="config-chatin-actions">
+                <button type="button" id="btnSalvarConfigChatin" class="btn-primary-modern"><i class="fas fa-save" aria-hidden="true"></i> Salvar configuração</button>
+                <a href="/sistema" data-page="sistema" class="btn-secondary-modern"><i class="fas fa-arrow-left" aria-hidden="true"></i> Voltar ao Sistema</a>
+            </div>
+        </div>
+    </div>
+</div>

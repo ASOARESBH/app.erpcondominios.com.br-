@@ -48,7 +48,7 @@
         conciliacao:'conciliacao', relatorios_bancarios:'relatorios_bancarios', contas_pagar:'contas_pagar',
         contas_receber:'contas_receber', planos_contas:'financeiro', importacao_financeira:'importacao_financeira',
         inadimplencia:'inadimplencia', logs_financeiro:'logs_financeiro',
-        administrativa:'administrativo', recursos_humanos:'recursos_humanos',
+        administrativa:'administrativo', recursos_humanos:'recursos_humanos', chatin:'chatin',
         assembleia:'assembleia', contratos:'contratos', protocolos:'protocolos', protocolo:'protocolo',
         notificacoes:'notificacoes', notificacoes_push:'notificacoes_push', eventos:'eventos',
         crm:'crm', marketplace:'marketplace', marketplace_admin:'marketplace_admin',
@@ -57,7 +57,7 @@
         meu_perfil:'meu_perfil', rondas_vigilante:'rondas_vigilante', superadmin:'superadmin',
         superadmin_aplicativos:'superadmin_aplicativos', aplicativos:'superadmin_aplicativos', pwa_central:'pwa_central',
         'admin-sessoes':'admin_sessoes', admin_sessoes:'admin_sessoes', auditoria:'auditoria',
-        manual:'manual', monitoring:'superadmin', config_moradores:'sistema', config_controle_acesso:'sistema'
+        manual:'manual', monitoring:'superadmin', config_moradores:'sistema', config_controle_acesso:'sistema', config_chatin:'chatin'
     };
 
     function emContextoTenantSuperAdmin() {
@@ -227,6 +227,7 @@
 
     function temAcessoPagina(page) {
         if (state.mode === 'superadmin' || state.permissoes === null) return true;
+        if (page === 'config_chatin') return !!(state.permissoes.chatin?.pode_acessar || state.permissoes.sistema?.pode_acessar);
         const chave = chavePermissaoDaPagina(page);
         if (!chave) return true;
         return !!state.permissoes[chave]?.pode_acessar;
