@@ -5,8 +5,15 @@ Registro de alterações significativas no ERP.
 ## [Unreleased]
 ### Projeto PostgreSQL P1 — Hetzner (parcial, 2026-11-15)
 - Iniciado o cluster PostgreSQL 18.6 apenas em loopback; preparado banco vazio `erp_pg_dev` com schemas `erp`/`legado`, ICU `ci` e perfil de memória 512 MB/2 GB/8 MB.
-- Backup root-only da configuração PostgreSQL antes do ajuste; monitoramento >5 min manteve memória disponível acima de 5,5 GB e PSI `avg10=0.00`.
-- P1 não concluído: cópia verificada `erp_pg_source`/`pg_reader` adiada para 23h–06h BRT; camada PHP compatível e FPM/vhosts 8443/8444 ainda ausentes. Sem dados, dump, produção ou alteração de Nginx/UFW/DNS.
+- Backup root-only da configuração PostgreSQL antes do ajuste; monitoramento inicial >5 min manteve memória disponível acima de 5,5 GB e PSI `avg10=0.00`.
+- O backup diário foi validado e restaurado exclusivamente no schema MySQL `erp_pg_source` (275 tabelas, 7 triggers, 0 views/routines/events); conta `pg_reader` read-only e credencial root-only 0600. Checksums de configuração e smoke da produção passaram; produção permaneceu intacta.
+- P1 segue parcial: nenhuma carga foi feita no PostgreSQL, e a camada de compatibilidade integrada, FPM isolado e vhosts 8443/8444 ainda não existem. Sem alteração de Nginx/UFW/DNS nesta restauração.
+
+### Projeto PostgreSQL P3 — primeiro PR (2026-11-15)
+- Adicionada fachada OO PDO PostgreSQL em `api/db/` com wrappers mysqli parciais e 19 testes unitários sintéticos. Após revisão, os resultsets preservam posições mesmo com rótulos repetidos; estados de resultado/insert_id são limpos; statements fechados ou com conexão encerrada não executam; cardinalidade e modo de binding são validados.
+- `insert_id` só usa `RETURNING ... AS insert_id` em INSERT direto; sem alias não há inferência por LASTVAL, que poderia refletir sequence de trigger.
+- O scanner de `param_count` segue as classes bytewise do lexer PostgreSQL 18 para tags dollar-quote e fronteiras de identificador, inclusive bytes UTF-8 altos; testes cobrem tags Unicode/emoji, caixa exata e dígitos.
+- Linter antes/depois medido sobre corpus explicitado: 1.678/145 em 337 arquivos `api/*.php` → 1.678/145 em 340 arquivos (incluídos três wrappers novos, sem findings). O baseline informado 1.677/142 não foi reproduzido e está documentado para reconciliação.
 
 ### Corrigido
 - Portal do Morador: layout de abas convertido em sidebar vertical responsiva/drawer, preservando os 14 módulos e seus loaders.
