@@ -133,3 +133,12 @@ Chave opcional `pwa_configuracoes.push_chatin_ativo` = '0' desliga o push do Cha
 `chatin_preferencias` também recebe as CHECK constraints `chk_chatin_som_volume` (0–100) e `chk_chatin_som_tipo` (`classico|campainha|suave`). Antes de qualquer DDL, o preflight verifica definições e valores já existentes; incompatibilidade interrompe a migration sem iniciar as alterações de aplicação. Gravações de preferências têm whitelist de campos, validação de booleanos/volume e são transacionais.
 
 Filtros: o DDL versionado de `moradores` tem `ativo`, mas não campo de tipo titular/proprietário/inquilino. `dependentes` é uma entidade separada com `morador_id`, `parentesco` e `ativo`; parentesco não comprova titularidade ou contrato da unidade. O Chat-In continua listando apenas moradores ativos; filtro de perfil não é presumido.
+
+
+## 17. Projeto PostgreSQL 18 — portabilidade SQL (2026-11-15)
+
+Código novo deve priorizar SQL comum aos drivers MySQL e PostgreSQL. Diferenças inevitáveis devem ser encapsuladas em helpers de banco com variantes selecionadas por `ERP_DB_DRIVER`; `mysql` continua sendo o padrão. Evitar `DATE_FORMAT`, `INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, crases e outras construções específicas diretamente nos módulos.
+
+`tools/pg_sql_lint.php` recebe uma lista explícita de arquivos PHP/SQL de aplicação e verifica um catálogo inicial de construções não portáveis; não percorre o repositório por conta própria e imprime somente caminho, linha e regra. `NOW()` é aceito como compartilhado; comentários `--` com separador, `#` e `/* ... */` são ignorados. `--comentário` sem separador é marcado como ambíguo entre drivers. Os operadores PostgreSQL `#>`, `#>>` e `#-` permanecem ativos. Não lintar o próprio scanner nem fixtures que contêm dialetos proibidos intencionalmente. `tests/pg_sql_lint_test.php` cobre oito casos sintéticos. O linter é heurístico e não prova equivalência semântica; o resultado deve ser combinado com testes MySQL e PostgreSQL em cada PR.
+
+Este registro não significa que a camada PDO/mysqli, os helpers de compatibilidade, o pipeline de carga/reconciliação ou o ambiente PostgreSQL estejam prontos. Não houve instalação/início de serviços, acesso ao banco de produção, dump, carga ou mudança de runtime nesta etapa.
