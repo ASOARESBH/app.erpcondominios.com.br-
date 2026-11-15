@@ -2,7 +2,7 @@
 
 ## Estado e escopo
 
-O código do Chat-In v2 foi mesclado na `main` pelo PR #13, commit `2ad4b9ec652435ccdc21fb754bbdbfeca54f0ed4`. A migration SQL recebeu uma correção fail-closed: agora exige `pwa_configuracoes` no preflight, antes de qualquer DDL do schema da aplicação. A procedure auxiliar temporária da própria migration ainda é criada antes desse preflight; o runner a remove em falha normal e bloqueia nova execução se restar. O SHA-256 revisado nesta branch é `a5d402a17e3789223a9d5a297b0c12eb78fa26232ebd6eb8dd8c1f575f5aa375`. Este runbook e o runner não afirmam que a migration foi aplicada nem autorizam sua execução em produção. A aplicação depende de aprovação operacional expressa, do PR do runner/correção revisado/mergeado e de uma release imutável.
+O código do Chat-In v2 foi mesclado na `main` pelo PR #13, commit `2ad4b9ec652435ccdc21fb754bbdbfeca54f0ed4`. A migration SQL recebeu uma correção fail-closed: agora exige `pwa_configuracoes` no preflight, antes de qualquer DDL do schema da aplicação. A procedure auxiliar temporária da própria migration ainda é criada antes desse preflight; o runner a remove em falha normal e bloqueia nova execução se restar. O SHA-256 revisado é `a5d402a17e3789223a9d5a297b0c12eb78fa26232ebd6eb8dd8c1f575f5aa375`. A aplicação em produção ocorreu em 2026-11-15 conforme a seção “Execução concluída” abaixo; não execute novamente. O runner não concede autorização para futuras alterações operacionais.
 
 O único alvo codificado é o MySQL 8.4 local da Hetzner `2.29.161.106`, schema ativo `erpcondominios_stage_20261114`. Não alterar o schema antigo preservado, o HostGator, PostgreSQL, DNS ou outros ambientes. Não executar o SQL direto pelo phpMyAdmin nem editá-lo manualmente.
 
@@ -61,3 +61,15 @@ Rollback não é DROP/limpeza de objetos. Não restaurar o backup sobre a base a
 ## Verificações realizadas ao preparar este procedimento
 
 O runner foi validado por revisão estática, `bash -n`, testes de argumentos/ajuda e verificação do checksum do SQL no repositório. Fixtures locais MariaDB 10.11 validam a falha do novo preflight PWA antes de DDL; isso não substitui MySQL 8.4. Não houve conexão SSH, execução de `--check` na VM, backup, consulta ao banco ativo, aplicação de SQL, deploy de código ou alteração de produção nesta preparação.
+
+## Execução concluída — 2026-11-15
+
+PR #14 foi mesclado em `main` (`7c834ff90905857c58431855d02d432cef91963f`). A release imutável foi ativada em `current`; a release anterior `3f78734566c9d2ceac38e265e72f7cb79a2a4e90` permaneceu intacta. O runner passou `--check`, MySQL 8.4.13 e checksum do SQL foram confirmados, e a aplicação única foi autorizada no TTY com a frase literal exigida. O backup novo e o serviço de integridade concluíram com sucesso; `gzip -t`, manifesto SHA-256 e modo `0600` foram conferidos. A pós-checagem do runner e uma verificação independente indicaram `COMPLETA`; Nginx, PHP-FPM e MySQL permaneceram ativos.
+
+Smoke não autenticado: `/`, Portal do Morador, logins de morador/fornecedor, assets do widget e Configuração Chat-In retornaram 200; a API Chat-In sem sessão retornou 401 esperado. Não foram feitos login autenticado, teste FCM, teste Flutter ou restore drill; cópia off-host também continua pendente.
+
+### Correção da rota limpa — 2026-11-15
+
+Causa confirmada: a release ativa já continha `frontend/pages/config_chatin.html` e o catálogo versionado do SHA `7c834ff90905857c58431855d02d432cef91963f` listava a rota, mas `/etc/nginx/snippets/erp-pages.conf` estava desatualizado e não tinha essa expressão. Sem a location regex do allowlist, `/config_chatin` caía em `location /`, cujo `try_files` recuava para `/login.html`; a location exata legada de `/login.html` então devolvia `301 /`.
+
+Instalado o arquivo gerado `deploy/hetzner/erp-pages.conf` exatamente do SHA da release, após conferir SHA-256, confirmar fingerprint SSH e registrar backup root-only `/var/backups/erpcondominios/nginx/erp-pages-config-chatin-v3-20261115T123355Z.conf` (`0600 root:root`). `nginx -t` e reload passaram; após aguardar a estabilização, smoke local com `--noproxy` validou `/config_chatin` e `/` como `200`. A validação pública pelo DNS `app.erpcondominios.com.br` também retornou `200` em `/config_chatin`, `/` e `/frontend/layout-base.html?page=config_chatin`. O snippet ativo agora corresponde ao arquivo versionado e inclui `config_chatin`; nenhum arquivo da aplicação foi alterado nesta correção.
