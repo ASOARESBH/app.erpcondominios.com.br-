@@ -370,3 +370,12 @@ Adicionado `<base href="/frontend/">` como primeiro elemento do `<head>` em `fro
 Implementação na branch `feature/chatin-v2`, pendente de revisão/merge do André. Acrescenta preferências Web Audio locais (sem áudio de terceiros), opt-in de Notification API sem prévias, cursor de eventos paginado, polling 2,5 s na conversa focada, sinal visual de digitação com TTL, Cutucar com rate limit/Retry-After e push existente do morador. Adiciona configuração tenant-scoped do Chat-In, ações RBAC `visualizar/configurar`, seed de `visualizar` em grupos existentes, canal CHATIN indisponível quando o recurso é desligado e auditoria da tela de configuração. Migração de `push_chatin_ativo` para `recurso_push_app` ocorre ao inserir configuração nova, sem sobrescrever linhas tenant já existentes.
 
 A análise do schema encontrou `moradores.ativo`; não encontrou campo confiável de titular/proprietário/inquilino. `dependentes.parentesco` modela relação familiar, não titularidade, por isso nenhum filtro de perfil foi implementado. A migration foi exercitada duas vezes em MariaDB 10.11 isolado e ainda exige validação MySQL 8.4 real após revisão/backup; equivalente PostgreSQL, testes com sessões reais/20 usuários e produção permanecem pendentes. Nenhum banco, backup, serviço ou release de produção foi alterado.
+
+
+## [Unreleased] PostgreSQL P2 — fundação do mapeador tipado (2026-11-15)
+- Adicionado mapeador MySQL→PostgreSQL sem conexões ou execução SQL, com decisão explícita de collation, parsing ENUM, checks de faixa e códigos de revisão manual para conversões potencialmente ambíguas.
+- Adicionada suíte sintética local de 19 casos e documento de plano/gates P2. `erp_pg_source` não existe; nenhum catálogo live/dump/dado foi lido; não há loader, DDL gerado, reconciliação ou alteração na VM/produção.
+
+
+### Revisão da primeira fatia P2
+A revisão read-only identificou que `DECIMAL` sem precisão assumia `NUMERIC(10,0)`; agora metadado incompleto falha fechado. Incluído `require_review_codes_resolved()` para impedir geração a partir de mapeamento ainda pendente e ampliada a suíte para 19 testes, incluindo DST ambíguo, timezone inválido, quote de literal e DECIMAL incompleto. Nenhuma carga live foi feita.

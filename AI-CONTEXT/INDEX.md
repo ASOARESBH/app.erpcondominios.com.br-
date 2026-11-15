@@ -6,6 +6,7 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **Arquitetura Geral**: [ARCHITECTURE.md](ARCHITECTURE.md)
 - **Módulos de Negócio**: [MODULES.md](MODULES.md)
 - **Banco de Dados**: [DATABASE.md](DATABASE.md)
+- **Projeto PostgreSQL P2**: [POSTGRESQL_P2.md](POSTGRESQL_P2.md)
 - **APIs e Endpoints**: [API.md](API.md)
 
 ## 💻 2. Guias de Desenvolvimento
