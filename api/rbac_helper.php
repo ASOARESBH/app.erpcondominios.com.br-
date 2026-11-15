@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/db/DatabaseDialect.php';
+
 /**
  * RBAC HELPER — ERP CONDOMÍNIO
  *
@@ -9,12 +11,33 @@
 
 if (!function_exists('rbacTabelasDisponiveis')) {
     function rbacTabelasDisponiveis($conexao) {
-        static $disponivel = null;
-        if ($disponivel !== null) return $disponivel;
-        $resultado = $conexao->query("SHOW TABLES LIKE 'rbac_modulos'");
-        $disponivel = $resultado instanceof mysqli_result && $resultado->num_rows > 0;
-        if ($resultado instanceof mysqli_result) $resultado->free();
-        return $disponivel;
+        static $disponibilidade = null;
+        if ($disponibilidade === null) $disponibilidade = new WeakMap();
+        $driver = \ERP\Database\DatabaseDialect::driver($conexao);
+        if (isset($disponibilidade[$conexao])) return $disponibilidade[$conexao];
+        $obrigatorias = $driver === 'pgsql'
+            ? ['rbac_modulos', 'rbac_permissoes', 'rbac_grupos', 'rbac_grupo_permissoes', 'rbac_usuario_grupos', 'rbac_usuario_permissoes', 'rbac_configuracoes', 'rbac_sessoes', 'rbac_auditoria', 'rbac_politicas_api']
+            : ['rbac_modulos'];
+        try {
+            foreach ($obrigatorias as $tabela) {
+                if (!\ERP\Database\DatabaseDialect::tableExists($conexao, $tabela)) {
+                    if ($driver === 'pgsql') {
+                        throw new RuntimeException('Schema RBAC PostgreSQL incompleto.');
+                    }
+                    $disponibilidade[$conexao] = false;
+                    return false;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('[RBAC] Falha ao verificar disponibilidade do schema.');
+            if ($driver === 'mysql') {
+                $disponibilidade[$conexao] = false;
+                return false;
+            }
+            throw $e;
+        }
+        $disponibilidade[$conexao] = true;
+        return true;
     }
 
     function rbacUuidV4() {
@@ -62,9 +85,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
 
     function rbacAuditar($conexao, array $evento) {
         if (!rbacTabelasDisponiveis($conexao)) return false;
-        $temAuditoria = $conexao->query("SHOW TABLES LIKE 'rbac_auditoria'");
-        $existe = $temAuditoria instanceof mysqli_result && $temAuditoria->num_rows > 0;
-        if ($temAuditoria instanceof mysqli_result) $temAuditoria->free();
+        $existe = \ERP\Database\DatabaseDialect::tableExists($conexao, 'rbac_auditoria');
         if (!$existe) return false;
 
         $tenantId = isset($evento['tenant_id']) ? (int)$evento['tenant_id'] : (int)($_SESSION['tenant_id'] ?? 0);
@@ -74,7 +95,8 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         $antes = rbacJsonAuditoria($evento['dados_antes'] ?? null);
         $depois = rbacJsonAuditoria($evento['dados_depois'] ?? null);
         $hashAnterior = null;
-        $st = $conexao->prepare('SELECT hash_evento FROM rbac_auditoria WHERE tenant_id <=> ? ORDER BY id DESC LIMIT 1');
+        $igualdadeTenant = \ERP\Database\DatabaseDialect::nullSafeEqualityOperator($conexao);
+        $st = $conexao->prepare('SELECT hash_evento FROM rbac_auditoria WHERE tenant_id ' . $igualdadeTenant . ' ? ORDER BY id DESC LIMIT 1');
         if ($st) {
             $st->bind_param('i', $tenantId);
             $st->execute();
@@ -122,7 +144,8 @@ if (!function_exists('rbacTabelasDisponiveis')) {
     function rbacInvalidarCache($conexao, $tenantId) {
         $tenantId = (int)$tenantId;
         if ($tenantId > 0) {
-            $st = $conexao->prepare('INSERT INTO rbac_configuracoes (tenant_id, revisao_permissoes) VALUES (?, 1) ON DUPLICATE KEY UPDATE revisao_permissoes = revisao_permissoes + 1, atualizado_em = NOW()');
+            $sql = \ERP\Database\DatabaseDialect::rbacRevisionUpsertSql($conexao);
+            $st = $conexao->prepare($sql);
             if ($st) {
                 $st->bind_param('i', $tenantId);
                 if (!$st->execute()) error_log('[RBAC] Falha ao invalidar revisão de permissões do tenant ' . $tenantId);
@@ -193,7 +216,8 @@ if (!function_exists('rbacTabelasDisponiveis')) {
             $st->close();
         }
 
-        $st = $conexao->prepare('INSERT INTO rbac_usuario_grupos (usuario_id,tenant_id,grupo_id,ativo,atribuido_por_usuario_id,atribuido_em,removido_em) VALUES (?,?,?,1,?,NOW(),NULL) ON DUPLICATE KEY UPDATE ativo=1,atribuido_por_usuario_id=VALUES(atribuido_por_usuario_id),atribuido_em=NOW(),removido_em=NULL');
+        $sql = \ERP\Database\DatabaseDialect::rbacGroupMembershipUpsertSql($conexao);
+        $st = $conexao->prepare($sql);
         if (!$st) return ['ok' => false, 'alterado' => false, 'mensagem' => 'Não foi possível ativar o grupo compatível do perfil.'];
         $st->bind_param('iiii', $usuarioId, $tenantId, $alvoId, $ator);
         $ok = $st->execute();
@@ -207,7 +231,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
     function rbacUsuarioPerfilBanco($conexao, $usuarioId, $tenantId) {
         $usuarioId = (int)$usuarioId;
         $tenantId = (int)$tenantId;
-        if (!$conexao instanceof mysqli || $usuarioId <= 0 || $tenantId <= 0) return null;
+        if (!\ERP\Database\DatabaseDialect::supports($conexao) || $usuarioId < 0 || $tenantId <= 0) return null;
         $st = $conexao->prepare("SELECT LOWER(COALESCE(permissao, '')) AS permissao FROM usuarios WHERE id=? AND (tenant_id=? OR LOWER(COALESCE(permissao, ''))='super_admin') LIMIT 1");
         if (!$st) return null;
         $st->bind_param('ii', $usuarioId, $tenantId);
@@ -220,7 +244,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
     function rbacUsuarioEhSuperAdmin($conexao = null, $usuarioId = null, $tenantId = null) {
         $usuarioId = (int)($usuarioId ?? ($_SESSION['usuario_id'] ?? 0));
         $tenantId = (int)($tenantId ?? ($_SESSION['tenant_id'] ?? 0));
-        return $conexao instanceof mysqli && rbacUsuarioPerfilBanco($conexao, $usuarioId, $tenantId) === 'super_admin';
+        return \ERP\Database\DatabaseDialect::supports($conexao) && rbacUsuarioPerfilBanco($conexao, $usuarioId, $tenantId) === 'super_admin';
     }
 
     /**
@@ -233,7 +257,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
     function rbacUsuarioTemAcessoTotal($conexao = null, $usuarioId = null, $tenantId = null) {
         $usuarioId = (int)($usuarioId ?? ($_SESSION['usuario_id'] ?? 0));
         $tenantId = (int)($tenantId ?? ($_SESSION['tenant_id'] ?? 0));
-        if (!$conexao instanceof mysqli || $usuarioId <= 0 || $tenantId <= 0) return false;
+        if (!\ERP\Database\DatabaseDialect::supports($conexao) || $usuarioId < 0 || $tenantId <= 0) return false;
         return rbacUsuarioAlvoTemAcessoTotal($conexao, $usuarioId, $tenantId);
     }
 
@@ -253,7 +277,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         $efetivas = [];
         $detalhes = [];
         $grupos = [];
-        $st = $conexao->prepare('SELECT g.id,g.slug,g.nome,g.protegido FROM rbac_usuario_grupos ug INNER JOIN rbac_grupos g ON g.id=ug.grupo_id WHERE ug.usuario_id=? AND ug.tenant_id=? AND ug.ativo=1 AND ug.removido_em IS NULL AND g.ativo=1 AND g.excluido_em IS NULL ORDER BY g.nome,g.id');
+        $st = $conexao->prepare('SELECT g.id,g.slug,g.nome,g.protegido FROM rbac_usuario_grupos ug INNER JOIN rbac_grupos g ON g.id=ug.grupo_id AND g.tenant_id=ug.tenant_id WHERE ug.usuario_id=? AND ug.tenant_id=? AND ug.ativo=1 AND ug.removido_em IS NULL AND g.ativo=1 AND g.excluido_em IS NULL ORDER BY g.nome,g.id');
         if ($st) {
             $st->bind_param('ii', $usuarioId, $tenantId);
             $st->execute();
@@ -359,7 +383,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
     function rbacPode($conexao, $moduloChave, $acao, $usuarioId = null, $tenantId = null) {
         $usuarioId = $usuarioId ?: (int)($_SESSION['usuario_id'] ?? 0);
         $tenantId = $tenantId ?: (int)($_SESSION['tenant_id'] ?? 0);
-        if ($usuarioId <= 0 || $tenantId <= 0) return false;
+        if ($usuarioId < 0 || $tenantId <= 0) return false;
         $efetivas = rbacObterPermissoesEfetivas($conexao, $usuarioId, $tenantId);
         return rbacEfetivaPermissaoPermitida($efetivas, $moduloChave, $acao);
     }
@@ -370,9 +394,7 @@ if (!function_exists('rbacTabelasDisponiveis')) {
      */
     function rbacExigirPoliticaApi($conexao, $acaoRequisicao = null) {
         if (!rbacTabelasDisponiveis($conexao)) return true;
-        $tabela = $conexao->query("SHOW TABLES LIKE 'rbac_politicas_api'");
-        $existe = $tabela instanceof mysqli_result && $tabela->num_rows > 0;
-        if ($tabela instanceof mysqli_result) $tabela->free();
+        $existe = \ERP\Database\DatabaseDialect::tableExists($conexao, 'rbac_politicas_api');
         if (!$existe) return true;
         $endpoint = basename($_SERVER['SCRIPT_NAME'] ?? '');
         $metodo = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
@@ -380,11 +402,22 @@ if (!function_exists('rbacTabelasDisponiveis')) {
         $acaoRequisicao = substr((string)$acaoRequisicao, 0, 80);
         $sql = "SELECT modulo_chave,acao_permissao FROM rbac_politicas_api WHERE endpoint=? AND ativo=1 AND (metodo_http IS NULL OR metodo_http='' OR metodo_http=?) AND (acao_requisicao='' OR acao_requisicao=?) ORDER BY CHAR_LENGTH(acao_requisicao) DESC, CASE WHEN metodo_http IS NULL OR metodo_http='' THEN 0 ELSE 1 END DESC LIMIT 1";
         $st = $conexao->prepare($sql);
-        if (!$st) return true;
-        $st->bind_param('sss', $endpoint, $metodo, $acaoRequisicao);
-        $st->execute();
-        $politica = $st->get_result()->fetch_assoc();
+        if (!$st) {
+            if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+                throw new RuntimeException('Não foi possível consultar a política RBAC da API.');
+            }
+            return true;
+        }
+        $ok = $st->bind_param('sss', $endpoint, $metodo, $acaoRequisicao) && $st->execute();
+        $resultado = $ok ? $st->get_result() : false;
         $st->close();
+        if (!$resultado) {
+            if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+                throw new RuntimeException('Não foi possível consultar a política RBAC da API.');
+            }
+            return true;
+        }
+        $politica = $resultado->fetch_assoc();
         if (!$politica) return true;
         return rbacExigir($conexao, $politica['modulo_chave'], $politica['acao_permissao'], ['submodulo_chave' => $acaoRequisicao ?: null]);
     }
@@ -416,14 +449,15 @@ if (!function_exists('rbacTabelasDisponiveis')) {
 
 if (!function_exists('rbacSessaoDisponivel')) {
     function rbacSessaoDisponivel($conexao) {
-        $res = $conexao->query("SHOW TABLES LIKE 'rbac_sessoes'");
-        $ok = $res instanceof mysqli_result && $res->num_rows > 0;
-        if ($res instanceof mysqli_result) $res->free();
+        $ok = \ERP\Database\DatabaseDialect::tableExists($conexao, 'rbac_sessoes');
+        if (!$ok && \ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+            throw new RuntimeException('Schema de sessões RBAC PostgreSQL incompleto.');
+        }
         return $ok;
     }
 
     function rbacRegistrarOuAtualizarSessao($conexao, $usuarioId, $tenantId, $sessaoInativa = false) {
-        if (!rbacTabelasDisponiveis($conexao) || !rbacSessaoDisponivel($conexao) || $usuarioId <= 0 || $tenantId <= 0) return null;
+        if (!rbacTabelasDisponiveis($conexao) || !rbacSessaoDisponivel($conexao) || $usuarioId < 0 || $tenantId <= 0) return null;
         if (session_status() === PHP_SESSION_NONE) session_start();
         $hash = hash('sha256', session_id());
         $cliente = rbacClienteInfo();
@@ -433,15 +467,16 @@ if (!function_exists('rbacSessaoDisponivel')) {
             $st = $conexao->prepare("UPDATE rbac_sessoes SET ultima_atividade_em=NOW() WHERE id=? AND tenant_id=? AND usuario_id=? AND status='ATIVA'");
             if ($st) { $st->bind_param('iii',$id,$tenantId,$usuarioId); $st->execute(); $ok=$st->affected_rows >= 0; $st->close(); if ($ok) return $id; }
         }
-        $sql = "INSERT INTO rbac_sessoes (tenant_id,usuario_id,sessao_hash,status,sessao_inativa,timeout_minutos,ip,user_agent,dispositivo,navegador,sistema_operacional) VALUES (?,?,?,'ATIVA',?,?,?,?,?,?,?)";
+        $sql = \ERP\Database\DatabaseDialect::rbacSessionInsertSql($conexao);
         $st = $conexao->prepare($sql);
         if (!$st) return null;
         $sessaoInativaInt = $sessaoInativa ? 1 : 0;
         $st->bind_param('iisiisssss',$tenantId,$usuarioId,$hash,$sessaoInativaInt,$timeout,$cliente['ip'],$cliente['user_agent'],$cliente['dispositivo'],$cliente['navegador'],$cliente['sistema']);
-        $ok = $st->execute(); $novoId = $ok ? (int)$conexao->insert_id : 0; $st->close();
+        $ok = $st->execute();
+        $novoId = $ok ? \ERP\Database\DatabaseDialect::lastInsertId($conexao, $st) : 0;
+        $st->close();
         if ($novoId > 0) {
             $_SESSION['_rbac_sessao_id'] = $novoId;
-            $_SESSION['_rbac_sessao_hash'] = $hash;
             rbacAuditar($conexao,['tenant_id'=>$tenantId,'usuario_id'=>$usuarioId,'sessao_id'=>$novoId,'modulo_chave'=>'seguranca','submodulo_chave'=>'sessoes','acao'=>'LOGIN','resultado'=>'SUCESSO','status_http'=>200]);
             return $novoId;
         }
@@ -451,10 +486,26 @@ if (!function_exists('rbacSessaoDisponivel')) {
     function rbacValidarSessaoAtual($conexao, $usuarioId, $tenantId) {
         if (!rbacTabelasDisponiveis($conexao) || !rbacSessaoDisponivel($conexao)) return true;
         $id=(int)($_SESSION['_rbac_sessao_id'] ?? 0);
-        if ($id<=0) return rbacRegistrarOuAtualizarSessao($conexao,$usuarioId,$tenantId,!empty($_SESSION['sessao_inativa'])) !== null;
+        if ($id<=0) {
+            $registrada = rbacRegistrarOuAtualizarSessao($conexao,$usuarioId,$tenantId,!empty($_SESSION['sessao_inativa']));
+            if ($registrada === null && \ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+                throw new RuntimeException('Não foi possível registrar a sessão RBAC.');
+            }
+            return $registrada !== null;
+        }
         $st=$conexao->prepare("SELECT id FROM rbac_sessoes WHERE id=? AND usuario_id=? AND tenant_id=? AND status='ATIVA' LIMIT 1");
-        if (!$st) return true;
-        $st->bind_param('iii',$id,$usuarioId,$tenantId); $st->execute(); $linha=$st->get_result()->fetch_assoc(); $st->close();
+        if (!$st) {
+            if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) throw new RuntimeException('Não foi possível validar a sessão RBAC.');
+            return true;
+        }
+        $ok = $st->bind_param('iii',$id,$usuarioId,$tenantId) && $st->execute();
+        $resultado = $ok ? $st->get_result() : false;
+        $st->close();
+        if (!$resultado) {
+            if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) throw new RuntimeException('Não foi possível validar a sessão RBAC.');
+            return true;
+        }
+        $linha=$resultado->fetch_assoc();
         if (!$linha) return false;
         $st=$conexao->prepare('UPDATE rbac_sessoes SET ultima_atividade_em=NOW() WHERE id=?');
         if ($st) { $st->bind_param('i',$id); $st->execute(); $st->close(); }
@@ -475,6 +526,15 @@ if (!function_exists('rbacSessaoDisponivel')) {
 }
 
 if (!function_exists('rbacSeedGruposCompatibilidade')) {
+    function rbacExecutarSeedTenant($conexao, string $sql, int $tenantId): bool {
+        $st = $conexao->prepare(\ERP\Database\DatabaseDialect::idempotentInsertSql($conexao, $sql));
+        if (!$st) return false;
+        $st->bind_param('i', $tenantId);
+        $ok = $st->execute();
+        $st->close();
+        return $ok;
+    }
+
     /**
      * Garante que um tenant possua os 4 grupos RBAC de compatibilidade
      * (compat-visualizador/operador/gerente/admin) usados como vínculo padrão
@@ -497,7 +557,8 @@ if (!function_exists('rbacSeedGruposCompatibilidade')) {
         ];
         foreach ($grupos as $slug => $nome) {
             $descricao = 'Grupo criado a partir do perfil legado ' . substr($slug, 7);
-            $st = $conexao->prepare('INSERT IGNORE INTO rbac_grupos (tenant_id,slug,nome,descricao,ativo,protegido) VALUES (?,?,?,?,1,1)');
+            $sql = \ERP\Database\DatabaseDialect::idempotentInsertSql($conexao, 'INSERT INTO rbac_grupos (tenant_id,slug,nome,descricao,ativo,protegido) VALUES (?,?,?,?,1,1)');
+            $st = $conexao->prepare($sql);
             if (!$st) continue;
             $st->bind_param('isss', $tenantId, $slug, $nome, $descricao);
             $st->execute();
@@ -505,41 +566,47 @@ if (!function_exists('rbacSeedGruposCompatibilidade')) {
         }
 
         // compat-admin recebe todas as permissões do catálogo (acesso total).
-        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+        $sqlAdmin = "INSERT INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
             SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
             FROM rbac_grupos g CROSS JOIN rbac_permissoes p
-            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-admin' AND g.ativo = 1");
+            WHERE g.tenant_id = ? AND g.slug = 'compat-admin' AND g.ativo = 1";
+        rbacExecutarSeedTenant($conexao, $sqlAdmin, $tenantId);
 
         // compat-gerente: ações operacionais em módulos até o nível gerente.
-        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+        $sqlGerente = "INSERT INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
             SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
             FROM rbac_grupos g
             INNER JOIN rbac_permissoes p ON p.acao IN ('visualizar','criar','editar','exportar','imprimir')
             INNER JOIN rbac_modulos m ON m.id = p.modulo_id
-            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-gerente' AND m.perfil_compatibilidade IN ('visualizador','operador','gerente')");
-        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+            WHERE g.tenant_id = ? AND g.slug = 'compat-gerente' AND m.perfil_compatibilidade IN ('visualizador','operador','gerente')";
+        rbacExecutarSeedTenant($conexao, $sqlGerente, $tenantId);
+        $sqlGerenteUsuarios = "INSERT INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
             SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
             FROM rbac_grupos g
             INNER JOIN rbac_modulos m ON m.chave = 'usuarios'
             INNER JOIN rbac_permissoes p ON p.modulo_id = m.id AND p.acao = 'visualizar'
-            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-gerente'");
+            WHERE g.tenant_id = ? AND g.slug = 'compat-gerente'";
+        rbacExecutarSeedTenant($conexao, $sqlGerenteUsuarios, $tenantId);
 
         // compat-operador: ações básicas em módulos até o nível operador.
-        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+        $sqlOperador = "INSERT INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
             SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
             FROM rbac_grupos g
             INNER JOIN rbac_permissoes p ON p.acao IN ('visualizar','criar','editar','exportar','imprimir')
             INNER JOIN rbac_modulos m ON m.id = p.modulo_id
-            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-operador' AND m.perfil_compatibilidade IN ('visualizador','operador')");
+            WHERE g.tenant_id = ? AND g.slug = 'compat-operador' AND m.perfil_compatibilidade IN ('visualizador','operador')";
+        rbacExecutarSeedTenant($conexao, $sqlOperador, $tenantId);
 
         // compat-visualizador: apenas leitura em módulos de nível visualizador.
-        $conexao->query("INSERT IGNORE INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
+        $sqlVisualizador = "INSERT INTO rbac_grupo_permissoes (grupo_id,permissao_id,efeito,escopo_dados)
             SELECT g.id, p.id, 'PERMITIR', 'GLOBAL'
             FROM rbac_grupos g
             INNER JOIN rbac_permissoes p ON p.acao = 'visualizar'
             INNER JOIN rbac_modulos m ON m.id = p.modulo_id
-            WHERE g.tenant_id = $tenantId AND g.slug = 'compat-visualizador' AND m.perfil_compatibilidade = 'visualizador'");
+            WHERE g.tenant_id = ? AND g.slug = 'compat-visualizador' AND m.perfil_compatibilidade = 'visualizador'";
+        rbacExecutarSeedTenant($conexao, $sqlVisualizador, $tenantId);
 
-        $conexao->query("INSERT IGNORE INTO rbac_configuracoes (tenant_id, revisao_permissoes) VALUES ($tenantId, 1)");
+        $sqlConfiguracao = 'INSERT INTO rbac_configuracoes (tenant_id, revisao_permissoes) VALUES (?, 1)';
+        rbacExecutarSeedTenant($conexao, $sqlConfiguracao, $tenantId);
     }
 }

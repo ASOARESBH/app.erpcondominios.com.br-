@@ -23,6 +23,10 @@ require_once 'auth_helper.php';
 verificarAutenticacao(true, 'operador'); // true = exige login, 'operador' = nivel minimo
 ```
 
+### Portabilidade P3.2 — pré-homologação
+
+`POST /api/api_verificar_tipo_login.php` preserva `password_verify`; após autenticação válida, o login regenera o ID PHP e limpa integralmente estado anterior antes de gravar a nova identidade/tenant, evitando herdar sessão RBAC de usuário/tenant anterior. No Portal MySQL, substituição do token, último acesso e montagem da resposta são transacionais sobre a tabela InnoDB; falha antes do commit reverte o token novo e preserva sessões antigas, enquanto a sessão PHP parcial é destruída. Uma falha posterior a commit confirmado devolve a resposta de sucesso já serializada, sem revogar o token durável. Com `ERP_DB_DRIVER=pgsql`, usuários comuns exigem vínculo ativo em `usuario_tenant`; `super_admin` global pode selecionar tenant ativo mesmo sem vínculo, com slug novamente validado no servidor. A seleção global usa listagem visual no login, nunca aceita `tenant_id` do cliente. O papel efetivo da sessão aplica a hierarquia global/local já definida e nunca permite promoção local a `super_admin`. Eventos de login gravam códigos estáticos, sem e-mail, nome, user-agent ou IP; o frontend mantém senha em memória apenas durante seleção e a limpa em cancelamento, falha ou resposta final. Nas verificações/renovações ERP PostgreSQL, vínculo/tenant ativo e sessão RBAC são revalidados; revogação encerra o contexto e falha fechada. Schema RBAC incompleto/falha do repositório retorna indisponibilidade sem sessão autenticada. `verificar_sessao_completa.php` não devolve o PHP `session_id` na resposta. O caminho de Portal do Morador retorna `503` no PostgreSQL antes de ler/gravar sessão Bearer até que `sessoes_portal` seja portada. PostgreSQL continua opt-in e não está ativado na aplicação de produção.
+
 ## 4. Prevenção de Erros de Output
 Muitas APIs usam o padrão `ob_start()` no início e `ob_end_clean()` antes de enviar o JSON, para evitar que warnings do PHP quebrem o parse do JSON no frontend.
 

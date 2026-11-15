@@ -320,8 +320,14 @@
 
         function _fecharPopup() {
             if (_popupEl) { _popupEl.remove(); _popupEl = null; }
+            _limparCredenciaisPendentes();
             btnLogin.disabled = false;
             restaurarBotaoLogin();
+        }
+
+        function _limparCredenciaisPendentes() {
+            _pendEmail = '';
+            _pendSenha = '';
         }
 
         function _escolher(tipo) {
@@ -339,14 +345,82 @@
             .then(function(data) { _processarResposta(data); })
             .catch(function(err) {
                 console.error('[Login] Erro:', err);
+                _limparCredenciaisPendentes();
                 mostrarAlerta(textoLogin('login.login_error', 'Erro ao processar login. Tente novamente.'), 'error');
                 btnLogin.disabled = false;
                 restaurarBotaoLogin();
             });
         }
 
+        function _escolherTenant(slug) {
+            if (_popupEl) { _popupEl.remove(); _popupEl = null; }
+            btnLogin.disabled = true;
+            botaoLoginCarregando();
+
+            fetch(window.location.origin + '/api/api_verificar_tipo_login.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ email: _pendEmail, senha: _pendSenha, tipo_escolhido: 'erp', tenant_slug_escolhido: slug })
+            })
+            .then(function(response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.json();
+            })
+            .then(function(data) { _processarResposta(data); })
+            .catch(function() {
+                _limparCredenciaisPendentes();
+                mostrarAlerta(textoLogin('login.login_error', 'Erro ao processar login. Tente novamente.'), 'error');
+                btnLogin.disabled = false;
+                restaurarBotaoLogin();
+            });
+        }
+
+        function _criarPopupTenant(tenants) {
+            var anterior = document.getElementById('__popupSelecao');
+            if (anterior) anterior.remove();
+            var popup = document.createElement('div');
+            popup.id = '__popupSelecao';
+            popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:1rem;';
+            var card = document.createElement('div');
+            card.style.cssText = 'background:#fff;border-radius:16px;padding:2rem;width:100%;max-width:440px;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);';
+            var title = document.createElement('h2');
+            title.textContent = textoLogin('login.tenant_choice_title', 'Selecione o condomínio');
+            title.style.cssText = 'font-size:1.15rem;color:#1e293b;margin:0 0 .4rem;';
+            var description = document.createElement('p');
+            description.textContent = textoLogin('login.tenant_choice_description', 'Escolha o condomínio que deseja acessar.');
+            description.style.cssText = 'font-size:.87rem;color:#64748b;margin:0 0 1rem;';
+            var list = document.createElement('div');
+            list.style.cssText = 'display:grid;gap:.65rem;';
+            (Array.isArray(tenants) ? tenants : []).forEach(function(tenant) {
+                if (!tenant || typeof tenant.slug !== 'string') return;
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.style.cssText = 'border:1px solid #dbe3ee;border-radius:10px;padding:.85rem 1rem;background:#fff;cursor:pointer;text-align:left;font:inherit;color:#1e293b;';
+                var name = document.createElement('span');
+                name.textContent = String(tenant.nome || tenant.slug);
+                name.style.cssText = 'display:block;font-weight:700;';
+                var slugLabel = document.createElement('small');
+                slugLabel.textContent = tenant.slug;
+                slugLabel.style.cssText = 'display:block;color:#64748b;margin-top:.2rem;';
+                button.append(name, slugLabel);
+                button.addEventListener('click', function() { _escolherTenant(tenant.slug); });
+                list.appendChild(button);
+            });
+            var cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.textContent = textoLogin('common.cancel', 'Cancelar');
+            cancel.style.cssText = 'width:100%;margin-top:1rem;padding:.65rem;border:0;background:transparent;color:#64748b;cursor:pointer;font:inherit;';
+            cancel.addEventListener('click', _fecharPopup);
+            card.append(title, description, list, cancel);
+            popup.appendChild(card);
+            document.body.appendChild(popup);
+            _popupEl = popup;
+        }
+
         function _processarResposta(data) {
             if (!data.sucesso) {
+                _limparCredenciaisPendentes();
                 mostrarAlerta(data.mensagem, 'error');
                 btnLogin.disabled = false;
                 restaurarBotaoLogin();
@@ -354,6 +428,13 @@
             }
 
             var tipo = data.tipo; // 'erp', 'morador', 'ambos'
+
+            if (tipo === 'selecionar_tenant') {
+                btnLogin.disabled = false;
+                restaurarBotaoLogin();
+                _criarPopupTenant(data.dados && data.dados.tenants);
+                return;
+            }
 
             if (tipo === 'ambos') {
                 // Exibir popup de seleção sem desabilitar botão
@@ -367,6 +448,7 @@
             }
 
             if (tipo === 'erp') {
+                _limparCredenciaisPendentes();
                 mostrarAlerta(textoLogin('login.erp_success', 'Login realizado! Redirecionando...'), 'success');
                 if (data.dados) {
                     if (data.dados.nome)        localStorage.setItem('usuario_nome',       data.dados.nome);
@@ -400,6 +482,7 @@
             }
 
             if (tipo === 'morador') {
+                _limparCredenciaisPendentes();
                 mostrarAlerta(textoLogin('login.portal_success', 'Login realizado! Acessando portal...'), 'success');
                 if (data.dados) {
                     localStorage.setItem('portal_token',    data.dados.token      || '');
@@ -421,6 +504,7 @@
             }
 
             // Fallback genérico
+            _limparCredenciaisPendentes();
             mostrarAlerta(data.mensagem || textoLogin('login.generic_success', 'Login realizado!'), 'success');
         }
 
@@ -451,6 +535,7 @@
             })
             .catch(function (error) {
                 console.error('[Login] Erro:', error);
+                _limparCredenciaisPendentes();
                 mostrarAlerta(textoLogin('login.login_error', 'Erro ao processar login. Tente novamente.'), 'error');
                 btnLogin.disabled = false;
                 restaurarBotaoLogin();

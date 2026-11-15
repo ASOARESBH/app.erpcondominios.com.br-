@@ -14,10 +14,11 @@
  * e injeta tenant_id + dados do tenant na sessão PHP.
  *
  * Endpoint: POST /api/api_verificar_tipo_login.php
- * Body: { "email": "...", "senha": "...", "tipo_escolhido"?: "erp|portal" }
+ * Body: { "email": "...", "senha": "...", "tipo_escolhido"?: "erp|portal",
+ *         "tenant_slug_escolhido"?: "slug" }
  *
  * Resposta:
- *   { "sucesso": true, "tipo": "erp|morador|ambos", "dados": {...} }
+ *   { "sucesso": true, "tipo": "erp|morador|ambos|selecionar_tenant", "dados": {...} }
  *
  * @version 2.0.0 (Multi-Tenant)
  * @date 2026-07-22
@@ -54,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once 'config.php';
 require_once 'tenant_helper.php';
+require_once __DIR__ . '/db/DatabaseDialect.php';
 
 // Função auxiliar JSON local
 if (!function_exists('retornar_json')) {
@@ -63,6 +65,18 @@ if (!function_exists('retornar_json')) {
         echo json_encode($r, JSON_UNESCAPED_UNICODE);
         exit;
     }
+}
+
+function iniciar_sessao_autenticada_limpa(): void {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        throw new RuntimeException('Não foi possível iniciar a sessão autenticada.');
+    }
+    if (!session_regenerate_id(true)) {
+        $_SESSION = [];
+        session_destroy();
+        throw new RuntimeException('Não foi possível iniciar a sessão autenticada.');
+    }
+    $_SESSION = [];
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -78,17 +92,27 @@ $email = isset($dados['email']) ? strtolower(trim($dados['email'])) : '';
 $senha = isset($dados['senha']) ? $dados['senha'] : '';
 
 if (empty($email) || empty($senha)) {
-    registrar_log('LOGIN_FALHA', "Campo vazio: email='" . (empty($email) ? 'VAZIO' : 'ok') . "' ua='" . ($_SERVER['HTTP_USER_AGENT'] ?? '') . "'");
+    registrar_log('LOGIN_FALHA', 'CAMPOS_LOGIN_AUSENTES', null, false);
     retornar_json(false, 'E-mail e senha são obrigatórios');
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    registrar_log('LOGIN_FALHA', "Email inválido: '{$email}'");
+    registrar_log('LOGIN_FALHA', 'EMAIL_INVALIDO', null, false);
     retornar_json(false, 'E-mail inválido');
 }
 
+$novaSessaoAutenticada = false;
+$tokenPortalCriado = null;
+$moradorTokenCriadoId = null;
+$portalTransactionStarted = false;
+$portalTransactionCommitted = false;
+
 try {
     $conexao = conectar_banco();
+    if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+        require_once __DIR__ . '/rbac_helper.php';
+        rbacTabelasDisponiveis($conexao);
+    }
 
     $encontrou_erp     = false;
     $encontrou_morador = false;
@@ -110,7 +134,7 @@ try {
         $stmt->close();
 
         if ((int)$usuario['ativo'] === 0) {
-            registrar_log('LOGIN_BLOQUEADO', "Conta inativa: {$email}", $usuario['nome']);
+            registrar_log('LOGIN_BLOQUEADO', 'CONTA_INATIVA', null, false);
             retornar_json(false, 'Sua conta está desativada. Entre em contato com o administrador.');
         }
 
@@ -152,13 +176,13 @@ try {
             }
             if (!$senha_valida_morador && strlen($morador['senha']) === 40) {
                 $senha_valida_morador = (sha1($senha) === $morador['senha']);
-                if ($senha_valida_morador) {
+                if ($senha_valida_morador && !\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
                     $nova_senha = password_hash($senha, PASSWORD_BCRYPT);
                     $stmt_upd = $conexao->prepare("UPDATE moradores SET senha = ? WHERE id = ?");
                     $stmt_upd->bind_param('si', $nova_senha, $morador['id']);
                     $stmt_upd->execute();
                     $stmt_upd->close();
-                    registrar_log('SENHA_ATUALIZADA', "SHA1→BCRYPT: {$morador['nome']}", $morador['nome']);
+                    registrar_log('SENHA_ATUALIZADA', 'CREDENCIAL_LEGADA_ATUALIZADA', null, false);
                 }
             }
             if (!$senha_valida_morador) {
@@ -183,8 +207,7 @@ try {
 
     // ─── 3. Nenhum perfil encontrado ──────────────────────────────────────
     if (!$encontrou_erp && !$encontrou_morador) {
-        $ua = $_SERVER['HTTP_USER_AGENT'] ?? 'desconhecido';
-        registrar_log('LOGIN_FALHA', "Login inválido: {$email} | ua={$ua}");
+        registrar_log('LOGIN_FALHA', 'CREDENCIAIS_INVALIDAS', null, false);
         retornar_json(false, 'E-mail ou senha incorretos!');
     }
 
@@ -192,7 +215,7 @@ try {
     $tipo_escolhido = isset($dados['tipo_escolhido']) ? trim($dados['tipo_escolhido']) : '';
 
     if ($encontrou_erp && $encontrou_morador && empty($tipo_escolhido)) {
-        registrar_log('LOGIN_AMBOS', "Email em ambas as tabelas: {$email}");
+        registrar_log('LOGIN_AMBOS', 'MULTIPLOS_PERFIS', null, false);
         echo json_encode([
             'sucesso'  => true,
             'tipo'     => 'ambos',
@@ -223,42 +246,119 @@ try {
 
         // 5a. Identificar tenant pelo subdomínio da requisição
         $tenant_slug = resolverTenantSlugDaUrl();
+        $tenant_slug_escolhido = '';
+        if (array_key_exists('tenant_slug_escolhido', $dados)) {
+            if (!is_string($dados['tenant_slug_escolhido'])) {
+                fechar_conexao($conexao);
+                http_response_code(400);
+                retornar_json(false, 'Seleção de condomínio inválida.');
+            }
+            $tenant_slug_escolhido = strtolower(trim($dados['tenant_slug_escolhido']));
+        }
+        if ($tenant_slug_escolhido !== '') {
+            if (!preg_match('/\A[a-z0-9-]{1,50}\z/', $tenant_slug_escolhido)) {
+                fechar_conexao($conexao);
+                http_response_code(400);
+                retornar_json(false, 'Seleção de condomínio inválida.');
+            }
+            if ($tenant_slug !== null && $tenant_slug !== $tenant_slug_escolhido) {
+                fechar_conexao($conexao);
+                http_response_code(403);
+                retornar_json(false, 'O condomínio selecionado não corresponde ao endereço de acesso.');
+            }
+            $tenant_slug = $tenant_slug ?? $tenant_slug_escolhido;
+        }
         $tenant = null;
 
         if ($tenant_slug) {
-            // Modo subdomínio: buscar tenant pelo slug
-            $tenant = carregarTenantPorSlug($conexao, $tenant_slug);
+            if (\ERP\Database\DatabaseDialect::isPostgres($conexao) || $tenant_slug_escolhido !== '') {
+                $superAdminClause = \ERP\Database\DatabaseDialect::isPostgres($conexao)
+                    ? " OR ? = 'super_admin'"
+                    : '';
+                $stmt_slug = $conexao->prepare(
+                    "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
+                            t.plano, t.status, t.logo_url, t.email_principal, t.modulos_habilitados,
+                            ut.permissao
+                     FROM tenants t
+                     LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id
+                         AND ut.usuario_id = ? AND ut.ativo = 1
+                     WHERE t.status = 'ativo' AND t.slug = ?
+                       AND (ut.usuario_id IS NOT NULL{$superAdminClause})
+                     LIMIT 1"
+                );
+                if (!$stmt_slug) {
+                    throw new RuntimeException('Não foi possível validar o vínculo do tenant.');
+                }
+                if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+                    $stmt_slug->bind_param('iss', $dados_erp['id'], $tenant_slug, $permissao_global);
+                } else {
+                    $stmt_slug->bind_param('is', $dados_erp['id'], $tenant_slug);
+                }
+                if (!$stmt_slug->execute()) {
+                    $stmt_slug->close();
+                    throw new RuntimeException('Não foi possível validar o vínculo do tenant.');
+                }
+                $res_slug = $stmt_slug->get_result();
+                $tenant = $res_slug ? $res_slug->fetch_assoc() : null;
+                $stmt_slug->close();
+                if (!$tenant) {
+                    fechar_conexao($conexao);
+                    http_response_code(403);
+                    retornar_json(false, 'Acesso ao condomínio não autorizado.');
+                }
+            } else {
+                // Modo subdomínio MySQL legado: buscar tenant pelo slug.
+                $tenant = carregarTenantPorSlug($conexao, $tenant_slug);
+            }
         }
 
         if (!$tenant) {
             // Modo domínio único: buscar o tenant vinculado ao usuário
             // Se o usuário tiver vínculo com apenas 1 tenant, usa automaticamente
             // Se tiver múltiplos, retorna lista para seleção
-            $stmt_t = $conexao->prepare(
-                "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
-                        t.plano, t.status, t.logo_url, t.email_principal,
-                        t.modulos_habilitados, ut.permissao
-                 FROM tenants t
-                 INNER JOIN usuario_tenant ut ON ut.tenant_id = t.id
-                 WHERE ut.usuario_id = ? AND t.status = 'ativo' AND ut.ativo = 1
-                 ORDER BY t.nome_fantasia ASC"
-            );
-            $stmt_t->bind_param('i', $dados_erp['id']);
-            $stmt_t->execute();
-            $res_t = $stmt_t->get_result();
-            $tenants_usuario = $res_t->fetch_all(MYSQLI_ASSOC);
-            $stmt_t->close();
+            if (\ERP\Database\DatabaseDialect::isPostgres($conexao) && $permissao_global === 'super_admin') {
+                $stmt_t = $conexao->prepare(
+                    "SELECT id, slug, razao_social, nome_fantasia, cnpj, plano, status,
+                            logo_url, email_principal, modulos_habilitados, NULL AS permissao
+                     FROM tenants WHERE status = 'ativo' ORDER BY nome_fantasia ASC, id ASC"
+                );
+                if (!$stmt_t || !$stmt_t->execute()) {
+                    if ($stmt_t) $stmt_t->close();
+                    throw new RuntimeException('Não foi possível carregar tenants ativos.');
+                }
+                $tenants_usuario = $stmt_t->get_result()->fetch_all(MYSQLI_ASSOC);
+                $stmt_t->close();
+            } else {
+                $stmt_t = $conexao->prepare(
+                    "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
+                            t.plano, t.status, t.logo_url, t.email_principal,
+                            t.modulos_habilitados, ut.permissao
+                     FROM tenants t
+                     INNER JOIN usuario_tenant ut ON ut.tenant_id = t.id
+                     WHERE ut.usuario_id = ? AND t.status = 'ativo' AND ut.ativo = 1
+                     ORDER BY t.nome_fantasia ASC"
+                );
+                $stmt_t->bind_param('i', $dados_erp['id']);
+                $stmt_t->execute();
+                $res_t = $stmt_t->get_result();
+                $tenants_usuario = $res_t->fetch_all(MYSQLI_ASSOC);
+                $stmt_t->close();
+            }
 
             if (count($tenants_usuario) === 0) {
                 // Fallback: usuário não tem vínculo na usuario_tenant
                 // Compatibilidade com instalações antigas — usa tenant_id = 1
-                $tenant = carregarTenantPorId($conexao, 1);
-                if ($tenant) {
+                $tenant = null;
+                if (!\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+                    $tenant = carregarTenantPorId($conexao, 1);
+                }
+                if ($tenant && !\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
                     // Criar vínculo automaticamente para não repetir este fallback
-                    $stmt_ins = $conexao->prepare(
-                        "INSERT IGNORE INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo)
-                         VALUES (?, 1, ?, 1)"
+                    $sql_vinculo = \ERP\Database\DatabaseDialect::idempotentInsertSql(
+                        $conexao,
+                        'INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, 1, ?, 1)'
                     );
+                    $stmt_ins = $conexao->prepare($sql_vinculo);
                     $stmt_ins->bind_param('is', $dados_erp['id'], $dados_erp['permissao']);
                     $stmt_ins->execute();
                     $stmt_ins->close();
@@ -266,23 +366,10 @@ try {
             } elseif (count($tenants_usuario) === 1) {
                 // Apenas 1 tenant: usar automaticamente
                 $tenant = $tenants_usuario[0];
-                // A permissão efetiva é a MAIOR entre a global (usuarios.permissao) e a
-                // local do vínculo (usuario_tenant.permissao) — nunca a menor. A tabela
-                // usuario_tenant tem DEFAULT 'operador' em todas as suas variações de
-                // schema, e pelo menos um ponto de criação de usuário (api_usuarios.php)
-                // historicamente inseria o vínculo sem definir permissao — então confiar
-                // cegamente no valor local rebaixava silenciosamente admins de verdade
-                // para 'operador' a cada login, sem nada corrigir isso depois. Como este
-                // ramo só é alcançado quando o usuário tem exatamente 1 tenant, não existe
-                // aqui um cenário legítimo de "restringir" alguém abaixo do seu papel
-                // global — só o de vínculo desatualizado/mal populado.
-                $hierarquia_login = ['visualizador' => 1, 'operador' => 2, 'gerente' => 3, 'admin' => 4, 'super_admin' => 5];
-                $permissao_local = strtolower(trim((string)($tenants_usuario[0]['permissao'] ?? '')));
-                $nivel_global = $hierarquia_login[$permissao_global] ?? 0;
-                $nivel_local  = $hierarquia_login[$permissao_local]  ?? 0;
-                if ($permissao_global !== 'super_admin' && $nivel_local > $nivel_global) {
-                    $dados_erp['permissao'] = $permissao_local;
-                }
+                $dados_erp['permissao'] = erpPermissaoLoginEfetiva(
+                    $permissao_global,
+                    isset($tenants_usuario[0]['permissao']) ? (string)$tenants_usuario[0]['permissao'] : null
+                );
             } else {
                 // Múltiplos tenants: retornar lista para seleção
                 fechar_conexao($conexao);
@@ -306,13 +393,22 @@ try {
             }
         }
 
+        if ($tenant && (\ERP\Database\DatabaseDialect::isPostgres($conexao) || $tenant_slug_escolhido !== '')) {
+            $dados_erp['permissao'] = erpPermissaoLoginEfetiva(
+                $permissao_global,
+                isset($tenant['permissao']) ? (string)$tenant['permissao'] : null
+            );
+        }
+
         // 5b. Validar que o tenant foi encontrado
         if (!$tenant) {
-            registrar_log('LOGIN_FALHA', "Tenant não encontrado para: {$email} | slug={$tenant_slug}");
+            registrar_log('LOGIN_FALHA', 'TENANT_NAO_DISPONIVEL', null, false);
             retornar_json(false, 'Condomínio não encontrado ou inativo. Verifique o endereço de acesso.');
         }
 
         // 5c. Criar sessão ERP com tenant_id
+        iniciar_sessao_autenticada_limpa();
+        $novaSessaoAutenticada = true;
         $_SESSION['usuario_id']           = $dados_erp['id'];
         $_SESSION['usuario_nome']         = $dados_erp['nome'];
         $_SESSION['usuario_email']        = $dados_erp['email'];
@@ -327,9 +423,7 @@ try {
         // ✅ MULTI-TENANT: Injetar dados do tenant na sessão
         injetarTenantNaSessao($tenant);
 
-        session_regenerate_id(true);
-
-        registrar_log('LOGIN_ERP_SUCESSO', "Login ERP: {$email} | tenant={$tenant['slug']}", $dados_erp['nome']);
+        registrar_log('LOGIN_ERP_SUCESSO', 'LOGIN_ERP_CONFIRMADO', null, false);
 
         fechar_conexao($conexao);
 
@@ -356,7 +450,15 @@ try {
 
     // ─── 6. AUTENTICAÇÃO MORADOR ─────────────────────────────────────────
     if ($tipo_final === 'morador') {
+        if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+            http_response_code(503);
+            retornar_json(false, 'O login do Portal do Morador ainda não foi homologado para este driver.');
+        }
+        iniciar_sessao_autenticada_limpa();
+        $novaSessaoAutenticada = true;
         $token     = bin2hex(random_bytes(32));
+        $tokenPortalCriado = $token;
+        $moradorTokenCriadoId = (int)$dados_morador['id'];
         $expiracao = date('Y-m-d H:i:s', strtotime('+7 days'));
         $ip        = $_SERVER['REMOTE_ADDR'] ?? '';
         $ua        = $_SERVER['HTTP_USER_AGENT'] ?? '';
@@ -370,43 +472,60 @@ try {
              WHERE m.id = ? AND t.status = 'ativo'
              LIMIT 1"
         );
-        if ($stmt_tm) {
-            $stmt_tm->bind_param('i', $dados_morador['id']);
-            $stmt_tm->execute();
-            $res_tm = $stmt_tm->get_result();
-            if ($res_tm->num_rows > 0) {
-                $tenant_morador = $res_tm->fetch_assoc();
-            }
+        if (!$stmt_tm) throw new RuntimeException('Não foi possível validar o tenant do morador.');
+        $stmt_tm->bind_param('i', $dados_morador['id']);
+        if (!$stmt_tm->execute()) {
             $stmt_tm->close();
+            throw new RuntimeException('Não foi possível validar o tenant do morador.');
         }
+        $res_tm = $stmt_tm->get_result();
+        if ($res_tm && $res_tm->num_rows > 0) {
+            $tenant_morador = $res_tm->fetch_assoc();
+        }
+        $stmt_tm->close();
         // Fallback: tenant 1
         if (!$tenant_morador) {
             $tenant_morador = carregarTenantPorId($conexao, 1);
         }
 
         // Limpar tokens antigos e inserir novo
-        $chk = $conexao->query("SHOW TABLES LIKE 'sessoes_portal'");
-        if ($chk && $chk->num_rows > 0) {
-            $stmt_del = $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ?");
-            $stmt_del->bind_param('i', $dados_morador['id']);
-            $stmt_del->execute();
-            $stmt_del->close();
-
-            $stmt_ins = $conexao->prepare(
-                "INSERT INTO sessoes_portal (morador_id, token, ip_address, user_agent, data_expiracao)
-                 VALUES (?, ?, ?, ?, ?)"
-            );
-            $stmt_ins->bind_param('issss', $dados_morador['id'], $token, $ip, $ua, $expiracao);
-            $stmt_ins->execute();
-            $stmt_ins->close();
+        $sessoesPortalDisponivel = \ERP\Database\DatabaseDialect::tableExists($conexao, 'sessoes_portal');
+        if (!$sessoesPortalDisponivel) {
+            throw new RuntimeException('Schema de sessões do Portal indisponível.');
         }
+        if (!$conexao->begin_transaction()) {
+            throw new RuntimeException('Não foi possível iniciar a transação da sessão Portal.');
+        }
+        $portalTransactionStarted = true;
+        $stmt_del = $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ?");
+        if (!$stmt_del) throw new RuntimeException('Não foi possível preparar a limpeza de sessões do Portal.');
+        $stmt_del->bind_param('i', $dados_morador['id']);
+        if (!$stmt_del->execute()) {
+            $stmt_del->close();
+            throw new RuntimeException('Não foi possível limpar sessões anteriores do Portal.');
+        }
+        $stmt_del->close();
+
+        $stmt_ins = $conexao->prepare(
+            "INSERT INTO sessoes_portal (morador_id, token, ip_address, user_agent, data_expiracao)
+             VALUES (?, ?, ?, ?, ?)"
+        );
+        if (!$stmt_ins) throw new RuntimeException('Não foi possível preparar a sessão do Portal.');
+        $stmt_ins->bind_param('issss', $dados_morador['id'], $token, $ip, $ua, $expiracao);
+        if (!$stmt_ins->execute()) {
+            $stmt_ins->close();
+            throw new RuntimeException('Não foi possível persistir a sessão do Portal.');
+        }
+        $stmt_ins->close();
 
         $stmt_upd = $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW() WHERE id = ?");
+        if (!$stmt_upd) throw new RuntimeException('Não foi possível preparar o registro do último acesso.');
         $stmt_upd->bind_param('i', $dados_morador['id']);
-        $stmt_upd->execute();
+        if (!$stmt_upd->execute()) {
+            $stmt_upd->close();
+            throw new RuntimeException('Não foi possível registrar o último acesso.');
+        }
         $stmt_upd->close();
-
-        fechar_conexao($conexao);
 
         // Sessão PHP do morador
         $_SESSION['morador_id']      = $dados_morador['id'];
@@ -424,9 +543,7 @@ try {
         }
 
         $log_tipo = $dados_morador['senha_temporaria'] ? 'SENHA_TEMPORARIA_LOGIN' : 'LOGIN_MORADOR_SUCESSO';
-        registrar_log($log_tipo, "Login Portal: {$email}", $dados_morador['nome']);
-
-        echo json_encode([
+        $respostaPortal = json_encode([
             'sucesso'  => true,
             'tipo'     => 'morador',
             'mensagem' => 'Login realizado com sucesso!',
@@ -440,11 +557,78 @@ try {
                 'redirect'         => '/frontend/portal_morador.html'
             ]
         ], JSON_UNESCAPED_UNICODE);
+        if (!is_string($respostaPortal)) throw new RuntimeException('Não foi possível gerar a resposta do Portal.');
+        if (!$conexao->commit()) throw new RuntimeException('Não foi possível confirmar a transação da sessão Portal.');
+        $portalTransactionCommitted = true;
+        $portalTransactionStarted = false;
+        try {
+            registrar_log($log_tipo, 'LOGIN_PORTAL_CONFIRMADO', null, false);
+        } catch (Throwable) {
+            error_log('[api_verificar_tipo_login] Falha na auditoria final do Portal.');
+        }
+        try {
+            fechar_conexao($conexao);
+        } catch (Throwable) {
+            error_log('[api_verificar_tipo_login] Falha ao fechar conexão do Portal.');
+        }
+        $conexao = null;
+        echo $respostaPortal;
         exit;
     }
 
-} catch (Exception $e) {
-    error_log('[api_verificar_tipo_login] Erro: ' . $e->getMessage());
+} catch (Throwable $e) {
+    if ($portalTransactionCommitted && isset($respostaPortal) && is_string($respostaPortal)) {
+        if (isset($conexao) && $conexao !== null) {
+            try {
+                fechar_conexao($conexao);
+            } catch (Throwable) {
+                try { error_log('[api_verificar_tipo_login] Falha ao fechar conexão após commit Portal.'); } catch (Throwable) {}
+            }
+        }
+        echo $respostaPortal;
+        exit;
+    }
+    try { error_log('[api_verificar_tipo_login] Falha interna ao processar login.'); } catch (Throwable) {}
+    if ($portalTransactionStarted && isset($conexao) && $conexao !== null) {
+        try {
+            if (!$conexao->rollback()) {
+                try { error_log('[api_verificar_tipo_login] Falha ao reverter transação Portal.'); } catch (Throwable) {}
+            }
+        } catch (Throwable) {
+            try { error_log('[api_verificar_tipo_login] Falha ao reverter transação Portal.'); } catch (Throwable) {}
+        }
+        $portalTransactionStarted = false;
+    }
+    if ($tokenPortalCriado !== null && $moradorTokenCriadoId !== null) {
+        $conexaoRevogacao = null;
+        try {
+            $conexaoRevogacao = conectar_banco();
+            $stmt_revogar = $conexaoRevogacao->prepare('DELETE FROM sessoes_portal WHERE morador_id = ? AND token = ?');
+            if (!$stmt_revogar) throw new RuntimeException('Não foi possível preparar revogação do token Portal.');
+            $stmt_revogar->bind_param('is', $moradorTokenCriadoId, $tokenPortalCriado);
+            if (!$stmt_revogar->execute()) throw new RuntimeException('Não foi possível revogar o token Portal.');
+            $stmt_revogar->close();
+            fechar_conexao($conexaoRevogacao);
+        } catch (Throwable) {
+            try { error_log('[api_verificar_tipo_login] Falha ao revogar sessão parcial do Portal.'); } catch (Throwable) {}
+            if ($conexaoRevogacao !== null) {
+                try { fechar_conexao($conexaoRevogacao); } catch (Throwable) {}
+            }
+        }
+    }
+    if ($novaSessaoAutenticada && session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION = [];
+        session_destroy();
+        session_write_close();
+    }
+    if (isset($conexao) && $conexao !== null) {
+        try {
+            fechar_conexao($conexao);
+        } catch (Throwable) {
+            try { error_log('[api_verificar_tipo_login] Falha ao fechar conexão após login incompleto.'); } catch (Throwable) {}
+        }
+    }
+    if (defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql') http_response_code(503);
     retornar_json(false, 'Erro ao processar login. Tente novamente.');
 }
 ?>

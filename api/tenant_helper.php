@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/db/DatabaseDialect.php';
+
 /**
  * =====================================================
  * TENANT HELPER — MOTOR DE RESOLUÇÃO DE TENANT
@@ -64,7 +66,8 @@ if (!defined('TENANT_HELPER_LOADED')) {
      * @param string $slug    Slug do tenant
      * @return array|null     Dados do tenant ou null se não encontrado/inativo
      */
-    function carregarTenantPorSlug(mysqli $conexao, string $slug): ?array {
+    function carregarTenantPorSlug($conexao, string $slug): ?array {
+        if (!\ERP\Database\DatabaseDialect::supports($conexao)) return null;
         $stmt = $conexao->prepare(
             "SELECT id, slug, razao_social, nome_fantasia, cnpj, plano, status,
                     logo_url, email_principal, modulos_habilitados
@@ -89,7 +92,8 @@ if (!defined('TENANT_HELPER_LOADED')) {
      * @param int    $tenant_id ID do tenant
      * @return array|null       Dados do tenant ou null se não encontrado/inativo
      */
-    function carregarTenantPorId(mysqli $conexao, int $tenant_id): ?array {
+    function carregarTenantPorId($conexao, int $tenant_id): ?array {
+        if (!\ERP\Database\DatabaseDialect::supports($conexao)) return null;
         $stmt = $conexao->prepare(
             "SELECT id, slug, razao_social, nome_fantasia, cnpj, plano, status,
                     logo_url, email_principal, modulos_habilitados
@@ -104,6 +108,46 @@ if (!defined('TENANT_HELPER_LOADED')) {
         $tenant = $res->num_rows > 0 ? $res->fetch_assoc() : null;
         $stmt->close();
         return $tenant;
+    }
+
+    function usuarioTemAcessoTenantAtivo($conexao, int $usuario_id, int $tenant_id): bool {
+        if (!\ERP\Database\DatabaseDialect::supports($conexao) || $usuario_id < 0 || $tenant_id <= 0) {
+            return false;
+        }
+        $stmt = $conexao->prepare(
+            "SELECT 1 AS autorizado
+             FROM usuarios u
+             INNER JOIN tenants t ON t.id = ? AND t.status = 'ativo'
+             LEFT JOIN usuario_tenant ut ON ut.usuario_id = u.id AND ut.tenant_id = t.id AND ut.ativo = 1
+             WHERE u.id = ? AND u.ativo = 1
+               AND (LOWER(COALESCE(u.permissao, '')) = 'super_admin' OR ut.usuario_id IS NOT NULL)
+             LIMIT 1"
+        );
+        if (!$stmt) throw new RuntimeException('Não foi possível validar o acesso ao tenant.');
+        $stmt->bind_param('ii', $tenant_id, $usuario_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            throw new RuntimeException('Não foi possível validar o acesso ao tenant.');
+        }
+        $result = $stmt->get_result();
+        if (!$result) {
+            $stmt->close();
+            throw new RuntimeException('Não foi possível validar o acesso ao tenant.');
+        }
+        $authorized = $result->fetch_assoc() !== null;
+        if (method_exists($result, 'free')) $result->free();
+        $stmt->close();
+        return $authorized;
+    }
+
+    function erpPermissaoLoginEfetiva(string $permissaoGlobal, ?string $permissaoLocal): string {
+        $global = strtolower(trim($permissaoGlobal));
+        if ($global === 'super_admin') return 'super_admin';
+        $hierarquia = ['visualizador' => 1, 'operador' => 2, 'gerente' => 3, 'admin' => 4];
+        $nivelGlobal = $hierarquia[$global] ?? 0;
+        $local = strtolower(trim((string)$permissaoLocal));
+        $nivelLocal = $hierarquia[$local] ?? 0;
+        return $nivelLocal > $nivelGlobal ? $local : $global;
     }
 
     /**

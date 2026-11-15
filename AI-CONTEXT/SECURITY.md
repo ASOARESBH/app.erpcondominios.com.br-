@@ -7,6 +7,15 @@
   `Access-Control-Allow-Origin: https://app.erpcondominios.com.br`
   `Access-Control-Allow-Credentials: true`
 
+### P3.2 — portabilidade em preparação
+- O login administrativo PostgreSQL só aceita tenant obtido por vínculo ativo do próprio usuário em `usuario_tenant`, exceto `super_admin` global, que pode escolher um tenant ativo. A escolha envia slug não-ID, revalidado pelo servidor em cada chamada; nunca aceitar `tenant_id` do cliente como autoridade. Ausência/ambiguidade de vínculo falha fechada para usuários comuns; nunca usar tenant 1 como fallback PostgreSQL.
+- RBAC PostgreSQL exige o conjunto de tabelas esperado e erro de metadata/validação de sessão não é convertido em permissão. A precedência registrada na seção RBAC abaixo não muda.
+- Somente no opt-in PostgreSQL, a sessão ERP revalida em cada verificação/renovação que o usuário e tenant continuam ativos e que há vínculo ativo, salvo autoridade global `super_admin`; contexto ausente/falha de consulta não pode ser tratado como sessão válida. O comportamento histórico do MySQL permanece no restante inalterado. `verificar_sessao_completa.php` não deve devolver o PHP `session_id` ou token na resposta.
+- Credenciais, hashes de senha, tokens e cookies não podem ser registrados/persistidos para debug. Exceção expressa: o SHA-256 do ID efêmero da sessão PHP pode ser persistido somente em `rbac_sessoes.sessao_hash`; o ID em claro e esse digest não devem aparecer em logs, auditoria, respostas nem em outro campo da sessão PHP.
+- Auditoria do endpoint de login usa somente códigos de evento estáticos; não persistir e-mail, nome, user-agent ou IP do solicitante nesse fluxo. O helper mantém o comportamento padrão de IP para outros chamadores; login opta explicitamente por IP nulo.
+- Após autenticação válida, regenere o ID PHP e limpe a sessão anterior antes de definir a nova identidade/tenant; nenhum `_rbac_sessao_id`, cache ou identidade de outro usuário/tenant pode sobreviver à troca de conta. Se falhar antes do commit, destrua a sessão PHP parcial e faça rollback transacional. No login Bearer do Portal MySQL, remova tokens anteriores/inserir o novo token dentro de transação InnoDB e só confirme depois de a resposta estar pronta; rollback precisa restaurar tokens anteriores. Se o commit foi confirmado, uma falha tardia deve devolver a resposta de sucesso já serializada, sem revogar o token durável. O token Bearer Portal PostgreSQL continua bloqueado até portabilidade/homologação próprias.
+- O Portal do Morador no PostgreSQL permanece indisponível (503) até a sessão Bearer e o schema correspondente serem portados e homologados. Esta nota não autoriza seleção de driver em produção.
+
 ## 2. Hierarquia de Permissões
 Definida no `auth_helper.php`:
 1. `visualizador` (Apenas leitura)
