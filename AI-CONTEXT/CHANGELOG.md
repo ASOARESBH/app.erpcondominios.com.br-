@@ -35,7 +35,7 @@ Registro de alterações significativas no ERP.
 - `bind_param` mantém valores nulos como `PDO::PARAM_NULL`, cobrindo colunas opcionais com o adapter PDO.
 - Centralizadas em `DatabaseDialect` as variantes de metadata, igualdade null-safe, idempotência, upserts RBAC e `RETURNING` para sessão. O digest SHA-256 da sessão fica somente em `rbac_sessoes.sessao_hash`, conforme autorização expressa; o ID/cookie em claro não é persistido ou logado.
 - Login e ações de sessão Bearer do Portal do Morador permanecem indisponíveis no PostgreSQL (HTTP 503 antes de qualquer escrita); persistência Bearer `sessoes_portal` e o MVC legado `sessoes_usuarios` não foram convertidos nesta fatia.
-- QA local: 16 testes sintéticos auth/RBAC, 4 cenários sintéticos de bootstrap, 20 regressões da fachada e lint PHP; sem conexão a banco real ou teste HTTP/FPM.
+- QA local: 16 testes sintéticos auth/RBAC, 4 cenários sintéticos de bootstrap e 20 regressões da fachada. Harness integrado temporário passou em MySQL 8.0.46 e PostgreSQL 16.15 isolados, exercitando CRUD/prepared, metadata, idempotência, nulabilidade, igualdade null-safe, SQLSTATE, rollback e upserts RBAC; instâncias descartáveis foram removidas. Não foi testado PostgreSQL 18, schema completo do ERP, HTTP/FPM ou produção.
 - Linter sobre `api/*.php`: commit base `219ef48` = 1.678 ocorrências/145 arquivos entre 340 PHP; P3.2 = 1.668/142 entre 342 PHP (redução líquida de 10). Os 7 findings restantes em `DatabaseDialect.php` são variantes MySQL deliberadamente centralizadas; os 8 arquivos de aplicação alterados, excluído o helper, passaram sem findings.
 
 ### Corrigido

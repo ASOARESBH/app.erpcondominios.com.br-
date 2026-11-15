@@ -183,3 +183,10 @@ Em `pg/p3-1b-dropin`, passaram `php -n` sem `mysqli` nativo: **26/26** testes si
 
 
 O harness drop-in reportou 37 assertions do processo pai no runtime sem mysqli nativa e 39 no CLI normal (as duas adicionais confirmam a detecção/recusa da extensão mysqli carregada); processos filhos também são verificados por exit status e marcadores `PASS`, sem agregar suas assertions internas a esse contador. Esses números não são testes de integração com servidores.
+
+
+## 25. P3.2 — autenticação, sessão e RBAC (reconstrução em revisão)
+
+O PR P3.2 deve ser baseado na P3.1b publicada e não pode introduzir UI/API de seleção de tenant (`selecionar_tenant`/`tenant_slug_escolhido`) nem novo POST do browser contendo senha para escolha de tenant. No PostgreSQL, tenant vem do host validado pelo servidor ou de vínculo ativo único; contexto ausente, ambiguidade ou falha de metadata/RBAC termina sem sessão operacional. O MySQL histórico permanece como baseline de compatibilidade; quaisquer diferenças fora desse recorte exigem teste diferencial e registro explícito.
+
+Após reconstrução, executar e registrar de novo os harnesses `tests/p3_auth_rbac_portability_test.php`, `tests/p3_database_bootstrap_test.php`, `tests/p3_mysqli_compat_test.php` e `tests/p3_mysqli_dropin_test.php` (este último também com PHP sem a extensão nativa mysqli), `php -l`, `node --check` nos scripts inline realmente alterados, `tools/pg_sql_lint.php` com corpus base/branch idêntico e `git diff --check` respeitando CRLF. Estes testes sintéticos não substituem o gate HTTP/PHP-FPM em MySQL do vhost 8444; o vhost PostgreSQL 8443 só é validado após a carga P2 aprovada. Nenhuma senha, token, cookie, hash ou dado pessoal deve constar em fixtures, logs ou relatório.
