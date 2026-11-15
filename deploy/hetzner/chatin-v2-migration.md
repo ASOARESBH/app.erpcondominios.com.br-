@@ -23,7 +23,9 @@ Execute pelo TTY SSH autorizado, como root através de `sudo`, usando a release 
 sudo /var/www/erpcondominios/current/deploy/hetzner/migrate-chatin-v2-production.sh --check
 ```
 
-O modo `--check` valida somente metadados/operação: IPv4 local, configuração privada sem exibir seus valores, e compara a identidade do MySQL via conexão PHP do ERP e via CLI com `--no-defaults`; valida schema, versão/UUID/socket, serviços, checksum, objetos base (incluindo PWA), estado estrutural coluna a coluna, procedure temporária e configuração/grants se a migration estiver completa. Não inicia backup, não cria log/marcador, não executa DDL e não altera o banco. Se houver qualquer estado parcial ou tentativa anterior, para sem tentar corrigir.
+O modo `--check` valida somente metadados/operação: IPv4 local, configuração privada sem exibir seus valores, e compara a identidade do MySQL via conexão PHP do ERP e via CLI com `--no-defaults`; valida schema, versão/UUID/socket, serviços, checksum, objetos base (incluindo PWA), presença/contagem das colunas e constraints e configuração/grants se a migration estiver completa. Não inicia backup, não cria log/marcador, não executa DDL e não altera o banco. Se houver qualquer estado parcial ou tentativa anterior, para sem tentar corrigir.
+
+Limite conhecido: no estado `COMPLETA`, o runner confia no marcador root-only e verifica presença/contagem/nome dos objetos; não revalida toda semântica de tipos, defaults e expressões de constraints em cada `--check`. Uma suspeita de alteração externa pós-migration exige comparação read-only detalhada com a definição versionada antes de aceitar o estado.
 
 ## Aplicação — não executar sem janela e autorização operacional
 
