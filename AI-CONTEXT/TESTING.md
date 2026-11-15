@@ -164,3 +164,14 @@ Pendente após implantação: validar as APIs com duas sessões reais em tenant 
 PostgreSQL 18.6 iniciou em `localhost:5432`; conexão SQL de leitura a `erp_pg_dev` passou. Foram verificados parâmetros efetivos 512 MB/2 GB/8 MB, timezone `America/Sao_Paulo`, UTF-8, schemas `erp` e `legado` vazios e collation ICU não determinística `ci` com `LIKE` insensível a caixa e sensível a acento. Sete amostras de memória em intervalo >5 min permaneceram em 5,54–5,56 GB disponíveis, PSI `some/full avg10=0.00`; regra de parada não acionada.
 
 `nginx -t` passou; produção smoke local: `/` = 200 `text/html`, `/frontend/login.html` = 301 para `/`; MySQL, Nginx e PHP-FPM permaneceram ativos. O FPM existente lista `pgsql`/`pdo_pgsql` junto de `mysqli`/`pdo_mysql`/`mysqlnd`, sem serviço separado nem prova de isolamento; o CLI PHP não carregou os módulos PostgreSQL. A fase P1 permanece parcial: sem `erp_pg_source`, sem dump/carga, segunda instância PHP-FPM isolada, camada de compatibilidade ou vhosts de comparação. Não foi feita consulta de linhas de negócio nem alteração de produção; baseline de checksums anterior ao P1 não foi capturada, portanto igualdade antes/depois não está comprovada.
+
+
+## 23. P2 — conversor de tipos sintético (2026-11-15)
+
+`python3 -m unittest discover -s tests/migracao_pg -v` executou 16 testes unitários sintéticos para tipos centrais, faixas signed/unsigned, DECIMAL, ENUM/escaping, collations explícitas, binários/limites, identifiers, datas zero, `DATETIME`, conversão UTC→hora civil São Paulo de `TIMESTAMP`, precisão fracionária e rejeição de `TIME` fora de faixa. `python3 -m py_compile` dos módulos testados passou.
+
+Não houve execução contra PostgreSQL/MySQL, introspecção de catálogo, leitura de backup/dados, carga, SQL gerado ou teste diferencial. A suíte não demonstra semântica das APIs, triggers/procedures, collation real `ci` ou compatibilidade de dados live. A fase P2 permanece bloqueada pelos gates em `AI-CONTEXT/POSTGRESQL_P2.md`.
+
+
+### P2 — revisão independente e QA final
+A primeira execução passou 16 casos; após revisão read-only foi corrigida a aceitação de `DECIMAL` sem precisão e adicionado guard que exige resolução explícita de `review_codes`. A suíte final `python3 -m unittest discover -s tests/migracao_pg -v` passou **19 testes**, incluindo 3 regressões adicionais de metadata incompleto/review gate e temporal DST/timezone. `py_compile`, os 8 testes do linter legado e `git diff --check` também passaram. Ainda são testes unitários sintéticos, sem conexão a bancos ou uso de dados.
