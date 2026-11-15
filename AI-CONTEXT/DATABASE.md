@@ -134,7 +134,7 @@ Chave opcional `pwa_configuracoes.push_chatin_ativo` = '0' desliga o push do Cha
 
 Filtros: o DDL versionado de `moradores` tem `ativo`, mas não campo de tipo titular/proprietário/inquilino. `dependentes` é uma entidade separada com `morador_id`, `parentesco` e `ativo`; parentesco não comprova titularidade ou contrato da unidade. O Chat-In continua listando apenas moradores ativos; filtro de perfil não é presumido.
 
-## 17. PostgreSQL 18 de desenvolvimento na Hetzner — P1 parcial (2026-11-15)
+## 18. PostgreSQL 18 de desenvolvimento na Hetzner — P1 parcial (2026-11-15)
 
 Em `2.29.161.106`, o cluster PostgreSQL 18.6 `18/main` foi iniciado após ajuste isolado do perfil de memória; atende somente `localhost`/loopback (`127.0.0.1`, `::1`) na porta 5432. Os parâmetros efetivos são `shared_buffers=512MB`, `effective_cache_size=2GB` e `work_mem=8MB`. O banco vazio `erp_pg_dev` foi criado em UTF-8, dono `erp_owner` (role sem login), timezone `America/Sao_Paulo`, schemas `erp` e `legado`, ambos de `erp_owner`, e collation não determinística ICU `ci` (`und-u-ks-level2`). Verificações em PostgreSQL 18 confirmaram `LIKE` sem distinção de caixa e distinção de acento; os schemas iniciaram sem relações.
 
