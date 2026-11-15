@@ -32,7 +32,7 @@ Registro de alterações significativas no ERP.
 - Runner executado uma vez após `--check` aprovado e confirmação TTY: migration aplicada no MySQL 8.4.13/schema ativo; pós-checagem `COMPLETA`.
 - Backup novo e integridade passaram; `gzip -t`, SHA-256 e permissões `0600` conferidos. Restore drill e cópia off-host continuam pendentes.
 - Nginx/PHP-FPM/MySQL ativos; smoke não autenticado passou para login, portais, assets Chat-In e API sem sessão (401 esperado). QA autenticado, FCM e Flutter permanecem pendentes.
-- Achado: `/config_chatin` ainda redireciona para `/`. A tentativa de instalar o snippet gerado falhou no smoke e foi revertida; a configuração anterior foi restaurada e `nginx -t` passou. Não houve alteração Nginx persistente.
+- Corrigida rota limpa `/config_chatin`: o snippet Nginx instalado estava desatualizado; sem o allowlist, a rota caía no fallback `/login.html`, que redireciona para `/`. Instalado o snippet gerado no SHA da release com backup root-only. `nginx -t`, reload e smoke local/público passaram (`/config_chatin` e `/` = 200). Sem alteração de código da aplicação.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado
