@@ -3,6 +3,11 @@
 Registro de alterações significativas no ERP.
 
 ## [Unreleased]
+### Projeto PostgreSQL P1 — Hetzner (parcial, 2026-11-15)
+- Iniciado o cluster PostgreSQL 18.6 apenas em loopback; preparado banco vazio `erp_pg_dev` com schemas `erp`/`legado`, ICU `ci` e perfil de memória 512 MB/2 GB/8 MB.
+- Backup root-only da configuração PostgreSQL antes do ajuste; monitoramento >5 min manteve memória disponível acima de 5,5 GB e PSI `avg10=0.00`.
+- P1 não concluído: cópia verificada `erp_pg_source`/`pg_reader` adiada para 23h–06h BRT; camada PHP compatível e FPM/vhosts 8443/8444 ainda ausentes. Sem dados, dump, produção ou alteração de Nginx/UFW/DNS.
+
 ### Corrigido
 - Portal do Morador: layout de abas convertido em sidebar vertical responsiva/drawer, preservando os 14 módulos e seus loaders.
 - Logo: corrigido o acesso do Portal à imagem `logo_tenant` com Bearer do morador e filtro simultâneo por tenant, tipo ativo e MIME de imagem; demais anexos continuam inacessíveis por essa exceção.

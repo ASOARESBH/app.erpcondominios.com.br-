@@ -151,3 +151,9 @@ Também passaram `php -l` nos endpoints/helpers PHP alterados, `node --check` no
 Estado atualizado em 2026-11-15: a migration foi aplicada no MySQL 8.4.13 em produção pela release `7c834ff90905857c58431855d02d432cef91963f`; pós-checagem `COMPLETA`, backup e integridade verificados, serviços ativos. Smoke não autenticado de páginas/assets passou, e a API sem sessão negou com 401 esperado.
 
 Pendente após implantação: validar as APIs com duas sessões reais em tenant de teste e segundo tenant, conferir gates negativos, Browser Playwright desktop/celular no painel e Portal, `prefers-reduced-motion`, consentimento/áudio, métricas de sync e alvo de 20 sessões (p95 <300 ms). FCM real, Flutter e restore drill/cópia off-host também seguem pendentes. A rota limpa `/config_chatin` foi corrigida atualizando o snippet allowlist Nginx defasado; `nginx -t`, reload e smoke local/público confirmaram 200 para `/config_chatin`, `/` e `/frontend/layout-base.html?page=config_chatin`. Nenhum código de aplicação foi alterado; ver runbook para causa e backup.
+
+## PostgreSQL P1 — verificação inicial Hetzner (2026-11-15)
+
+PostgreSQL 18.6 iniciou em `localhost:5432`; `pg_isready` passou. Foram verificados parâmetros efetivos 512 MB/2 GB/8 MB, timezone `America/Sao_Paulo`, UTF-8, schemas `erp` e `legado` vazios e collation ICU não determinística `ci` com `LIKE` insensível a caixa e sensível a acento. Sete amostras de memória em intervalo >5 min permaneceram em 5,54–5,56 GB disponíveis, PSI `some/full avg10=0.00`; regra de parada não acionada.
+
+`nginx -t` passou; produção smoke local: `/` = 200 `text/html`, `/frontend/login.html` = 301 para `/`; MySQL, Nginx e PHP-FPM permaneceram ativos. A fase P1 permanece parcial: sem `erp_pg_source`, sem dump/carga, sem segunda instância PHP-FPM, camada de compatibilidade ou vhosts de comparação. Não foi feita consulta de linhas de negócio nem alteração de produção.
