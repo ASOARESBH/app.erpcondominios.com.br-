@@ -151,3 +151,10 @@ Também passaram `php -l` nos endpoints/helpers PHP alterados, `node --check` no
 Estado atualizado em 2026-11-15: a migration foi aplicada no MySQL 8.4.13 em produção pela release `7c834ff90905857c58431855d02d432cef91963f`; pós-checagem `COMPLETA`, backup e integridade verificados, serviços ativos. Smoke não autenticado de páginas/assets passou, e a API sem sessão negou com 401 esperado.
 
 Pendente após implantação: validar as APIs com duas sessões reais em tenant de teste e segundo tenant, conferir gates negativos, Browser Playwright desktop/celular no painel e Portal, `prefers-reduced-motion`, consentimento/áudio, métricas de sync e alvo de 20 sessões (p95 <300 ms). FCM real, Flutter e restore drill/cópia off-host também seguem pendentes. A rota limpa `/config_chatin` foi corrigida atualizando o snippet allowlist Nginx defasado; `nginx -t`, reload e smoke local/público confirmaram 200 para `/config_chatin`, `/` e `/frontend/layout-base.html?page=config_chatin`. Nenhum código de aplicação foi alterado; ver runbook para causa e backup.
+
+
+## 21. SQL portátil — linter inicial PostgreSQL (2026-11-15)
+
+`php tests/pg_sql_lint_test.php` passou **8 cenários sintéticos**: SQL PHP/MySQL portátil (incluindo `NOW()`), construções MySQL em string PHP, comentários portáveis `--`/`#` e literais SQL sem falsos positivos, rejeição de `--` sem separador, operadores PostgreSQL `#>`/`#>>`/`#-` sem ocultar o restante da linha, SQL MySQL não portátil, ausência de paths explícitos e recusa de arquivo fora do repositório. A saída negativa informa caminho relativo, linha e identificador da regra, sem copiar query ou valor.
+
+`php -l tools/pg_sql_lint.php`, `php -l tests/pg_sql_lint_test.php` e `git diff --check` passaram. O linter é heurístico; nenhuma aplicação ou query de negócio foi executada, e não houve conexão a MySQL/PostgreSQL, leitura de dados/dumps, instalação de serviços ou alteração de produção. A equivalência dos drivers e os testes diferenciais continuam pendentes.
