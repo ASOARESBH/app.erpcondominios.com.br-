@@ -85,6 +85,13 @@ Nesta ordem de confiabilidade:
 - Não introduza bibliotecas, frameworks ou padrões novos (ver regras absolutas do `SKILL.md`) sem necessidade real, e registre em `DEPENDENCIES.md` quando introduzir.
 - Não deixe marcas de geração automática no código final (TODOs genéricos, docstrings de template, `console.log` de teste esquecido).
 
+### 5.1 SQL portátil — projeto PostgreSQL
+
+- Todo SQL novo deve priorizar construções portáveis entre MySQL e PostgreSQL. `ERP_DB_DRIVER=mysql` permanece o padrão até autorização e homologação da mudança de runtime.
+- Quando não houver forma portátil, mantenha as variantes de cada driver em helpers explícitos da camada de banco; não espalhe SQL específico de MySQL/PostgreSQL pelos módulos.
+- Execute `php tools/pg_sql_lint.php <arquivos-de-aplicação...>` nos módulos e migrations de aplicação novos/alterados. O linter exige paths explícitos e atualmente detecta um conjunto inicial de padrões conhecidos; não lintar o próprio scanner nem fixtures que contêm dialetos proibidos intencionalmente. Não substitui revisão semântica nem testes nos dois bancos.
+- Cada PR que converte SQL deve informar os arquivos/consultas tratados, resultado do linter, teste equivalente nos dois drivers e smoke MySQL não produtivo. Nunca declare a camada ou o módulo PostgreSQL concluído apenas pelo lint.
+
 ## 6. Encerramento de tarefa (obrigatório)
 
 1. Validar a sintaxe do(s) arquivo(s) PHP alterado(s) (`php -l`) e, quando aplicável, testar o endpoint.

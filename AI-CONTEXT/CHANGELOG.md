@@ -24,6 +24,12 @@ Registro de alterações significativas no ERP.
 - Para os hubs, `tests/hub_navigation/hub-navigation.test.mjs`, a regressão `tests/clean_urls/app-router.test.mjs`, `node --check` e `git diff --check` passaram.
 - Chat-In v2: testes Node de contrato/áudio **14/14** passaram; harness MariaDB 10.11 descartável passou incluindo ausência de `pwa_configuracoes` antes do DDL, preflights fail-closed, idempotência, constraints de som/volume, seed RBAC e preservação de estado push. MySQL 8.4, browser autenticado, FCM e produção permanecem pendentes.
 
+### PostgreSQL — regra de SQL portátil (2026-11-15)
+- Código SQL novo deve priorizar a sintaxe comum entre MySQL e PostgreSQL. Diferenças de dialeto pertencem a helpers com variantes explícitas selecionadas por `ERP_DB_DRIVER`; `mysql` continua sendo o padrão.
+- Adicionados `tools/pg_sql_lint.php` (entrada explícita de arquivos; sem varredura implícita do repositório) e `tests/pg_sql_lint_test.php` com oito cenários sintéticos. O linter detecta construções conhecidas não portáveis em PHP/SQL e não imprime SQL bruto.
+- A revisão independente levou à remoção de `NOW()` do catálogo MySQL, ao suporte de comentários SQL `#` sem mascarar `#>`, `#>>` e `#-`, e à rejeição controlada de `--` sem separador por sua ambiguidade entre drivers.
+- É uma verificação estática inicial, não um parser semântico nem prova de equivalência. A camada PDO/mysqli, o pipeline PostgreSQL e o diferencial continuam ausentes/pendentes; não foram iniciados serviços nem consultados bancos nesta alteração.
+
 ### Preparação de operação
 - PR #13 mesclado em `main` no commit `2ad4b9ec652435ccdc21fb754bbdbfeca54f0ed4`.
 - Corrigido preflight SQL para falhar antes de qualquer DDL do schema da aplicação quando `pwa_configuracoes` estiver ausente; a procedure auxiliar é temporária e removida pelo runner em falha normal. Novo SHA-256 `a5d402a17e3789223a9d5a297b0c12eb78fa26232ebd6eb8dd8c1f575f5aa375`.

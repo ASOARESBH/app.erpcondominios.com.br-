@@ -152,8 +152,15 @@ Estado atualizado em 2026-11-15: a migration foi aplicada no MySQL 8.4.13 em pro
 
 Pendente após implantação: validar as APIs com duas sessões reais em tenant de teste e segundo tenant, conferir gates negativos, Browser Playwright desktop/celular no painel e Portal, `prefers-reduced-motion`, consentimento/áudio, métricas de sync e alvo de 20 sessões (p95 <300 ms). FCM real, Flutter e restore drill/cópia off-host também seguem pendentes. A rota limpa `/config_chatin` foi corrigida atualizando o snippet allowlist Nginx defasado; `nginx -t`, reload e smoke local/público confirmaram 200 para `/config_chatin`, `/` e `/frontend/layout-base.html?page=config_chatin`. Nenhum código de aplicação foi alterado; ver runbook para causa e backup.
 
-## PostgreSQL P1 — verificação inicial Hetzner (2026-11-15)
+
+## 21. SQL portátil — linter inicial PostgreSQL (2026-11-15)
+
+`php tests/pg_sql_lint_test.php` passou **8 cenários sintéticos**: SQL PHP/MySQL portátil (incluindo `NOW()`), construções MySQL em string PHP, comentários portáveis `--`/`#` e literais SQL sem falsos positivos, rejeição de `--` sem separador, operadores PostgreSQL `#>`/`#>>`/`#-` sem ocultar o restante da linha, SQL MySQL não portátil, ausência de paths explícitos e recusa de arquivo fora do repositório. A saída negativa informa caminho relativo, linha e identificador da regra, sem copiar query ou valor.
+
+`php -l tools/pg_sql_lint.php`, `php -l tests/pg_sql_lint_test.php` e `git diff --check` passaram. O linter é heurístico; seus testes não executaram aplicação nem query de negócio, e não acessaram banco, dados ou dumps. O estado do PostgreSQL de desenvolvimento está registrado na §22; equivalência dos drivers e testes diferenciais continuam pendentes.
+
+## 22. PostgreSQL P1 — verificação inicial Hetzner (2026-11-15)
 
 PostgreSQL 18.6 iniciou em `localhost:5432`; conexão SQL de leitura a `erp_pg_dev` passou. Foram verificados parâmetros efetivos 512 MB/2 GB/8 MB, timezone `America/Sao_Paulo`, UTF-8, schemas `erp` e `legado` vazios e collation ICU não determinística `ci` com `LIKE` insensível a caixa e sensível a acento. Sete amostras de memória em intervalo >5 min permaneceram em 5,54–5,56 GB disponíveis, PSI `some/full avg10=0.00`; regra de parada não acionada.
 
-`nginx -t` passou; produção smoke local: `/` = 200 `text/html`, `/frontend/login.html` = 301 para `/`; MySQL, Nginx e PHP-FPM permaneceram ativos. O FPM existente lista os módulos `pgsql`/`pdo_pgsql` junto dos módulos MySQL, mas não há serviço FPM separado nem prova de isolamento; o CLI PHP não carregou os módulos PostgreSQL. A fase P1 permanece parcial: sem `erp_pg_source`, sem dump/carga, segunda instância PHP-FPM isolada, camada de compatibilidade ou vhosts de comparação. Não foi feita consulta de linhas de negócio nem alteração de produção.
+`nginx -t` passou; produção smoke local: `/` = 200 `text/html`, `/frontend/login.html` = 301 para `/`; MySQL, Nginx e PHP-FPM permaneceram ativos. O FPM existente lista `pgsql`/`pdo_pgsql` junto de `mysqli`/`pdo_mysql`/`mysqlnd`, sem serviço separado nem prova de isolamento; o CLI PHP não carregou os módulos PostgreSQL. A fase P1 permanece parcial: sem `erp_pg_source`, sem dump/carga, segunda instância PHP-FPM isolada, camada de compatibilidade ou vhosts de comparação. Não foi feita consulta de linhas de negócio nem alteração de produção; baseline de checksums anterior ao P1 não foi capturada, portanto igualdade antes/depois não está comprovada.
