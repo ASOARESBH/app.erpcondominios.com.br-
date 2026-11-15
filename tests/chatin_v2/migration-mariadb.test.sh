@@ -151,6 +151,20 @@ fi
 mariadb --no-defaults --socket="$SOCKET" --user=root "$DB" -e 'DROP PROCEDURE IF EXISTS sp_erp_chatin_v2_20261114;'
 [[ $(mariadb --no-defaults --batch --skip-column-names --socket="$SOCKET" --user=root "$DB" -e "SELECT COUNT(*) FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA='$DB' AND ROUTINE_NAME='sp_erp_chatin_v2_20261114'") == 0 ]]
 mariadb --no-defaults --socket="$SOCKET" --user=root "$DB" -e "ALTER TABLE chatin_mensagens MODIFY tipo ENUM('TEXTO','AVISO') NOT NULL DEFAULT 'TEXTO';"
+# The migration needs this legacy source for the tenant push default; absence must fail before any application DDL.
+mariadb --no-defaults --socket="$SOCKET" --user=root "$DB" -e 'DROP TABLE pwa_configuracoes;'
+if mariadb --no-defaults --batch --socket="$SOCKET" --user=root "$DB" < "$MIGRATION" >"$TMP/pwa-missing.stdout" 2>"$TMP/pwa-missing.stderr"; then
+  echo 'FAIL: migration deveria falhar antes do DDL quando pwa_configuracoes está ausente.' >&2
+  exit 1
+fi
+if ! grep -q 'Preflight Chat-In v2: pwa_configuracoes ausente' "$TMP/pwa-missing.stderr"; then
+  cat "$TMP/pwa-missing.stdout" "$TMP/pwa-missing.stderr" >&2
+  echo 'FAIL: o preflight não identificou pwa_configuracoes ausente.' >&2
+  exit 1
+fi
+[[ $(mariadb --no-defaults --batch --skip-column-names --socket="$SOCKET" --user=root "$DB" -e "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME='chatin_preferencias' AND COLUMN_NAME='som_ativo'") == 0 ]]
+[[ $(mariadb --no-defaults --batch --skip-column-names --socket="$SOCKET" --user=root "$DB" -e "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME='chatin_configuracoes'") == 0 ]]
+mariadb --no-defaults --socket="$SOCKET" --user=root "$DB" -e 'DROP PROCEDURE IF EXISTS sp_erp_chatin_v2_20261114; CREATE TABLE pwa_configuracoes (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, tenant_id INT NOT NULL, chave VARCHAR(100) NOT NULL, valor TEXT DEFAULT NULL, UNIQUE KEY uq_pwa_tenant_chave(tenant_id,chave)); INSERT INTO pwa_configuracoes(tenant_id,chave,valor) VALUES(101,"push_chatin_ativo","0"),(202,"push_chatin_ativo","1");'
 # A coluna parcialmente migrada com dado fora da faixa também deve parar antes do DDL restante.
 mariadb --no-defaults --socket="$SOCKET" --user=root "$DB" -e "ALTER TABLE chatin_preferencias ADD som_volume TINYINT UNSIGNED NOT NULL DEFAULT 70; INSERT INTO chatin_preferencias(tenant_id,participante_tipo,participante_id,som_volume) VALUES(101,'MORADOR',1,101);"
 if mariadb --no-defaults --batch --socket="$SOCKET" --user=root "$DB" < "$MIGRATION" >"$TMP/volume.stdout" 2>"$TMP/volume.stderr"; then
@@ -230,5 +244,5 @@ criar_cenario_pwa_global chatin_v2_pwa_global_off 0
 criar_cenario_pwa_global chatin_v2_pwa_global_absent AUSENTE
 [[ $(mariadb --no-defaults --batch --skip-column-names --socket="$SOCKET" --user=root chatin_v2_pwa_global_absent -e 'SELECT COUNT(*) FROM chatin_configuracoes WHERE recurso_push_app=1') == 2 ]]
 
-echo "PASS: migration Chat-In v2 fail-closed na base incompleta, ENUM divergente, som_volume e som_tipo preexistentes inválidos em MariaDB $DB_VERSION isolado; abort fail-fast sem DDL de aplicação, procedure temporária removida por cleanup explícito, CHECKs de som e volume, execução idempotente duas vezes, seed em todos os grupos com NEGAR preexistente preservado e push legado tenant/global/ausente preservado."
+echo "PASS: migration Chat-In v2 fail-closed na base incompleta, pwa_configuracoes ausente, ENUM divergente, som_volume e som_tipo preexistentes inválidos em MariaDB $DB_VERSION isolado; abort fail-fast sem DDL de aplicação, procedure temporária removida por cleanup explícito, CHECKs de som e volume, execução idempotente duas vezes, seed em todos os grupos com NEGAR preexistente preservado e push legado tenant/global/ausente preservado."
 echo 'NOTA: MariaDB 10.11 não substitui homologação no MySQL 8.4.'

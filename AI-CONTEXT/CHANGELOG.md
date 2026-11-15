@@ -17,7 +17,15 @@ Registro de alterações significativas no ERP.
 ### Validação
 - Testes estáticos locais e `php -l`/`node --check` aprovados; nomes de colunas do Marketplace confirmados por `INFORMATION_SCHEMA` no MySQL ativo sem ler linhas de negócio. Para esta correção, suíte Portal (9 testes), lint PHP/JS e `git diff --check` aprovados; leitura autenticada da logo e FCM consentido continuam pendentes antes de declarar validação runtime.
 - Para os hubs, `tests/hub_navigation/hub-navigation.test.mjs`, a regressão `tests/clean_urls/app-router.test.mjs`, `node --check` e `git diff --check` passaram.
-- Chat-In v2: testes Node de contrato/áudio **13/13** passaram; harness MariaDB 10.11 descartável passou com preflights fail-closed, idempotência de migration, constraints de som/volume, seed RBAC em todos os grupos e preservação de estado por tenant. MySQL 8.4, duas conexões concorrentes, browser autenticado, FCM e produção permanecem pendentes.
+- Chat-In v2: testes Node de contrato/áudio **14/14** passaram; harness MariaDB 10.11 descartável passou incluindo ausência de `pwa_configuracoes` antes do DDL, preflights fail-closed, idempotência, constraints de som/volume, seed RBAC e preservação de estado push. MySQL 8.4, browser autenticado, FCM e produção permanecem pendentes.
+
+### Preparação de operação
+- PR #13 mesclado em `main` no commit `2ad4b9ec652435ccdc21fb754bbdbfeca54f0ed4`.
+- Corrigido preflight SQL para falhar antes de qualquer DDL do schema da aplicação quando `pwa_configuracoes` estiver ausente; a procedure auxiliar é temporária e removida pelo runner em falha normal. Novo SHA-256 `a5d402a17e3789223a9d5a297b0c12eb78fa26232ebd6eb8dd8c1f575f5aa375`.
+- Preparado runner fail-closed para migration Chat-In v2 com alvo MySQL/schema e SHA fixos, comparação de identidade da instância via aplicação/CLI, modo `--check` read-only, confirmação TTY, lock root-only sem symlink, marcador persistente de tentativa, backup/integridade obrigatórios e pós-condições granulares de estrutura/tenant/RBAC.
+- Revisão independente motivou hardening de estado parcial, retentativa, lock e logs; os achados ainda não foram validados via conexão com MySQL 8.4 real.
+- Riscos P2 documentados: a routine auxiliar é criada antes do preflight PWA; `--check` em estado completo confia no marcador e não revalida a semântica integral dos tipos/CHECKs; proveniência GitHub da release é gate externo; gzip/checksum não substituem restore drill.
+- A migration **não foi executada**: não houve SSH, backup, consulta nem escrita no banco de produção. Teste MySQL 8.4 descartável e QA autenticado continuam gates antes da aplicação.
 
 ## [2.1.26] - 2026-11-05
 ### Adicionado

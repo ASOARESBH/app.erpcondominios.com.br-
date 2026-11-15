@@ -258,6 +258,9 @@ BEGIN
     -- Validar a configuração push antes da primeira alteração da aplicação.
     SELECT COUNT(*) INTO v_count FROM INFORMATION_SCHEMA.TABLES
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pwa_configuracoes' AND TABLE_TYPE = 'BASE TABLE';
+    IF v_count <> 1 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Preflight Chat-In v2: pwa_configuracoes ausente; nenhuma alteração foi aplicada.';
+    END IF;
     IF v_count > 0 THEN
         SELECT COUNT(*) INTO v_count FROM INFORMATION_SCHEMA.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pwa_configuracoes' AND COLUMN_NAME IN ('chave','valor');
