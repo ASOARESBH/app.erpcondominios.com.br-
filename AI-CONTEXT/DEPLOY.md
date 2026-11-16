@@ -55,10 +55,36 @@ O runner criou backup novo e a verificação reportou sucesso; `gzip -t`, manife
 
 Causa do `301` em `/config_chatin`: o snippet Nginx instalado estava defasado e não tinha a rota, embora o release/catalog source a contivesse. Sem o allowlist regex, a requisição caía no `location /`, fazia fallback para `/login.html` e a location exata legada enviava `301 /`. O snippet foi substituído pelo arquivo gerado do mesmo SHA da release, com backup root-only e rollback disponível; `nginx -t`, reload e smoke após estabilização passaram. Testes locais com `--noproxy` e testes públicos via DNS confirmaram `200` para `/config_chatin`, `/` e a rota legada de layout. O runbook operacional mantém causa, backup e evidências detalhados.
 
-## PostgreSQL de desenvolvimento — preparação P1 parcial (2026-11-15)
+## PostgreSQL de desenvolvimento — snapshot histórico P1 (2026-11-15; supersedido pelo registro de 16/11)
+
+> O estado abaixo é preservado como histórico de 15/11. Seus bloqueios e pendências operacionais foram atualizados no registro P1 de 16/11 mais adiante neste arquivo; não usar este snapshot como status atual.
 
 O cluster PostgreSQL 18.6 `18/main` foi iniciado localmente em `2.29.161.106`, com `listen_addresses=localhost`, somente loopback e porta 5432. O perfil de desenvolvimento é `shared_buffers=512MB`, `effective_cache_size=2GB`, `work_mem=8MB`. Foi criado apenas o banco vazio `erp_pg_dev` (UTF-8, dono `erp_owner`, timezone `America/Sao_Paulo`), com schemas `erp`/`legado` e collation ICU não determinística `ci`; nenhum dump, backup ou dado ERP foi lido/carregado. A configuração PostgreSQL original recebeu cópia root-only modo `0600` antes do ajuste.
 
 O monitoramento de memória por mais de cinco minutos permaneceu acima de 5,5 GB disponíveis, PSI `avg10=0.00`; o PostgreSQL dev ficou ativo e serviços MySQL, Nginx e PHP-FPM de produção permaneceram ativos. `nginx -t` passou; smoke local confirmou `/` = 200 e `/frontend/login.html` = 301 para `/`.
 
 P1 ainda não está aceito/completo: o backup diário só poderá ser copiado para `erp_pg_source` entre 23h–06h BRT, verificado e carregado com `--single-transaction`; não ler o banco de produção `erpcondominios` pelo pipeline. `php8.3-pgsql` está instalado e o `conf.d` do FPM atual inclui `pgsql`/`pdo_pgsql` **e** `mysqli`/`pdo_mysql`/`mysqlnd`; há somente `php8.3-fpm.service` e o pool `www.conf`. Portanto, isto não é runtime PG isolado. `pg_reader`, segunda instância PHP-FPM sem módulos MySQL, camada PHP de compatibilidade, vhosts `8443`/`8444`, Basic Auth e regras temporárias de firewall ainda não foram preparados. Não foram alterados configuração/serviços de produção, Nginx, UFW, DNS, releases ou `current`. Como não foi capturada uma baseline de checksums antes do P1, o critério de igualdade de checksums de produção antes/depois ainda não está demonstrado. Prosseguir com o FPM/vhosts somente depois que a camada de compatibilidade e seu teste diferencial estiverem revisados; qualquer ação de produção continua gate separado.
+
+## Estado P1 verificado — Hetzner (2026-11-16)
+
+### Identidade dos bancos
+
+O nome “stage” é histórico: `erpcondominios_stage_20261114` é o schema MySQL de produção ativo desde a comutação atômica documentada em “Estado do cutover — 14/11/2026”. O schema `erpcondominios` é o rollback anterior, não a origem da migração.
+
+| Banco/schema | Papel | Estado/limites |
+| --- | --- | --- |
+| MySQL `erpcondominios_stage_20261114` | Produção ativa | 276 tabelas-base; aprox. 455 MiB em `data_length+index_length`. Não foi escrito nesta etapa. |
+| MySQL `erpcondominios` | Rollback antigo | Preservar; nunca usar como origem; nenhuma escrita. |
+| MySQL `erp_pg_source` | Cópia isolada de origem | Mesmo dump verificado, cabeçalho indica `erpcondominios_stage_20261114`; 275 tabelas-base e 7 triggers. `pg_reader@localhost` read-only limitado ao schema. |
+| MySQL `erp_hml_mysql` | Cópia HTTP de homologação | Restaurada do mesmo dump; 275 tabelas-base e 7 triggers. `erp_hml_app@localhost` tem privilégios somente neste clone. |
+| PostgreSQL `erp_pg_dev` | Alvo de desenvolvimento | Schemas `erp`/`legado` existem; zero tabelas de aplicação carregadas. |
+
+O dump gzip teve integridade e SHA-256 verificados; seu cabeçalho identifica o schema ativo acima. A cópia possui 275 tabelas versus 276 no schema atualmente ativo, 7 triggers e zero views/procedures/functions/events. O contrato anterior esperava duas procedures; localizar o artefato ausente antes do aceite P2. Os objetos nos clones não dependem de `DEFINER=erp_app`; o pipeline/rebuild deve ler exclusivamente `erp_pg_source` e implementar rotinas por comportamento verificado. O diretório físico do schema ativo tem birth time 2026-11-14 01:44:40 UTC (2026-11-13 22:44:40 BRT); o runbook atesta a promoção ao papel ativo no cutover de 14/11, mas não identifica o job administrativo que originalmente executou a criação.
+
+### Aplicação e proteção
+
+`/var/www/erpcondominios/current` aponta para `/var/www/erpcondominios/releases/7c834ff90905857c58431855d02d432cef91963f`. O arquivo `REVISION` não existe; o `REVISION` usado é o SHA do nome do release. Com o código desse release, usuário `www-data` e `ERP_CONFIG_PATH` privado de produção, `require api/config.php` + `conectar_banco()` retornaram classe `mysqli` e `SELECT DATABASE()` retornou `erpcondominios_stage_20261114`. A conclusão anterior “driver não é MySQL” foi incorreta: ela testou a presença da constante explícita `ERP_DB_DRIVER` e tratou sua ausência como não-MySQL, embora o código default do ERP seja MySQL. A checagem corrigida abriu a conexão efetiva e confirmou `mysqli`.
+
+O master FPM `8444` é cópia isolada da configuração PHP de produção, com `mysqli` nativa e sem `auto_prepend_file` do shim. O master FPM `8443` é isolado, sem `mysqli`, com o drop-in por auto-prepend. Os vhosts mantêm TLS/Basic Auth, escutam somente em loopback; não há regras UFW para 8443/8444. Testes HTTP devem usar o túnel SSH. Configurações de produção, Nginx principal, FPM de produção, UFW global, DNS, `current`, os dois schemas de produção e seus dados não foram alterados.
+
+Baseline antes/depois: checksums de 8 arquivos de configuração sem mudança. Smoke de produção antes/depois: raiz/IP 200; login legado 301 para `/`; API sem sessão 401. MemAvailable mínimo no restore HML: 1.572.864 KiB; leitura posterior: 4.055.712 KiB. P1 continua **preparada, mas não aceita**: falta executar a matriz HTTP de autenticação/sessão/RBAC em 8444. `erp_p3_runtime` foi removido; `erp_pg_source` permanece origem read-only. Esta preparação não autoriza conexão da produção ao PostgreSQL, deploy, DNS/cutover, migration/carga em `erp_pg_dev` ou merge.
