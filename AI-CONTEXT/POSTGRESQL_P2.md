@@ -6,9 +6,13 @@
 
 A branch desta etapa parte da `main` remota `6a296e1f87be41e5d866fe0eaa00e9f149413bba`, que incorpora os PRs #16 e #17. O prompt original usa `7c834ff` como referência histórica de Chat-In v2; a implementação usa a `main` atual, mais recente, sem alterar `main`.
 
-O schema MySQL ativo de produção é `erpcondominios_stage_20261114`; o nome “stage” é histórico e foi mantido após o cutover de 14/11/2026. `erpcondominios` é o schema antigo de rollback e nunca pode ser origem do pipeline. O P1 agora tem `erp_pg_source` e `erp_hml_mysql`, duas cópias MySQL restauradas do mesmo dump verificado, e `pg_reader` read-only em `erp_pg_source`; `erp_pg_dev` é o alvo PostgreSQL 18. O dump compartilhado foi identificado no cabeçalho como originário de `erpcondominios_stage_20261114`. Desenvolvimento e rebuild devem ler somente `erp_pg_source`, sem conexão de leitura/escrita ao schema ativo ou ao rollback. O pipeline não pode depender dos `DEFINER` existentes: rotinas/triggers devem ser descobertas e traduzidas por lógica/efeito explícito, nunca executadas como `erp_app` nem presumidas pelo nome da conta.
+O schema MySQL ativo de produção é `erpcondominios_stage_20261114`; “stage” é nome histórico desde o cutover de 14/11/2026. `erpcondominios` é o schema antigo de rollback e nunca é origem. `erp_pg_source` é o clone MySQL read-only usado no desenvolvimento, restaurado do dump verificado; `erp_hml_mysql` é HML MySQL; `erp_pg_dev` é o alvo PostgreSQL 18 de desenvolvimento.
 
-Esta branch não instala pacotes na VM, não cria credenciais, não ativa serviços, não cria/restaura bancos, não consulta o banco de produção, não carrega dados e não faz deploy. O alvo `erp_pg_dev` só poderá ser recriado por comando operacional próprio, após gates e autorização correspondentes.
+**Não haverá sincronização contínua MySQL → PostgreSQL.** Antes de cada rodada de testes de desenvolvimento, o clone `erp_pg_source` deve ser atualizado do backup diário verificado mais recente do schema ativo; em seguida, `erp_pg_dev` é reconstruído integralmente. Registrar a identificação/validação do backup e a duração da recarga como ensaio da janela. Fora do congelamento de P5, os testes não se conectam diretamente ao schema ativo. Na virada, haverá uma única cópia definitiva após congelar as entradas, usando `erpcondominios_stage_20261114` em leitura ou um dump verificado obtido nesse congelamento. O rollback `erpcondominios` permanece sempre excluído. Nenhum rebuild escreve na origem. O pipeline não pode depender de `DEFINER`: rotinas/triggers devem ser traduzidas por lógica/efeito explícito, sem executá-las como `erp_app` nem presumir comportamento pelo nome da conta.
+
+Esta branch não instala pacotes na VM, não cria credenciais, não ativa serviços, não cria/restaura bancos, não consulta o banco de produção, não carrega dados e não faz deploy. O rebuild de desenvolvimento ou de cutover só poderá ser executado por procedimento próprio, após os respectivos gates e autorização.
+
+**Ordem de gates aprovada:** P3.1b em PR próprio → PR #20 revisado e matriz MySQL 8444 → aprovação expressa de André e merge do PR #20 → trabalho/carga P2 → somente depois da carga e reconciliação P2, teste HTTP PostgreSQL 8443. A matriz 8444 já passou, mas o PR #20 permanece draft e não foi mergeado. Esta documentação não autoriza merge, recarga, rebuild, cutover nem acesso ao 8443.
 
 ## 2. Sequência de implementação
 
@@ -51,9 +55,9 @@ A collation não determinística pode alterar igualdade e revelar colisões em U
 
 ### P2-D — loader/rebuild e reconciliação
 
-O pipeline futuro terá um único entry point `tools/migracao_pg/rebuild.sh --source erp_pg_source --target erp_pg_dev`, com allowlist estrita para esses dois nomes. O arquivo `rebuild.sh` ainda não existe nesta branch; ao implementá-lo, deve validar a origem pela conta/endpoint local allowlisted, nunca aceitar `erpcondominios_stage_20261114` nem `erpcondominios`, e não depender de objetos `DEFINER`. Python usará PyMySQL para leitura e psycopg 3 `COPY` para carga. O entry point:
+O arquivo `tools/migracao_pg/rebuild.sh` ainda não existe nesta branch. Seu contrato deve separar dois perfis fail-closed: **desenvolvimento**, limitado a `erp_pg_source` → `erp_pg_dev`; e **cutover P5**, uma execução única depois do congelamento, com origem read-only `erpcondominios_stage_20261114` ou dump verificado desse instante e destino PostgreSQL definitivo explicitamente aprovado (nome ainda não definido). Não haverá CDC, replicação, dual-write nem sincronização contínua. No desenvolvimento, o `erp_pg_dev` será recarregado integralmente antes de cada rodada a partir do backup diário verificado mais recente: restaurar esse backup no clone MySQL isolado `erp_pg_source` e reconstruir o alvo PostgreSQL. Registrar a referência e a duração ponta a ponta de cada recarga como ensaio da janela. O perfil de cutover não pode ser usado em ensaios comuns. O runner deve validar identidade/endpoint local allowlisted e não depender de `DEFINER`. Python usará PyMySQL para leitura e psycopg 3 `COPY` para carga. O entry point:
 
-- valida identidades/roles locais, permissões, versão do schema e fingerprint do snapshot; rejeita produção, hosts remotos, DSNs fornecidas pelo chamador e nomes não allowlisted;
+- valida identidades/roles locais, permissões, versão do schema e fingerprint do snapshot; em desenvolvimento aceita somente o clone e alvo allowlisted; no cutover aceita somente a origem congelada acima e o destino definitivo aprovado; rejeita `erpcondominios`, hosts remotos, DSNs fornecidas pelo chamador e nomes não allowlisted;
 - abre snapshot consistente read-only no source; lista e carrega colunas explicitamente em ordem fixa, nunca assume `SELECT *`;
 - interrompe no primeiro erro, reverte a transação/execução temporária e retorna código não zero; não retoma carga parcial;
 - registra apenas etapa, nome técnico do objeto, contagem agregada, duração e SQLSTATE; jamais query completa, valor, registro, DSN ou segredo;
@@ -66,10 +70,10 @@ Canonicalização antes de implementar o reconciliador: `NULL` tem marcador dist
 
 ## 3. Gates para iniciar inventário e carga
 
-1. `erp_pg_source` deve existir como cópia MySQL isolada e read-only do dump verificado; sem fonte isolada, não existe schema live para converter.
-2. Confirmar backup fonte, data, checksum e origem `erpcondominios_stage_20261114`, incluindo as migrações desejadas. Não conectar ao schema ativo de produção `erpcondominios_stage_20261114` nem ao rollback `erpcondominios`; ambos ficam fora do pipeline.
+1. Para desenvolvimento, antes de cada rodada, recarregar `erp_pg_dev` integralmente a partir do backup diário verificado mais recente, restaurando-o primeiro no clone MySQL isolado e read-only `erp_pg_source`; registrar referência do backup e duração ponta a ponta.
+2. Confirmar backup fonte, data, checksum e origem `erpcondominios_stage_20261114`, incluindo as migrações desejadas. Conexão direta ao schema ativo é proibida nos ensaios de desenvolvimento e só será permitida, read-only, na execução única de P5 depois do congelamento; alternativamente, usar o dump verificado desse congelamento. `erpcondominios` nunca é origem.
 3. `pg_reader@localhost` read-only existe para `erp_pg_source`; a credencial fica root-only. O runtime HML `erp_hml_app@localhost` tem grants somente no clone `erp_hml_mysql`.
-4. P1 está preparada, mas não aceita: os masters FPM separados, os vhosts loopback 8443/8444, TLS/Basic Auth e SSH tunnel estão configurados; smoke e checksums da produção antes/depois passaram. A matriz HTTP de login/RBAC ainda não foi executada e bloqueia aceite P1/diferencial e prontidão da aplicação.
+4. P1 está isolada. A matriz HTTP MySQL 8444 do SHA P3.2 `6137110` passou em 33/33 casos em 16/11/2026; PR #20 continua draft e sem merge, aguardando revisão/aprovação expressa de André. Depois do merge, iniciar P2; o teste PostgreSQL 8443 só ocorre após carga e reconciliação P2 aprovadas. Não declarar aceite P1 completo nem testar 8443 antes desse gate.
 5. O dump verificado contém 7 triggers e zero procedures/functions/events, enquanto o contrato anterior esperava duas procedures. Essa divergência de artefato/catalogação está aberta: identificar se as procedures foram omitidas do dump e obter a definição necessária antes de declarar conversão completa; definir manualmente a tradução e os casos diferenciais de cada rotina.
 6. Fechar classificações de tipos/colunas, datas zero NOT NULL, NUL binário, limites `TIME`, ENUM legado fora da definição e colisões de collation/UNIQUE.
 7. Aprovar política de retry/cleanup e rollback do target temporário antes de um `rebuild.sh` destrutivo sobre qualquer schema existente.
@@ -79,7 +83,7 @@ Canonicalização antes de implementar o reconciliador: `NULL` tem marcador dist
 
 - 100% do catálogo efetivo da origem isolada inventariado; nenhuma tabela, view, trigger, procedure ou event ignorado sem decisão registrada.
 - DDL versionado e reprodutível, incluindo tabelas/constraints/índices/FKs/identity/sequences/grants, rotina `ON UPDATE`, sete triggers, duas procedures e Chat-In v2, todos com teste e revisão apropriados.
-- Uma execução limpa do comando de rebuild conclui; a segunda execução, do mesmo snapshot, gera o mesmo resultado; mede-se duração total.
+- Em desenvolvimento, cada rodada começa com recarga integral de `erp_pg_dev` a partir do backup diário verificado mais recente via `erp_pg_source`; registrar a duração ponta a ponta para estimar a janela. A repetibilidade é demonstrada em alvo descartável de desenvolvimento com o mesmo snapshot. O cutover P5 é uma única execução após congelamento; não se repete sobre o destino definitivo.
 - Primeira falha interrompe a execução; o source não muda, nenhum alvo parcial é aceito e dados anteriores fora do target autorizado são preservados.
 - Reconciliação de todas as tabelas: contagens iguais; zero hashes de linha divergentes após apenas normalizações aprovadas; `max(id)` igual; sequences acima do máximo; somas NUMERIC e lengths binários iguais; distribuição tenant igual; FKs validadas ou órfãos quantificados e reportados.
 - Sem segredo/PII no log/relatório; saída contém só metadados agregados e SQLSTATE.
@@ -90,7 +94,7 @@ Canonicalização antes de implementar o reconciliador: `NULL` tem marcador dist
 - Implementado: mapeador puro de tipos/ENUM/identificadores, classificação explícita de casos manuais e conversão temporal sintética, com testes unitários locais.
 - Não implementado: introspecção do `information_schema`, gerador DDL, tradução de rotinas, loader PyMySQL/psycopg, `rebuild.sh`, auditoria de NUL, reconciliação e teste diferencial.
 - Executado em P1: acesso read-only a metadados, validação do dump, clone MySQL `erp_pg_source`, clone de homologação `erp_hml_mysql` e seed sintético somente na cópia HML. O banco ativo `erpcondominios_stage_20261114` foi identificado com código/configuração de produção; nenhuma escrita foi feita nele ou no rollback `erpcondominios`. Não houve migration/carga em `erp_pg_dev`.
-- Próximo incremento: concluir a matriz HTTP P1 e o gate de rotinas ausentes; depois implementar export sanitizado do catálogo exclusivamente de `erp_pg_source`, sem consultar os schemas de produção.
+- Próximo gate: revisão/aprovação de André e merge do PR #20. Só depois começar a carga P2 de desenvolvimento, com recarga do backup diário mais recente; testar 8443 depois de `erp_pg_dev` carregado e reconciliado. Fechar em paralelo a lacuna das procedures antes de declarar conversão completa. O export de catálogo de desenvolvimento deve permanecer sanitizado e usar `erp_pg_source` atualizado, sem consulta direta aos schemas de produção fora do congelamento P5.
 
 
 ## Adendo da revisão de código (2026-11-15)
