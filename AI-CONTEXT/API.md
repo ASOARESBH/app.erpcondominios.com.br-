@@ -276,3 +276,8 @@ Referência completa em `AI-CONTEXT/CHATIN.md`.
 - `api/api_notificacao_canais.php` valida JSON/canais/booleanos em whitelist e grava valores e auditoria RBAC na mesma transação; falha de execução/auditoria desfaz todas as alterações. O helper checa falha de `execute()`.
 - `api/helpers/notificacao_canais_helper.php`: canal `CHATIN` é marcado indisponível e não pode ser reativado via `api/api_notificacao_canais.php` quando `chatin_configuracoes.ativo=0` no tenant. O envio automático usa defaults para tenant ainda sem linha, mas configuração parcial falha fechada; outros canais permanecem independentes.
 - Todos os fluxos novos usam tenant no SQL; respostas mantêm `{sucesso, mensagem, dados, codigo?}`. Nenhuma configuração ou credencial é retornada nos endpoints de status.
+
+
+## 19. Portal do Morador — tenant e revogação Bearer no logout
+
+No login MySQL do Portal, `api/api_verificar_tipo_login.php` detecta `sessoes_portal.tenant_id` no schema corrente por `DatabaseDialect::columnExists()`. Quando a coluna existe, a linha nova recebe o tenant derivado do cadastro do morador; quando não existe, permanece o `INSERT` legado. O cliente nunca escolhe nem envia esse tenant. O login também guarda o Bearer em `$_SESSION['morador_portal_token']` na sessão PHP server-side, para que `api/logout_morador.php` possa revogá-lo antes de destruir a sessão. O endpoint de logout não aceita token pela querystring e restringe a atualização ao morador e tenant da sessão. O caminho Portal PostgreSQL continua bloqueado até homologação própria.

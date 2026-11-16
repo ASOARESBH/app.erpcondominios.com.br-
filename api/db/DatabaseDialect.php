@@ -76,6 +76,40 @@ final class DatabaseDialect
         return $exists;
     }
 
+    public static function columnExists(mixed $connection, string $table, string $column): bool
+    {
+        if (preg_match('/\A[a-z_][a-z0-9_]*\z/i', $table) !== 1
+            || preg_match('/\A[a-z_][a-z0-9_]*\z/i', $column) !== 1) {
+            throw new RuntimeException('Identificador de coluna inválido.');
+        }
+
+        $statement = $connection->prepare(self::columnExistsSql($connection));
+        if (!$statement || !$statement->bind_param('ss', $table, $column) || !$statement->execute()) {
+            if ($statement) {
+                $statement->close();
+            }
+            throw new RuntimeException('Não foi possível verificar o schema do banco.');
+        }
+
+        $result = $statement->get_result();
+        if (!$result) {
+            $statement->close();
+            throw new RuntimeException('Não foi possível verificar o schema do banco.');
+        }
+
+        $exists = $result->fetch_assoc() !== null;
+        $result->free();
+        $statement->close();
+        return $exists;
+    }
+
+    public static function columnExistsSql(mixed $connection): string
+    {
+        return self::driver($connection) === 'pgsql'
+            ? 'SELECT 1 AS presente FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ? LIMIT 1'
+            : 'SELECT 1 AS presente FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1';
+    }
+
     public static function tableExistsSql(mixed $connection): string
     {
         return self::driver($connection) === 'pgsql'

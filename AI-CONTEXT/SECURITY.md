@@ -123,3 +123,8 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - O shim só pode rodar em pool FPM isolado sem a extensão mysqli nativa, com `ERP_CONFIG_PATH` apontando para configuração fora do document root, sem permissão de grupo/outros (`0600` recomendado). Se o caminho estiver ausente/inválido ou o document root não puder ser validado em SAPI web, o bootstrap falha fechado. O fallback MySQL legado em `api/config.php` usa o mesmo resolvedor e não ignora as verificações de permissão/document root.
 - A inicialização descarta qualquer saída parcial e retorna somente erro genérico 503; o bootstrap da configuração também suprime e rejeita output inesperado do arquivo privado. Configuração privada, mensagens brutas PDO e credenciais não devem ser incluídas em logs ou respostas. O driver MySQL permanece padrão e PostgreSQL exige seleção e schema explícitos.
 - Multi-query é sequencial/bufferizada e não atômica; `CALL` e DDL de stored programs são recusados. `send_long_data` usa stream temporário e não significa streaming integral da aplicação.
+
+
+### P3.2 — Portal Bearer e logout (complemento)
+
+No login Portal MySQL, o Bearer emitido é guardado somente na sessão PHP server-side, não em log ou em outro campo RBAC. `logout_morador.php` usa o marcador para revogar a sessão Bearer, restrita ao morador e tenant associados à sessão, antes de destruir o estado PHP. O login grava `sessoes_portal.tenant_id` quando a coluna existe no schema corrente e conserva o contrato legado quando ausente; esse valor é derivado no servidor. PostgreSQL Portal permanece bloqueado.

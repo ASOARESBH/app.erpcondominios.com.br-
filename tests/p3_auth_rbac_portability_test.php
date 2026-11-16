@@ -87,6 +87,7 @@ final class AuthRbacFakePdo extends PDO
     public ?string $failureState = null;
     public ?string $failureNeedle = null;
     public bool $rbacSchemaPresent = true;
+    public bool $portalTenantColumnPresent = true;
     public bool $tenantLinkActive = true;
     public bool $globalSuperAdmin = false;
     public array $groupEffects = [];
@@ -132,6 +133,9 @@ final class AuthRbacFakePdo extends PDO
                 return [];
             }
             return [['presente' => 1, 0 => 1]];
+        }
+        if (str_contains($query, 'information_schema.columns')) {
+            return $this->portalTenantColumnPresent ? [['presente' => 1, 0 => 1]] : [];
         }
         if (str_contains($query, 'SELECT revisao_permissoes')) {
             return [['revisao_permissoes' => 1, 0 => 1]];
@@ -307,6 +311,7 @@ try {
         p3AssertSame('<=>', DatabaseDialect::nullSafeEqualityOperator($mysql), 'MySQL deve manter igualdade null-safe.');
         p3AssertSame(true, DatabaseDialect::supports($mysql), 'Conexão mysqli deve ser suportada.');
         p3AssertSame(true, str_contains(DatabaseDialect::tableExistsSql($mysql), 'DATABASE()'), 'Metadata MySQL deve limitar o schema corrente.');
+        p3AssertSame(true, str_contains(DatabaseDialect::columnExistsSql($mysql), 'DATABASE()'), 'Metadata de coluna MySQL deve limitar o schema corrente.');
 
         $pgsqlFacade = (new ReflectionClass(PdoMysqliConnection::class))->newInstanceWithoutConstructor();
         $selectedDriver = new ReflectionProperty(PdoMysqliConnection::class, 'selectedDriver');
@@ -315,6 +320,7 @@ try {
         p3AssertSame('pgsql', DatabaseDialect::driver($pgsqlFacade), 'Alias global mysqli não pode apagar o driver PostgreSQL selecionado.');
         p3AssertSame(true, DatabaseDialect::isPostgres($pgsqlFacade), 'Facade PostgreSQL deve selecionar as variantes de SQL do dialecto.');
         p3AssertSame(true, str_contains(DatabaseDialect::tableExistsSql($pgsqlFacade), 'current_schema()'), 'Metadata pela facade deve continuar PostgreSQL.');
+        p3AssertSame(true, str_contains(DatabaseDialect::columnExistsSql($pgsqlFacade), 'current_schema()'), 'Metadata de coluna pela facade deve continuar PostgreSQL.');
         p3AssertSame(true, str_contains(DatabaseDialect::idempotentInsertSql($pgsqlFacade, 'INSERT INTO fixture_table (id) VALUES (?)'), 'ON CONFLICT DO NOTHING'), 'Idempotência pela facade deve usar sintaxe PostgreSQL.');
         p3AssertSame(true, str_contains(DatabaseDialect::rbacRevisionUpsertSql($pgsqlFacade), 'ON CONFLICT')
             && !str_contains(DatabaseDialect::rbacRevisionUpsertSql($pgsqlFacade), 'ON DUPLICATE KEY'), 'Upsert de revisão pela facade deve usar PostgreSQL.');
@@ -334,11 +340,15 @@ try {
         $pdo = new AuthRbacFakePdo();
         $connection = new PgsqlMysqliConnection($pdo);
         p3AssertSame(true, DatabaseDialect::tableExists($connection, 'rbac_modulos'), 'Tabela sintética deveria existir.');
+        p3AssertSame(true, DatabaseDialect::columnExists($connection, 'sessoes_portal', 'tenant_id'), 'Coluna sintética deveria existir no schema corrente.');
         p3AssertSame('pgsql', DatabaseDialect::driver($connection), 'Conexão PDO deve ser reconhecida como PostgreSQL.');
         p3AssertSame('IS NOT DISTINCT FROM', DatabaseDialect::nullSafeEqualityOperator($connection), 'PostgreSQL deve usar igualdade null-safe explícita.');
         p3AssertSame(true, str_contains(DatabaseDialect::tableExistsSql($connection), 'current_schema()'), 'Metadata PostgreSQL deve usar o schema corrente.');
         p3AssertSame('rbac_modulos', $pdo->executed[0]['bindings'][1] ?? null, 'Nome de tabela deve ser parâmetro preparado.');
         p3AssertSame(true, str_contains($pdo->executed[0]['query'], 'information_schema.tables'), 'Consulta de metadata deve usar information_schema.');
+        p3AssertSame('sessoes_portal', $pdo->executed[1]['bindings'][1] ?? null, 'Nome de tabela da coluna deve ser parâmetro preparado.');
+        p3AssertSame('tenant_id', $pdo->executed[1]['bindings'][2] ?? null, 'Nome de coluna deve ser parâmetro preparado.');
+        p3AssertSame(true, str_contains($pdo->executed[1]['query'], 'information_schema.columns'), 'Consulta de coluna deve usar information_schema.');
     });
 
     $test('metadata ausente e falha de consulta não se confundem', static function (): void {
@@ -346,12 +356,22 @@ try {
         $missing->rbacSchemaPresent = false;
         $missingConnection = new PgsqlMysqliConnection($missing);
         p3AssertSame(false, DatabaseDialect::tableExists($missingConnection, 'rbac_modulos'), 'Tabela ausente deve retornar false.');
-        p3AssertThrows(static fn() => DatabaseDialect::tableExists($missingConnection, 'rbac-modulos'), 'Identificador inválido deve falhar antes da consulta.');
+        p3AssertThrows(static fn() => DatabaseDialect::tableExists($missingConnection, 'rbac-modules'), 'Identificador inválido deve falhar antes da consulta.');
+
+        $missingColumn = new AuthRbacFakePdo();
+        $missingColumn->portalTenantColumnPresent = false;
+        p3AssertSame(false, DatabaseDialect::columnExists(new PgsqlMysqliConnection($missingColumn), 'sessoes_portal', 'tenant_id'), 'Coluna ausente deve retornar false.');
+        p3AssertThrows(static fn() => DatabaseDialect::columnExists(new PgsqlMysqliConnection($missingColumn), 'sessoes-portal', 'tenant_id'), 'Identificador inválido deve falhar antes da consulta de coluna.');
 
         $failed = new AuthRbacFakePdo();
         $failed->failureState = '42P01';
         $failedConnection = new PgsqlMysqliConnection($failed);
         p3AssertThrows(static fn() => DatabaseDialect::tableExists($failedConnection, 'rbac_modulos'), 'Falha de metadata deve lançar erro e não virar ausência.');
+
+        $failedColumn = new AuthRbacFakePdo();
+        $failedColumn->failureState = '42P01';
+        $failedColumn->failureNeedle = 'information_schema.columns';
+        p3AssertThrows(static fn() => DatabaseDialect::columnExists(new PgsqlMysqliConnection($failedColumn), 'sessoes_portal', 'tenant_id'), 'Falha de metadata de coluna deve lançar erro e não virar ausência.');
     });
 
     $test('tenant ativo, revogação e super_admin são avaliados no servidor', static function (): void {

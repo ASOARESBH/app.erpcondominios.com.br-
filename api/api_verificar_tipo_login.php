@@ -494,12 +494,26 @@ try {
         }
         $stmt_del->close();
 
-        $stmt_ins = $conexao->prepare(
-            "INSERT INTO sessoes_portal (morador_id, token, ip_address, user_agent, data_expiracao)
-             VALUES (?, ?, ?, ?, ?)"
-        );
+        $portalSessionHasTenant = \ERP\Database\DatabaseDialect::columnExists($conexao, 'sessoes_portal', 'tenant_id');
+        if ($portalSessionHasTenant && (int)($tenant_morador['id'] ?? 0) <= 0) {
+            throw new RuntimeException('Não foi possível identificar o condomínio da sessão do Portal.');
+        }
+        $stmt_ins = $portalSessionHasTenant
+            ? $conexao->prepare(
+                "INSERT INTO sessoes_portal (morador_id, tenant_id, token, ip_address, user_agent, data_expiracao)
+                 VALUES (?, ?, ?, ?, ?, ?)"
+            )
+            : $conexao->prepare(
+                "INSERT INTO sessoes_portal (morador_id, token, ip_address, user_agent, data_expiracao)
+                 VALUES (?, ?, ?, ?, ?)"
+            );
         if (!$stmt_ins) throw new RuntimeException('Não foi possível preparar a sessão do Portal.');
-        $stmt_ins->bind_param('issss', $dados_morador['id'], $token, $ip, $ua, $expiracao);
+        if ($portalSessionHasTenant) {
+            $tenantSessaoPortalId = (int)$tenant_morador['id'];
+            $stmt_ins->bind_param('iissss', $dados_morador['id'], $tenantSessaoPortalId, $token, $ip, $ua, $expiracao);
+        } else {
+            $stmt_ins->bind_param('issss', $dados_morador['id'], $token, $ip, $ua, $expiracao);
+        }
         if (!$stmt_ins->execute()) {
             $stmt_ins->close();
             throw new RuntimeException('Não foi possível persistir a sessão do Portal.');
@@ -524,6 +538,7 @@ try {
         $_SESSION['morador_logado']  = true;
         $_SESSION['login_timestamp'] = time();
         $_SESSION['tipo_usuario']    = 'morador';
+        $_SESSION['morador_portal_token'] = $token;
 
         // ✅ MULTI-TENANT: Injetar tenant do morador
         if ($tenant_morador) {
