@@ -38,6 +38,39 @@ Os dumps são mantidos apenas no mesmo host e não têm retenção/expurgo autom
 
 Rollback de código: apontar `current` para o symlink de release anterior preservada e validar Nginx. DDL H3 é additivo; rollback de banco requer restaurar o backup pré-DDL em uma cópia isolada ou desenvolver rollback explícito, nunca apagar colunas/tabelas automaticamente. Parar e pedir aprovação antes de DML migration, mudança em HostGator/DNS, integração externa real, exclusão de dados não temporários ou merge em `main`.
 
+## Cutover PostgreSQL P5 — plano aprovado, não executado (2026-11-16)
+
+Esta seção registra o procedimento de virada; não autoriza nem registra congelamento, backup final, rebuild, troca de driver/configuração, cutover ou alteração da produção. **Não haverá sincronização contínua MySQL → PostgreSQL.** Durante o desenvolvimento, antes de cada rodada de testes, atualizar `erp_pg_source` a partir do backup diário verificado mais recente e reconstruir `erp_pg_dev` do zero; registrar duração e referência do backup como ensaio da janela. Não conectar diretamente à produção fora da janela de congelamento.
+
+### Ordem obrigatória dos gates
+
+1. P3.1b drop-in em PR próprio (#21) → PR #20 e matriz HTTP MySQL 8444. A matriz 8444 passou em 33/33 casos para o SHA P3.2 `613711060f67ef1b92cd9a2fb1d849c737f84341`; o PR #20 permanece draft.
+2. Aguardar revisão e aprovação expressa de André; somente então o PR #20 pode ser mergeado.
+3. Depois do merge, executar o trabalho/carga P2 em `erp_pg_dev` e concluir a reconciliação de desenvolvimento.
+4. Testar o vhost PostgreSQL 8443 somente depois que `erp_pg_dev` estiver carregado e reconciliado. Não inverter estes gates.
+
+### Execução única da janela P5
+
+Pré-condições: runner `rebuild.sh` implementado e revisado; origem, snapshot, destino PostgreSQL definitivo e release/código aprovados; dependências de rotinas e schema fechadas; procedimento de rollback ensaiado em cópia. O nome do banco PostgreSQL definitivo ainda precisa de aprovação explícita. A origem será o schema ativo `erpcondominios_stage_20261114` em leitura ou um dump dele produzido durante o congelamento. `erpcondominios` é o schema antigo de rollback e nunca será usado como origem.
+
+1. Colocar a aplicação em manutenção e desligar/pausar crons, filas e demais processos que aceitam escrita; confirmar que as entradas estão paralisadas.
+2. Gerar o backup final de MySQL em `/var/backups/erpcondominios/mysql-final/`. Diretório `root:root 0700`, artefatos `root:root 0600`; verificar hash e integridade antes de continuar. Preservar esse backup, sem expurgo, até André confirmar o aceite.
+3. Rodar uma única vez o `rebuild.sh` aprovado para o destino PostgreSQL definitivo, usando somente a origem congelada ou seu dump verificado. Não usar CDC, replicação, dual-write, `erp_pg_source` desatualizado nem o schema rollback.
+4. Exigir reconciliação de 100% antes de qualquer troca: contagens e hash por linha, distribuição por tenant, IDs/máximos/sequences, constraints/FKs/órfãos e rotinas cobertas pelo catálogo aprovado. Se houver qualquer divergência, **não trocar driver/configuração**: manter/recolocar a aplicação em MySQL e tratar a causa. Não aceitar diferenças silenciosamente.
+5. Somente após reconciliação integral, trocar atomicamente o driver e a configuração privada para PostgreSQL, preservando cópia root-only e identificável da configuração MySQL anterior.
+6. Executar smoke funcional e de segurança com contas de teste autorizadas. Se falhar antes de liberar escrita PostgreSQL, restaurar a configuração MySQL anterior, validar o serviço e só então retirar a manutenção.
+7. Liberar entradas apenas após todos os gates anteriores passarem; registrar horários/durações e resultados agregados, nunca dados de negócio, credenciais, cookies ou hashes por linha.
+
+### Pós-troca, rollback e proteção de dados
+
+Manter intactos e sem escrita os schemas MySQL, incluindo a cópia ativa pré-cutover e o schema antigo de rollback; a cópia MySQL é contingência, não destino de sincronização. O backup `mysql-final/` permanece preservado até o OK expresso de André. Se for necessário voltar ao MySQL depois que o PostgreSQL já recebeu novas escritas, primeiro congelar novamente e interromper: a troca simples de driver poderia perder os lançamentos feitos após o cutover. Não reabrir escrita em MySQL nem descartar o estado PostgreSQL sem uma decisão de recuperação/reconciliação aprovada.
+
+Após o cutover, criar backup diário PostgreSQL em `/var/backups/erpcondominios/pg/` por `pg_dump -Fc`, com diretório `root:root 0700`, arquivos/manifests `root:root 0600`, hash e verificação do archive. Testar restauração em alvo temporário isolado, nunca sobre produção, o banco MySQL, `erp_pg_source`, `erp_pg_dev` ou qualquer ensaio histórico. Retenção: 14 diários e 8 semanais, sem apagar arquivo fora da política versionada e validada. Integrar frescor do backup, integridade e resultado do restore test ao healthcheck e aos alertas por e-mail; não incluir PII, dados, credenciais ou logs brutos. O estado atual de SMTP/TITAN ainda tem gates pendentes: não declarar alertas funcionais até a configuração e os testes próprios passarem.
+
+Backup fora da máquina é etapa futura; não criar destino, conta, cópia ou política off-host antes de André defini-los. Até a execução e o aceite dessa sequência, PostgreSQL definitivo, cutover, liberação e backups pós-troca permanecem **não realizados**.
+
+O restore test precisa executar uma restauração efetiva do archive em destino isolado e validar o resultado sem expor registros; `pg_restore --list` sozinho não comprova recuperabilidade. A frequência do exercício e o limite máximo de idade do último teste aprovado precisam ser definidos antes de implementar/ativar o timer e o alerta correspondente. O healthcheck deverá medir a idade do último restore test válido e alertar quando ultrapassar esse limite; qualquer database/cluster temporário deve ser identificável, isolado de produção, e nunca sobrescrever artefatos históricos.
+
 ## Alertas de operação
 
 O dispatcher `/usr/local/lib/erpcondominios/alert-manager.py` usa `/etc/erpcondominios/secrets/msmtprc` e credenciais separadas `titan-app-password` e `smtp-password`, todos `root:root 0600` no diretório `root:root 0700`. A conta `titan` (`smtp.titan.email`, 465/SSL-TLS) é primária; em rejeição/falha de transporte conclusiva, o código tenta `brevo`, que usa TLS conforme sua configuração. Em timeout ambíguo, o fallback é omitido para reduzir risco de envio duplicado; a notificação fica pendente para retry. Remetente e destinatário permanecem `noreply@erpcondominios.com.br`. O fallback é explícito por conta msmtp, não uma tentativa de dois provedores em paralelo. Cada conta usa `passwordeval` apontando para seu arquivo privado. TLS e verificação de certificado permanecem obrigatórios; logging de protocolo e syslog do msmtp ficam desligados. A origem da configuração Brevo continua sendo o dump-fonte confirmado pelo administrador, não a HML; não abrir nem copiar credenciais para Git, webroot ou chat.
