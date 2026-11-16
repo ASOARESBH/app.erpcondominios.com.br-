@@ -100,3 +100,12 @@ Canonicalização antes de implementar o reconciliador: `NULL` tem marcador dist
 ## Adendo da revisão de código (2026-11-15)
 
 A revisão independente encontrou que `DECIMAL` sem metadado `(p,s)` era mapeado para `NUMERIC(10,0)`. A implementação agora rejeita esse caso (`INVALID_DECIMAL_METADATA`) em vez de presumir escala. O helper `require_review_codes_resolved()` bloqueia um mapeamento com códigos pendentes; o consumidor futuro deverá fornecer apenas as resoluções efetivamente comprovadas por preflight/teste. A suíte final tem 19 testes sintéticos aprovados, com cobertura adicional para metadata decimal ausente, uso do guard, quoting de literal e horário local DST ambíguo. A aprovação do reviewer foi read-only e nenhuma evidência live foi usada.
+
+
+## Estado de execução — 2026-11-16 (após merge de #20; P2 pré-voo, sem carga)
+
+O PR #20 foi mesclado como merge commit `609daec709a4714dfe6b459eaee8b41d1ec33fbf` na branch-base `pg/p3-1b-dropin`, conforme autorização de André. A branch `main` permaneceu em `219ef48f59a3e9f3cc5081f7e3b3f6da1e9097dc`; não houve merge para `main`, deploy nem cutover.
+
+Preflight P2 somente leitura em 16/11: o backup diário mais recente encontrado tinha 16,92 horas, modo `0600`/owner root, `gzip -t` e manifesto/hash válidos, e cabeçalho da origem `erpcondominios_stage_20261114`. O cluster PostgreSQL 18 está online; havia 3.938 MiB disponíveis. `erp_pg_dev` existe e tem zero tabelas/views/sequences/objetos de usuário. Os clones MySQL `erp_pg_source` e `erp_hml_mysql` existem, cada qual com 275 objetos de catálogo. Nenhuma linha de negócio foi consultada ou exibida.
+
+A carga **não foi iniciada**: nesta branch só existem `type_mapping.py` e os testes sintéticos do mapeador; `rebuild.sh`, introspecção/snapshot de catálogo, gerador DDL, loader e reconciliador ainda não existem. O mapeador tem gates explícitos de revisão e não autoriza inferir automaticamente timezone/NUL/tipos/routines. O clone `erp_pg_source` ainda não foi atualizado a partir do backup de 16/11; o backup verificado não foi importado em nenhum banco nesta tarefa. Não executar `pgloader` ou SQL improvisado como substituto do pipeline fail-closed. Próximo passo: implementar e testar esses componentes nesta branch com fixtures sintéticas e somente depois atualizar o clone isolado e carregar o alvo vazio `erp_pg_dev`; parar em qualquer classe/coluna que exija decisão manual. O vhost 8443 permanece bloqueado até carga e reconciliação aprovadas.
