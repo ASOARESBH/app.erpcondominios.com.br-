@@ -243,7 +243,7 @@ final class DropInFakePdo extends PDO
     }
 }
 
-function writeSyntheticConfig(string $driver, bool $includeDriver = true, ?string $directory = null, bool $emitOutput = false): string
+function writeSyntheticConfig(string $driver, bool $includeDriver = true, ?string $directory = null, bool $emitOutput = false, bool $includeTrustedDomains = true, ?string $timezone = null): string
 {
     $path = tempnam($directory ?? sys_get_temp_dir(), 'erp-p3-dropin-');
     if (!is_string($path)) {
@@ -267,6 +267,12 @@ function writeSyntheticConfig(string $driver, bool $includeDriver = true, ?strin
             . "define('ERP_PG_USER', 'synthetic');\n"
             . "define('ERP_PG_PASS', 'synthetic-only');\n"
             . "define('ERP_PG_SCHEMA', 'erp');\n";
+        if ($includeTrustedDomains) {
+            $body .= "define('ERP_TRUSTED_TENANT_DOMAINS', ['erpcondominios.com.br']);\n";
+        }
+    }
+    if ($timezone !== null) {
+        $body .= "define('ERP_TIMEZONE', " . var_export($timezone, true) . ");\n";
     }
     if (file_put_contents($path, $body, LOCK_EX) !== strlen($body)) {
         unlink($path);
@@ -295,7 +301,9 @@ function createLegacyFallbackTree(bool $emitOutput = false, int $permissions = 0
             }
         }
         if (!copy(__DIR__ . '/../api/config.php', $root . '/worktrees/project/api/config.php')
-            || !copy(__DIR__ . '/../api/db/PrivateConfigPath.php', $root . '/worktrees/project/api/db/PrivateConfigPath.php')) {
+            || !copy(__DIR__ . '/../api/db/PrivateConfigPath.php', $root . '/worktrees/project/api/db/PrivateConfigPath.php')
+            || !copy(__DIR__ . '/../api/db/DatabaseDriverSelector.php', $root . '/worktrees/project/api/db/DatabaseDriverSelector.php')
+            || !copy(__DIR__ . '/../api/db/DatabaseTimezone.php', $root . '/worktrees/project/api/db/DatabaseTimezone.php')) {
             throw new RuntimeException('Não foi possível copiar os arquivos versionados de bootstrap.');
         }
         $temporaryConfig = writeSyntheticConfig('mysql', true, $root . '/worktrees/erpcondominios-private', $emitOutput);
@@ -322,10 +330,12 @@ function createLegacyFallbackTree(bool $emitOutput = false, int $permissions = 0
 function removeLegacyFallbackTree(string $root): bool
 {
     $paths = [
-        $root . '/worktrees/erpcondominios-private/erp_config.php',
-        $root . '/document-root',
-        $root . '/worktrees/erpcondominios-private',
-        $root . '/worktrees/project/api/db/PrivateConfigPath.php',
+            $root . '/worktrees/erpcondominios-private/erp_config.php',
+            $root . '/document-root',
+            $root . '/worktrees/erpcondominios-private',
+            $root . '/worktrees/project/api/db/DatabaseTimezone.php',
+            $root . '/worktrees/project/api/db/DatabaseDriverSelector.php',
+            $root . '/worktrees/project/api/db/PrivateConfigPath.php',
         $root . '/worktrees/project/api/config.php',
         $root . '/worktrees/project/api/db',
         $root . '/worktrees/project/api',
@@ -347,7 +357,7 @@ function removeLegacyFallbackTree(string $root): bool
     return !file_exists($root);
 }
 
-function runChild(array $arguments): array
+function runChild(array $arguments, ?array $environment = null): array
 {
     $extensionDir = ini_get('extension_dir');
     if (!is_string($extensionDir) || $extensionDir === '') {
@@ -363,7 +373,7 @@ function runChild(array $arguments): array
         ...$arguments,
     ];
     $pipes = [];
-    $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $environment);
     if (!is_resource($process)) {
         throw new RuntimeException('Não foi possível iniciar o processo PHP isolado.');
     }
@@ -501,6 +511,11 @@ if (($argv[1] ?? '') === '--child-install') {
     $pdo = new DropInFakePdo();
     $pdo->rowsByQuery['SELECT ? AS valor'] = [['valor' => '19']];
     $innerConnection = new PgsqlMysqliConnection($pdo);
+    $sessionSetup = new ReflectionMethod(PdoMysqliConnection::class, 'configurePostgresSession');
+    $sessionSetup->setAccessible(true);
+    $pdo->queryCalls = [];
+    $sessionSetup->invoke(null, $innerConnection, ['pg_schema' => 'erp', 'pg_timezone' => 'America/Sao_Paulo']);
+    assertDropIn($pdo->queryCalls === ['SET search_path TO "erp"', "SET TIME ZONE 'America/Sao_Paulo'"], 'Conexão PostgreSQL deve fixar schema e timezone para todo caller, inclusive auditoria direta.');
     $connectionReflection = new ReflectionClass(ERP\Database\PdoMysqliConnection::class);
     $pgFacadeConnection = $connectionReflection->newInstanceWithoutConstructor();
     $pgsqlProperty = $connectionReflection->getProperty('pgsql');
@@ -748,6 +763,22 @@ if (($argv[1] ?? '') === '--child-config-fail-closed') {
     exit(0);
 }
 
+if (($argv[1] ?? '') === '--child-install-env') {
+    putenv('ERP_CONFIG_PATH=' . ($argv[2] ?? ''));
+    $failedForMissingPgDriver = false;
+    try {
+        MysqliDropInBootstrap::install();
+    } catch (RuntimeException $exception) {
+        $failedForMissingPgDriver = str_contains($exception->getMessage(), 'driver PDO selecionado indisponível');
+    }
+    assertDropIn($failedForMissingPgDriver
+        && MysqliDropInBootstrap::selectedDriver() === 'pgsql'
+        && !MysqliDropInBootstrap::installed()
+        && !class_exists('mysqli', false), 'Auto-prepend deve respeitar o driver ambiental PG e falhar fechado antes de instalar aliases.');
+    echo "PASS seletor de driver ambiental PG alinhado ao auto-prepend e fail-closed\n";
+    exit(0);
+}
+
 if (($argv[1] ?? '') === '--child-api-config') {
     putenv('ERP_CONFIG_PATH=' . ($argv[2] ?? ''));
     $expectedDriver = $argv[3] ?? '';
@@ -756,10 +787,13 @@ if (($argv[1] ?? '') === '--child-api-config') {
         $installed->setValue(null, true);
     }
     require __DIR__ . '/../api/config.php';
-    assertDropIn(defined('DB_HOST') && defined('DB_NAME') && defined('DB_USER') && defined('DB_PASS'), 'Bootstrap API deveria publicar aliases DB_* legados.');
     assertDropIn($expectedDriver === 'pgsql'
-        ? (!defined('ERP_DB_HOST') && !defined('ERP_DB_PASS') && defined('ERP_PG_PASS') && DB_HOST === ERP_PG_HOST && DB_PASS === ERP_PG_PASS)
-        : (defined('ERP_DB_HOST') && DB_HOST === ERP_DB_HOST && DB_PASS === ERP_DB_PASS), 'Bootstrap API deve usar somente credenciais do driver selecionado.');
+        ? (defined('DB_HOST') && defined('DB_NAME') && defined('DB_USER') && defined('DB_PASS')
+            && !defined('ERP_DB_HOST') && !defined('ERP_DB_PASS') && defined('ERP_PG_PASS')
+            && DB_HOST === ERP_PG_HOST && DB_PASS === ERP_PG_PASS)
+        : (defined('DB_HOST') && defined('DB_NAME') && defined('DB_USER') && defined('DB_PASS')
+            && defined('ERP_DB_HOST') && DB_HOST === ERP_DB_HOST && DB_PASS === ERP_DB_PASS),
+        'Bootstrap API deve manter credenciais separadas e não publicar aliases MySQL no perfil PostgreSQL.');
     echo "PASS configuração API por driver sem conexão\n";
     exit(0);
 }
@@ -821,6 +855,19 @@ assertDropIn($splitMysqlStatements->invoke(null, '/*!50003 CREATE PROCEDURE p() 
 assertDropIn($splitMysqlStatements->invoke(null, '/*!50003 CALL p() */', false) === null, 'CALL em comentário executável MySQL deve falhar fechado.');
 assertDropIn($splitMysqlStatements->invoke(null, '/*M!100100 CALL p() */', false) === null, 'CALL em comentário executável MariaDB deve falhar fechado.');
 assertDropIn($splitMysqlStatements->invoke(null, 'DELIMITER //; SELECT 1', false) === null, 'Diretiva de cliente DELIMITER deve falhar fechado.');
+$timezoneAccepted = static function (mixed $configured): bool {
+    try {
+        \ERP\Database\DatabaseTimezone::resolve($configured);
+        return true;
+    } catch (Throwable) {
+        return false;
+    }
+};
+assertDropIn($timezoneAccepted('UTC'), 'Timezone UTC deve ser aceito.');
+assertDropIn($timezoneAccepted('America/Sao_Paulo'), 'Zona regional IANA deve ser aceita.');
+assertDropIn(!$timezoneAccepted('Etc/GMT+5'), 'Alias Etc/GMT+5 de offset fixo deve ser recusado.');
+assertDropIn(!$timezoneAccepted('Etc/GMT-5'), 'Alias Etc/GMT-5 de offset fixo deve ser recusado.');
+assertDropIn(!$timezoneAccepted('Etc/UTC'), 'Alias Etc/UTC deve ser recusado pela política de timezone.');
 $documentRootCheck = new ReflectionMethod(\ERP\Database\PrivateConfigPath::class, 'isOutsideDocumentRoot');
 $documentRootCheck->setAccessible(true);
 assertDropIn($documentRootCheck->invoke(null, '/srv/private/erp_config.php', '/var/www/html', true) === true, 'Config fora do document root deve ser aceita pelo verificador puro.');
@@ -836,6 +883,18 @@ try {
     $configs['default-mysql'] = writeSyntheticConfig('mysql', false);
     $configs['legacy-fallback'] = writeSyntheticConfig('mysql');
     $configs['pgsql'] = writeSyntheticConfig('pgsql');
+    $configs['pgsql-env'] = writeSyntheticConfig('pgsql', false);
+    $configs['pgsql-missing-domains'] = writeSyntheticConfig('pgsql', true, null, false, false);
+    $configs['pgsql-invalid-timezone'] = writeSyntheticConfig('pgsql', true, null, false, true, 'Invalid/Timezone');
+    $configs['pgsql-fixed-offset-timezone'] = writeSyntheticConfig('pgsql', true, null, false, true, '+05:00');
+    $configs['pgsql-fixed-zone-alias'] = writeSyntheticConfig('pgsql', true, null, false, true, 'Etc/GMT+5');
+    $configs['pgsql-null-timezone'] = writeSyntheticConfig('pgsql');
+    file_put_contents($configs['pgsql-null-timezone'], "define('ERP_TIMEZONE', null);\n", FILE_APPEND | LOCK_EX);
+    $configs['mysql-invalid-timezone'] = writeSyntheticConfig('mysql', true, null, false, true, 'Invalid/Timezone');
+    $configs['mysql-fixed-offset-timezone'] = writeSyntheticConfig('mysql', true, null, false, true, '+05:00');
+    $configs['mysql-fixed-zone-alias'] = writeSyntheticConfig('mysql', true, null, false, true, 'Etc/GMT+5');
+    $configs['mysql-null-timezone'] = writeSyntheticConfig('mysql');
+    file_put_contents($configs['mysql-null-timezone'], "define('ERP_TIMEZONE', null);\n", FILE_APPEND | LOCK_EX);
     $configs['invalid'] = writeSyntheticConfig('not-a-driver');
     $configs['world-readable'] = writeSyntheticConfig('mysql');
     chmod($configs['world-readable'], 0644);
@@ -852,6 +911,7 @@ try {
     }
     chmod($configs['noisy-invalid'], 0600);
     file_put_contents($configs['noisy-invalid'], "<?php\necho 'synthetic-only';\ndefine('ERP_DB_DRIVER', 'invalid');\n");
+    putenv('ERP_DB_DRIVER');
     [$status, $stdout] = runChild(['--child-install', $configs['mysql']]);
     assertDropIn($status === 0, 'Processo sem mysqli deveria instalar aliases; saída de erro não é reproduzida por segurança.');
     assertDropIn(str_contains($stdout, 'PASS aliases, constantes, funções procedurais, bindings e resultsets sem mysqli'), 'Processo sem mysqli não confirmou o contrato procedural.');
@@ -862,6 +922,14 @@ try {
     assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração API por driver sem conexão'), 'Bootstrap API MySQL deveria manter as constantes históricas.');
     [$status, $stdout] = runChild(['--child-api-config', $configs['pgsql'], 'pgsql']);
     assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração API por driver sem conexão'), 'Bootstrap API PG deve funcionar sem exigir ERP_DB_* ou copiar credenciais MySQL.');
+    [$status, $stdout] = runChild(['--child-api-config-output', $configs['mysql-invalid-timezone']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'Configuração de serviço indisponível')
+        && str_contains($stdout, '|HTTP_STATUS=500') && !str_contains($stdout, 'Invalid/Timezone'), 'Bootstrap API MySQL deve falhar fechado para timezone inválido.');
+    [$status, $stdout] = runChild(['--child-api-config-output', $configs['mysql-null-timezone']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'Configuração de serviço indisponível')
+        && str_contains($stdout, '|HTTP_STATUS=500'), 'Bootstrap API MySQL deve falhar fechado para timezone nulo.');
+    [$status, $stdout] = runChild(['--child-install-env', $configs['pgsql-env']], ['ERP_DB_DRIVER' => 'pgsql']);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS seletor de driver ambiental PG alinhado ao auto-prepend e fail-closed'), 'Auto-prepend deve usar o mesmo ERP_DB_DRIVER por ambiente que api/config.php.');
     [$status, $stdout] = runChild(['--child-api-config-output', $configs['output-config']]);
     assertDropIn($status === 0 && str_contains($stdout, 'Configuração de serviço indisponível')
         && str_contains($stdout, '|HTTP_STATUS=500')
@@ -890,6 +958,12 @@ try {
         && str_contains($stdout, '|HTTP_STATUS=500') && !str_contains($stdout, 'PASS fallback'), 'Fallback convencional dentro do document root deve falhar fechado no bootstrap completo.');
     [$status, $stdout] = runAutoPrepend($configs['mysql']);
     assertDropIn($status === 0 && $stdout === 'AUTO_INSTALLED', 'auto_prepend deve instalar o shim antes do script com configuração válida.');
+    [$status, $stdout] = runAutoPrepend($configs['mysql-fixed-offset-timezone']);
+    assertDropIn($status === 0 && str_contains($stdout, 'Serviço temporariamente indisponível.')
+        && !str_contains($stdout, '+05:00'), 'Auto-prepend MySQL deve recusar offset literal sem revelar configuração.');
+    [$status, $stdout] = runAutoPrepend($configs['mysql-fixed-zone-alias']);
+    assertDropIn($status === 0 && str_contains($stdout, 'Serviço temporariamente indisponível.')
+        && !str_contains($stdout, 'Etc/GMT+5'), 'Auto-prepend MySQL deve recusar alias Etc/GMT sem revelar configuração.');
     [$status, $stdout, $stderr] = runAutoPrepend(null);
     assertDropIn($status === 0 && str_contains($stdout, 'Serviço temporariamente indisponível.')
         && !str_contains($stdout, 'AUTO_INSTALLED') && !str_contains($stderr, 'synthetic-only'), 'auto_prepend deve encerrar em falha pré-script com resposta genérica.');
@@ -907,6 +981,24 @@ try {
     assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'ERP_CONFIG_PATH explicitamente vazio deveria falhar sem fallback.');
     [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['invalid']]);
     assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Driver desconhecido deveria falhar sem instalar aliases.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['pgsql-missing-domains']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Configuração PG sem domínios confiáveis deve falhar sem instalar aliases.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['pgsql-invalid-timezone']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Timezone PostgreSQL inválido deve falhar sem instalar aliases.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['pgsql-fixed-offset-timezone']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Timezone por offset fixo não aceito pelo PHP deve falhar antes de instalar aliases.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['pgsql-fixed-zone-alias']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Timezone Etc/GMT com offset fixo deve falhar antes de instalar aliases.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['pgsql-null-timezone']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Timezone PostgreSQL explicitamente nulo deve falhar antes de instalar aliases.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['mysql-invalid-timezone']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Auto-prepend MySQL deve falhar fechado para timezone inválido antes de instalar aliases.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['mysql-null-timezone']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Auto-prepend MySQL deve falhar fechado para timezone nulo antes de instalar aliases.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['mysql-fixed-offset-timezone']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Instalação MySQL deve falhar antes de aliases quando o timezone é offset literal.');
+    [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['mysql-fixed-zone-alias']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Instalação MySQL deve falhar antes de aliases para alias Etc/GMT.');
     [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['world-readable']]);
     assertDropIn($status === 0 && str_contains($stdout, 'PASS configuração/driver inválidos falham fechados sem aliases'), 'Configuração legível por qualquer usuário deveria ser recusada antes de instalar aliases.');
     [$status, $stdout] = runChild(['--child-config-fail-closed', $configs['group-readable']]);

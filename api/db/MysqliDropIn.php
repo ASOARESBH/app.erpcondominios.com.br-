@@ -6,6 +6,8 @@ namespace ERP\Database;
 use RuntimeException;
 use Throwable;
 
+require_once __DIR__ . '/DatabaseTimezone.php';
+
 final class MysqliCompatSqlException extends RuntimeException
 {
     public function __construct(string $message = '', int $code = 0, ?Throwable $previous = null, private readonly string $sqlState = 'HY000')
@@ -194,13 +196,22 @@ final class MysqliDropInBootstrap
         }
         require_once $realConfigPath;
 
-        $driver = defined('ERP_DB_DRIVER') ? constant('ERP_DB_DRIVER') : 'mysql';
+        $driver = defined('ERP_DB_DRIVER') ? constant('ERP_DB_DRIVER') : getenv('ERP_DB_DRIVER');
+        if ($driver === false || $driver === null || (is_string($driver) && trim($driver) === '')) {
+            $driver = 'mysql';
+        }
         if (!is_string($driver)) {
             throw new RuntimeException('Driver de banco inválido.');
         }
         $driver = strtolower(trim($driver));
         if (!in_array($driver, ['mysql', 'pgsql'], true)) {
             throw new RuntimeException('Driver de banco inválido.');
+        }
+
+        try {
+            $timezone = DatabaseTimezone::resolve(defined('ERP_TIMEZONE') ? constant('ERP_TIMEZONE') : 'America/Sao_Paulo');
+        } catch (\Throwable) {
+            throw new RuntimeException('Fuso horário inválido.');
         }
 
         if ($driver === 'mysql') {
@@ -225,6 +236,18 @@ final class MysqliDropInBootstrap
                 throw new RuntimeException('Configuração PostgreSQL incompleta.');
             }
         }
+        $trustedTenantDomains = defined('ERP_TRUSTED_TENANT_DOMAINS')
+            ? constant('ERP_TRUSTED_TENANT_DOMAINS')
+            : null;
+        if (!is_array($trustedTenantDomains) || !array_is_list($trustedTenantDomains) || $trustedTenantDomains === []) {
+            throw new RuntimeException('Domínios confiáveis do tenant indisponíveis.');
+        }
+        foreach ($trustedTenantDomains as $trustedDomain) {
+            if (!is_string($trustedDomain)
+                || filter_var($trustedDomain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false) {
+                throw new RuntimeException('Domínios confiáveis do tenant inválidos.');
+            }
+        }
         $port = defined('ERP_PG_PORT') ? self::portValue(constant('ERP_PG_PORT'), 5432) : 5432;
         $host = constant('ERP_PG_HOST');
         $database = constant('ERP_PG_NAME');
@@ -245,6 +268,8 @@ final class MysqliDropInBootstrap
             'pg_user' => constant('ERP_PG_USER'),
             'pg_password' => constant('ERP_PG_PASS'),
             'pg_schema' => $schema,
+            'pg_trusted_tenant_domains' => array_map('strtolower', $trustedTenantDomains),
+            'pg_timezone' => $timezone,
         ];
     }
 

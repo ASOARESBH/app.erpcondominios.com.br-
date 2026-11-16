@@ -662,6 +662,20 @@ $test('charset aceita somente UTF-8 e o escape delega ao PDO quote', static func
     assertSameValue("O''Brien", $connection->real_escape_string("O'Brien"), 'Escape deve usar a citação do driver.');
 });
 
+$test('bind_param preserva null como PDO::PARAM_NULL', static function (): void {
+    $pdo = new FakePdo();
+    $connection = new PgsqlMysqliConnection($pdo);
+    $statement = $connection->prepare('INSERT INTO logs_sistema (tipo, descricao, usuario, ip) VALUES (?, ?, ?, ?)');
+    $type = 'LOGIN_FALHA';
+    $description = 'EVENTO_SINTETICO';
+    $user = null;
+    $ip = null;
+    assertTrueValue($statement !== false, 'Statement de auditoria deve ser preparado.');
+    assertTrueValue($statement->bind_param('ssss', $type, $description, $user, $ip), 'Bindings devem ser aceitos.');
+    assertTrueValue($statement->execute(), 'Insert sintético deve executar.');
+    assertSameValue([null, PDO::PARAM_NULL], $pdo->lastBindings[4] ?? null, 'Campo opcional null deve usar PDO::PARAM_NULL.');
+});
+
 $test('close invalida operações futuras', static function (): void {
     $connection = new PgsqlMysqliConnection(new FakePdo());
     $statement = $connection->prepare('SELECT 1');
