@@ -19,7 +19,7 @@ require_once __DIR__ . '/db/DatabaseDialect.php';
  * ESTRATÉGIA DE RESOLUÇÃO (em ordem de prioridade):
  *   1. Sessão PHP ($_SESSION['tenant_id']) — já autenticado
  *   2. Subdomínio da requisição (ex: serra.erpcondominios.com.br → slug=serra)
- *   3. Parâmetro GET ?tenant=slug (apenas para debug/dev)
+ *   3. Parâmetro GET ?tenant=slug (debug/dev do fluxo legado; login PostgreSQL o desabilita)
  * 
  * @version 1.0.0
  * @date 2026-07-22
@@ -29,15 +29,72 @@ if (!defined('TENANT_HELPER_LOADED')) {
     define('TENANT_HELPER_LOADED', true);
 
     /**
+     * Valida o host permitido no perfil PostgreSQL e extrai seu slug, quando houver.
+     * Hosts-base e subdomínios reservados são confiáveis, mas não selecionam tenant.
+     *
+     * @return array{trusted: bool, slug: ?string}
+     */
+    function resolverContextoHostTenantPostgres(): array {
+        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
+        if (!is_string($host) || preg_match('/\A([A-Za-z0-9.-]+)(?::([0-9]{1,5}))?\z/D', $host, $matches) !== 1) {
+            return ['trusted' => false, 'slug' => null];
+        }
+        if (isset($matches[2]) && ((int)$matches[2] < 1 || (int)$matches[2] > 65535)) {
+            return ['trusted' => false, 'slug' => null];
+        }
+
+        $hostname = strtolower($matches[1]);
+        $dnsLabel = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
+        if (preg_match('/\A' . $dnsLabel . '(?:\.' . $dnsLabel . ')*\z/D', $hostname) !== 1) {
+            return ['trusted' => false, 'slug' => null];
+        }
+
+        $trustedDomains = defined('ERP_TRUSTED_TENANT_DOMAINS') ? ERP_TRUSTED_TENANT_DOMAINS : null;
+        if (!is_array($trustedDomains) || !array_is_list($trustedDomains)) {
+            return ['trusted' => false, 'slug' => null];
+        }
+
+        foreach ($trustedDomains as $candidate) {
+            if (!is_string($candidate)) {
+                continue;
+            }
+            $domain = strtolower($candidate);
+            if ($hostname === $domain) {
+                return ['trusted' => true, 'slug' => null];
+            }
+            $suffix = '.' . $domain;
+            if (!str_ends_with($hostname, $suffix)) {
+                continue;
+            }
+
+            $subdomain = substr($hostname, 0, -strlen($suffix));
+            if ($subdomain === '' || str_contains($subdomain, '.')) {
+                continue;
+            }
+            $ignorar = ['www', 'app', 'api'];
+            return [
+                'trusted' => true,
+                'slug' => in_array($subdomain, $ignorar, true) ? null : $subdomain,
+            ];
+        }
+
+        return ['trusted' => false, 'slug' => null];
+    }
+
+    /**
      * Resolve o slug do tenant a partir da URL da requisição.
-     * Suporta subdomínio (serra.erpcondominios.com.br) e domínio único (app.erpcondominios.com.br).
+     * Suporta subdomínio e domínio único, mantendo querystring apenas no fluxo legado.
      *
      * @return string|null Slug do tenant ou null se não identificado
      */
-    function resolverTenantSlugDaUrl(): ?string {
+    function resolverTenantSlugDaUrl(bool $allowDebugQuery = true): ?string {
         $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
-        // Remove porta se existir (ex: localhost:8080)
-        $host = preg_replace('/:\d+$/', '', $host);
+        if (!$allowDebugQuery) {
+            $contexto = resolverContextoHostTenantPostgres();
+            return $contexto['trusted'] ? $contexto['slug'] : null;
+        }
+
+        $host = preg_replace('/:\d+$/', '', (string)$host);
 
         // Modo subdomínio: serra.erpcondominios.com.br → 'serra'
         // Ignora www, app, api, localhost, 127.0.0.1
@@ -51,7 +108,7 @@ if (!defined('TENANT_HELPER_LOADED')) {
         }
 
         // Modo domínio único: parâmetro GET ?tenant=slug (apenas dev/debug)
-        if (!empty($_GET['tenant']) && preg_match('/^[a-z0-9\-]+$/', $_GET['tenant'])) {
+        if ($allowDebugQuery && !empty($_GET['tenant']) && preg_match('/^[a-z0-9\-]+$/', $_GET['tenant'])) {
             return strtolower(trim($_GET['tenant']));
         }
 

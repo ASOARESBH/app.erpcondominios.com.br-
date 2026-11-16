@@ -31,6 +31,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 
 require_once 'config.php';
 require_once 'tenant_helper.php';
+require_once 'auth_helper.php';
 
 // Verificar se está logado
 if (!isset($_SESSION['usuario_logado']) || $_SESSION['usuario_logado'] !== true) {
@@ -51,15 +52,31 @@ if ($sessao_inativa !== 1 && isset($_SESSION['login_timestamp'])) {
     $_SESSION['login_timestamp'] = time();
 }
 
-// Resolver tenant se não estiver na sessão (compatibilidade)
-$tenant_id = $_SESSION['tenant_id'] ?? null;
-if (empty($tenant_id)) {
-    $slug = resolverTenantSlugDaUrl();
-    if ($slug) {
-        $conexao = conectar_banco();
-        $tenant  = carregarTenantPorSlug($conexao, $slug);
-        if ($tenant) injetarTenantNaSessao($tenant);
-        fechar_conexao($conexao);
+if (ERP_DB_DRIVER === 'pgsql') {
+    $hostTenant = resolverContextoHostTenantPostgres();
+    $tenantIdSessao = filter_var($_SESSION['tenant_id'] ?? null, FILTER_VALIDATE_INT);
+    $tenantSlugSessao = $_SESSION['tenant_slug'] ?? null;
+    $contextoSessaoValido = $tenantIdSessao !== false && $tenantIdSessao !== null && $tenantIdSessao > 0
+        && is_string($tenantSlugSessao) && $tenantSlugSessao !== ''
+        && ($hostTenant['slug'] === null || $hostTenant['slug'] === $tenantSlugSessao);
+
+    if (!$hostTenant['trusted'] || !$contextoSessaoValido) {
+        erp_auth_limpar_sessao_operacional();
+        http_response_code($hostTenant['trusted'] ? 409 : 403);
+        echo json_encode(['sucesso' => false, 'mensagem' => 'Contexto do condomínio inválido.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+} else {
+    // A recuperação por querystring permanece restrita ao fluxo legado MySQL.
+    $tenant_id = $_SESSION['tenant_id'] ?? null;
+    if (empty($tenant_id)) {
+        $slug = resolverTenantSlugDaUrl();
+        if ($slug) {
+            $conexao = conectar_banco();
+            $tenant  = carregarTenantPorSlug($conexao, $slug);
+            if ($tenant) injetarTenantNaSessao($tenant);
+            fechar_conexao($conexao);
+        }
     }
 }
 

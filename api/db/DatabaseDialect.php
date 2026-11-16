@@ -13,11 +13,21 @@ final class DatabaseDialect
 {
     public static function supports(mixed $connection): bool
     {
+        if (self::isPdoMysqliFacade($connection)) {
+            return in_array($connection->driver(), ['mysql', 'pgsql'], true);
+        }
         return $connection instanceof \mysqli || $connection instanceof PgsqlMysqliConnection;
     }
 
     public static function driver(mixed $connection): string
     {
+        if (self::isPdoMysqliFacade($connection)) {
+            $driver = $connection->driver();
+            if (in_array($driver, ['mysql', 'pgsql'], true)) {
+                return $driver;
+            }
+            throw new RuntimeException('Conexão de banco não suportada.');
+        }
         if ($connection instanceof \mysqli) {
             return 'mysql';
         }
@@ -26,6 +36,11 @@ final class DatabaseDialect
         }
 
         throw new RuntimeException('Conexão de banco não suportada.');
+    }
+
+    private static function isPdoMysqliFacade(mixed $connection): bool
+    {
+        return class_exists(PdoMysqliConnection::class, false) && $connection instanceof PdoMysqliConnection;
     }
 
     public static function isPostgres(mixed $connection): bool

@@ -14,11 +14,10 @@
  * e injeta tenant_id + dados do tenant na sessão PHP.
  *
  * Endpoint: POST /api/api_verificar_tipo_login.php
- * Body: { "email": "...", "senha": "...", "tipo_escolhido"?: "erp|portal",
- *         "tenant_slug_escolhido"?: "slug" }
+ * Body: { "email": "...", "senha": "...", "tipo_escolhido"?: "erp|portal" }
  *
- * Resposta:
- *   { "sucesso": true, "tipo": "erp|morador|ambos|selecionar_tenant", "dados": {...} }
+ * Resposta PostgreSQL: sucesso/tipo/dados; contexto de tenant ambíguo retorna HTTP 409.
+ * O comportamento histórico do MySQL para múltiplos vínculos permanece inalterado.
  *
  * @version 2.0.0 (Multi-Tenant)
  * @date 2026-07-22
@@ -77,6 +76,11 @@ function iniciar_sessao_autenticada_limpa(): void {
         throw new RuntimeException('Não foi possível iniciar a sessão autenticada.');
     }
     $_SESSION = [];
+}
+
+function invalidar_sessao_anterior_login_pg(): void {
+    require_once __DIR__ . '/auth_helper.php';
+    erp_auth_limpar_sessao_operacional();
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -245,36 +249,19 @@ try {
         $dados_erp['permissao'] = $permissao_global;
 
         // 5a. Identificar tenant pelo subdomínio da requisição
-        $tenant_slug = resolverTenantSlugDaUrl();
-        $tenant_slug_escolhido = '';
-        if (array_key_exists('tenant_slug_escolhido', $dados)) {
-            if (!is_string($dados['tenant_slug_escolhido'])) {
-                fechar_conexao($conexao);
-                http_response_code(400);
-                retornar_json(false, 'Seleção de condomínio inválida.');
-            }
-            $tenant_slug_escolhido = strtolower(trim($dados['tenant_slug_escolhido']));
+        $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
+        if ($isPostgres && !resolverContextoHostTenantPostgres()['trusted']) {
+            fechar_conexao($conexao);
+            invalidar_sessao_anterior_login_pg();
+            http_response_code(403);
+            retornar_json(false, 'Acesso ao domínio não autorizado.');
         }
-        if ($tenant_slug_escolhido !== '') {
-            if (!preg_match('/\A[a-z0-9-]{1,50}\z/', $tenant_slug_escolhido)) {
-                fechar_conexao($conexao);
-                http_response_code(400);
-                retornar_json(false, 'Seleção de condomínio inválida.');
-            }
-            if ($tenant_slug !== null && $tenant_slug !== $tenant_slug_escolhido) {
-                fechar_conexao($conexao);
-                http_response_code(403);
-                retornar_json(false, 'O condomínio selecionado não corresponde ao endereço de acesso.');
-            }
-            $tenant_slug = $tenant_slug ?? $tenant_slug_escolhido;
-        }
+        $tenant_slug = resolverTenantSlugDaUrl(!$isPostgres);
         $tenant = null;
 
         if ($tenant_slug) {
-            if (\ERP\Database\DatabaseDialect::isPostgres($conexao) || $tenant_slug_escolhido !== '') {
-                $superAdminClause = \ERP\Database\DatabaseDialect::isPostgres($conexao)
-                    ? " OR ? = 'super_admin'"
-                    : '';
+            if ($isPostgres) {
+                $superAdminClause = " OR ? = 'super_admin'";
                 $stmt_slug = $conexao->prepare(
                     "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
                             t.plano, t.status, t.logo_url, t.email_principal, t.modulos_habilitados,
@@ -289,11 +276,7 @@ try {
                 if (!$stmt_slug) {
                     throw new RuntimeException('Não foi possível validar o vínculo do tenant.');
                 }
-                if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
-                    $stmt_slug->bind_param('iss', $dados_erp['id'], $tenant_slug, $permissao_global);
-                } else {
-                    $stmt_slug->bind_param('is', $dados_erp['id'], $tenant_slug);
-                }
+                $stmt_slug->bind_param('iss', $dados_erp['id'], $tenant_slug, $permissao_global);
                 if (!$stmt_slug->execute()) {
                     $stmt_slug->close();
                     throw new RuntimeException('Não foi possível validar o vínculo do tenant.');
@@ -303,6 +286,7 @@ try {
                 $stmt_slug->close();
                 if (!$tenant) {
                     fechar_conexao($conexao);
+                    invalidar_sessao_anterior_login_pg();
                     http_response_code(403);
                     retornar_json(false, 'Acesso ao condomínio não autorizado.');
                 }
@@ -313,46 +297,41 @@ try {
         }
 
         if (!$tenant) {
-            // Modo domínio único: buscar o tenant vinculado ao usuário
-            // Se o usuário tiver vínculo com apenas 1 tenant, usa automaticamente
-            // Se tiver múltiplos, retorna lista para seleção
-            if (\ERP\Database\DatabaseDialect::isPostgres($conexao) && $permissao_global === 'super_admin') {
-                $stmt_t = $conexao->prepare(
-                    "SELECT id, slug, razao_social, nome_fantasia, cnpj, plano, status,
-                            logo_url, email_principal, modulos_habilitados, NULL AS permissao
-                     FROM tenants WHERE status = 'ativo' ORDER BY nome_fantasia ASC, id ASC"
-                );
-                if (!$stmt_t || !$stmt_t->execute()) {
-                    if ($stmt_t) $stmt_t->close();
-                    throw new RuntimeException('Não foi possível carregar tenants ativos.');
-                }
-                $tenants_usuario = $stmt_t->get_result()->fetch_all(MYSQLI_ASSOC);
-                $stmt_t->close();
-            } else {
-                $stmt_t = $conexao->prepare(
-                    "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
-                            t.plano, t.status, t.logo_url, t.email_principal,
-                            t.modulos_habilitados, ut.permissao
-                     FROM tenants t
-                     INNER JOIN usuario_tenant ut ON ut.tenant_id = t.id
-                     WHERE ut.usuario_id = ? AND t.status = 'ativo' AND ut.ativo = 1
-                     ORDER BY t.nome_fantasia ASC"
-                );
-                $stmt_t->bind_param('i', $dados_erp['id']);
-                $stmt_t->execute();
-                $res_t = $stmt_t->get_result();
-                $tenants_usuario = $res_t->fetch_all(MYSQLI_ASSOC);
-                $stmt_t->close();
+            // Domínio único: usa somente um vínculo ativo inequívoco.
+            // Ambiguidade exige contexto server-side; não devolver catálogo para seleção client-side.
+            $stmt_t = $conexao->prepare(
+                "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
+                        t.plano, t.status, t.logo_url, t.email_principal,
+                        t.modulos_habilitados, ut.permissao
+                 FROM tenants t
+                 INNER JOIN usuario_tenant ut ON ut.tenant_id = t.id
+                 WHERE ut.usuario_id = ? AND t.status = 'ativo' AND ut.ativo = 1
+                 ORDER BY t.nome_fantasia ASC"
+            );
+            if (!$stmt_t) {
+                throw new RuntimeException('Não foi possível validar o tenant do usuário.');
             }
+            $stmt_t->bind_param('i', $dados_erp['id']);
+            if (!$stmt_t->execute()) {
+                $stmt_t->close();
+                throw new RuntimeException('Não foi possível validar o tenant do usuário.');
+            }
+            $res_t = $stmt_t->get_result();
+            if (!$res_t) {
+                $stmt_t->close();
+                throw new RuntimeException('Não foi possível validar o tenant do usuário.');
+            }
+            $tenants_usuario = $res_t->fetch_all(MYSQLI_ASSOC);
+            $stmt_t->close();
 
             if (count($tenants_usuario) === 0) {
                 // Fallback: usuário não tem vínculo na usuario_tenant
                 // Compatibilidade com instalações antigas — usa tenant_id = 1
                 $tenant = null;
-                if (!\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+                if (!$isPostgres) {
                     $tenant = carregarTenantPorId($conexao, 1);
                 }
-                if ($tenant && !\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+                if ($tenant && !$isPostgres) {
                     // Criar vínculo automaticamente para não repetir este fallback
                     $sql_vinculo = \ERP\Database\DatabaseDialect::idempotentInsertSql(
                         $conexao,
@@ -371,29 +350,35 @@ try {
                     isset($tenants_usuario[0]['permissao']) ? (string)$tenants_usuario[0]['permissao'] : null
                 );
             } else {
-                // Múltiplos tenants: retornar lista para seleção
+                if ($isPostgres) {
+                    fechar_conexao($conexao);
+                    invalidar_sessao_anterior_login_pg();
+                    http_response_code(409);
+                    retornar_json(false, 'O contexto do condomínio não pôde ser determinado para esta conta.');
+                }
+                // Compatibilidade: a resposta legado multi-tenant MySQL já existia na base.
                 fechar_conexao($conexao);
                 $lista = array_map(fn($t) => [
-                    'id'           => $t['id'],
-                    'slug'         => $t['slug'],
-                    'nome'         => $t['nome_fantasia'] ?? $t['razao_social'],
-                    'logo_url'     => $t['logo_url'],
-                    'permissao'    => $t['permissao']
+                    'id'        => $t['id'],
+                    'slug'      => $t['slug'],
+                    'nome'      => $t['nome_fantasia'] ?? $t['razao_social'],
+                    'logo_url'  => $t['logo_url'],
+                    'permissao' => $t['permissao']
                 ], $tenants_usuario);
                 echo json_encode([
                     'sucesso'  => true,
                     'tipo'     => 'selecionar_tenant',
                     'mensagem' => 'Selecione o condomínio que deseja acessar.',
                     'dados'    => [
-                        'nome'     => $dados_erp['nome'],
-                        'tenants'  => $lista
+                        'nome'    => $dados_erp['nome'],
+                        'tenants' => $lista
                     ]
                 ], JSON_UNESCAPED_UNICODE);
                 exit;
             }
         }
 
-        if ($tenant && (\ERP\Database\DatabaseDialect::isPostgres($conexao) || $tenant_slug_escolhido !== '')) {
+        if ($tenant && $isPostgres) {
             $dados_erp['permissao'] = erpPermissaoLoginEfetiva(
                 $permissao_global,
                 isset($tenant['permissao']) ? (string)$tenant['permissao'] : null
@@ -402,6 +387,9 @@ try {
 
         // 5b. Validar que o tenant foi encontrado
         if (!$tenant) {
+            if ($isPostgres) {
+                invalidar_sessao_anterior_login_pg();
+            }
             registrar_log('LOGIN_FALHA', 'TENANT_NAO_DISPONIVEL', null, false);
             retornar_json(false, 'Condomínio não encontrado ou inativo. Verifique o endereço de acesso.');
         }
@@ -620,6 +608,8 @@ try {
         $_SESSION = [];
         session_destroy();
         session_write_close();
+    } elseif (($isPostgres ?? false) && !empty($encontrou_erp)) {
+        invalidar_sessao_anterior_login_pg();
     }
     if (isset($conexao) && $conexao !== null) {
         try {

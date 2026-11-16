@@ -25,6 +25,23 @@ function erp_auth_usuario_id_sessao_valido($usuario_id): bool {
     return $valor !== false && $valor >= 0;
 }
 
+function erp_auth_limpar_sessao_operacional(): bool {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return false;
+    }
+    $_SESSION = [];
+    if (!session_regenerate_id(true)) {
+        $_SESSION = [];
+        session_destroy();
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        return false;
+    }
+    $_SESSION = [];
+    return true;
+}
+
 function verificarAutenticacao($exigir_autenticacao = true, $permissao_minima = null) {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
@@ -157,8 +174,14 @@ function _tentarResolverTenantLegado($usuario_id) {
         require_once __DIR__ . '/config.php';
         $conexao = conectar_banco();
 
-        $slug = resolverTenantSlugDaUrl();
-        if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+        $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
+        if ($isPostgres && !resolverContextoHostTenantPostgres()['trusted']) {
+            erp_auth_limpar_sessao_operacional();
+            fechar_conexao($conexao);
+            return null;
+        }
+        $slug = resolverTenantSlugDaUrl(!$isPostgres);
+        if ($isPostgres) {
             $sql = "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
                            t.plano, t.status, t.logo_url, t.email_principal, t.modulos_habilitados
                     FROM tenants t

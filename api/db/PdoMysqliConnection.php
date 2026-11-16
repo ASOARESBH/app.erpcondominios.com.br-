@@ -556,10 +556,7 @@ final class PdoMysqliConnection
                     'user' => $config['pg_user'],
                     'password' => $config['pg_password'],
                 ]);
-                $searchPath = 'SET search_path TO "' . $config['pg_schema'] . '"';
-                if ($this->pgsql->query($searchPath) !== true) {
-                    throw new RuntimeException('Não foi possível selecionar o schema PostgreSQL.');
-                }
+                self::configurePostgresSession($this->pgsql, $config);
                 $this->pdo = null;
                 $this->error =& $this->pgsql->error;
                 $this->errno =& $this->pgsql->errno;
@@ -611,6 +608,17 @@ final class PdoMysqliConnection
             if (MysqliDropInState::reportsErrors()) {
                 trigger_error($this->connect_error, E_USER_WARNING);
             }
+        }
+    }
+
+    private static function configurePostgresSession(PgsqlMysqliConnection $connection, array $config): void
+    {
+        $searchPath = 'SET search_path TO "' . $config['pg_schema'] . '"';
+        if ($connection->query($searchPath) !== true) {
+            throw new RuntimeException('Não foi possível selecionar o schema PostgreSQL.');
+        }
+        if ($connection->query("SET TIME ZONE '" . $config['pg_timezone'] . "'") !== true) {
+            throw new RuntimeException('Não foi possível configurar o fuso horário PostgreSQL.');
         }
     }
 

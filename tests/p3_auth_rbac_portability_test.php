@@ -3,10 +3,13 @@ declare(strict_types=1);
 
 use ERP\Database\DatabaseDialect;
 use ERP\Database\DatabaseDriverSelector;
+use ERP\Database\PdoMysqliConnection;
 use ERP\Database\PgsqlMysqliConnection;
 
+define('ERP_TRUSTED_TENANT_DOMAINS', ['erpcondominios.com.br']);
 require_once __DIR__ . '/../api/db/DatabaseDriverSelector.php';
 require_once __DIR__ . '/../api/db/DatabaseDialect.php';
+require_once __DIR__ . '/../api/db/PdoMysqliConnection.php';
 require_once __DIR__ . '/../api/tenant_helper.php';
 require_once __DIR__ . '/../api/rbac_helper.php';
 require_once __DIR__ . '/../api/auth_helper.php';
@@ -17,8 +20,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
     $syntheticSessionFile = session_save_path() . '/sess_' . session_id();
     register_shutdown_function(static function () use ($syntheticSessionFile): void {
+        $currentSessionFile = session_save_path() . '/sess_' . session_id();
         if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
         if (is_file($syntheticSessionFile)) unlink($syntheticSessionFile);
+        if ($currentSessionFile !== $syntheticSessionFile && is_file($currentSessionFile)) unlink($currentSessionFile);
     });
 }
 
@@ -89,6 +94,15 @@ final class AuthRbacFakePdo extends PDO
 
     public function __construct()
     {
+    }
+
+    public function getAttribute(int $attribute): mixed
+    {
+        return match ($attribute) {
+            PDO::ATTR_DRIVER_NAME => 'pgsql',
+            PDO::ATTR_CLIENT_VERSION => 'synthetic-pg',
+            default => null,
+        };
     }
 
     public function prepare(string $query, array $options = []): PDOStatement|false
@@ -185,6 +199,22 @@ $test = static function (string $name, callable $operation) use (&$passed): void
 };
 
 try {
+    $test('falha de resolução invalida sessão ERP anterior', static function (): void {
+        $_SESSION = [
+            'usuario_logado' => true,
+            'usuario_id' => 81,
+            'tenant_id' => 23,
+            'usuario_permissao' => 'admin',
+            '_rbac_sessao_id' => 901,
+            '_rbac_cache' => ['moradores.editar' => true],
+        ];
+        $oldSessionId = session_id();
+        p3AssertSame(true, erp_auth_limpar_sessao_operacional(), 'A sessão ativa deve ser invalidada.');
+        p3AssertSame([], $_SESSION, 'Identidade, tenant e cache RBAC anteriores devem ser removidos.');
+        p3AssertSame(false, session_id() === $oldSessionId, 'A limpeza deve rotacionar o identificador anterior.');
+        p3AssertSame(PHP_SESSION_ACTIVE, session_status(), 'A sessão limpa deve permanecer ativa para a resposta 409.');
+    });
+
     $test('driver default mysql e seleção explícita validada', static function (): void {
         p3AssertSame('mysql', DatabaseDriverSelector::resolve(null), 'Driver ausente deve manter MySQL.');
         p3AssertSame('mysql', DatabaseDriverSelector::resolve(''), 'Driver vazio deve manter MySQL.');
@@ -192,6 +222,68 @@ try {
         p3AssertSame('pgsql', DatabaseDriverSelector::resolve('PgSQL'), 'PostgreSQL explícito deve ser aceito.');
         p3AssertThrows(static fn() => DatabaseDriverSelector::resolve('sqlite'), 'Driver não suportado deve falhar.');
         p3AssertThrows(static fn() => DatabaseDriverSelector::resolve(false), 'Tipo de driver inesperado deve falhar.');
+    });
+
+    $test('tenant PostgreSQL aceita somente host confiável e não aceita querystring', static function (): void {
+        $originalServer = $_SERVER;
+        $originalGet = $_GET;
+        try {
+            $_GET = ['tenant' => 'qa-tenant'];
+            $_SERVER['HTTP_HOST'] = 'predio.erpcondominios.com.br:8444';
+            p3AssertSame('predio', resolverTenantSlugDaUrl(false), 'Subdomínio do domínio confiável deve resolver o tenant.');
+            p3AssertSame(['trusted' => true, 'slug' => 'predio'], resolverContextoHostTenantPostgres(), 'Subdomínio válido deve fornecer contexto confiável e slug.');
+            $_SERVER['HTTP_HOST'] = '-predio.erpcondominios.com.br';
+            p3AssertSame(['trusted' => false, 'slug' => null], resolverContextoHostTenantPostgres(), 'Rótulo DNS iniciado por hífen deve ser rejeitado.');
+            $_SERVER['HTTP_HOST'] = 'predio-.erpcondominios.com.br';
+            p3AssertSame(['trusted' => false, 'slug' => null], resolverContextoHostTenantPostgres(), 'Rótulo DNS terminado por hífen deve ser rejeitado.');
+            $_SERVER['HTTP_HOST'] = 'predio.erpcondominios.com.br:65536';
+            p3AssertSame(null, resolverTenantSlugDaUrl(false), 'Porta HTTP fora do intervalo não pode estabelecer tenant.');
+            $_SERVER['HTTP_HOST'] = 'predio.erpcondominios.com.br:0';
+            p3AssertSame(null, resolverTenantSlugDaUrl(false), 'Porta zero não pode estabelecer tenant.');
+
+            $_SERVER['HTTP_HOST'] = 'app.erpcondominios.com.br';
+            p3AssertSame(null, resolverTenantSlugDaUrl(false), 'Domínio base não deve produzir slug de tenant.');
+            p3AssertSame(['trusted' => true, 'slug' => null], resolverContextoHostTenantPostgres(), 'Host reservado confiável não deve selecionar tenant por slug.');
+            $_SERVER['HTTP_HOST'] = 'erpcondominios.com.br';
+            p3AssertSame(['trusted' => true, 'slug' => null], resolverContextoHostTenantPostgres(), 'Domínio-base exato deve ser confiável sem selecionar tenant.');
+            $_SERVER['HTTP_HOST'] = 'app.erpcondominios.com.br';
+            p3AssertSame('qa-tenant', resolverTenantSlugDaUrl(true), 'Comportamento debug legado fica explícito apenas quando habilitado.');
+
+            $_SERVER['HTTP_HOST'] = 'predio.example.net';
+            p3AssertSame(null, resolverTenantSlugDaUrl(false), 'Domínio alheio não pode selecionar tenant.');
+            p3AssertSame(['trusted' => false, 'slug' => null], resolverContextoHostTenantPostgres(), 'Domínio alheio deve ser distinguido do domínio-base confiável.');
+            $_SERVER['HTTP_HOST'] = 'predio.erpcondominios.com.br.attacker.net';
+            p3AssertSame(null, resolverTenantSlugDaUrl(false), 'Sufixo forjado não pode corresponder ao domínio confiável.');
+            $_SERVER['HTTP_HOST'] = 'a.predio.erpcondominios.com.br';
+            p3AssertSame(null, resolverTenantSlugDaUrl(false), 'Subdomínio aninhado não deve ser interpretado como tenant.');
+            $_SERVER['HTTP_HOST'] = 'app.erpcondominios.com.br';
+            p3AssertSame(null, resolverTenantSlugDaUrl(false), 'Parâmetro tenant não pode substituir contexto ausente no PostgreSQL.');
+        } finally {
+            $_SERVER = $originalServer;
+            $_GET = $originalGet;
+        }
+    });
+
+    $test('login PostgreSQL bloqueia Host não confiável antes do fallback de tenant único', static function (): void {
+        $source = file_get_contents(__DIR__ . '/../api/api_verificar_tipo_login.php');
+        p3AssertSame(true, is_string($source), 'O endpoint de login deve estar disponível para inspeção estática.');
+        $hostGate = strpos($source, "if (\$isPostgres && !resolverContextoHostTenantPostgres()['trusted']) {");
+        $fallback = $hostGate === false ? false : strpos($source, 'if (!$tenant) {', $hostGate);
+        p3AssertSame(true, $hostGate !== false && $fallback !== false && $hostGate < $fallback, 'Host PostgreSQL não confiável deve falhar antes do fallback de tenant único.');
+        $gateEnd = substr($source, $hostGate, $fallback - $hostGate);
+        p3AssertSame(true, str_contains($gateEnd, 'invalidar_sessao_anterior_login_pg()') && str_contains($gateEnd, 'http_response_code(403)'), 'A falha de host deve invalidar a sessão anterior e responder 403.');
+    });
+
+    $test('auth_helper bloqueia fallback de sessão em Host PostgreSQL não confiável', static function (): void {
+        $source = file_get_contents(__DIR__ . '/../api/auth_helper.php');
+        p3AssertSame(true, is_string($source), 'O helper de autenticação deve estar disponível para inspeção estática.');
+        $resolver = strpos($source, 'function _tentarResolverTenantLegado');
+        $hostGate = $resolver === false ? false : strpos($source, "if (\$isPostgres && !resolverContextoHostTenantPostgres()['trusted']) {", $resolver);
+        $slugResolution = $hostGate === false ? false : strpos($source, 'resolverTenantSlugDaUrl(!$isPostgres)', $hostGate);
+        $query = $slugResolution === false ? false : strpos($source, 'FROM tenants t', $slugResolution);
+        p3AssertSame(true, $hostGate !== false && $slugResolution !== false && $query !== false && $hostGate < $slugResolution && $slugResolution < $query, 'O Host precisa ser validado antes de resolver slug ou consultar vínculos do tenant.');
+        $gate = substr($source, $hostGate, $slugResolution - $hostGate);
+        p3AssertSame(true, str_contains($gate, 'erp_auth_limpar_sessao_operacional()') && str_contains($gate, 'return null'), 'Host não confiável deve limpar a sessão operacional e encerrar o fallback.');
     });
 
     $test('ID zero legado é válido apenas como inteiro de sessão', static function (): void {
@@ -202,8 +294,8 @@ try {
         p3AssertSame(false, erp_auth_usuario_id_sessao_valido(null), 'ID ausente deve ser rejeitado.');
     });
 
-    $test('permissão do tenant escolhido aplica hierarquia global/local sem promover super_admin', static function (): void {
-        p3AssertSame('admin', erpPermissaoLoginEfetiva('operador', 'admin'), 'Vínculo admin deve ser efetivo no tenant selecionado.');
+    $test('permissão efetiva respeita hierarquia global/local sem promover super_admin', static function (): void {
+        p3AssertSame('admin', erpPermissaoLoginEfetiva('operador', 'admin'), 'Vínculo admin deve ser efetivo no tenant resolvido.');
         p3AssertSame('admin', erpPermissaoLoginEfetiva('admin', 'visualizador'), 'Permissão local não deve rebaixar o papel global na regra vigente.');
         p3AssertSame('super_admin', erpPermissaoLoginEfetiva('super_admin', 'operador'), 'Vínculo local não pode rebaixar super_admin global.');
         p3AssertSame('operador', erpPermissaoLoginEfetiva('operador', 'super_admin'), 'Vínculo local não pode promover a super_admin global.');
@@ -215,6 +307,26 @@ try {
         p3AssertSame('<=>', DatabaseDialect::nullSafeEqualityOperator($mysql), 'MySQL deve manter igualdade null-safe.');
         p3AssertSame(true, DatabaseDialect::supports($mysql), 'Conexão mysqli deve ser suportada.');
         p3AssertSame(true, str_contains(DatabaseDialect::tableExistsSql($mysql), 'DATABASE()'), 'Metadata MySQL deve limitar o schema corrente.');
+
+        $pgsqlFacade = (new ReflectionClass(PdoMysqliConnection::class))->newInstanceWithoutConstructor();
+        $selectedDriver = new ReflectionProperty(PdoMysqliConnection::class, 'selectedDriver');
+        $selectedDriver->setValue($pgsqlFacade, 'pgsql');
+        p3AssertSame(true, DatabaseDialect::supports($pgsqlFacade), 'Facade drop-in selecionada como PostgreSQL deve ser suportada.');
+        p3AssertSame('pgsql', DatabaseDialect::driver($pgsqlFacade), 'Alias global mysqli não pode apagar o driver PostgreSQL selecionado.');
+        p3AssertSame(true, DatabaseDialect::isPostgres($pgsqlFacade), 'Facade PostgreSQL deve selecionar as variantes de SQL do dialecto.');
+        p3AssertSame(true, str_contains(DatabaseDialect::tableExistsSql($pgsqlFacade), 'current_schema()'), 'Metadata pela facade deve continuar PostgreSQL.');
+        p3AssertSame(true, str_contains(DatabaseDialect::idempotentInsertSql($pgsqlFacade, 'INSERT INTO fixture_table (id) VALUES (?)'), 'ON CONFLICT DO NOTHING'), 'Idempotência pela facade deve usar sintaxe PostgreSQL.');
+        p3AssertSame(true, str_contains(DatabaseDialect::rbacRevisionUpsertSql($pgsqlFacade), 'ON CONFLICT')
+            && !str_contains(DatabaseDialect::rbacRevisionUpsertSql($pgsqlFacade), 'ON DUPLICATE KEY'), 'Upsert de revisão pela facade deve usar PostgreSQL.');
+        p3AssertSame(true, str_contains(DatabaseDialect::rbacGroupMembershipUpsertSql($pgsqlFacade), 'ON CONFLICT')
+            && !str_contains(DatabaseDialect::rbacGroupMembershipUpsertSql($pgsqlFacade), 'ON DUPLICATE KEY'), 'Upsert de grupo pela facade deve usar PostgreSQL.');
+        p3AssertSame(true, str_contains(DatabaseDialect::rbacUserPermissionUpsertSql($pgsqlFacade), 'ON CONFLICT')
+            && !str_contains(DatabaseDialect::rbacUserPermissionUpsertSql($pgsqlFacade), 'ON DUPLICATE KEY'), 'Upsert individual pela facade deve usar PostgreSQL.');
+        p3AssertSame(true, str_contains(DatabaseDialect::rbacSessionInsertSql($pgsqlFacade), 'RETURNING id AS insert_id'), 'Insert de sessão pela facade deve retornar PK PostgreSQL.');
+        p3AssertSame(88, DatabaseDialect::lastInsertId($pgsqlFacade, (object)['insert_id' => 88]), 'insert_id pela facade deve vir do statement PostgreSQL.');
+        p3AssertSame('IS NOT DISTINCT FROM', DatabaseDialect::nullSafeEqualityOperator($pgsqlFacade), 'Igualdade null-safe pela facade deve usar PostgreSQL.');
+        $selectedDriver->setValue($pgsqlFacade, 'invalid');
+        p3AssertSame(false, DatabaseDialect::supports($pgsqlFacade), 'Facade não conectada/driver inválido não deve ser considerada conexão MySQL.');
         p3AssertThrows(static fn() => DatabaseDialect::driver(new stdClass()), 'Conexão desconhecida deve falhar.');
     });
 
@@ -366,6 +478,7 @@ try {
 
     $test('Portal PostgreSQL bloqueia antes de escrita e o verificador não expõe session_id', static function (): void {
         $login = file_get_contents(__DIR__ . '/../api/api_verificar_tipo_login.php');
+        $authHelper = file_get_contents(__DIR__ . '/../api/auth_helper.php');
         $session = file_get_contents(__DIR__ . '/../api/verificar_sessao_completa.php');
         $frontend = file_get_contents(__DIR__ . '/../frontend/login.html');
         $sessionInitializer = strpos($login, 'function iniciar_sessao_autenticada_limpa');
@@ -417,23 +530,29 @@ try {
         p3AssertSame(true, is_int($postBarrier) && is_int($postTimeoutConfig) && is_int($postPortalUpdate) && $postBarrier < $postTimeoutConfig && $postTimeoutConfig < $postPortalUpdate, 'POST deve bloquear Portal antes de ler config_sessao ou atualizar sessão Bearer.');
         p3AssertSame(false, str_contains($session, 'session_id()'), 'A resposta do verificador não pode incluir o PHP session_id.');
         p3AssertSame(true, str_contains($session, 'if ($uid >= 0)'), 'ID de usuário zero deve atualizar o estado sessao_inativa no verificador.');
-        p3AssertSame(true, str_contains($login, "\$permissao_global === 'super_admin'") && str_contains($login, "FROM tenants WHERE status = 'ativo'"), 'super_admin global deve receber somente catálogo de tenants ativos no fluxo de domínio único PostgreSQL.');
-        p3AssertSame(true, str_contains($login, 'tenant_slug_escolhido') && str_contains($login, "\A[a-z0-9-]{1,50}\z"), 'Slug de tenant escolhido precisa de validação server-side.');
-        p3AssertSame(true, str_contains($login, 'erpPermissaoLoginEfetiva(') && str_contains($login, "\$_SESSION['usuario_permissao']    = \$dados_erp['permissao']"), 'A permissão efetiva precisa ser aplicada antes de criar a sessão do tenant escolhido.');
-        p3AssertSame(true, str_contains($frontend, "tipo === 'selecionar_tenant'") && str_contains($frontend, 'name.textContent = String(tenant.nome || tenant.slug)'), 'Frontend deve suportar seleção global sem inserir nomes como HTML.');
+        p3AssertSame(true, str_contains($login, "OR ? = 'super_admin'") && str_contains($login, 't.slug = ?') && str_contains($login, 'resolverTenantSlugDaUrl(!$isPostgres)'), 'super_admin global só pode acessar tenant ativo resolvido pelo host do servidor.');
+        p3AssertSame(false, str_contains($login, 'tenant_slug_escolhido') || str_contains($frontend, 'tenant_slug_escolhido') || str_contains($frontend, '_escolherTenant') || str_contains($frontend, '_criarPopupTenant'), 'P3.2 não pode aceitar seleção tenant do cliente nem reenviar senha para um segundo POST.');
+        p3AssertSame(true, str_contains($authHelper, '$slug = resolverTenantSlugDaUrl(!$isPostgres);'), 'Auth helper não pode aceitar ?tenant como contexto PostgreSQL.');
+        p3AssertSame(true, str_contains($login, 'erpPermissaoLoginEfetiva(') && str_contains($login, "\$_SESSION['usuario_permissao']    = \$dados_erp['permissao']"), 'A permissão efetiva precisa ser aplicada antes de criar a sessão do tenant validado.');
+        $ambiguousTenant = strpos($login, "invalidar_sessao_anterior_login_pg();\n                    http_response_code(409);\n                    retornar_json(false, 'O contexto do condomínio não pôde ser determinado para esta conta.')");
+        p3AssertSame(true, is_int($ambiguousTenant), 'A resposta 409 PostgreSQL deve invalidar sessão prévia antes de retornar.');
     });
 
     $test('auditoria do login não registra identificadores pessoais nem IP', static function (): void {
         $login = file_get_contents(__DIR__ . '/../api/api_verificar_tipo_login.php');
+        $config = file_get_contents(__DIR__ . '/../api/config.php');
         $auditCalls = array_values(array_filter(explode("\n", $login), static fn(string $line): bool => str_contains($line, 'registrar_log(')));
         p3AssertSame(true, count($auditCalls) >= 8, 'Eventos de login devem continuar auditáveis por código.');
         foreach ($auditCalls as $call) {
             p3AssertSame(false, preg_match('/\$(?:email|dados_erp|dados_morador|usuario|tenant_slug|tenant)|HTTP_USER_AGENT|REMOTE_ADDR/', $call) === 1, 'Evento não pode armazenar e-mail, nome, slug, user-agent ou IP.');
             p3AssertSame(true, str_contains($call, 'null, false'), 'Toda auditoria do login deve omitir usuário e IP.');
         }
+        p3AssertSame(true, str_contains($config, 'function registrar_log($tipo, $descricao, $usuario = null, $incluirIp = true)')
+            && str_contains($config, 'function erp_registrar_log_em_conexao(')
+            && str_contains($config, "\$ip = \$incluirIp ? (\$_SERVER['REMOTE_ADDR'] ?? 'desconhecido') : null;"), 'O registrador expõe a política de IP e delega a persistência à conexão recebida.');
     });
 
-    $test('senha pendente do seletor é limpa após cancelamento, erro ou login terminal', static function (): void {
+    $test('credenciais temporárias do seletor ERP/Portal legado são limpas', static function (): void {
         $frontend = file_get_contents(__DIR__ . '/../frontend/login.html');
         $cancelStart = strpos($frontend, 'function _fecharPopup()');
         $cancelClear = is_int($cancelStart) ? strpos($frontend, '_limparCredenciaisPendentes();', $cancelStart) : false;
