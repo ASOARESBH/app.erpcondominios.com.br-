@@ -1,34 +1,36 @@
-# Camada P3: fachada mysqli sobre PDO PostgreSQL
+# Camada P3: compatibilidade mysqli sobre PDO
 
-Esta primeira fatia adiciona uma fachada de compatibilidade orientada a objetos, sem conectar automaticamente a aplicação e sem substituir a classe nativa `mysqli`.
+A camada é incremental e **não ativa PostgreSQL na aplicação por padrão**. A P3.1 adicionou a fachada OO PostgreSQL; a P3.1b adiciona um shim opt-in para o subconjunto mysqli efetivamente consumido pelo ERP. MySQL continua sendo o driver padrão.
 
-## Arquivos
+## Componentes
 
-- `PgsqlMysqliConnection.php`: conecta via PDO PostgreSQL quando `pdo_pgsql` estiver habilitado, prepara consultas, executa queries, administra transações e mantém estado de erro resumido.
-- `PgsqlMysqliStatement.php`: oferece `bind_param`, `execute`, `get_result`, `bind_result`/`fetch`, `store_result` e `close`.
-- `PgsqlMysqliResult.php`: oferece resultados bufferizados por `fetch_assoc`, `fetch_row`, `fetch_array`, `fetch_all`, `data_seek` e `free`.
+- `PgsqlMysqliConnection.php`, `PgsqlMysqliStatement.php` e `PgsqlMysqliResult.php`: núcleo PDO PostgreSQL com bindings, transações, resultados bufferizados, estado de erro sanitizado e scanner de placeholders.
+- `PdoMysqliConnection.php`, `PdoMysqliStatement.php` e `PdoMysqliResult.php`: fachada compartilhada para PDO MySQL/PostgreSQL, com verificação de que os argumentos legados da conexão correspondem ao destino da configuração selecionada.
+- `MysqliDropIn.php` e `MysqliDropInFunctions.php`: bootstrap que instala aliases globais `mysqli`, `mysqli_stmt`, `mysqli_result` e `mysqli_sql_exception`, as constantes `MYSQLI_*` presentes no corpus e 26 funções procedurais (20 nomes no corpus amplo versionado, incluindo bootstrap; 19 fora dele; e 6 wrappers de charset, BLOB e multi-query).
+- `MysqliDropInAutoPrepend.php`: ativação prévia ao script PHP, com falha sanitizada HTTP 503.
 
-## Contrato e restrições
+## Seleção e segurança de configuração
 
-- A classe ainda não é carregada por `api/config.php`, não altera `conectar_banco()` e não troca o driver do ERP. A seleção do driver e a integração da sessão ficam para o PR seguinte.
-- Não é substituta drop-in de `mysqli`: chamadas procedurais `mysqli_*`, herança/identidade de tipo nativo, `multi_query`, resultados streaming, metadados completos de campo e transaction flags/names não são suportados.
-- Consultas preparadas aceitam placeholders posicionais `?`; `param_count` ignora literais/comentários e placeholders PDO escapados `??`. Use `??` para operadores PostgreSQL JSON que contenham `?`. `bind_param` aceita tipos mysqli `i`, `d`, `s` e `b`; `execute($params)` exige lista posicional com cardinalidade exata e não pode ser misturado a bindings `bind_param` no mesmo ciclo. Código novo deve preferir prepared statements e não montar SQL com escaping.
-- O scanner léxico de parâmetros respeita delimitadores dollar-quote e identificadores UTF-8 segundo a [documentação lexical oficial](https://www.postgresql.org/docs/current/sql-syntax-lexical.html) e o [scanner do PostgreSQL 18](https://raw.githubusercontent.com/postgres/postgres/REL_18_STABLE/src/backend/parser/scan.l), incluindo o tratamento por byte dos caracteres não ASCII.
-- Resultsets são bufferizados em memória. A adequação a consultas grandes precisa ser avaliada por endpoint antes do uso.
-- Resultados solicitados como associativos e posicionais são materializados por `PDO::FETCH_BOTH`, preservando colunas homônimas para `fetch_row`, `fetch_array(MYSQLI_NUM)` e `bind_result`; `fetch_assoc` mantém somente o último valor para um rótulo repetido, como ocorre com arrays associativos.
-- PostgreSQL não fornece um `insert_id` universal equivalente ao MySQL. O adapter só devolve esse valor para INSERT iniciado diretamente com `RETURNING ... AS insert_id`; `INSERT ... RETURNING id` sem alias e INSERT dentro de CTE não alimentam a propriedade. Cada nova execução limpa o ID anterior. A tradução dos escritores existentes deve usar a forma documentada e ser explícita.
-- `close()` na conexão impede novas operações também nos statements já preparados; `close()` no statement é idempotente e invalida suas futuras execuções. Falhas limpam o estado da execução anterior.
-- `connect()` falha com `RuntimeException` sanitizada; a fachada não expõe `connect_error`/`connect_errno` compatíveis com o objeto nativo.
-- O mapeamento `SQLSTATE` → `errno` cobre códigos comuns apenas para compatibilidade de transição. A mensagem exposta não inclui SQL, valores ou texto bruto do driver.
-- `set_charset('utf8'|'utf8mb4')` significa UTF-8 PostgreSQL. Outros charsets são rejeitados.
+- `ERP_DB_DRIVER=mysql` continua sendo o default de compatibilidade; PostgreSQL exige `ERP_DB_DRIVER=pgsql` e as constantes próprias `ERP_PG_*`, incluindo schema explícito. As credenciais do driver não selecionado não são copiadas para os aliases `DB_*`.
+- O shim só carrega quando a extensão nativa `mysqli` não está ativa. O pool isolado deve configurar `auto_prepend_file` para `api/db/MysqliDropInAutoPrepend.php` e `ERP_CONFIG_PATH` para um arquivo privado fora do document root, sem permissões de grupo/outros (`0600` recomendado). No FPM, ausência ou impossibilidade de verificar o document root, caminho explícito inválido e driver indisponível falham fechados antes da API, com resposta sanitizada; o bootstrap descarta saída parcial. Sem `ERP_CONFIG_PATH`, o fallback MySQL legado usa o mesmo resolvedor de caminho/permissões, e qualquer saída do arquivo invalida a configuração sem vazar para a resposta.
+- Os parâmetros fornecidos por `new mysqli(...)`/`mysqli_connect(...)` não escolhem outro banco: se divergirem do perfil privado selecionado, a conexão é recusada. O shim não deve ser carregado junto com a extensão nativa nem em um pool compartilhado com runtimes distintos.
+- `mysqli_report(MYSQLI_REPORT_STRICT)` lança a exceção compatível sanitizada; erros não expõem query, valores ou texto bruto do driver. `connect_errno` preserva o código numérico reportado pelo PDO e usa `2002` como fallback genérico.
 
-## Teste local
+## Contrato e limites
+
+- Os aliases permitem type hints e `instanceof` do subconjunto inventariado, mas **não implementam toda a API mysqli**. `multi_query`, `more_results`, `next_result` e `store_result` da conexão são sequenciais, MySQL/PDO-only e bufferizados. O parser entende delimitadores fora de literais/comentários e recusa `DELIMITER`, `CALL` e DDL de stored programs; uma falha intermediária não reverte statements já executados. `send_long_data` aceita apenas parâmetros `b` vinculados e acumula o payload em `php://temp` até `execute` (até 2 MiB em memória antes de poder usar armazenamento temporário); não é streaming de ponta a ponta. Metadados completos de campos/avisos, resultados não bufferizados e flags/names avançados de transação continuam fora do contrato; chamadas não inventariadas não devem ser presumidas suportadas.
+- Prepared statements aceitam placeholders posicionais `?`; o scanner considera literais, comentários, dollar quotes e escapes conforme o driver. `bind_param` preserva referências e valida quantidade/tipos. Resultsets são materializados em memória; avalie o tamanho por endpoint.
+- PostgreSQL: o `insert_id` de `RETURNING id` ou `RETURNING ... AS insert_id` é lido do resultado; no caminho explícito, os nomes reconhecidos para a coluna retornada são `id` e `insert_id`. Outros aliases/nomes continuam visíveis no resultset, mas não alimentam `insert_id`. Para um `INSERT ... VALUES` de uma única tupla, com lista de colunas explícita que omite a PK serial/identity, o adapter acrescenta internamente `RETURNING <PK> AS insert_id` e oculta essa coluna auxiliar do contrato público; assim o ID vem da própria linha, não de `currval()`/`lastval()` compartilhado. A reescrita usa nome de coluna obtido de metadata e escapado como identificador. Multi-row, `INSERT ... SELECT`, `ON CONFLICT`, lista de colunas implícita, PK informada pelo chamador e outros formatos ambíguos não são reescritos e deixam `insert_id=0`, mesmo se uma única linha tiver sido afetada. Se a PK/sequence não puder ser identificada, a consulta original permanece intacta e o ID fica zero. Valores nulos em `bind_param` e `execute(array)` são vinculados como `PDO::PARAM_NULL`.
+- MySQL via PDO usa `lastInsertId()` após INSERT bem-sucedido. Os resultados do adapter e a equivalência de cada consulta da aplicação ainda precisam de homologação diferencial.
+- `set_charset('utf8'|'utf8mb4')` e `character_set_name()` representam UTF-8 nos dois drivers. Em MySQL, `real_escape_string()` usa `PDO::quote` no modo padrão; quando o SQL mode detectado inclui `NO_BACKSLASH_ESCAPES`, duplica aspas simples sem adicionar escapes por barra invertida e rejeita byte NUL. Alterações de `SESSION sql_mode` por query direta ou prepared statement invalidam o estado; o valor efetivo é relido antes do próximo escape e antes da divisão de multi-query. Uma multi-query que contenha qualquer referência a `sql_mode` é recusada para evitar mudança de regras no meio do lote; falha ao consultar o modo interrompe a operação antes de executar o lote. As mensagens e erros são sanitizados; não registre senhas, tokens, cookies ou hashes.
+
+## Testes locais
 
 ```bash
-php -l api/db/PgsqlMysqliConnection.php
-php -l api/db/PgsqlMysqliStatement.php
-php -l api/db/PgsqlMysqliResult.php
-php tests/p3_mysqli_compat_test.php
+D=$(php -r 'echo ini_get("extension_dir");')
+php -n -d extension=pdo -d extension="$D/mysqlnd.so" -d extension="$D/pdo_mysql.so" tests/p3_mysqli_compat_test.php
+php -n -d extension=pdo -d extension="$D/mysqlnd.so" -d extension="$D/pdo_mysql.so" tests/p3_mysqli_dropin_test.php
+php tests/p3_mysqli_dropin_test.php
 ```
 
-O harness injeta `PDO`/`PDOStatement` sintéticos; não abre conexão MySQL/PostgreSQL nem depende de fixture com dados do ERP.
+A suíte sintética injeta PDO/statement falsos e verifica aliases, APIs procedurais, falha fechada, binding, metadata de PK/sequence, destino, BLOB, multi-query, escape por SQL mode e sanitização (26 testes do núcleo e 37 assertions do processo pai no harness sem mysqli nativa; 39 no CLI normal). Os subprocessos do harness são validados por status e marcadores, sem agregar as assertions internas. O teste do insert_id modela separadamente o ID da linha (89) e o valor posterior da mesma sequence (90), cobrindo o risco de trigger consumir essa sequence; continua sem executar trigger PostgreSQL real. Não abre conexão com MySQL ou PostgreSQL; os testes HTTP/PHP-FPM e a validação em engines reais são gates separados.

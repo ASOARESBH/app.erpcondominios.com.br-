@@ -8,7 +8,8 @@
 
 if (!function_exists('erp_responder_configuracao_indisponivel')) {
     function erp_responder_configuracao_indisponivel() {
-        http_response_code(500);
+        $driver = defined('ERP_DB_DRIVER') ? strtolower(trim((string)ERP_DB_DRIVER)) : 'mysql';
+        http_response_code($driver === 'pgsql' ? 503 : 500);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'sucesso' => false,
@@ -18,25 +19,46 @@ if (!function_exists('erp_responder_configuracao_indisponivel')) {
     }
 }
 
-$erpConfigCandidates = [];
-$erpConfigEnv = getenv('ERP_CONFIG_PATH');
-if (is_string($erpConfigEnv) && trim($erpConfigEnv) !== '') {
-    $erpConfigCandidates[] = trim($erpConfigEnv);
-}
-
-// Padrão HostGator: /home/USUARIO/erpcondominios-private/erp_config.php
-$erpConfigCandidates[] = dirname(__DIR__, 2) . '/erpcondominios-private/erp_config.php';
-
+require_once __DIR__ . '/db/PrivateConfigPath.php';
+$erpConfigPath = \ERP\Database\PrivateConfigPath::resolve();
 $erpConfigLoaded = false;
-foreach (array_unique($erpConfigCandidates) as $erpConfigPath) {
-    if (is_file($erpConfigPath) && is_readable($erpConfigPath)) {
+if (is_string($erpConfigPath)) {
+    $configOutputDetected = false;
+    $configIncludeFailed = false;
+    ob_start(static function ($output) use (&$configOutputDetected) {
+        if ($output !== '') {
+            $configOutputDetected = true;
+        }
+        return '';
+    });
+    try {
         require_once $erpConfigPath;
-        $erpConfigLoaded = true;
-        break;
+    } catch (Throwable) {
+        $configIncludeFailed = true;
+    } finally {
+        ob_end_flush();
+    }
+    $erpConfigLoaded = !$configIncludeFailed && !$configOutputDetected;
+    if (!$erpConfigLoaded) {
+        error_log('[ERP_CONFIG] Configuração externa indisponível.');
     }
 }
 
-$erpRequiredConstants = ['ERP_DB_HOST', 'ERP_DB_NAME', 'ERP_DB_USER', 'ERP_DB_PASS'];
+$erpDatabaseDriver = defined('ERP_DB_DRIVER') ? strtolower(trim((string)ERP_DB_DRIVER)) : 'mysql';
+if (!in_array($erpDatabaseDriver, ['mysql', 'pgsql'], true)) {
+    error_log('[ERP_CONFIG] Driver de banco inválido.');
+    erp_responder_configuracao_indisponivel();
+}
+if ($erpDatabaseDriver === 'pgsql'
+    && (!class_exists(\ERP\Database\MysqliDropInBootstrap::class, false)
+        || !\ERP\Database\MysqliDropInBootstrap::installed())) {
+    error_log('[ERP_CONFIG] Bootstrap PostgreSQL indisponível.');
+    erp_responder_configuracao_indisponivel();
+}
+
+$erpRequiredConstants = $erpDatabaseDriver === 'pgsql'
+    ? ['ERP_PG_HOST', 'ERP_PG_NAME', 'ERP_PG_USER', 'ERP_PG_PASS', 'ERP_PG_SCHEMA']
+    : ['ERP_DB_HOST', 'ERP_DB_NAME', 'ERP_DB_USER', 'ERP_DB_PASS'];
 foreach ($erpRequiredConstants as $erpConstant) {
     if (!$erpConfigLoaded || !defined($erpConstant) || (string)constant($erpConstant) === '') {
         error_log('[ERP_CONFIG] Configuração externa ausente ou incompleta.');
@@ -44,11 +66,19 @@ foreach ($erpRequiredConstants as $erpConstant) {
     }
 }
 
-if (!defined('DB_HOST')) define('DB_HOST', ERP_DB_HOST);
-if (!defined('DB_NAME')) define('DB_NAME', ERP_DB_NAME);
-if (!defined('DB_USER')) define('DB_USER', ERP_DB_USER);
-if (!defined('DB_PASS')) define('DB_PASS', ERP_DB_PASS);
-if (!defined('DB_CHARSET')) define('DB_CHARSET', defined('ERP_DB_CHARSET') ? ERP_DB_CHARSET : 'utf8mb4');
+if ($erpDatabaseDriver === 'pgsql') {
+    if (!defined('DB_HOST')) define('DB_HOST', ERP_PG_HOST);
+    if (!defined('DB_NAME')) define('DB_NAME', ERP_PG_NAME);
+    if (!defined('DB_USER')) define('DB_USER', ERP_PG_USER);
+    if (!defined('DB_PASS')) define('DB_PASS', ERP_PG_PASS);
+    if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
+} else {
+    if (!defined('DB_HOST')) define('DB_HOST', ERP_DB_HOST);
+    if (!defined('DB_NAME')) define('DB_NAME', ERP_DB_NAME);
+    if (!defined('DB_USER')) define('DB_USER', ERP_DB_USER);
+    if (!defined('DB_PASS')) define('DB_PASS', ERP_DB_PASS);
+    if (!defined('DB_CHARSET')) define('DB_CHARSET', defined('ERP_DB_CHARSET') ? ERP_DB_CHARSET : 'utf8mb4');
+}
 
 date_default_timezone_set(defined('ERP_TIMEZONE') ? ERP_TIMEZONE : 'America/Sao_Paulo');
 error_reporting(E_ALL);

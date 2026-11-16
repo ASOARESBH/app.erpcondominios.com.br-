@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace ERP\Database;
 
-final class PgsqlMysqliResult
+class PgsqlMysqliResult
 {
     public int $num_rows;
     public int $field_count;
@@ -83,6 +83,11 @@ final class PgsqlMysqliResult
     public function free_result(): void
     {
         $this->free();
+    }
+
+    public function allRows(): array
+    {
+        return $this->freed ? [] : $this->rows;
     }
 
     private static function numericValues(array $row): array

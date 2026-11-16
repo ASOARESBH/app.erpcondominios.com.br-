@@ -3,6 +3,16 @@
 Registro de alterações significativas no ERP.
 
 ## [Unreleased]
+
+
+### Projeto PostgreSQL P3.1b — shim mysqli sobre PDO (branch isolada, 2026-11-15)
+- Adicionado bootstrap opt-in via `auto_prepend_file` para aliases mysqli e 26 funções procedurais, sem carregar junto da extensão nativa. MySQL continua default; PostgreSQL exige perfil próprio e schema, enquanto argumentos de conexão divergentes são rejeitados.
+- A superfície observada inclui BLOB com `send_long_data`, charset e multi-query sequencial MySQL/PDO; resultados são bufferizados, `CALL`/DDL de stored programs falham fechados, e multi-query não oferece rollback dos statements já executados.
+- `insert_id` PostgreSQL explícito vem do `RETURNING` solicitado; para uma tupla `INSERT ... VALUES` com lista explícita que omite uma PK serial/identity identificável, o adapter acrescenta `RETURNING <PK> AS insert_id` internamente e oculta a coluna auxiliar. O ID é, assim, o da própria linha, não o avanço de `currval()`/`lastval()`; o teste sintético modela ID 89 da linha e estado final 90 após consumo adicional da mesma sequence. Multi-row, `INSERT ... SELECT`, `ON CONFLICT`, PK fornecida pelo chamador e lista de colunas implícita ficam sem rewrite e retornam zero. Bindings `null` usam `PDO::PARAM_NULL`. Erros do bootstrap são sanitizados; tanto o caminho externo explícito quanto o fallback MySQL legado passam pelo resolvedor privado, e output inesperado da configuração é descartado e invalidado.
+- `real_escape_string` MySQL usa o SQL mode sincronizado com a sessão: no `NO_BACKSLASH_ESCAPES`, duplica aspas simples, preserva barras invertidas e rejeita byte NUL; mudanças via query direta ou prepared statement invalidam o estado e exigem releitura antes do próximo escape; multi-query com referência a `sql_mode` é recusada antes de executar o lote; nos demais modos, mantém `PDO::quote`.
+- QA local: 26/26 testes unitários sintéticos P3.1 core; harness drop-in com 37 assertions do processo pai sem mysqli nativa e 39 no CLI normal, incluindo recusa da extensão nativa; checagens dos subprocessos usam exit status e marcadores PASS, não são somadas ao contador. O fake cobre o efeito de trigger consumindo a mesma sequence, mas não executa trigger PostgreSQL real. Sem conexão por este shim a engines reais, sem PHP-FPM/HTTP, sem mudanças na Hetzner ou produção.
+- Linter em corpus idêntico `api/*.php`: 340 arquivos/1.678 ocorrências/145 arquivos afetados no SHA base `219ef48f59a3e9f3cc5081f7e3b3f6da1e9097dc`; worktree 347 arquivos e o mesmo total 1.678/145. Os sete PHP novos não aumentaram findings.
+- Esta branch prepara o runtime, mas não é prova de compatibilidade integral nem autorização de ativação/deploy. O gate de homologação HTTP/PHP-FPM isolada e o teste MySQL 8444 ainda não foram executados.
 ### Projeto PostgreSQL P1 — Hetzner (parcial, 2026-11-15)
 - Iniciado o cluster PostgreSQL 18.6 apenas em loopback; preparado banco vazio `erp_pg_dev` com schemas `erp`/`legado`, ICU `ci` e perfil de memória 512 MB/2 GB/8 MB.
 - Backup root-only da configuração PostgreSQL antes do ajuste; monitoramento inicial >5 min manteve memória disponível acima de 5,5 GB e PSI `avg10=0.00`.
@@ -13,7 +23,7 @@ Registro de alterações significativas no ERP.
 - Adicionada fachada OO PDO PostgreSQL em `api/db/` com wrappers mysqli parciais e 19 testes unitários sintéticos. Após revisão, os resultsets preservam posições mesmo com rótulos repetidos; estados de resultado/insert_id são limpos; statements fechados ou com conexão encerrada não executam; cardinalidade e modo de binding são validados.
 - `insert_id` só usa `RETURNING ... AS insert_id` em INSERT direto; sem alias não há inferência por LASTVAL, que poderia refletir sequence de trigger.
 - O scanner de `param_count` segue as classes bytewise do lexer PostgreSQL 18 para tags dollar-quote e fronteiras de identificador, inclusive bytes UTF-8 altos; testes cobrem tags Unicode/emoji, caixa exata e dígitos.
-- Linter antes/depois medido sobre corpus explicitado: 1.678/145 em 337 arquivos `api/*.php` → 1.678/145 em 340 arquivos (incluídos três wrappers novos, sem findings). O baseline informado 1.677/142 não foi reproduzido e está documentado para reconciliação.
+- Linter antes/depois medido sobre todos os arquivos PHP rastreados recursivamente sob `api/` (`find api -type f -name '*.php'`): 1.678/145 em 337 arquivos → 1.678/145 em 340 arquivos (incluídos três wrappers novos, sem findings). O baseline informado 1.677/142 não foi reproduzido e está documentado para reconciliação.
 
 ### Corrigido
 - Portal do Morador: layout de abas convertido em sidebar vertical responsiva/drawer, preservando os 14 módulos e seus loaders.

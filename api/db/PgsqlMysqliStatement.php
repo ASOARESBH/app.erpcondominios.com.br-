@@ -12,12 +12,13 @@ final class PgsqlMysqliStatement
     public string $error = '';
     public int $errno = 0;
     public int $affected_rows = 0;
-    public int $insert_id = 0;
+    public int|string $insert_id = 0;
     public int $num_rows = 0;
     public int $param_count = 0;
     public int $field_count = 0;
 
     private array $boundParams = [];
+    private array $longDataBuffers = [];
     private array $boundResults = [];
     private array $rows = [];
     private int $cursor = 0;
@@ -29,13 +30,15 @@ final class PgsqlMysqliStatement
         private readonly PgsqlMysqliConnection $connection,
         private readonly PDO $pdo,
         private readonly PDOStatement $statement,
-        private readonly string $query
+        private readonly string $query,
+        private readonly bool $hasInternalInsertId = false
     ) {
         $this->param_count = self::countPositionalParameters($query);
     }
 
     public function bind_param(string $types, mixed &...$variables): bool
     {
+        $this->clearLongDataBuffers();
         if ($this->closed || $this->connection->isClosed()) {
             $this->setError('Statement ou conexão encerrada.', 2006);
             return false;
@@ -66,34 +69,79 @@ final class PgsqlMysqliStatement
         return true;
     }
 
+    public function send_long_data(int $param_num, string $data): bool
+    {
+        if ($this->closed || $this->connection->isClosed()) {
+            $this->setError('Statement ou conexão encerrada.', 2006);
+            return false;
+        }
+        if ($param_num < 0 || !isset($this->boundParams[$param_num]) || $this->boundParams[$param_num]['type'] !== 'b') {
+            $this->setError('Parâmetro binário não vinculado.', 2031);
+            return false;
+        }
+        if (!isset($this->longDataBuffers[$param_num])) {
+            $stream = fopen('php://temp/maxmemory:2097152', 'w+b');
+            if (!is_resource($stream)) {
+                $this->setError('Buffer binário indisponível.', 1);
+                return false;
+            }
+            $this->longDataBuffers[$param_num] = $stream;
+        }
+        $stream = $this->longDataBuffers[$param_num];
+        if (fwrite($stream, $data) !== strlen($data)) {
+            $this->clearLongDataBuffers();
+            $this->setError('Falha ao armazenar conteúdo binário.', 1);
+            return false;
+        }
+        $this->clearError();
+        return true;
+    }
+
     public function execute(?array $params = null): bool
     {
         $this->resetResultState();
         if ($this->closed || $this->connection->isClosed()) {
+            $this->clearLongDataBuffers();
             $this->setError('Statement ou conexão encerrada.', 2006);
             return false;
         }
 
         if ($params !== null) {
             if ($this->parameterMode === 'bind_param' || !array_is_list($params) || count($params) !== $this->param_count) {
+                $this->clearLongDataBuffers();
                 $this->setError('Quantidade ou forma de parâmetros incompatível.', 2031);
                 return false;
             }
             $this->parameterMode = 'execute';
         } elseif (($this->requiresExplicitParams && $this->param_count > 0)
             || ($this->param_count > 0 && count($this->boundParams) !== $this->param_count)) {
+            $this->clearLongDataBuffers();
             $this->setError('Os parâmetros devem ser vinculados antes da execução.', 2031);
             return false;
         }
 
+        $isInsert = preg_match('/\A\s*INSERT\b/i', $this->query) === 1;
+        $hasReturning = $isInsert && PgsqlMysqliConnection::hasReturningClause($this->query);
         try {
             if ($params !== null) {
-                $executed = $this->statement->execute($params);
+                foreach ($params as $index => $value) {
+                    if (!$this->statement->bindValue($index + 1, $value, self::pdoTypeForValue($value))) {
+                        $this->setError('Falha ao vincular parâmetros.', 2031);
+                        return false;
+                    }
+                }
+                $executed = $this->statement->execute();
                 $this->requiresExplicitParams = $this->param_count > 0;
             } else {
                 foreach ($this->boundParams as $index => $binding) {
-                    $value = $binding['value'];
-                    $this->statement->bindValue($index + 1, $value, $this->pdoTypeForMysqliType($binding['type']));
+                    $value = $this->longDataBuffers[$index] ?? $binding['value'];
+                    if (is_resource($value)) {
+                        rewind($value);
+                    }
+                    $type = isset($this->longDataBuffers[$index])
+                        ? PDO::PARAM_LOB
+                        : $this->pdoTypeForMysqliType($binding['type'], $value);
+                    $this->statement->bindValue($index + 1, $value, $type);
                 }
                 $executed = $this->statement->execute();
             }
@@ -103,17 +151,24 @@ final class PgsqlMysqliStatement
                 return false;
             }
 
-            $this->field_count = $this->statement->columnCount();
+            $databaseFieldCount = $this->statement->columnCount();
             $this->affected_rows = $this->statement->rowCount();
-            $this->rows = $this->field_count > 0 ? $this->statement->fetchAll(PDO::FETCH_BOTH) : [];
-            $this->num_rows = count($this->rows);
+            $rows = $databaseFieldCount > 0 ? $this->statement->fetchAll(PDO::FETCH_BOTH) : [];
+            if ($this->hasInternalInsertId) {
+                $this->insert_id = PgsqlMysqliConnection::returnedInsertId($rows);
+                $this->field_count = 0;
+                $this->rows = [];
+                $this->num_rows = 0;
+            } else {
+                $this->field_count = $databaseFieldCount;
+                $this->rows = $rows;
+                $this->num_rows = count($this->rows);
+            }
             if (count($this->boundResults) !== $this->field_count) {
                 $this->boundResults = [];
             }
 
-            if ($this->field_count > 0
-                && preg_match('/\A\s*INSERT\b/i', $this->query) === 1
-                && preg_match('/\bRETURNING\b/i', $this->query) === 1) {
+            if (!$this->hasInternalInsertId && $this->field_count > 0 && $hasReturning) {
                 $this->insert_id = PgsqlMysqliConnection::returnedInsertId($this->rows);
             }
             $this->connection->recordResult($this->affected_rows, $this->insert_id);
@@ -123,6 +178,8 @@ final class PgsqlMysqliStatement
             $this->resetResultState();
             $this->setErrorFromException($exception);
             return false;
+        } finally {
+            $this->clearLongDataBuffers();
         }
     }
 
@@ -195,6 +252,7 @@ final class PgsqlMysqliStatement
         }
         $this->closed = true;
         $this->boundParams = [];
+        $this->clearLongDataBuffers();
         $this->resetResultState(true, false);
         try {
             return $this->statement->closeCursor();
@@ -218,6 +276,16 @@ final class PgsqlMysqliStatement
         if ($updateConnection) {
             $this->connection->recordResult(0, 0);
         }
+    }
+
+    private function clearLongDataBuffers(): void
+    {
+        foreach ($this->longDataBuffers as $stream) {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+        $this->longDataBuffers = [];
     }
 
     private static function numericValues(array $row): array
@@ -324,19 +392,32 @@ final class PgsqlMysqliStatement
         return $count;
     }
 
+    public static function countParametersForCompatibility(string $sql): int
+    {
+        return self::countPositionalParameters($sql);
+    }
+
     private static function isIdentifierByte(string $byte): bool
     {
         return $byte !== '' && preg_match('/\A[A-Za-z0-9_$\x80-\xFF]\z/D', $byte) === 1;
     }
 
-    private function pdoTypeForMysqliType(string $type): int
+    private function pdoTypeForMysqliType(string $type, mixed $value): int
     {
+        if ($value === null) {
+            return PDO::PARAM_NULL;
+        }
         return match ($type) {
             'i' => PDO::PARAM_INT,
             'b' => PDO::PARAM_LOB,
             'd', 's' => PDO::PARAM_STR,
             default => PDO::PARAM_STR,
         };
+    }
+
+    private static function pdoTypeForValue(mixed $value): int
+    {
+        return $value === null ? PDO::PARAM_NULL : PDO::PARAM_STR;
     }
 
     private function setError(string $message, int $errno): void

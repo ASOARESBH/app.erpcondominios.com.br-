@@ -1,6 +1,6 @@
 # Guia de Testes e QA
 
-O sistema não possui testes automatizados (Jest/PHPUnit). Os testes são manuais e focados em comportamento.
+O sistema não possui uma suíte central Jest/PHPUnit; a validação geral permanece manual e focada em comportamento. Algumas camadas têm harnesses PHP CLI sintéticos específicos, registrados nas seções correspondentes, que não equivalem a testes de integração da aplicação.
 
 ## 1. Testes de Frontend
 - **Navegação**: Verificar se o AppRouter carrega a página, CSS e JS sem recarregar a janela.
@@ -172,4 +172,14 @@ A fase P1 segue parcial: `erp_pg_source` é somente o clone MySQL de origem, ain
 
 `php tests/p3_mysqli_compat_test.php`: 19/19 testes sintéticos passaram, cobrindo DSN validado, bindings diretos e por array unpack/reuso, invalidação de bindings inválidos, contagem de placeholders fora de literais/comentários/dollar quotes e identificadores/tags Unicode com `$`, sensibilidade a caixa e tags com dígitos, colunas com nomes repetidos, resultsets bufferizados, `RETURNING insert_id`, limpeza de estado após falha/UPDATE, cardinalidade/reutilização de `execute($params)`, transações, SQLSTATE, UTF-8, escape e lifecycle de close. Os testes injetam PDO/statement falsos; nenhuma conexão MySQL/PostgreSQL foi aberta. `php -l` passou nos três arquivos `api/db/` e no harness.
 
-Linter no corpus `api/*.php`: antes, 1.678 ocorrências em 145 arquivos afetados entre 337 entradas; depois, no mesmo corpus mais três arquivos novos, 1.678/145 entre 340 entradas. Os novos arquivos não acrescentaram ocorrências. Isso difere da baseline informada (1.677/142), que não foi reproduzida com o corpus/versionamento atualmente disponível. Não foram executados testes de integração com PostgreSQL real nem testes diferenciais da aplicação.
+Linter recursivo em todos os PHP rastreados sob `api/` (receita: `find api -type f -name '*.php'`): antes, 1.678 ocorrências em 145 arquivos afetados entre 337 entradas; depois, no mesmo corpus mais três arquivos novos, 1.678/145 entre 340 entradas. Os novos arquivos não acrescentaram ocorrências. Isso difere da baseline informada (1.677/142), que não foi reproduzida com o corpus/versionamento atualmente disponível. Não foram executados testes de integração com PostgreSQL real nem testes diferenciais da aplicação.
+
+
+## 24. P3.1b — shim PDO/mysqli opt-in (2026-11-15)
+
+Em `pg/p3-1b-dropin`, passaram `php -n` sem `mysqli` nativo: **26/26** testes sintéticos do núcleo PostgreSQL, incluindo `insert_id` obtido da linha pela cláusula `RETURNING` interna, caso em que o ID da linha é 89 e o estado final sintético da mesma sequence é 90, proteção contra ID ambíguo em INSERT multi-row sem `RETURNING` inclusive com uma linha afetada após `ON CONFLICT`, preservação de `RETURNING` explícito, SQL NULL, PK/sequence identificadas por metadata e schema/tabela/PK com espaços e aspas; e o harness `tests/p3_mysqli_dropin_test.php`, cobrindo aliases/type hints, os 20 nomes do corpus amplo (19 fora do bootstrap; 26 wrappers disponíveis ao todo), bindings/queries/resultsets, ambos os perfis via PDO fake, BLOB, multi-query, charset, escape `NO_BACKSLASH_ESCAPES` e rejeição de NUL, erros sanitizados, flags, `ping`, `bind_result/fetch`, configuração/driver inválidos, caminho explícito ausente, permissões amplas, document root ausente/inválido/inseguro, saída descartada e recusada no config, falha PostgreSQL sem `pdo_pgsql` e ausência de aliases parciais. O núcleo simula o efeito de um trigger que consome a mesma sequence, mas não executa trigger PostgreSQL real. O mesmo harness no CLI normal confirmou recusa da extensão mysqli nativa carregada.
+
+`php -l` foi executado nos arquivos PHP do shim e testes pelo runtime mínimo sem mysqli; `git diff --check` (CRLF-aware) passou. Nenhum desses harnesses abriu banco ou provou conexão PDO real. Ainda pendem a P1 isolada na Hetzner com PHP-FPM 8.3 sem mysqli, teste HTTP do vhost MySQL 8444 como gate de não regressão, depois teste PostgreSQL 8443 quando houver carga homologada, e QA autenticado de login/RBAC. Nenhuma configuração FPM/Nginx/UFW, credencial, serviço ou dado de produção foi alterado nesta branch.
+
+
+O harness drop-in reportou 37 assertions do processo pai no runtime sem mysqli nativa e 39 no CLI normal (as duas adicionais confirmam a detecção/recusa da extensão mysqli carregada); processos filhos também são verificados por exit status e marcadores `PASS`, sem agregar suas assertions internas a esse contador. Esses números não são testes de integração com servidores.

@@ -107,3 +107,9 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 - Notificação de navegador exige opt-in e permissão concedida; seu corpo é somente “Nova mensagem”. O polling oculto só continua a cada 20 s quando esse opt-in está ativo.
 - Em autenticação por cookie, gravações e `GET sync` (que atualiza presença) validam `Origin`/Fetch Metadata same-origin; GET não marca leitura. Bearer inválido nunca sofre downgrade para cookie de painel. `tenant_id` e ator permanecem derivados do token/sessão, não do body.
 - Preferências e canais validam booleanos/whitelists; opções avançadas respeitam os gates de recurso tenant no servidor. Mensagens/limites são serializados com transação e locks; chave idempotente não é normalizada truncando conteúdo, e replay só é aceito para a mesma conversa e payload. Falhas de canais ou auditoria RBAC executam rollback.
+
+
+## 9. Runtime PDO/mysqli isolado — P3.1b
+- O shim só pode rodar em pool FPM isolado sem a extensão mysqli nativa, com `ERP_CONFIG_PATH` apontando para configuração fora do document root, sem permissão de grupo/outros (`0600` recomendado). Se o caminho estiver ausente/inválido ou o document root não puder ser validado em SAPI web, o bootstrap falha fechado. O fallback MySQL legado em `api/config.php` usa o mesmo resolvedor e não ignora as verificações de permissão/document root.
+- A inicialização descarta qualquer saída parcial e retorna somente erro genérico 503; o bootstrap da configuração também suprime e rejeita output inesperado do arquivo privado. Configuração privada, mensagens brutas PDO e credenciais não devem ser incluídas em logs ou respostas. O driver MySQL permanece padrão e PostgreSQL exige seleção e schema explícitos.
+- Multi-query é sequencial/bufferizada e não atômica; `CALL` e DDL de stored programs são recusados. `send_long_data` usa stream temporário e não significa streaming integral da aplicação.

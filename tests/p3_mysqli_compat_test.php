@@ -4,6 +4,16 @@ declare(strict_types=1);
 use ERP\Database\PgsqlMysqliConnection;
 use ERP\Database\PgsqlMysqliResult;
 
+foreach ([
+    'MYSQLI_ASSOC' => 1,
+    'MYSQLI_NUM' => 2,
+    'MYSQLI_BOTH' => 3,
+] as $name => $value) {
+    if (!defined($name)) {
+        define($name, $value);
+    }
+}
+
 require_once __DIR__ . '/../api/db/PgsqlMysqliConnection.php';
 require_once __DIR__ . '/../api/db/PgsqlMysqliStatement.php';
 require_once __DIR__ . '/../api/db/PgsqlMysqliResult.php';
@@ -34,9 +44,19 @@ final class FakePdoStatement extends PDOStatement
         if ($params !== null) {
             $this->bindings = $params;
         }
+        $this->owner->afterExecute($this->query);
         $this->rows = $this->owner->rowsFor($this->query);
         $this->cursor = 0;
-        $this->owner->lastBindings = $this->bindings;
+        $capturedBindings = $this->bindings;
+        foreach ($capturedBindings as &$binding) {
+            if (is_array($binding) && is_resource($binding[0] ?? null)) {
+                rewind($binding[0]);
+                $binding[0] = stream_get_contents($binding[0]);
+            }
+        }
+        unset($binding);
+        $this->owner->executedStatements[] = ['query' => $this->query, 'params' => array_values($capturedBindings)];
+        $this->owner->lastBindings = $capturedBindings;
         return true;
     }
 
@@ -88,22 +108,44 @@ final class FakePdo extends PDO
 {
     public array $rowsByQuery = [];
     public array $execCalls = [];
+    public array $queryCalls = [];
+    public array $prepareCalls = [];
+    public array $executedStatements = [];
     public array $lastBindings = [];
     public int $affectedRows = 1;
     public ?string $failureState = null;
+    public ?string $sequenceName = 'public.sample_id_seq';
+    public string $primaryKeyColumn = 'id';
+    public ?string $insertedRowId = '89';
+    public ?string $sequenceCurrentValue = '88';
+    public ?string $sequenceNextValue = '89';
+    public ?string $sequenceTriggeredValue = null;
     private bool $transaction = false;
 
     public function __construct()
     {
     }
 
+    public function getAttribute(int $attribute): mixed
+    {
+        if ($attribute === PDO::ATTR_DRIVER_NAME) {
+            return 'pgsql';
+        }
+        if ($attribute === PDO::ATTR_CLIENT_VERSION) {
+            return 'synthetic-pg-client';
+        }
+        return null;
+    }
+
     public function prepare(string $query, array $options = []): PDOStatement|false
     {
+        $this->prepareCalls[] = $query;
         return new FakePdoStatement($this, $query);
     }
 
     public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
     {
+        $this->queryCalls[] = $query;
         $statement = new FakePdoStatement($this, $query);
         $statement->execute();
         return $statement;
@@ -145,12 +187,31 @@ final class FakePdo extends PDO
 
     public function rowsFor(string $query): array
     {
+        if (str_contains($query, 'pg_get_serial_sequence')) {
+            return [['column_name' => $this->primaryKeyColumn, 'sequence_name' => $this->sequenceName]];
+        }
+        if (array_key_exists($query, $this->rowsByQuery)) {
+            return $this->rowsByQuery[$query];
+        }
+        if (PgsqlMysqliConnection::hasReturningClause($query)) {
+            return $this->insertedRowId === null ? [] : [['insert_id' => $this->insertedRowId]];
+        }
         return $this->rowsByQuery[$query] ?? [];
+    }
+
+    public function afterExecute(string $query): void
+    {
+        if (preg_match('/\A\s*INSERT\b/i', $query) !== 1) {
+            return;
+        }
+        if ($this->sequenceNextValue !== null) {
+            $this->sequenceCurrentValue = $this->sequenceTriggeredValue ?? $this->sequenceNextValue;
+        }
     }
 
     public function columnCountFor(string $query, array $rows): int
     {
-        if (preg_match('/\A\s*SELECT\b/i', $query) === 1 || preg_match('/\bRETURNING\b/i', $query) === 1) {
+        if (preg_match('/\A\s*SELECT\b/i', $query) === 1 || PgsqlMysqliConnection::hasReturningClause($query)) {
             if (!isset($rows[0])) {
                 return 1;
             }
@@ -205,6 +266,11 @@ $test('DSN usa valores validados', static function (): void {
     ]), 'Porta embutida no host deve ser rejeitada.');
 });
 
+$test('client_info é obtido sem imprimir dados de conexão', static function (): void {
+    $connection = new PgsqlMysqliConnection(new FakePdo());
+    assertSameValue('synthetic-pg-client', $connection->clientInfo(), 'client_info deve usar PDO::ATTR_CLIENT_VERSION.');
+});
+
 $test('bind_param lê o valor por referência no execute', static function (): void {
     $pdo = new FakePdo();
     $connection = new PgsqlMysqliConnection($pdo);
@@ -232,6 +298,31 @@ $test('bind_param aceita array unpack por referência e ignora placeholders em t
     $params[0] = 19;
     assertTrueValue($statement->execute(), 'Statement deveria executar após mudar o array.');
     assertSameValue(19, $pdo->lastBindings[1][0], 'O valor atualizado no array deve ser lido no execute.');
+});
+
+$test('send_long_data acumula bytes BLOB em fragments e exige tipo b', static function (): void {
+    $pdo = new FakePdo();
+    $connection = new PgsqlMysqliConnection($pdo);
+    $statement = $connection->prepare('INSERT INTO sample(payload) VALUES (?)');
+    $placeholder = null;
+    assertTrueValue($statement !== false && $statement->bind_param('b', $placeholder), 'Parâmetro BLOB deve aceitar binding por referência.');
+    assertTrueValue($statement->send_long_data(0, "\x00\x01A"), 'Primeiro fragmento binário deve ser aceito.');
+    assertTrueValue($statement->send_long_data(0, "B\xFF"), 'Fragmento subsequente deve ser acumulado.');
+    assertTrueValue($statement->execute(), 'INSERT BLOB deve executar por PDO::PARAM_LOB.');
+    $blobBinding = null;
+    foreach ($pdo->executedStatements as $execution) {
+        if (str_contains($execution['query'], 'INSERT INTO sample(payload)')) {
+            $blobBinding = $execution['params'][0] ?? null;
+            break;
+        }
+    }
+    assertSameValue("\x00\x01AB\xFF", is_array($blobBinding) ? ($blobBinding[0] ?? null) : null, 'Bytes binários devem permanecer idênticos e ordenados.');
+    assertSameValue(PDO::PARAM_LOB, is_array($blobBinding) ? ($blobBinding[1] ?? null) : null, 'O parâmetro deve ser enviado como PDO::PARAM_LOB.');
+
+    $invalid = $connection->prepare('INSERT INTO sample(value) VALUES (?)');
+    $value = 'text';
+    assertTrueValue($invalid !== false && $invalid->bind_param('s', $value), 'Binding de texto deve continuar disponível.');
+    assertSameValue(false, $invalid->send_long_data(0, 'not-blob'), 'send_long_data deve rejeitar parâmetro que não foi declarado como b.');
 });
 
 $test('param_count ignora dollar quotes e operador PDO escapado', static function (): void {
@@ -341,6 +432,13 @@ $test('query respeita RETURNING insert_id explícito e rejeita modo streaming', 
     $connection = new PgsqlMysqliConnection($pdo);
     assertTrueValue($connection->query($query) instanceof PgsqlMysqliResult, 'INSERT RETURNING deveria retornar o resultset.');
     assertSameValue(74, $connection->insert_id, 'Somente o alias explícito insert_id deve alimentar a propriedade.');
+    assertSameValue(75, PgsqlMysqliConnection::returnedInsertId([['id' => '75']]), 'RETURNING id convencional deve alimentar insert_id sem exigir alias especial.');
+    $idReturningPdo = new FakePdo();
+    $idReturningQuery = 'INSERT INTO sample (nome) VALUES (\'synthetic\') RETURNING id';
+    $idReturningPdo->rowsByQuery[$idReturningQuery] = [['id' => '76']];
+    $idReturningConnection = new PgsqlMysqliConnection($idReturningPdo);
+    assertTrueValue($idReturningConnection->query($idReturningQuery) instanceof PgsqlMysqliResult, 'INSERT RETURNING id deveria entregar resultset.');
+    assertSameValue(76, $idReturningConnection->insert_id, 'INSERT RETURNING id deve alimentar insert_id na conexão.');
     assertTrueValue($connection->query('SELECT id FROM sample') instanceof PgsqlMysqliResult, 'SELECT deveria retornar o resultset.');
     assertSameValue(0, $connection->insert_id, 'Uma consulta não-INSERT não deve deixar ID obsoleto.');
     assertSameValue(false, $connection->query('SELECT id FROM sample', 1), 'Modo de resultado streaming deve falhar fechado.');
@@ -362,14 +460,105 @@ $test('query limpa insert_id após UPDATE e após falha', static function (): vo
     assertSameValue(0, $connection->insert_id, 'Falha não pode preservar insert_id anterior.');
 });
 
-$test('INSERT id sem RETURNING não é inferido pela sequence de trigger', static function (): void {
+$test('INSERT simples obtém insert_id da linha retornada sem usar currval', static function (): void {
     $pdo = new FakePdo();
+    $pdo->sequenceTriggeredValue = '90';
     $connection = new PgsqlMysqliConnection($pdo);
     $statement = $connection->prepare('INSERT INTO sample (nome) VALUES (?)');
     $value = 'synthetic';
     assertTrueValue($statement !== false && $statement->bind_param('s', $value) && $statement->execute(), 'INSERT deveria executar.');
-    assertSameValue(0, $connection->insert_id, 'Sem RETURNING a camada não deve inferir qual sequence gerou o ID.');
-    assertSameValue([], $pdo->execCalls, 'Não deve consultar LASTVAL nem alterar transações.');
+    assertSameValue(89, $connection->insert_id, 'O ID da sequence da PK deve ser preservado após INSERT simples.');
+    assertSameValue(89, $statement->insert_id, 'O statement também deve expor insert_id.');
+    assertSameValue(0, $statement->field_count, 'A coluna auxiliar RETURNING não deve aparecer como resultado público do statement.');
+    assertSameValue(false, $statement->get_result(), 'INSERT original sem retorno explícito não deve expor resultset auxiliar.');
+    assertSameValue('90', $pdo->sequenceCurrentValue, 'O cenário sintético deve representar trigger consumindo a mesma sequence após a linha inserida.');
+    assertSameValue([], $pdo->queryCalls, 'Metadata e INSERT preparado não devem executar consultas de sequência paralelas.');
+    $preparedSql = implode("\n", $pdo->prepareCalls);
+    assertTrueValue(str_contains($preparedSql, 'pg_get_serial_sequence'), 'Metadata deve resolver a sequence da chave primária da tabela alvo.');
+    assertTrueValue(str_contains($preparedSql, 'RETURNING "id" AS insert_id'), 'O INSERT preparado deve obter o ID da própria linha com RETURNING.');
+    assertSameValue(false, str_contains($preparedSql, 'currval('), 'O adapter não deve inferir insert_id pelo currval global da conexão.');
+    $directPdo = new FakePdo();
+    $directPdo->sequenceTriggeredValue = '90';
+    $directConnection = new PgsqlMysqliConnection($directPdo);
+    assertSameValue(true, $directConnection->query('INSERT INTO sample (nome) VALUES (\'synthetic\')'), 'INSERT direto deveria executar sem expor a coluna interna.');
+    assertSameValue(89, $directConnection->insert_id, 'INSERT direto deve obter o ID real da linha, mesmo se um trigger avançar a sequence.');
+    assertSameValue(1, $directConnection->affected_rows, 'A coluna RETURNING interna não deve alterar affected_rows.');
+});
+
+$test('detecção de RETURNING ignora literais, identificadores quoted e comentários', static function (): void {
+    assertSameValue(false, PgsqlMysqliConnection::hasReturningClause("INSERT INTO sample(value) VALUES ('RETURNING') -- RETURNING"), 'Texto literal ou comentário não pode simular cláusula RETURNING.');
+    assertSameValue(false, PgsqlMysqliConnection::hasReturningClause('INSERT INTO sample(value) VALUES ($tag$RETURNING$tag$ /* RETURNING */'), 'Dollar quote e comentário em bloco devem ser ignorados.');
+    assertSameValue(false, PgsqlMysqliConnection::hasReturningClause('INSERT INTO sample("returning") VALUES (1)'), 'Identificador quoted não é cláusula RETURNING.');
+    assertSameValue(false, PgsqlMysqliConnection::hasReturningClause('INSERT INTO sample$returning(value) VALUES (1)'), 'Sufixo de identificador com $ não deve simular uma cláusula RETURNING.');
+    assertSameValue(true, PgsqlMysqliConnection::hasReturningClause('INSERT INTO sample(value) VALUES (1) RETURNING id'), 'Cláusula RETURNING real deve ser detectada.');
+});
+
+$test('INSERT sem sequence de PK continua sem insert_id inventado', static function (): void {
+    $pdo = new FakePdo();
+    $pdo->sequenceName = null;
+    $connection = new PgsqlMysqliConnection($pdo);
+    $statement = $connection->prepare('INSERT INTO sample (nome) VALUES (?)');
+    $value = 'synthetic';
+    assertTrueValue($statement !== false && $statement->bind_param('s', $value) && $statement->execute(), 'INSERT sintético deveria executar.');
+    assertSameValue(0, $connection->insert_id, 'Sem sequence serial/identity associada à PK, o adapter não deve inferir ID.');
+    assertSameValue(false, str_contains(implode("\n", $pdo->prepareCalls), 'RETURNING'), 'Sem metadata de sequence, o SQL original deve ser preservado.');
+
+    $explicitPrimaryKeyPdo = new FakePdo();
+    $explicitPrimaryKeyConnection = new PgsqlMysqliConnection($explicitPrimaryKeyPdo);
+    assertSameValue(true, $explicitPrimaryKeyConnection->query('INSERT INTO sample (id, nome) VALUES (5, \'synthetic\')'), 'INSERT com PK explícita deve executar normalmente.');
+    assertSameValue(0, $explicitPrimaryKeyConnection->insert_id, 'PK fornecida pelo chamador não deve ser confundida com ID gerado pela sequence.');
+    assertSameValue(false, str_contains(implode("\n", $explicitPrimaryKeyPdo->queryCalls), 'RETURNING'), 'O adapter deve preservar SQL que fornece a PK explicitamente.');
+});
+
+$test('INSERT multi-row sem RETURNING não inventa insert_id incompatível', static function (): void {
+    assertSameValue(true, PgsqlMysqliConnection::isSingleValuesInsert('INSERT INTO sample (nome) VALUES (?)'), 'INSERT VALUES simples deve ser reconhecido.');
+    assertSameValue(false, PgsqlMysqliConnection::isSingleValuesInsert('INSERT INTO sample (nome) VALUES (?), (?)'), 'INSERT multi-row deve ser recusado pelo detector de ID simples.');
+    assertSameValue(false, PgsqlMysqliConnection::isSingleValuesInsert('INSERT INTO sample (nome) VALUES (?), (?) ON CONFLICT DO NOTHING'), 'ON CONFLICT multi-row não pode usar o estado final da sequence como ID único.');
+    assertSameValue(false, PgsqlMysqliConnection::isSingleValuesInsert('INSERT INTO sample (nome) SELECT nome FROM source'), 'INSERT SELECT não fornece tupla VALUES simples.');
+
+    $preparedPdo = new FakePdo();
+    $preparedPdo->affectedRows = 2;
+    $preparedConnection = new PgsqlMysqliConnection($preparedPdo);
+    $prepared = $preparedConnection->prepare('INSERT INTO sample (nome) VALUES (?), (?)');
+    assertTrueValue($prepared !== false && $prepared->execute(['synthetic-a', 'synthetic-b']), 'INSERT multi-row preparado deveria executar.');
+    assertSameValue(0, $prepared->insert_id, 'Sem RETURNING, statement multi-row não deve expor o último ID como se fosse o primeiro.');
+
+    $directPdo = new FakePdo();
+    $directPdo->affectedRows = 2;
+    $directConnection = new PgsqlMysqliConnection($directPdo);
+    assertSameValue(true, $directConnection->query("INSERT INTO sample (nome) VALUES ('synthetic-a'), ('synthetic-b')"), 'INSERT multi-row direto deveria executar.');
+    assertSameValue(0, $directConnection->insert_id, 'Sem RETURNING, conexão não deve expor ID ambíguo de INSERT multi-row.');
+
+    $partialPdo = new FakePdo();
+    $partialPdo->affectedRows = 1;
+    $partialConnection = new PgsqlMysqliConnection($partialPdo);
+    $partial = $partialConnection->prepare('INSERT INTO sample (nome) VALUES (?), (?) ON CONFLICT DO NOTHING');
+    assertTrueValue($partial !== false && $partial->execute(['synthetic-a', 'synthetic-b']), 'INSERT parcial via ON CONFLICT deveria executar.');
+    assertSameValue(0, $partial->insert_id, 'Um único registro afetado não torna inequívoco o ID de um INSERT multi-row.');
+    $sequenceMetadataCalls = array_filter(
+        array_merge($partialPdo->prepareCalls, $partialPdo->queryCalls),
+        static fn(string $query): bool => str_contains($query, 'pg_get_serial_sequence')
+    );
+    assertSameValue([], array_values($sequenceMetadataCalls), 'Detector multi-row deve evitar até mesmo capturar sequence de ID ambíguo.');
+});
+
+$test('resolução da sequence preserva schema e identificador entre aspas como parâmetros', static function (): void {
+    $pdo = new FakePdo();
+    $pdo->primaryKeyColumn = 'chave "principal"';
+    $pdo->insertedRowId = '91';
+    $connection = new PgsqlMysqliConnection($pdo);
+    $query = 'INSERT INTO "My Schema"."odd""table" (nome) VALUES (\'synthetic\')';
+    assertSameValue(true, $connection->query($query), 'INSERT em identificadores sintéticos deveria executar.');
+    assertSameValue(91, $connection->insert_id, 'A PK com aspas/espaços deve ser retornada sem interpolação insegura.');
+    $metadataBindings = null;
+    foreach ($pdo->executedStatements as $execution) {
+        if (str_contains($execution['query'], 'pg_get_serial_sequence')) {
+            $metadataBindings = $execution['params'];
+            break;
+        }
+    }
+    assertSameValue(['My Schema', 'odd"table', 'My Schema', 'odd"table'], $metadataBindings, 'Schema/tabela devem ser enviados a to_regclass como parâmetros, sem interpolação.');
+    assertTrueValue(str_contains(implode("\n", $pdo->queryCalls), 'RETURNING "chave ""principal""" AS insert_id'), 'O identificador da PK deve ser escapado corretamente na cláusula interna.');
 });
 
 $test('INSERT com RETURNING expõe somente o ID retornado pela consulta', static function (): void {
@@ -397,7 +586,36 @@ $test('execute params valida cardinalidade e não reutiliza bindings ambíguos',
     $value = 33;
     assertSameValue(false, $statement->bind_param('i', $value), 'Não deve misturar execute(array) e bind_param no mesmo statement.');
     assertSameValue(true, $statement->execute([32]), 'Reexecução deve aceitar a nova lista explícita.');
-    assertSameValue(32, $pdo->lastBindings[0], 'O último valor explícito não foi usado.');
+    assertSameValue([32, PDO::PARAM_STR], $pdo->lastBindings[1], 'O último valor explícito não foi usado com o tipo legado de execute(array).');
+});
+
+$test('valores null são vinculados como SQL NULL no PostgreSQL', static function (): void {
+    $paramsPdo = new FakePdo();
+    $paramsConnection = new PgsqlMysqliConnection($paramsPdo);
+    $paramsQuery = 'INSERT INTO sample (morador_id) VALUES (?)';
+    $paramsStatement = $paramsConnection->prepare($paramsQuery);
+    assertTrueValue($paramsStatement !== false && $paramsStatement->execute([null]), 'execute(array) com valor opcional nulo deveria executar.');
+    $params = null;
+    foreach ($paramsPdo->executedStatements as $execution) {
+        if (str_starts_with($execution['query'], $paramsQuery)) {
+            $params = $execution['params'][0] ?? null;
+        }
+    }
+    assertSameValue([null, PDO::PARAM_NULL], $params, 'execute(array) deve preservar o binding como SQL NULL.');
+
+    $boundPdo = new FakePdo();
+    $boundConnection = new PgsqlMysqliConnection($boundPdo);
+    $boundQuery = 'INSERT INTO sample (morador_id) VALUES (?)';
+    $boundStatement = $boundConnection->prepare($boundQuery);
+    $nullableId = null;
+    assertTrueValue($boundStatement !== false && $boundStatement->bind_param('i', $nullableId) && $boundStatement->execute(), 'bind_param inteiro nulo deveria executar.');
+    $params = null;
+    foreach ($boundPdo->executedStatements as $execution) {
+        if (str_starts_with($execution['query'], $boundQuery)) {
+            $params = $execution['params'][0] ?? null;
+        }
+    }
+    assertSameValue([null, PDO::PARAM_NULL], $params, 'bind_param deve preservar o binding como SQL NULL.');
 });
 
 $test('falha de statement limpa estado do resultado anterior', static function (): void {
