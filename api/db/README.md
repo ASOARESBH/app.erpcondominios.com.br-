@@ -24,6 +24,10 @@ A camada é incremental e **não ativa PostgreSQL na aplicação por padrão**. 
 - MySQL via PDO usa `lastInsertId()` após INSERT bem-sucedido. Os resultados do adapter e a equivalência de cada consulta da aplicação ainda precisam de homologação diferencial.
 - `set_charset('utf8'|'utf8mb4')` e `character_set_name()` representam UTF-8 nos dois drivers. Em MySQL, `real_escape_string()` usa `PDO::quote` no modo padrão; quando o SQL mode detectado inclui `NO_BACKSLASH_ESCAPES`, duplica aspas simples sem adicionar escapes por barra invertida e rejeita byte NUL. Alterações de `SESSION sql_mode` por query direta ou prepared statement invalidam o estado; o valor efetivo é relido antes do próximo escape e antes da divisão de multi-query. Uma multi-query que contenha qualquer referência a `sql_mode` é recusada para evitar mudança de regras no meio do lote; falha ao consultar o modo interrompe a operação antes de executar o lote. As mensagens e erros são sanitizados; não registre senhas, tokens, cookies ou hashes.
 
+## Lint sintático
+
+`MysqliDropInFunctions.php` define funções globais que também existem na extensão nativa `mysqli`. Por isso, sua verificação sintática deve ser feita sem carregar extensões: `php -n -l api/db/MysqliDropInFunctions.php`. Com `mysqli` carregada, `php -l` pode reportar `Cannot redeclare`, conflito esperado entre as definições do drop-in e as nativas, não um erro de sintaxe. O workflow `.github/workflows/php-syntax.yml` executa esse lint com PHP 8.3.
+
 ## Testes locais
 
 ```bash
