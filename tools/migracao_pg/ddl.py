@@ -12,7 +12,7 @@ from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, qu
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "1.4.0"
+GENERATOR_VERSION = "1.4.1"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
 POSTGRES_SEQUENCE_MAX = 9223372036854775807
@@ -519,7 +519,7 @@ def generate_ddl(
             trigger_statements.append(
                 f"CREATE FUNCTION {_qualified(TARGET_SCHEMA, 'fn_on_update_' + digest)}() RETURNS trigger\n"
                 "LANGUAGE plpgsql AS $$\nBEGIN\n"
-                f"  IF (to_jsonb(NEW) - {excluded}) IS DISTINCT FROM (to_jsonb(OLD) - {excluded}) THEN\n"
+                f"  IF to_jsonb(NEW) - {excluded} IS DISTINCT FROM to_jsonb(OLD) - {excluded} THEN\n"
                 f"{assignments}\n"
                 "  END IF;\n  RETURN NEW;\nEND;\n$$;"
             )
