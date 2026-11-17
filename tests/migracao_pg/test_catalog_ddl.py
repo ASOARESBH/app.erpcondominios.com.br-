@@ -72,8 +72,10 @@ def sample_snapshot() -> dict:
 class FakeCursor:
     def __init__(self) -> None:
         self.current: list[dict] = []
+        self.statements: list[str] = []
 
     def execute(self, sql: str, args=()) -> None:
+        self.statements.append(sql)
         if "CURRENT_USER()" in sql:
             self.current = [{"connected_account": "pg_reader@localhost", "selected_database": "erp_pg_source", "server_version": "8.4.13"}]
         elif "SHOW GRANTS" in sql:
@@ -115,6 +117,7 @@ class FakeCursor:
 class FakeConnection:
     def __init__(self) -> None:
         self.c = FakeCursor()
+        self.statements = self.c.statements
         self.rolled_back = False
 
     def cursor(self):
@@ -201,7 +204,18 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(result["source_schema_wide_select"])
         self.assertEqual(len(result["structural_fingerprint_sha256"]), 64)
         self.assertNotIn("view_definition", result["views"])
+        self.assertIn("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY", connection.statements[1])
+        self.assertLess(connection.statements.index("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY"), next(
+            index for index, statement in enumerate(connection.statements) if "SHOW GRANTS" in statement
+        ))
         self.assertTrue(connection.rolled_back)
+
+    def test_catalog_can_leave_the_read_only_snapshot_open_for_the_loader(self) -> None:
+        connection = FakeConnection()
+        result = collect_catalog(connection, keep_snapshot=True)
+        self.assertEqual(result["catalog_consistency_check"], "PRE_POST_SIGNATURE_MATCH")
+        self.assertIn("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY", connection.statements)
+        self.assertFalse(connection.rolled_back)
 
     def test_catalog_output_is_private_and_never_overwritten(self) -> None:
         with TemporaryDirectory() as directory:
