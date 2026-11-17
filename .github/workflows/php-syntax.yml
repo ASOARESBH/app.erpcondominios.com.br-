@@ -12,5 +12,34 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+          extensions: pdo_mysql
       - name: Lint mysqli drop-in without native extensions
         run: php -n -l api/db/MysqliDropInFunctions.php
+      - name: Lint SQL translator without native extensions
+        run: php -n -l api/db/MysqlToPostgresSqlTranslator.php
+      - name: Lint database facade without native extensions
+        run: |
+          php -n -l api/db/MysqliDropIn.php
+          php -n -l api/db/PdoMysqliConnection.php
+      - name: Test SQL translator contract
+        run: php -n tests/p3_sql_translator_test.php
+      - name: Test SQL translation through the mysqli facade
+        run: |
+          D=$(php -r 'echo ini_get("extension_dir");')
+          php -n -d extension=pdo -d extension="$D/mysqlnd.so" -d extension="$D/pdo_mysql.so" tests/p3_mysqli_dropin_test.php
+
+  p2-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned P2 dependencies
+        run: python -m pip install -r tools/migracao_pg/requirements.txt
+      - name: Run synthetic P2 suites
+        run: python -m unittest tests.migracao_pg.test_type_mapping tests.migracao_pg.test_catalog_ddl tests.migracao_pg.test_loader
+      - name: Validate P2 Python and development runner syntax
+        run: |
+          python -m compileall -q tools/migracao_pg tests/migracao_pg
+          bash -n tools/migracao_pg/rebuild.sh

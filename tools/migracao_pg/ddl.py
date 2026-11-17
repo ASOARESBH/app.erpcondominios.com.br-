@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 import hashlib
 import json
 import re
@@ -11,8 +12,9 @@ from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, qu
 
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
+LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "1.4.1"
+GENERATOR_VERSION = "1.5.3"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
 POSTGRES_SEQUENCE_MAX = 9223372036854775807
@@ -54,19 +56,38 @@ def _textual(data_type: str) -> bool:
     return data_type.lower() in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext", "enum"}
 
 
+def _sensitive_column_name(name: str) -> bool:
+    return re.search(
+        r"(?:^|_)(?:token|hash|sha|hmac|senha|password|secret|key|chave|slug|uuid|path|caminho|file|arquivo|signature|assinatura|payload)(?:_|$)",
+        name,
+        re.IGNORECASE,
+    ) is not None
+
+
+def _is_legacy_backup_table(name: str) -> bool:
+    lowered = name.lower()
+    return "_bkp_" in lowered or lowered.endswith("_backup") or re.search(r"(?:_|-)20\d{2}(?:[-_]?\d{2}){2}$", lowered) is not None
+
+
+def _schema_for_table(name: str) -> str:
+    return LEGACY_SCHEMA if _is_legacy_backup_table(name) else TARGET_SCHEMA
+
+
 def _key_requires_collision_scan(table: dict[str, Any], columns: list[str], overrides: dict[str, str]) -> bool:
-    known_ci = {"utf8mb3_unicode_ci", "utf8mb4_unicode_ci", "utf8mb4_0900_ai_ci"}
     column_by_name = {str(column["name"]): column for column in table.get("columns", [])}
     for name in columns:
         column = column_by_name.get(name)
         if not column or not _textual(str(column.get("data_type", ""))):
             continue
         key = f"{table['name']}.{name}"
-        if overrides.get(key) == "ci":
+        if key in overrides:
+            target = overrides[key]
+        else:
+            source = str(column.get("source_collation") or "").lower()
+            sensitive_name = _sensitive_column_name(name)
+            target = "C" if sensitive_name or source.endswith("_bin") or source == "binary" else "ci"
+        if target == "ci":
             return True
-        if key not in overrides and str(column.get("source_collation") or "").lower() in known_ci:
-            if not re.search(r"(?:^|_)(?:token|hash|senha|password|signature|assinatura|payload|path|caminho)(?:_|$)", name, re.IGNORECASE):
-                return True
     return False
 
 
@@ -77,20 +98,19 @@ def _target_collation(column: dict[str, Any], explicit: dict[str, str], table: s
         value = explicit[key]
         if value not in {"ci", "C"}:
             raise DdlGenerationError("COLLATION_OVERRIDE_INVALID")
+        reason = "explicit_override"
+    else:
+        source = str(column.get("source_collation") or "").lower()
+        sensitive_name = _sensitive_column_name(name)
+        binary_source = source.endswith("_bin") or source == "binary"
+        value = "C" if sensitive_name or binary_source else "ci"
+        reason = "sensitive_name" if sensitive_name else ("binary_source_collation" if binary_source else "default_case_insensitive")
+    decision = {"table": table, "column": name, "target": value, "source": column.get("source_collation"), "reason": reason}
+    report["collation_decisions"].append(decision)
+    if value == "C":
+        report["collation_C_columns"].append({"table": table, "column": name, "reason": reason})
         return value
-    source = str(column.get("source_collation") or "").lower()
-    known_accent_insensitive_ci = {
-        "utf8mb3_unicode_ci",
-        "utf8mb4_unicode_ci",
-        "utf8mb4_0900_ai_ci",
-    }
-    if source in known_accent_insensitive_ci:
-        if re.search(r"(?:^|_)(?:token|hash|senha|password|signature|assinatura|payload|path|caminho)(?:_|$)", name, re.IGNORECASE):
-            report["review_items"].append({"table": table, "column": name, "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED", "candidate": "C"})
-            return None
-        return "ci"
-    report["review_items"].append({"table": table, "column": name, "code": "SOURCE_COLLATION_SEMANTICS_REVIEW_REQUIRED"})
-    return None
+    return "ci"
 
 
 def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, no_backslash_escapes: bool = False) -> str | None:
@@ -101,6 +121,8 @@ def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, 
         expression = str(default.get("expression", ""))
         data_type = str(column.get("data_type", "")).lower()
         if expression == "NULL":
+            if data_type in {"date", "datetime", "timestamp"}:
+                return expression
             if not _textual(data_type) and column.get("nullable") is True:
                 return expression
             report["review_items"].append({"table": table, "column": str(column["name"]), "code": "DEFAULT_NULL_SEMANTICS_REVIEW_REQUIRED"})
@@ -108,12 +130,38 @@ def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, 
         if data_type in {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "numeric", "float", "double", "real", "year"}:
             if re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", expression):
                 return expression
-        elif data_type in {"char", "varchar", "tinytext", "text", "mediumtext", "longtext"} and expression == "''":
-            return expression
+        elif data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext"}:
+            if expression == "''" or re.fullmatch(r"'(?:[^']|'')*'", expression):
+                literal = expression[1:-1].replace("''", "'")
+                if "\x00" not in literal and quote_literal(literal) == expression:
+                    return expression
         elif data_type in {"datetime", "timestamp"}:
             expected = "timezone('America/Sao_Paulo', statement_timestamp())" if data_type == "timestamp" else "LOCALTIMESTAMP(0)"
             if expression == expected:
                 return expression
+            match = re.fullmatch(r"TIMESTAMP '([^']+)'", expression)
+            if match:
+                try:
+                    parsed = datetime.fromisoformat(match.group(1))
+                except ValueError:
+                    parsed = None
+                if parsed is not None and parsed.tzinfo is None and not parsed.microsecond:
+                    return expression
+        elif data_type == "date":
+            match = re.fullmatch(r"DATE '([^']+)'", expression)
+            if match:
+                try:
+                    date.fromisoformat(match.group(1))
+                except ValueError:
+                    pass
+                else:
+                    return expression
+        elif data_type == "time":
+            match = re.fullmatch(r"INTERVAL '([+-]?\d{1,3}:\d{2}:\d{2}(?:\.\d{1,6})?)'", expression)
+            if match:
+                hours, minutes, seconds = (int(part) for part in match.group(1).lstrip("+-").split(":", 2))
+                if hours <= 838 and minutes <= 59 and seconds <= 59:
+                    return expression
         elif data_type == "enum":
             try:
                 labels = parse_mysql_enum(str(column.get("column_type", "")), no_backslash_escapes=no_backslash_escapes)
@@ -136,6 +184,7 @@ def _identity_sequence_script(fingerprint: str, identity_columns: list[dict[str,
     for item in identity_columns:
         table = str(item["table"])
         column = str(item["column"])
+        schema = str(item.get("target_schema", TARGET_SCHEMA))
         next_value = item.get("source_next_auto_increment")
         strategy = str(item.get("strategy", "identity"))
         maximum = MYSQL_UNSIGNED_BIGINT_MAX if strategy == "unsigned_sequence_pair" else POSTGRES_SEQUENCE_MAX
@@ -144,7 +193,7 @@ def _identity_sequence_script(fingerprint: str, identity_columns: list[dict[str,
         if next_value is not None and (isinstance(next_value, bool) or not isinstance(next_value, int) or next_value < 1 or next_value > maximum):
             raise DdlGenerationError("AUTO_INCREMENT_NEXT_VALUE_METADATA_INVALID")
         minimum_from_source = max(0, next_value - 1) if next_value is not None else 0
-        sequence_key = quote_literal(f"{table}.{column}")
+        sequence_key = quote_literal(f"{schema}.{table}.{column}")
         if strategy == "unsigned_sequence_pair":
             statements.append(
                 "DO $erp_numeric_identity$\n"
@@ -153,9 +202,9 @@ def _identity_sequence_script(fingerprint: str, identity_columns: list[dict[str,
                 f"  SELECT low_sequence, high_sequence, post_load_sync_complete INTO v_low_sequence, v_high_sequence, v_synced FROM {_qualified(TARGET_SCHEMA, AUTOINCREMENT_STATE_STORE)} WHERE sequence_name = {sequence_key} FOR UPDATE;\n"
                 "  IF NOT FOUND THEN RAISE EXCEPTION 'numeric identity state missing'; END IF;\n"
                 "  IF v_synced THEN RAISE EXCEPTION 'post-load sequence sync is one-shot'; END IF;\n"
-                f"  LOCK TABLE {_qualified(TARGET_SCHEMA, table)} IN ACCESS EXCLUSIVE MODE;\n"
+                f"  LOCK TABLE {_qualified(schema, table)} IN ACCESS EXCLUSIVE MODE;\n"
                 "  IF pg_catalog.pg_sequence_last_value(v_low_sequence) IS NOT NULL OR pg_catalog.pg_sequence_last_value(v_high_sequence) IS NOT NULL THEN RAISE EXCEPTION 'sequence sync already started; manual recovery required'; END IF;\n"
-                f"  SELECT GREATEST(COALESCE(MAX({_ident(column)}), 0), {minimum_from_source}) INTO v_current FROM {_qualified(TARGET_SCHEMA, table)};\n"
+                f"  SELECT GREATEST(COALESCE(MAX({_ident(column)}), 0), {minimum_from_source}) INTO v_current FROM {_qualified(schema, table)};\n"
                 f"  IF v_current <= {POSTGRES_SEQUENCE_MAX} THEN\n"
                 f"    IF v_current = 0 THEN PERFORM pg_catalog.setval(v_low_sequence, 1, false); ELSE PERFORM pg_catalog.setval(v_low_sequence, v_current::bigint, true); END IF;\n"
                 "    PERFORM pg_catalog.setval(v_high_sequence, 0, false);\n"
@@ -168,7 +217,7 @@ def _identity_sequence_script(fingerprint: str, identity_columns: list[dict[str,
                 "$erp_numeric_identity$;"
             )
         else:
-            qualified_text = quote_literal(f'"{TARGET_SCHEMA}"."{table}"')
+            qualified_text = quote_literal(f'"{schema}"."{table}"')
             column_text = quote_literal(column)
             statements.append(
                 "DO $erp_sequence$\n"
@@ -177,11 +226,11 @@ def _identity_sequence_script(fingerprint: str, identity_columns: list[dict[str,
                 f"  SELECT post_load_sync_complete INTO v_synced FROM {_qualified(TARGET_SCHEMA, AUTOINCREMENT_STATE_STORE)} WHERE sequence_name = {sequence_key} FOR UPDATE;\n"
                 "  IF NOT FOUND THEN RAISE EXCEPTION 'identity state missing'; END IF;\n"
                 "  IF v_synced THEN RAISE EXCEPTION 'post-load sequence sync is one-shot'; END IF;\n"
-                f"  LOCK TABLE {_qualified(TARGET_SCHEMA, table)} IN ACCESS EXCLUSIVE MODE;\n"
+                f"  LOCK TABLE {_qualified(schema, table)} IN ACCESS EXCLUSIVE MODE;\n"
                 f"  SELECT pg_get_serial_sequence({qualified_text}, {column_text}) INTO v_sequence;\n"
                 "  IF v_sequence IS NULL THEN RAISE EXCEPTION 'identity sequence missing'; END IF;\n"
                 "  IF pg_catalog.pg_sequence_last_value(v_sequence::regclass) IS NOT NULL THEN RAISE EXCEPTION 'sequence sync already started; manual recovery required'; END IF;\n"
-                f"  SELECT MAX({_ident(column)}) INTO v_max FROM {_qualified(TARGET_SCHEMA, table)};\n"
+                f"  SELECT MAX({_ident(column)}) INTO v_max FROM {_qualified(schema, table)};\n"
                 f"  v_next := GREATEST(COALESCE(v_max, 0), {minimum_from_source});\n"
                 "  IF v_next = 0 THEN PERFORM pg_catalog.setval(v_sequence::regclass, 1, false);\n"
                 "  ELSE PERFORM pg_catalog.setval(v_sequence::regclass, v_next::bigint, true); END IF;\n"
@@ -285,14 +334,26 @@ def generate_ddl(
         "catalog_fingerprint_sha256": fingerprint,
         "collation_overrides_sha256": overrides_sha256,
         "collation_overrides": dict(sorted(overrides.items())),
+        "collation_decisions": [],
+        "collation_C_columns": [],
+        "zero_date_nullable_columns": [],
+        "enum_checks_deferred": [],
         "source_schema": SOURCE_SCHEMA,
         "target_schema": TARGET_SCHEMA,
+        "legacy_schema": LEGACY_SCHEMA,
+        "table_schemas": {},
+        "legacy_backup_tables": [],
+        "nul_audit_table": {"schema": LEGACY_SCHEMA, "table": "auditoria_nul", "runtime_access_granted": False},
         "application_role": application_role,
         "review_items": list(snapshot.get("review_items", [])),
         "blocked_tables": [],
         "unsupported_indexes": [],
         "deferred_indexes": [],
         "unique_indexes_pending_collision_scan": [],
+        "primary_keys_pending_collision_scan": [],
+        "primary_keys_post_load": [],
+        "unique_indexes_post_load": [],
+        "foreign_keys_post_load": [],
         "foreign_keys": {"generated_not_valid": 0, "unsupported": [], "deferred": []},
         "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "unsigned_sequence_pairs": 0},
         "auto_increment": {
@@ -341,8 +402,6 @@ def generate_ddl(
             report["review_items"].append({"object_type": object_type, "code": "METADATA_VISIBILITY_NOT_CONFIRMED"})
     if snapshot.get("unresolved_role_grants"):
         report["review_items"].append({"code": "SOURCE_ROLE_GRANTS_UNRESOLVED"})
-    if snapshot.get("grants"):
-        report["review_items"].append({"code": "POSTGRES_ROLE_GRANT_MAPPING_REQUIRED"})
     for trigger in snapshot.get("triggers", []):
         report["review_items"].append({
             "table": str(trigger.get("table", "")),
@@ -368,8 +427,12 @@ def generate_ddl(
         f"-- Generator version: {GENERATOR_VERSION}",
         f"-- Catalog SHA-256: {fingerprint}",
         f"CREATE SCHEMA {_ident(TARGET_SCHEMA)};",
-        f"SET search_path TO {_ident(TARGET_SCHEMA)}, pg_catalog;",
+        f"CREATE SCHEMA {_ident(LEGACY_SCHEMA)};",
+        f"REVOKE ALL ON SCHEMA {_ident(LEGACY_SCHEMA)} FROM PUBLIC;",
+        f"SET search_path TO {_ident(TARGET_SCHEMA)}, {_ident(LEGACY_SCHEMA)}, pg_catalog;",
         f"CREATE COLLATION {_qualified(TARGET_SCHEMA, 'ci')} (provider = icu, locale = 'und-u-ks-level1', deterministic = false);",
+        f"CREATE TABLE {_qualified(LEGACY_SCHEMA, 'auditoria_nul')} (\"tabela\" TEXT NOT NULL, \"coluna\" TEXT NOT NULL, \"pk\" TEXT NOT NULL, \"valor_original\" BYTEA NOT NULL, \"migrado_em\" TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp());",
+        f"REVOKE ALL ON TABLE {_qualified(LEGACY_SCHEMA, 'auditoria_nul')} FROM PUBLIC;",
     ]
     table_header = list(table_statements)
     table_statements = []
@@ -379,8 +442,14 @@ def generate_ddl(
     emitted_unique_keys: set[tuple[str, tuple[str, ...]]] = set()
     emitted_column_types: dict[tuple[str, str], tuple[str, str | None]] = {}
     identity_columns: list[dict[str, Any]] = []
+    primary_keys_post_load: list[dict[str, Any]] = []
+    unique_indexes_post_load: list[dict[str, Any]] = []
     for table_name in sorted(table_by_name):
         table = table_by_name[table_name]
+        target_schema = _schema_for_table(table_name)
+        report["table_schemas"][table_name] = target_schema
+        if target_schema == LEGACY_SCHEMA:
+            report["legacy_backup_tables"].append(table_name)
         try:
             _ident(table_name)
             if str(table.get("engine", "")).upper() != "INNODB":
@@ -414,7 +483,7 @@ def generate_ddl(
                 extra = str(column.get("extra", "")).lower()
                 if "auto_increment" in extra:
                     if mapping.sql_type == "NUMERIC(20,0)":
-                        sequence_key = f"{table_name}.{name}"
+                        sequence_key = f"{target_schema}.{table_name}.{name}"
                         table_allocators.append({
                             "key": sequence_key,
                             "low_sequence": _generated_name("p2_u64_lo", table_name, name),
@@ -423,7 +492,12 @@ def generate_ddl(
                         declaration += f" DEFAULT {_qualified(TARGET_SCHEMA, UNSIGNED_IDENTITY_FUNCTION)}({quote_literal(sequence_key)})"
                     else:
                         declaration += " GENERATED BY DEFAULT AS IDENTITY"
-                if not bool(column.get("nullable", True)):
+                nullable = bool(column.get("nullable", True))
+                if data_type.lower() in {"date", "datetime", "timestamp"}:
+                    if not nullable:
+                        report["zero_date_nullable_columns"].append({"table": table_name, "column": name})
+                    nullable = True
+                if not nullable:
                     declaration += " NOT NULL"
                 default_sql = _sql_default(
                     column,
@@ -437,8 +511,20 @@ def generate_ddl(
                 for check in mapping.checks:
                     constraint_name = _generated_name("ck", table_name, name, str(len(column_defs)))
                     column_defs.append(f"CONSTRAINT {_ident(constraint_name)} {check}")
-                    if data_type.lower() == "enum":
-                        report["generated"]["enum_checks"] += 1
+                if data_type.lower() == "enum":
+                    labels = parse_mysql_enum(
+                        str(column["column_type"]),
+                        no_backslash_escapes=bool(snapshot.get("source_no_backslash_escapes", False)),
+                    )
+                    report["generated"]["enum_checks"] += 1
+                    report["enum_checks_deferred"].append({
+                        "table": table_name,
+                        "column": name,
+                        "declared_label_count": len(labels),
+                        "empty_label_included": "" in labels,
+                        "constraint_name": _generated_name("ck_enum", table_name, name),
+                        "status": "CHECK_AFTER_VALUE_SCAN",
+                    })
                 report["review_items"].extend({"table": table_name, "column": name, "code": code} for code in mapping.review_codes)
                 if "on update current_timestamp" in extra:
                     if data_type.lower() not in {"timestamp", "datetime"}:
@@ -449,16 +535,16 @@ def generate_ddl(
                 for name in pk_columns:
                     if name not in {str(column["name"]) for column in columns}:
                         raise TypeMappingError("PRIMARY_KEY_COLUMN_NOT_FOUND")
-                if _key_requires_collision_scan(table, pk_columns, overrides):
-                    report["review_items"].append({
-                        "table": table_name,
-                        "columns": pk_columns,
-                        "code": "PRIMARY_KEY_CI_COLLISION_SCAN_REQUIRED",
-                    })
                 pk_name = "PRIMARY" if len("PRIMARY") <= MAX_IDENTIFIER_BYTES else "pk_" + hashlib.sha256(table_name.encode()).hexdigest()[:16]
-                column_defs.append(f"CONSTRAINT {_ident(pk_name)} PRIMARY KEY ({', '.join(_ident(name) for name in pk_columns)})")
+                primary_keys_post_load.append({"table": table_name, "columns": pk_columns, "target_schema": target_schema, "constraint_name": pk_name})
+                report["primary_keys_pending_collision_scan"].append({
+                    "table": table_name,
+                    "columns": pk_columns,
+                    "target_schema": target_schema,
+                    "code": "PRIMARY_KEY_CI_COLLISION_SCAN_REQUIRED" if _key_requires_collision_scan(table, pk_columns, overrides) else "PRIMARY_KEY_POST_LOAD_VALIDATION",
+                })
                 report["generated"]["primary_keys"] += 1
-            table_statements.append(f"CREATE TABLE {_qualified(TARGET_SCHEMA, table_name)} (\n  " + ",\n  ".join(column_defs) + "\n);")
+            table_statements.append(f"CREATE TABLE {_qualified(target_schema, table_name)} (\n  " + ",\n  ".join(column_defs) + "\n);")
             autoincrement_entries.extend(table_allocators)
             report["generated"]["tables"] += 1
             emitted_tables.add(table_name)
@@ -475,13 +561,14 @@ def generate_ddl(
                     report["review_items"].append({"table": table_name, "code": "AUTO_INCREMENT_NEXT_VALUE_METADATA_INVALID"})
                     next_value = None
                 if strategy == "identity":
-                    autoincrement_entries.append({"key": f"{table_name}.{auto_name}"})
+                    autoincrement_entries.append({"key": f"{target_schema}.{table_name}.{auto_name}"})
                 identity_columns.append({
                     "table": table_name,
+                    "target_schema": target_schema,
                     "column": auto_name,
                     "source_next_auto_increment": next_value,
                     "strategy": strategy,
-                    **(next((item for item in table_allocators if item["key"] == f"{table_name}.{auto_name}"), {}) if strategy == "unsigned_sequence_pair" else {}),
+                    **(next((item for item in table_allocators if item["key"] == f"{target_schema}.{table_name}.{auto_name}"), {}) if strategy == "unsigned_sequence_pair" else {}),
                 })
                 if strategy == "unsigned_sequence_pair":
                     report["generated"]["unsigned_sequence_pairs"] += 1
@@ -495,6 +582,35 @@ def generate_ddl(
         if application_role is None and has_unsigned_identity:
             report["review_items"].append({"code": "AUTO_INCREMENT_APPLICATION_ROLE_REQUIRED"})
         table_header.extend(_autoincrement_support_sql(autoincrement_entries, application_role))
+    if application_role is not None:
+        app_role = _ident(application_role)
+        runtime_tables = [
+            _qualified(TARGET_SCHEMA, name)
+            for name in sorted(emitted_tables)
+            if report["table_schemas"].get(name) == TARGET_SCHEMA
+        ]
+        table_statements.extend([
+            f"REVOKE ALL ON ALL TABLES IN SCHEMA {_ident(TARGET_SCHEMA)} FROM PUBLIC;",
+            f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA {_ident(TARGET_SCHEMA)} FROM PUBLIC;",
+            f"GRANT USAGE ON SCHEMA {_ident(TARGET_SCHEMA)} TO {app_role};",
+            *([f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {', '.join(runtime_tables)} TO {app_role};"] if runtime_tables else []),
+            f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA {_ident(TARGET_SCHEMA)} TO {app_role};",
+            f"REVOKE ALL ON SCHEMA {_ident(LEGACY_SCHEMA)} FROM {app_role};",
+            f"REVOKE ALL ON ALL TABLES IN SCHEMA {_ident(LEGACY_SCHEMA)} FROM {app_role};",
+            f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA {_ident(LEGACY_SCHEMA)} FROM {app_role};",
+            f"REVOKE ALL ON TABLE {_qualified(LEGACY_SCHEMA, 'auditoria_nul')} FROM {app_role};",
+        ])
+        if autoincrement_entries:
+            table_statements.append(f"REVOKE ALL ON TABLE {_qualified(TARGET_SCHEMA, AUTOINCREMENT_STATE_STORE)} FROM {app_role};")
+        unsigned_sequences = [
+            _qualified(str(item.get("target_schema", TARGET_SCHEMA)), str(sequence_name))
+            for item in autoincrement_entries
+            if item.get("target_schema", TARGET_SCHEMA) == TARGET_SCHEMA
+            for sequence_name in (item.get("low_sequence"), item.get("high_sequence"))
+            if sequence_name
+        ]
+        if unsigned_sequences:
+            table_statements.append(f"REVOKE ALL ON SEQUENCE {', '.join(unsigned_sequences)} FROM {app_role};")
     table_statements = table_header + table_statements
 
     if on_update_groups:
@@ -516,16 +632,17 @@ def generate_ddl(
                 "    END IF;"
                 for column in columns
             )
+            table_schema = _schema_for_table(table_name)
             trigger_statements.append(
-                f"CREATE FUNCTION {_qualified(TARGET_SCHEMA, 'fn_on_update_' + digest)}() RETURNS trigger\n"
+                f"CREATE FUNCTION {_qualified(table_schema, 'fn_on_update_' + digest)}() RETURNS trigger\n"
                 "LANGUAGE plpgsql AS $$\nBEGIN\n"
                 f"  IF to_jsonb(NEW) - {excluded} IS DISTINCT FROM to_jsonb(OLD) - {excluded} THEN\n"
                 f"{assignments}\n"
                 "  END IF;\n  RETURN NEW;\nEND;\n$$;"
             )
             trigger_statements.append(
-                f"CREATE TRIGGER {trigger_name} BEFORE UPDATE ON {_qualified(TARGET_SCHEMA, table_name)}\n"
-                f"FOR EACH ROW EXECUTE FUNCTION {_qualified(TARGET_SCHEMA, 'fn_on_update_' + digest)}();"
+                f"CREATE TRIGGER {trigger_name} BEFORE UPDATE ON {_qualified(table_schema, table_name)}\n"
+                f"FOR EACH ROW EXECUTE FUNCTION {_qualified(table_schema, 'fn_on_update_' + digest)}();"
             )
             report["generated"]["on_update_triggers"] += 1
     else:
@@ -551,38 +668,85 @@ def generate_ddl(
                 raise TypeMappingError("INDEX_HAS_NO_COLUMNS")
             if not bool(index.get("visible", True)):
                 raise TypeMappingError("INVISIBLE_INDEX_SEMANTICS_REVIEW_REQUIRED")
-            if str(index.get("type", "BTREE")).upper() not in {"BTREE"}:
+            index_type = str(index.get("type", "BTREE")).upper()
+            if index_type not in {"BTREE", "FULLTEXT"}:
                 raise TypeMappingError("INDEX_METHOD_REVIEW_REQUIRED")
             parts: list[str] = []
+            prefix_index = False
             for part in columns:
-                if part.get("expression_present") or part.get("prefix_length") is not None or not part.get("name"):
-                    raise TypeMappingError("FUNCTIONAL_OR_PREFIX_INDEX_REVIEW_REQUIRED")
+                if part.get("expression_present") or not part.get("name"):
+                    raise TypeMappingError("FUNCTIONAL_INDEX_REVIEW_REQUIRED")
                 direction = str(part.get("direction", "ASC")).upper()
                 if direction not in {"ASC", "DESC"}:
                     raise TypeMappingError("INDEX_DIRECTION_INVALID")
-                parts.append(f"{_ident(str(part['name']))} {direction}")
+                column_name = str(part["name"])
+                if index_type == "FULLTEXT":
+                    column_meta = next((column for column in table_by_name[table_name].get("columns", []) if str(column.get("name")) == column_name), None)
+                    if column_meta is None or not _textual(str(column_meta.get("data_type", ""))):
+                        raise TypeMappingError("FULLTEXT_COLUMN_NOT_TEXTUAL")
+                    parts.append(f"COALESCE({_ident(column_name)}::text, '')")
+                    continue
+                prefix_length = part.get("prefix_length")
+                if prefix_length is not None:
+                    if isinstance(prefix_length, bool) or not isinstance(prefix_length, int) or prefix_length < 1:
+                        raise TypeMappingError("INDEX_PREFIX_LENGTH_INVALID")
+                    column_meta = next((column for column in table_by_name[table_name].get("columns", []) if str(column.get("name")) == column_name), None)
+                    if column_meta is None:
+                        raise TypeMappingError("INDEX_COLUMN_NOT_FOUND")
+                    column_type = str(column_meta.get("data_type", "")).lower()
+                    if _textual(column_type):
+                        expression = f"left({_ident(column_name)}::text, {prefix_length})"
+                    elif column_type in {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}:
+                        expression = f"substring({_ident(column_name)} from 1 for {prefix_length})"
+                    else:
+                        raise TypeMappingError("INDEX_PREFIX_COLUMN_TYPE_UNSUPPORTED")
+                    parts.append(f"({expression}) {direction}")
+                    prefix_index = True
+                else:
+                    parts.append(f"{_ident(column_name)} {direction}")
             unique = not bool(index.get("non_unique", True))
+            if index_type == "FULLTEXT" and unique:
+                raise TypeMappingError("UNIQUE_FULLTEXT_UNSUPPORTED")
             generated_name = _generated_name("ix", table_name, index_name)
-            statement = f"CREATE {'UNIQUE ' if unique else ''}INDEX {_ident(generated_name)} ON {_qualified(TARGET_SCHEMA, table_name)} ({', '.join(parts)});"
-            index_statements.append(statement)
+            if index_type == "FULLTEXT":
+                search_vector = " || ' ' || ".join(parts)
+                statement = f"CREATE INDEX {_ident(generated_name)} ON {_qualified(_schema_for_table(table_name), table_name)} USING GIN (to_tsvector('portuguese', {search_vector}));"
+            elif unique:
+                statement = ""
+                unique_indexes_post_load.append({
+                    "table": table_name,
+                    "index": index_name,
+                    "target_schema": _schema_for_table(table_name),
+                    "generated_name": generated_name,
+                    "columns": [dict(part) for part in columns],
+                    "prefix_index": prefix_index,
+                    "ci_collision_scan_required": _key_requires_collision_scan(
+                        table_by_name[table_name], [str(part["name"]) for part in columns], overrides
+                    ),
+                })
+            else:
+                statement = f"CREATE INDEX {_ident(generated_name)} ON {_qualified(_schema_for_table(table_name), table_name)} ({', '.join(parts)});"
+            if statement:
+                index_statements.append(statement)
             report["generated"]["indexes"] += 1
             if unique:
                 report["generated"]["unique_indexes"] += 1
                 key_columns = [str(p["name"]) for p in columns]
-                emitted_unique_keys.add((table_name, tuple(key_columns)))
-                if _key_requires_collision_scan(table_by_name[table_name], key_columns, overrides):
-                    unique_pending.append({"table": table_name, "index": index_name, "columns": key_columns})
-                    report["review_items"].append({
-                        "table": table_name,
-                        "index": index_name,
-                        "columns": key_columns,
-                        "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
-                    })
+                if not prefix_index:
+                    emitted_unique_keys.add((table_name, tuple(key_columns)))
+                unique_pending.append({
+                    "table": table_name,
+                    "index": index_name,
+                    "columns": key_columns,
+                    "target_schema": _schema_for_table(table_name),
+                    "prefix_lengths": [part.get("prefix_length") for part in columns],
+                    "code": "UNIQUE_COLLISION_SCAN_REQUIRED" if _key_requires_collision_scan(table_by_name[table_name], key_columns, overrides) else "UNIQUE_POST_LOAD_VALIDATION",
+                })
         except (TypeMappingError, KeyError, ValueError) as error:
             code = error.code if isinstance(error, TypeMappingError) else "INDEX_METADATA_INVALID"
             report["unsupported_indexes"].append({"table": table_name, "index": index_name, "code": code})
 
-    fk_statements = [f"-- Generator version: {GENERATOR_VERSION}", f"-- Catalog SHA-256: {fingerprint}", f"SET search_path TO {_ident(TARGET_SCHEMA)}, pg_catalog;"]
+    fk_statements = [f"-- Generator version: {GENERATOR_VERSION}", f"-- Catalog SHA-256: {fingerprint}", f"SET search_path TO {_ident(TARGET_SCHEMA)}, {_ident(LEGACY_SCHEMA)}, pg_catalog;"]
     for fk in snapshot.get("foreign_keys", []):
         table_name = str(fk.get("table", "")); name = str(fk.get("name", ""))
         ref_schema = str(fk.get("referenced_schema", "")); ref_table = str(fk.get("referenced_table", ""))
@@ -617,13 +781,18 @@ def generate_ddl(
             allowed = {"NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"}
             if update_rule not in allowed or delete_rule not in allowed:
                 raise TypeMappingError("FK_ACTION_UNSUPPORTED")
-            action_sql = f" ON UPDATE {update_rule} ON DELETE {delete_rule}"
-            fk_statements.append(
-                f"ALTER TABLE {_qualified(TARGET_SCHEMA, table_name)} ADD CONSTRAINT {_ident(_generated_name('fk', table_name, name))} "
-                f"FOREIGN KEY ({', '.join(_ident(x) for x in source_columns)}) "
-                f"REFERENCES {_qualified(TARGET_SCHEMA, ref_table)} ({', '.join(_ident(x) for x in target_columns)})"
-                f"{action_sql} NOT VALID;"
-            )
+            report["foreign_keys_post_load"].append({
+                "table": table_name,
+                "name": name,
+                "columns": source_columns,
+                "referenced_table": ref_table,
+                "referenced_columns": target_columns,
+                "target_schema": _schema_for_table(table_name),
+                "referenced_schema": _schema_for_table(ref_table),
+                "update_rule": update_rule,
+                "delete_rule": delete_rule,
+                "constraint_name": _generated_name("fk", table_name, name),
+            })
             report["foreign_keys"]["generated_not_valid"] += 1
         except (TypeMappingError, KeyError, ValueError) as error:
             code = error.code if isinstance(error, TypeMappingError) else "FK_METADATA_INVALID"
@@ -639,8 +808,17 @@ def generate_ddl(
         })
 
     report["unique_indexes_pending_collision_scan"] = unique_pending
+    report["primary_keys_post_load"] = primary_keys_post_load
+    report["unique_indexes_post_load"] = unique_indexes_post_load
     report["auto_increment"]["generated"] = len(identity_columns)
     report["auto_increment"]["columns"] = identity_columns
+    unique_reviews: dict[tuple[str, ...], dict[str, Any]] = {}
+    for item in report["review_items"]:
+        key = tuple(str(item.get(field, "")) for field in (
+            "table", "column", "object_type", "constraint", "code", "definition_sha256"
+        ))
+        unique_reviews.setdefault(key, item)
+    report["review_items"] = list(unique_reviews.values())
     report["review_items"].sort(key=lambda item: (str(item.get("table", "")), str(item.get("column", "")), str(item.get("code", ""))))
     for script in [table_statements, trigger_statements, index_statements, fk_statements]:
         script.append("")

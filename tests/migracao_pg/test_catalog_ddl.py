@@ -8,7 +8,7 @@ from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
 from tools.migracao_pg.catalog import CatalogError, _atomic_json, _grants_are_read_only, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, collect_catalog
-from tools.migracao_pg.ddl import DdlGenerationError, canonical_fingerprint, generate_ddl
+from tools.migracao_pg.ddl import DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
 from tools.migracao_pg.generate_ddl import main as generate_ddl_main
 
 
@@ -180,19 +180,71 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(_has_schema_wide_select([{"scope": "SCHEMA", "privileges": ["SELECT"]}]))
         self.assertFalse(_has_schema_wide_select([{"scope": "SCHEMA_OBJECTS", "privileges": ["SELECT"]}]))
 
-    def test_catalog_default_allowlist_does_not_export_arbitrary_string_values(self) -> None:
+    def test_catalog_default_allowlist_handles_text_literals_and_sensitive_names(self) -> None:
         stamp = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "CURRENT_TIMESTAMP"}
         self.assertEqual(_safe_default(stamp), {"kind": "sql", "expression": "timezone('America/Sao_Paulo', statement_timestamp())"})
-        unsafe = {"data_type": "varchar", "column_type": "varchar(100)", "column_default": "token-like-string"}
-        self.assertEqual(_safe_default(unsafe), {"kind": "review", "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT"})
+        safe = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "active"}
+        safe_default = _safe_default(safe)
+        self.assertEqual(safe_default, {"kind": "sql", "expression": "'active'"})
+        report = {"review_items": []}
+        self.assertEqual(_sql_default({**safe, "nullable": True, "default": safe_default}, "synthetic", report), "'active'")
+        self.assertEqual(report["review_items"], [])
+        for data_type in ("char", "varchar", "nchar", "nvarchar", "text"):
+            column = {"name": "status", "data_type": data_type, "column_type": f"{data_type}(40)", "nullable": True,
+                      "default": {"kind": "sql", "expression": "'active'"}}
+            self.assertEqual(_sql_default(column, "synthetic", report), "'active'")
+        escaped = {"name": "status", "data_type": "varchar", "column_type": "varchar(40)", "nullable": True,
+                   "default": {"kind": "sql", "expression": "'O''Brien'"}}
+        self.assertEqual(_sql_default(escaped, "synthetic", report), "'O''Brien'")
+        sensitive = {"name": "api_token", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "active"}
+        self.assertEqual(_safe_default(sensitive), {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"})
+        expression = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "default_value()", "extra": "DEFAULT_GENERATED"}
+        self.assertEqual(_safe_default(expression), {"kind": "review", "code": "TEXT_EXPRESSION_DEFAULT_REVIEW_REQUIRED"})
         text_null = {"data_type": "varchar", "column_type": "varchar(100)", "column_default": "NULL"}
         self.assertEqual(_safe_default(text_null), {"kind": "review", "code": "AMBIGUOUS_TEXT_NULL_DEFAULT_REVIEW_REQUIRED"})
+
+    def test_catalog_text_default_requires_positive_safe_column_and_value_classification(self) -> None:
+        self.assertEqual(
+            _safe_default({"name": "salt", "data_type": "varchar", "column_type": "varchar(64)", "column_default": "active"}),
+            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
+        )
+        self.assertEqual(
+            _safe_default({"name": "status", "data_type": "varchar", "column_type": "varchar(64)", "column_default": "secret-default"}),
+            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
+        )
         enum = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "A"}
         self.assertEqual(_safe_default(enum), {"kind": "sql", "expression": "'A'"})
         enum_null = {"data_type": "enum", "column_type": "enum('NULL','B')", "column_default": "NULL"}
         self.assertEqual(_safe_default(enum_null), {"kind": "sql", "expression": "'NULL'"})
         enum_null_ambiguous = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "NULL"}
         self.assertEqual(_safe_default(enum_null_ambiguous), {"kind": "review", "code": "AMBIGUOUS_ENUM_NULL_DEFAULT_REVIEW_REQUIRED"})
+
+    def test_temporal_defaults_are_canonicalized_without_source_timezone_guessing(self) -> None:
+        date_default = {"data_type": "date", "column_type": "date", "column_default": "0000-00-00"}
+        time_default = {"data_type": "time", "column_type": "time", "column_default": "-25:00:00"}
+        timestamp_default = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "2026-11-17 00:00:00"}
+        zero_timestamp_default = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "0000-00-00 00:00:00"}
+        self.assertEqual(_safe_default(date_default), {"kind": "sql", "expression": "NULL"})
+        self.assertEqual(_safe_default(time_default), {"kind": "sql", "expression": "INTERVAL '-25:00:00'"})
+        self.assertEqual(_safe_default(timestamp_default), {"kind": "sql", "expression": "TIMESTAMP '2026-11-17 00:00:00'"})
+        self.assertEqual(_safe_default(zero_timestamp_default), {"kind": "sql", "expression": "NULL"})
+        fractional_timestamp_default = dict(timestamp_default, column_default="2026-11-17 00:00:00.123456")
+        self.assertEqual(_safe_default(fractional_timestamp_default), {"kind": "review", "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED"})
+
+        snapshot = sample_snapshot()
+        snapshot["tables"][0]["columns"].extend([
+            {"name": "zero_date", "ordinal": 3, "nullable": False, "data_type": "date", "column_type": "date", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(date_default)},
+            {"name": "elapsed", "ordinal": 4, "nullable": False, "data_type": "time", "column_type": "time", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(time_default)},
+            {"name": "stamp_default", "ordinal": 5, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(timestamp_default)},
+            {"name": "zero_timestamp", "ordinal": 6, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(zero_timestamp_default)},
+        ])
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        tables = bundle.scripts["00_tables.sql"]
+        self.assertIn('"zero_date" DATE DEFAULT NULL', tables)
+        self.assertIn('"elapsed" INTERVAL NOT NULL DEFAULT INTERVAL \'-25:00:00\'', tables)
+        self.assertIn('"stamp_default" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT TIMESTAMP \'2026-11-17 00:00:00\'', tables)
+        self.assertIn('"zero_timestamp" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL', tables)
 
     def test_catalog_is_metadata_only_and_rolls_back_read_transaction(self) -> None:
         connection = FakeConnection()
@@ -247,15 +299,20 @@ class CatalogTests(unittest.TestCase):
         fks = bundle.scripts["20_foreign_keys_not_valid.sql"]
         sequences = bundle.scripts["30_post_load_sequences.sql"]
         self.assertIn('"id" BIGINT GENERATED BY DEFAULT AS IDENTITY NOT NULL', tables)
-        self.assertIn("CHECK (\"state\" IN ('A', 'B'))", tables)
+        self.assertNotIn('CONSTRAINT "PRIMARY" PRIMARY KEY', tables)
+        self.assertNotIn("CHECK (\"state\" IN ('A', 'B'))", tables)
+        self.assertEqual(bundle.report["enum_checks_deferred"][0]["column"], "state")
+        self.assertEqual(bundle.report["primary_keys_post_load"][0]["table"], "parent")
+        self.assertEqual(bundle.report["unique_indexes_post_load"][0]["index"], "uq_parent_name")
+        self.assertNotIn("CREATE UNIQUE INDEX", bundle.scripts["10_indexes.sql"])
         self.assertIn("COLLATE ci", tables)
         self.assertIn('COLLATE "C"', tables)
         self.assertIn("CREATE TRIGGER", triggers)
         self.assertIn("IS DISTINCT FROM", triggers)
         self.assertIn("IF to_jsonb(NEW) -", triggers)
         self.assertNotIn("IF (to_jsonb(NEW)", triggers)
-        self.assertIn('FOREIGN KEY ("parent_id")', fks)
-        self.assertIn("NOT VALID;", fks)
+        self.assertNotIn("FOREIGN KEY", fks)
+        self.assertEqual(bundle.report["foreign_keys_post_load"][0]["columns"], ["parent_id"])
         self.assertEqual(bundle.report["generated"]["on_update_triggers"], 1)
         self.assertEqual(bundle.report["foreign_keys"]["generated_not_valid"], 1)
         self.assertIn("pg_get_serial_sequence", sequences)
@@ -269,6 +326,34 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(bundle.report["auto_increment"]["generated"], 1)
         self.assertFalse(bundle.report["executable_complete"])
 
+    def test_backup_tables_are_created_in_legacy_schema(self) -> None:
+        snapshot = sample_snapshot()
+        backup = {
+            "name": "archive_backup",
+            "type": "BASE TABLE",
+            "engine": "InnoDB",
+            "source_collation": "utf8mb4_unicode_ci",
+            "columns": [
+                {"name": "id", "ordinal": 1, "nullable": False, "data_type": "int", "column_type": "int", "character_set": None, "source_collation": None, "extra": ""},
+            ],
+            "primary_key": [{"ordinal": 1, "column": "id"}],
+        }
+        dated = dict(backup, name="archive_2026_11_17")
+        snapshot["tables"].extend([backup, dated])
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot, application_role="erp_app")
+        tables = bundle.scripts["00_tables.sql"]
+        self.assertIn('CREATE SCHEMA "legado"', tables)
+        self.assertIn('CREATE TABLE "legado"."archive_backup"', tables)
+        self.assertIn('CREATE TABLE "legado"."archive_2026_11_17"', tables)
+        self.assertEqual(bundle.report["table_schemas"]["archive_backup"], "legado")
+        self.assertEqual(bundle.report["table_schemas"]["archive_2026_11_17"], "legado")
+        self.assertIn('REVOKE ALL ON SCHEMA "legado" FROM "erp_app"', tables)
+        self.assertIn('REVOKE ALL ON TABLE "legado"."auditoria_nul" FROM "erp_app"', tables)
+        self.assertIn('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "erp"."child", "erp"."parent" TO "erp_app"', tables)
+        self.assertNotIn('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "erp"', tables)
+        self.assertNotIn('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legado".', tables)
+
     def test_unsigned_bigint_auto_increment_uses_nontransactional_sequence_pair(self) -> None:
         snapshot = sample_snapshot()
         parent = snapshot["tables"][0]
@@ -278,7 +363,7 @@ class CatalogTests(unittest.TestCase):
         bundle = generate_ddl(snapshot, collation_overrides={"parent.name": "ci", "child.state": "ci", "child.api_token": "C"}, application_role="erp_app")
         tables = bundle.scripts["00_tables.sql"]
         sequences = bundle.scripts["30_post_load_sequences.sql"]
-        self.assertIn('"id" NUMERIC(20,0) DEFAULT "erp"."_p2_next_unsigned_id"(\'parent.id\') NOT NULL', tables)
+        self.assertIn('"id" NUMERIC(20,0) DEFAULT "erp"."_p2_next_unsigned_id"(\'erp.parent.id\') NOT NULL', tables)
         self.assertIn('CREATE TABLE "erp"."_p2_autoincrement_state"', tables)
         self.assertIn("CREATE SEQUENCE \"erp\".\"p2_u64_lo_parent_id\"", tables)
         self.assertIn("CREATE SEQUENCE \"erp\".\"p2_u64_hi_parent_id\"", tables)
@@ -324,39 +409,90 @@ class CatalogTests(unittest.TestCase):
         self.assertFalse(bundle.report["auto_increment"]["runtime_privileges"]["unsigned_function_execute_granted"])
         self.assertFalse(bundle.report["executable_complete"])
 
-    def test_prefix_index_and_unresolved_checks_are_reported_not_emitted(self) -> None:
+    def test_prefix_index_is_emitted_and_unresolved_checks_remain_reported(self) -> None:
         snapshot = sample_snapshot()
         snapshot["indexes"].append({"table": "parent", "name": "prefix_idx", "non_unique": True, "type": "BTREE", "visible": True, "columns": [{"ordinal": 1, "name": "name", "prefix_length": 10, "direction": "ASC", "expression_present": False}]})
         snapshot["check_constraints"] = [{"table": "parent", "name": "chk_business", "definition_sha256": "2" * 64, "enforced": True}]
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
-        self.assertEqual(bundle.report["unsupported_indexes"][0]["code"], "FUNCTIONAL_OR_PREFIX_INDEX_REVIEW_REQUIRED")
+        self.assertEqual(bundle.report["unsupported_indexes"], [])
+        self.assertIn('left("name"::text, 10)', bundle.scripts["10_indexes.sql"])
         self.assertTrue(any(item.get("code") == "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED" for item in bundle.report["review_items"]))
         self.assertFalse(bundle.report["executable_complete"])
 
-    def test_sensitive_collation_requires_explicit_confirmation(self) -> None:
+    def test_fulltext_index_is_emitted_as_portuguese_gin(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["indexes"].append({"table": "parent", "name": "fts_name", "non_unique": True, "type": "FULLTEXT", "visible": True, "columns": [{"ordinal": 1, "name": "name", "prefix_length": None, "direction": "ASC", "expression_present": False}]})
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
+        self.assertIn("USING GIN (to_tsvector('portuguese', COALESCE(\"name\"::text, '')))", bundle.scripts["10_indexes.sql"])
+        self.assertNotIn("INDEX_METHOD_REVIEW_REQUIRED", {item["code"] for item in bundle.report["unsupported_indexes"]})
+
+    def test_sensitive_collation_defaults_to_c_and_is_reported(self) -> None:
         snapshot = sample_snapshot()
         bundle = generate_ddl(snapshot)
-        self.assertTrue(any(item.get("code") == "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED" for item in bundle.report["review_items"]))
-        confirmed = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
-        self.assertFalse(any(item.get("code") == "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED" for item in confirmed.report["review_items"]))
+        self.assertFalse(any(item.get("code") == "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED" for item in bundle.report["review_items"]))
+        self.assertIn({"table": "child", "column": "api_token", "reason": "sensitive_name"}, bundle.report["collation_C_columns"])
+        self.assertIn('"api_token" CHARACTER VARYING(64) COLLATE "C"', bundle.scripts["00_tables.sql"])
 
-    def test_non_allowlisted_collation_requires_review(self) -> None:
+    def test_sensitive_names_include_chave_sha_and_secret(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["tables"][0]["columns"].extend([
+            {"name": "chave_publica", "ordinal": 3, "nullable": True, "data_type": "varchar", "column_type": "varchar(128)", "character_set": "utf8mb4", "source_collation": "utf8mb4_unicode_ci", "extra": ""},
+            {"name": "sha256_hash", "ordinal": 4, "nullable": True, "data_type": "varchar", "column_type": "varchar(64)", "character_set": "utf8mb4", "source_collation": "utf8mb4_unicode_ci", "extra": ""},
+            {"name": "api_secret", "ordinal": 5, "nullable": True, "data_type": "varchar", "column_type": "varchar(64)", "character_set": "utf8mb4", "source_collation": "utf8mb4_unicode_ci", "extra": ""},
+        ])
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        sensitive = {(item["table"], item["column"]) for item in bundle.report["collation_C_columns"]}
+        self.assertTrue({("parent", "chave_publica"), ("parent", "sha256_hash"), ("parent", "api_secret")}.issubset(sensitive))
+
+    def test_enum_check_is_deferred_and_report_excludes_labels(self) -> None:
+        snapshot = sample_snapshot()
+        bundle = generate_ddl(snapshot)
+        enums = bundle.report["enum_checks_deferred"]
+        self.assertEqual(len(enums), 1)
+        self.assertEqual(enums[0]["declared_label_count"], 2)
+        self.assertFalse(enums[0]["empty_label_included"])
+        self.assertEqual(enums[0]["status"], "CHECK_AFTER_VALUE_SCAN")
+        self.assertNotIn("labels", enums[0])
+
+    def test_other_source_collations_follow_approved_ci_default(self) -> None:
         snapshot = sample_snapshot()
         snapshot["tables"][0]["columns"][1]["source_collation"] = "utf8mb4_0900_as_ci"
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot)
-        self.assertTrue(any(item.get("code") == "SOURCE_COLLATION_SEMANTICS_REVIEW_REQUIRED" for item in bundle.report["review_items"]))
-        self.assertFalse(bundle.report["executable_complete"])
+        self.assertFalse(any(item.get("code") == "SOURCE_COLLATION_SEMANTICS_REVIEW_REQUIRED" for item in bundle.report["review_items"]))
+        self.assertIn('"name" CHARACTER VARYING(80) COLLATE ci', bundle.scripts["00_tables.sql"])
+        self.assertTrue(any(item["table"] == "parent" and item["column"] == "name" and item["target"] == "ci" for item in bundle.report["collation_decisions"]))
 
-    def test_indexes_and_foreign_keys_of_blocked_tables_are_deferred(self) -> None:
+    def test_binary_source_collation_defaults_to_c(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["tables"][0]["columns"][1]["source_collation"] = "utf8mb4_bin"
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertIn('"name" CHARACTER VARYING(80) COLLATE "C"', bundle.scripts["00_tables.sql"])
+        self.assertIn({"table": "parent", "column": "name", "reason": "binary_source_collation"}, bundle.report["collation_C_columns"])
+
+    def test_not_null_date_column_is_nullable_for_zero_date_normalization(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["tables"][0]["columns"].append({"name": "created_on", "ordinal": 3, "nullable": False, "data_type": "date", "column_type": "date", "character_set": None, "source_collation": None, "extra": ""})
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        tables_sql = bundle.scripts["00_tables.sql"]
+        self.assertIn('"created_on" DATE', tables_sql)
+        self.assertNotIn('"created_on" DATE NOT NULL', tables_sql)
+        self.assertIn({"table": "parent", "column": "created_on"}, bundle.report["zero_date_nullable_columns"])
+
+    def test_unknown_source_collation_uses_default_and_generates_indexes_and_foreign_keys(self) -> None:
         snapshot = sample_snapshot()
         snapshot["tables"][0]["columns"][1]["source_collation"] = "utf8mb4_unknown_semantics"
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
-        self.assertTrue(any(item["table"] == "parent" for item in bundle.report["blocked_tables"]))
-        self.assertIn("INDEX_TABLE_DDL_BLOCKED", {item["code"] for item in bundle.report["deferred_indexes"]})
-        self.assertIn("FK_TARGET_TABLE_DDL_BLOCKED", {item["code"] for item in bundle.report["foreign_keys"]["deferred"]})
+        self.assertFalse(any(item["table"] == "parent" for item in bundle.report["blocked_tables"]))
+        self.assertEqual(bundle.report["deferred_indexes"], [])
+        self.assertEqual(bundle.report["foreign_keys"]["deferred"], [])
+        self.assertEqual(bundle.report["foreign_keys"]["generated_not_valid"], 1)
         self.assertNotIn("INDEX_TABLE_NOT_IN_CATALOG", {item["code"] for item in bundle.report["unsupported_indexes"]})
 
     def test_non_innodb_table_is_blocked(self) -> None:

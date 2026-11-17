@@ -7,7 +7,7 @@ caller fornece essa decisão a partir de um catálogo aprovado por coluna.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -227,23 +227,19 @@ def map_mysql_type(
         precision = int(precision_match.group(1) or 0)
         if precision > 6:
             raise TypeMappingError("UNSUPPORTED_TEMPORAL_PRECISION")
-        if precision > 0:
+        if precision > 0 and base != "time":
             reviews.append("FRACTIONAL_SECONDS_REVIEW_REQUIRED")
         temporal = {
             "datetime": "TIMESTAMP(0) WITHOUT TIME ZONE",
             "timestamp": "TIMESTAMP(0) WITHOUT TIME ZONE",
-            "time": "TIME(0) WITHOUT TIME ZONE",
+            "time": "INTERVAL",
         }[base]
-        if base == "timestamp":
-            reviews.append("MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED")
-        if base == "time":
-            reviews.append("MYSQL_TIME_RANGE_REVIEW_REQUIRED")
         return TypeMapping(temporal, review_codes=tuple(reviews))
 
     if base == "date":
         if clean_rest:
             raise TypeMappingError("INVALID_DATE_METADATA")
-        return TypeMapping("DATE", review_codes=("MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",))
+        return TypeMapping("DATE")
 
     if base in {"char", "varchar", "nchar", "nvarchar"}:
         length_match = re.fullmatch(r"\(\s*(\d+)\s*\)", clean_rest)
@@ -259,17 +255,14 @@ def map_mysql_type(
     if base in {"tinytext", "text", "mediumtext", "longtext"}:
         if clean_rest:
             raise TypeMappingError("INVALID_TEXT_METADATA")
-        reviews = ("MYSQL_LONGTEXT_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",) if base == "longtext" else ()
-        return TypeMapping("TEXT", collation_sql=_collation_clause(target_collation), review_codes=reviews)
+        return TypeMapping("TEXT", collation_sql=_collation_clause(target_collation))
 
     if base == "enum":
         if unsigned or zerofill:
             raise TypeMappingError("INVALID_ENUM_METADATA")
         labels = parse_mysql_enum(column_type, no_backslash_escapes=no_backslash_escapes)
-        if column_name is None:
-            raise TypeMappingError("COLUMN_NAME_REQUIRED_FOR_ENUM")
-        literals = ", ".join(quote_literal(label) for label in labels)
-        checks.append(_column_check(column_name, f"IN ({literals})"))
+        if any("\x00" in label for label in labels):
+            raise TypeMappingError("ENUM_LABEL_CONTAINS_NUL")
         return TypeMapping("CHARACTER VARYING", collation_sql=_collation_clause(target_collation), checks=tuple(checks))
 
     if base in {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}:
@@ -293,8 +286,7 @@ def map_mysql_type(
             if column is None:
                 raise TypeMappingError("COLUMN_NAME_REQUIRED_FOR_CHECK")
             checks.append(_check(f"octet_length({column}) <= {limits[base]}"))
-        reviews = ("MYSQL_LONGBLOB_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",) if base == "longblob" else ()
-        return TypeMapping("BYTEA", checks=tuple(checks), review_codes=reviews)
+        return TypeMapping("BYTEA", checks=tuple(checks))
 
     if base == "json":
         if clean_rest or unsigned or zerofill:
@@ -337,7 +329,7 @@ def normalize_temporal_value(
     zero_date_to_null: bool = True,
     source_timezone: str = "UTC",
     target_timezone: str = "America/Sao_Paulo",
-) -> date | datetime | time | None:
+) -> date | datetime | time | timedelta | None:
     """Normalize temporal data without silently discarding precision/range.
 
     MySQL TIMESTAMP input must come from a connection whose session timezone is
@@ -386,24 +378,24 @@ def normalize_temporal_value(
                 raise TemporalValueError("AMBIGUOUS_LOCAL_TIMESTAMP_REQUIRES_APPROVAL")
             return wall
 
+        if isinstance(value, timedelta):
+            return value
         if raw is not None:
             time_match = re.fullmatch(r"([+-]?)(\d{1,3}):(\d{2}):(\d{2})(?:\.(\d+))?", raw)
             if not time_match:
                 raise TemporalValueError("INVALID_MYSQL_TIME_VALUE")
             sign, hours, minutes, seconds, fraction = time_match.groups()
-            if fraction and any(digit != "0" for digit in fraction):
-                raise TemporalValueError("FRACTIONAL_SECONDS_REQUIRE_APPROVAL")
             hour, minute, second = int(hours), int(minutes), int(seconds)
-            if sign == "-" or hour > 23 or minute > 59 or second > 59:
-                raise TemporalValueError("MYSQL_TIME_OUT_OF_RANGE_FOR_POSTGRES_TIME")
-            return time(hour, minute, second)
+            if hour > 838 or minute > 59 or second > 59 or (fraction and len(fraction) > 6):
+                raise TemporalValueError("MYSQL_TIME_VALUE_OUT_OF_SOURCE_RANGE")
+            microsecond = int((fraction or "").ljust(6, "0"))
+            total = timedelta(hours=hour, minutes=minute, seconds=second, microseconds=microsecond)
+            return -total if sign == "-" else total
         if not isinstance(value, time):
             raise TypeError
-        if value.microsecond:
-            raise TemporalValueError("FRACTIONAL_SECONDS_REQUIRE_APPROVAL")
         if value.tzinfo is not None:
             raise TemporalValueError("MYSQL_TIME_MUST_REMAIN_TIMEZONE_NAIVE")
-        return value
+        return timedelta(hours=value.hour, minutes=value.minute, seconds=value.second, microseconds=value.microsecond)
     except TemporalValueError:
         raise
     except (TypeError, ValueError, OverflowError) as error:

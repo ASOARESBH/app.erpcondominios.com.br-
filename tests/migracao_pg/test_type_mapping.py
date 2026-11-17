@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, time
+from datetime import datetime, timedelta
 
 from tools.migracao_pg.type_mapping import (
     TemporalValueError,
@@ -19,8 +19,8 @@ class TypeMappingTests(unittest.TestCase):
     def test_prompt_core_type_mapping(self) -> None:
         self.assertEqual(map_mysql_type("datetime").sql_type, "TIMESTAMP(0) WITHOUT TIME ZONE")
         self.assertEqual(map_mysql_type("timestamp").sql_type, "TIMESTAMP(0) WITHOUT TIME ZONE")
-        self.assertIn("MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED", map_mysql_type("timestamp").review_codes)
-        self.assertEqual(map_mysql_type("time").sql_type, "TIME(0) WITHOUT TIME ZONE")
+        self.assertEqual(map_mysql_type("timestamp").review_codes, ())
+        self.assertEqual(map_mysql_type("time").sql_type, "INTERVAL")
         self.assertEqual(map_mysql_type("tinyint", column_name="tiny_value").sql_type, "SMALLINT")
         self.assertEqual(map_mysql_type("int unsigned", column_name="int_unsigned_value").sql_type, "BIGINT")
         self.assertEqual(map_mysql_type("decimal(12,4)").sql_type, "NUMERIC(12,4)")
@@ -60,7 +60,7 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(parsed, ("novo", "d'água", "linha\n2", "aspas'ok"))
         mapped = map_mysql_type("enum('A','b''c')", target_collation="ci", column_name="state")
         self.assertEqual(mapped.sql_type, "CHARACTER VARYING")
-        self.assertIn("CHECK (\"state\" IN ('A', 'b''c'))", mapped.checks[0])
+        self.assertEqual(mapped.checks, ())
 
     def test_enum_parser_rejects_malformed_or_unsafe_metadata(self) -> None:
         for value in ("varchar(3)", "enum()", "enum('a',)", "enum('a','a')", "enum('open"):
@@ -85,24 +85,25 @@ class TypeMappingTests(unittest.TestCase):
             map_mysql_type("decimal(8,2) unsigned")
 
     def test_review_codes_must_be_resolved_before_ddl(self) -> None:
-        mapping = map_mysql_type("timestamp")
+        mapping = map_mysql_type("datetime(6)")
         with self.assertRaisesRegex(TypeMappingError, "MANUAL_REVIEW_REQUIRED"):
             require_review_codes_resolved(mapping, set())
         require_review_codes_resolved(mapping, set(mapping.review_codes))
         with self.assertRaisesRegex(TypeMappingError, "REVIEW_RESOLUTION_NOT_APPLICABLE"):
             require_review_codes_resolved(mapping, {"UNKNOWN_REVIEW"})
 
-    def test_binary_limit_checks_and_large_object_review(self) -> None:
+    def test_binary_limit_checks_and_large_object_mapping(self) -> None:
         self.assertEqual(map_mysql_type("varbinary(32)", column_name="token").checks,
                          ('CHECK (octet_length("token") <= 32)',))
         self.assertEqual(map_mysql_type("binary(16)", column_name="digest").checks,
                          ('CHECK (octet_length("digest") = 16)',))
-        self.assertIn("MYSQL_LONGBLOB_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
-                      map_mysql_type("longblob", column_name="payload").review_codes)
+        self.assertEqual(map_mysql_type("longblob", column_name="payload").sql_type, "BYTEA")
+        self.assertEqual(map_mysql_type("longtext", target_collation="ci").sql_type, "TEXT")
 
     def test_temporal_precision_and_unlisted_types_fail_closed(self) -> None:
         self.assertIn("FRACTIONAL_SECONDS_REVIEW_REQUIRED", map_mysql_type("datetime(6)").review_codes)
-        self.assertIn("MYSQL_TIME_RANGE_REVIEW_REQUIRED", map_mysql_type("time").review_codes)
+        self.assertEqual(map_mysql_type("time").sql_type, "INTERVAL")
+        self.assertEqual(map_mysql_type("time(6)").review_codes, ())
         with self.assertRaisesRegex(TypeMappingError, "MANUAL_TYPE_MAPPING_REQUIRED"):
             map_mysql_type("geometry")
 
@@ -146,15 +147,17 @@ class TemporalNormalizationTests(unittest.TestCase):
         with self.assertRaisesRegex(TemporalValueError, "DATETIME_MUST_REMAIN_TIMEZONE_NAIVE"):
             normalize_temporal_value(datetime.fromisoformat("2025-01-02T03:04:05+00:00"), "datetime")
 
-    def test_time_range_is_checked_before_postgres_cast(self) -> None:
-        self.assertEqual(normalize_temporal_value("23:59:59", "time"), time(23, 59, 59))
-        for value in ("-01:00:00", "24:00:00", "838:00:00"):
-            with self.subTest(value=value), self.assertRaisesRegex(TemporalValueError, "MYSQL_TIME_OUT_OF_RANGE_FOR_POSTGRES_TIME"):
-                normalize_temporal_value(value, "time")
+    def test_time_maps_to_interval_and_preserves_negative_extended_range(self) -> None:
+        self.assertEqual(normalize_temporal_value("23:59:59", "time"), timedelta(hours=23, minutes=59, seconds=59))
+        self.assertEqual(normalize_temporal_value("24:00:00", "time"), timedelta(hours=24))
+        self.assertEqual(normalize_temporal_value("-01:00:00", "time"), -timedelta(hours=1))
+        self.assertEqual(normalize_temporal_value("-838:59:59", "time"), -timedelta(hours=838, minutes=59, seconds=59))
+        self.assertEqual(normalize_temporal_value("12:30:45.123456", "time(6)"), timedelta(hours=12, minutes=30, seconds=45, microseconds=123456))
+        with self.assertRaisesRegex(TemporalValueError, "MYSQL_TIME_VALUE_OUT_OF_SOURCE_RANGE"):
+            normalize_temporal_value("839:00:00", "time")
 
-    def test_time_fraction_is_not_silently_truncated(self) -> None:
-        with self.assertRaisesRegex(TemporalValueError, "FRACTIONAL_SECONDS_REQUIRE_APPROVAL"):
-            normalize_temporal_value("12:00:00.000001", "time")
+    def test_time_fraction_is_preserved_in_interval(self) -> None:
+        self.assertEqual(normalize_temporal_value("12:00:00.000001", "time"), timedelta(hours=12, microseconds=1))
 
 
 if __name__ == "__main__":

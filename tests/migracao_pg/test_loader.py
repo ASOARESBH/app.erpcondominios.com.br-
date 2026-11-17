@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager, ExitStack
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+import base64
 import hashlib
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -12,7 +14,392 @@ import unittest
 from unittest.mock import patch
 
 from tools.migracao_pg import loader
-from tools.migracao_pg.loader import LoaderError, _MemoryGuard, _row_size_bytes, _sqlstate, _validate_row_size, normalize_mysql_value, validate_bundle
+from tools.migracao_pg.loader import LoaderError, _MemoryGuard, _row_size_bytes, _sqlstate, _validate_column_mappings, _validate_row_size, normalize_mysql_value, validate_bundle
+
+
+class TargetConfigTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.config = {
+            "host": "127.0.0.1",
+            "port": "5432",
+            "dbname": "erp_pg_dev",
+            "user": "erp_p2_loader",
+            "password": "synthetic-only-secret",
+            "schema": "erp",
+            "timezone": "UTC",
+            "application_user": "erp_app",
+        }
+
+    def test_requires_local_target_and_separate_roles(self) -> None:
+        validated = loader._validate_target_config(dict(self.config))
+        self.assertEqual(validated["port"], 5432)
+        for key, value, code in (
+            ("host", "203.0.113.5", "TARGET_HOST_MUST_BE_LOCAL"),
+            ("dbname", "erpcondominios", "TARGET_CONFIG_SCOPE_MISMATCH"),
+            ("user", "erp_app", "TARGET_ROLE_SEPARATION_REQUIRED"),
+            ("application_user", "erp_p2_loader", "TARGET_ROLE_SEPARATION_REQUIRED"),
+            ("timezone", "America/Sao_Paulo", "TARGET_TIMEZONE_MISMATCH"),
+        ):
+            candidate = dict(self.config)
+            candidate[key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(LoaderError, code):
+                loader._validate_target_config(candidate)
+
+
+class NulPolicyTests(unittest.TestCase):
+    def test_binary_nul_scan_compares_server_and_python_bytes_without_normalizing(self) -> None:
+        class Guard:
+            def sample_if_due(self):
+                return None
+
+        class Cursor:
+            def __init__(self, aggregate):
+                self.aggregate = aggregate
+                self.rows = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, query):
+                if "COUNT(*)" in query:
+                    self.rows = [(2, 1)]
+                else:
+                    self.rows = [(b"\x00\xffpayload",), (b"plain",)]
+
+            def fetchone(self):
+                return self.rows[0]
+
+            def fetchmany(self, _size):
+                rows, self.rows = self.rows, []
+                return rows
+
+        class Source:
+            def cursor(self, cursor_class=None):
+                return Cursor(cursor_class is not None)
+
+        snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
+            {"name": "payload", "data_type": "blob"},
+        ]}]}
+        result = loader._scan_source_binary_policy(Source(), snapshot, Guard())
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["method_b_cells_with_nul"], 1)
+        self.assertEqual(result[0]["python_cells_with_nul"], 1)
+        self.assertEqual(result[0]["nul_bytes"], 1)
+        self.assertEqual(result[0]["binary_bytes_scanned"], len(b"\x00\xffpayload") + len(b"plain"))
+        self.assertEqual(result[0]["bytea_policy"], "raw_bytes_without_text_decode_or_nul_normalization")
+
+    def test_binary_nul_scan_fails_closed_on_detector_disagreement(self) -> None:
+        class Guard:
+            def sample_if_due(self):
+                return None
+
+        class Cursor:
+            def __init__(self):
+                self.rows = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, query):
+                self.rows = [(1, 0)] if "COUNT(*)" in query else [(b"\x00",)]
+
+            def fetchone(self):
+                return self.rows[0]
+
+            def fetchmany(self, _size):
+                rows, self.rows = self.rows, []
+                return rows
+
+        class Source:
+            def cursor(self, *_args):
+                return Cursor()
+
+        snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
+            {"name": "payload", "data_type": "varbinary"},
+        ]}]}
+        with self.assertRaisesRegex(LoaderError, "SOURCE_BINARY_NUL_DETECTOR_DISAGREEMENT"):
+            loader._scan_source_binary_policy(Source(), snapshot, Guard())
+
+    def test_sensitive_name_does_not_override_approved_text_nul_normalization(self) -> None:
+        human_text_finding = {
+            "character_set": "utf8mb4",
+            "cells_with_nul": 2,
+            "non_utf8_cells": 0,
+            "invalid_declared_charset_cells_after_nul": 0,
+            "name_suggests_sensitive": True,
+        }
+        self.assertFalse(loader._text_findings_require_review([human_text_finding]))
+        invalid_text_finding = {**human_text_finding, "non_utf8_cells": 1}
+        self.assertTrue(loader._text_findings_require_review([invalid_text_finding]))
+
+    def test_text_nul_is_removed_and_exact_source_bytes_are_recorded(self) -> None:
+        counts = {}
+        records = []
+        raw = b"before\x00after"
+        value = normalize_mysql_value(
+            raw,
+            {"name": "description", "data_type": "text", "character_set": "utf8mb4"},
+            nul_normalization_counts=counts,
+            nul_records=records,
+            table_name="synthetic",
+        )
+        self.assertEqual(value, "beforeafter")
+        self.assertEqual(records, [("synthetic", "description", raw, "middle")])
+        self.assertEqual(counts[("synthetic", "description")]["cells_with_nul"], 1)
+        self.assertEqual(loader._nul_report_rows(counts)[0]["status"], "NORMALIZED_NUL")
+        self.assertNotIn(raw, repr(loader._nul_report_rows(counts)).encode("utf-8"))
+
+    def test_multibyte_charset_zero_bytes_without_u0000_are_not_nul(self) -> None:
+        class Guard:
+            def sample_if_due(self):
+                return None
+
+        class Cursor:
+            def __init__(self, aggregate):
+                self.aggregate = aggregate
+                self.rows = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, query):
+                self.rows = [(1, 0)] if "COUNT(*)" in query else [(b"\x00A",)]
+
+            def fetchone(self):
+                return self.rows[0]
+
+            def fetchmany(self, _size):
+                rows, self.rows = self.rows, []
+                return rows
+
+        class Source:
+            def cursor(self, cursor_class=None):
+                return Cursor(cursor_class is not None)
+
+        snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
+            {"name": "description", "data_type": "text", "character_set": "ucs2"},
+        ]}]}
+        findings = loader._scan_source_text_policy(Source(), snapshot, Guard())
+        self.assertEqual(findings[0]["python_cells_with_nul"], 0)
+        self.assertEqual(findings[0]["method_b_cells_with_nul"], 0)
+        self.assertFalse(findings[0]["detector_disagreement"])
+
+    def test_multibyte_charset_normalizes_only_u0000_and_audits_source_bytes(self) -> None:
+        counts = {}
+        records = []
+        raw = "A\x00B".encode("utf-16-be")
+        value = normalize_mysql_value(
+            raw,
+            {"name": "description", "data_type": "text", "character_set": "ucs2"},
+            nul_normalization_counts=counts,
+            nul_records=records,
+            table_name="synthetic",
+        )
+        self.assertEqual(value, "AB")
+        self.assertEqual(records, [("synthetic", "description", raw, "middle")])
+        self.assertEqual(counts[("synthetic", "description")]["nul_bytes"], 2)
+
+    def test_json_physical_and_escaped_nul_are_removed_and_audited(self) -> None:
+        counts = {}
+        records = []
+        column = {"name": "payload", "data_type": "json", "character_set": "utf8mb4"}
+        physical = b'{"x":"\x00"}'
+        normalized_physical = normalize_mysql_value(
+            physical, column, nul_normalization_counts=counts, nul_records=records, table_name="synthetic"
+        )
+        escaped = b'{"x":"\\u0000"}'
+        normalized_escaped = normalize_mysql_value(
+            escaped, column, nul_normalization_counts=counts, nul_records=records, table_name="synthetic"
+        )
+        self.assertEqual(normalized_physical, '{"x":""}')
+        self.assertEqual(normalized_escaped, '{"x":""}')
+        self.assertEqual(records[0][2], physical)
+        self.assertEqual(records[1][2], escaped)
+        self.assertEqual(counts[("synthetic", "payload")]["cells_with_nul"], 2)
+        self.assertEqual(counts[("synthetic", "payload")]["json_escaped_nul_cells"], 1)
+        self.assertEqual(counts[("synthetic", "payload")]["nul_bytes"], 7)
+
+    def test_json_key_collision_during_nul_normalization_fails_closed(self) -> None:
+        with self.assertRaisesRegex(LoaderError, "JSON_NUL_NORMALIZATION_KEY_COLLISION"):
+            normalize_mysql_value(
+                b'{"a\\u0000":1,"a":2}',
+                {"name": "payload", "data_type": "json", "character_set": "utf8mb4"},
+                nul_normalization_counts={},
+                nul_records=[],
+                table_name="synthetic",
+            )
+
+    def test_json_physical_nul_key_collision_fails_closed(self) -> None:
+        with self.assertRaisesRegex(LoaderError, "JSON_NUL_NORMALIZATION_KEY_COLLISION"):
+            normalize_mysql_value(
+                b'{"a\x00":1,"a":2}',
+                {"name": "payload", "data_type": "json", "character_set": "utf8mb4"},
+                nul_normalization_counts={},
+                nul_records=[],
+                table_name="synthetic",
+            )
+
+    def test_json_physical_and_escaped_nul_key_collision_fails_closed(self) -> None:
+        with self.assertRaisesRegex(LoaderError, "JSON_NUL_NORMALIZATION_KEY_COLLISION"):
+            normalize_mysql_value(
+                b'{"a\x00":1,"a\\u0000":2}',
+                {"name": "payload", "data_type": "json", "character_set": "utf8mb4"},
+                nul_normalization_counts={},
+                nul_records=[],
+                table_name="synthetic",
+            )
+
+    def test_json_scan_detects_physical_nul_key_collision_before_dict_loss(self) -> None:
+        class Guard:
+            def sample_if_due(self):
+                return None
+
+        class Cursor:
+            def __init__(self, aggregate):
+                self.rows = [(1, 1)] if aggregate else [(b'{"a\x00":1,"a\\u0000":2}',)]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, _query):
+                return None
+
+            def fetchone(self):
+                return self.rows[0]
+
+            def fetchmany(self, _size):
+                rows, self.rows = self.rows, []
+                return rows
+
+        class Source:
+            def cursor(self, cursor_class=None):
+                return Cursor(cursor_class is not None and cursor_class.__name__ == "Cursor")
+
+        snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
+            {"name": "payload", "data_type": "json", "character_set": "utf8mb4"},
+        ]}]}
+        with self.assertRaisesRegex(LoaderError, "JSON_NUL_NORMALIZATION_KEY_COLLISION"):
+            loader._scan_source_text_policy(Source(), snapshot, Guard())
+
+    def test_scan_compares_legacy_python_binary_sql_and_python_bytes(self) -> None:
+        class Cursor:
+            def __init__(self, aggregate: bool):
+                self.aggregate = aggregate
+                self.sent = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, _query):
+                return None
+
+            def fetchone(self):
+                return (1, 1)
+
+            def fetchmany(self, _size):
+                if self.aggregate or self.sent:
+                    return []
+                self.sent = True
+                return [(b"prefix\x00suffix",)]
+
+        class Source:
+            def cursor(self, cursor_class):
+                return Cursor(cursor_class.__name__ == "Cursor")
+
+        snapshot = {"tables": [{
+            "name": "synthetic",
+            "type": "BASE TABLE",
+            "columns": [{"name": "description", "data_type": "text", "character_set": "utf8mb4", "source_collation": "utf8mb4_unicode_ci"}],
+        }]}
+        findings = loader._scan_source_text_policy(Source(), snapshot, _MemoryGuard())
+        self.assertEqual(len(findings), 1)
+        finding = findings[0]
+        self.assertEqual(finding["method_a_python_string_cells_with_nul"], 1)
+        self.assertEqual(finding["method_b_cells_with_nul"], 1)
+        self.assertEqual(finding["python_cells_with_nul"], 1)
+        self.assertEqual(finding["in_middle"], 1)
+        self.assertNotIn("prefix", repr(finding))
+
+    def test_nul_audit_copies_original_bytes_to_private_schema(self) -> None:
+        class Copy:
+            def __init__(self):
+                self.rows = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def write_row(self, row):
+                self.rows.append(row)
+
+        class Cursor:
+            def __init__(self, capture):
+                self.capture = capture
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def copy(self, _statement):
+                return self.capture
+
+        class Target:
+            def __init__(self, capture):
+                self.capture = capture
+
+            def cursor(self):
+                return Cursor(self.capture)
+
+        original = b"text\x00bytes"
+        spool = io.BytesIO((json.dumps(["synthetic", "description", '{"id":1}', base64.b64encode(original).decode(), "middle"]) + "\n").encode())
+        capture = Copy()
+        mapping = {
+            "types": {"description": object()},
+            "columns": [{"name": "description", "data_type": "text"}],
+        }
+        count = loader._apply_nul_audit(Target(capture), spool, {"synthetic": mapping})
+        self.assertEqual(count, 1)
+        self.assertEqual(capture.rows, [("synthetic", "description", '{"id":1}', original)])
+
+    def test_runtime_legacy_privilege_is_rejected(self) -> None:
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, *_args):
+                return None
+
+            def fetchone(self):
+                return (True,) + (False,) * 8
+
+        class Target:
+            def cursor(self):
+                return Cursor()
+
+        with self.assertRaisesRegex(LoaderError, "TARGET_RUNTIME_ACCESS_TO_LEGACY_DETECTED"):
+            loader._verify_application_legacy_isolation(Target(), "erp_app")
 
 
 class NormalizeMysqlValueTests(unittest.TestCase):
@@ -24,21 +411,56 @@ class NormalizeMysqlValueTests(unittest.TestCase):
         self.assertEqual(normalize_mysql_value(raw, {"data_type": "longblob", "column_type": "longblob"}), raw)
         self.assertEqual(normalize_mysql_value(raw, {"data_type": "varbinary", "column_type": "varbinary(32)"}), raw)
 
-    def test_text_nul_fails_closed(self) -> None:
-        with self.assertRaisesRegex(LoaderError, "SOURCE_TEXT_NUL_POLICY_REQUIRED"):
+    def test_text_nul_requires_audit_collector_when_called_directly(self) -> None:
+        with self.assertRaisesRegex(LoaderError, "SOURCE_TEXT_NUL_REPORT_REQUIRED"):
             normalize_mysql_value("prefix\x00suffix", {"data_type": "varchar", "column_type": "varchar(30)"})
 
-    def test_json_nul_fails_closed_even_when_escaped(self) -> None:
-        with self.assertRaisesRegex(LoaderError, "SOURCE_JSON_NUL_POLICY_REQUIRED"):
+    def test_column_mapping_requires_complete_collation_decisions(self) -> None:
+        snapshot = {
+            "source_no_backslash_escapes": False,
+            "tables": [{"name": "t", "type": "BASE TABLE", "columns": [
+                {"name": "label", "ordinal": 1, "data_type": "varchar", "column_type": "varchar(20)", "nullable": True}
+            ]}],
+        }
+        report = {
+            "collation_overrides": {},
+            "collation_decisions": [{"table": "t", "column": "label", "target": "ci"}],
+            "table_schemas": {"t": "erp"},
+        }
+        mappings = _validate_column_mappings(snapshot, report, ["t"])
+        self.assertEqual(mappings["t"]["types"]["label"].collation_sql, "ci")
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_COLLATION_DECISIONS_MISMATCH"):
+            _validate_column_mappings(snapshot, {"collation_overrides": {}, "collation_decisions": []}, ["t"])
+
+    def test_backup_table_schema_routing_is_fail_closed(self) -> None:
+        snapshot = {"tables": [{"name": "archive_backup", "type": "BASE TABLE", "columns": [
+            {"name": "id", "ordinal": 1, "data_type": "int", "column_type": "int", "nullable": False}
+        ]}]}
+        report = {"collation_overrides": {}, "collation_decisions": [], "table_schemas": {"archive_backup": "erp"}}
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_TABLE_SCHEMA_ROUTING_MISMATCH"):
+            _validate_column_mappings(snapshot, report, ["archive_backup"])
+
+    def test_json_nul_requires_audit_collector_when_called_directly(self) -> None:
+        with self.assertRaisesRegex(LoaderError, "SOURCE_TEXT_NUL_REPORT_REQUIRED"):
             normalize_mysql_value('{"label":"\\u0000"}', {"data_type": "json", "column_type": "json"})
 
     def test_json_must_parse(self) -> None:
         with self.assertRaisesRegex(LoaderError, "SOURCE_JSON_INVALID"):
             normalize_mysql_value("{invalid", {"data_type": "json", "column_type": "json"})
 
-    def test_zero_date_fails_instead_of_silent_null(self) -> None:
-        with self.assertRaisesRegex(LoaderError, "MYSQL_ZERO_DATE_REQUIRES_APPROVAL"):
-            normalize_mysql_value(b"0000-00-00", {"data_type": "date", "column_type": "date"})
+    def test_zero_date_normalizes_to_null_and_reports_only_aggregate_count(self) -> None:
+        counts: dict[tuple[str, str], int] = {}
+        value = normalize_mysql_value(
+            b"0000-00-00",
+            {"name": "created_on", "data_type": "date", "column_type": "date"},
+            normalization_counts=counts,
+            table_name="example_table",
+        )
+        self.assertIsNone(value)
+        self.assertEqual(
+            loader._zero_date_report_rows(counts),
+            [{"table": "example_table", "column": "created_on", "count": 1, "status": "NORMALIZED_ZERO_DATE"}],
+        )
 
     def test_date_bytes_are_parsed_after_raw_fetch(self) -> None:
         self.assertEqual(normalize_mysql_value(b"2026-11-16", {"data_type": "date", "column_type": "date"}), date(2026, 11, 16))
@@ -56,26 +478,58 @@ class NormalizeMysqlValueTests(unittest.TestCase):
         with self.assertRaisesRegex(LoaderError, "FRACTIONAL_SECONDS_REQUIRE_APPROVAL"):
             normalize_mysql_value(b"2026-11-16 12:00:00.125000", {"data_type": "datetime", "column_type": "datetime(6)"})
 
-    def test_time_range_requires_review(self) -> None:
-        with self.assertRaisesRegex(LoaderError, "MYSQL_TIME_OUT_OF_RANGE_FOR_POSTGRES_TIME"):
-            normalize_mysql_value(b"-01:00:00", {"data_type": "time", "column_type": "time"})
+    def test_time_negative_and_extended_range_are_preserved_as_interval(self) -> None:
+        self.assertEqual(
+            normalize_mysql_value(b"-01:00:00", {"data_type": "time", "column_type": "time"}),
+            -timedelta(hours=1),
+        )
+        self.assertEqual(
+            normalize_mysql_value(b"838:00:00", {"data_type": "time", "column_type": "time"}),
+            timedelta(hours=838),
+        )
 
     def test_bit_width_is_preserved(self) -> None:
         self.assertEqual(normalize_mysql_value(b"\x05", {"data_type": "bit", "column_type": "bit(3)"}), "101")
 
+    def test_binary_nul_is_preserved_exactly_for_bytea(self) -> None:
+        original = b"\x00\x00\xffbinary\x00"
+        for data_type in ("blob", "binary", "varbinary"):
+            value = normalize_mysql_value(original, {"data_type": data_type, "column_type": data_type})
+            self.assertEqual(value, original)
+
     def test_enum_must_match_declared_label(self) -> None:
         meta = {"data_type": "enum", "column_type": "enum('A','B')"}
         self.assertEqual(normalize_mysql_value("A", meta), "A")
-        with self.assertRaisesRegex(LoaderError, "ENUM_VALUE_OUTSIDE_DECLARED_LABELS"):
+        counts: dict[tuple[str, str, str], int] = {}
+        self.assertEqual(
+            normalize_mysql_value("C", {**meta, "name": "state"}, enum_value_counts=counts, table_name="example_table"),
+            "C",
+        )
+        self.assertEqual(
+            normalize_mysql_value("", {**meta, "name": "state"}, enum_value_counts=counts, table_name="example_table"),
+            "",
+        )
+        self.assertEqual(loader._enum_extension_report_rows(counts), [{
+            "table": "example_table",
+            "column": "state",
+            "cells_outside_declared_labels": 2,
+            "distinct_extra_values": 2,
+            "counts_by_distinct_extra_value": [1, 1],
+            "empty_label_cells": 1,
+            "status": "ENUM_EXTENDED_FROM_EXISTING_VALUES",
+        }])
+        with self.assertRaisesRegex(LoaderError, "ENUM_EXTENSION_REPORT_REQUIRED"):
             normalize_mysql_value("C", meta)
 
-    def test_text_bytes_require_valid_utf8_charset(self) -> None:
+    def test_text_bytes_require_declared_charset(self) -> None:
         meta = {"data_type": "varchar", "column_type": "varchar(20)", "character_set": "utf8mb4"}
         self.assertEqual(normalize_mysql_value("olá".encode(), meta), "olá")
         with self.assertRaisesRegex(LoaderError, "SOURCE_TEXT_INVALID_UTF8"):
             normalize_mysql_value(b"\xff", meta)
-        with self.assertRaisesRegex(LoaderError, "NON_TEXT_BINARY_VALUE_REQUIRES_REVIEW"):
-            normalize_mysql_value(b"\xff", {"data_type": "varchar", "column_type": "varchar(20)", "character_set": "latin1"})
+        self.assertEqual(
+            normalize_mysql_value(b"\xff", {"data_type": "varchar", "column_type": "varchar(20)", "character_set": "latin1"}),
+            "ÿ",
+        )
 
 
 class BundleValidationTests(unittest.TestCase):
@@ -287,10 +741,14 @@ class _FakeCursor:
         self.row = None
 
     def execute(self, query, params=None) -> None:
-        text = str(query)
+        text = query.as_string(None) if hasattr(query, "as_string") else str(query)
         self.connection.statements.append((text, self.connection.transaction_active))
         if "current_database()" in text:
             self.row = ("erp_pg_dev",)
+        elif "has_schema_privilege" in text:
+            self.row = (False,) * 9
+        elif "count(*)" in text.lower():
+            self.row = (self.connection.count_results.pop(0) if self.connection.count_results else 0,)
 
     def fetchone(self):
         return self.row
@@ -315,6 +773,7 @@ class _FakeTarget:
         self.closed = False
         self.fail_rollback = False
         self.fail_close = False
+        self.count_results = []
 
     def cursor(self):
         return _FakeCursor(self)
@@ -343,6 +802,158 @@ class _FakeTarget:
             raise RuntimeError("synthetic target close failure")
 
 
+class EnumCheckTests(unittest.TestCase):
+    def test_check_includes_only_declared_or_observed_empty_label(self) -> None:
+        target = _FakeTarget()
+        report = {"enum_checks_deferred": [{"table": "sample", "column": "state", "constraint_name": "ck_state"}]}
+        mappings = {"sample": {"enum_labels": {"state": ("A", "B")}}}
+        counts = {("sample", "state", "legacy-value"): 2, ("sample", "state", ""): 3}
+        loader._apply_enum_checks(target, report, mappings, counts)
+        self.assertEqual(len(target.statements), 1)
+        self.assertIn("ALTER TABLE", target.statements[0][0])
+        self.assertIn("CHECK", target.statements[0][0])
+        self.assertIn("''", target.statements[0][0])
+        self.assertEqual(report["enum_empty_label_counts"], [{"table": "sample", "column": "state", "count": 3}])
+
+    def test_check_does_not_invent_unobserved_empty_label(self) -> None:
+        target = _FakeTarget()
+        report = {"enum_checks_deferred": [{"table": "sample", "column": "state", "constraint_name": "ck_state"}]}
+        mappings = {"sample": {"enum_labels": {"state": ("A", "B")}}}
+        loader._apply_enum_checks(target, report, mappings, {})
+        self.assertNotIn("''", target.statements[0][0])
+        self.assertEqual(report["enum_empty_label_counts"], [])
+
+    def test_check_metadata_must_cover_every_enum_column(self) -> None:
+        target = _FakeTarget()
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_ENUM_CHECK_COVERAGE_MISMATCH"):
+            loader._apply_enum_checks(
+                target,
+                {"enum_checks_deferred": []},
+                {"sample": {"enum_labels": {"state": ("A",)}}},
+                {},
+            )
+        self.assertEqual(target.statements, [])
+
+
+class UniqueForeignKeyTests(unittest.TestCase):
+    def test_unique_collision_under_ci_converts_only_colliding_column_to_c(self) -> None:
+        target = _FakeTarget()
+        target.count_results = [0, 1, 1, 0, 0, 0]
+        mapping = {
+            "target_schema": "erp",
+            "columns": [
+                {"name": "id", "data_type": "int"},
+                {"name": "name", "data_type": "varchar"},
+            ],
+            "types": {
+                "id": loader.map_mysql_type("int"),
+                "name": loader.map_mysql_type("varchar(40)", target_collation="ci"),
+            },
+        }
+        report = {
+            "primary_keys_post_load": [{"table": "sample", "columns": ["id"], "target_schema": "erp", "constraint_name": "pk_sample"}],
+            "unique_indexes_post_load": [{
+                "table": "sample", "index": "uq_name", "target_schema": "erp", "generated_name": "ix_name",
+                "columns": [{"name": "name", "prefix_length": None, "direction": "ASC"}], "prefix_index": False,
+            }],
+        }
+        results = loader._apply_unique_constraints(target, report, {"sample": mapping})
+        unique_result = next(item for item in results if item["kind"] == "UNIQUE_INDEX")
+        self.assertEqual(unique_result["status"], "CREATED")
+        self.assertEqual(unique_result["collision_groups_under_ci"], 1)
+        self.assertEqual(unique_result["remaining_duplicate_groups"], 0)
+        self.assertEqual(unique_result["columns_converted_to_C"], ["name"])
+        statements = [statement for statement, _ in target.statements]
+        self.assertTrue(any("ALTER TABLE" in statement and "COLLATE" in statement for statement in statements))
+        self.assertTrue(any("CREATE UNIQUE INDEX" in statement for statement in statements))
+        converted_at = next(index for index, statement in enumerate(statements) if "ALTER TABLE" in statement and "COLLATE" in statement)
+        primary_key_at = next(index for index, statement in enumerate(statements) if "ADD CONSTRAINT" in statement and "PRIMARY KEY" in statement)
+        unique_index_at = next(index for index, statement in enumerate(statements) if "CREATE UNIQUE INDEX" in statement)
+        self.assertLess(converted_at, primary_key_at)
+        self.assertLess(converted_at, unique_index_at)
+
+    def test_literal_unique_collision_is_reported_without_dropping_rows(self) -> None:
+        target = _FakeTarget()
+        target.count_results = [1, 0, 1]
+        mapping = {
+            "target_schema": "erp",
+            "columns": [{"name": "name", "data_type": "varchar"}],
+            "types": {"name": loader.map_mysql_type("varchar(40)", target_collation="ci")},
+        }
+        report = {
+            "primary_keys_post_load": [],
+            "unique_indexes_post_load": [{
+                "table": "sample", "index": "uq_name", "target_schema": "erp", "generated_name": "ix_name",
+                "columns": [{"name": "name", "prefix_length": None, "direction": "ASC"}], "prefix_index": False,
+            }],
+        }
+        results = loader._apply_unique_constraints(target, report, {"sample": mapping})
+        self.assertEqual(results[0]["status"], "BLOCKED_LITERAL_UNIQUE_COLLISION")
+        self.assertEqual(results[0]["collision_groups_under_ci"], 1)
+        self.assertEqual(results[0]["remaining_duplicate_groups"], 1)
+        self.assertFalse(any("CREATE UNIQUE INDEX" in statement for statement, _ in target.statements))
+
+    def test_foreign_key_with_orphans_remains_not_valid_and_reports_count(self) -> None:
+        target = _FakeTarget()
+        target.count_results = [2]
+        mappings = {
+            "child": {"target_schema": "erp", "types": {"parent_id": loader.map_mysql_type("int")}},
+            "parent": {"target_schema": "erp", "types": {"id": loader.map_mysql_type("int")}},
+        }
+        report = {"foreign_keys_post_load": [{
+            "table": "child", "name": "fk_child_parent", "columns": ["parent_id"],
+            "referenced_table": "parent", "referenced_columns": ["id"], "target_schema": "erp",
+            "referenced_schema": "erp", "update_rule": "CASCADE", "delete_rule": "RESTRICT", "constraint_name": "fk_child_parent",
+        }]}
+        unique_results = [{"kind": "PRIMARY_KEY", "table": "parent", "columns": ["id"], "status": "CREATED", "supports_foreign_key": True}]
+        loader._apply_foreign_keys(target, report, mappings, unique_results)
+        self.assertEqual(report["foreign_key_results"][0]["orphan_rows"], 2)
+        self.assertEqual(report["foreign_key_results"][0]["status"], "NOT_VALID_ORPHANS_REPORTED")
+        statements = [statement for statement, _ in target.statements]
+        self.assertTrue(any("NOT VALID" in statement for statement in statements))
+        self.assertFalse(any("VALIDATE CONSTRAINT" in statement for statement in statements))
+
+
+class ForeignKeyFailClosedTests(unittest.TestCase):
+    def test_missing_target_unique_constraint_blocks_foreign_key(self) -> None:
+        target = _FakeTarget()
+        mappings = {
+            "child": {"target_schema": "erp", "types": {"parent_id": loader.map_mysql_type("int")}},
+            "parent": {"target_schema": "erp", "types": {"id": loader.map_mysql_type("int")}},
+        }
+        report = {"foreign_keys_post_load": [{
+            "table": "child", "name": "fk_child_parent", "columns": ["parent_id"],
+            "referenced_table": "parent", "referenced_columns": ["id"], "target_schema": "erp",
+            "referenced_schema": "erp", "update_rule": "CASCADE", "delete_rule": "RESTRICT",
+            "constraint_name": "fk_child_parent",
+        }]}
+        with self.assertRaisesRegex(LoaderError, "FK_TARGET_UNIQUE_CONSTRAINT_UNAVAILABLE"):
+            loader._apply_foreign_keys(target, report, mappings, [])
+        self.assertEqual(target.statements, [])
+
+
+class TemporalNullabilityTests(unittest.TestCase):
+    def test_restores_not_null_only_when_no_zero_date_was_normalized(self) -> None:
+        target = _FakeTarget()
+        report = {"zero_date_nullable_columns": [
+            {"table": "kept_not_null", "column": "created_at"},
+            {"table": "zero_date_column", "column": "created_at"},
+        ]}
+        mappings = {
+            "kept_not_null": {"target_schema": "erp", "types": {"created_at": loader.map_mysql_type("datetime")}},
+            "zero_date_column": {"target_schema": loader.LEGACY_SCHEMA, "types": {"created_at": loader.map_mysql_type("datetime")}},
+        }
+        counts = {("zero_date_column", "created_at"): 2}
+        results = loader._restore_temporal_not_null(target, report, mappings, counts)
+        self.assertEqual([item["status"] for item in results], ["RESTORED_NOT_NULL", "LEFT_NULLABLE_FOR_ZERO_DATE"])
+        self.assertEqual([item["zero_date_count"] for item in results], [0, 2])
+        statements = [statement for statement, _ in target.statements]
+        self.assertEqual(len(statements), 1)
+        self.assertIn("ALTER COLUMN", statements[0])
+        self.assertIn("kept_not_null", statements[0])
+        self.assertNotIn("zero_date_column", statements[0])
+
+
 class _FakeSource:
     def __init__(self) -> None:
         self.rollbacks = 0
@@ -365,14 +976,18 @@ class LoadTransactionTests(unittest.TestCase):
         source = _FakeSource()
         target = _FakeTarget()
         captured_reports = []
-        role = "erp_pg_dev_app"
-        config = {"user": role}
+        role = "erp_app"
+        config = {"user": "erp_p2_loader", "application_user": role}
         report = {
             "application_role_sha256": hashlib.sha256(role.encode()).hexdigest(),
             "generated_tables": ["synthetic_table"],
             "generated_scripts_sha256": {name: "0" * 64 for name in loader.SCRIPT_NAMES},
             "catalog_fingerprint_sha256": "f" * 64,
             "generator_version": "test",
+            "primary_keys_post_load": [],
+            "unique_indexes_post_load": [],
+            "foreign_keys_post_load": [],
+            "zero_date_nullable_columns": [],
         }
         snapshot = {
             "source_schema": "erp_pg_source",
@@ -389,6 +1004,10 @@ class LoadTransactionTests(unittest.TestCase):
         patches.enter_context(patch.object(loader, "_validate_column_mappings", return_value={"synthetic_table": {}}))
         patches.enter_context(patch.object(loader, "_connect_source", return_value=(source, snapshot)))
         patches.enter_context(patch.object(loader, "_connect_target", return_value=target))
+        private_tmp = tempfile.TemporaryDirectory(prefix="p2-loader-test-")
+        patches.callback(private_tmp.cleanup)
+        patches.enter_context(patch.object(loader, "REPORT_ROOT", Path(private_tmp.name)))
+        patches.enter_context(patch.object(loader, "_scan_source_text_policy", return_value=[]))
         patches.enter_context(patch.object(loader, "_target_preflight", return_value={"database_matches": True}))
         def execute_script(connection, script_path, expected_sha256):
             if not connection.transaction_active:
@@ -419,8 +1038,13 @@ class LoadTransactionTests(unittest.TestCase):
         self.assertEqual(result["status"], "LOAD_COMMITTED_PENDING_RECONCILIATION")
         self.assertEqual(result["tables_loaded"], 1)
         self.assertEqual(result["rows_loaded"], 2)
+        self.assertEqual(result["zero_date_nullability_results"], [])
+        self.assertTrue(result["target_scope"]["legacy_audit_access_revoked"])
         self.assertEqual(target.commits, 1)
-        self.assertTrue(any("Identifier('erp')" in item and active for item, active in target.statements))
+        dropped_schemas = [item for item, active in target.statements if "DROP SCHEMA" in item and active]
+        self.assertEqual(len(dropped_schemas), 2)
+        self.assertTrue(any('DROP SCHEMA IF EXISTS "erp"' in item for item in dropped_schemas))
+        self.assertTrue(any('DROP SCHEMA IF EXISTS "legado"' in item for item in dropped_schemas))
         self.assertTrue(all("DROP DATABASE" not in item.upper() for item, _ in target.statements))
         self.assertTrue(all(active for item, active in target.statements if "DROP SCHEMA" in item or item.startswith("SCRIPT:")))
         self.assertEqual(sum(item.startswith("SCRIPT:") for item, _ in target.statements), len(loader.SCRIPT_NAMES))
@@ -463,6 +1087,21 @@ class LoadTransactionTests(unittest.TestCase):
             patches.close()
         self.assertEqual(reports[-1]["status"], "FAILED_ROLLBACK_UNCONFIRMED")
         self.assertEqual(reports[-1]["failure_code"], "POSTGRES_ROLLBACK_UNCONFIRMED")
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
+
+    def test_failure_report_preserves_temporal_nullability_results(self) -> None:
+        patches, source, target, reports = self._call_load()
+        temporal_result = [{"table": "synthetic_table", "column": "created_at", "status": "RESTORED_NOT_NULL", "zero_date_count": 0}]
+        patches.enter_context(patch.object(loader, "_restore_temporal_not_null", return_value=temporal_result))
+        patches.enter_context(patch.object(loader, "_apply_enum_checks", side_effect=LoaderError("SYNTHETIC_ENUM_CHECK_FAILURE")))
+        try:
+            with self.assertRaisesRegex(LoaderError, "SYNTHETIC_ENUM_CHECK_FAILURE"):
+                loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
+        finally:
+            patches.close()
+        self.assertEqual(reports[-1]["zero_date_nullability_results"], temporal_result)
+        self.assertEqual(reports[-1]["status"], "FAILED_ROLLED_BACK")
         self.assertTrue(source.closed)
         self.assertTrue(target.closed)
 

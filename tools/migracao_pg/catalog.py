@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from configparser import RawConfigParser
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import hashlib
 import json
 import os
@@ -17,6 +17,23 @@ from .type_mapping import TypeMappingError, parse_mysql_enum, quote_literal
 
 SOURCE_SCHEMA = "erp_pg_source"
 CATALOG_VERSION = 2
+SAFE_TEXT_DEFAULT_NAMES = frozenset({
+    "status", "estado", "situacao", "tipo", "categoria", "nivel", "ativo", "habilitado",
+    "enabled", "visivel", "publicado", "prioridade", "modo", "origem", "formato", "cor",
+    "idioma", "locale", "canal", "metodo", "perfil", "escopo", "acao", "frequencia",
+    "periodo", "unidade_medida", "versao", "tema",
+})
+SAFE_TEXT_DEFAULT_VALUES = frozenset({
+    "0", "1", "active", "inactive", "enabled", "disabled", "yes", "no", "sim", "não", "nao",
+    "s", "n", "true", "false", "ativo", "inativo", "aberto", "fechado", "pendente",
+    "cancelado", "cancelada", "concluido", "concluida", "rascunho", "draft", "publicado",
+    "publicada", "normal", "padrao", "padrão",
+})
+SENSITIVE_DEFAULT_NAME_RE = re.compile(
+    r"(?:token|hash|senha|password|secret|chave|key|slug|uuid|path|caminho|file|arquivo|"
+    r"signature|assinatura|payload|credential|auth)",
+    re.IGNORECASE,
+)
 
 
 class CatalogError(RuntimeError):
@@ -73,6 +90,18 @@ def _safe_default(column: dict[str, Any], *, no_backslash_escapes: bool = False)
             return {"kind": "sql", "expression": "''"}
         if upper == "NULL":
             return {"kind": "review", "code": "AMBIGUOUS_TEXT_NULL_DEFAULT_REVIEW_REQUIRED"}
+        column_name = column.get("name", column.get("column_name"))
+        if not isinstance(column_name, str) or column_name.lower() not in SAFE_TEXT_DEFAULT_NAMES \
+            or SENSITIVE_DEFAULT_NAME_RE.search(column_name):
+            return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
+        if "default_generated" in str(column.get("extra", "")).lower():
+            return {"kind": "review", "code": "TEXT_EXPRESSION_DEFAULT_REVIEW_REQUIRED"}
+        if raw.casefold() not in SAFE_TEXT_DEFAULT_VALUES:
+            return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
+        try:
+            return {"kind": "sql", "expression": quote_literal(raw)}
+        except TypeMappingError:
+            return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
     if upper == "NULL":
         return {"kind": "sql", "expression": "NULL"}
 
@@ -90,8 +119,45 @@ def _safe_default(column: dict[str, Any], *, no_backslash_escapes: bool = False)
             return {"kind": "sql", "expression": raw.strip()}
         return {"kind": "review", "code": "NON_NUMERIC_DEFAULT_REVIEW_REQUIRED"}
 
-    if data_type in {"date", "datetime", "timestamp", "time"}:
-        return {"kind": "review", "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED"}
+    if data_type == "date":
+        if re.fullmatch(r"0000-00-00", raw):
+            return {"kind": "sql", "expression": "NULL"}
+        try:
+            parsed_date = date.fromisoformat(raw)
+        except ValueError:
+            return {"kind": "review", "code": "STATIC_DATE_DEFAULT_REVIEW_REQUIRED"}
+        return {"kind": "sql", "expression": f"DATE {quote_literal(parsed_date.isoformat())}"}
+    if data_type == "datetime":
+        if re.fullmatch(r"0000-00-00(?: 00:00:00(?:\.0+)?)?", raw):
+            return {"kind": "sql", "expression": "NULL"}
+        try:
+            parsed_datetime = datetime.fromisoformat(raw.replace(" ", "T", 1))
+        except ValueError:
+            return {"kind": "review", "code": "STATIC_DATETIME_DEFAULT_REVIEW_REQUIRED"}
+        if parsed_datetime.tzinfo is not None or parsed_datetime.microsecond:
+            return {"kind": "review", "code": "STATIC_DATETIME_DEFAULT_REVIEW_REQUIRED"}
+        return {"kind": "sql", "expression": f"TIMESTAMP {quote_literal(parsed_datetime.isoformat(sep=' ', timespec='seconds'))}"}
+    if data_type == "time":
+        time_match = re.fullmatch(r"([+-]?\d{1,3}:\d{2}:\d{2})(?:\.(\d{1,6}))?", raw)
+        if not time_match:
+            return {"kind": "review", "code": "STATIC_TIME_DEFAULT_REVIEW_REQUIRED"}
+        base_value, fraction = time_match.groups()
+        hours, minutes, seconds = (int(part) for part in base_value.lstrip("+-").split(":"))
+        if hours > 838 or minutes > 59 or seconds > 59:
+            return {"kind": "review", "code": "STATIC_TIME_DEFAULT_REVIEW_REQUIRED"}
+        canonical = base_value + (("." + fraction.ljust(6, "0")) if fraction else "")
+        return {"kind": "sql", "expression": f"INTERVAL {quote_literal(canonical)}"}
+    if data_type == "timestamp":
+        if re.fullmatch(r"0000-00-00(?: 00:00:00(?:\.0+)?)?", raw):
+            return {"kind": "sql", "expression": "NULL"}
+        try:
+            parsed_timestamp = datetime.fromisoformat(raw.replace(" ", "T", 1))
+        except ValueError:
+            return {"kind": "review", "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED"}
+        if parsed_timestamp.tzinfo is not None or parsed_timestamp.microsecond:
+            return {"kind": "review", "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED"}
+        canonical = parsed_timestamp.isoformat(sep=" ", timespec="seconds")
+        return {"kind": "sql", "expression": f"TIMESTAMP {quote_literal(canonical)}"}
 
     # Arbitrary strings/JSON/functions are not copied into the shared catalog.
     return {"kind": "review", "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT"}
