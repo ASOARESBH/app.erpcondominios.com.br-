@@ -448,6 +448,11 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(json.loads(snapshot_copy.read_text(encoding="utf-8"))["fingerprint_sha256"], sample_snapshot()["fingerprint_sha256"])
             report = json.loads((bundles[0] / "report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["snapshot_file_sha256"], hashlib.sha256(snapshot_copy.read_bytes()).hexdigest())
+            self.assertEqual(len(report["generated_tables"]), report["generated"]["tables"])
+            scripts = report["generated_scripts_sha256"]
+            self.assertTrue(scripts)
+            for filename, expected_hash in scripts.items():
+                self.assertEqual(hashlib.sha256((bundles[0] / filename).read_bytes()).hexdigest(), expected_hash)
             self.assertIn('executable_complete": false', (bundles[0] / "report.json").read_text(encoding="utf-8"))
             with patch("sys.argv", args), self.assertRaisesRegex(SystemExit, "OUTPUT_ALREADY_EXISTS"):
                 generate_ddl_main()

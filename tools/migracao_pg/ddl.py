@@ -656,6 +656,7 @@ def generate_ddl(
         "30_post_load_sequences.sql": "\n\n".join(_identity_sequence_script(fingerprint, identity_columns)),
     }
     scripts = {name: f"-- Collation overrides SHA-256: {overrides_sha256}\n\n{content}" for name, content in scripts.items()}
+    report["generated_tables"] = sorted(emitted_tables)
     report["executable_complete"] = not report["blocked_tables"] and not report["unsupported_indexes"] and not report["deferred_indexes"] and not report["foreign_keys"]["unsupported"] and not report["foreign_keys"]["deferred"] and not report["review_items"]
     return DdlBundle(scripts=scripts, report=report)
 

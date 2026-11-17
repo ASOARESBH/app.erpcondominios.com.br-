@@ -91,12 +91,19 @@ def main() -> int:
     bundle.report["application_role_sha256"] = role_hash
     bundle.report["snapshot_file_sha256"] = snapshot_sha256
     safety_header = "-- REVIEW ARTIFACT: DO NOT APPLY until report.json has executable_complete=true and required reviews are approved.\n"
+    script_artifacts = {
+        filename: (safety_header + f"-- Generator code SHA-256: {generator_hash}\n" + content).rstrip("\n") + "\n"
+        for filename, content in bundle.scripts.items()
+    }
+    bundle.report["generated_scripts_sha256"] = {
+        filename: hashlib.sha256(content.encode("utf-8")).hexdigest()
+        for filename, content in sorted(script_artifacts.items())
+    }
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(mode=0o755, exist_ok=False)
     try:
-        for filename, content in bundle.scripts.items():
-            code_header = f"-- Generator code SHA-256: {generator_hash}\n"
-            _write_new_file(output_dir / filename, safety_header + code_header + content)
+        for filename, content in script_artifacts.items():
+            _write_new_file(output_dir / filename, content)
         _write_new_file(output_dir / "catalog_snapshot.json", snapshot_artifact)
         report_path = output_dir / "report.json"
         _write_new_file(report_path, json.dumps(bundle.report, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
