@@ -252,6 +252,8 @@ class CatalogTests(unittest.TestCase):
         self.assertIn('COLLATE "C"', tables)
         self.assertIn("CREATE TRIGGER", triggers)
         self.assertIn("IS DISTINCT FROM", triggers)
+        self.assertIn("IF to_jsonb(NEW) -", triggers)
+        self.assertNotIn("IF (to_jsonb(NEW)", triggers)
         self.assertIn('FOREIGN KEY ("parent_id")', fks)
         self.assertIn("NOT VALID;", fks)
         self.assertEqual(bundle.report["generated"]["on_update_triggers"], 1)
