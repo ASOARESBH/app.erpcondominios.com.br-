@@ -320,8 +320,14 @@
 
         function _fecharPopup() {
             if (_popupEl) { _popupEl.remove(); _popupEl = null; }
+            _limparCredenciaisPendentes();
             btnLogin.disabled = false;
             restaurarBotaoLogin();
+        }
+
+        function _limparCredenciaisPendentes() {
+            _pendEmail = '';
+            _pendSenha = '';
         }
 
         function _escolher(tipo) {
@@ -339,6 +345,7 @@
             .then(function(data) { _processarResposta(data); })
             .catch(function(err) {
                 console.error('[Login] Erro:', err);
+                _limparCredenciaisPendentes();
                 mostrarAlerta(textoLogin('login.login_error', 'Erro ao processar login. Tente novamente.'), 'error');
                 btnLogin.disabled = false;
                 restaurarBotaoLogin();
@@ -347,6 +354,7 @@
 
         function _processarResposta(data) {
             if (!data.sucesso) {
+                _limparCredenciaisPendentes();
                 mostrarAlerta(data.mensagem, 'error');
                 btnLogin.disabled = false;
                 restaurarBotaoLogin();
@@ -367,6 +375,7 @@
             }
 
             if (tipo === 'erp') {
+                _limparCredenciaisPendentes();
                 mostrarAlerta(textoLogin('login.erp_success', 'Login realizado! Redirecionando...'), 'success');
                 if (data.dados) {
                     if (data.dados.nome)        localStorage.setItem('usuario_nome',       data.dados.nome);
@@ -400,6 +409,7 @@
             }
 
             if (tipo === 'morador') {
+                _limparCredenciaisPendentes();
                 mostrarAlerta(textoLogin('login.portal_success', 'Login realizado! Acessando portal...'), 'success');
                 if (data.dados) {
                     localStorage.setItem('portal_token',    data.dados.token      || '');
@@ -421,6 +431,7 @@
             }
 
             // Fallback genérico
+            _limparCredenciaisPendentes();
             mostrarAlerta(data.mensagem || textoLogin('login.generic_success', 'Login realizado!'), 'success');
         }
 
@@ -451,6 +462,7 @@
             })
             .catch(function (error) {
                 console.error('[Login] Erro:', error);
+                _limparCredenciaisPendentes();
                 mostrarAlerta(textoLogin('login.login_error', 'Erro ao processar login. Tente novamente.'), 'error');
                 btnLogin.disabled = false;
                 restaurarBotaoLogin();

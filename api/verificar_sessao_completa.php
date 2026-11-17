@@ -33,7 +33,7 @@ register_shutdown_function(function() {
         if (ob_get_level() > 0) ob_end_clean();
         if (!headers_sent()) {
             header('Content-Type: application/json; charset=utf-8');
-            http_response_code(200);
+            http_response_code(defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql' ? 503 : 200);
         }
         echo json_encode([
             'sucesso' => false,
@@ -58,6 +58,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once 'config.php';
+require_once __DIR__ . '/tenant_helper.php';
 require_once __DIR__ . '/rbac_helper.php';
 
 // Padrões: 60 min total, 0 = sem timeout de inatividade
@@ -101,20 +102,22 @@ function obter_config_timeout($conexao) {
             }
             $stmt->close();
         }
-    } catch (Exception $e) { log_sessao('Erro config_sessao: ' . $e->getMessage(), 'WARN'); }
+    } catch (Throwable $e) { log_sessao('Falha ao carregar configuração de sessão.', 'WARN'); }
     return $cfg;
 }
 
 function verificar_sessao_portal($conexao, $token, $cfg) {
     if (empty($token)) { log_sessao('Token vazio', 'WARN'); return null; }
-    // Verificar se tabela sessoes_portal existe (migration pode não ter sido executada)
+    // Verificar a tabela sem depender de sintaxe específica do driver.
     try {
-        $check = $conexao->query("SHOW TABLES LIKE 'sessoes_portal'");
-        if (!$check || $check->num_rows === 0) {
-            log_sessao('Tabela sessoes_portal inexistente — ignorando verificação portal', 'WARN');
+        if (!\ERP\Database\DatabaseDialect::tableExists($conexao, 'sessoes_portal')) {
+            log_sessao('Tabela de sessões do Portal indisponível.', 'WARN');
             return null;
         }
-    } catch (Exception $e) { return null; }
+    } catch (Throwable $e) {
+        log_sessao('Falha ao verificar tabela de sessões do Portal.', 'WARN');
+        return null;
+    }
     try {
     $stmt = $conexao->prepare("
         SELECT sp.id AS sessao_id, sp.morador_id, sp.data_login, sp.ativo,
@@ -132,8 +135,8 @@ function verificar_sessao_portal($conexao, $token, $cfg) {
     $stmt->execute();
     $sess = $stmt->get_result()->fetch_assoc();
     $stmt->close();
-    if (!$sess) { log_sessao('Token nao encontrado: ' . substr($token,0,8), 'WARN'); return null; }
-    } catch (Exception $e) { log_sessao('Erro verificar_sessao_portal: ' . $e->getMessage(), 'ERROR'); return null; }
+    if (!$sess) { log_sessao('Sessão do Portal não encontrada.', 'WARN'); return null; }
+    } catch (Throwable $e) { log_sessao('Falha ao verificar sessão do Portal.', 'ERROR'); return null; }
     try {
 
     $usa_custom = (int)($sess['sessao_personalizada'] ?? 0);
@@ -154,7 +157,7 @@ function verificar_sessao_portal($conexao, $token, $cfg) {
 
     // Verificar expiração por tempo total
     if ($lim_total > 0 && $seg_login >= $lim_total) {
-        log_sessao("Expirou timeout total ({$t_total}min) — {$sess['morador_nome']}", 'INFO');
+        log_sessao("Expirou timeout total ({$t_total}min).", 'INFO');
         $conexao->query("UPDATE sessoes_portal SET ativo=0 WHERE id={$sess['sessao_id']}");
         return ['expirou' => true, 'motivo' => 'timeout_total'];
     }
@@ -163,7 +166,7 @@ function verificar_sessao_portal($conexao, $token, $cfg) {
     if ($t_inativ > 0) {
         $lim_inativ = $t_inativ * 60;
         if ($seg_inativ >= $lim_inativ) {
-            log_sessao("Expirou inatividade ({$t_inativ}min) — {$sess['morador_nome']}", 'INFO');
+            log_sessao("Expirou inatividade ({$t_inativ}min).", 'INFO');
             $conexao->query("UPDATE sessoes_portal SET ativo=0 WHERE id={$sess['sessao_id']}");
             return ['expirou' => true, 'motivo' => 'inatividade'];
         }
@@ -173,7 +176,7 @@ function verificar_sessao_portal($conexao, $token, $cfg) {
     $rest_total  = $lim_total > 0 ? max(0, $lim_total - $seg_login) : 9999999;
     $rest_inativ = $t_inativ > 0  ? max(0, $t_inativ * 60 - $seg_inativ) : 9999999;
     $tempo_rest  = min($rest_total, $rest_inativ);
-    log_sessao("Sessao valida — {$sess['morador_nome']} | restante:{$tempo_rest}s", 'INFO');
+    log_sessao("Sessão Portal válida; restante:{$tempo_rest}s.", 'INFO');
 
     return [
         'expirou' => false, 'sessao_id' => (int)$sess['sessao_id'],
@@ -186,7 +189,7 @@ function verificar_sessao_portal($conexao, $token, $cfg) {
         'tempo_restante_seg' => $tempo_rest,
         'restante_total_seg' => $rest_total, 'restante_inatividade_seg' => $rest_inativ,
     ];
-    } catch (Exception $e) { log_sessao('Erro calcular tempo sessao portal: ' . $e->getMessage(), 'ERROR'); return null; }
+    } catch (Throwable $e) { log_sessao('Falha ao calcular tempo da sessão Portal.', 'ERROR'); return null; }
 }
 
 function verificar_sessao_erp() {
@@ -207,6 +210,32 @@ function verificar_sessao_erp() {
     return true;
 }
 
+function exigir_sessao_erp_postgres_valida($conexao) {
+    if (!defined('ERP_DB_DRIVER') || ERP_DB_DRIVER !== 'pgsql' || !verificar_sessao_erp()) return;
+    $uid = (int)($_SESSION['usuario_id'] ?? 0);
+    $tenantId = (int)($_SESSION['tenant_id'] ?? 0);
+    if ($uid < 0 || $tenantId <= 0) {
+        $_SESSION = [];
+        session_destroy();
+        retornar_erro_sessao('A sessão não contém um contexto válido. Faça login novamente.', 401);
+    }
+    try {
+        if (!usuarioTemAcessoTenantAtivo($conexao, $uid, $tenantId)) {
+            $_SESSION = [];
+            session_destroy();
+            retornar_erro_sessao('O acesso a este condomínio foi revogado. Faça login novamente.', 403);
+        }
+        if (!rbacTabelasDisponiveis($conexao) || !rbacValidarSessaoAtual($conexao, $uid, $tenantId)) {
+            $_SESSION = [];
+            session_destroy();
+            retornar_erro_sessao('A sessão RBAC não está mais ativa. Faça login novamente.', 401);
+        }
+    } catch (Throwable $e) {
+        log_sessao('Falha ao validar tenant e sessão RBAC no PostgreSQL.', 'ERROR');
+        retornar_erro_sessao('Não foi possível validar a sessão. Tente novamente mais tarde.', 503);
+    }
+}
+
 function retornar_erro_sessao($msg, $code = 401) {
     http_response_code($code);
     echo json_encode(['sucesso'=>false,'sessao_ativa'=>false,'mensagem'=>$msg,'timestamp'=>date('Y-m-d H:i:s')], JSON_UNESCAPED_UNICODE);
@@ -218,7 +247,6 @@ function retornar_sucesso_sessao($dados) {
 }
 
 $conexao = conectar_banco();
-$config  = obter_config_timeout($conexao);
 
 // ── GET ──────────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -228,16 +256,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // token nesse caso devolvia 401 ao SessionManager enquanto o AuthGuard,
     // baseado no cookie PHPSESSID, já havia autorizado o layout.
     $sessao_erp_valida = verificar_sessao_erp();
-    if ($sessao_erp_valida && !empty($_SESSION['tenant_id']) && rbacTabelasDisponiveis($conexao)) {
-        $uid_rbac = (int)($_SESSION['usuario_id'] ?? 0);
-        if ($uid_rbac > 0 && !rbacValidarSessaoAtual($conexao, $uid_rbac, (int)$_SESSION['tenant_id'])) {
-            $_SESSION = [];
-            session_destroy();
-            $sessao_erp_valida = false;
+    $postgresSelecionado = defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql';
+    if ($postgresSelecionado) exigir_sessao_erp_postgres_valida($conexao);
+    if (!$postgresSelecionado && $sessao_erp_valida && !empty($_SESSION['tenant_id'])) {
+        try {
+            if (rbacTabelasDisponiveis($conexao)) {
+                $uid_rbac = (int)($_SESSION['usuario_id'] ?? 0);
+                if ($uid_rbac > 0 && !rbacValidarSessaoAtual($conexao, $uid_rbac, (int)$_SESSION['tenant_id'])) {
+                    $_SESSION = [];
+                    session_destroy();
+                    $sessao_erp_valida = false;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('[sessao] Falha ao verificar a sessão RBAC.');
         }
     }
 
+    if ($postgresSelecionado && !$sessao_erp_valida && !empty($token)) {
+        retornar_erro_sessao('O login do Portal do Morador ainda não foi homologado para este driver.', 503);
+    }
+
     if (!$sessao_erp_valida && !empty($token)) {
+        $config = obter_config_timeout($conexao);
         $sessao = verificar_sessao_portal($conexao, $token, $config);
         if (!$sessao) retornar_erro_sessao('Token inválido ou sessão não encontrada');
         if ($sessao['expirou']) {
@@ -266,12 +307,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'timeout_total_min' => $sessao['timeout_total_min'],
                 'timeout_inatividade_min' => $sessao['timeout_inatividade_min'],
                 'aviso_expiracao_min' => $config['aviso'],
-                'session_id' => $sessao['sessao_id'],
                 'sessao_inativa' => $sessao_inativa_flag,
             ],
             'tempo_restante_segundos'  => $tr,
             'tempo_restante_formatado' => $tr !== null ? sprintf('%02d:%02d', $mm, $ss) : '∞',
-            'session_id' => $sessao['sessao_id'],
         ]);
     }
 
@@ -284,7 +323,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         // Buscar sessao_inativa atualizado do banco — com try/catch para não quebrar
         $uid = (int)($_SESSION['usuario_id'] ?? 0);
-        if ($uid > 0) {
+        if ($uid >= 0) {
             try {
                 $stmt_u = $conexao->prepare("SELECT sessao_inativa FROM usuarios WHERE id = ? LIMIT 1");
                 if ($stmt_u) {
@@ -298,8 +337,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         if ($sessao_inativa_flag) $tr = null;
                     }
                 }
-            } catch (Exception $e) {
-                log_sessao('Erro buscar sessao_inativa: ' . $e->getMessage(), 'WARN');
+            } catch (Throwable $e) {
+                log_sessao('Falha ao consultar estado de sessão ERP.', 'WARN');
                 // Continuar com valor da sessão PHP — não quebrar
             }
         }
@@ -327,12 +366,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'timeout_total_min'      => SESSAO_TIMEOUT_TOTAL_MIN,
                 'timeout_inatividade_min'=> SESSAO_TIMEOUT_INATIVIDADE_MIN,
                 'aviso_expiracao_min'    => SESSAO_AVISO_EXPIRACAO_MIN,
-                'session_id'             => session_id(),
                 'sessao_inativa'         => $sessao_inativa_flag,
             ],
             'tempo_restante_segundos'  => $tr,
             'tempo_restante_formatado' => $tr !== null ? sprintf('%02d:%02d', $mm, $ss) : '∞',
-            'session_id' => session_id(),
         ]);
     }
 
@@ -344,16 +381,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acao  = trim($_POST['acao'] ?? '');
     $token = obter_token_bearer();
     if (empty($acao)) retornar_erro_sessao('Ação não especificada', 400);
+    $postgresSelecionado = defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql';
+    if ($postgresSelecionado && !empty($token)) {
+        retornar_erro_sessao('O login do Portal do Morador ainda não foi homologado para este driver.', 503);
+    }
+    if ($postgresSelecionado && in_array($acao, ['renovar', 'ping'], true)) {
+        exigir_sessao_erp_postgres_valida($conexao);
+    }
 
     if ($acao === 'renovar' || $acao === 'ping') {
         if (!empty($token)) {
+            $config = obter_config_timeout($conexao);
             try {
             $stmt = $conexao->prepare("UPDATE sessoes_portal SET ultimo_ativo=NOW() WHERE token=? AND ativo=1");
             if ($stmt) { $stmt->bind_param('s', $token); $stmt->execute(); $stmt->close(); }
-            } catch (Exception $e) { log_sessao('Erro renovar token: ' . $e->getMessage(), 'WARN'); }
+            } catch (Throwable $e) { log_sessao('Falha ao renovar sessão do Portal.', 'WARN'); }
             $af = 1;
             if ($acao === 'renovar' && $af === 0) retornar_erro_sessao('Sessão não encontrada para renovação');
-            log_sessao("Sessao renovada/ping — token: " . substr($token,0,8), 'INFO');
+            log_sessao('Sessão Portal renovada ou verificada.', 'INFO');
             $tr_renovado = $config['inatividade'] > 0 ? $config['inatividade'] * 60 : null;
             retornar_sucesso_sessao(['mensagem'=>'Sessão renovada','novo_ultimo_ativo'=>date('Y-m-d H:i:s'),'tempo_restante_segundos'=>$tr_renovado]);
         } elseif (verificar_sessao_erp()) {
@@ -370,7 +415,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($token)) {
             $stmt = $conexao->prepare("UPDATE sessoes_portal SET ativo=0 WHERE token=?");
             $stmt->bind_param('s', $token); $stmt->execute(); $stmt->close();
-            log_sessao("Logout — token: " . substr($token,0,8), 'INFO');
+            log_sessao('Logout do Portal realizado.', 'INFO');
         }
         if (rbacTabelasDisponiveis($conexao)) rbacEncerrarSessaoAtual($conexao, 'LOGOUT_USUARIO');
         if (session_status() === PHP_SESSION_ACTIVE) { $_SESSION=[]; session_destroy(); }
