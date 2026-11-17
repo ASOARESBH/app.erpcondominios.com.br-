@@ -1,0 +1,4966 @@
+{
+  "application_role": null,
+  "application_role_sha256": "0dc657aa7435b16fefe0e9b530c7d5c08c713ff2fc17c3db24284ae05f2dc976",
+  "auto_increment": {
+    "columns": [
+      {
+        "column": "id",
+        "source_next_auto_increment": 42,
+        "strategy": "identity",
+        "table": "abastecimento_lancamentos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 9,
+        "strategy": "identity",
+        "table": "abastecimento_recargas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "abastecimento_saldo"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 3,
+        "strategy": "identity",
+        "table": "abastecimento_veiculos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 5,
+        "strategy": "identity",
+        "table": "administradoras_importacao"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 11,
+        "strategy": "identity",
+        "table": "administradoras_layouts"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "alertas_acesso"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "alertas_acesso_criterios"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "alertas_acesso_entregas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "alertas_acesso_eventos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "alertas_acesso_leituras"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 41,
+        "strategy": "identity",
+        "table": "alertas_estoque"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_alertas_unidade_acionamentos_id",
+        "key": "alertas_unidade_acionamentos.id",
+        "low_sequence": "p2_u64_lo_alertas_unidade_acionamentos_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "alertas_unidade_acionamentos"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_alertas_unidade_alvos_id",
+        "key": "alertas_unidade_alvos.id",
+        "low_sequence": "p2_u64_lo_alertas_unidade_alvos_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "alertas_unidade_alvos"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_alertas_unidade_ciencias_id",
+        "key": "alertas_unidade_ciencias.id",
+        "low_sequence": "p2_u64_lo_alertas_unidade_ciencias_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "alertas_unidade_ciencias"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_alertas_unidade_historico_id",
+        "key": "alertas_unidade_historico.id",
+        "low_sequence": "p2_u64_lo_alertas_unidade_historico_id",
+        "source_next_auto_increment": 3,
+        "strategy": "unsigned_sequence_pair",
+        "table": "alertas_unidade_historico"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_alertas_unidade_lembretes_id",
+        "key": "alertas_unidade_lembretes.id",
+        "low_sequence": "p2_u64_lo_alertas_unidade_lembretes_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "alertas_unidade_lembretes"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_alertas_unidade_notificacoes_id",
+        "key": "alertas_unidade_notificacoes.id",
+        "low_sequence": "p2_u64_lo_alertas_unidade_notificacoes_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "alertas_unidade_notificacoes"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_alertas_unidade_rate_limits_id",
+        "key": "alertas_unidade_rate_limits.id",
+        "low_sequence": "p2_u64_lo_alertas_unidade_rate_limits_id",
+        "source_next_auto_increment": 3149,
+        "strategy": "unsigned_sequence_pair",
+        "table": "alertas_unidade_rate_limits"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "aplicativos_catalogo"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "aplicativos_versionamento_log"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "aplicativos_versoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "assembleias"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "avaliacoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "avaliacoes_backup"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 333,
+        "strategy": "identity",
+        "table": "bancos_brasileiros"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "bridge_eventos_log"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "bridge_fila_comandos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "bridge_status"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 9,
+        "strategy": "identity",
+        "table": "categorias_estoque"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_chatin_conversas_id",
+        "key": "chatin_conversas.id",
+        "low_sequence": "p2_u64_lo_chatin_conversas_id",
+        "source_next_auto_increment": 7,
+        "strategy": "unsigned_sequence_pair",
+        "table": "chatin_conversas"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_chatin_mensagens_id",
+        "key": "chatin_mensagens.id",
+        "low_sequence": "p2_u64_lo_chatin_mensagens_id",
+        "source_next_auto_increment": 34,
+        "strategy": "unsigned_sequence_pair",
+        "table": "chatin_mensagens"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_chatin_participantes_id",
+        "key": "chatin_participantes.id",
+        "low_sequence": "p2_u64_lo_chatin_participantes_id",
+        "source_next_auto_increment": 13,
+        "strategy": "unsigned_sequence_pair",
+        "table": "chatin_participantes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 11,
+        "strategy": "identity",
+        "table": "checklist_alertas_config"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 21,
+        "strategy": "identity",
+        "table": "checklist_alertas_gerados"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 601,
+        "strategy": "identity",
+        "table": "checklist_itens"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 27,
+        "strategy": "identity",
+        "table": "checklist_km_acumulado"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 51,
+        "strategy": "identity",
+        "table": "checklist_veicular"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_conciliacoes_id",
+        "key": "conciliacoes.id",
+        "low_sequence": "p2_u64_lo_conciliacoes_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "conciliacoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 17,
+        "strategy": "identity",
+        "table": "config_moradores_campos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "config_moradores_opcoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "config_periodo_leitura"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 4,
+        "strategy": "identity",
+        "table": "config_sessao"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 11,
+        "strategy": "identity",
+        "table": "config_visitantes_campos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 11,
+        "strategy": "identity",
+        "table": "configuracoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "contas_bancarias"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 16,
+        "strategy": "identity",
+        "table": "contas_pagar"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "contas_receber"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "contrato_aditivos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 37,
+        "strategy": "identity",
+        "table": "contrato_documentos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "contrato_orcamento_documentos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 40,
+        "strategy": "identity",
+        "table": "contrato_orcamentos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 16,
+        "strategy": "identity",
+        "table": "contratos"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_controlid_eventos_acesso_id",
+        "key": "controlid_eventos_acesso.id",
+        "low_sequence": "p2_u64_lo_controlid_eventos_acesso_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "controlid_eventos_acesso"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "controlid_fila_comandos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "controlid_push_queue"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 3,
+        "strategy": "identity",
+        "table": "convidados"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 15,
+        "strategy": "identity",
+        "table": "crm_interacoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 4,
+        "strategy": "identity",
+        "table": "crm_relacionamentos"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_dashboard_empresa_widgets_id",
+        "key": "dashboard_empresa_widgets.id",
+        "low_sequence": "p2_u64_lo_dashboard_empresa_widgets_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "dashboard_empresa_widgets"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_dashboard_usuario_widgets_id",
+        "key": "dashboard_usuario_widgets.id",
+        "low_sequence": "p2_u64_lo_dashboard_usuario_widgets_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "dashboard_usuario_widgets"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 17,
+        "strategy": "identity",
+        "table": "dashboard_widgets_catalogo"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 10,
+        "strategy": "identity",
+        "table": "departamentos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 233,
+        "strategy": "identity",
+        "table": "dependentes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "dispositivos_controlid_leituras"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 19,
+        "strategy": "identity",
+        "table": "dispositivos_controlid_sync_log"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 13,
+        "strategy": "identity",
+        "table": "documentos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "documentos_departamentos_migrado_bkp"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 4,
+        "strategy": "identity",
+        "table": "documentos_grupos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "documentos_grupos_moradores"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "documentos_grupos_usuarios"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 28,
+        "strategy": "identity",
+        "table": "documentos_logs"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 10,
+        "strategy": "identity",
+        "table": "documentos_pastas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 11,
+        "strategy": "identity",
+        "table": "documentos_tipos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "documentos_usuarios_acesso"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 136,
+        "strategy": "identity",
+        "table": "email_alertas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "email_delivery_logs"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 595,
+        "strategy": "identity",
+        "table": "email_log"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "email_templates"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "empresa"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "empresa_administradora"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "empresa_administradora_layout"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "eventos_condominio"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 12,
+        "strategy": "identity",
+        "table": "grupos_inventario"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "hidrometro"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 146,
+        "strategy": "identity",
+        "table": "hidrometros"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 65,
+        "strategy": "identity",
+        "table": "hidrometros_historico"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "historico_importacoes_ofx"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "historico_pagamentos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "historico_status_pedido"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 3,
+        "strategy": "identity",
+        "table": "importacoes_financeiras"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "importacoes_financeiras_itens"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "inadimplencia_comparacoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 6,
+        "strategy": "identity",
+        "table": "inadimplencia_importacoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2307,
+        "strategy": "identity",
+        "table": "inadimplencia_lancamentos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 214,
+        "strategy": "identity",
+        "table": "inventario"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1453,
+        "strategy": "identity",
+        "table": "leituras"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 5,
+        "strategy": "identity",
+        "table": "local_acessos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "local_acessos_log"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "local_acessos_tipos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 7,
+        "strategy": "identity",
+        "table": "logs_erro"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 16,
+        "strategy": "identity",
+        "table": "logs_financeiro"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 24,
+        "strategy": "identity",
+        "table": "manual_artigos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "manual_avaliacoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "manual_buscas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 23,
+        "strategy": "identity",
+        "table": "manual_categorias"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "manual_historico"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 16,
+        "strategy": "identity",
+        "table": "manual_modulos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 16,
+        "strategy": "identity",
+        "table": "marcas_dispositivo"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 20,
+        "strategy": "identity",
+        "table": "modelos_dispositivo"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 42,
+        "strategy": "identity",
+        "table": "modulos_sistema"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "monitoramento_cameras"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "monitoramento_configuracoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "monitoramento_dispositivos_local"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "monitoramento_evento_acesso"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "monitoramento_evento_revisoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "monitoramento_eventos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "monitoring_releases"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "monitoring_update_log"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_movimentacoes_bancarias_id",
+        "key": "movimentacoes_bancarias.id",
+        "low_sequence": "p2_u64_lo_movimentacoes_bancarias_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "movimentacoes_bancarias"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 250,
+        "strategy": "identity",
+        "table": "movimentacoes_estoque"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 18,
+        "strategy": "identity",
+        "table": "mt_consolidacao_exclusoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "mt_consolidacao_tabelas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 168,
+        "strategy": "identity",
+        "table": "mt_integridade_ids_log"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "mt_os_integridade_log"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 17,
+        "strategy": "identity",
+        "table": "mt_reconstrucao_exclusoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 415,
+        "strategy": "identity",
+        "table": "mt_reconstrucao_tabelas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 7,
+        "strategy": "identity",
+        "table": "notif_regras"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 13,
+        "strategy": "identity",
+        "table": "notificacoes_downloads"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 671,
+        "strategy": "identity",
+        "table": "notificacoes_morador"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 5,
+        "strategy": "identity",
+        "table": "notificacoes_visualizacoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 25,
+        "strategy": "identity",
+        "table": "os_assuntos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 615,
+        "strategy": "identity",
+        "table": "os_chamados"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "os_config_homem_hora"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 18,
+        "strategy": "identity",
+        "table": "os_etapas"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_os_integridade_interacoes_log_id",
+        "key": "os_integridade_interacoes_log.id",
+        "low_sequence": "p2_u64_lo_os_integridade_interacoes_log_id",
+        "source_next_auto_increment": 3,
+        "strategy": "unsigned_sequence_pair",
+        "table": "os_integridade_interacoes_log"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 80,
+        "strategy": "identity",
+        "table": "os_interacao_fotos"
+      },
+      {
+        "column": "backup_id",
+        "high_sequence": "p2_u64_hi_os_interacao_fotos_quarentena_backup_id",
+        "key": "os_interacao_fotos_quarentena.backup_id",
+        "low_sequence": "p2_u64_lo_os_interacao_fotos_quarentena_backup_id",
+        "source_next_auto_increment": 4,
+        "strategy": "unsigned_sequence_pair",
+        "table": "os_interacao_fotos_quarentena"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2690,
+        "strategy": "identity",
+        "table": "os_interacoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 31,
+        "strategy": "identity",
+        "table": "os_materiais_usados"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 10,
+        "strategy": "identity",
+        "table": "os_permissoes_departamento"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 228,
+        "strategy": "identity",
+        "table": "os_recursos_humanos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "os_usuarios_config"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "pedidos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 16,
+        "strategy": "identity",
+        "table": "planos_contas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 293,
+        "strategy": "identity",
+        "table": "produtos_estoque"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 4,
+        "strategy": "identity",
+        "table": "produtos_servicos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1075,
+        "strategy": "identity",
+        "table": "protocolos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 296,
+        "strategy": "identity",
+        "table": "publico_rate_limit"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 8,
+        "strategy": "identity",
+        "table": "pwa_logs"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "pwa_notificacoes_push"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "pwa_notificacoes_recebidas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "pwa_versao"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 58,
+        "strategy": "identity",
+        "table": "ramos_atividade"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1015,
+        "strategy": "identity",
+        "table": "rbac_grupo_permissoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 6,
+        "strategy": "identity",
+        "table": "rbac_grupos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 60,
+        "strategy": "identity",
+        "table": "rbac_modulos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 239,
+        "strategy": "identity",
+        "table": "rbac_permissoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 24,
+        "strategy": "identity",
+        "table": "rbac_politicas_api"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 47,
+        "strategy": "identity",
+        "table": "rbac_usuario_grupos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 299,
+        "strategy": "identity",
+        "table": "rbac_usuario_permissoes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 5,
+        "strategy": "identity",
+        "table": "recebedores"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 520,
+        "strategy": "identity",
+        "table": "rh_banco_horas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 19,
+        "strategy": "identity",
+        "table": "rh_escala"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1163,
+        "strategy": "identity",
+        "table": "rh_ponto_lancamento"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 39,
+        "strategy": "identity",
+        "table": "rh_ponto_periodo"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_ronda_auditoria_id",
+        "key": "ronda_auditoria.id",
+        "low_sequence": "p2_u64_lo_ronda_auditoria_id",
+        "source_next_auto_increment": 18,
+        "strategy": "unsigned_sequence_pair",
+        "table": "ronda_auditoria"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_ronda_registros_id",
+        "key": "ronda_registros.id",
+        "low_sequence": "p2_u64_lo_ronda_registros_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "ronda_registros"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 5,
+        "strategy": "identity",
+        "table": "ronda_rotas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 3,
+        "strategy": "identity",
+        "table": "ronda_vigilantes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "sessoes_usuarios"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_tenant_arquivo_referencias_id",
+        "key": "tenant_arquivo_referencias.id",
+        "low_sequence": "p2_u64_lo_tenant_arquivo_referencias_id",
+        "source_next_auto_increment": 6,
+        "strategy": "unsigned_sequence_pair",
+        "table": "tenant_arquivo_referencias"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "tenants"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 16,
+        "strategy": "identity",
+        "table": "tipos_dispositivo"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 196,
+        "strategy": "identity",
+        "table": "unidades"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 2,
+        "strategy": "identity",
+        "table": "usuario_modulos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 62,
+        "strategy": "identity",
+        "table": "usuario_tenant"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "v_emails_recentes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "validacoes_face_id"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 306,
+        "strategy": "identity",
+        "table": "veiculos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 4138,
+        "strategy": "identity",
+        "table": "visitantes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_alertas_pendentes"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_checklist_completo"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_consumo_veiculos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_dependentes_ativos"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_dependentes_completo"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_vw_extrato_bancario_id",
+        "key": "vw_extrato_bancario.id",
+        "low_sequence": "p2_u64_lo_vw_extrato_bancario_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "vw_extrato_bancario"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_movimentacoes_detalhadas"
+      },
+      {
+        "column": "id",
+        "high_sequence": "p2_u64_hi_vw_pendencias_conciliacao_id",
+        "key": "vw_pendencias_conciliacao.id",
+        "low_sequence": "p2_u64_lo_vw_pendencias_conciliacao_id",
+        "source_next_auto_increment": 1,
+        "strategy": "unsigned_sequence_pair",
+        "table": "vw_pendencias_conciliacao"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_produtos_estoque_baixo"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_saldo_contas"
+      },
+      {
+        "column": "id",
+        "source_next_auto_increment": 1,
+        "strategy": "identity",
+        "table": "vw_ultimos_abastecimentos"
+      }
+    ],
+    "generated": 192,
+    "post_load_sync_required": true,
+    "runtime_privileges": {
+      "application_role": null,
+      "sequence_access_granted": false,
+      "state_table_access_granted": false,
+      "unsigned_function_execute_granted": false
+    },
+    "script": "30_post_load_sequences.sql",
+    "sync_policy": "ONE_SHOT_BEFORE_APPLICATION_WRITES"
+  },
+  "blocked_tables": [
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "acessos_visitantes"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "alertas_unidade_ciencia_tokens"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "configuracao_smtp"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "controlid_dispositivos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "controlid_push_eventos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "crm_anexos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "dispositivos_console"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "dispositivos_controlid"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "dispositivos_seguranca"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "dispositivos_tablets"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "documentos_acessos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "documentos_compartilhamentos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "email_providers"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "face_descriptors"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "fornecedores"
+    },
+    {
+      "code": "GENERATED_COLUMN_TRANSLATION_REQUIRED",
+      "table": "lancamentos_agua"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "leituras_fotos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "log_reset_senha"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "logs_acesso_qrcode"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "logs_validacoes_dispositivo"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "monitoramento_agentes"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "monitoramento_sessoes"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "moradores"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "moradores_anexos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "notificacoes"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "pwa_fcm_tokens"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "pwa_oauth_cache"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "qrcode_tokens"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "qrcodes_temporarios"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "rbac_sessoes"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "rbac_sessoes_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "recuperacao_senha_tokens"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "recuperacao_senha_tokens_v2"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "rh_colaboradores"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "ronda_pontos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "senha_recuperacao_logs"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "sessoes_colaborador_mobile"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "sessoes_portal"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "tenant_arquivos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "tenant_arquivos_migracao_log"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "usuarios"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "usuarios_bkp_duplicata_admin_20261027"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "usuarios_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "validacoes_acesso"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "view_dispositivos_ativos"
+    },
+    {
+      "code": "TEXT_COLLATION_DECISION_REQUIRED",
+      "table": "view_tokens_ativos"
+    }
+  ],
+  "catalog_fingerprint_sha256": "9112484a2fd7ed128a51f4b39e167f6e025d6560ab78db24d341fc52e666c7f4",
+  "catalog_summary": {
+    "auto_increment_columns": 237,
+    "base_tables": 275,
+    "columns": 3385,
+    "columns_by_mysql_type": {
+      "bigint": 117,
+      "char": 32,
+      "date": 59,
+      "datetime": 320,
+      "decimal": 135,
+      "enum": 234,
+      "int": 974,
+      "json": 12,
+      "longblob": 1,
+      "longtext": 7,
+      "mediumtext": 13,
+      "smallint": 17,
+      "text": 167,
+      "time": 16,
+      "timestamp": 157,
+      "tinyint": 186,
+      "varchar": 938
+    },
+    "columns_by_source_collation": {
+      "(none)": 1994,
+      "utf8mb3_unicode_ci": 127,
+      "utf8mb4_0900_ai_ci": 147,
+      "utf8mb4_unicode_ci": 1117
+    },
+    "events_for_manual_review": null,
+    "metadata_visibility": {
+      "events": false,
+      "routines": false,
+      "triggers": false,
+      "views": true
+    },
+    "routines_for_manual_review": null,
+    "source_grants": [
+      {
+        "privileges": [
+          "USAGE"
+        ],
+        "scope": "GLOBAL"
+      },
+      {
+        "privileges": [
+          "SELECT",
+          "SHOW VIEW"
+        ],
+        "scope": "SCHEMA"
+      }
+    ],
+    "source_grants_read_only": true,
+    "source_schema_wide_select": true,
+    "tables_without_primary_key": [
+      "crm_sequencia",
+      "empresa_log",
+      "logs_sistema",
+      "manual_favoritos",
+      "media_avaliacoes_fornecedor",
+      "media_avaliacoes_produto",
+      "mt_os_chamados_id_zero_backup",
+      "mt_protocolos_id_zero_backup",
+      "notif_alertas",
+      "notif_destinatarios",
+      "pwa_configuracoes",
+      "pwa_fcm_tokens",
+      "rbac_sessoes_bkp_ids_a_partir_15_20261027",
+      "rbac_usuario_grupos_bkp_ids_a_partir_15_20261027",
+      "rbac_usuario_permissoes_bkp_ids_a_partir_15_20261027",
+      "registros_acesso",
+      "sessoes_portal",
+      "sessoes_usuarios_bkp_ids_a_partir_15_20261027",
+      "usuario_modulos_bkp_ids_a_partir_15_20261027",
+      "usuario_tenant_bkp_ids_a_partir_15_20261027",
+      "usuarios_bkp_duplicata_admin_20261027",
+      "usuarios_bkp_ids_a_partir_15_20261027",
+      "view_estatisticas_dispositivos",
+      "view_estatisticas_tokens",
+      "vw_consumo_por_morador",
+      "vw_dashboard_financeiro",
+      "vw_estatisticas_veiculo",
+      "vw_fluxo_caixa",
+      "vw_validacao_dependente_visitante",
+      "vw_valor_total_estoque"
+    ],
+    "triggers_for_manual_translation": null,
+    "unresolved_role_grants": false,
+    "views": 0
+  },
+  "collation_overrides": {},
+  "collation_overrides_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "deferred_indexes": [
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_acessos_vis_tenant",
+      "table": "acessos_visitantes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_acessos_visitantes_tenant",
+      "table": "acessos_visitantes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_au_tenant_id",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_au_tenant_morador",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_au_tenant_origem",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_au_tenant_status_fim",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_au_tenant_status_vigencia",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_au_tenant_unidade_status",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_au_tenant_idempotency",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_autok_tenant_usado",
+      "table": "alertas_unidade_ciencia_tokens"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_autok_tenant_usuario_expira",
+      "table": "alertas_unidade_ciencia_tokens"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_autok_token_hash",
+      "table": "alertas_unidade_ciencia_tokens"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uq_leituras_fotos_tenant_client_uuid",
+      "table": "leituras_fotos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_monitoramento_agent_heartbeat",
+      "table": "monitoramento_agentes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_monitoramento_agent_tenant_status",
+      "table": "monitoramento_agentes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_monitoramento_agent_install",
+      "table": "monitoramento_agentes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_monitoramento_install_global",
+      "table": "monitoramento_agentes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_monitoramento_hub_device_time",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_monitoramento_hub_identifier",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_monitoramento_hub_source_time",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_monitoramento_hub_tenant_time",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_monitoramento_hub_event_tenant_uuid",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_monitoramento_session_agent",
+      "table": "monitoramento_sessoes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_monitoramento_session_token",
+      "table": "monitoramento_sessoes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_moradores_tenant",
+      "table": "moradores"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_ativo",
+      "table": "moradores_anexos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_morador_id",
+      "table": "moradores_anexos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_tenant_morador",
+      "table": "moradores_anexos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_fcm_tenant_morador_ativo",
+      "table": "pwa_fcm_tokens"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "fk_rbac_auditoria_sessao",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rbac_auditoria_modulo_acao",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rbac_auditoria_resultado",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rbac_auditoria_tenant_data",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rbac_auditoria_usuario_data",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_rbac_auditoria_hash",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_rbac_auditoria_uuid",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rbac_sessao_atividade",
+      "table": "rbac_sessoes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rbac_sessao_tenant_usuario_status",
+      "table": "rbac_sessoes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_rbac_sessao_hash",
+      "table": "rbac_sessoes"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_recuperacao_conta",
+      "table": "recuperacao_senha_tokens_v2"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_recuperacao_expira",
+      "table": "recuperacao_senha_tokens_v2"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_recuperacao_ip_data",
+      "table": "recuperacao_senha_tokens_v2"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_recuperacao_tenant",
+      "table": "recuperacao_senha_tokens_v2"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uq_recuperacao_token_hash",
+      "table": "recuperacao_senha_tokens_v2"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rh_bh_reproc_tenant_colab",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rh_bh_reproc_tenant_inicio",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_rh_colaboradores_tenant",
+      "table": "rh_colaboradores"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_ronda_ponto_rota",
+      "table": "ronda_pontos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_ronda_ponto_ordem",
+      "table": "ronda_pontos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_ronda_ponto_token",
+      "table": "ronda_pontos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_sessao_colaborador_expiracao",
+      "table": "sessoes_colaborador_mobile"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_sessao_colaborador_usuario_tenant",
+      "table": "sessoes_colaborador_mobile"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uq_sessao_colaborador_token",
+      "table": "sessoes_colaborador_mobile"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_sessoes_portal_tenant_token",
+      "table": "sessoes_portal"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_tenant_arquivo_criado",
+      "table": "tenant_arquivos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_tenant_arquivo_sha",
+      "table": "tenant_arquivos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_tenant_arquivo_tipo",
+      "table": "tenant_arquivos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_tenant_arquivo_legado",
+      "table": "tenant_arquivos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_tenant_arquivo_token",
+      "table": "tenant_arquivos"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_migracao_status",
+      "table": "tenant_arquivos_migracao_log"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "uk_migracao_caminho",
+      "table": "tenant_arquivos_migracao_log"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_usuarios_tenant",
+      "table": "usuarios"
+    },
+    {
+      "code": "INDEX_TABLE_DDL_BLOCKED",
+      "index": "idx_usuarios_tenant",
+      "table": "usuarios_bkp_duplicata_admin_20261027"
+    }
+  ],
+  "executable_complete": false,
+  "foreign_keys": {
+    "deferred": [
+      {
+        "code": "FK_SOURCE_TABLE_DDL_BLOCKED",
+        "name": "fk_moradores_anexos_morador",
+        "referenced_schema": "erp_pg_source",
+        "referenced_table": "moradores",
+        "table": "moradores_anexos"
+      },
+      {
+        "code": "FK_SOURCE_TABLE_DDL_BLOCKED",
+        "name": "fk_rbac_auditoria_sessao",
+        "referenced_schema": "erp_pg_source",
+        "referenced_table": "rbac_sessoes",
+        "table": "rbac_auditoria"
+      }
+    ],
+    "generated_not_valid": 9,
+    "unsupported": []
+  },
+  "generated": {
+    "enum_checks": 209,
+    "indexes": 215,
+    "on_update_triggers": 90,
+    "primary_keys": 200,
+    "tables": 225,
+    "unique_indexes": 58,
+    "unsigned_sequence_pairs": 22
+  },
+  "generated_scripts_sha256": {
+    "00_tables.sql": "2014b306be0e39397697eacfab1b120832c0eb8aedd7cd4010c4f4ec3615ae48",
+    "05_on_update_triggers.sql": "060d9a59d661adb6c78b4f70869aa7ab61c341466d13367aaeceb3ff16c88fc4",
+    "10_indexes.sql": "6c3afdcf21ef93cf405e67023c790601e768f77d04a6a1790fa2dfe70eaa674e",
+    "20_foreign_keys_not_valid.sql": "34a24597f76b65ad6167cbc6c37ecb345452aa1da8f9861bd9a1ac7a90a0870a",
+    "30_post_load_sequences.sql": "7342501ef147acfdc0b0fd0b011a812ce4fa6c5533d0d1ef8a643618c8e4f1b2"
+  },
+  "generated_tables": [
+    "abastecimento_lancamentos",
+    "abastecimento_recargas",
+    "abastecimento_saldo",
+    "abastecimento_veiculos",
+    "administradoras_importacao",
+    "administradoras_layouts",
+    "alertas_acesso",
+    "alertas_acesso_criterios",
+    "alertas_acesso_entregas",
+    "alertas_acesso_eventos",
+    "alertas_acesso_leituras",
+    "alertas_estoque",
+    "alertas_unidade_acionamentos",
+    "alertas_unidade_alvos",
+    "alertas_unidade_cache_ids",
+    "alertas_unidade_ciencias",
+    "alertas_unidade_historico",
+    "alertas_unidade_lembretes",
+    "alertas_unidade_notificacoes",
+    "alertas_unidade_preferencias",
+    "alertas_unidade_rate_limits",
+    "aplicativos_catalogo",
+    "aplicativos_versionamento_log",
+    "aplicativos_versoes",
+    "assembleias",
+    "avaliacoes",
+    "avaliacoes_backup",
+    "bancos_brasileiros",
+    "bridge_eventos_log",
+    "bridge_fila_comandos",
+    "bridge_status",
+    "categorias_estoque",
+    "chatin_bloqueios",
+    "chatin_conversas",
+    "chatin_mensagens",
+    "chatin_participantes",
+    "chatin_preferencias",
+    "chatin_presenca",
+    "checklist_alertas_config",
+    "checklist_alertas_gerados",
+    "checklist_itens",
+    "checklist_km_acumulado",
+    "checklist_veicular",
+    "conciliacoes",
+    "config_moradores_campos",
+    "config_moradores_opcoes",
+    "config_periodo_leitura",
+    "config_sessao",
+    "config_visitantes_campos",
+    "configuracoes",
+    "contas_bancarias",
+    "contas_pagar",
+    "contas_receber",
+    "contrato_aditivos",
+    "contrato_documentos",
+    "contrato_orcamento_documentos",
+    "contrato_orcamentos",
+    "contratos",
+    "controlid_eventos_acesso",
+    "controlid_fila_comandos",
+    "controlid_push_queue",
+    "convidados",
+    "crm_interacoes",
+    "crm_relacionamentos",
+    "crm_sequencia",
+    "dashboard_empresa_widgets",
+    "dashboard_usuario_widgets",
+    "dashboard_widgets_catalogo",
+    "departamentos",
+    "dependentes",
+    "dispositivos_controlid_leituras",
+    "dispositivos_controlid_sync_log",
+    "documentos",
+    "documentos_departamentos_migrado_bkp",
+    "documentos_grupos",
+    "documentos_grupos_moradores",
+    "documentos_grupos_usuarios",
+    "documentos_logs",
+    "documentos_pastas",
+    "documentos_tipos",
+    "documentos_usuarios_acesso",
+    "email_alertas",
+    "email_delivery_logs",
+    "email_log",
+    "email_templates",
+    "empresa",
+    "empresa_administradora",
+    "empresa_administradora_layout",
+    "empresa_log",
+    "eventos_condominio",
+    "grupos_inventario",
+    "hidrometro",
+    "hidrometro_config",
+    "hidrometros",
+    "hidrometros_historico",
+    "historico_importacoes_ofx",
+    "historico_pagamentos",
+    "historico_status_pedido",
+    "importacoes_financeiras",
+    "importacoes_financeiras_itens",
+    "inadimplencia_comparacoes",
+    "inadimplencia_importacoes",
+    "inadimplencia_lancamentos",
+    "inventario",
+    "leituras",
+    "local_acessos",
+    "local_acessos_log",
+    "local_acessos_tipos",
+    "logs_erro",
+    "logs_financeiro",
+    "logs_sistema",
+    "manual_artigos",
+    "manual_avaliacoes",
+    "manual_buscas",
+    "manual_categorias",
+    "manual_favoritos",
+    "manual_historico",
+    "manual_modulos",
+    "marcas_dispositivo",
+    "media_avaliacoes_fornecedor",
+    "media_avaliacoes_produto",
+    "modelos_dispositivo",
+    "modulos_sistema",
+    "monitoramento_cameras",
+    "monitoramento_configuracoes",
+    "monitoramento_dispositivos_local",
+    "monitoramento_evento_acesso",
+    "monitoramento_evento_revisoes",
+    "monitoramento_eventos",
+    "monitoring_releases",
+    "monitoring_update_log",
+    "movimentacoes_bancarias",
+    "movimentacoes_estoque",
+    "mt_consolidacao_exclusoes",
+    "mt_consolidacao_tabelas",
+    "mt_integridade_ids_log",
+    "mt_os_chamados_id_zero_backup",
+    "mt_os_integridade_log",
+    "mt_protocolos_id_zero_backup",
+    "mt_reconstrucao_exclusoes",
+    "mt_reconstrucao_tabelas",
+    "notif_alertas",
+    "notif_destinatarios",
+    "notif_regras",
+    "notificacao_canais_config",
+    "notificacoes_downloads",
+    "notificacoes_morador",
+    "notificacoes_visualizacoes",
+    "os_assuntos",
+    "os_chamados",
+    "os_config_homem_hora",
+    "os_etapas",
+    "os_integridade_interacoes_log",
+    "os_interacao_fotos",
+    "os_interacao_fotos_quarentena",
+    "os_interacoes",
+    "os_materiais_usados",
+    "os_permissoes_departamento",
+    "os_recursos_humanos",
+    "os_usuarios_config",
+    "pedidos",
+    "planos_contas",
+    "produtos_estoque",
+    "produtos_servicos",
+    "protocolos",
+    "publico_rate_limit",
+    "pwa_configuracoes",
+    "pwa_logs",
+    "pwa_notificacoes_push",
+    "pwa_notificacoes_recebidas",
+    "pwa_versao",
+    "ramos_atividade",
+    "rbac_configuracoes",
+    "rbac_grupo_permissoes",
+    "rbac_grupos",
+    "rbac_modulos",
+    "rbac_permissoes",
+    "rbac_politicas_api",
+    "rbac_usuario_grupos",
+    "rbac_usuario_grupos_bkp_ids_a_partir_15_20261027",
+    "rbac_usuario_permissoes",
+    "rbac_usuario_permissoes_bkp_ids_a_partir_15_20261027",
+    "recebedores",
+    "registros_acesso",
+    "rh_banco_horas",
+    "rh_escala",
+    "rh_ponto_lancamento",
+    "rh_ponto_periodo",
+    "ronda_auditoria",
+    "ronda_registros",
+    "ronda_rotas",
+    "ronda_vigilantes",
+    "sessoes_usuarios",
+    "sessoes_usuarios_bkp_ids_a_partir_15_20261027",
+    "tenant_arquivo_referencias",
+    "tenants",
+    "tipos_dispositivo",
+    "unidades",
+    "usuario_modulos",
+    "usuario_modulos_bkp_ids_a_partir_15_20261027",
+    "usuario_tenant",
+    "usuario_tenant_bkp_ids_a_partir_15_20261027",
+    "v_emails_recentes",
+    "validacoes_face_id",
+    "veiculos",
+    "view_estatisticas_dispositivos",
+    "view_estatisticas_tokens",
+    "visitantes",
+    "vw_alertas_pendentes",
+    "vw_checklist_completo",
+    "vw_consumo_por_morador",
+    "vw_consumo_veiculos",
+    "vw_dashboard_financeiro",
+    "vw_dependentes_ativos",
+    "vw_dependentes_completo",
+    "vw_estatisticas_veiculo",
+    "vw_extrato_bancario",
+    "vw_fluxo_caixa",
+    "vw_movimentacoes_detalhadas",
+    "vw_pendencias_conciliacao",
+    "vw_produtos_estoque_baixo",
+    "vw_saldo_contas",
+    "vw_ultimos_abastecimentos",
+    "vw_validacao_dependente_visitante",
+    "vw_valor_total_estoque"
+  ],
+  "generator_code_sha256": "0b2f9699cfb98e68c177bfd0eef361ddc8b8632b4b51ddf679e63b378cda323b",
+  "generator_version": "1.4.0",
+  "review_items": [
+    {
+      "code": "AUTO_INCREMENT_APPLICATION_ROLE_REQUIRED"
+    },
+    {
+      "code": "METADATA_VISIBILITY_NOT_CONFIRMED",
+      "object_type": "triggers"
+    },
+    {
+      "code": "METADATA_VISIBILITY_NOT_CONFIRMED",
+      "object_type": "routines"
+    },
+    {
+      "code": "METADATA_VISIBILITY_NOT_CONFIRMED",
+      "object_type": "events"
+    },
+    {
+      "code": "POSTGRES_ROLE_GRANT_MAPPING_REQUIRED"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_final",
+      "table": "acessos_visitantes"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_inicial",
+      "table": "acessos_visitantes"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_final",
+      "table": "acessos_visitantes"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_inicial",
+      "table": "acessos_visitantes"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_acesso",
+      "table": "acessos_visitantes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "slug"
+      ],
+      "index": "uq_administradora_importacao_slug",
+      "table": "administradoras_importacao"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "administradoras_importacao"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "administradoras_importacao"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "administradora_id",
+        "codigo"
+      ],
+      "index": "uq_administradora_layout_codigo",
+      "table": "administradoras_layouts"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "administradoras_layouts"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "administradoras_layouts"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "formato_aceito",
+      "table": "administradoras_layouts"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "formato_aceito",
+      "table": "administradoras_layouts"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "evento_id",
+        "canal",
+        "destinatario"
+      ],
+      "index": "uk_evento_canal_destinatario",
+      "table": "alertas_acesso_entregas"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "alerta_id",
+        "evento_uuid"
+      ],
+      "index": "uk_alerta_evento",
+      "table": "alertas_acesso_eventos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_alerta",
+      "table": "alertas_estoque"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_fim",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_inicio",
+      "table": "alertas_unidade"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "idempotency_payload_hash",
+      "table": "alertas_unidade"
+    },
+    {
+      "code": "PRIMARY_KEY_CI_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "unidade"
+      ],
+      "table": "alertas_unidade_cache_ids"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_hash",
+      "table": "alertas_unidade_ciencia_tokens"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "alerta_id",
+        "tipo",
+        "vigencia_fim"
+      ],
+      "index": "uk_aul_expiracao",
+      "table": "alertas_unidade_lembretes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "push_status",
+      "table": "alertas_unidade_lembretes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "push_status",
+      "table": "alertas_unidade_lembretes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "push_status",
+      "table": "alertas_unidade_notificacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "push_status",
+      "table": "alertas_unidade_notificacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "tipo",
+      "table": "alertas_unidade_notificacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "tipo",
+      "table": "alertas_unidade_notificacoes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "usuario_id",
+        "unidade",
+        "bucket_inicio"
+      ],
+      "index": "uk_aurl_bucket",
+      "table": "alertas_unidade_rate_limits"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "chave"
+      ],
+      "index": "uk_aplicativos_catalogo_chave",
+      "table": "aplicativos_catalogo"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_avaliacao_fornecedor",
+      "table": "avaliacoes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_avaliacao_morador",
+      "table": "avaliacoes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "avaliacoes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_avaliacao",
+      "table": "avaliacoes_backup"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "bridge_status"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "ultimo_contato",
+      "table": "bridge_status"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cor",
+      "table": "categorias_estoque"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cor",
+      "table": "categorias_estoque"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "categorias_estoque"
+    },
+    {
+      "code": "PRIMARY_KEY_CI_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "bloqueador_tipo",
+        "bloqueador_id",
+        "bloqueado_tipo",
+        "bloqueado_id"
+      ],
+      "table": "chatin_bloqueios"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "chave_unica"
+      ],
+      "index": "uk_chatin_conversa_chave",
+      "table": "chatin_conversas"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "remetente_tipo",
+        "remetente_id",
+        "idempotency_key"
+      ],
+      "index": "uk_chatin_msg_idem",
+      "table": "chatin_mensagens"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "conversa_id",
+        "participante_tipo",
+        "participante_id"
+      ],
+      "index": "uk_chatin_part",
+      "table": "chatin_participantes"
+    },
+    {
+      "code": "PRIMARY_KEY_CI_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "participante_tipo",
+        "participante_id"
+      ],
+      "table": "chatin_preferencias"
+    },
+    {
+      "code": "PRIMARY_KEY_CI_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "participante_tipo",
+        "participante_id"
+      ],
+      "table": "chatin_presenca"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "plataforma",
+      "table": "chatin_presenca"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "plataforma",
+      "table": "chatin_presenca"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "checklist_alertas_config"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_registro",
+      "table": "checklist_itens"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "checklist_km_acumulado"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "checklist_veicular"
+    },
+    {
+      "code": "MYSQL_LONGTEXT_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
+      "column": "criterios",
+      "table": "conciliacoes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "grupo",
+        "campo"
+      ],
+      "index": "uk_config_moradores_tenant_grupo_campo",
+      "table": "config_moradores_campos"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "opcao"
+      ],
+      "index": "uk_config_moradores_tenant_opcao",
+      "table": "config_moradores_opcoes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "config_periodo_leitura"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "config_periodo_leitura"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado",
+      "table": "config_sessao"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "campo"
+      ],
+      "index": "uk_config_visitantes_tenant_campo",
+      "table": "config_visitantes_campos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "provedor",
+      "table": "configuracao_smtp"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "provedor",
+      "table": "configuracao_smtp"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "smtp_de_nome",
+      "table": "configuracao_smtp"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "smtp_host",
+      "table": "configuracao_smtp"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "smtp_host",
+      "table": "configuracao_smtp"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "smtp_senha",
+      "table": "configuracao_smtp"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "configuracoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "moeda",
+      "table": "contas_bancarias"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "moeda",
+      "table": "contas_bancarias"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "contas_pagar"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "contas_pagar"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_emissao",
+      "table": "contas_pagar"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_pagamento",
+      "table": "contas_pagar"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_vencimento",
+      "table": "contas_pagar"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "contas_receber"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "contas_receber"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_emissao",
+      "table": "contas_receber"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_recebimento",
+      "table": "contas_receber"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_vencimento",
+      "table": "contas_receber"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_assinatura",
+      "table": "contrato_aditivos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "nova_data_fim",
+      "table": "contrato_aditivos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_fim",
+      "table": "contratos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_inicio",
+      "table": "contratos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_vencimento",
+      "table": "contratos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "fabricante",
+      "table": "controlid_dispositivos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_autenticacao",
+      "table": "controlid_dispositivos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "usuario_api",
+      "table": "controlid_dispositivos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "verbo",
+      "table": "controlid_fila_comandos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "verbo",
+      "table": "controlid_fila_comandos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "payload",
+      "table": "controlid_push_eventos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "controlid_push_queue"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "endpoint",
+      "table": "controlid_push_queue"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "endpoint",
+      "table": "controlid_push_queue"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "idempotency_key"
+      ],
+      "index": "uk_conv_tenant_idempotency",
+      "table": "convidados"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_prevista_chegada",
+      "table": "convidados"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "validade_fim",
+      "table": "convidados"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "caminho",
+      "table": "crm_anexos"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "widget_key"
+      ],
+      "index": "uk_dashboard_empresa_widget",
+      "table": "dashboard_empresa_widgets"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "dashboard_empresa_widgets"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "usuario_id",
+        "widget_key"
+      ],
+      "index": "uk_dashboard_usuario_widget",
+      "table": "dashboard_usuario_widgets"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "dashboard_usuario_widgets"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "widget_key"
+      ],
+      "index": "uk_dashboard_widget_key",
+      "table": "dashboard_widgets_catalogo"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "dashboard_widgets_catalogo"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "dashboard_widgets_catalogo"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "modulo_icone",
+      "table": "dashboard_widgets_catalogo"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "modulo_icone",
+      "table": "dashboard_widgets_catalogo"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "tamanho_padrao",
+      "table": "dashboard_widgets_catalogo"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "tamanho_padrao",
+      "table": "dashboard_widgets_catalogo"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "nome"
+      ],
+      "index": "uk_tenant_nome",
+      "table": "departamentos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "dependentes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "dependentes"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_nascimento",
+      "table": "dependentes"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_acesso",
+      "table": "dispositivos_console"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "acao_acesso_params",
+      "table": "dispositivos_controlid"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha_api",
+      "table": "dispositivos_controlid"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "usuario_api",
+      "table": "dispositivos_controlid"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "usuario_api",
+      "table": "dispositivos_controlid"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_importacao",
+      "table": "dispositivos_controlid_leituras"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_hora",
+      "table": "dispositivos_controlid_sync_log"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha",
+      "table": "dispositivos_seguranca"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "dispositivos_tablets"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_expiracao",
+      "table": "documentos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_publicacao",
+      "table": "documentos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "updated_at",
+      "table": "documentos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_compartilhamento",
+      "table": "documentos_acessos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "documentos_compartilhamentos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cor",
+      "table": "documentos_departamentos_migrado_bkp"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cor",
+      "table": "documentos_departamentos_migrado_bkp"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos_departamentos_migrado_bkp"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "documentos_departamentos_migrado_bkp"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "documentos_departamentos_migrado_bkp"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "updated_at",
+      "table": "documentos_departamentos_migrado_bkp"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos_grupos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "updated_at",
+      "table": "documentos_grupos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos_grupos_moradores"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos_grupos_usuarios"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos_logs"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos_pastas"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "updated_at",
+      "table": "documentos_pastas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cor",
+      "table": "documentos_tipos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cor",
+      "table": "documentos_tipos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos_tipos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "documentos_tipos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "documentos_tipos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "updated_at",
+      "table": "documentos_tipos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "documentos_usuarios_acesso"
+    },
+    {
+      "code": "MYSQL_LONGTEXT_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
+      "column": "corpo_html",
+      "table": "email_alertas"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "email_alertas"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "email_alertas"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "created_at",
+      "table": "email_delivery_logs"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_envio",
+      "table": "email_log"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "smtp_password",
+      "table": "email_providers"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "email_templates"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "empresa_administradora"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "empresa_administradora"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "modulo"
+      ],
+      "index": "uq_empresa_adm_layout_modulo",
+      "table": "empresa_administradora_layout"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "empresa_administradora_layout"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "empresa_administradora_layout"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_cadastro",
+      "table": "face_descriptors"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha",
+      "table": "fornecedores"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "grupos_inventario"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "grupos_inventario"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "hidrometro"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_instalacao",
+      "table": "hidrometro"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "hidrometros"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "hidrometros"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_alteracao",
+      "table": "hidrometros_historico"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "dt_fim_ofx",
+      "table": "historico_importacoes_ofx"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "dt_inicio_ofx",
+      "table": "historico_importacoes_ofx"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "ultima_data",
+      "table": "historico_importacoes_ofx"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "historico_pagamentos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_pagamento",
+      "table": "historico_pagamentos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_mudanca",
+      "table": "historico_status_pedido"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_fim",
+      "table": "importacoes_financeiras"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_importacao",
+      "table": "importacoes_financeiras"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_inicio",
+      "table": "importacoes_financeiras"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_conciliacao",
+      "table": "importacoes_financeiras_itens"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_pagamento",
+      "table": "importacoes_financeiras_itens"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_vencimento",
+      "table": "importacoes_financeiras_itens"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "inadimplencia_comparacoes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "inadimplencia_comparacoes"
+    },
+    {
+      "code": "MYSQL_LONGTEXT_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
+      "column": "resumo_json",
+      "table": "inadimplencia_comparacoes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_base",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "fonte_sistema",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "fonte_sistema",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "layout_id",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "layout_id",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "layout_versao",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "layout_versao",
+      "table": "inadimplencia_importacoes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "inadimplencia_lancamentos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "mes_referencia",
+      "table": "inadimplencia_lancamentos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "vencimento",
+      "table": "inadimplencia_lancamentos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "inventario"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_baixa",
+      "table": "inventario"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "inventario"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_compra",
+      "table": "inventario"
+    },
+    {
+      "code": "GENERATED_COLUMN_REVIEW_REQUIRED",
+      "column": "consumo",
+      "table": "lancamentos_agua"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "client_uuid"
+      ],
+      "index": "uq_leituras_tenant_client_uuid",
+      "table": "leituras"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "leituras"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "caminho",
+      "table": "leituras_fotos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "lancado_por_tipo",
+      "table": "leituras_fotos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha_anterior",
+      "table": "log_reset_senha"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "logs_acesso_qrcode"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_hora",
+      "table": "logs_erro"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "logs_financeiro"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_hora",
+      "table": "logs_sistema"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_qrcode",
+      "table": "logs_validacoes_dispositivo"
+    },
+    {
+      "code": "MYSQL_LONGTEXT_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
+      "column": "conteudo",
+      "table": "manual_artigos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "versao",
+      "table": "manual_artigos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "versao",
+      "table": "manual_artigos"
+    },
+    {
+      "code": "MYSQL_LONGTEXT_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
+      "column": "conteudo",
+      "table": "manual_historico"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "manual_modulos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "manual_modulos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "marcas_dispositivo"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "modelos_dispositivo"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "modulos_sistema"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "modulos_sistema"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "hardware_fingerprint_hash",
+      "table": "monitoramento_agentes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "status",
+      "table": "monitoramento_agentes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "agente_id",
+        "external_key"
+      ],
+      "index": "uk_monitoramento_camera_agent_key",
+      "table": "monitoramento_cameras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "origem_stream",
+      "table": "monitoramento_cameras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "origem_stream",
+      "table": "monitoramento_cameras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "sentido",
+      "table": "monitoramento_cameras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "sentido",
+      "table": "monitoramento_cameras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "ultimo_status",
+      "table": "monitoramento_cameras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "ultimo_status",
+      "table": "monitoramento_cameras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "lpr_engine",
+      "table": "monitoramento_configuracoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "lpr_engine",
+      "table": "monitoramento_configuracoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "onnx_backend",
+      "table": "monitoramento_configuracoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "onnx_backend",
+      "table": "monitoramento_configuracoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "versao_minima_agente",
+      "table": "monitoramento_configuracoes"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "versao_minima_agente",
+      "table": "monitoramento_configuracoes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "agente_id",
+        "external_key"
+      ],
+      "index": "uk_monitoramento_local_device",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "protocolo",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "protocolo",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "sentido",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "sentido",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "tipo_dispositivo",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "tipo_dispositivo",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "ultimo_status",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "ultimo_status",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "agente_id",
+        "event_uuid"
+      ],
+      "index": "uk_monitoramento_event_tenant_uuid",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "direcao",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "direcao",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "match_status",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "match_status",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "motor",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "motor",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "status_evento",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "status_evento",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "tipo_evento",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "tipo_evento",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "decisao",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "decisao",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "direcao",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "direcao",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "identifier_hash",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "source_protocol",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "source_protocol",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "source_type",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "source_type",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "status_evento",
+      "table": "monitoramento_eventos_hub"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_hash",
+      "table": "monitoramento_sessoes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "version_code",
+        "channel"
+      ],
+      "index": "uk_monitoring_release_code_channel",
+      "table": "monitoring_releases"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha",
+      "table": "moradores"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "caminho",
+      "table": "moradores_anexos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_lancamento",
+      "table": "movimentacoes_bancarias"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_movimentacao",
+      "table": "movimentacoes_estoque"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tabela"
+      ],
+      "index": "uk_mt_exclusao_tabela",
+      "table": "mt_consolidacao_exclusoes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tabela",
+        "tenant_id"
+      ],
+      "index": "uk_mt_consolidacao_tabela",
+      "table": "mt_consolidacao_tabelas"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tabela"
+      ],
+      "index": "uk_mt_integridade_tabela",
+      "table": "mt_integridade_ids_log"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_previsao",
+      "table": "mt_os_chamados_id_zero_backup"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "projeto_data_fim_prevista",
+      "table": "mt_os_chamados_id_zero_backup"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "projeto_data_inicio_prevista",
+      "table": "mt_os_chamados_id_zero_backup"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "mt_protocolos_id_zero_backup"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "mt_protocolos_id_zero_backup"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tabela"
+      ],
+      "index": "uk_mt_reconstrucao_exclusao",
+      "table": "mt_reconstrucao_exclusoes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tabela",
+        "tenant_id"
+      ],
+      "index": "uk_mt_reconstrucao",
+      "table": "mt_reconstrucao_tabelas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cor",
+      "table": "notif_alertas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cor",
+      "table": "notif_alertas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "notif_alertas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "notif_alertas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "modulo",
+      "table": "notif_alertas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "modulo",
+      "table": "notif_alertas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "canais",
+      "table": "notif_regras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "canais",
+      "table": "notif_regras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "modulo",
+      "table": "notif_regras"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "modulo",
+      "table": "notif_regras"
+    },
+    {
+      "code": "PRIMARY_KEY_CI_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "evento",
+        "canal"
+      ],
+      "table": "notificacao_canais_config"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "anexo_caminho",
+      "table": "notificacoes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "morador_id",
+        "protocolo_id",
+        "tipo"
+      ],
+      "index": "uq_notif_morador_protocolo_evento",
+      "table": "notificacoes_morador"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "morador_id",
+        "registro_acesso_id",
+        "tipo"
+      ],
+      "index": "uq_notif_morador_registro_evento",
+      "table": "notificacoes_morador"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_previsao",
+      "table": "os_chamados"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "projeto_data_fim_prevista",
+      "table": "os_chamados"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "projeto_data_inicio_prevista",
+      "table": "os_chamados"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "usuario_id",
+        "departamento"
+      ],
+      "index": "uk_os_usuario_departamento",
+      "table": "os_permissoes_departamento"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_aceite",
+      "table": "pedidos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_conclusao",
+      "table": "pedidos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_finalizacao",
+      "table": "pedidos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_inicio_execucao",
+      "table": "pedidos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_pedido",
+      "table": "pedidos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "planos_contas"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "planos_contas"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "produtos_estoque"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "produtos_estoque"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "produtos_servicos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "produtos_servicos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "atualizado_em",
+      "table": "protocolos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "protocolos"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "chave"
+      ],
+      "index": "uq_pwa_config_tenant_chave",
+      "table": "pwa_configuracoes"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "fcm_token",
+      "table": "pwa_fcm_tokens"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "url_destino",
+      "table": "pwa_notificacoes_push"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "url_destino",
+      "table": "pwa_notificacoes_push"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "access_token",
+      "table": "pwa_oauth_cache"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "token_type",
+      "table": "pwa_oauth_cache"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cache_version",
+      "table": "pwa_versao"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cache_version",
+      "table": "pwa_versao"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "versao",
+      "table": "pwa_versao"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "versao",
+      "table": "pwa_versao"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "qrcode_tokens"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "qrcodes_temporarios"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "ramos_atividade"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_criacao",
+      "table": "ramos_atividade"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "ramos_atividade"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "ramos_atividade"
+    },
+    {
+      "code": "MYSQL_LONGTEXT_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
+      "column": "dados_antes",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "MYSQL_LONGTEXT_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
+      "column": "dados_depois",
+      "table": "rbac_auditoria"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "hash_anterior",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "origem",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "origem",
+      "table": "rbac_auditoria"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "slug"
+      ],
+      "index": "uk_rbac_grupo_tenant_slug",
+      "table": "rbac_grupos"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "chave"
+      ],
+      "index": "uk_rbac_modulo_chave",
+      "table": "rbac_modulos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "grupo",
+      "table": "rbac_modulos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "grupo",
+      "table": "rbac_modulos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "rbac_modulos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "rbac_modulos"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "modulo_id",
+        "acao"
+      ],
+      "index": "uk_rbac_modulo_acao",
+      "table": "rbac_permissoes"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "endpoint",
+        "acao_requisicao",
+        "metodo_http"
+      ],
+      "index": "uk_rbac_politica",
+      "table": "rbac_politicas_api"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "acao_permissao",
+      "table": "rbac_politicas_api"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "acao_permissao",
+      "table": "rbac_politicas_api"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "sessao_hash",
+      "table": "rbac_sessoes"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "sessao_hash",
+      "table": "rbac_sessoes_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cargo",
+      "table": "recebedores"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "cargo",
+      "table": "recebedores"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "criado_em",
+      "table": "recebedores"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "data_expiracao",
+      "table": "recuperacao_senha_tokens"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "recuperacao_senha_tokens"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_hash",
+      "table": "recuperacao_senha_tokens_v2"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "idempotency_key"
+      ],
+      "index": "uk_registros_acesso_tenant_idempotency",
+      "table": "registros_acesso"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "registros_acesso"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "idempotency_key"
+      ],
+      "index": "uq_rh_bh_tenant_idempotency",
+      "table": "rh_banco_horas"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data",
+      "table": "rh_banco_horas"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_fim",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_inicio",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "hash_previa",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "regra",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "regra",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "versao_calculo",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "versao_calculo",
+      "table": "rh_banco_horas_reprocessamentos"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_admissao",
+      "table": "rh_colaboradores"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_demissao",
+      "table": "rh_colaboradores"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_nascimento",
+      "table": "rh_colaboradores"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "foto_path",
+      "table": "rh_colaboradores"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "alternada_dia_inicio",
+      "table": "rh_escala"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_almoco_retorno",
+      "table": "rh_escala"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_almoco_retorno",
+      "table": "rh_escala"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_almoco_retorno",
+      "table": "rh_escala"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_almoco_saida",
+      "table": "rh_escala"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_almoco_saida",
+      "table": "rh_escala"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_almoco_saida",
+      "table": "rh_escala"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_entrada",
+      "table": "rh_escala"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_entrada",
+      "table": "rh_escala"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_entrada",
+      "table": "rh_escala"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_saida",
+      "table": "rh_escala"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_saida",
+      "table": "rh_escala"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_saida",
+      "table": "rh_escala"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "nome_escala",
+      "table": "rh_escala"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "nome_escala",
+      "table": "rh_escala"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data",
+      "table": "rh_ponto_lancamento"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_almoco_retorno",
+      "table": "rh_ponto_lancamento"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_almoco_saida",
+      "table": "rh_ponto_lancamento"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_entrada",
+      "table": "rh_ponto_lancamento"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_saida",
+      "table": "rh_ponto_lancamento"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_qr",
+      "table": "ronda_pontos"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "ponto_id",
+        "colaborador_id",
+        "ciclo_chave"
+      ],
+      "index": "uk_ronda_registro_ponto_ciclo",
+      "table": "ronda_registros"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "dias_semana",
+      "table": "ronda_rotas"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "dias_semana",
+      "table": "ronda_rotas"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_fim",
+      "table": "ronda_rotas"
+    },
+    {
+      "code": "MYSQL_TIME_RANGE_REVIEW_REQUIRED",
+      "column": "hora_inicio",
+      "table": "ronda_rotas"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_inicio",
+      "table": "ronda_rotas"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "hora_inicio",
+      "table": "ronda_rotas"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha_temp_hash",
+      "table": "senha_recuperacao_logs"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_hash",
+      "table": "sessoes_colaborador_mobile"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "data_expiracao",
+      "table": "sessoes_portal"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "sessoes_portal"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_expiracao",
+      "table": "sessoes_usuarios"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "data_expiracao",
+      "table": "sessoes_usuarios"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "data_expiracao",
+      "table": "sessoes_usuarios"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_login",
+      "table": "sessoes_usuarios"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "ultima_atividade",
+      "table": "sessoes_usuarios"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_expiracao",
+      "table": "sessoes_usuarios_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "data_expiracao",
+      "table": "sessoes_usuarios_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "data_expiracao",
+      "table": "sessoes_usuarios_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_login",
+      "table": "sessoes_usuarios_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "ultima_atividade",
+      "table": "sessoes_usuarios_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "tenant_id",
+        "arquivo_id",
+        "modulo",
+        "registro_id",
+        "campo_origem"
+      ],
+      "index": "uk_referencia_arquivo",
+      "table": "tenant_arquivo_referencias"
+    },
+    {
+      "code": "MYSQL_LONGBLOB_EXCEEDS_POSTGRES_VALUE_LIMIT_REVIEW_REQUIRED",
+      "column": "conteudo",
+      "table": "tenant_arquivos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token_publico",
+      "table": "tenant_arquivos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "caminho_legado",
+      "table": "tenant_arquivos_migracao_log"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "slug"
+      ],
+      "index": "uk_tenant_slug",
+      "table": "tenants"
+    },
+    {
+      "code": "UNIQUE_COLLISION_SCAN_REQUIRED",
+      "columns": [
+        "projetos_slug"
+      ],
+      "index": "uk_tenants_projetos_slug",
+      "table": "tenants"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "locale",
+      "table": "tenants"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "locale",
+      "table": "tenants"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "tipos_dispositivo"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "tipos_dispositivo"
+    },
+    {
+      "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT",
+      "column": "icone",
+      "table": "tipos_dispositivo"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "unidades"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "unidades"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha",
+      "table": "usuarios"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha",
+      "table": "usuarios_bkp_duplicata_admin_20261027"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "senha",
+      "table": "usuarios_bkp_ids_a_partir_15_20261027"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_envio",
+      "table": "v_emails_recentes"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "validacoes_acesso"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "veiculos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "veiculos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "view_dispositivos_ativos"
+    },
+    {
+      "candidate": "C",
+      "code": "SENSITIVE_COLLATION_CONFIRMATION_REQUIRED",
+      "column": "token",
+      "table": "view_tokens_ativos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "visitantes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "visitantes"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "ultima_retirada",
+      "table": "vw_consumo_por_morador"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_nascimento",
+      "table": "vw_dependentes_ativos"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "vw_dependentes_completo"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "vw_dependentes_completo"
+    },
+    {
+      "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED",
+      "column": "data_atualizacao",
+      "table": "vw_dependentes_completo"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_cadastro",
+      "table": "vw_dependentes_completo"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_nascimento",
+      "table": "vw_dependentes_completo"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_lancamento",
+      "table": "vw_extrato_bancario"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "venc_pagar",
+      "table": "vw_extrato_bancario"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "venc_receber",
+      "table": "vw_extrato_bancario"
+    },
+    {
+      "code": "MYSQL_TIMESTAMP_TIMEZONE_CONVERSION_REQUIRED",
+      "column": "data_movimentacao",
+      "table": "vw_movimentacoes_detalhadas"
+    },
+    {
+      "code": "MYSQL_ZERO_DATE_PREFLIGHT_REQUIRED",
+      "column": "data_lancamento",
+      "table": "vw_pendencias_conciliacao"
+    }
+  ],
+  "snapshot_file_sha256": "a00aa5ae38786265f6367d3cf1fb5e2abb14f97d04cacbeaf8c17e9da4b82ae4",
+  "source_schema": "erp_pg_source",
+  "target_schema": "erp",
+  "unique_indexes_pending_collision_scan": [
+    {
+      "columns": [
+        "slug"
+      ],
+      "index": "uq_administradora_importacao_slug",
+      "table": "administradoras_importacao"
+    },
+    {
+      "columns": [
+        "administradora_id",
+        "codigo"
+      ],
+      "index": "uq_administradora_layout_codigo",
+      "table": "administradoras_layouts"
+    },
+    {
+      "columns": [
+        "evento_id",
+        "canal",
+        "destinatario"
+      ],
+      "index": "uk_evento_canal_destinatario",
+      "table": "alertas_acesso_entregas"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "alerta_id",
+        "evento_uuid"
+      ],
+      "index": "uk_alerta_evento",
+      "table": "alertas_acesso_eventos"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "alerta_id",
+        "tipo",
+        "vigencia_fim"
+      ],
+      "index": "uk_aul_expiracao",
+      "table": "alertas_unidade_lembretes"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "usuario_id",
+        "unidade",
+        "bucket_inicio"
+      ],
+      "index": "uk_aurl_bucket",
+      "table": "alertas_unidade_rate_limits"
+    },
+    {
+      "columns": [
+        "chave"
+      ],
+      "index": "uk_aplicativos_catalogo_chave",
+      "table": "aplicativos_catalogo"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "chave_unica"
+      ],
+      "index": "uk_chatin_conversa_chave",
+      "table": "chatin_conversas"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "remetente_tipo",
+        "remetente_id",
+        "idempotency_key"
+      ],
+      "index": "uk_chatin_msg_idem",
+      "table": "chatin_mensagens"
+    },
+    {
+      "columns": [
+        "conversa_id",
+        "participante_tipo",
+        "participante_id"
+      ],
+      "index": "uk_chatin_part",
+      "table": "chatin_participantes"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "grupo",
+        "campo"
+      ],
+      "index": "uk_config_moradores_tenant_grupo_campo",
+      "table": "config_moradores_campos"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "opcao"
+      ],
+      "index": "uk_config_moradores_tenant_opcao",
+      "table": "config_moradores_opcoes"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "campo"
+      ],
+      "index": "uk_config_visitantes_tenant_campo",
+      "table": "config_visitantes_campos"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "idempotency_key"
+      ],
+      "index": "uk_conv_tenant_idempotency",
+      "table": "convidados"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "widget_key"
+      ],
+      "index": "uk_dashboard_empresa_widget",
+      "table": "dashboard_empresa_widgets"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "usuario_id",
+        "widget_key"
+      ],
+      "index": "uk_dashboard_usuario_widget",
+      "table": "dashboard_usuario_widgets"
+    },
+    {
+      "columns": [
+        "widget_key"
+      ],
+      "index": "uk_dashboard_widget_key",
+      "table": "dashboard_widgets_catalogo"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "nome"
+      ],
+      "index": "uk_tenant_nome",
+      "table": "departamentos"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "modulo"
+      ],
+      "index": "uq_empresa_adm_layout_modulo",
+      "table": "empresa_administradora_layout"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "client_uuid"
+      ],
+      "index": "uq_leituras_tenant_client_uuid",
+      "table": "leituras"
+    },
+    {
+      "columns": [
+        "agente_id",
+        "external_key"
+      ],
+      "index": "uk_monitoramento_camera_agent_key",
+      "table": "monitoramento_cameras"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "agente_id",
+        "external_key"
+      ],
+      "index": "uk_monitoramento_local_device",
+      "table": "monitoramento_dispositivos_local"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "agente_id",
+        "event_uuid"
+      ],
+      "index": "uk_monitoramento_event_tenant_uuid",
+      "table": "monitoramento_eventos"
+    },
+    {
+      "columns": [
+        "version_code",
+        "channel"
+      ],
+      "index": "uk_monitoring_release_code_channel",
+      "table": "monitoring_releases"
+    },
+    {
+      "columns": [
+        "tabela"
+      ],
+      "index": "uk_mt_exclusao_tabela",
+      "table": "mt_consolidacao_exclusoes"
+    },
+    {
+      "columns": [
+        "tabela",
+        "tenant_id"
+      ],
+      "index": "uk_mt_consolidacao_tabela",
+      "table": "mt_consolidacao_tabelas"
+    },
+    {
+      "columns": [
+        "tabela"
+      ],
+      "index": "uk_mt_integridade_tabela",
+      "table": "mt_integridade_ids_log"
+    },
+    {
+      "columns": [
+        "tabela"
+      ],
+      "index": "uk_mt_reconstrucao_exclusao",
+      "table": "mt_reconstrucao_exclusoes"
+    },
+    {
+      "columns": [
+        "tabela",
+        "tenant_id"
+      ],
+      "index": "uk_mt_reconstrucao",
+      "table": "mt_reconstrucao_tabelas"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "morador_id",
+        "protocolo_id",
+        "tipo"
+      ],
+      "index": "uq_notif_morador_protocolo_evento",
+      "table": "notificacoes_morador"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "morador_id",
+        "registro_acesso_id",
+        "tipo"
+      ],
+      "index": "uq_notif_morador_registro_evento",
+      "table": "notificacoes_morador"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "usuario_id",
+        "departamento"
+      ],
+      "index": "uk_os_usuario_departamento",
+      "table": "os_permissoes_departamento"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "chave"
+      ],
+      "index": "uq_pwa_config_tenant_chave",
+      "table": "pwa_configuracoes"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "slug"
+      ],
+      "index": "uk_rbac_grupo_tenant_slug",
+      "table": "rbac_grupos"
+    },
+    {
+      "columns": [
+        "chave"
+      ],
+      "index": "uk_rbac_modulo_chave",
+      "table": "rbac_modulos"
+    },
+    {
+      "columns": [
+        "modulo_id",
+        "acao"
+      ],
+      "index": "uk_rbac_modulo_acao",
+      "table": "rbac_permissoes"
+    },
+    {
+      "columns": [
+        "endpoint",
+        "acao_requisicao",
+        "metodo_http"
+      ],
+      "index": "uk_rbac_politica",
+      "table": "rbac_politicas_api"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "idempotency_key"
+      ],
+      "index": "uk_registros_acesso_tenant_idempotency",
+      "table": "registros_acesso"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "idempotency_key"
+      ],
+      "index": "uq_rh_bh_tenant_idempotency",
+      "table": "rh_banco_horas"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "ponto_id",
+        "colaborador_id",
+        "ciclo_chave"
+      ],
+      "index": "uk_ronda_registro_ponto_ciclo",
+      "table": "ronda_registros"
+    },
+    {
+      "columns": [
+        "tenant_id",
+        "arquivo_id",
+        "modulo",
+        "registro_id",
+        "campo_origem"
+      ],
+      "index": "uk_referencia_arquivo",
+      "table": "tenant_arquivo_referencias"
+    },
+    {
+      "columns": [
+        "slug"
+      ],
+      "index": "uk_tenant_slug",
+      "table": "tenants"
+    },
+    {
+      "columns": [
+        "projetos_slug"
+      ],
+      "index": "uk_tenants_projetos_slug",
+      "table": "tenants"
+    }
+  ],
+  "unsupported_indexes": []
+}
