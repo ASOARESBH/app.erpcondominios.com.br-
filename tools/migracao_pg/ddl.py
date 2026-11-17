@@ -12,7 +12,7 @@ from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, qu
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "1.3.0"
+GENERATOR_VERSION = "1.4.0"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
 POSTGRES_SEQUENCE_MAX = 9223372036854775807
@@ -133,8 +133,6 @@ def _array_text(columns: list[str]) -> str:
 
 def _identity_sequence_script(fingerprint: str, identity_columns: list[dict[str, Any]]) -> list[str]:
     statements = [f"-- Generator version: {GENERATOR_VERSION}", f"-- Catalog SHA-256: {fingerprint}"]
-    if identity_columns:
-        statements.append("BEGIN;")
     for item in identity_columns:
         table = str(item["table"])
         column = str(item["column"])
@@ -191,8 +189,6 @@ def _identity_sequence_script(fingerprint: str, identity_columns: list[dict[str,
                 "END\n"
                 "$erp_sequence$;"
             )
-    if identity_columns:
-        statements.append("COMMIT;")
     return statements
 
 
