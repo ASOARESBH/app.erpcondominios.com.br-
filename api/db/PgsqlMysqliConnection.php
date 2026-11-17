@@ -16,6 +16,7 @@ final class PgsqlMysqliConnection
 
     private ?PDO $pdo;
     private string $driver;
+    private array $conflictMetadataCache = [];
 
     public function __construct(PDO $pdo)
     {
@@ -30,6 +31,187 @@ final class PgsqlMysqliConnection
     public function driver(): string
     {
         return $this->driver;
+    }
+
+    public function resolveConflictTarget(string $table, array $insertColumns, bool $replace): ?array
+    {
+        if ($this->pdo === null || preg_match('/\A[a-z_][a-z0-9_]*\z/i', $table) !== 1
+            || $insertColumns === []) {
+            return null;
+        }
+        $normalizedColumns = [];
+        foreach ($insertColumns as $column) {
+            if (!is_string($column) || preg_match('/\A[a-z_][a-z0-9_]*\z/i', $column) !== 1) {
+                return null;
+            }
+            $normalizedColumns[] = strtolower($column);
+        }
+        $normalizedColumns = array_values(array_unique($normalizedColumns));
+        $table = strtolower($table);
+        if (!array_key_exists($table, $this->conflictMetadataCache)) {
+            try {
+                $indexesStatement = $this->pdo->prepare(
+                    'SELECT i.indisvalid AS is_valid, i.indisprimary AS is_primary, '
+                    . 'bool_or(i.indpred IS NOT NULL) AS is_partial, i.indisunique AS is_unique, '
+                    . 'i.indimmediate AS is_immediate, i.indisexclusion AS is_exclusion, '
+                    . 'bool_or(att.attnum IS NULL) AS has_expression, '
+                    . 'json_agg(att.attname ORDER BY keypart.ordinality)::text AS columns_json '
+                    . 'FROM pg_catalog.pg_index i '
+                    . 'JOIN pg_catalog.pg_class rel ON rel.oid = i.indrelid '
+                    . 'JOIN pg_catalog.pg_namespace ns ON ns.oid = rel.relnamespace '
+                    . 'CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS keypart(attnum, ordinality) '
+                    . 'LEFT JOIN pg_catalog.pg_attribute att ON att.attrelid = rel.oid '
+                    . 'AND att.attnum = keypart.attnum AND att.attnum > 0 '
+                    . 'WHERE ns.nspname = current_schema() AND rel.relname = :table_name '
+                    . 'AND (i.indisunique OR i.indisexclusion) '
+                    . 'AND keypart.ordinality <= i.indnkeyatts '
+                    . 'GROUP BY i.indexrelid, i.indisvalid, i.indisprimary, '
+                    . 'i.indisunique, i.indimmediate, i.indisexclusion'
+                );
+                if (!$indexesStatement || !$indexesStatement->execute(['table_name' => $table])) {
+                    $this->conflictMetadataCache[$table] = null;
+                    return null;
+                }
+                $indexes = [];
+                foreach ($indexesStatement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $columns = json_decode((string)($row['columns_json'] ?? ''), true);
+                    if (!is_array($columns)) {
+                        continue;
+                    }
+                    $indexes[] = [
+                        'columns' => $columns,
+                        'has_expression' => self::catalogBoolean($row['has_expression'] ?? false),
+                        'is_valid' => self::catalogBoolean($row['is_valid'] ?? false),
+                        'is_partial' => self::catalogBoolean($row['is_partial'] ?? false),
+                        'is_unique' => self::catalogBoolean($row['is_unique'] ?? false),
+                        'is_immediate' => self::catalogBoolean($row['is_immediate'] ?? false),
+                        'is_exclusion' => self::catalogBoolean($row['is_exclusion'] ?? false),
+                    ];
+                }
+
+                $columnsStatement = $this->pdo->prepare(
+                    'SELECT att.attname AS column_name, att.attidentity AS identity_kind '
+                    . 'FROM pg_catalog.pg_attribute att '
+                    . 'JOIN pg_catalog.pg_class rel ON rel.oid = att.attrelid '
+                    . 'JOIN pg_catalog.pg_namespace ns ON ns.oid = rel.relnamespace '
+                    . 'WHERE ns.nspname = current_schema() AND rel.relname = :table_name '
+                    . 'AND att.attnum > 0 AND NOT att.attisdropped AND att.attgenerated = \'\' '
+                    . 'ORDER BY att.attnum'
+                );
+                if (!$columnsStatement || !$columnsStatement->execute(['table_name' => $table])) {
+                    $this->conflictMetadataCache[$table] = null;
+                    return null;
+                }
+                $columns = [];
+                $identityColumns = [];
+                foreach ($columnsStatement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $columnName = $row['column_name'] ?? null;
+                    if (!is_string($columnName)) {
+                        continue;
+                    }
+                    $columns[] = strtolower($columnName);
+                    if (($row['identity_kind'] ?? '') !== '') {
+                        $identityColumns[] = strtolower($columnName);
+                    }
+                }
+                $this->conflictMetadataCache[$table] = [
+                    'indexes' => $indexes,
+                    'columns' => $columns,
+                    'identity_columns' => $identityColumns,
+                ];
+            } catch (\Throwable) {
+                $this->conflictMetadataCache[$table] = null;
+                return null;
+            }
+        }
+
+        $metadata = $this->conflictMetadataCache[$table];
+        if (!is_array($metadata)) {
+            return null;
+        }
+        $uniqueIndexes = array_values(array_filter(
+            $metadata['indexes'],
+            static fn(array $index): bool => ($index['is_unique'] ?? false) || ($index['is_exclusion'] ?? false)
+        ));
+        if (count($uniqueIndexes) !== 1) {
+            return null;
+        }
+        $matches = [];
+        foreach ($uniqueIndexes as $index) {
+            if (($index['is_valid'] ?? false) !== true || ($index['is_partial'] ?? true) !== false
+                || ($index['is_unique'] ?? false) !== true || ($index['is_immediate'] ?? false) !== true
+                || ($index['is_exclusion'] ?? true) !== false || ($index['has_expression'] ?? true) !== false) {
+                return null;
+            }
+            $keyColumns = $index['columns'] ?? null;
+            if (!is_array($keyColumns) || $keyColumns === []
+                || count(array_filter($keyColumns, 'is_string')) !== count($keyColumns)) {
+                continue;
+            }
+            $normalizedKey = array_map('strtolower', $keyColumns);
+            if (count(array_diff($normalizedKey, $normalizedColumns)) === 0) {
+                $matches[implode("\0", $normalizedKey)] = $normalizedKey;
+            }
+        }
+        if (count($matches) !== 1 || ($replace && ($metadata['identity_columns'] ?? []) !== [])) {
+            return null;
+        }
+        return [
+            'target' => array_values(reset($matches)),
+            'replace_columns' => $replace ? $metadata['columns'] : [],
+        ];
+    }
+
+    public function resolveRuntimeObject(string $kind, ?string $schema, string $table, ?string $column): bool
+    {
+        if ($this->pdo === null || !in_array($kind, ['table', 'column', 'index', 'unique_index'], true)
+            || preg_match('/\A[a-z_][a-z0-9_]*\z/i', $table) !== 1
+            || ($schema !== null && preg_match('/\A[a-z_][a-z0-9_]*\z/i', $schema) !== 1)
+            || ($kind === 'column' && (!is_string($column) || preg_match('/\A[a-z_][a-z0-9_]*\z/i', $column) !== 1))) {
+            return false;
+        }
+        try {
+            $schemaStatement = $this->pdo->query('SELECT current_schema()');
+            $currentSchema = $schemaStatement?->fetchColumn();
+            if (!is_string($currentSchema) || ($schema !== null && $schema !== $currentSchema)) {
+                return false;
+            }
+            $sql = $kind === 'table'
+                ? 'SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_class c '
+                    . 'JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace '
+                    . 'WHERE n.nspname = :schema_name AND c.relname = :table_name '
+                    . 'AND c.relkind IN (\'r\', \'p\', \'v\', \'m\', \'f\'))'
+                : ($kind === 'column'
+                    ? 'SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute a '
+                    . 'JOIN pg_catalog.pg_class c ON c.oid = a.attrelid '
+                    . 'JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace '
+                    . 'WHERE n.nspname = :schema_name AND c.relname = :table_name '
+                    . 'AND a.attname = :column_name AND a.attnum > 0 '
+                    . 'AND NOT a.attisdropped)'
+                    : 'SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_index i '
+                        . 'JOIN pg_catalog.pg_class t ON t.oid = i.indrelid '
+                        . 'JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace '
+                        . 'JOIN pg_catalog.pg_class x ON x.oid = i.indexrelid '
+                        . 'WHERE n.nspname = :schema_name AND t.relname = :table_name '
+                        . 'AND x.relname = :column_name AND i.indisvalid AND i.indisready'
+                        . ($kind === 'unique_index' ? ' AND i.indisunique' : '') . ')');
+            $statement = $this->pdo->prepare($sql);
+            $parameters = ['schema_name' => $currentSchema, 'table_name' => $table];
+            if ($kind !== 'table') {
+                $parameters['column_name'] = (string)$column;
+            }
+            if (!$statement || !$statement->execute($parameters)) {
+                return false;
+            }
+            return self::catalogBoolean($statement->fetchColumn());
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private static function catalogBoolean(mixed $value): bool
+    {
+        return $value === true || $value === 1 || in_array(strtolower((string)$value), ['1', 't', 'true', 'yes', 'on'], true);
     }
 
     public function clientInfo(): string

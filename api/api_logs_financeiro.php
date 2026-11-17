@@ -150,22 +150,22 @@ function _resumo() {
     $kpis_24h = [];
     $res = $conn->query("SELECT nivel, COUNT(*) as qtd FROM logs_financeiro
                          WHERE criado_em >= NOW() - INTERVAL 24 HOUR
-                         GROUP BY nivel ORDER BY FIELD(nivel,'CRITICO','ERRO','AVISO','INFO','DEBUG')");
+                         GROUP BY nivel ORDER BY CASE nivel WHEN 'CRITICO' THEN 1 WHEN 'ERRO' THEN 2 WHEN 'AVISO' THEN 3 WHEN 'INFO' THEN 4 WHEN 'DEBUG' THEN 5 ELSE 0 END");
     while ($r = $res->fetch_assoc()) $kpis_24h[$r['nivel']] = (int)$r['qtd'];
 
     $kpis_7d = [];
     $res = $conn->query("SELECT nivel, COUNT(*) as qtd FROM logs_financeiro
                          WHERE criado_em >= NOW() - INTERVAL 7 DAY
-                         GROUP BY nivel ORDER BY FIELD(nivel,'CRITICO','ERRO','AVISO','INFO','DEBUG')");
+                         GROUP BY nivel ORDER BY CASE nivel WHEN 'CRITICO' THEN 1 WHEN 'ERRO' THEN 2 WHEN 'AVISO' THEN 3 WHEN 'INFO' THEN 4 WHEN 'DEBUG' THEN 5 ELSE 0 END");
     while ($r = $res->fetch_assoc()) $kpis_7d[$r['nivel']] = (int)$r['qtd'];
 
     // Por módulo (últimos 7 dias)
     $por_modulo = [];
     $res = $conn->query("SELECT modulo,
-                                SUM(nivel='CRITICO') as criticos,
-                                SUM(nivel='ERRO')    as erros,
-                                SUM(nivel='AVISO')   as avisos,
-                                SUM(nivel='INFO')    as infos,
+                                SUM(CASE WHEN nivel='CRITICO' THEN 1 WHEN nivel IS NOT NULL THEN 0 ELSE NULL END) as criticos,
+                                SUM(CASE WHEN nivel='ERRO' THEN 1 WHEN nivel IS NOT NULL THEN 0 ELSE NULL END) as erros,
+                                SUM(CASE WHEN nivel='AVISO' THEN 1 WHEN nivel IS NOT NULL THEN 0 ELSE NULL END) as avisos,
+                                SUM(CASE WHEN nivel='INFO' THEN 1 WHEN nivel IS NOT NULL THEN 0 ELSE NULL END) as infos,
                                 COUNT(*)             as total,
                                 MAX(criado_em)       as ultimo
                          FROM logs_financeiro
@@ -185,8 +185,8 @@ function _resumo() {
     // Timeline últimas 24h (por hora)
     $timeline = [];
     $res = $conn->query("SELECT DATE_FORMAT(criado_em, '%H:00') as hora,
-                                SUM(nivel='ERRO' OR nivel='CRITICO') as erros,
-                                SUM(nivel='AVISO') as avisos,
+                                SUM(CASE WHEN nivel IN ('ERRO','CRITICO') THEN 1 WHEN nivel IS NOT NULL THEN 0 ELSE NULL END) as erros,
+                                SUM(CASE WHEN nivel='AVISO' THEN 1 WHEN nivel IS NOT NULL THEN 0 ELSE NULL END) as avisos,
                                 COUNT(*) as total
                          FROM logs_financeiro
                          WHERE criado_em >= NOW() - INTERVAL 24 HOUR

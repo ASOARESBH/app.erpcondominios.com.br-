@@ -207,7 +207,7 @@ function cm_buscar_protocolo_qr(mysqli $conexao, $tenant_id, $codigo) {
              INNER JOIN moradores m ON m.id = p.morador_id AND m.tenant_id = p.tenant_id
              LEFT JOIN unidades u ON u.id = p.unidade_id AND u.tenant_id = p.tenant_id
              WHERE p.tenant_id = ? AND p.codigo_nf = ?
-             ORDER BY FIELD(p.status, 'pendente', 'entregue'), p.data_hora_recebimento DESC LIMIT 1"
+             ORDER BY CASE p.status WHEN 'pendente' THEN 1 WHEN 'entregue' THEN 2 ELSE 0 END, p.data_hora_recebimento DESC LIMIT 1"
         );
         $stmt->bind_param('is', $tenant_id, $codigo);
     }

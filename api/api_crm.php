@@ -117,7 +117,7 @@ if ($metodo === 'GET' && $acao === 'listar') {
             FROM crm_relacionamentos r
             WHERE $sql_where
             ORDER BY
-                FIELD(r.prioridade,'urgente','alta','media','baixa'),
+                CASE r.prioridade WHEN 'urgente' THEN 1 WHEN 'alta' THEN 2 WHEN 'media' THEN 3 WHEN 'baixa' THEN 4 ELSE 0 END,
                 CASE WHEN r.data_limite IS NOT NULL AND r.data_limite > NOW() THEN 0 ELSE 1 END,
                 r.data_limite ASC,
                 r.created_at DESC

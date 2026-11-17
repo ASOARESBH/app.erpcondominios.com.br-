@@ -72,6 +72,22 @@ final class MysqliDropInState
         }
         trigger_error($safeMessage, E_USER_WARNING);
     }
+
+    public static function reportTranslationFailure(string $patternCode): string
+    {
+        if (preg_match('/\A[A-Z0-9_]{1,80}\z/D', $patternCode) !== 1) {
+            $patternCode = 'UNKNOWN_PATTERN';
+        }
+        $safeMessage = 'SQL_NAO_TRADUZIDO:' . $patternCode;
+        error_log($safeMessage);
+        if (self::throwsOnError()) {
+            throw new MysqliCompatSqlException($safeMessage, 1, null, 'HY000');
+        }
+        if (self::reportsErrors()) {
+            trigger_error($safeMessage, E_USER_WARNING);
+        }
+        return $safeMessage;
+    }
 }
 
 final class MysqliDropInBootstrap

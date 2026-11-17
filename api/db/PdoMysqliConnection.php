@@ -14,6 +14,7 @@ require_once __DIR__ . '/PgsqlMysqliStatement.php';
 require_once __DIR__ . '/PgsqlMysqliResult.php';
 require_once __DIR__ . '/PdoMysqliStatement.php';
 require_once __DIR__ . '/PdoMysqliResult.php';
+require_once __DIR__ . '/MysqlToPostgresSqlTranslator.php';
 
 final class PdoMysqliConnection
 {
@@ -88,7 +89,14 @@ final class PdoMysqliConnection
         }
 
         if ($this->selectedDriver === 'pgsql') {
-            $statement = $this->pgsql?->prepare($query);
+            try {
+                $translatedQuery = $this->translatePostgresSql($query);
+            } catch (SqlTranslationException $exception) {
+                $this->setError('SQL_NAO_TRADUZIDO:' . $exception->patternCode, 1);
+                MysqliDropInState::reportTranslationFailure($exception->patternCode);
+                return false;
+            }
+            $statement = $this->pgsql?->prepare($translatedQuery);
             if ($statement === false || $statement === null) {
                 $this->syncPgState();
                 MysqliDropInState::reportFailure($this->error, $this->errno);
@@ -131,7 +139,14 @@ final class PdoMysqliConnection
         }
 
         if ($this->selectedDriver === 'pgsql') {
-            $result = $this->pgsql?->query(self::translateSessionTimezone($query));
+            try {
+                $translatedQuery = $this->translatePostgresSql(self::translateSessionTimezone($query));
+            } catch (SqlTranslationException $exception) {
+                $this->setError('SQL_NAO_TRADUZIDO:' . $exception->patternCode, 1);
+                MysqliDropInState::reportTranslationFailure($exception->patternCode);
+                return false;
+            }
+            $result = $this->pgsql?->query($translatedQuery);
             $this->syncPgState();
             if ($result === false || $result === null) {
                 MysqliDropInState::reportFailure($this->error, $this->errno);
@@ -186,26 +201,38 @@ final class PdoMysqliConnection
         if (!$this->isConnected()) {
             return $this->connectionFailure();
         }
-        if ($this->selectedDriver !== 'mysql') {
-            $this->setError('SQL multi-statement não suportado neste driver.', 1);
-            return self::reportResult(false, $this->error, $this->errno);
-        }
         if ($this->multiQueries !== []) {
             $this->setError('Há resultados multi-query pendentes.', 2014);
             return self::reportResult(false, $this->error, $this->errno);
         }
-        if (!$this->refreshMysqlSqlModeIfNeeded()) {
-            return self::reportResult(false, $this->error, $this->errno);
-        }
-        if (preg_match('/(?<![A-Za-z0-9_])sql_mode(?![A-Za-z0-9_])/i', $query) === 1) {
-            $this->setError('Multi-query com referência a sql_mode não é suportada.', 1);
-            return self::reportResult(false, $this->error, $this->errno);
-        }
 
-        $queries = self::splitMysqlStatements($query, $this->mysqlNoBackslashEscapes);
-        if ($queries === null) {
-            $this->setError('Formato de SQL multi-statement não suportado.', 1);
-            return self::reportResult(false, $this->error, $this->errno);
+        if ($this->selectedDriver === 'mysql') {
+            if (!$this->refreshMysqlSqlModeIfNeeded()) {
+                return self::reportResult(false, $this->error, $this->errno);
+            }
+            if (preg_match('/(?<![A-Za-z0-9_])sql_mode(?![A-Za-z0-9_])/i', $query) === 1) {
+                $this->setError('Multi-query com referência a sql_mode não é suportada.', 1);
+                return self::reportResult(false, $this->error, $this->errno);
+            }
+            $queries = self::splitMysqlStatements($query, $this->mysqlNoBackslashEscapes);
+            if ($queries === null) {
+                $this->setError('Formato de SQL multi-statement não suportado.', 1);
+                return self::reportResult(false, $this->error, $this->errno);
+            }
+        } else {
+            try {
+                $queries = MysqlToPostgresSqlTranslator::translateStatements(
+                    $query,
+                    fn(string $table, array $columns, bool $replace): ?array =>
+                        $this->pgsql?->resolveConflictTarget($table, $columns, $replace),
+                    fn(string $kind, ?string $schema, string $table, ?string $column): bool =>
+                        $this->pgsql?->resolveRuntimeObject($kind, $schema, $table, $column) === true
+                );
+            } catch (SqlTranslationException $exception) {
+                $this->setError('SQL_NAO_TRADUZIDO:' . $exception->patternCode, 1);
+                MysqliDropInState::reportTranslationFailure($exception->patternCode);
+                return false;
+            }
         }
         if ($queries === []) {
             $this->clearError();
@@ -214,7 +241,13 @@ final class PdoMysqliConnection
 
         $this->multiQueries = $queries;
         $this->multiQueryIndex = 0;
-        if (!$this->executeMultiQueryAtIndex()) {
+        try {
+            $executed = $this->executeMultiQueryAtIndex();
+        } catch (Throwable $exception) {
+            $this->resetMultiQueryState();
+            throw $exception;
+        }
+        if (!$executed) {
             $this->resetMultiQueryState();
             return false;
         }
@@ -240,7 +273,13 @@ final class PdoMysqliConnection
             return false;
         }
         $this->multiQueryIndex++;
-        if (!$this->executeMultiQueryAtIndex()) {
+        try {
+            $executed = $this->executeMultiQueryAtIndex();
+        } catch (Throwable $exception) {
+            $this->resetMultiQueryState();
+            throw $exception;
+        }
+        if (!$executed) {
             $this->resetMultiQueryState();
             return false;
         }
@@ -718,6 +757,17 @@ final class PdoMysqliConnection
         return $this->selectedDriver === 'pgsql' ? $this->pgsql !== null && !$this->pgsql->isClosed() : $this->pdo !== null;
     }
 
+    private function translatePostgresSql(string $query): string
+    {
+        return MysqlToPostgresSqlTranslator::translate(
+            $query,
+            fn(string $table, array $columns, bool $replace): ?array =>
+                $this->pgsql?->resolveConflictTarget($table, $columns, $replace),
+            fn(string $kind, ?string $schema, string $table, ?string $column): bool =>
+                $this->pgsql?->resolveRuntimeObject($kind, $schema, $table, $column) === true
+        );
+    }
+
     private function connectionFailure(): false
     {
         $this->setError('Conexão indisponível.', $this->connect_errno > 0 ? $this->connect_errno : 2006);
@@ -747,13 +797,33 @@ final class PdoMysqliConnection
     private function executeMultiQueryAtIndex(): bool
     {
         $query = $this->multiQueries[$this->multiQueryIndex] ?? null;
-        if (!is_string($query) || $this->pdo === null) {
+        if (!is_string($query)) {
             $this->setError('Consulta multi-statement indisponível.', 2006);
             return false;
         }
         $this->multiQueryResult = null;
         $this->affected_rows = 0;
         $this->insert_id = 0;
+
+        if ($this->selectedDriver === 'pgsql') {
+            $result = $this->pgsql?->query($query);
+            $this->syncPgState();
+            if ($result === false || $result === null) {
+                MysqliDropInState::reportFailure($this->error, $this->errno);
+                return false;
+            }
+            if ($result instanceof PgsqlMysqliResult) {
+                $rows = $result->allRows();
+                $this->affected_rows = count($rows);
+                $this->multiQueryResult = new PdoMysqliResult($rows, $result->field_count);
+            }
+            return true;
+        }
+
+        if ($this->pdo === null) {
+            $this->setError('Consulta multi-statement indisponível.', 2006);
+            return false;
+        }
         try {
             $statement = $this->pdo->query($query);
             if (!$statement instanceof PDOStatement) {

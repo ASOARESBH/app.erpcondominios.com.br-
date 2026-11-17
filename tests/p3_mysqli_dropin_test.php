@@ -83,6 +83,8 @@ final class DropInFakePdoStatement extends PDOStatement
         } elseif ($normalizedQuery === 'SET SESSION sql_mode = ?') {
             $this->owner->sqlMode = (string)($capturedBindings[1] ?? '');
             $this->rows = [];
+        } elseif ($this->query === 'SELECT current_schema()') {
+            $this->rows = [['current_schema' => $this->owner->currentSchema]];
         } elseif ($this->query === 'SELECT @@SESSION.sql_mode AS sql_mode') {
             $this->rows = [['sql_mode' => $this->owner->sqlMode]];
         } elseif (str_contains($this->query, 'pg_get_serial_sequence')) {
@@ -92,6 +94,25 @@ final class DropInFakePdoStatement extends PDOStatement
             ]];
         } elseif (str_contains($this->query, ' AS insert_id')) {
             $this->rows = [['insert_id' => $this->owner->insertedRowId]];
+        } elseif (str_contains($this->query, 'pg_catalog.pg_index') && str_contains($this->query, 'column_name')) {
+            $key = (str_contains($this->query, 'AND i.indisunique') ? 'unique_index:' : 'index:')
+                . (string)($capturedBindings['schema_name'] ?? '') . ':'
+                . (string)($capturedBindings['table_name'] ?? '') . ':'
+                . (string)($capturedBindings['column_name'] ?? '');
+            $this->rows = [['exists' => !empty($this->owner->runtimeObjects[$key]) ? 't' : 'f']];
+        } elseif (str_contains($this->query, 'i.indisunique') && str_contains($this->query, 'columns_json')) {
+            $this->rows = $this->owner->conflictIndexes;
+        } elseif (str_contains($this->query, 'att.attidentity')) {
+            $this->rows = $this->owner->conflictColumns;
+        } elseif (str_contains($this->query, 'pg_catalog.pg_attribute') && str_contains($this->query, 'column_name')) {
+            $key = 'column:' . (string)($capturedBindings['schema_name'] ?? '') . ':'
+                . (string)($capturedBindings['table_name'] ?? '') . ':'
+                . (string)($capturedBindings['column_name'] ?? '');
+            $this->rows = [['exists' => !empty($this->owner->runtimeObjects[$key]) ? 't' : 'f']];
+        } elseif (str_contains($this->query, 'pg_catalog.pg_class') && str_contains($this->query, 'table_name')) {
+            $key = 'table:' . (string)($capturedBindings['schema_name'] ?? '') . ':'
+                . (string)($capturedBindings['table_name'] ?? '');
+            $this->rows = [['exists' => !empty($this->owner->runtimeObjects[$key]) ? 't' : 'f']];
         } else {
             $this->rows = $this->owner->rowsByQuery[$this->query] ?? [];
         }
@@ -157,6 +178,7 @@ final class DropInFakePdo extends PDO
     public array $lastBindings = [];
     public array $lastBindingTypes = [];
     public array $queryCalls = [];
+    public array $preparedQueries = [];
     public int $affectedRows = 1;
     public array $transactionEvents = [];
     public ?string $transactionFailure = null;
@@ -165,6 +187,10 @@ final class DropInFakePdo extends PDO
     public string $sequenceName = 'public.synthetic_id_seq';
     public string $primaryKeyColumn = 'id';
     public string $insertedRowId = '23';
+    public string $currentSchema = 'erp';
+    public array $conflictIndexes = [];
+    public array $conflictColumns = [];
+    public array $runtimeObjects = [];
     public ?string $queryFailure = null;
     public ?string $prepareFailure = null;
 
@@ -183,6 +209,7 @@ final class DropInFakePdo extends PDO
 
     public function prepare(string $query, array $options = []): PDOStatement|false
     {
+        $this->preparedQueries[] = $query;
         if ($this->prepareFailure === $query) {
             $exception = new PDOException('synthetic raw driver detail');
             $exception->errorInfo = ['HY000', 1064, 'synthetic-secret detail'];
@@ -510,7 +537,32 @@ if (($argv[1] ?? '') === '--child-install') {
 
     $pdo = new DropInFakePdo();
     $pdo->rowsByQuery['SELECT ? AS valor'] = [['valor' => '19']];
+    $pdo->conflictIndexes = [[
+        'is_valid' => 't', 'is_primary' => 't', 'is_partial' => 'f', 'is_unique' => 't',
+        'is_immediate' => 't', 'is_exclusion' => 'f', 'has_expression' => 'f', 'columns_json' => '["ano"]',
+    ]];
+    $pdo->conflictColumns = [
+        ['column_name' => 'ano', 'identity_kind' => ''],
+        ['column_name' => 'ultimo', 'identity_kind' => ''],
+    ];
+    $pdo->runtimeObjects = [
+        'table:erp:configuracao_smtp' => true,
+        'column:erp:configuracao_smtp:host' => true,
+        'index:erp:os_chamados:idx_os_tenant_unidade' => true,
+        'unique_index:erp:departamentos:uk_tenant_nome' => true,
+    ];
     $innerConnection = new PgsqlMysqliConnection($pdo);
+    assertDropIn(!$innerConnection->resolveRuntimeObject('unique_index', null, 'os_chamados', 'idx_os_tenant_unidade'),
+        'Um índice comum não deve satisfazer lookup de índice único.');
+    assertDropIn(!$innerConnection->resolveRuntimeObject('unique_index', 'public', 'departamentos', 'uk_tenant_nome'),
+        'DDL runtime qualificado fora do current_schema deve falhar fechado.');
+    $pdo->currentSchema = 'ERP';
+    $pdo->runtimeObjects['table:ERP:ConfigTable'] = true;
+    assertDropIn($innerConnection->resolveRuntimeObject('table', 'ERP', 'ConfigTable', null),
+        'Identificadores quoted com caixa original devem resolver no current_schema exato.');
+    assertDropIn(!$innerConnection->resolveRuntimeObject('table', 'erp', 'configtable', null),
+        'Schema qualificado com caixa diferente deve falhar fechado.');
+    $pdo->currentSchema = 'erp';
     $sessionSetup = new ReflectionMethod(PdoMysqliConnection::class, 'configurePostgresSession');
     $sessionSetup->setAccessible(true);
     $pdo->queryCalls = [];
@@ -522,6 +574,50 @@ if (($argv[1] ?? '') === '--child-install') {
     $pgsqlProperty->setValue($pgFacadeConnection, $innerConnection);
     $driverProperty = $connectionReflection->getProperty('selectedDriver');
     $driverProperty->setValue($pgFacadeConnection, 'pgsql');
+    $translatedStatement = $pgFacadeConnection->prepare('SELECT IFNULL(?, 1) AS valor');
+    assertDropIn($translatedStatement instanceof mysqli_stmt, 'SQL legado suportado deveria continuar preparando no PostgreSQL.');
+    assertDropIn(end($pdo->preparedQueries) === 'SELECT COALESCE(?, 1) AS valor', 'prepare PostgreSQL deve entregar SQL traduzido ao PDO.');
+    $pdo->queryCalls = [];
+    $pgFacadeConnection->query('SELECT NOW()');
+    assertDropIn($pdo->queryCalls === ['SELECT LOCALTIMESTAMP(0)'], 'query PostgreSQL deve entregar SQL traduzido ao PDO.');
+    $pdo->queryCalls = [];
+    assertDropIn($pgFacadeConnection->query('ALTER TABLE configuracao_smtp ADD COLUMN IF NOT EXISTS host VARCHAR(255)') === true,
+        'ALTER ADD COLUMN já coberto pelo DDL versionado deve resultar em no-op PostgreSQL.');
+    assertDropIn(end($pdo->queryCalls) === 'DO $erp_runtime_ddl$ BEGIN NULL; END $erp_runtime_ddl$'
+        && in_array('SELECT current_schema()', $pdo->queryCalls, true),
+        'Runtime DDL no-op deve consultar metadata read-only e executar apenas DO NULL.');
+    $pdo->queryCalls = [];
+    assertDropIn($pgFacadeConnection->query('ALTER TABLE configuracao_smtp ADD COLUMN segredo TEXT') === false,
+        'ALTER ADD COLUMN ausente do DDL versionado deve falhar fechado.');
+    assertDropIn(!in_array('DO $erp_runtime_ddl$ BEGIN NULL; END $erp_runtime_ddl$', $pdo->queryCalls, true)
+        && str_contains($pgFacadeConnection->error, 'MYSQL_RUNTIME_DDL_OBJECT_UNPROVEN'),
+        'Objeto runtime não provado não pode executar SQL nem vazar conteúdo da consulta.');
+    $pdo->queryCalls = [];
+    assertDropIn($pgFacadeConnection->query(
+        'ALTER TABLE os_chamados ADD INDEX idx_os_tenant_unidade (tenant_id, morador_unidade)'
+    ) === true, 'ADD INDEX já presente no catálogo PostgreSQL deve ser um no-op seguro.');
+    assertDropIn(end($pdo->queryCalls) === 'DO $erp_runtime_ddl$ BEGIN NULL; END $erp_runtime_ddl$',
+        'ADD INDEX confirmado deve executar apenas o bloco inerte.');
+    $pdo->queryCalls = [];
+    assertDropIn($pgFacadeConnection->query(
+        'ALTER TABLE departamentos ADD UNIQUE KEY uk_tenant_nome (tenant_id, nome)'
+    ) === true, 'ADD UNIQUE KEY já presente no catálogo PostgreSQL deve ser um no-op seguro.');
+    assertDropIn(end($pdo->queryCalls) === 'DO $erp_runtime_ddl$ BEGIN NULL; END $erp_runtime_ddl$',
+        'ADD UNIQUE KEY confirmado deve executar apenas o bloco inerte.');
+    $pdo->queryCalls = [];
+    assertDropIn($pgFacadeConnection->multi_query('ALTER TABLE configuracao_smtp ADD COLUMN host TEXT; SELECT 7'),
+        'multi_query deve aceitar runtime DDL comprovado e encaminhar o restante pela ordem original.');
+    assertDropIn(end($pdo->queryCalls) === 'DO $erp_runtime_ddl$ BEGIN NULL; END $erp_runtime_ddl$'
+        && mysqli_next_result($pgFacadeConnection)
+        && end($pdo->queryCalls) === 'SELECT 7',
+        'multi_query deve executar apenas no-op verificado e depois o statement seguinte.');
+    assertDropIn(!mysqli_more_results($pgFacadeConnection), 'multi_query runtime DDL deve limpar o estado após o último statement.');
+    $preparedCount = count($pdo->preparedQueries);
+    assertDropIn($pgFacadeConnection->prepare("SELECT DATE_FORMAT(criado, '%r')") === false, 'prepare deve recusar especificador MySQL ainda não traduzido.');
+    assertDropIn(count($pdo->preparedQueries) === $preparedCount, 'SQL recusado não deve chegar ao PDO.');
+    $queryCount = count($pdo->queryCalls);
+    assertDropIn($pgFacadeConnection->query("SELECT DATE_FORMAT(criado, '%r')") === false, 'query deve recusar especificador MySQL ainda não traduzido.');
+    assertDropIn(count($pdo->queryCalls) === $queryCount, 'query recusada não deve chegar ao PDO.');
     $wrappedStatement = mysqli_prepare($pgFacadeConnection, 'SELECT ? AS valor');
     assertDropIn($wrappedStatement instanceof mysqli_stmt, 'Statement deve satisfazer identidade mysqli_stmt.');
     assertDropIn(acceptsMysqliStatementType($wrappedStatement), 'Type hint mysqli_stmt deve aceitar a facade do statement.');
@@ -539,6 +635,25 @@ if (($argv[1] ?? '') === '--child-install') {
     assertDropIn(mysqli_stmt_execute($insertStatement), 'INSERT PostgreSQL sem RETURNING deve ser executado.');
     assertDropIn(mysqli_insert_id($pgFacadeConnection) === 23, 'mysqli_insert_id PostgreSQL deve usar a PK retornada internamente para INSERT simples.');
     assertDropIn($insertStatement->field_count === 0 && mysqli_stmt_get_result($insertStatement) === false, 'RETURNING auxiliar do adapter não deve aparecer como resultset público.');
+    $upsertStatement = $pgFacadeConnection->prepare(
+        'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE ultimo=VALUES(ultimo)+1'
+    );
+    assertDropIn($upsertStatement instanceof mysqli_stmt, 'Upsert com alvo único real do catálogo deve preparar pela fachada.');
+    assertDropIn(
+        end($pdo->preparedQueries) === 'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON CONFLICT ("ano") DO UPDATE SET ultimo = EXCLUDED.ultimo+1',
+        'Fachada deve resolver a PK/UNIQUE a partir do catálogo PostgreSQL e preservar VALUES(coluna).'
+    );
+    assertDropIn(substr_count((string)end($pdo->preparedQueries), '?') === 2, 'Tradução do upsert não pode duplicar nem remover placeholders.');
+    $pdo->conflictIndexes[] = [
+        'is_valid' => 't', 'is_primary' => 'f', 'is_partial' => 'f', 'is_unique' => 't',
+        'is_immediate' => 't', 'is_exclusion' => 'f', 'has_expression' => 'f', 'columns_json' => '["ano","ultimo"]',
+    ];
+    $ambiguousUpsertSql = 'INSERT INTO crm_sequencia_ambiguous (ano, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE ultimo=VALUES(ultimo)';
+    assertDropIn(
+        $pgFacadeConnection->prepare($ambiguousUpsertSql) === false,
+        'Upsert com mais de um índice único possível deve falhar fechado.'
+    );
+    assertDropIn(!in_array($ambiguousUpsertSql, $pdo->preparedQueries, true), 'SQL do upsert ambíguo não deve ser preparado para execução.');
 
     $mysqlPdo = new DropInFakePdo('mysql');
     $mysqlPdo->rowsByQuery['SELECT ? AS valor'] = [['valor' => '31']];
@@ -550,6 +665,14 @@ if (($argv[1] ?? '') === '--child-install') {
     $pdoProperty = $connectionReflection->getProperty('pdo');
     $pdoProperty->setValue($mysqlConnection, $mysqlPdo);
     $driverProperty->setValue($mysqlConnection, 'mysql');
+    $mysqlConnection->prepare('SELECT IFNULL(?, 1) AS valor');
+    assertDropIn(end($mysqlPdo->preparedQueries) === 'SELECT IFNULL(?, 1) AS valor', 'prepare MySQL deve preservar o SQL original.');
+    $mysqlUpsertSql = 'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE ultimo=VALUES(ultimo)';
+    $mysqlConnection->prepare($mysqlUpsertSql);
+    assertDropIn(end($mysqlPdo->preparedQueries) === $mysqlUpsertSql, 'prepare MySQL deve preservar ON DUPLICATE KEY sem passar pelo tradutor PostgreSQL.');
+    $mysqlReplaceSql = 'REPLACE INTO crm_sequencia (ano, ultimo) VALUES (?, ?)';
+    $mysqlConnection->prepare($mysqlReplaceSql);
+    assertDropIn(end($mysqlPdo->preparedQueries) === $mysqlReplaceSql, 'prepare MySQL deve preservar REPLACE INTO legado.');
     assertDropIn($mysqlConnection->begin_transaction() && $mysqlConnection->commit() && $mysqlConnection->rollback(), 'Transações procedural MySQL deveriam delegar ao PDO.');
     assertDropIn($mysqlPdo->transactionEvents === ['begin', 'commit', 'rollback'], 'Ordem e quantidade de operações transacionais incorretas.');
     $mysqlPdo->transactionFailure = 'begin';
@@ -694,7 +817,67 @@ if (($argv[1] ?? '') === '--child-install') {
     assertDropIn(mysqli_next_result($mysqlConnection) === false && !mysqli_more_results($mysqlConnection), 'Falha intermediária deve encerrar a sequência sem deixar resultados pendentes.');
     assertDropIn($mysqlConnection->error !== '' && !str_contains($mysqlConnection->error, 'synthetic-secret'), 'Erro intermediário deve ser preservado apenas em forma sanitizada.');
     $mysqlPdo->queryFailure = null;
-    assertDropIn($pgFacadeConnection->multi_query('SELECT 1') === false, 'multi_query deve falhar fechado no driver PostgreSQL.');
+    $pdo->queryCalls = [];
+    assertDropIn($pgFacadeConnection->query("SELECT SUM(status = 'open')") !== false, 'SUM boolean via facade PostgreSQL deve chegar ao PDO como expressão numérica.');
+    assertDropIn($pdo->queryCalls === ["SELECT SUM(CASE status = 'open' WHEN TRUE THEN 1 WHEN FALSE THEN 0 ELSE NULL END)"], 'Facade deve traduzir SUM(boolean) antes do PDO.');
+    $pdo->preparedQueries = [];
+    $preparedSum = $pgFacadeConnection->prepare('SELECT SUM(status = ?) FROM synthetic');
+    assertDropIn($preparedSum instanceof mysqli_stmt, 'prepare de SUM(boolean) deve retornar o statement compatível.');
+    assertDropIn($pdo->preparedQueries === ['SELECT SUM(CASE status = ? WHEN TRUE THEN 1 WHEN FALSE THEN 0 ELSE NULL END) FROM synthetic']
+        && substr_count($pdo->preparedQueries[0], '?') === 1, 'Facade deve preservar um único placeholder em SUM(boolean) preparado.');
+    $pdo->queryCalls = [];
+    assertDropIn($pgFacadeConnection->multi_query('SELECT NOW(); SELECT IFNULL(1, 0)'), 'multi_query PostgreSQL deve iniciar a sequência traduzida.');
+    assertDropIn($pdo->queryCalls === ['SELECT LOCALTIMESTAMP(0)'], 'multi_query PG deve executar somente o primeiro statement antes de next_result.');
+    assertDropIn(mysqli_more_results($pgFacadeConnection) && mysqli_next_result($pgFacadeConnection), 'multi_query PG deve avançar para o segundo statement.');
+    assertDropIn($pdo->queryCalls === ['SELECT LOCALTIMESTAMP(0)', 'SELECT COALESCE(1, 0)'], 'multi_query PG deve traduzir cada statement antes do PDO.');
+    assertDropIn(!mysqli_more_results($pgFacadeConnection), 'multi_query PG deve encerrar e limpar o estado após o último statement.');
+    $pdo->conflictIndexes = [[
+        'is_valid' => 't', 'is_primary' => 't', 'is_partial' => 'f', 'is_unique' => 't',
+        'is_immediate' => 't', 'is_exclusion' => 'f', 'has_expression' => 'f', 'columns_json' => '["ano"]',
+    ]];
+    $pdo->queryCalls = [];
+    $multiUpsert = 'INSERT INTO crm_sequencia_multi (ano, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE ultimo=VALUES(ultimo)';
+    assertDropIn($pgFacadeConnection->multi_query($multiUpsert . '; SELECT 9'), 'multi_query deve aceitar upsert somente após resolver o índice único PostgreSQL.');
+    assertDropIn(
+        $pdo->queryCalls === ['INSERT INTO crm_sequencia_multi (ano, ultimo) VALUES (?, ?) ON CONFLICT ("ano") DO UPDATE SET ultimo = EXCLUDED.ultimo'],
+        'multi_query deve executar o primeiro upsert traduzido antes de avançar ao próximo statement.'
+    );
+    assertDropIn(mysqli_next_result($pgFacadeConnection), 'multi_query deve avançar depois do upsert traduzido.');
+    assertDropIn($pdo->queryCalls === [
+        'INSERT INTO crm_sequencia_multi (ano, ultimo) VALUES (?, ?) ON CONFLICT ("ano") DO UPDATE SET ultimo = EXCLUDED.ultimo',
+        'SELECT 9',
+    ], 'multi_query deve preservar a ordem de execução após o upsert traduzido.');
+    assertDropIn(!mysqli_more_results($pgFacadeConnection), 'multi_query deve limpar a fila após o statement posterior ao upsert.');
+    $pdo->queryCalls = [];
+    assertDropIn($pgFacadeConnection->multi_query('UPDATE accounts SET locked = TRUE /*! WHERE id = 42 */') === false,
+        'multi_query deve recusar comentário executável antes de executar qualquer statement.');
+    assertDropIn($pdo->queryCalls === [] && str_starts_with($pgFacadeConnection->error, 'SQL_NAO_TRADUZIDO:'),
+        'SQL não traduzido deve falhar fechado e preservar apenas o código do padrão.');
+    $pdo->queryFailure = 'SELECT failing';
+    mysqli_report(MYSQLI_REPORT_STRICT);
+    assertDropIn($pgFacadeConnection->multi_query('SELECT 1; SELECT failing; SELECT 3'), 'multi_query deve executar o primeiro statement antes da falha seguinte.');
+    $multiQueryStrictException = null;
+    try {
+        $pgFacadeConnection->next_result();
+    } catch (mysqli_sql_exception $exception) {
+        $multiQueryStrictException = $exception;
+    }
+    assertDropIn($multiQueryStrictException instanceof mysqli_sql_exception && !$pgFacadeConnection->more_results(),
+        'Falha de next_result em strict deve limpar estado pendente da sequência.');
+    $pdo->queryFailure = null;
+    mysqli_report(MYSQLI_REPORT_STRICT);
+    $translationException = null;
+    try {
+        $pgFacadeConnection->query("SELECT DATE_FORMAT(created_at, '%r')");
+    } catch (mysqli_sql_exception $exception) {
+        $translationException = $exception;
+    }
+    assertDropIn($translationException instanceof mysqli_sql_exception
+        && str_starts_with($translationException->getMessage(), 'SQL_NAO_TRADUZIDO:MYSQL_DATE_FORMAT_SPECIFIER_UNSUPPORTED')
+        && !str_contains($translationException->getMessage(), 'created_at'),
+        'modo strict deve lançar código SQL_NAO_TRADUZIDO sem incluir SQL ou valores.');
+    mysqli_report(MYSQLI_REPORT_OFF);
+    echo "PASS integração do tradutor PostgreSQL via prepare/query/multi_query e strict mode\n";
     $mysqlPdo->rowsByQuery['SELECT left_col, right_col'] = [['left_col' => 'alpha', 'right_col' => 'beta']];
     $boundResultStatement = mysqli_prepare($mysqlConnection, 'SELECT left_col, right_col');
     assertDropIn(mysqli_stmt_execute($boundResultStatement), 'SELECT sem parâmetros deve executar em PDO MySQL.');
@@ -915,6 +1098,7 @@ try {
     [$status, $stdout] = runChild(['--child-install', $configs['mysql']]);
     assertDropIn($status === 0, 'Processo sem mysqli deveria instalar aliases; saída de erro não é reproduzida por segurança.');
     assertDropIn(str_contains($stdout, 'PASS aliases, constantes, funções procedurais, bindings e resultsets sem mysqli'), 'Processo sem mysqli não confirmou o contrato procedural.');
+    assertDropIn(str_contains($stdout, 'PASS integração do tradutor PostgreSQL via prepare/query/multi_query e strict mode'), 'Processo sem mysqli não confirmou a integração do tradutor na fachada.');
     assertDropIn(str_contains($stdout, 'PASS real_escape_string NO_BACKSLASH_ESCAPES'), 'Escape MySQL sob NO_BACKSLASH_ESCAPES não foi confirmado pelo processo filho.');
     [$status, $stdout] = runChild(['--child-install', $configs['default-mysql']]);
     assertDropIn($status === 0 && str_contains($stdout, 'PASS aliases, constantes, funções procedurais, bindings e resultsets sem mysqli'), 'Ausência do seletor deve manter o default MySQL, sem envolver PostgreSQL.');

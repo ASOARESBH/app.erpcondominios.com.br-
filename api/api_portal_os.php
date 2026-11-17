@@ -215,7 +215,7 @@ switch ($action) {
             LEFT JOIN os_assuntos a ON o.assunto_id = a.id
             WHERE $where_sql
             ORDER BY
-                FIELD(o.status,'aberto','andamento','finalizado','cancelado'),
+                CASE o.status WHEN 'aberto' THEN 1 WHEN 'andamento' THEN 2 WHEN 'finalizado' THEN 3 WHEN 'cancelado' THEN 4 ELSE 0 END,
                 o.data_abertura DESC
             LIMIT ? OFFSET ?
         ");

@@ -1075,8 +1075,8 @@ switch ($acao) {
         $res = $conn->query("
             SELECT UPPER(TRIM(departamento)) as dep,
                    COUNT(*) as total,
-                   SUM(status IN ('aberto','andamento')) as abertas,
-                   SUM(status = 'finalizado') as finalizadas
+                   SUM(CASE WHEN status IN ('aberto','andamento') THEN 1 WHEN status IS NOT NULL THEN 0 ELSE NULL END) as abertas,
+                   SUM(CASE WHEN status = 'finalizado' THEN 1 WHEN status IS NOT NULL THEN 0 ELSE NULL END) as finalizadas
             FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND departamento IS NOT NULL AND TRIM(departamento) != ''
             GROUP BY UPPER(TRIM(departamento))
             ORDER BY total DESC
@@ -1101,9 +1101,9 @@ switch ($acao) {
         $res = $conn->query("
             SELECT MIN(TRIM(COALESCE(NULLIF(TRIM(o.morador_unidade), ''), NULLIF(TRIM(m.unidade), '')))) AS unidade,
                    COUNT(*) as total,
-                   SUM(o.status IN ('aberto','andamento')) as abertas,
-                   SUM(o.status = 'finalizado') as finalizadas,
-                   SUM(o.status = 'cancelado') as canceladas
+                   SUM(CASE WHEN o.status IN ('aberto','andamento') THEN 1 WHEN o.status IS NOT NULL THEN 0 ELSE NULL END) as abertas,
+                   SUM(CASE WHEN o.status = 'finalizado' THEN 1 WHEN o.status IS NOT NULL THEN 0 ELSE NULL END) as finalizadas,
+                   SUM(CASE WHEN o.status = 'cancelado' THEN 1 WHEN o.status IS NOT NULL THEN 0 ELSE NULL END) as canceladas
             FROM os_chamados o
             LEFT JOIN moradores m ON m.tenant_id = o.tenant_id AND m.id = o.morador_id
             WHERE o.tenant_id = $tenant_id AND $os_scope_unidades
@@ -1209,10 +1209,10 @@ switch ($acao) {
                 $sql_rel = "SELECT TRIM(morador_unidade) as unidade,
                     MAX(morador_nome) as morador,
                     COUNT(*) as total_aberto,
-                    SUM(prioridade='urgente') as urgentes,
-                    SUM(prioridade='alta') as altas,
-                    SUM(prioridade='media') as medias,
-                    SUM(prioridade='baixa') as baixas,
+                    SUM(CASE WHEN prioridade='urgente' THEN 1 WHEN prioridade IS NOT NULL THEN 0 ELSE NULL END) as urgentes,
+                    SUM(CASE WHEN prioridade='alta' THEN 1 WHEN prioridade IS NOT NULL THEN 0 ELSE NULL END) as altas,
+                    SUM(CASE WHEN prioridade='media' THEN 1 WHEN prioridade IS NOT NULL THEN 0 ELSE NULL END) as medias,
+                    SUM(CASE WHEN prioridade='baixa' THEN 1 WHEN prioridade IS NOT NULL THEN 0 ELSE NULL END) as baixas,
                     DATE_FORMAT(MIN(data_abertura),'%d/%m/%Y') as abertura_mais_antiga
                 FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND status IN ('aberto','andamento')
                   AND morador_unidade IS NOT NULL AND TRIM(morador_unidade) != ''
@@ -1245,13 +1245,13 @@ switch ($acao) {
                 $sql_rel = "SELECT
                     COALESCE(atendente_nome,'Sem atendente') as atendente,
                     COUNT(*) as total,
-                    SUM(status='finalizado') as finalizadas,
-                    SUM(status IN ('aberto','andamento')) as em_aberto,
-                    SUM(status='cancelado') as canceladas,
+                    SUM(CASE WHEN status='finalizado' THEN 1 WHEN status IS NOT NULL THEN 0 ELSE NULL END) as finalizadas,
+                    SUM(CASE WHEN status IN ('aberto','andamento') THEN 1 WHEN status IS NOT NULL THEN 0 ELSE NULL END) as em_aberto,
+                    SUM(CASE WHEN status='cancelado' THEN 1 WHEN status IS NOT NULL THEN 0 ELSE NULL END) as canceladas,
                     ROUND(AVG(CASE WHEN status='finalizado' AND data_finalizacao IS NOT NULL
                         THEN DATEDIFF(data_finalizacao,data_abertura) END),1) as media_dias,
                     ROUND(SUM(COALESCE(horas_totais,0)),1) as total_horas,
-                    ROUND(SUM(prioridade='urgente')) as urgentes_atendidas
+                    ROUND(SUM(CASE WHEN prioridade='urgente' THEN 1 WHEN prioridade IS NOT NULL THEN 0 ELSE NULL END)) as urgentes_atendidas
                 FROM os_chamados WHERE tenant_id = $tenant_id AND $os_scope AND $wb_str $wu
                 GROUP BY atendente_nome
                 ORDER BY finalizadas DESC, total DESC";
@@ -1261,10 +1261,10 @@ switch ($acao) {
                 $sql_rel = "SELECT
                     COALESCE(NULLIF(UPPER(TRIM(departamento)),''),'Sem departamento') as departamento,
                     COUNT(*) as total,
-                    SUM(status IN ('aberto','andamento')) as em_aberto,
-                    SUM(status='finalizado') as finalizadas,
-                    SUM(status='cancelado') as canceladas,
-                    SUM(prioridade='urgente') as urgentes,
+                    SUM(CASE WHEN status IN ('aberto','andamento') THEN 1 WHEN status IS NOT NULL THEN 0 ELSE NULL END) as em_aberto,
+                    SUM(CASE WHEN status='finalizado' THEN 1 WHEN status IS NOT NULL THEN 0 ELSE NULL END) as finalizadas,
+                    SUM(CASE WHEN status='cancelado' THEN 1 WHEN status IS NOT NULL THEN 0 ELSE NULL END) as canceladas,
+                    SUM(CASE WHEN prioridade='urgente' THEN 1 WHEN prioridade IS NOT NULL THEN 0 ELSE NULL END) as urgentes,
                     ROUND(AVG(CASE WHEN status='finalizado' AND data_finalizacao IS NOT NULL
                         THEN DATEDIFF(data_finalizacao,data_abertura) END),1) as media_dias_resolucao,
                     ROUND(SUM(COALESCE(horas_totais,0)),1) as total_horas
@@ -1288,7 +1288,7 @@ switch ($acao) {
                   AND data_previsao < CURDATE()
                   AND status NOT IN ('finalizado','cancelado')
                   AND $wb5_str $wu
-                ORDER BY dias_atraso DESC, FIELD(prioridade,'urgente','alta','media','baixa')";
+                ORDER BY dias_atraso DESC, CASE prioridade WHEN 'urgente' THEN 1 WHEN 'alta' THEN 2 WHEN 'media' THEN 3 WHEN 'baixa' THEN 4 ELSE 0 END";
                 break;
 
             case 'tempo_resolucao':
@@ -1310,9 +1310,9 @@ switch ($acao) {
                     COALESCE(a.nome,'Sem assunto') as assunto,
                     COALESCE(NULLIF(UPPER(TRIM(o.departamento)),''),'—') as departamento,
                     COUNT(o.id) as total,
-                    SUM(o.status IN ('aberto','andamento')) as em_aberto,
-                    SUM(o.status='finalizado') as finalizadas,
-                    SUM(o.prioridade IN ('urgente','alta')) as alta_prioridade,
+                    SUM(CASE WHEN o.status IN ('aberto','andamento') THEN 1 WHEN o.status IS NOT NULL THEN 0 ELSE NULL END) as em_aberto,
+                    SUM(CASE WHEN o.status='finalizado' THEN 1 WHEN o.status IS NOT NULL THEN 0 ELSE NULL END) as finalizadas,
+                    SUM(CASE WHEN o.prioridade IN ('urgente','alta') THEN 1 WHEN o.prioridade IS NOT NULL THEN 0 ELSE NULL END) as alta_prioridade,
                     ROUND(AVG(CASE WHEN o.status='finalizado' AND o.data_finalizacao IS NOT NULL
                         THEN DATEDIFF(o.data_finalizacao,o.data_abertura) END),1) as media_dias
                 FROM os_chamados o
@@ -1479,7 +1479,7 @@ switch ($acao) {
 
         // Ordenação: abertos primeiro, depois andamento, depois finalizados;
         // dentro de cada grupo, mais recentes primeiro
-        $order = "FIELD(o.status,'aberto','andamento','finalizado','cancelado'), o.id DESC";
+        $order = "CASE o.status WHEN 'aberto' THEN 1 WHEN 'andamento' THEN 2 WHEN 'finalizado' THEN 3 WHEN 'cancelado' THEN 4 ELSE 0 END, o.id DESC";
 
         $sql = "SELECT o.*, a.nome as assunto_nome
                 FROM os_chamados o

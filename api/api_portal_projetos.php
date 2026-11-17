@@ -190,7 +190,7 @@ try {
 
         $sql = "SELECT " . pp_campos_publicos() . " " . pp_from_join() . "
                 WHERE $whereSql
-                ORDER BY FIELD(o.status,'andamento','aberto','finalizado','cancelado'), o.data_previsao IS NULL, o.data_previsao ASC
+                ORDER BY CASE o.status WHEN 'andamento' THEN 1 WHEN 'aberto' THEN 2 WHEN 'finalizado' THEN 3 WHEN 'cancelado' THEN 4 ELSE 0 END, o.data_previsao IS NULL, o.data_previsao ASC
                 LIMIT ? OFFSET ?";
         $params[] = $limit; $params[] = $offset;
         $types .= 'ii';
