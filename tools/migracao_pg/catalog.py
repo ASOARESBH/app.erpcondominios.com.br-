@@ -258,7 +258,7 @@ def _catalog_signature(cursor: Any, schema: str, visibility: dict[str, bool]) ->
     return hashlib.sha256(raw).hexdigest()
 
 
-def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA) -> dict[str, Any]:
+def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapshot: bool = False) -> dict[str, Any]:
     if schema != SOURCE_SCHEMA:
         raise CatalogError("SOURCE_SCHEMA_NOT_ALLOWLISTED")
 
@@ -274,6 +274,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA) -> dict[str
         raise CatalogError("MYSQL_DATABASE_MUST_BE_ERP_PG_SOURCE")
 
     cursor.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
+    completed = False
     try:
         grant_inventory, metadata_visibility, unresolved_role_grants = _source_grant_inventory(cursor, SOURCE_SCHEMA)
         if unresolved_role_grants:
@@ -504,10 +505,12 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA) -> dict[str
         snapshot["structural_fingerprint_sha256"] = hashlib.sha256(structural).hexdigest()
         canonical = json.dumps(snapshot, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         snapshot["fingerprint_sha256"] = hashlib.sha256(canonical).hexdigest()
+        completed = True
         return snapshot
     finally:
         try:
-            connection.rollback()
+            if not keep_snapshot or not completed:
+                connection.rollback()
         finally:
             cursor.close()
 
