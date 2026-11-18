@@ -660,6 +660,10 @@ function _esta_online(?string $ultimo_keep_alive): bool
  */
 function _migration_comunicacao(mysqli $conn): void
 {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+        return;
+    }
+
     $cols = [
         ['fabricante',          "VARCHAR(50) NOT NULL DEFAULT 'controlid'"],
         ['tipo_integracao',     "ENUM('bridge_local','monitor_nativo','manual') NOT NULL DEFAULT 'bridge_local'"],

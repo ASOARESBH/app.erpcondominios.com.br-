@@ -51,6 +51,7 @@ require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 require_once __DIR__ . '/helpers/chatin_helper.php';
+require_once __DIR__ . '/helpers/ged_unidade_order.php';
 
 if (!function_exists('retornar_json')) {
     function retornar_json($sucesso, $mensagem, $dados = null) {
@@ -140,7 +141,41 @@ switch ($acao) {
 // ============================================================
 // CRIAÇÃO AUTOMÁTICA DE TABELAS
 // ============================================================
+function _semear_tipos_padrao_documentos($db) {
+    $rTipos = $db->query("SELECT COUNT(*) c FROM documentos_tipos");
+    if ($rTipos && (int)$rTipos->fetch_assoc()['c'] === 0) {
+        $db->query("INSERT INTO documentos_tipos (nome, descricao, icone, cor) VALUES
+            ('ATA', 'Atas de reuniões e assembleias', 'fas fa-file-signature', '#2563eb'),
+            ('Estatuto', 'Estatuto social e regimento interno', 'fas fa-scroll', '#7c3aed'),
+            ('Nota Fiscal', 'Notas fiscais e documentos fiscais', 'fas fa-file-invoice-dollar', '#059669'),
+            ('Contrato', 'Contratos e aditivos', 'fas fa-file-contract', '#d97706'),
+            ('Comunicado', 'Comunicados e circulares', 'fas fa-bullhorn', '#dc2626'),
+            ('Relatório', 'Relatórios e prestações de contas', 'fas fa-chart-bar', '#0891b2'),
+            ('Regulamento', 'Regulamentos internos', 'fas fa-gavel', '#9333ea'),
+            ('Planta', 'Plantas e projetos', 'fas fa-drafting-compass', '#16a34a'),
+            ('Manual', 'Manuais e instruções', 'fas fa-book', '#ea580c'),
+            ('Outro', 'Outros documentos', 'fas fa-file', '#64748b')
+        ");
+    }
+}
+
 function _criar_tabelas($db) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($db)) {
+        if (\ERP\Database\DatabaseDialect::tableExists($db, 'documentos_departamentos')) {
+            http_response_code(503);
+            retornar_json(false, 'Migração de departamentos do GED pendente; a estrutura deve ser reconciliada antes do uso.');
+        }
+        if (!\ERP\Database\DatabaseDialect::tableExists($db, 'documentos_tipos')) {
+            http_response_code(503);
+            retornar_json(false, 'Schema de tipos do GED não foi provisionado pelo DDL versionado.');
+        }
+        $tipos = $db->query('SELECT 1 FROM documentos_tipos LIMIT 1');
+        if (!$tipos || $tipos->fetch_assoc() === null) {
+            http_response_code(503);
+            retornar_json(false, 'Tipos do GED não foram provisionados; aplique os dados de referência antes do uso.');
+        }
+        return;
+    }
     // Departamentos: cadastro central único (Configurações → Sistema → Departamentos).
     // O GED apenas consome esta tabela — não possui mais cadastro próprio.
     $db->query("CREATE TABLE IF NOT EXISTS `departamentos` (
@@ -290,21 +325,7 @@ function _criar_tabelas($db) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     // Inserir tipos padrão se a tabela estiver vazia
-    $rTipos = $db->query("SELECT COUNT(*) c FROM documentos_tipos");
-    if ($rTipos && (int)$rTipos->fetch_assoc()['c'] === 0) {
-        $db->query("INSERT INTO documentos_tipos (nome, descricao, icone, cor) VALUES
-            ('ATA', 'Atas de reuniões e assembleias', 'fas fa-file-signature', '#2563eb'),
-            ('Estatuto', 'Estatuto social e regimento interno', 'fas fa-scroll', '#7c3aed'),
-            ('Nota Fiscal', 'Notas fiscais e documentos fiscais', 'fas fa-file-invoice-dollar', '#059669'),
-            ('Contrato', 'Contratos e aditivos', 'fas fa-file-contract', '#d97706'),
-            ('Comunicado', 'Comunicados e circulares', 'fas fa-bullhorn', '#dc2626'),
-            ('Relatório', 'Relatórios e prestações de contas', 'fas fa-chart-bar', '#0891b2'),
-            ('Regulamento', 'Regulamentos internos', 'fas fa-gavel', '#9333ea'),
-            ('Planta', 'Plantas e projetos', 'fas fa-drafting-compass', '#16a34a'),
-            ('Manual', 'Manuais e instruções', 'fas fa-book', '#ea580c'),
-            ('Outro', 'Outros documentos', 'fas fa-file', '#64748b')
-        ");
-    }
+    _semear_tipos_padrao_documentos($db);
 
     // Adicionar colunas tipo_id e unidades_acesso se não existirem
     $rCols = $db->query("SHOW COLUMNS FROM documentos LIKE 'tipo_id'");
@@ -1372,9 +1393,10 @@ function _tipo_excluir($db) {
 function _unidades_select($db) {
     global $tenant_id; // corrigido: a função usava $tenant_id fora de escopo (SQL inválido)
     $res = $db->query("SELECT id, nome, bloco FROM unidades WHERE tenant_id = $tenant_id AND ativo = 1
-                       ORDER BY CASE WHEN bloco = 'ADMIN' THEN 9999 ELSE CAST(SUBSTRING_INDEX(nome, ' ', -1) AS UNSIGNED) END ASC, nome ASC");
+                       ORDER BY nome ASC");
     $rows = [];
     if ($res) while ($r = $res->fetch_assoc()) $rows[] = $r;
+    $rows = erpGedOrdenarUnidades($rows);
     retornar_json(true, 'OK', $rows);
 }
 

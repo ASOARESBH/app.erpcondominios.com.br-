@@ -130,7 +130,7 @@ async function carregarDashboard() {
         }
 
         // QR Code
-        _qrUrl = `https://${window.location.hostname}${s.install_url}`;
+        _qrUrl = _safePwaInstallUrl(s.install_url);
         _setText('pwa-qr-url-display', _qrUrl);
         _renderQrCode(_qrUrl);
 
@@ -213,13 +213,13 @@ async function _carregarConfigFirebase() {
         _setCheck('flag-push-urgente',        c.push_urgente_ativo      === '1');
 
         // Service Account status
-        _atualizarStatusSA(c.service_account_existe, c.service_account_email, c.service_account_project);
+        _atualizarStatusSA(c.service_account_existe);
     } catch (e) {
         console.error('[PwaCentral] Erro ao carregar config:', e);
     }
 }
 
-function _atualizarStatusSA(existe, email, project) {
+function _atualizarStatusSA(existe) {
     const area    = document.getElementById('pwa-sa-area');
     const titulo  = document.getElementById('pwa-sa-titulo');
     const desc    = document.getElementById('pwa-sa-desc');
@@ -227,7 +227,7 @@ function _atualizarStatusSA(existe, email, project) {
     if (existe) {
         area.className = 'pwa-sa-area ok';
         if (titulo) titulo.textContent = '✅ Service Account configurado';
-        if (desc) desc.innerHTML = `<strong>${email || '?'}</strong><br>${project || '?'}<br><span style="color:#16a34a;font-size:0.78rem;">Clique para substituir</span>`;
+        if (desc) desc.textContent = 'Conta configurada. Clique para substituir.';
     } else {
         area.className = 'pwa-sa-area';
         if (titulo) titulo.textContent = 'Clique para enviar o Service Account JSON';
@@ -255,8 +255,7 @@ function lerServiceAccount(event) {
                         <span class="pwa-alert-icon">✅</span>
                         <div>
                             <strong>Arquivo válido</strong><br>
-                            Projeto: <code>${_esc(_saJson.project_id)}</code><br>
-                            Email: <code>${_esc(_saJson.client_email)}</code>
+                            A conta de serviço está pronta para envio seguro.
                         </div>
                     </div>
                 `;
@@ -279,7 +278,7 @@ async function salvarServiceAccount() {
         const d = await _post('upload_service_account', { service_account_json: JSON.stringify(_saJson) });
         if (d.sucesso) {
             _toast('Service Account salvo com sucesso!', 'sucesso');
-            _atualizarStatusSA(true, d.dados?.client_email, d.dados?.project_id);
+            _atualizarStatusSA(d.dados?.service_account_existe === true);
             _saJson = null;
             const prev = document.getElementById('pwa-sa-preview');
             if (prev) prev.style.display = 'none';
@@ -389,7 +388,7 @@ async function carregarDispositivos(offset = 0) {
                 <td><strong>${_esc(d.morador_nome || '—')}</strong><br><span style="font-size:0.75rem;color:var(--color-text-secondary);">Unidade ${_esc(d.unidade_numero || '—')}</span></td>
                 <td><span class="pwa-plat-badge ${d.plataforma}">${platIcon[d.plataforma] || ''} ${d.plataforma}</span></td>
                 <td>${_esc(d.device_os || '—')}<br><span style="font-size:0.75rem;color:var(--color-text-secondary);">${_esc(d.device_browser || '—')}</span></td>
-                <td class="pwa-token-preview">${_esc(d.token_preview || '—')}...</td>
+                <td>${Number(d.token_configurado) === 1 ? 'Configurado' : 'Ausente'}</td>
                 <td style="font-size:0.78rem;color:var(--color-text-secondary);">${d.ultimo_uso || d.criado_em || '—'}</td>
                 <td>${d.ativo ? '<span class="pwa-ativo-badge">Ativo</span>' : '<span class="pwa-inativo-badge">Inativo</span>'}</td>
                 <td><div class="pwa-acoes-btn">
@@ -558,19 +557,50 @@ async function _carregarEstatisticas() {
 
 // ── QR CODE ───────────────────────────────────────────────────
 
+function _safePwaInstallUrl(value) {
+    const origin = window.location.origin;
+    const fallback = new URL('/frontend/portal_morador.html', origin).href;
+    const raw = String(value ?? '').trim();
+    if (!raw || raw.startsWith('//') || raw.includes('\\')) return fallback;
+
+    let decoded = raw;
+    try {
+        for (let i = 0; i < 3; i++) {
+            const next = decodeURIComponent(decoded);
+            if (next === decoded) break;
+            decoded = next;
+        }
+    } catch {
+        return fallback;
+    }
+    if (decoded.startsWith('//') || decoded.includes('\\') || /[\u0000-\u0020\u007f]/.test(decoded)) return fallback;
+
+    try {
+        const url = new URL(raw, origin);
+        if (url.origin !== origin || url.username || url.password) return fallback;
+        return url.href;
+    } catch {
+        return fallback;
+    }
+}
+
 async function _renderQrCode(url) {
     const canvas = document.getElementById('pwa-qr-canvas');
     if (!canvas) return;
+    url = _safePwaInstallUrl(url);
     await _carregarQrLib();
-    if (!_qrLib) { canvas.innerHTML = `<a href="${url}" style="font-size:0.8rem;word-break:break-all;">${url}</a>`; return; }
-    canvas.innerHTML = '';
-    _qrLib.toCanvas ? _qrLib.toCanvas(document.createElement('canvas'), url, { width: 200 }, (err, cvs) => { if (!err && cvs) canvas.appendChild(cvs); })
-                    : (canvas.innerHTML = `<img src="${_qrLib.createDataURL ? _qrLib.createDataURL(url) : ''}" style="width:200px">`);
-    // Usar QRCode object se disponível (qrcodejs)
+    canvas.replaceChildren();
     try {
-        canvas.innerHTML = '';
+        if (!window.QRCode) throw new Error('qr_library_unavailable');
         new window.QRCode(canvas, { text: url, width: 200, height: 200, correctLevel: window.QRCode.CorrectLevel.M });
-    } catch {}
+    } catch {
+        const link = document.createElement('a');
+        link.href = url;
+        link.textContent = url;
+        link.style.fontSize = '0.8rem';
+        link.style.wordBreak = 'break-all';
+        canvas.appendChild(link);
+    }
 }
 
 async function _carregarQrLib() {

@@ -11,6 +11,7 @@ readonly RELEASE_ROOT='/var/www/erpcondominios-pg/releases'
 readonly SYSTEM_PATH='/usr/sbin:/usr/bin:/sbin:/bin'
 
 phase='startup'
+runner_started_epoch=$(/usr/bin/date +%s)
 private_tmp=''
 cleanup() {
     local status=$?
@@ -340,10 +341,23 @@ if ! printf '%s' "$preflight_json" | /usr/bin/env -i "PATH=$SYSTEM_PATH" "$pytho
 fi
 
 phase='target-rebuild'
-/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 "$python_bin" -E -B -m tools.migracao_pg.loader load \
+load_result=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 "$python_bin" -E -B -m tools.migracao_pg.loader load \
     --bundle-name "$bundle" \
     --source-defaults-file "$source_defaults_file" \
-    --report-file "$report_file"
+    --report-file "$report_file")
+printf '%s\n' "$load_result"
+
+phase='reconciliation'
+reconciliation_result=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 "$python_bin" -E -B -m tools.migracao_pg.loader reconcile \
+    --bundle-name "$bundle" \
+    --source-defaults-file "$source_defaults_file" \
+    --report-file "$report_file")
+printf '%s\n' "$reconciliation_result"
+if ! printf '%s' "$reconciliation_result" | /usr/bin/env -i "PATH=$SYSTEM_PATH" "$python_bin" -E -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("status") == "RECONCILED" else 1)'; then
+    printf 'REBUILD_ERROR=RECONCILIATION_NOT_ACCEPTED\n' >&2
+    exit 78
+fi
 
 phase='complete'
-printf 'REBUILD_STATUS=LOAD_COMMITTED_PENDING_RECONCILIATION TARGET=%s\n' "$TARGET_DATABASE"
+runner_finished_epoch=$(/usr/bin/date +%s)
+printf 'REBUILD_STATUS=LOAD_RECONCILED TARGET=%s ELAPSED_SECONDS=%s\n' "$TARGET_DATABASE" "$((runner_finished_epoch - runner_started_epoch))"

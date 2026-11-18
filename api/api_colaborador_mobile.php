@@ -13,6 +13,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 require_once __DIR__ . '/helpers/ronda_helper.php';
+require_once __DIR__ . '/helpers/os_numbering.php';
 // O login não depende do módulo de notificações. Em instalações parciais, uma
 // ausência deste helper não pode provocar erro 500 ao autenticar o colaborador.
 $cm_helper_protocolos = __DIR__ . '/helpers/protocol_notification_helper.php';
@@ -151,18 +152,29 @@ function cm_coluna_existe(mysqli $conexao, $tabela, $coluna) {
     return $encontrada;
 }
 
-function cm_numero_os(mysqli $conexao, $tenant_id) {
-    $ano = date('Y');
-    $stmt = $conexao->prepare(
-        "SELECT MAX(CAST(SUBSTRING_INDEX(numero, '-', -1) AS UNSIGNED)) AS ultimo
-         FROM os_chamados WHERE tenant_id = ? AND numero LIKE ?"
-    );
+function cm_reservar_numero_os(mysqli $conexao): array {
+    $ano = (int)date('Y');
+    if (!os_adquirir_lock_numeracao($conexao, $ano)) {
+        throw new RuntimeException('OS_NUMBER_LOCK_FAILED');
+    }
     $like = '%-' . $ano . '-%';
-    $stmt->bind_param('is', $tenant_id, $like);
-    $stmt->execute();
-    $ultimo = (int)($stmt->get_result()->fetch_assoc()['ultimo'] ?? 0);
+    $stmt = $conexao->prepare('SELECT numero FROM os_chamados WHERE numero LIKE ?');
+    if (!$stmt || !$stmt->bind_param('s', $like) || !$stmt->execute()) {
+        if ($stmt) $stmt->close();
+        os_liberar_lock_numeracao($conexao, $ano);
+        throw new RuntimeException('OS_NUMBER_LOOKUP_FAILED');
+    }
+    $result = $stmt->get_result();
+    if (!$result) {
+        $stmt->close();
+        os_liberar_lock_numeracao($conexao, $ano);
+        throw new RuntimeException('OS_NUMBER_LOOKUP_FAILED');
+    }
+    $numeros = $result->fetch_all(MYSQLI_ASSOC);
+    $result->free();
     $stmt->close();
-    return 'OS-' . $ano . '-' . str_pad((string)($ultimo + 1), 4, '0', STR_PAD_LEFT);
+    $sequencia = os_sequencia_numero_anual($numeros, $ano);
+    return ['ano' => $ano, 'numero' => os_formatar_numero_anual($ano, $sequencia, 'OS-')];
 }
 
 function cm_calcular_valor_agua($consumo) {
@@ -739,7 +751,7 @@ switch ($acao) {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'usuario', ?, ?)"
         );
         if (!$stmt) cm_json(false, 'Não foi possível preparar o lançamento da leitura.', null, 503);
-        $stmt->bind_param('isiisddddddssiss', $tenant_id, $client_uuid, $hidrometro_id, $hidrometro['morador_id'], $hidrometro['unidade'], $anterior, $leitura_atual, $consumo, $valor_mc, $valor_min, $valor_total, $data_leitura, $observacao, $usuario_id, $usuario['nome']);
+        $stmt->bind_param('isiisddddddssis', $tenant_id, $client_uuid, $hidrometro_id, $hidrometro['morador_id'], $hidrometro['unidade'], $anterior, $leitura_atual, $consumo, $valor_mc, $valor_min, $valor_total, $data_leitura, $observacao, $usuario_id, $usuario['nome']);
         if (!$stmt->execute()) { $stmt->close(); cm_json(false, 'Não foi possível registrar a leitura.', null, 500); }
         $leitura_id = (int)$conexao->insert_id; $stmt->close();
         $foto_vinculada = false;
@@ -796,6 +808,11 @@ switch ($acao) {
 
     case 'abrir_chamado':
         if ($metodo !== 'POST') cm_json(false, 'Método não permitido.', null, 405);
+        foreach ([['os_chamados', 'tenant_id'], ['os_assuntos', 'tenant_id'], ['os_interacoes', 'tenant_id']] as [$tabela, $coluna]) {
+            if (!cm_coluna_existe($conexao, $tabela, $coluna)) {
+                cm_json(false, 'A estrutura multi-condomínio de chamados não está pronta.', null, 503);
+            }
+        }
         $titulo = trim((string)($dados['titulo'] ?? ''));
         $descricao = trim((string)($dados['descricao'] ?? ''));
         $assunto_id = (int)($dados['assunto_id'] ?? 0);
@@ -803,22 +820,56 @@ switch ($acao) {
         $prioridade = trim((string)($dados['prioridade'] ?? 'media'));
         if ($titulo === '' || mb_strlen($titulo) > 200 || $descricao === '') cm_json(false, 'Informe título e descrição do chamado.');
         if (!in_array($prioridade, ['baixa', 'media', 'alta', 'urgente'], true)) $prioridade = 'media';
-        if ($assunto_id > 0 && $departamento === '') {
-            $stmt = $conexao->prepare('SELECT departamento FROM os_assuntos WHERE id = ? AND ativo = 1 LIMIT 1');
-            $stmt->bind_param('i', $assunto_id); $stmt->execute();
-            $departamento = (string)($stmt->get_result()->fetch_assoc()['departamento'] ?? ''); $stmt->close();
+        if ($assunto_id > 0) {
+            $stmt = $conexao->prepare('SELECT departamento FROM os_assuntos WHERE id = ? AND tenant_id = ? AND ativo = 1 LIMIT 1');
+            if (!$stmt || !$stmt->bind_param('ii', $assunto_id, $tenant_id) || !$stmt->execute()) {
+                if ($stmt) $stmt->close();
+                cm_json(false, 'Não foi possível validar o assunto no condomínio atual.', null, 503);
+            }
+            $assunto = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (!$assunto) cm_json(false, 'Assunto não encontrado no condomínio atual.', null, 404);
+            $departamento = (string)($assunto['departamento'] ?? '');
         }
-        $numero = cm_numero_os($conexao, $tenant_id);
-        $stmt = $conexao->prepare(
-            "INSERT INTO os_chamados (tenant_id, numero, titulo, assunto_id, departamento, prioridade, status, descricao, origem_portal, criado_por_id, criado_por_nome)
-             VALUES (?, ?, ?, NULLIF(?, 0), ?, ?, 'aberto', ?, 'portal_colaborador', ?, ?)"
-        );
-        $stmt->bind_param('ississsis', $tenant_id, $numero, $titulo, $assunto_id, $departamento, $prioridade, $descricao, $usuario_id, $usuario['nome']);
-        if (!$stmt->execute()) cm_json(false, 'Não foi possível abrir o chamado.', null, 500);
-        $os_id = $conexao->insert_id; $stmt->close();
-        $mensagem = 'Chamado aberto pelo Portal do Colaborador.';
-        $stmt = $conexao->prepare("INSERT INTO os_interacoes (os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?, 'comentario', ?, ?, ?)");
-        if ($stmt) { $stmt->bind_param('isis', $os_id, $mensagem, $usuario_id, $usuario['nome']); $stmt->execute(); $stmt->close(); }
+        $anoLock = null;
+        $transacaoIniciada = false;
+        try {
+            $reserva = cm_reservar_numero_os($conexao);
+            $anoLock = $reserva['ano'];
+            $numero = $reserva['numero'];
+            if (!$conexao->begin_transaction()) throw new RuntimeException('OS_TRANSACTION_BEGIN_FAILED');
+            $transacaoIniciada = true;
+
+            $stmt = $conexao->prepare(
+                "INSERT INTO os_chamados (tenant_id, numero, titulo, assunto_id, departamento, prioridade, status, descricao, origem_portal, criado_por_id, criado_por_nome)
+                 VALUES (?, ?, ?, NULLIF(?, 0), ?, ?, 'aberto', ?, 'portal_colaborador', ?, ?)"
+            );
+            if (!$stmt || !$stmt->bind_param('ississsis', $tenant_id, $numero, $titulo, $assunto_id, $departamento, $prioridade, $descricao, $usuario_id, $usuario['nome']) || !$stmt->execute()) {
+                if ($stmt) $stmt->close();
+                throw new RuntimeException('OS_INSERT_FAILED');
+            }
+            $os_id = (int)$conexao->insert_id;
+            $stmt->close();
+            if ($os_id <= 0) throw new RuntimeException('OS_ID_INVALID');
+
+            $mensagem = 'Chamado aberto pelo Portal do Colaborador.';
+            $stmt = $conexao->prepare("INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?, ?, 'comentario', ?, ?, ?)");
+            if (!$stmt || !$stmt->bind_param('iisis', $tenant_id, $os_id, $mensagem, $usuario_id, $usuario['nome']) || !$stmt->execute()) {
+                if ($stmt) $stmt->close();
+                throw new RuntimeException('OS_INITIAL_INTERACTION_FAILED');
+            }
+            $stmt->close();
+            if (!$conexao->commit()) throw new RuntimeException('OS_TRANSACTION_COMMIT_FAILED');
+            $transacaoIniciada = false;
+        } catch (Throwable $e) {
+            if ($transacaoIniciada) $conexao->rollback();
+            if ($anoLock !== null) os_liberar_lock_numeracao($conexao, (int)$anoLock);
+            cm_log('chamado_abertura_falhou', ['usuario_id' => $usuario_id, 'tenant_id' => $tenant_id, 'erro_tipo' => get_class($e)]);
+            cm_json(false, 'Não foi possível abrir o chamado.', null, 503);
+        }
+        if ($anoLock !== null && !os_liberar_lock_numeracao($conexao, (int)$anoLock)) {
+            cm_log('lock_numeracao_os_liberacao_falhou', ['tenant_id' => $tenant_id]);
+        }
         cm_log('chamado_aberto', ['usuario_id' => $usuario_id, 'tenant_id' => $tenant_id, 'os_id' => $os_id]);
         cm_json(true, 'Chamado aberto com sucesso.', ['id' => $os_id, 'numero' => $numero]);
         break;

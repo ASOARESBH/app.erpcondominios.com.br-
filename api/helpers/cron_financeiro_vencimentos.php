@@ -15,6 +15,7 @@ require_once __DIR__ . '/email_alertas_dispatcher.php';
 
 if (!function_exists('_cron_financeiro_garantir_colunas')) {
     function _cron_financeiro_garantir_colunas($conexao) {
+        if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) return;
         $cols = [];
         $res = mysqli_query($conexao, "DESCRIBE contas_pagar");
         if ($res) while ($r = mysqli_fetch_assoc($res)) $cols[] = $r['Field'];

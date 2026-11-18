@@ -28,12 +28,23 @@ $tenant_id = exigirTenantId();
 $usuario_nome = (string)($usuario['nome'] ?? 'Sistema');
 $usuario_id = (int)($usuario['id'] ?? $_SESSION['usuario_id'] ?? 0);
 if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
-
-_garantirTabelas();
 // Aceita a ação explicitamente em GET ou POST; evita ambiguidade de $_REQUEST em uploads multipart.
 $acao = strtolower(trim((string)($_GET['acao'] ?? $_POST['acao'] ?? '')));
 
 try {
+    $schemaReady = true;
+    if ($acao !== 'catalogo_layouts') {
+        try {
+            $schemaReady = _garantirTabelas();
+        } catch (Throwable $schemaError) {
+            error_log('[Inadimplencia] schema readiness failed');
+            $schemaReady = false;
+        }
+    }
+    if (!$schemaReady) {
+        http_response_code(503);
+        retornar_json(false, 'Schema de inadimplência não provisionado; o módulo está temporariamente indisponível.');
+    }
     switch ($acao) {
         case 'importar':              _importar(); break;
         case 'catalogo_layouts':      _catalogoLayouts(); break;
@@ -139,6 +150,25 @@ function _obterLayoutInadimplencia($layoutId) {
 
 function _garantirTabelas() {
     global $conn;
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+        $tables = [
+            'inadimplencia_importacoes' => ['id', 'tenant_id'],
+            'inadimplencia_lancamentos' => ['id', 'tenant_id', 'importacao_id'],
+            'inadimplencia_comparacoes' => ['id', 'tenant_id', 'importacao_atual_id'],
+        ];
+        foreach ($tables as $table => $columns) {
+            if (!\ERP\Database\DatabaseDialect::tableExists($conn, $table)) return false;
+            foreach ($columns as $column) {
+                if (!\ERP\Database\DatabaseDialect::columnExists($conn, $table, $column)) return false;
+            }
+            $identity = $conn->prepare("SELECT is_identity, column_default FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = 'id'");
+            if (!$identity || !$identity->bind_param('s', $table) || !$identity->execute()) return false;
+            $meta = $identity->get_result()->fetch_assoc();
+            $identity->close();
+            if (!$meta || (($meta['is_identity'] ?? 'NO') !== 'YES' && !preg_match('/^nextval\\(/i', (string)($meta['column_default'] ?? '')))) return false;
+        }
+        return true;
+    }
     $sqlImportacoes = "CREATE TABLE IF NOT EXISTS `inadimplencia_importacoes` (
         `id` int(11) NOT NULL AUTO_INCREMENT,
         `tenant_id` int(11) NOT NULL,
@@ -232,10 +262,12 @@ function _garantirTabelas() {
     _inadGarantirColuna('inadimplencia_importacoes', 'fonte_sistema', "VARCHAR(60) NOT NULL DEFAULT 'BRCONDOS' AFTER nome_arquivo");
     _inadGarantirColuna('inadimplencia_importacoes', 'layout_id', "VARCHAR(100) NOT NULL DEFAULT 'brcondos-inadimplencia-detalhado-v1' AFTER fonte_sistema");
     _inadGarantirColuna('inadimplencia_importacoes', 'layout_versao', "VARCHAR(20) NOT NULL DEFAULT '1' AFTER layout_id");
+    return true;
 }
 
 function _inadGarantirColuna($tabela, $coluna, $definicao) {
     global $conn;
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) return;
     $stmt = $conn->prepare('SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?');
     $stmt->bind_param('ss', $tabela, $coluna);
     $stmt->execute();
@@ -640,7 +672,7 @@ function _obterRanking($importacao_id, $filtros=[]) {
     if($carteira!==''){ $where.=' AND l.carteira_status=? ';$params[]=$carteira;$tipos.='s'; }
     $base=" FROM inadimplencia_lancamentos l LEFT JOIN moradores m ON m.id=l.morador_id AND m.tenant_id=l.tenant_id LEFT JOIN unidades u ON u.id=l.unidade_id AND u.tenant_id=l.tenant_id $where ";
     $group=' GROUP BY l.gleba_numero,l.carteira_status,l.permite_receber,l.participa_cobranca,l.proprietario_nome,l.proprietario_cpf,l.morador_id,l.unidade_id,m.nome,u.nome ';
-    $orderMap=['divida_desc'=>'total_projetado DESC','divida_asc'=>'total_projetado ASC','gleba_asc'=>'CAST(l.gleba_numero AS UNSIGNED) ASC','meses_desc'=>'meses_aberto DESC'];$order=$orderMap[$filtros['ordem']??'divida_desc']??$orderMap['divida_desc'];
+    $orderMap=['divida_desc'=>'total_projetado DESC','divida_asc'=>'total_projetado ASC','gleba_asc'=>'CAST(l.gleba_numero AS DECIMAL(20,0)) ASC','meses_desc'=>'meses_aberto DESC'];$order=$orderMap[$filtros['ordem']??'divida_desc']??$orderMap['divida_desc'];
     $select='SELECT l.gleba_numero,l.carteira_status,l.permite_receber,l.participa_cobranca,MAX(l.proprietario_nome) proprietario_nome,MAX(l.proprietario_cpf) proprietario_cpf,MAX(l.morador_id) morador_id,MAX(l.unidade_id) unidade_id,MAX(m.nome) morador_nome,MAX(u.nome) unidade_nome,COUNT(DISTINCT l.mes_referencia) meses_aberto,SUM(l.valor) total_lancado,SUM(l.projecao_recebimento) total_projetado';
     $sql=$select.$base.$group.' ORDER BY '.$order;
     if($limite>0){$sql.=' LIMIT '.$limite;}else{$sql.=' LIMIT ? OFFSET ?';$params[]=$por;$params[]=($pagina-1)*$por;$tipos.='ii';}

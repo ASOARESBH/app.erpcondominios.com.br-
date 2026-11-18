@@ -587,12 +587,14 @@ if ($tipo === 'geral') {
     $colspan_vazio = 10;
     $msg_vazio = 'Nenhum hidrômetro encontrado para os filtros informados';
 
-    try {
-        $idxCheck = $conn->query("SELECT COUNT(1) as qtd FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'leituras' AND INDEX_NAME = 'idx_hidrometro_data'");
-        if ($idxCheck && ($idxRow = $idxCheck->fetch_assoc()) && intval($idxRow['qtd']) === 0) {
-            $conn->query("CREATE INDEX idx_hidrometro_data ON leituras(hidrometro_id, data_leitura)");
-        }
-    } catch (Throwable $e) { /* segue sem o índice — apenas performance */ }
+    if (!\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+        try {
+            $idxCheck = $conn->query("SELECT COUNT(1) as qtd FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'leituras' AND INDEX_NAME = 'idx_hidrometro_data'");
+            if ($idxCheck && ($idxRow = $idxCheck->fetch_assoc()) && intval($idxRow['qtd']) === 0) {
+                $conn->query("CREATE INDEX idx_hidrometro_data ON leituras(hidrometro_id, data_leitura)");
+            }
+        } catch (Throwable $e) { /* segue sem o índice — apenas performance */ }
+    }
 
     if ($data_de === '' || $data_ate === '') {
         $titulo_tabela = 'Informe a Data Inicial e a Data Final para gerar este relatório';

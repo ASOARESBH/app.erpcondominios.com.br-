@@ -69,18 +69,19 @@ if (rbacTabelasDisponiveis($conexao)) {
 
 // ===== VERIFICAR / CRIAR COLUNAS EXTRAS =====
 function _tem_coluna($conexao, $tabela, $coluna) {
-    $r = $conexao->query("SHOW COLUMNS FROM `$tabela` LIKE '$coluna'");
-    return $r && $r->num_rows > 0;
+    try {
+        return \ERP\Database\DatabaseDialect::columnExists($conexao, (string)$tabela, (string)$coluna);
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 function _tem_tabela($conexao, $tabela) {
-    $stmt = $conexao->prepare("SHOW TABLES LIKE ?");
-    if (!$stmt) return false;
-    $stmt->bind_param('s', $tabela);
-    $stmt->execute();
-    $existe = $stmt->get_result()->num_rows > 0;
-    $stmt->close();
-    return $existe;
+    try {
+        return \ERP\Database\DatabaseDialect::tableExists($conexao, (string)$tabela);
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 function _mensagem_migration_convidados() {
@@ -212,6 +213,7 @@ function _registro_payload_idempotente_coincide(mysqli $conexao, int $tenantId, 
 }
 
 function _garantir_coluna($conexao, $tabela, $coluna, $definicao) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) return;
     if (_tem_coluna($conexao, $tabela, $coluna)) return;
     $ok = @$conexao->query("ALTER TABLE `$tabela` ADD COLUMN `$coluna` $definicao");
     if (!$ok && $conexao->errno !== 1060) {
@@ -236,6 +238,7 @@ function _tem_indice($conexao, $tabela, $nomeIndice) {
 }
 
 function _garantir_indice_unico($conexao, $tabela, $nomeIndice, $definicaoColunas) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) return;
     if (_tem_indice($conexao, $tabela, $nomeIndice)) return;
     $ok = @$conexao->query("ALTER TABLE `$tabela` ADD UNIQUE KEY `$nomeIndice` ($definicaoColunas)");
     if (!$ok && $conexao->errno !== 1061) {
@@ -246,11 +249,21 @@ function _garantir_indice_unico($conexao, $tabela, $nomeIndice, $definicaoColuna
 }
 
 function _garantir_registro_titular_nulo($conexao) {
-    $resultado = @$conexao->query(
-        "SHOW COLUMNS FROM `registros_acesso` LIKE 'registro_titular_id'"
-    );
+    if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) return;
+    $stmt = $conexao->prepare("SELECT COLUMN_TYPE AS Type, IS_NULLABLE AS `Null`
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+    if (!$stmt) return;
+    $tabela = 'registros_acesso';
+    $nomeColuna = 'registro_titular_id';
+    if (!$stmt->bind_param('ss', $tabela, $nomeColuna) || !$stmt->execute()) {
+        $stmt->close();
+        return;
+    }
+    $resultado = $stmt->get_result();
     $coluna = $resultado ? $resultado->fetch_assoc() : null;
     if ($resultado) $resultado->free();
+    $stmt->close();
     if (!$coluna || strtoupper((string)($coluna['Null'] ?? '')) === 'YES') return;
 
     // Instalações antigas criaram o campo como NOT NULL DEFAULT 0.

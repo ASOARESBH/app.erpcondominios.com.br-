@@ -24,7 +24,7 @@ $rules = [
     'MYSQL_INSERT_IGNORE' => '/\bINSERT\s+IGNORE\b/i',
     'MYSQL_ON_DUPLICATE_KEY' => '/\bON\s+DUPLICATE\s+KEY\s+UPDATE\b/i',
     'MYSQL_REPLACE_INTO' => '/\bREPLACE\s+INTO\b/i',
-    'MYSQL_INSERT_SET' => '/\bINSERT\s+INTO\s+[^;]+?\bSET\s+/i',
+    'MYSQL_INSERT_SET' => '/\bINSERT\s+INTO\b(?:(?!\bVALUES?\b|\bSELECT\b|\bON\s+DUPLICATE\s+KEY\s+UPDATE\b|;)[\s\S])*\bSET\s+/i',
     'MYSQL_GROUP_CONCAT' => '/\bGROUP_CONCAT\s*\(/i',
     'MYSQL_FIND_IN_SET' => '/\bFIND_IN_SET\s*\(/i',
     'MYSQL_FIELD_FUNCTION' => '/\bFIELD\s*\(/i',
@@ -206,6 +206,9 @@ foreach ($files as $realPath => $extension) {
         }
         if ($tokenId === T_CONSTANT_ENCAPSED_STRING && strlen($tokenText) >= 2) {
             $tokenText = substr($tokenText, 1, -1);
+        }
+        if ($tokenId === T_CONSTANT_ENCAPSED_STRING && preg_match('/\A-{3,}(?:\\\\[rn])*\z/', $tokenText) === 1) {
+            continue;
         }
         $tokenText = pgLintMaskSqlCommentsAndStrings($tokenText);
         $violations = array_merge($violations, pgLintFindViolations($tokenText, $tokenLine, $relativePath, $rules));

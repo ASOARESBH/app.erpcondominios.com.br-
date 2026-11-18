@@ -23,6 +23,21 @@ jobs:
           php -n -l api/db/PdoMysqliConnection.php
       - name: Test SQL translator contract
         run: php -n tests/p3_sql_translator_test.php
+      - name: Test annual service-order numbering
+        run: php -n tests/os_numbering_test.php
+      - name: Test service-order department policy
+        run: php -n tests/os_department_policy_test.php
+      - name: Lint collaborator mobile API
+        run: php -n -l api/api_colaborador_mobile.php
+      - name: Test portable GED unit ordering
+        run: php -n tests/ged_unidade_order_test.php
+      - name: Test RH period month key
+        run: php -n tests/rh_banco_horas_reprocessamento_test.php
+      - name: Test PWA URL and config security helpers
+        run: |
+          php -n -l api/helpers/pwa_security.php
+          php -n -l tests/pwa_security_test.php
+          php -n tests/pwa_security_test.php
       - name: Test SQL translation through the mysqli facade
         run: |
           D=$(php -r 'echo ini_get("extension_dir");')
@@ -38,7 +53,7 @@ jobs:
       - name: Install pinned P2 dependencies
         run: python -m pip install -r tools/migracao_pg/requirements.txt
       - name: Run synthetic P2 suites
-        run: python -m unittest tests.migracao_pg.test_type_mapping tests.migracao_pg.test_catalog_ddl tests.migracao_pg.test_loader
+        run: python -m unittest tests.migracao_pg.test_type_mapping tests.migracao_pg.test_catalog_ddl tests.migracao_pg.test_loader tests.migracao_pg.test_reconcile
       - name: Validate P2 Python and development runner syntax
         run: |
           python -m compileall -q tools/migracao_pg tests/migracao_pg

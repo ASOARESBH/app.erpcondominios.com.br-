@@ -94,6 +94,12 @@ switch ($acao) {
 // ════════════════════════════════════════════════════════════
 function responder_migration() {
     global $conn;
+    $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conn);
+    if ($isPostgres) {
+        http_response_code(409);
+        echo json_encode(['ok' => false, 'erro' => 'O DDL do módulo de assembleias deve ser aplicado pelo schema PostgreSQL versionado.']);
+        exit;
+    }
     $sqls = [
         "CREATE TABLE IF NOT EXISTS assembleias (
             id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -177,9 +183,11 @@ function responder_migration() {
     ];
 
     $erros = [];
-    foreach ($sqls as $sql) {
-        if (!mysqli_query($conn, $sql)) {
-            $erros[] = mysqli_error($conn);
+    if (!$isPostgres) {
+        foreach ($sqls as $sql) {
+            if (!mysqli_query($conn, $sql)) {
+                $erros[] = mysqli_error($conn);
+            }
         }
     }
 
@@ -194,7 +202,10 @@ function responder_migration() {
         mysqli_query($conn, $sql);
     }
 
-    if (!empty($erros)) {
+    if ($isPostgres) {
+        http_response_code(409);
+        echo json_encode(['ok' => false, 'erro' => 'O DDL do módulo de assembleias deve ser aplicado pelo schema PostgreSQL versionado.']);
+    } elseif (!empty($erros)) {
         echo json_encode(['ok' => false, 'erros' => $erros]);
     } else {
         echo json_encode(['ok' => true, 'mensagem' => 'Migration executada com sucesso']);
@@ -683,10 +694,10 @@ function responder_listar_participantes() {
 // ════════════════════════════════════════════════════════════
 function _assembleia_tenant_pronto() {
     global $conn;
-    $t = mysqli_query($conn, "SHOW TABLES LIKE 'assembleias'");
-    if (!$t || mysqli_num_rows($t) === 0) return true; // tabela ainda não criada: a ação "migration" cria a estrutura
-    $r = mysqli_query($conn, "SHOW COLUMNS FROM assembleias LIKE 'tenant_id'");
-    return $r && mysqli_num_rows($r) > 0;
+    if (!\ERP\Database\DatabaseDialect::tableExists($conn, 'assembleias')) {
+        return true; // tabela ainda não criada: a ação "migration" cria a estrutura
+    }
+    return \ERP\Database\DatabaseDialect::columnExists($conn, 'assembleias', 'tenant_id');
 }
 
 /** Assembleia do tenant da sessão (ou null). */

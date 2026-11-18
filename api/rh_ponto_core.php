@@ -253,10 +253,11 @@ if (!function_exists('_ponto_garantir_colunas')) {
  */
 function _ponto_garantir_colunas($conn): void {
     foreach (['rh_ponto_lancamento'=>['saida_antecipada_min'],'rh_ponto_periodo'=>['total_saida_antecipada_min','total_carga_prevista_min']] as $table=>$required) {
-        $res=$conn->query('SHOW COLUMNS FROM `'.$table.'`');
-        if (!$res) throw new RuntimeException('Schema RH pendente; aplique migration_rh_banco_horas_mapeamento_mysql57.sql.');
-        $columns=[];while($r=$res->fetch_assoc())$columns[]=$r['Field'];$res->free();
-        foreach($required as $column) if(!in_array($column,$columns,true)) throw new RuntimeException('Schema RH pendente; aplique migration_rh_banco_horas_mapeamento_mysql57.sql.');
+        foreach ($required as $column) {
+            if (!\ERP\Database\DatabaseDialect::columnExists($conn, $table, $column)) {
+                throw new RuntimeException('Schema RH pendente; aplique migration_rh_banco_horas_mapeamento_mysql57.sql.');
+            }
+        }
     }
 }
 }
@@ -267,10 +268,11 @@ if (!function_exists('_abono_garantir_colunas')) {
  * exclusivamente na migration de deploy para evitar locks/commits implícitos.
  */
 function _abono_garantir_colunas($conn): void {
-    $res = $conn->query("SHOW COLUMNS FROM rh_ponto_lancamento");
-    if (!$res) throw new RuntimeException('Schema de Abono indisponível; aplique migration_rh_banco_horas_mapeamento_mysql57.sql.');
-    $cols=[];while($r=$res->fetch_assoc())$cols[]=$r['Field'];$res->free();
-    foreach(['abono_extras','abono_extras_min','abono_falta','abono_atraso','abono_atraso_min','abono_justificativa','abono_usuario','abono_data'] as $column) if(!in_array($column,$cols,true)) throw new RuntimeException('Schema de Abono pendente; aplique migration_rh_banco_horas_mapeamento_mysql57.sql.');
+    foreach (['abono_extras','abono_extras_min','abono_falta','abono_atraso','abono_atraso_min','abono_justificativa','abono_usuario','abono_data'] as $column) {
+        if (!\ERP\Database\DatabaseDialect::columnExists($conn, 'rh_ponto_lancamento', $column)) {
+            throw new RuntimeException('Schema de Abono pendente; aplique migration_rh_banco_horas_mapeamento_mysql57.sql.');
+        }
+    }
 }
 }
 

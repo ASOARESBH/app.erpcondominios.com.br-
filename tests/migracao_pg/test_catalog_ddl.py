@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
-from tools.migracao_pg.catalog import CatalogError, _atomic_json, _grants_are_read_only, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, collect_catalog
+from tools.migracao_pg.catalog import CatalogError, _atomic_json, _foreign_key_action_rules, _grants_are_read_only, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, collect_catalog
 from tools.migracao_pg.ddl import DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
 from tools.migracao_pg.generate_ddl import main as generate_ddl_main
 
@@ -131,11 +131,26 @@ class CatalogTests(unittest.TestCase):
     def test_catalog_connection_requires_unix_socket(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "client.cnf"
-            path.write_text("[client]\nprotocol=SOCKET\nsocket=/run/mysqld/mysqld.sock\n", encoding="utf-8")
+            path.write_text("[client]\nuser=pg_reader\nprotocol=SOCKET\nsocket=/run/mysqld/mysqld.sock\n", encoding="utf-8")
             self.assertEqual(_mysql_socket_options(path), {"unix_socket": "/run/mysqld/mysqld.sock"})
-            path.write_text("[client]\nprotocol=TCP\nhost=localhost\n", encoding="utf-8")
+            path.write_text("[client]\nuser=pg_reader\nprotocol=TCP\nhost=localhost\n", encoding="utf-8")
             with self.assertRaisesRegex(CatalogError, "MYSQL_PROTOCOL_MUST_BE_SOCKET"):
                 _mysql_socket_options(path)
+            path.write_text("[client]\nuser=erp_app\nprotocol=SOCKET\n", encoding="utf-8")
+            with self.assertRaisesRegex(CatalogError, "MYSQL_ACCOUNT_MUST_BE_PG_READER"):
+                _mysql_socket_options(path)
+            path.write_text("[client]\nuser=pg_reader\nprotocol=SOCKET\nsocket=/tmp/other-mysql.sock\n", encoding="utf-8")
+            with self.assertRaisesRegex(CatalogError, "MYSQL_SOCKET_PATH_NOT_ALLOWLISTED"):
+                _mysql_socket_options(path)
+
+    def test_foreign_key_action_rules_require_exactly_one_valid_metadata_row(self) -> None:
+        valid = {("child", "fk_parent"): [{"update_rule": "CASCADE", "delete_rule": "RESTRICT"}]}
+        self.assertEqual(_foreign_key_action_rules("child", "fk_parent", valid), ("CASCADE", "RESTRICT"))
+        with self.assertRaisesRegex(CatalogError, "FOREIGN_KEY_RULES_MISSING_OR_AMBIGUOUS"):
+            _foreign_key_action_rules("child", "fk_parent", {})
+        ambiguous = {("child", "fk_parent"): valid[("child", "fk_parent")] * 2}
+        with self.assertRaisesRegex(CatalogError, "FOREIGN_KEY_RULES_MISSING_OR_AMBIGUOUS"):
+            _foreign_key_action_rules("child", "fk_parent", ambiguous)
 
     def test_grant_inventory_is_sanitized_and_unresolved_roles_fail_closed(self) -> None:
         class GrantsCursor:
@@ -256,7 +271,9 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(result["source_schema_wide_select"])
         self.assertEqual(len(result["structural_fingerprint_sha256"]), 64)
         self.assertNotIn("view_definition", result["views"])
-        self.assertIn("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY", connection.statements[1])
+        utc_index = connection.statements.index("SET SESSION time_zone = '+00:00'")
+        snapshot_index = connection.statements.index("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
+        self.assertLess(utc_index, snapshot_index)
         self.assertLess(connection.statements.index("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY"), next(
             index for index, statement in enumerate(connection.statements) if "SHOW GRANTS" in statement
         ))
@@ -266,6 +283,7 @@ class CatalogTests(unittest.TestCase):
         connection = FakeConnection()
         result = collect_catalog(connection, keep_snapshot=True)
         self.assertEqual(result["catalog_consistency_check"], "PRE_POST_SIGNATURE_MATCH")
+        self.assertIn("SET SESSION time_zone = '+00:00'", connection.statements)
         self.assertIn("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY", connection.statements)
         self.assertFalse(connection.rolled_back)
 

@@ -79,10 +79,22 @@ function pd_ip() {
 // do GED; necessário porque o conceito de "tentativa negada" só existe a
 // partir do consumo pelo Portal).
 function pd_garantir_schema($db) {
-    $r = $db->query("SHOW COLUMNS FROM documentos_logs LIKE 'acao'");
-    if (!$r) return;
-    $col = $r->fetch_assoc();
-    if ($col && stripos($col['Type'], 'acesso_negado') === false) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($db)) return;
+
+    $stmt = $db->prepare("SELECT COLUMN_TYPE AS Type FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+    if (!$stmt) return;
+    $table = 'documentos_logs';
+    $column = 'acao';
+    if (!$stmt->bind_param('ss', $table, $column) || !$stmt->execute()) {
+        $stmt->close();
+        return;
+    }
+    $r = $stmt->get_result();
+    $col = $r ? $r->fetch_assoc() : null;
+    if ($r) $r->free();
+    $stmt->close();
+    if ($col && stripos((string)$col['Type'], 'acesso_negado') === false) {
         $db->query("ALTER TABLE documentos_logs MODIFY COLUMN acao
             ENUM('criacao','edicao','exclusao','download','visualizacao','compartilhamento',
                  'expiracao','restauracao','upload','acesso_negado') NOT NULL");

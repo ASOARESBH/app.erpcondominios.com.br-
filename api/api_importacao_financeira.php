@@ -33,8 +33,11 @@ $usuario_nome = $usuario['nome'] ?? 'Sistema';
 date_default_timezone_set('America/Sao_Paulo');
 
 // ── Criar tabelas se não existirem ────────────────────────────
-$conn->query("CREATE TABLE IF NOT EXISTS `importacoes_financeiras` (
+function _importacao_financeira_garantir_schema($conn) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) return;
+    $conn->query("CREATE TABLE IF NOT EXISTS `importacoes_financeiras` (
   `id`               int(11)      NOT NULL AUTO_INCREMENT,
+  `tenant_id`        int(11)      NOT NULL,
   `nome_arquivo`     varchar(255) NOT NULL,
   `tipo_arquivo`     enum('CSV','PDF') NOT NULL DEFAULT 'CSV',
   `tipo_conta`       enum('PAGAR','RECEBER','EXTRATO') NOT NULL DEFAULT 'PAGAR',
@@ -56,6 +59,7 @@ $conn->query("CREATE TABLE IF NOT EXISTS `importacoes_financeiras` (
 
 $conn->query("CREATE TABLE IF NOT EXISTS `importacoes_financeiras_itens` (
   `id`                    int(11)      NOT NULL AUTO_INCREMENT,
+  `tenant_id`             int(11)      NOT NULL,
   `importacao_id`         int(11)      NOT NULL,
   `linha_original`        int(11)      DEFAULT NULL,
   `numero_documento`      varchar(100) DEFAULT NULL,
@@ -84,6 +88,21 @@ $conn->query("CREATE TABLE IF NOT EXISTS `importacoes_financeiras_itens` (
   KEY `idx_importacao_id` (`importacao_id`),
   KEY `idx_data_lancamento` (`data_lancamento`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+_importacao_financeira_garantir_schema($conn);
+
+if (\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+    foreach ([
+        'importacoes_financeiras', 'importacoes_financeiras_itens',
+        'contas_pagar', 'planos_contas',
+    ] as $tabelaFinanceira) {
+        if (!\ERP\Database\DatabaseDialect::tableExists($conn, $tabelaFinanceira)
+            || !\ERP\Database\DatabaseDialect::columnExists($conn, $tabelaFinanceira, 'tenant_id')) {
+            http_response_code(503);
+            retornar_json(false, 'Schema de importação financeira não provisionado pelo DDL versionado.');
+        }
+    }
+}
 
 // ── Roteamento ────────────────────────────────────────────────
 $acao = $_REQUEST['acao'] ?? '';
@@ -105,7 +124,7 @@ switch ($acao) {
 // IMPORTAR
 // ══════════════════════════════════════════════════════════════
 function _importar() {
-    global $conn, $usuario_nome;
+    global $conn, $usuario_nome, $tenant_id;
 
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         retornar_json(false, 'Método inválido'); return;
@@ -148,11 +167,11 @@ function _importar() {
 
     // Criar lote
     $stmt = $conn->prepare("INSERT INTO importacoes_financeiras
-        (nome_arquivo, tipo_arquivo, tipo_conta, formato_origem, data_inicio, data_fim, status, usuario)
-        VALUES (?, ?, ?, ?, ?, ?, 'PROCESSANDO', ?)");
+        (tenant_id, nome_arquivo, tipo_arquivo, tipo_conta, formato_origem, data_inicio, data_fim, status, usuario)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'PROCESSANDO', ?)");
     $di = $data_inicio ?: null;
     $df = $data_fim    ?: null;
-    $stmt->bind_param('sssssss', $nome_orig, $ext, $tipo_conta, $formato, $di, $df, $usuario_nome);
+    $stmt->bind_param('isssssss', $tenant_id, $nome_orig, $ext, $tipo_conta, $formato, $di, $df, $usuario_nome);
     $stmt->execute();
     $lote_id = $conn->insert_id;
     $stmt->close();
@@ -206,12 +225,12 @@ function _importar() {
 
         // Inserir item
         $ins = $conn->prepare("INSERT INTO importacoes_financeiras_itens
-            (importacao_id, linha_original, numero_documento, fornecedor_nome,
+            (tenant_id, importacao_id, linha_original, numero_documento, fornecedor_nome,
              classificacao_despesa, centro_custo, historico_completo, observacao,
              tipo_lancamento, valor, valor_entrada, valor_saida, saldo_apos,
              data_lancamento, data_vencimento, data_pagamento,
              status_original, aprovada, status_importacao, duplicata_conta_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
 
         $linha  = $idx + 1;
         $num    = $item['numero_documento']      ?? null;
@@ -231,8 +250,8 @@ function _importar() {
         $stori  = $item['status_original']       ?? null;
         $aprov  = isset($item['aprovada'])       ? (int)$item['aprovada']         : 0;
 
-        $ins->bind_param('iisssssssddddssssis',
-            $lote_id, $linha, $num, $forn, $class, $cc, $hist, $obs,
+        $ins->bind_param('iiisssssssddddssssis',
+            $tenant_id, $lote_id, $linha, $num, $forn, $class, $cc, $hist, $obs,
             $tlanc, $val, $vent, $vsai, $saldo,
             $dl, $dv, $dp, $stori, $aprov, $status_imp, $dup_id
         );
@@ -624,7 +643,7 @@ function _parseCSV($path, $data_inicio, $data_fim) {
 // LISTAR LOTES
 // ══════════════════════════════════════════════════════════════
 function _listarLotes() {
-    global $conn;
+    global $conn, $tenant_id;
     $res   = $conn->query("SELECT * FROM importacoes_financeiras WHERE tenant_id = $tenant_id ORDER BY data_importacao DESC LIMIT 100");
     $lotes = [];
     while ($row = $res->fetch_assoc()) $lotes[] = $row;
@@ -635,7 +654,7 @@ function _listarLotes() {
 // LISTAR ITENS DE UM LOTE
 // ══════════════════════════════════════════════════════════════
 function _listarItens() {
-    global $conn;
+    global $conn, $tenant_id;
     $lote_id = (int)($_GET['lote_id'] ?? 0);
     $status  = trim($_GET['status']   ?? '');
     $tipo    = trim($_GET['tipo']     ?? '');
@@ -673,7 +692,7 @@ function _listarItens() {
 // RESUMO DO LOTE — KPIs e agrupamentos para visualização
 // ══════════════════════════════════════════════════════════════
 function _resumoLote() {
-    global $conn;
+    global $conn, $tenant_id;
     $lote_id = (int)($_GET['lote_id'] ?? 0);
     if (!$lote_id) { retornar_json(false, 'lote_id obrigatório'); return; }
 
@@ -735,11 +754,18 @@ function _resumoLote() {
 // CONCILIAR ITEM
 // ══════════════════════════════════════════════════════════════
 function _conciliarItem() {
-    global $conn, $usuario_nome;
+    global $conn, $usuario_nome, $tenant_id;
     $data     = json_decode(file_get_contents('php://input'), true) ?: $_POST;
     $item_id  = (int)($data['item_id']  ?? 0);
     $conta_id = (int)($data['conta_id'] ?? 0);
     if (!$item_id) { retornar_json(false, 'item_id obrigatório'); return; }
+    if ($conta_id > 0) {
+        $conta = $conn->query("SELECT id FROM contas_bancarias WHERE tenant_id = $tenant_id AND id = $conta_id AND ativo = 1");
+        if (!$conta || $conta->num_rows === 0) {
+            http_response_code(404);
+            retornar_json(false, 'Conta não encontrada para o tenant autenticado.');
+        }
+    }
     $stmt = $conn->prepare("UPDATE importacoes_financeiras_itens SET
         status_importacao='CONCILIADO', conta_id=?, conciliado_por=?, data_conciliacao=NOW() WHERE tenant_id = $tenant_id AND id=?");
     $cid = $conta_id ?: null;
@@ -752,7 +778,7 @@ function _conciliarItem() {
 // IGNORAR ITEM
 // ══════════════════════════════════════════════════════════════
 function _ignorarItem() {
-    global $conn;
+    global $conn, $tenant_id;
     $data    = json_decode(file_get_contents('php://input'), true) ?: $_POST;
     $item_id = (int)($data['item_id'] ?? 0);
     if (!$item_id) { retornar_json(false, 'item_id obrigatório'); return; }
@@ -764,7 +790,7 @@ function _ignorarItem() {
 // CONFIRMAR IMPORTAÇÃO
 // ══════════════════════════════════════════════════════════════
 function _confirmarImportar() {
-    global $conn, $usuario_nome;
+    global $conn, $usuario_nome, $tenant_id;
     $data    = json_decode(file_get_contents('php://input'), true) ?: $_POST;
     $lote_id = (int)($data['lote_id'] ?? 0);
     $apenas_saidas = isset($data['apenas_saidas']) ? (bool)$data['apenas_saidas'] : true;
@@ -776,8 +802,11 @@ function _confirmarImportar() {
 
     // Buscar plano padrão de despesa
     $res_plano = $conn->query("SELECT id FROM planos_contas WHERE tenant_id = $tenant_id AND tipo='DESPESA' AND ativo=1 LIMIT 1");
-    $plano_id  = 1;
-    if ($res_plano && $res_plano->num_rows > 0) $plano_id = (int)$res_plano->fetch_assoc()['id'];
+    if (!$res_plano || $res_plano->num_rows === 0) {
+        http_response_code(503);
+        retornar_json(false, 'Nenhum plano de contas do tenant está disponível.');
+    }
+    $plano_id = (int)$res_plano->fetch_assoc()['id'];
 
     // Filtro: importar apenas saídas (despesas) para contas_pagar
     $filtro_tipo = $apenas_saidas ? "AND tipo_lancamento IN ('SAIDA','TARIFA')" : "";
@@ -798,14 +827,14 @@ function _confirmarImportar() {
         $saldo   = 0;
 
         $ins = $conn->prepare("INSERT INTO contas_pagar
-            (numero_documento, fornecedor_nome, plano_conta_id, classificacao_despesa,
+            (tenant_id, numero_documento, fornecedor_nome, plano_conta_id, classificacao_despesa,
              descricao, valor_original, valor_pago, saldo_devedor,
              data_emissao, data_vencimento, data_pagamento,
              status, observacoes, usuario_criacao, ativo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)");
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)");
         $de = date('Y-m-d');
-        $ins->bind_param('ssissdddssssss',
-            $num_doc, $forn, $plano_id, $class,
+        $ins->bind_param('ississdddssssss',
+            $tenant_id, $num_doc, $forn, $plano_id, $class,
             $obs, $valor, $vp, $saldo,
             $de, $dv, $dp,
             $status, $obs, $usuario_nome
@@ -831,7 +860,7 @@ function _confirmarImportar() {
 // EXCLUIR LOTE
 // ══════════════════════════════════════════════════════════════
 function _excluirLote() {
-    global $conn;
+    global $conn, $tenant_id;
     $data    = json_decode(file_get_contents('php://input'), true) ?: $_POST;
     $lote_id = (int)($data['lote_id'] ?? $_GET['lote_id'] ?? 0);
     if (!$lote_id) { retornar_json(false, 'lote_id obrigatório'); return; }

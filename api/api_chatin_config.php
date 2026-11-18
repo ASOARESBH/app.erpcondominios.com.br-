@@ -56,20 +56,15 @@ function api_chatin_config_validar_origem_sessao($metodo) {
 function api_chatin_config_tabela_existe($conexao, $nome) {
     $nome = (string)$nome;
     if (!preg_match('/^[A-Za-z0-9_]+$/', $nome)) return false;
-    $resultado = $conexao->query("SHOW TABLES LIKE '" . $conexao->real_escape_string($nome) . "'");
-    if (!$resultado) return false;
-    $existe = $resultado->num_rows > 0;
-    $resultado->free();
-    return $existe;
+    try {
+        return \ERP\Database\DatabaseDialect::tableExists($conexao, $nome);
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 function api_chatin_config_instalado($conexao) {
     if (!api_chatin_config_tabela_existe($conexao, 'chatin_configuracoes')) return false;
-    $resultado = $conexao->query('SHOW COLUMNS FROM `chatin_configuracoes`');
-    if (!$resultado) return false;
-    $colunas = [];
-    while ($linha = $resultado->fetch_assoc()) $colunas[$linha['Field']] = true;
-    $resultado->free();
     $obrigatorias = [
         'tenant_id', 'ativo', 'usuario_usuario', 'usuario_morador',
         'morador_inicia_com_equipe', 'morador_morador', 'recurso_sons',
@@ -77,7 +72,13 @@ function api_chatin_config_instalado($conexao) {
         'recurso_push_app', 'grupos_visiveis_moradores_json',
         'filtro_moradores_json', 'atualizado_por', 'atualizado_em',
     ];
-    foreach ($obrigatorias as $coluna) if (empty($colunas[$coluna])) return false;
+    try {
+        foreach ($obrigatorias as $coluna) {
+            if (!\ERP\Database\DatabaseDialect::columnExists($conexao, 'chatin_configuracoes', $coluna)) return false;
+        }
+    } catch (Throwable $e) {
+        return false;
+    }
     return true;
 }
 

@@ -139,8 +139,10 @@ function _criar_tabelas($db) {
         )"
     ];
 
-    foreach ($sql as $q) {
-        $db->query($q);
+    if (!\ERP\Database\DatabaseDialect::isPostgres($db)) {
+        foreach ($sql as $q) {
+            $db->query($q);
+        }
     }
 
     // Popular módulos padrão se vazio

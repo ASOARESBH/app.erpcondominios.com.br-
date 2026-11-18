@@ -49,24 +49,33 @@ function pub_ip() {
 // Limite generoso o suficiente para navegação normal (60 requisições por
 // minuto por IP), mas suficiente para conter varredura/scraping agressivo.
 function pub_rate_limit($conn, $rota) {
-    $conn->query("CREATE TABLE IF NOT EXISTS publico_rate_limit (
-        id        INT AUTO_INCREMENT PRIMARY KEY,
-        ip        VARCHAR(45) NOT NULL,
-        rota      VARCHAR(60) NOT NULL,
-        criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_ip_rota_tempo (ip, rota, criado_em)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+        if (!\ERP\Database\DatabaseDialect::tableExists($conn, 'publico_rate_limit')) {
+            pub_json(false, 'Proteção temporariamente indisponível.', null, 503);
+        }
+    } else {
+        $conn->query("CREATE TABLE IF NOT EXISTS publico_rate_limit (
+            id        INT AUTO_INCREMENT PRIMARY KEY,
+            ip        VARCHAR(45) NOT NULL,
+            rota      VARCHAR(60) NOT NULL,
+            criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ip_rota_tempo (ip, rota, criado_em)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
 
     $ip   = $conn->real_escape_string(pub_ip());
     $rota = $conn->real_escape_string(substr((string)$rota, 0, 60));
     $limite = 60; // por minuto
 
     $res = $conn->query("SELECT COUNT(*) c FROM publico_rate_limit WHERE ip='$ip' AND rota='$rota' AND criado_em >= DATE_SUB(NOW(), INTERVAL 1 MINUTE)");
-    $total = $res ? (int)$res->fetch_assoc()['c'] : 0;
+    if (!$res) pub_json(false, 'Proteção temporariamente indisponível.', null, 503);
+    $total = (int)($res->fetch_assoc()['c'] ?? 0);
     if ($total >= $limite) {
         pub_json(false, 'Muitas requisições. Aguarde um momento e tente novamente.', null, 429);
     }
-    $conn->query("INSERT INTO publico_rate_limit (ip, rota) VALUES ('$ip','$rota')");
+    if (!$conn->query("INSERT INTO publico_rate_limit (ip, rota) VALUES ('$ip','$rota')")) {
+        pub_json(false, 'Proteção temporariamente indisponível.', null, 503);
+    }
 
     // Limpeza esporádica (1% das requisições) para não acumular linhas indefinidamente
     if (mt_rand(1, 100) === 1) {

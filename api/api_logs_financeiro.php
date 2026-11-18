@@ -29,6 +29,7 @@ $usuario_nome = $usuario['nome'] ?? 'Sistema';
 date_default_timezone_set('America/Sao_Paulo');
 
 // ── Criar tabela de logs se não existir ──────────────────────
+if (!\ERP\Database\DatabaseDialect::isPostgres($conn)) {
 $conn->query("CREATE TABLE IF NOT EXISTS `logs_financeiro` (
   `id`            bigint(20)   NOT NULL AUTO_INCREMENT,
   `modulo`        varchar(50)  NOT NULL COMMENT 'importacao|contas_pagar|contas_receber|planos_contas|conciliacao|geral',
@@ -51,6 +52,7 @@ $conn->query("CREATE TABLE IF NOT EXISTS `logs_financeiro` (
   KEY `idx_criado`   (`criado_em`),
   KEY `idx_usuario`  (`usuario`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
 
 // ── Roteamento ────────────────────────────────────────────────
 $method = $_SERVER['REQUEST_METHOD'];

@@ -438,10 +438,10 @@ if ($metodo === 'GET') {
     $total = (int)($linhaCount['total'] ?? 0);
     $stmtCount->close();
 
-    $sql .= " ORDER BY v.nome_completo ASC LIMIT ?, ?";
+    $sql .= " ORDER BY v.nome_completo ASC LIMIT ? OFFSET ?";
     $tipos .= 'ii';
-    $parametros[] = $offset;
     $parametros[] = $limite;
+    $parametros[] = $offset;
     $stmt = $conexao->prepare($sql);
     if (!$stmt) retornar_json(false, 'Não foi possível preparar a listagem de visitantes.');
     $stmt->bind_param($tipos, ...$parametros);

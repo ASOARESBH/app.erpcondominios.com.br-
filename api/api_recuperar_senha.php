@@ -37,6 +37,10 @@ function recuperacao_ip(): string
  */
 function recuperacao_garantir_schema(mysqli $conexao): void
 {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+        return;
+    }
+
     $sql = <<<'SQL'
 CREATE TABLE IF NOT EXISTS `recuperacao_senha_tokens_v2` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

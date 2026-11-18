@@ -18,32 +18,49 @@ if (!$conexao) {
     exit;
 }
 
+function verificar_banco_colunas($conexao, string $tabela): array {
+    if (preg_match('/\A[a-z_][a-z0-9_]*\z/i', $tabela) !== 1) return [];
+    $tipoExpr = \ERP\Database\DatabaseDialect::isPostgres($conexao) ? 'data_type' : 'column_type';
+    $schemaExpr = \ERP\Database\DatabaseDialect::isPostgres($conexao) ? 'current_schema()' : 'DATABASE()';
+    $stmt = $conexao->prepare("SELECT column_name AS field_name, $tipoExpr AS column_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = $schemaExpr AND table_name = ? ORDER BY ordinal_position");
+    if (!$stmt || !$stmt->bind_param('s', $tabela) || !$stmt->execute()) {
+        if ($stmt) $stmt->close();
+        return [];
+    }
+    $result = $stmt->get_result();
+    if (!$result) { $stmt->close(); return []; }
+    $columns = [];
+    while ($row = $result->fetch_assoc()) $columns[] = $row;
+    $result->free();
+    $stmt->close();
+    return $columns;
+}
+
 echo "<p style='color:green;'><strong>✅ Conexão com banco OK</strong></p>";
 echo "<hr>";
 
 // ========== VERIFICAR TABELA MORADORES ==========
 echo "<h3>1. Tabela: moradores</h3>";
 
-$resultado = $conexao->query("SHOW TABLES LIKE 'moradores'");
-if ($resultado->num_rows > 0) {
+if (\ERP\Database\DatabaseDialect::tableExists($conexao, 'moradores')) {
     echo "<p style='color:green;'>✅ Tabela existe</p>";
     
     // Verificar campos
-    $campos = $conexao->query("DESCRIBE moradores");
+    $campos = verificar_banco_colunas($conexao, 'moradores');
     echo "<table border='1' cellpadding='5'>";
     echo "<tr><th>Campo</th><th>Tipo</th><th>Nulo</th><th>Padrão</th></tr>";
     
     $campos_necessarios = ['id', 'nome', 'cpf', 'email', 'unidade', 'senha', 'ativo', 'ultimo_acesso'];
     $campos_encontrados = [];
     
-    while ($campo = $campos->fetch_assoc()) {
+    foreach ($campos as $campo) {
         echo "<tr>";
-        echo "<td>{$campo['Field']}</td>";
-        echo "<td>{$campo['Type']}</td>";
-        echo "<td>{$campo['Null']}</td>";
-        echo "<td>{$campo['Default']}</td>";
+        echo "<td>{$campo['field_name']}</td>";
+        echo "<td>{$campo['column_type']}</td>";
+        echo "<td>{$campo['is_nullable']}</td>";
+        echo "<td>{$campo['column_default']}</td>";
         echo "</tr>";
-        $campos_encontrados[] = $campo['Field'];
+        $campos_encontrados[] = $campo['field_name'];
     }
     echo "</table>";
     
@@ -82,20 +99,20 @@ echo "<hr>";
 // ========== VERIFICAR TABELA SESSOES_PORTAL ==========
 echo "<h3>2. Tabela: sessoes_portal</h3>";
 
-$resultado = $conexao->query("SHOW TABLES LIKE 'sessoes_portal'");
-if ($resultado->num_rows > 0) {
+$resultado = \ERP\Database\DatabaseDialect::tableExists($conexao, 'sessoes_portal');
+if ($resultado) {
     echo "<p style='color:green;'>✅ Tabela existe</p>";
     
     // Verificar campos
-    $campos = $conexao->query("DESCRIBE sessoes_portal");
+    $campos = verificar_banco_colunas($conexao, 'sessoes_portal');
     echo "<table border='1' cellpadding='5'>";
     echo "<tr><th>Campo</th><th>Tipo</th><th>Nulo</th><th>Padrão</th></tr>";
-    while ($campo = $campos->fetch_assoc()) {
+    foreach ($campos as $campo) {
         echo "<tr>";
-        echo "<td>{$campo['Field']}</td>";
-        echo "<td>{$campo['Type']}</td>";
-        echo "<td>{$campo['Null']}</td>";
-        echo "<td>{$campo['Default']}</td>";
+        echo "<td>{$campo['field_name']}</td>";
+        echo "<td>{$campo['column_type']}</td>";
+        echo "<td>{$campo['is_nullable']}</td>";
+        echo "<td>{$campo['column_default']}</td>";
         echo "</tr>";
     }
     echo "</table>";
@@ -105,6 +122,7 @@ if ($resultado->num_rows > 0) {
     echo "<p><strong>A API está falhando porque a tabela sessoes_portal não existe.</strong></p>";
     
     echo "<hr>";
+    if (!\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
     echo "<h4>Solução: Execute o SQL abaixo no phpMyAdmin</h4>";
     echo "<pre style='background:#f0f0f0; padding:10px; overflow-x:auto;'>";
     echo "CREATE TABLE IF NOT EXISTS `sessoes_portal` (
@@ -128,8 +146,13 @@ if ($resultado->num_rows > 0) {
     echo "<form method='post'>";
     echo "<button type='submit' name='criar_tabela' style='background:green; color:white; padding:10px 20px; font-size:16px; border:none; cursor:pointer;'>Criar Tabela sessoes_portal</button>";
     echo "</form>";
+    } else {
+        echo "<p>Criação de schema runtime desabilitada no PostgreSQL; use o bundle DDL versionado.</p>";
+    }
     
-    if (isset($_POST['criar_tabela'])) {
+    if (isset($_POST['criar_tabela']) && \ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+        echo "<p>Criação de schema runtime desabilitada no PostgreSQL; use o bundle DDL versionado.</p>";
+    } elseif (isset($_POST['criar_tabela'])) {
         echo "<hr>";
         echo "<h4>Criando tabela...</h4>";
         
@@ -168,8 +191,7 @@ $tabelas_portal = [
 ];
 
 foreach ($tabelas_portal as $tabela => $descricao) {
-    $resultado = $conexao->query("SHOW TABLES LIKE '$tabela'");
-    if ($resultado->num_rows > 0) {
+    if (\ERP\Database\DatabaseDialect::tableExists($conexao, $tabela)) {
         echo "<p style='color:green;'>✅ $tabela ($descricao)</p>";
     } else {
         echo "<p style='color:orange;'>⚠️ $tabela ($descricao) - NÃO existe (opcional)</p>";
@@ -181,10 +203,10 @@ echo "<hr>";
 // ========== RESUMO ==========
 echo "<h3>Resumo da Verificação</h3>";
 
-$resultado_moradores = $conexao->query("SHOW TABLES LIKE 'moradores'");
-$resultado_sessoes = $conexao->query("SHOW TABLES LIKE 'sessoes_portal'");
+$moradores_existe = \ERP\Database\DatabaseDialect::tableExists($conexao, 'moradores');
+$sessoes_existe = \ERP\Database\DatabaseDialect::tableExists($conexao, 'sessoes_portal');
 
-if ($resultado_moradores->num_rows > 0 && $resultado_sessoes->num_rows > 0) {
+if ($moradores_existe && $sessoes_existe) {
     echo "<p style='color:green; font-size:20px; font-weight:bold;'>🎉 BANCO DE DADOS OK! LOGIN DEVE FUNCIONAR!</p>";
     echo "<p><a href='login_morador.html' style='background:blue; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;'>Testar Login</a></p>";
 } else {

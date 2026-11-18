@@ -29,18 +29,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 $usuario_logado = verificarAutenticacao(true);
 $tenant_id = exigirTenantId();
 $conexao = conectar_banco();
+$postgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
 
 // O carregamento de permissões ocorre em toda abertura do layout. Executar
 // CREATE/INSERT de estrutura nesse caminho gerava lock e instabilidade no
 // pós-login em hospedagem compartilhada. Só instala a estrutura se ela estiver
 // realmente ausente; instalações normais fazem apenas consultas de leitura.
-$tem_modulos = $conexao->query("SHOW TABLES LIKE 'modulos_sistema'");
-$tem_usuario_modulos = $conexao->query("SHOW TABLES LIKE 'usuario_modulos'");
-if (!$tem_modulos || !$tem_usuario_modulos || $tem_modulos->num_rows === 0 || $tem_usuario_modulos->num_rows === 0) {
-    _garantir_tabelas($conexao);
+if ($postgres) {
+    $tem_modulos = \ERP\Database\DatabaseDialect::tableExists($conexao, 'modulos_sistema');
+    $tem_usuario_modulos = \ERP\Database\DatabaseDialect::tableExists($conexao, 'usuario_modulos');
+    if (!$tem_modulos || !$tem_usuario_modulos) {
+        _garantir_tabelas($conexao);
+    }
+} else {
+    $tem_modulos = $conexao->query("SHOW TABLES LIKE 'modulos_sistema'");
+    $tem_usuario_modulos = $conexao->query("SHOW TABLES LIKE 'usuario_modulos'");
+    if (!$tem_modulos || !$tem_usuario_modulos || $tem_modulos->num_rows === 0 || $tem_usuario_modulos->num_rows === 0) {
+        _garantir_tabelas($conexao);
+    }
+    if ($tem_modulos instanceof mysqli_result) $tem_modulos->free();
+    if ($tem_usuario_modulos instanceof mysqli_result) $tem_usuario_modulos->free();
 }
-if ($tem_modulos instanceof mysqli_result) $tem_modulos->free();
-if ($tem_usuario_modulos instanceof mysqli_result) $tem_usuario_modulos->free();
 
 $metodo = $_SERVER['REQUEST_METHOD'];
 $acao   = $_GET['acao'] ?? $_POST['acao'] ?? (json_decode(file_get_contents('php://input'), true)['acao'] ?? '');
@@ -369,7 +378,9 @@ retornar_json(false, 'Método ou ação inválida');
 // HELPER: Garantir que as tabelas existem
 // ─────────────────────────────────────────────────────────────────────
 function _garantir_tabelas($conexao) {
-    $conexao->query("CREATE TABLE IF NOT EXISTS `modulos_sistema` (
+    $postgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
+    if (!$postgres) {
+        $conexao->query("CREATE TABLE IF NOT EXISTS `modulos_sistema` (
         `id`               INT UNSIGNED NOT NULL AUTO_INCREMENT,
         `chave`            VARCHAR(60)  NOT NULL,
         `nome`             VARCHAR(100) NOT NULL,
@@ -381,9 +392,9 @@ function _garantir_tabelas($conexao) {
         `ordem`            SMALLINT     NOT NULL DEFAULT 0,
         PRIMARY KEY (`id`),
         UNIQUE KEY `uk_chave` (`chave`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-    $conexao->query("CREATE TABLE IF NOT EXISTS `usuario_modulos` (
+        $conexao->query("CREATE TABLE IF NOT EXISTS `usuario_modulos` (
         `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
         `usuario_id`    INT UNSIGNED NOT NULL,
         `modulo_chave`  VARCHAR(60)  NOT NULL,
@@ -396,7 +407,12 @@ function _garantir_tabelas($conexao) {
         `atualizado_em` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (`id`),
         UNIQUE KEY `uk_usuario_modulo` (`usuario_id`, `modulo_chave`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    if ($postgres && !\ERP\Database\DatabaseDialect::tableExists($conexao, 'modulos_sistema')) {
+        return;
+    }
 
     // Inserir módulos padrão se a tabela estiver vazia
     $count = $conexao->query("SELECT COUNT(*) as c FROM modulos_sistema")->fetch_assoc()['c'];
@@ -441,7 +457,8 @@ function _garantir_tabelas($conexao) {
             ['empresa','Empresa','Sistema','fas fa-building','Dados da empresa','admin',105],
             ['meu_perfil','Meu Perfil','Sistema','fas fa-user-circle','Perfil do usuário','visualizador',106],
         ];
-        $stmt = $conexao->prepare("INSERT IGNORE INTO modulos_sistema (chave,nome,grupo,icone,descricao,permissao_minima,ordem) VALUES (?,?,?,?,?,?,?)");
+        $sql_insert = \ERP\Database\DatabaseDialect::idempotentInsertSql($conexao, "INSERT INTO modulos_sistema (chave,nome,grupo,icone,descricao,permissao_minima,ordem) VALUES (?,?,?,?,?,?,?)");
+        $stmt = $conexao->prepare($sql_insert);
         foreach ($modulos_padrao as $m) {
             $stmt->bind_param('ssssssi', $m[0],$m[1],$m[2],$m[3],$m[4],$m[5],$m[6]);
             $stmt->execute();

@@ -8,6 +8,7 @@ use ERP\Database\PdoMysqliStatement;
 
 require_once __DIR__ . '/../api/db/MysqliDropIn.php';
 require_once __DIR__ . '/../api/db/PdoMysqliConnection.php';
+require_once __DIR__ . '/../api/db/DatabaseDialect.php';
 
 function acceptsMysqliType(mysqli $connection): bool
 {
@@ -1121,8 +1122,10 @@ try {
     [$status, $stdout] = runChild(['--child-api-config-invalid-explicit-path']);
     assertDropIn($status === 0 && str_contains($stdout, 'Configuração de serviço indisponível') && !str_contains($stdout, 'UNEXPECTED_FALLBACK'), 'Caminho explícito inválido deve falhar fechado, sem carregar fallback legado.');
     $fallbackRoots['valid'] = createLegacyFallbackTree();
-    [$status, $stdout] = runChild(['--child-api-config-legacy-fallback', $fallbackRoots['valid']]);
-    assertDropIn($status === 0 && str_contains($stdout, 'PASS fallback MySQL resolvido sem conexão'), 'api/config.php deve carregar o fallback legado validado sem conexão real.');
+    [$status, $stdout, $stderr] = runChild(['--child-api-config-legacy-fallback', $fallbackRoots['valid']]);
+    assertDropIn($status === 0 && str_contains($stdout, 'PASS fallback MySQL resolvido sem conexão'),
+        'api/config.php deve carregar o fallback legado validado sem conexão real. status=' . $status
+        . '; stdout=' . substr($stdout, 0, 500) . '; stderr=' . substr($stderr, 0, 300));
     $fallbackRoots['noisy'] = createLegacyFallbackTree(true);
     [$status, $stdout] = runChild(['--child-api-config-legacy-fallback', $fallbackRoots['noisy']]);
     assertDropIn($status === 0 && str_contains($stdout, 'Configuração de serviço indisponível')

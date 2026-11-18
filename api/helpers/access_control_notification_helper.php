@@ -102,14 +102,13 @@ if (!function_exists('controle_acesso_criar_notificacao_veiculo')) {
              (tenant_id, morador_id, protocolo_id, veiculo_id, tipo, titulo, mensagem, descricao_mercadoria, push_status)
              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'pendente')
              ON DUPLICATE KEY UPDATE
-                id = LAST_INSERT_ID(id), atualizado_em = NOW(), push_status = 'pendente', push_detalhe = NULL"
+                id = id, atualizado_em = NOW(), push_status = 'pendente', push_detalhe = NULL"
         );
         if (!$stmt) {
             controle_acesso_notificacao_debug('insert_preparo_falhou', ['veiculo_id' => $veiculo_id]);
             return ['sucesso' => false, 'motivo' => 'insert_falhou'];
         }
-        $stmt->bind_param('iiissss', $tenant_id, $morador_id, $veiculo_id, $tipo, $titulo, $corpo, $placa);
-        if (!$stmt->execute()) {
+        if (!$stmt->bind_param('iiissss', $tenant_id, $morador_id, $veiculo_id, $tipo, $titulo, $corpo, $placa) || !$stmt->execute()) {
             controle_acesso_notificacao_debug('insert_execucao_falhou', [
                 'tenant_id' => $tenant_id,
                 'morador_id' => $morador_id,
@@ -119,8 +118,20 @@ if (!function_exists('controle_acesso_criar_notificacao_veiculo')) {
             $stmt->close();
             return ['sucesso' => false, 'motivo' => 'insert_falhou'];
         }
-        $notificacao_id = (int)$conexao->insert_id;
         $stmt->close();
+        $idStmt = $conexao->prepare('SELECT id FROM notificacoes_morador WHERE tenant_id = ? AND morador_id = ? AND veiculo_id = ? AND tipo = ? LIMIT 1');
+        if (!$idStmt || !$idStmt->bind_param('iiis', $tenant_id, $morador_id, $veiculo_id, $tipo) || !$idStmt->execute()) {
+            if ($idStmt) $idStmt->close();
+            controle_acesso_notificacao_debug('insert_id_lookup_falhou', ['veiculo_id' => $veiculo_id]);
+            return ['sucesso' => false, 'motivo' => 'insert_falhou'];
+        }
+        $idResult = $idStmt->get_result();
+        if (!$idResult) { $idStmt->close(); return ['sucesso' => false, 'motivo' => 'insert_falhou']; }
+        $idRow = $idResult->fetch_assoc() ?: [];
+        $idResult->free();
+        $idStmt->close();
+        $notificacao_id = (int)($idRow['id'] ?? 0);
+        if ($notificacao_id <= 0) return ['sucesso' => false, 'motivo' => 'insert_falhou'];
 
         $configuracoes = protocolo_notificacao_config($conexao, $tenant_id);
         if (($configuracoes['push_controle_acesso_ativo'] ?? '1') === '0') {
@@ -346,16 +357,26 @@ if (!function_exists('controle_acesso_criar_notificacao_registro')) {
                 "INSERT INTO notificacoes_morador
                  (tenant_id, morador_id, protocolo_id, registro_acesso_id, tipo, titulo, mensagem, descricao_mercadoria, push_status)
                  VALUES (?, ?, NULL, ?, ?, ?, ?, '', 'pendente')
-                 ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), atualizado_em = NOW(), push_status = 'pendente', push_detalhe = NULL"
+                 ON DUPLICATE KEY UPDATE id = id, atualizado_em = NOW(), push_status = 'pendente', push_detalhe = NULL"
             );
             if (!$stmt) continue;
-            $stmt->bind_param('iiisss', $tenant_id, $id_morador, $registro_acesso_id, $tipo_evento, $titulo, $corpo);
-            if (!$stmt->execute()) {
+            if (!$stmt->bind_param('iiisss', $tenant_id, $id_morador, $registro_acesso_id, $tipo_evento, $titulo, $corpo) || !$stmt->execute()) {
                 $stmt->close();
                 continue;
             }
-            $notificacao_id = (int)$conexao->insert_id;
             $stmt->close();
+            $idStmt = $conexao->prepare('SELECT id FROM notificacoes_morador WHERE tenant_id = ? AND morador_id = ? AND registro_acesso_id = ? AND tipo = ? LIMIT 1');
+            if (!$idStmt || !$idStmt->bind_param('iiis', $tenant_id, $id_morador, $registro_acesso_id, $tipo_evento) || !$idStmt->execute()) {
+                if ($idStmt) $idStmt->close();
+                continue;
+            }
+            $idResult = $idStmt->get_result();
+            if (!$idResult) { $idStmt->close(); continue; }
+            $idRow = $idResult->fetch_assoc() ?: [];
+            $notificacao_id = (int)($idRow['id'] ?? 0);
+            $idResult->free();
+            $idStmt->close();
+            if ($notificacao_id <= 0) continue;
             $resumo['persistidas']++;
             controle_acesso_notificacao_auditoria('evento_persistido', [
                 'notificacao_id' => $notificacao_id,

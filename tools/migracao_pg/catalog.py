@@ -59,13 +59,29 @@ def _mysql_socket_options(path: Path) -> dict[str, str]:
         raise CatalogError("MYSQL_DEFAULTS_FILE_UNREADABLE") from error
     if not loaded or not options.has_section("client"):
         raise CatalogError("MYSQL_CLIENT_GROUP_REQUIRED")
+    if options.get("client", "user", fallback="").strip() != "pg_reader":
+        raise CatalogError("MYSQL_ACCOUNT_MUST_BE_PG_READER")
     protocol = options.get("client", "protocol", fallback="").strip().lower()
     if protocol not in {"socket", "unix_socket"}:
         raise CatalogError("MYSQL_PROTOCOL_MUST_BE_SOCKET")
     socket_path = options.get("client", "socket", fallback="/run/mysqld/mysqld.sock").strip()
-    if not socket_path.startswith("/") or "\x00" in socket_path:
-        raise CatalogError("MYSQL_SOCKET_PATH_INVALID")
+    if socket_path not in {"/run/mysqld/mysqld.sock", "/var/run/mysqld/mysqld.sock"}:
+        raise CatalogError("MYSQL_SOCKET_PATH_NOT_ALLOWLISTED")
     return {"unix_socket": socket_path}
+
+
+def _foreign_key_action_rules(
+    table: str, name: str, rules_by_key: dict[tuple[str, str], list[dict[str, Any]]]
+) -> tuple[str, str]:
+    rows = rules_by_key.get((table, name), [])
+    if len(rows) != 1:
+        raise CatalogError("FOREIGN_KEY_RULES_MISSING_OR_AMBIGUOUS")
+    update_rule = str(rows[0].get("update_rule", "")).upper()
+    delete_rule = str(rows[0].get("delete_rule", "")).upper()
+    allowed = {"NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"}
+    if update_rule not in allowed or delete_rule not in allowed:
+        raise CatalogError("FOREIGN_KEY_RULES_INVALID")
+    return update_rule, delete_rule
 
 
 def _safe_default(column: dict[str, Any], *, no_backslash_escapes: bool = False) -> dict[str, str] | None:
@@ -339,6 +355,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
         cursor.close()
         raise CatalogError("MYSQL_DATABASE_MUST_BE_ERP_PG_SOURCE")
 
+    cursor.execute("SET SESSION time_zone = '+00:00'")
     cursor.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
     completed = False
     try:
@@ -421,7 +438,10 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             WHERE constraint_schema=%s
             ORDER BY table_name, constraint_name
         """, (SOURCE_SCHEMA,))
-        fk_rules = {(str(row["table_name"]), str(row["constraint_name"])): row for row in referential}
+        fk_rules: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for rule in referential:
+            key = (str(rule["table_name"]), str(rule["constraint_name"]))
+            fk_rules.setdefault(key, []).append(rule)
         fks: list[dict[str, Any]] = []
         pk_map: dict[str, list[dict[str, Any]]] = {}
         fk_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -434,7 +454,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 fk_groups.setdefault((str(row["table_name"]), str(row["constraint_name"])), []).append(row)
         for (table, name), rows in sorted(fk_groups.items()):
             rows.sort(key=lambda item: int(item["ordinal_position"]))
-            rules = fk_rules.get((table, name))
+            update_rule, delete_rule = _foreign_key_action_rules(table, name, fk_rules)
             fks.append({
                 "table": table,
                 "name": name,
@@ -442,8 +462,8 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 "referenced_schema": str(rows[0]["referenced_table_schema"]),
                 "referenced_table": str(rows[0]["referenced_table_name"]),
                 "referenced_columns": [str(row["referenced_column_name"]) for row in rows],
-                "update_rule": str(rules["update_rule"]).upper() if rules else "NO ACTION",
-                "delete_rule": str(rules["delete_rule"]).upper() if rules else "NO ACTION",
+                "update_rule": update_rule,
+                "delete_rule": delete_rule,
             })
 
         checks = _rows(cursor, """

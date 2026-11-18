@@ -62,6 +62,15 @@ try {
     $assert($result['exit'] === 0, 'SQL portátil em PHP deve passar.');
     $assert(str_contains($result['stdout'], 'nenhum padrão não portátil'), 'Saída positiva deve confirmar lint limpo.');
 
+    $phpSeparator = $writeFixture('separator.php', "<?php\n\$log = \"---\\n\";\n");
+    $result = $run([$phpSeparator]);
+    $assert($result['exit'] === 0, 'Separador de log sem SQL não deve parecer comentário MySQL não portável.');
+
+    $phpAmbiguousComment = $writeFixture('ambiguous_comment.php', "<?php\n\$sql = 'SELECT valor---coluna FROM tabela';\n");
+    $result = $run([$phpAmbiguousComment]);
+    $assert($result['exit'] === 1, 'Operador ambíguo em SQL PHP continua sinalizado.');
+    $assert(str_contains($result['stderr'], 'NONPORTABLE_DASH_DASH_COMMENT'), 'A exceção de separador não pode mascarar SQL ambíguo.');
+
     $mysqlPhp = $writeFixture('mysql.php', "<?php\n\$sql = \"SELECT * FROM `usuarios` WHERE criado = DATE_FORMAT(NOW(), '%Y-%m-%d') LIMIT 0, 10\";\n");
     $result = $run([$mysqlPhp]);
     $assert($result['exit'] === 1, 'Sintaxe MySQL em PHP deve falhar.');
@@ -82,6 +91,17 @@ try {
     $assert(str_contains($result['stderr'], 'MYSQL_ON_UPDATE_TIMESTAMP'), 'O linter deve identificar ON UPDATE CURRENT_TIMESTAMP.');
     $assert(!str_contains($result['stderr'], 'VALUES (1)'), 'A saída do linter deve omitir valores SQL.');
 
+    $upsertPhp = $writeFixture('upsert.php', "<?php\n\$sql = 'INSERT INTO notificacoes (tenant_id, chave) VALUES (?, ?) ON DUPLICATE KEY UPDATE chave = VALUES(chave)';\n");
+    $result = $run([$upsertPhp]);
+    $assert($result['exit'] === 1, 'Upsert MySQL continua sinalizado pela regra específica.');
+    $assert(str_contains($result['stderr'], 'MYSQL_ON_DUPLICATE_KEY'), 'O linter deve identificar ON DUPLICATE KEY.');
+    $assert(!str_contains($result['stderr'], 'MYSQL_INSERT_SET'), 'SET no upsert não é INSERT ... SET.');
+
+    $insertSetPhp = $writeFixture('insert_set.php', "<?php\n\$sql = 'INSERT INTO fila SET estado = ?';\n");
+    $result = $run([$insertSetPhp]);
+    $assert($result['exit'] === 1, 'INSERT ... SET segue bloqueado como sintaxe MySQL.');
+    $assert(str_contains($result['stderr'], 'MYSQL_INSERT_SET'), 'O linter deve identificar INSERT ... SET real.');
+
     $dashDashSql = $writeFixture('dash_dash.sql', "--DATE_FORMAT(created, '%Y-%m-%d')\nSELECT 1;\n");
     $result = $run([$dashDashSql]);
     $assert($result['exit'] === 1, 'Comentários `--` sem separador devem ser marcados como ambíguos entre os drivers.');
@@ -100,7 +120,7 @@ try {
     $assert($result['exit'] === 2, 'Arquivos fora do repositório devem ser recusados.');
     $assert(!str_contains($result['stderr'], '127.0.0.1'), 'Erro de path não deve imprimir conteúdo externo.');
 
-    echo "PASS: 8 cenários sintéticos do linter SQL portátil.\n";
+    echo "PASS: 12 cenários sintéticos do linter SQL portátil.\n";
 } catch (Throwable $error) {
     fwrite(STDERR, 'FAIL: ' . $error->getMessage() . "\n");
     exit(1);

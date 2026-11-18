@@ -833,6 +833,8 @@ function deletarOrcamento($db): void {
  * já que migrações SQL não rodam automaticamente em produção).
  */
 function garantirTabelaOrcamentoDocumentos($db): void {
+    if (\ERP\Database\DatabaseDialect::isPostgres($db)) return;
+
     $db->query("CREATE TABLE IF NOT EXISTS `contrato_orcamento_documentos` (
         `id`              INT AUTO_INCREMENT PRIMARY KEY,
         `tenant_id`       INT          NOT NULL,

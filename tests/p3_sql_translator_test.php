@@ -178,6 +178,32 @@ $check(
     $upsertTranslated === 'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON CONFLICT ("ano") DO UPDATE SET ultimo = EXCLUDED.ultimo+1'
         && substr_count($upsertTranslated, '?') === substr_count($upsertSql, '?')
 );
+$lastInsertIdUpsert = MysqlToPostgresSqlTranslator::translate(
+    'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), ultimo=VALUES(ultimo)',
+    $conflictResolver
+);
+$check(
+    'preserva idempotentemente a PK em upsert legado LAST_INSERT_ID(id)',
+    $lastInsertIdUpsert === 'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON CONFLICT ("ano") DO UPDATE SET id = id, ultimo = EXCLUDED.ultimo'
+);
+$noOpIdUpsert = MysqlToPostgresSqlTranslator::translate(
+    'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE id=id, ultimo=VALUES(ultimo)',
+    $conflictResolver
+);
+$check(
+    'preserva a PK existente em upsert idempotente sem LAST_INSERT_ID',
+    $noOpIdUpsert === 'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON CONFLICT ("ano") DO UPDATE SET id = id, ultimo = EXCLUDED.ultimo'
+);
+$lastInsertIdInvalidCode = null;
+try {
+    MysqlToPostgresSqlTranslator::translate(
+        'INSERT INTO crm_sequencia (ano, ultimo) VALUES (?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(ultimo)',
+        $conflictResolver
+    );
+} catch (SqlTranslationException $exception) {
+    $lastInsertIdInvalidCode = $exception->patternCode;
+}
+$check('recusa LAST_INSERT_ID aplicado a outra coluna em upsert', $lastInsertIdInvalidCode === 'MYSQL_LAST_INSERT_ID_CONTEXT_UNSUPPORTED');
 $replaceTranslated = MysqlToPostgresSqlTranslator::translate(
     'REPLACE INTO crm_sequencia (ano, ultimo) VALUES (?, ?)',
     $conflictResolver

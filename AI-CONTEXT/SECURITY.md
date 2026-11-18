@@ -67,6 +67,15 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
   projetos, documentos, impressão e imagens devem aplicar o mesmo escopo server-side.
 - Uma URL direta, um botão oculto ou um departamento enviado no payload nunca substitui
   a resolução do departamento armazenado na O.S. e a validação da sessão autenticada.
+- Interações, materiais, vínculos, projetos e uploads que alteram O.S. existente exigem
+  `editar` no RBAC global e no departamento; etapas são validadas por tenant. Contagens,
+  marcação e dispensa de notificações aplicam a mesma visibilidade departamental da O.S.
+- A API `api/api_portal_os.php` aceita somente Bearer no cabeçalho, resolve morador/tenant
+  no servidor e aplica ambos em assuntos, O.S. e interações. Token em query/body é inválido;
+  a API permanece 503 no PostgreSQL até portabilidade e homologação próprias.
+- `api/api_colaborador_mobile.php` deriva usuário/tenant da sessão Bearer móvel; abertura de
+  O.S. exige POST, assunto é validado no tenant, e chamado + interação inicial são atômicos.
+  A numeração anual usa o mesmo lock global dos fluxos interno e Portal do Morador.
 
 
 ## 7. Alertas da Unidade e QR
@@ -128,3 +137,9 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 ### P3.2 — Portal Bearer e logout (complemento)
 
 No login Portal MySQL, o Bearer emitido é guardado somente na sessão PHP server-side, não em log ou em outro campo RBAC. `logout_morador.php` usa o marcador para revogar a sessão Bearer, restrita ao morador e tenant associados à sessão, antes de destruir o estado PHP. O login grava `sessoes_portal.tenant_id` quando a coluna existe no schema corrente e conserva o contrato legado quando ausente; esse valor é derivado no servidor. PostgreSQL Portal permanece bloqueado.
+
+## 12. PWA — fronteira institucional e tenant
+- `api/api_pwa_central.php` é deliberadamente institucional/global, não uma tela de administrador do condomínio: exige Super-Admin no contexto global e bloqueia sessão em impersonação. Suas consultas globais só são aceitáveis sob esse controle; não apresentar a Central como tenant-scoped. O endpoint retorna 503 no PostgreSQL enquanto não for portada e homologada.
+- `api/api_pwa_push.php` opera no tenant da sessão/token, não no tenant do payload. O envio automático é interno, exige loopback, chave privada configurada fora do código e allowlist privada de tenants; destinatário ausente/ambíguo ou ID inválido falha fechado e nunca vira broadcast. Configuração pública usa allowlist de campos e não retorna credenciais ou metadados privados.
+- Mutação de push exige POST e origem autorizada; erros brutos do transporte/provedor FCM não são persistidos nem devolvidos ao cliente.
+- APIs autenticadas com CORS devem rejeitar origem não permitida com 403; não usar `*` com credenciais nem refletir uma origem desconhecida. O Portal O.S. aceita somente os domínios HTTPS oficiais e localhost estritamente limitado para desenvolvimento.

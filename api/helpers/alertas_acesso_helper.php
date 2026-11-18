@@ -54,12 +54,19 @@ if (!function_exists('alertas_acesso_processar_evento')) {
             }
             if (!$corresponde) continue;
             $dados_json = json_encode(['origem' => $origem, 'evento' => $evento, 'alerta' => $alerta['nome']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $stmtEv = $conexao->prepare("INSERT INTO alertas_acesso_eventos (tenant_id, alerta_id, evento_uuid, origem, dados_json, status) VALUES (?,?,?,?,?,'pendente') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
+            $stmtEv = $conexao->prepare("INSERT INTO alertas_acesso_eventos (tenant_id, alerta_id, evento_uuid, origem, dados_json, status) VALUES (?,?,?,?,?,'pendente') ON DUPLICATE KEY UPDATE id=id");
             if (!$stmtEv) continue;
-            $stmtEv->bind_param('iisss', $tenant_id, $aid, $evento_uuid, $origem, $dados_json);
-            if (!$stmtEv->execute()) { $stmtEv->close(); continue; }
-            $evento_id = (int)$conexao->insert_id;
+            if (!$stmtEv->bind_param('iisss', $tenant_id, $aid, $evento_uuid, $origem, $dados_json) || !$stmtEv->execute()) { $stmtEv->close(); continue; }
             $stmtEv->close();
+            $idStmt = $conexao->prepare('SELECT id FROM alertas_acesso_eventos WHERE tenant_id = ? AND alerta_id = ? AND evento_uuid = ? LIMIT 1');
+            if (!$idStmt || !$idStmt->bind_param('iis', $tenant_id, $aid, $evento_uuid) || !$idStmt->execute()) { if ($idStmt) $idStmt->close(); continue; }
+            $idResult = $idStmt->get_result();
+            if (!$idResult) { $idStmt->close(); continue; }
+            $idRow = $idResult->fetch_assoc() ?: [];
+            $evento_id = (int)($idRow['id'] ?? 0);
+            $idResult->free();
+            $idStmt->close();
+            if ($evento_id <= 0) continue;
             $canais = json_decode((string)$alerta['canais_json'], true);
             if (!is_array($canais) || !$canais) $canais = ['sistema'];
             foreach (array_unique($canais) as $canal) {

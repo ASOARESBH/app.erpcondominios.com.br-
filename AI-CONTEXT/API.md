@@ -14,6 +14,7 @@ Toda API deve retornar obrigatoriamente a estrutura:
     "dados": { ... } // Opcional
 }
 ```
+`retornar_json($sucesso, $mensagem, $dados, $statusHttp)` aceita o status HTTP como quarto argumento opcional, validado entre 100 e 599.
 
 ## 3. Autenticação nas APIs
 O arquivo `auth_helper.php` deve ser incluído no topo.
@@ -119,6 +120,10 @@ Ao criar ou editar uma O.S. com `morador_id`, o backend resolve `nome` e `unidad
 No formulário interno de criação/edição, `api/api_unidades.php?acao=select` fornece unidades ativas do tenant e `api/api_moradores.php?acao=select_por_unidade&unidade=...` fornece moradores ativos daquela unidade; o segundo select só habilita após escolher unidade. A seleção de unidade sem morador permanece válida para chamados de área comum. Ao selecionar um morador, o formulário envia `morador_id` e o backend continua sendo a fonte de verdade para nome/unidade.
 
 Na aba Chamados, o select de Unidade exibe somente o nome, sem quantitativos, e ordena/deduplica no frontend após trim e normalização de caixa. Deep-links e o atalho do ranking inserem uma unidade ausente na posição natural, mantendo `Todas` como primeira opção. A aba não consome mais `GET ...?acao=unidades_com_os`; a busca no código encontrou somente a própria ação backend como definição, sem outro consumidor ativo. A ação permanece tenant-safe e RBAC, preservada por enquanto como candidata a remoção futura.
+
+As ações que alteram uma O.S. existente ou seus subrecursos (`adicionar_interacao`, `adicionar_material`, `vincular_chamado`, projetos e uploads) exigem `editar`, além da política departamental da O.S. IDs de etapa de projeto são revalidados como ativos e pertencentes ao tenant antes da gravação. A numeração anual usa `api/helpers/os_numbering.php`, lock compartilhado entre criação interna, Portal do Morador e Portal do Colaborador; o lock permanece até a gravação atômica do chamado e sua interação inicial, pois o índice de `numero` é global.
+
+`api/api_portal_os.php` exige `Authorization: Bearer`, deriva morador e `tenant_id` do token ativo e filtra assuntos, O.S. e interações por esse tenant; token em query/body não é aceito. `listar_assuntos` também requer autenticação. Escritas de browser aceitam somente Origins exatas da allowlist; sem Origin, a escrita só prossegue após validação do Bearer, para não bloquear chamadas máquina-a-máquina autenticadas. Falha de conexão retorna HTTP 503; a numeração anual mantém lock até commit e libera em falhas do scan/da transação. O endpoint retorna HTTP 503 no PostgreSQL até que sua estrutura tenant-aware seja portada e homologada; integração HTTP ainda é necessária para provar a operação.
 
 ## 10.2 Projetos — URL pública personalizada por tenant
 
@@ -281,3 +286,14 @@ Referência completa em `AI-CONTEXT/CHATIN.md`.
 ## 19. Portal do Morador — tenant e revogação Bearer no logout
 
 No login MySQL do Portal, `api/api_verificar_tipo_login.php` detecta `sessoes_portal.tenant_id` no schema corrente por `DatabaseDialect::columnExists()`. Quando a coluna existe, a linha nova recebe o tenant derivado do cadastro do morador; quando não existe, permanece o `INSERT` legado. O cliente nunca escolhe nem envia esse tenant. O login também guarda o Bearer em `$_SESSION['morador_portal_token']` na sessão PHP server-side, para que `api/logout_morador.php` possa revogá-lo antes de destruir a sessão. O endpoint de logout não aceita token pela querystring e restringe a atualização ao morador e tenant da sessão. O caminho Portal PostgreSQL continua bloqueado até homologação própria.
+
+## 20. Contas Bancárias — ledger, OFX e readiness
+
+`api/api_contas_bancarias.php` deriva `tenant_id` da sessão e exige esse escopo nas referências de conta, movimento, título e conciliação. Escritas passam por POST e Origin permitida. A migration runtime MySQL ainda não está comprovada como instalador completo: ela retorna antes de executar todos os ajustes v2 e não adiciona `tenant_id` em tabelas legadas. Schema sem as colunas tenant-scoped obrigatórias responde 503, sem backfill presumido. A reconciliação do DDL runtime com `sql/migration_contas_bancarias_v2.sql`, incluindo schema novo e legado, continua pendente de teste. No PostgreSQL, migration/DDL runtime não é executada: a API responde 503 enquanto o DDL versionado e os campos exigidos estiverem ausentes.
+
+Conciliações manual/automática sincronizam movimento, título e ledger dentro de transação; desfazer valida o vínculo e limpa os campos canônicos do título. OFX confirma primeiro a importação transacional; falhas posteriores de conciliação/contadores/saldo não transformam uma importação já commitada em erro retryável e são identificadas na resposta.
+
+
+## Portal do Morador — dependentes
+
+`api/api_portal_dependentes.php` deriva o morador da sessão PHP ou do Token Bearer validado; o fallback de sessão confirma que o morador ainda existe e está ativo. Listagens, verificações de CPF e CRUD exigem `tenant_id` derivado do morador e também filtram por `morador_id`; sem as colunas multi-tenant obrigatórias, o endpoint falha em 503, sem backfill ou escopo legado permissivo. Escritas rejeitam origens não permitidas; para automações sem `Origin`, exigem Bearer, que é validado antes da operação. O PostgreSQL permanece bloqueado para este endpoint. Logs de auditoria não incluem nomes, CPF, morador_id ou mensagens brutas do driver.

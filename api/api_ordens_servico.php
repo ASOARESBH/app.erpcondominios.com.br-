@@ -35,13 +35,13 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
     $dir = dirname($log_file);
     if (!is_dir($dir)) mkdir($dir, 0755, true);
     $entry = date('Y-m-d H:i:s') . ' | PHP_ERROR | ' . json_encode([
-        'errno' => $errno, 'errstr' => $errstr,
+        'errno' => $errno,
         'errfile' => basename($errfile), 'errline' => $errline
     ], JSON_UNESCAPED_UNICODE) . PHP_EOL;
     file_put_contents($log_file, $entry, FILE_APPEND | LOCK_EX);
     if (in_array($errno, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
         http_response_code(500);
-        echo json_encode(['sucesso'=>false,'mensagem'=>"Erro interno: $errstr (linha $errline)"], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['sucesso'=>false,'mensagem'=>'Erro interno. Tente novamente ou contate o administrador.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
     return false;
@@ -50,12 +50,14 @@ register_shutdown_function(function() {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
         $log_file = __DIR__ . '/../logs/debug_ordens_servico.log';
-        $entry = date('Y-m-d H:i:s') . ' | FATAL_ERROR | ' . json_encode($error, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+        $entry = date('Y-m-d H:i:s') . ' | FATAL_ERROR | ' . json_encode([
+            'type' => $error['type'], 'file' => basename($error['file']), 'line' => $error['line'],
+        ], JSON_UNESCAPED_UNICODE) . PHP_EOL;
         file_put_contents($log_file, $entry, FILE_APPEND | LOCK_EX);
         if (!headers_sent()) {
             http_response_code(500);
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['sucesso'=>false,'mensagem'=>'Erro fatal: '.$error['message']], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['sucesso'=>false,'mensagem'=>'Erro interno. Tente novamente ou contate o administrador.'], JSON_UNESCAPED_UNICODE);
         }
     }
 });
@@ -72,6 +74,8 @@ require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
 require_once __DIR__ . '/helpers/tenant_file_storage_helper.php';
 require_once __DIR__ . '/helpers/os_email_notification_helper.php';
+require_once __DIR__ . '/helpers/os_numbering.php';
+require_once __DIR__ . '/helpers/os_department_policy.php';
 ob_end_clean();
 
 // ─── Headers ─────────────────────────────────────────
@@ -79,19 +83,31 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
 $allowed_origins = [
     'https://app.erpcondominios.com.br',
-    'http://app.erpcondominios.com.br',
-    'https://erpcondominios.com.br',
     'http://localhost',
     'http://127.0.0.1'
 ];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-header('Access-Control-Allow-Origin: ' . (in_array($origin, $allowed_origins) ? $origin : 'https://app.erpcondominios.com.br'));
-header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+if ($origin !== '' && !in_array($origin, $allowed_origins, true)) {
+    http_response_code(403);
+    echo json_encode(['sucesso' => false, 'mensagem' => 'Origem não autorizada.', 'dados' => null], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if ($origin !== '') {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+    header('Access-Control-Allow-Credentials: true');
+}
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    exit;
+}
+if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'POST'], true)) {
+    http_response_code(405);
+    header('Allow: GET, POST, OPTIONS');
+    echo json_encode(['sucesso' => false, 'mensagem' => 'Método não permitido.', 'dados' => null], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -100,18 +116,17 @@ function os_log($nivel, $mensagem, $dados = []) {
     $log_file = __DIR__ . '/../logs/debug_ordens_servico.log';
     $dir = dirname($log_file);
     if (!is_dir($dir)) mkdir($dir, 0755, true);
-    $session_id = (session_status() === PHP_SESSION_ACTIVE) ? session_id() : 'sem-sessao';
     $entry = date('Y-m-d H:i:s') . ' | ' . strtoupper($nivel) . ' | ' . json_encode([
-        'session_id' => $session_id,
-        'mensagem'   => $mensagem,
-        'dados'      => $dados
+        'mensagem'   => $mensagem
     ], JSON_UNESCAPED_UNICODE) . PHP_EOL;
     file_put_contents($log_file, $entry, FILE_APPEND | LOCK_EX);
 }
 
 // ─── Função retornar JSON ────────────────────────────
 if (!function_exists('retornar_json')) {
-    function retornar_json($sucesso, $mensagem, $dados = null) {
+    function retornar_json($sucesso, $mensagem, $dados = null, int $statusHttp = 200) {
+        if ($statusHttp < 100 || $statusHttp > 599) $statusHttp = 500;
+        http_response_code($statusHttp);
         $r = ['sucesso' => $sucesso, 'mensagem' => $mensagem];
         if ($dados !== null) $r['dados'] = $dados;
         echo json_encode($r, JSON_UNESCAPED_UNICODE);
@@ -122,9 +137,12 @@ if (!function_exists('retornar_json')) {
 // ─── Função de geração de notificações ────────────────
 if (!function_exists('_os_gerar_notificacoes')) {
     function _os_gerar_notificacoes($conn, $evento, $os_dados) {
+    global $tenant_id;
         // Garantir que as tabelas corretas existem
+        if (!\ERP\Database\DatabaseDialect::isPostgres($conn)) {
         $conn->query("CREATE TABLE IF NOT EXISTS notif_alertas (
             id            INT AUTO_INCREMENT PRIMARY KEY,
+            tenant_id     INT NOT NULL,
             regra_id      INT          DEFAULT NULL,
             modulo        VARCHAR(50)  NOT NULL DEFAULT 'os',
             evento        VARCHAR(80)  NOT NULL,
@@ -138,18 +156,20 @@ if (!function_exists('_os_gerar_notificacoes')) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $conn->query("CREATE TABLE IF NOT EXISTS notif_destinatarios (
             id          INT AUTO_INCREMENT PRIMARY KEY,
+            tenant_id   INT NOT NULL,
             alerta_id   INT NOT NULL,
             usuario_id  INT NOT NULL,
             lido        TINYINT(1) NOT NULL DEFAULT 0,
             lido_em     DATETIME DEFAULT NULL,
             dispensado  TINYINT(1) NOT NULL DEFAULT 0,
-            UNIQUE KEY uk_alerta_usuario (alerta_id, usuario_id),
+            UNIQUE KEY uk_alerta_usuario (tenant_id, alerta_id, usuario_id),
             INDEX idx_usuario (usuario_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
 
         $ev_esc = $conn->real_escape_string($evento);
         $result = $conn->query(
-            "SELECT * FROM notif_regras WHERE modulo='os' AND evento='$ev_esc' AND ativo=1"
+            "SELECT * FROM notif_regras WHERE tenant_id = $tenant_id AND modulo='os' AND evento='$ev_esc' AND ativo=1"
         );
         if (!$result) return;
 
@@ -192,9 +212,9 @@ if (!function_exists('_os_gerar_notificacoes')) {
 
             $conn->query(
                 "INSERT INTO notif_alertas
-                    (regra_id, modulo, evento, titulo, corpo, icone, cor, link_pagina, link_id)
+                    (tenant_id, regra_id, modulo, evento, titulo, corpo, icone, cor, link_pagina, link_id)
                  VALUES
-                    ($regra_id, 'os', '$ev_esc', '$titulo_esc', '$corpo_esc',
+                    ($tenant_id, $regra_id, 'os', '$ev_esc', '$titulo_esc', '$corpo_esc',
                      '$icone', '$cor', 'ordens_servico', $link_id)"
             );
             $alerta_id = $conn->insert_id;
@@ -213,15 +233,21 @@ if (!function_exists('_os_gerar_notificacoes')) {
                 if ($r_adm) while ($u = $r_adm->fetch_assoc()) $dest_ids[] = intval($u['id']);
             }
 
-            // Sempre incluir atendente e morador/solicitante vinculados à OS
+            // Notificações internas são destinadas a usuários, nunca a IDs de moradores.
             if (!empty($os_dados['atendente_id']))  $dest_ids[] = intval($os_dados['atendente_id']);
-            if (!empty($os_dados['morador_id']))     $dest_ids[] = intval($os_dados['morador_id']);
             if (!empty($os_dados['criado_por_id']))  $dest_ids[] = intval($os_dados['criado_por_id']);
 
-            foreach (array_unique(array_filter($dest_ids)) as $uid) {
+            $dest_ids = array_values(array_unique(array_filter(array_map('intval', $dest_ids))));
+            if (!$dest_ids) continue;
+            $idsSql = implode(',', $dest_ids);
+            $destQuery = $conn->query("SELECT id FROM usuarios WHERE tenant_id = $tenant_id AND ativo = 1 AND id IN ($idsSql)");
+            if (!$destQuery) continue;
+            $destIdsPermitidos = [];
+            while ($destRow = $destQuery->fetch_assoc()) $destIdsPermitidos[] = (int)$destRow['id'];
+            foreach ($destIdsPermitidos as $uid) {
                 $conn->query(
-                    "INSERT IGNORE INTO notif_destinatarios (alerta_id, usuario_id)
-                     VALUES ($alerta_id, $uid)"
+                    "INSERT IGNORE INTO notif_destinatarios (tenant_id, alerta_id, usuario_id)
+                     VALUES ($tenant_id, $alerta_id, $uid)"
                 );
             }
         }
@@ -233,8 +259,8 @@ try {
     verificarAutenticacao(true, 'operador');
 $tenant_id = exigirTenantId();
 } catch (Exception $e) {
-    os_log('erro', 'Autenticação falhou', ['msg' => $e->getMessage()]);
-    retornar_json(false, 'Não autenticado: ' . $e->getMessage());
+    os_log('erro', 'Autenticação falhou', ['tipo_erro' => get_class($e)]);
+    retornar_json(false, 'Não autenticado.', null, 401);
 }
 
 // ─── Escopo de acesso às O.S. ─────────────────────────
@@ -255,56 +281,60 @@ function os_departamento_chave($departamento): string {
     return strtoupper(trim((string)($departamento ?? '')));
 }
 
-function os_carregar_politica_usuario(mysqli $conn): void {
+function os_carregar_politica_usuario(mysqli $conn): bool {
     global $tenant_id, $os_usuario_id, $os_eh_gestor, $os_pode_ver_todas,
            $os_restritivo, $os_politica_departamentos_ativa, $os_permissoes_departamento_cache;
 
     $os_restritivo = false;
     $os_politica_departamentos_ativa = false;
+    $os_permissoes_departamento_cache = [];
 
     $stmt = $conn->prepare(
         'SELECT restritivo_os FROM os_usuarios_config WHERE tenant_id = ? AND usuario_id = ? LIMIT 1'
     );
-    if ($stmt) {
-        $stmt->bind_param('ii', $tenant_id, $os_usuario_id);
-        $stmt->execute();
-        $config = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $os_restritivo = !empty($config['restritivo_os']);
-    }
+    if (!$stmt) return false;
+    $stmt->bind_param('ii', $tenant_id, $os_usuario_id);
+    if (!$stmt->execute()) { $stmt->close(); return false; }
+    $configResult = $stmt->get_result();
+    if (!$configResult) { $stmt->close(); return false; }
+    $config = $configResult->fetch_assoc();
+    $stmt->close();
+    $os_restritivo = !empty($config['restritivo_os']);
 
     $stmt = $conn->prepare(
         'SELECT departamento, pode_visualizar, pode_criar, pode_editar, pode_excluir
          FROM os_permissoes_departamento WHERE tenant_id = ? AND usuario_id = ?'
     );
-    if ($stmt) {
-        $stmt->bind_param('ii', $tenant_id, $os_usuario_id);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        while ($row = $res->fetch_assoc()) {
-            $dep = os_departamento_chave($row['departamento']);
-            if ($dep === '') continue;
-            $os_permissoes_departamento_cache[$dep] = [
-                'visualizar' => (int)$row['pode_visualizar'],
-                'criar'      => (int)$row['pode_criar'],
-                'editar'     => (int)$row['pode_editar'],
-                'excluir'    => (int)$row['pode_excluir'],
-            ];
-        }
-        $stmt->close();
-        $os_politica_departamentos_ativa = count($os_permissoes_departamento_cache) > 0;
+    if (!$stmt) return false;
+    $stmt->bind_param('ii', $tenant_id, $os_usuario_id);
+    if (!$stmt->execute()) { $stmt->close(); return false; }
+    $res = $stmt->get_result();
+    if (!$res) { $stmt->close(); return false; }
+    while ($row = $res->fetch_assoc()) {
+        $dep = os_departamento_chave($row['departamento']);
+        if ($dep === '') continue;
+        $os_permissoes_departamento_cache[$dep] = [
+            'visualizar' => (int)$row['pode_visualizar'],
+            'criar'      => (int)$row['pode_criar'],
+            'editar'     => (int)$row['pode_editar'],
+            'excluir'    => (int)$row['pode_excluir'],
+        ];
     }
-
-    // A restrição explícita vence a herança do perfil gestor. Sem configuração,
-    // preserva-se a compatibilidade: gestores veem todo o tenant.
-    $os_pode_ver_todas = $os_eh_gestor && !$os_restritivo && !$os_politica_departamentos_ativa;
+    $stmt->close();
+    $estadoPolitica = os_department_policy_state(
+        $os_permissoes_departamento_cache,
+        $os_eh_gestor,
+        $os_restritivo
+    );
+    $os_politica_departamentos_ativa = $estadoPolitica['active'];
+    $os_pode_ver_todas = $estadoPolitica['can_view_all'];
+    return true;
 }
 
 function os_tem_coluna_assumido(mysqli $conn): bool {
     static $disponivel = null;
     if ($disponivel !== null) return $disponivel;
-    $res = @$conn->query("SHOW COLUMNS FROM `os_chamados` LIKE 'assumido_por_id'");
-    $disponivel = $res && $res->num_rows > 0;
+    $disponivel = \ERP\Database\DatabaseDialect::columnExists($conn, 'os_chamados', 'assumido_por_id');
     return $disponivel;
 }
 
@@ -338,7 +368,7 @@ function os_pode_acao_departamento(string $departamento, string $acao): bool {
 
 function os_exigir_acao_departamento(string $departamento, string $acao): void {
     if (os_pode_acao_departamento($departamento, $acao)) return;
-    retornar_json(false, 'Você não possui permissão para esta ação no departamento informado.');
+    retornar_json(false, 'Você não possui permissão para esta ação no departamento informado.', null, 403);
 }
 
 function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, status, departamento, criado_por_id, atendente_id, atendente_nome, morador_id, morador_unidade'): ?array {
@@ -360,7 +390,7 @@ function os_carregar_acessivel(mysqli $conn, int $id, string $campos = 'id, stat
 function os_exigir_acesso(int $id, string $mensagem = 'OS não encontrada'): array {
     global $conn;
     $os = os_carregar_acessivel($conn, $id);
-    if (!$os) retornar_json(false, $mensagem);
+    if (!$os) retornar_json(false, $mensagem, null, 404);
     return $os;
 }
 
@@ -372,9 +402,50 @@ function os_exigir_acao_os(int $id, string $acao, string $mensagem = 'OS não en
         || (int)($os['assumido_por_id'] ?? 0) === $os_usuario_id;
     if ($acao === 'visualizar' && $vinculado_ao_usuario) return $os;
     if (!os_pode_acao_departamento((string)($os['departamento'] ?? ''), $acao)) {
-        retornar_json(false, 'Você não possui a permissão necessária para esta ação no departamento da O.S.');
+        retornar_json(false, 'Você não possui a permissão necessária para esta ação no departamento da O.S.', null, 403);
     }
     return $os;
+}
+
+function _os_baixar_materiais_em_transacao(mysqli $conn, int $tenantId, int $osId): int {
+    $stmt = $conn->prepare('SELECT id, produto_id, quantidade FROM os_materiais_usados WHERE tenant_id = ? AND os_id = ? AND estoque_baixado = 0 ORDER BY produto_id, id FOR UPDATE');
+    if (!$stmt) throw new RuntimeException('materials_lookup_failed');
+    $stmt->bind_param('ii', $tenantId, $osId);
+    if (!$stmt->execute()) throw new RuntimeException('materials_lookup_failed');
+    $result = $stmt->get_result();
+    if (!$result) throw new RuntimeException('materials_lookup_failed');
+    $materiais = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    $baixados = 0;
+    $stProduto = $conn->prepare('SELECT quantidade_estoque FROM produtos_estoque WHERE tenant_id = ? AND id = ? FOR UPDATE');
+    $stAtualizaProduto = $conn->prepare('UPDATE produtos_estoque SET quantidade_estoque = quantidade_estoque - ? WHERE tenant_id = ? AND id = ? AND quantidade_estoque >= ?');
+    $stMarcaMaterial = $conn->prepare('UPDATE os_materiais_usados SET estoque_baixado = 1 WHERE tenant_id = ? AND id = ? AND estoque_baixado = 0');
+    if (!$stProduto || !$stAtualizaProduto || !$stMarcaMaterial) throw new RuntimeException('stock_statement_failed');
+
+    foreach ($materiais as $material) {
+        $produtoId = (int)$material['produto_id'];
+        $quantidade = (string)$material['quantidade'];
+        if (!is_numeric($quantidade) || !is_finite((float)$quantidade) || (float)$quantidade <= 0) {
+            throw new RuntimeException('material_quantity_invalid');
+        }
+        $stProduto->bind_param('ii', $tenantId, $produtoId);
+        if (!$stProduto->execute()) throw new RuntimeException('stock_lookup_failed');
+        $produtoResult = $stProduto->get_result();
+        $produto = $produtoResult ? $produtoResult->fetch_assoc() : null;
+        if (!$produto) throw new RuntimeException('stock_product_missing');
+        $stAtualizaProduto->bind_param('siss', $quantidade, $tenantId, $produtoId, $quantidade);
+        if (!$stAtualizaProduto->execute()) throw new RuntimeException('stock_update_failed');
+        if ($stAtualizaProduto->affected_rows !== 1) throw new DomainException('stock_insufficient');
+        $materialId = (int)$material['id'];
+        $stMarcaMaterial->bind_param('ii', $tenantId, $materialId);
+        if (!$stMarcaMaterial->execute() || $stMarcaMaterial->affected_rows !== 1) throw new RuntimeException('material_state_update_failed');
+        $baixados++;
+    }
+    $stProduto->close();
+    $stAtualizaProduto->close();
+    $stMarcaMaterial->close();
+    return $baixados;
 }
 
 function os_resolver_atendente_tenant(mysqli $conn, int $usuarioId): ?array {
@@ -391,6 +462,55 @@ function os_resolver_atendente_tenant(mysqli $conn, int $usuarioId): ?array {
     $usuario = $res ? ($res->fetch_assoc() ?: null) : null;
     $stmt->close();
     return $usuario;
+}
+
+function os_resolver_recursos_humanos_tenant(mysqli $conn, array $itens): ?array {
+    global $tenant_id;
+    $resolvidos = [];
+    $vistos = [];
+    $stmt = $conn->prepare('SELECT id, nome, cargo, departamento FROM rh_colaboradores WHERE tenant_id = ? AND id = ? AND ativo = 1 LIMIT 1');
+    if (!$stmt) return null;
+    foreach ($itens as $item) {
+        if (!is_array($item) || !isset($item['id'])) { $stmt->close(); return null; }
+        $id = filter_var($item['id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($id === false) { $stmt->close(); return null; }
+        if (isset($vistos[$id])) continue;
+        $stmt->bind_param('ii', $tenant_id, $id);
+        if (!$stmt->execute()) { $stmt->close(); return null; }
+        $result = $stmt->get_result();
+        if (!$result) { $stmt->close(); return null; }
+        $colaborador = $result->fetch_assoc();
+        if (!$colaborador) { $stmt->close(); return null; }
+        $vistos[$id] = true;
+        $resolvidos[] = $colaborador;
+    }
+    $stmt->close();
+    return $resolvidos;
+}
+
+function os_etapa_pertence_tenant(mysqli $conn, int $tenantId, mixed $etapaId): bool {
+    if ($etapaId === null || $etapaId === '' || $etapaId === 0 || $etapaId === '0') return true;
+    if ((!is_int($etapaId) && !is_string($etapaId)) || !preg_match('/^[1-9][0-9]{0,9}$/D', (string)$etapaId)) return false;
+    $id = filter_var((string)$etapaId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 2147483647]]);
+    if ($id === false) return false;
+    $stmt = $conn->prepare('SELECT 1 FROM os_etapas WHERE tenant_id = ? AND id = ? AND ativo = 1 LIMIT 1');
+    if (!$stmt || !$stmt->bind_param('ii', $tenantId, $id) || !$stmt->execute()) return false;
+    $valida = $stmt->get_result()->fetch_assoc() !== null;
+    $stmt->close();
+    return $valida;
+}
+
+function os_assunto_pertence_tenant(mysqli $conn, ?int $assuntoId): bool {
+    global $tenant_id;
+    if ($assuntoId === null) return true;
+    $stmt = $conn->prepare('SELECT 1 FROM os_assuntos WHERE tenant_id = ? AND id = ? LIMIT 1');
+    if (!$stmt) return false;
+    $stmt->bind_param('ii', $tenant_id, $assuntoId);
+    $ok = $stmt->execute();
+    $result = $ok ? $stmt->get_result() : null;
+    $ok = $result !== null && $result->fetch_assoc() !== null;
+    $stmt->close();
+    return $ok;
 }
 
 function os_resolver_morador_tenant(mysqli $conn, int $moradorId): ?array {
@@ -444,10 +564,33 @@ function _os_texto_simples($valor): string {
 }
 
 $acao = $_GET['acao'] ?? $_POST['acao'] ?? $body['acao'] ?? '';
+$acoes_escrita = [
+    'migration', 'criar', 'editar', 'excluir', 'adicionar_interacao', 'finalizar', 'assumir_portal',
+    'vincular_chamado', 'salvar_permissoes_os', 'criar_assunto', 'editar_assunto', 'excluir_assunto',
+    'salvar_config', 'excluir_config', 'adicionar_material', 'remover_material', 'baixar_estoque_os',
+    'salvar_projeto', 'upload_imagem_capa', 'upload_foto_interacao', 'criar_etapa', 'editar_etapa',
+    'excluir_etapa', 'vincular_documentos_projeto',
+];
+if (in_array($acao, $acoes_escrita, true)) {
+    if ($metodo !== 'POST') retornar_json(false, 'Esta ação exige POST.', null, 405);
+    if ($origin === '' || !in_array($origin, $allowed_origins, true)) {
+        retornar_json(false, 'Origem não autorizada.', null, 403);
+    }
+}
+
+if (\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+    foreach (['notif_regras', 'notif_alertas', 'notif_destinatarios'] as $tabelaNotif) {
+        if (!\ERP\Database\DatabaseDialect::tableExists($conn, $tabelaNotif)
+            || !\ERP\Database\DatabaseDialect::columnExists($conn, $tabelaNotif, 'tenant_id')) {
+            http_response_code(503);
+            retornar_json(false, 'Schema de notificações não provisionado pelo DDL versionado.');
+        }
+    }
+}
 
 if (rbacTabelasDisponiveis($conn)) {
-    $acoes_criar = ['criar', 'adicionar_interacao', 'vincular_chamado', 'adicionar_material', 'salvar_projeto', 'upload_imagem_capa', 'upload_foto_interacao', 'criar_etapa'];
-    $acoes_editar = ['editar', 'finalizar', 'assumir_portal', 'remover_material', 'baixar_estoque_os', 'editar_assunto', 'salvar_config', 'editar_etapa'];
+    $acoes_criar = ['criar', 'criar_etapa'];
+    $acoes_editar = ['editar', 'adicionar_interacao', 'vincular_chamado', 'adicionar_material', 'salvar_projeto', 'upload_imagem_capa', 'upload_foto_interacao', 'finalizar', 'assumir_portal', 'remover_material', 'baixar_estoque_os', 'editar_assunto', 'salvar_config', 'editar_etapa'];
     $acoes_excluir = ['excluir', 'excluir_assunto', 'excluir_config', 'excluir_etapa'];
     $acao_rbac = 'visualizar';
     if (in_array($acao, $acoes_criar, true)) $acao_rbac = 'criar';
@@ -456,12 +599,13 @@ if (rbacTabelasDisponiveis($conn)) {
     rbacExigir($conn, 'ordens_servico', $acao_rbac, ['submodulo_chave' => $acao ?: null]);
 }
 
-os_log('info', 'Requisição recebida', ['metodo' => $metodo, 'acao' => $acao, 'get' => $_GET]);
+os_log('info', 'Requisição recebida', ['metodo' => $metodo, 'acao' => $acao]);
 
 // =====================================================
 // MIGRATION — CRIAR TABELAS
 // =====================================================
 function _os_garantir_indice_unidade($conn): bool {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) return true;
     $colunas = $conn->query(
         "SELECT COUNT(DISTINCT COLUMN_NAME) AS total
          FROM INFORMATION_SCHEMA.COLUMNS
@@ -501,6 +645,7 @@ function _os_garantir_indice_unidade($conn): bool {
 }
 
 function _os_garantir_tabelas($conn) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) return [];
     $sqls = [];
 
     // Tabela principal de OS
@@ -545,6 +690,7 @@ function _os_garantir_tabelas($conn) {
     // Interações / histórico de atendimento
     $sqls[] = "CREATE TABLE IF NOT EXISTS os_interacoes (
         id          INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id   INT NOT NULL,
         os_id       INT NOT NULL,
         tipo        ENUM('comentario','andamento','solucao','nota_interna') NOT NULL DEFAULT 'comentario',
         mensagem    TEXT NOT NULL,
@@ -552,12 +698,14 @@ function _os_garantir_tabelas($conn) {
         usuario_id  INT DEFAULT NULL,
         usuario_nome VARCHAR(255) DEFAULT NULL,
         criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_os_id (os_id)
+        INDEX idx_os_id (os_id),
+        INDEX idx_os_tenant_os (tenant_id, os_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     // Materiais usados em cada OS
     $sqls[] = "CREATE TABLE IF NOT EXISTS os_materiais_usados (
         id              INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id       INT NOT NULL,
         os_id           INT NOT NULL,
         produto_id      INT NOT NULL,
         produto_nome    VARCHAR(255) NOT NULL,
@@ -566,33 +714,39 @@ function _os_garantir_tabelas($conn) {
         estoque_baixado TINYINT(1) NOT NULL DEFAULT 0,
         adicionado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_os_id (os_id),
+        INDEX idx_os_tenant_os (tenant_id, os_id),
         INDEX idx_produto_id (produto_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     // Assuntos / categorias de OS (configuráveis)
     $sqls[] = "CREATE TABLE IF NOT EXISTS os_assuntos (
         id          INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id   INT NOT NULL,
         nome        VARCHAR(150) NOT NULL,
         descricao   VARCHAR(255) DEFAULT NULL,
         departamento VARCHAR(100) DEFAULT NULL,
         ativo       TINYINT(1) NOT NULL DEFAULT 1,
-        criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        criado_em   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_os_assunto_tenant_nome (tenant_id, nome)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     // Configuração de homem-hora por assunto/serviço
     $sqls[] = "CREATE TABLE IF NOT EXISTS os_config_homem_hora (
         id              INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id       INT NOT NULL,
         assunto_id      INT DEFAULT NULL,
         descricao       VARCHAR(255) NOT NULL,
         horas_estimadas DECIMAL(8,2) NOT NULL DEFAULT 1,
         custo_hora      DECIMAL(10,2) DEFAULT 0,
         ativo           TINYINT(1) NOT NULL DEFAULT 1,
-        criado_em       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        criado_em       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_os_config_tenant_assunto (tenant_id, assunto_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     // Recursos humanos vinculados a cada OS
     $sqls[] = "CREATE TABLE IF NOT EXISTS os_recursos_humanos (
         id              INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id       INT NOT NULL,
         os_id           INT NOT NULL,
         colaborador_id  INT NOT NULL,
         colaborador_nome VARCHAR(255) NOT NULL,
@@ -600,13 +754,14 @@ function _os_garantir_tabelas($conn) {
         departamento    VARCHAR(100) DEFAULT NULL,
         vinculado_em    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_os_id (os_id),
+        INDEX idx_os_rh_tenant_os (tenant_id, os_id),
         INDEX idx_colaborador_id (colaborador_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     $erros = [];
     foreach ($sqls as $sql) {
         if (!$conn->query($sql)) {
-            $erros[] = $conn->error;
+            $erros[] = 'Falha ao aplicar uma etapa da estrutura.';
         }
     }
     if (!_os_garantir_indice_unidade($conn)) {
@@ -620,10 +775,22 @@ $erros_migration = _os_garantir_tabelas($conn);
 if (!empty($erros_migration)) {
     os_log('erro', 'Erros na migration', $erros_migration);
 }
+$os_schema_ready = _os_garantir_esquema_projetos($conn);
+foreach ([
+    'os_chamados', 'os_interacoes', 'os_materiais_usados', 'os_assuntos',
+    'os_config_homem_hora', 'os_recursos_humanos', 'os_interacao_fotos',
+    'os_usuarios_config', 'os_permissoes_departamento', 'os_etapas',
+] as $tabelaOs) {
+    if (!\ERP\Database\DatabaseDialect::tableExists($conn, $tabelaOs)
+        || !\ERP\Database\DatabaseDialect::columnExists($conn, $tabelaOs, 'tenant_id')) {
+        http_response_code(503);
+        retornar_json(false, 'Schema de Ordens de Serviço tenant-scoped não está pronto.');
+    }
+}
 
 // Adicionar coluna anexos em tabelas existentes (idempotente)
 $_r = @$conn->query("SELECT COUNT(*) c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='os_interacoes' AND COLUMN_NAME='anexos'");
-if ($_r && (int)$_r->fetch_assoc()['c'] === 0) {
+if (!\ERP\Database\DatabaseDialect::isPostgres($conn) && $_r && (int)$_r->fetch_assoc()['c'] === 0) {
     @$conn->query("ALTER TABLE os_interacoes ADD COLUMN anexos MEDIUMTEXT NULL AFTER mensagem");
 }
 
@@ -636,6 +803,7 @@ if ($_r && (int)$_r->fetch_assoc()['c'] === 0) {
 // os_interacoes. Reaproveita a tabela central `departamentos` já usada
 // por `listar_departamentos` nesta mesma API.
 function _os_add_column_if_missing($conn, $tabela, $coluna, $definicao) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) return;
     $r = @$conn->query("SELECT COUNT(*) c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='$tabela' AND COLUMN_NAME='$coluna'");
     if ($r && (int)$r->fetch_assoc()['c'] === 0) {
         @$conn->query("ALTER TABLE `$tabela` ADD COLUMN `$coluna` $definicao");
@@ -643,6 +811,7 @@ function _os_add_column_if_missing($conn, $tabela, $coluna, $definicao) {
 }
 
 function _os_corrigir_indice_departamentos($conn) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) return;
     // A tabela histórica usava UNIQUE(nome), o que bloqueava o mesmo
     // departamento em dois condomínios. A chave correta inclui o tenant.
     $old = $conn->query("SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='departamentos' AND INDEX_NAME='uk_nome'");
@@ -655,7 +824,31 @@ function _os_corrigir_indice_departamentos($conn) {
     }
 }
 
+function _os_semear_etapas_os($conn) {
+    global $tenant_id;
+    $cnt_etapas = $conn->query("SELECT COUNT(*) c FROM os_etapas WHERE tenant_id = $tenant_id");
+    if ($cnt_etapas && (int)$cnt_etapas->fetch_assoc()['c'] === 0) {
+        $seeds_etapas = [
+            'Análise', 'Levantamento Técnico', 'Projeto Executivo', 'Orçamento', 'Licitação',
+            'Compra de Materiais', 'Chegada de Materiais', 'Mobilização', 'Início da Obra',
+            'Execução', 'Concretagem', 'Acabamento', 'Paisagismo', 'Vistoria', 'Correções',
+            'Entrega', 'Finalizado',
+        ];
+        $stmt_seed = $conn->prepare("INSERT IGNORE INTO os_etapas (tenant_id, nome, ordem) VALUES (?, ?, ?)");
+        foreach ($seeds_etapas as $i => $nome_etapa) {
+            $ordem_etapa = $i + 1;
+            $stmt_seed->bind_param('isi', $tenant_id, $nome_etapa, $ordem_etapa);
+            $stmt_seed->execute();
+        }
+    }
+}
+
 function _os_garantir_esquema_projetos($conn) {
+    global $tenant_id;
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+        return \ERP\Database\DatabaseDialect::tableExists($conn, 'os_etapas')
+            && \ERP\Database\DatabaseDialect::columnExists($conn, 'os_etapas', 'tenant_id');
+    }
     // Projeto Público — classificação e informações públicas da O.S
     _os_add_column_if_missing($conn, 'os_chamados', 'projeto_publico', "TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
     _os_add_column_if_missing($conn, 'os_chamados', 'projeto_nome', "VARCHAR(255) DEFAULT NULL");
@@ -680,28 +873,15 @@ function _os_garantir_esquema_projetos($conn) {
     // Etapas configuráveis (Configurações → Ordens de Serviço → Etapas) — lista fixa, sem digitação livre
     $conn->query("CREATE TABLE IF NOT EXISTS os_etapas (
         id        INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL DEFAULT 1,
         nome      VARCHAR(100) NOT NULL,
         ordem     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
         ativo     TINYINT(1) NOT NULL DEFAULT 1,
         criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uk_nome (nome)
+        UNIQUE KEY uk_tenant_nome (tenant_id, nome)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-    $cnt_etapas = $conn->query("SELECT COUNT(*) c FROM os_etapas");
-    if ($cnt_etapas && (int)$cnt_etapas->fetch_assoc()['c'] === 0) {
-        $seeds_etapas = [
-            'Análise', 'Levantamento Técnico', 'Projeto Executivo', 'Orçamento', 'Licitação',
-            'Compra de Materiais', 'Chegada de Materiais', 'Mobilização', 'Início da Obra',
-            'Execução', 'Concretagem', 'Acabamento', 'Paisagismo', 'Vistoria', 'Correções',
-            'Entrega', 'Finalizado',
-        ];
-        $stmt_seed = $conn->prepare("INSERT IGNORE INTO os_etapas (nome, ordem) VALUES (?, ?)");
-        foreach ($seeds_etapas as $i => $nome_etapa) {
-            $ordem_etapa = $i + 1;
-            $stmt_seed->bind_param('si', $nome_etapa, $ordem_etapa);
-            $stmt_seed->execute();
-        }
-    }
+    _os_semear_etapas_os($conn);
 
     // Cadastro central de departamentos (mesma tabela usada por `listar_departamentos`
     // nesta API e por api_departamentos.php/api_documentos.php) — garantida aqui também
@@ -765,15 +945,20 @@ function _os_garantir_esquema_projetos($conn) {
     // Vínculo opcional de documentos do GED a um projeto — coluna aditiva na
     // própria tabela `documentos`; só é alterada se a tabela já existir
     // (o GED cria sua própria estrutura em api_documentos.php).
-    $tab_doc = $conn->query("SHOW TABLES LIKE 'documentos'");
-    if ($tab_doc && $tab_doc->num_rows > 0) {
+    if (\ERP\Database\DatabaseDialect::tableExists($conn, 'documentos')) {
         _os_add_column_if_missing($conn, 'documentos', 'os_id', "INT DEFAULT NULL");
     }
 
     // Capas e fotos de obra são mantidas em tenant_arquivos; não há diretórios públicos.
 }
-_os_garantir_esquema_projetos($conn);
-os_carregar_politica_usuario($conn);
+if (\ERP\Database\DatabaseDialect::isPostgres($conn) && $os_schema_ready !== true) {
+    http_response_code(503);
+    retornar_json(false, 'Schema ou dados de referência de O.S. não foram provisionados pelo DDL/seed versionado.');
+}
+if (!os_carregar_politica_usuario($conn)) {
+    http_response_code(503);
+    retornar_json(false, 'Política de acesso às Ordens de Serviço não está pronta.');
+}
 
 // Salva os campos de configuração pública do projeto (aba "Projeto" da O.S).
 // Chamada tanto pela ação dedicada `salvar_projeto` quanto reaproveitável
@@ -792,6 +977,9 @@ function _os_salvar_campos_projeto(mysqli $conn, int $tenant_id, int $os_id, arr
     }
 
     $projeto_etapa_id = !empty($dados['projeto_etapa_id']) ? (int)$dados['projeto_etapa_id'] : null;
+    if ($temEtapa && !os_etapa_pertence_tenant($conn, $tenant_id, $dados['projeto_etapa_id'])) {
+        return ['ok' => false, 'auditoria' => null];
+    }
     $projeto_percentual = $temPercentual && $dados['projeto_percentual'] !== ''
         ? max(0, min(100, (int)$dados['projeto_percentual'])) : null;
 
@@ -871,6 +1059,25 @@ function _os_salvar_campos_projeto(mysqli $conn, int $tenant_id, int $os_id, arr
 // são gerados de forma única. Sem PK/AUTO_INCREMENT, INSERTs podem produzir
 // id=0 e todas as fotos desse id acabam aparecendo em várias interações.
 function _os_interacoes_ids_prontos($conn): bool {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+        try {
+            $res = $conn->query("SELECT
+                MAX(CASE WHEN c.is_identity = 'YES' OR c.column_default LIKE 'nextval(%' THEN 1 ELSE 0 END) AS auto_increment_id,
+                MAX(CASE WHEN tc.constraint_type = 'PRIMARY KEY' AND kcu.column_name = 'id' THEN 1 ELSE 0 END) AS primary_id
+            FROM information_schema.columns c
+            LEFT JOIN information_schema.key_column_usage kcu
+                ON kcu.table_schema = c.table_schema AND kcu.table_name = c.table_name
+               AND kcu.column_name = c.column_name
+            LEFT JOIN information_schema.table_constraints tc
+                ON tc.table_schema = kcu.table_schema AND tc.table_name = kcu.table_name
+               AND tc.constraint_name = kcu.constraint_name AND tc.constraint_type = 'PRIMARY KEY'
+            WHERE c.table_schema = current_schema() AND c.table_name = 'os_interacoes' AND c.column_name = 'id'");
+        } catch (Throwable $e) {
+            return false;
+        }
+        $row = $res ? $res->fetch_assoc() : [];
+        return (int)($row['auto_increment_id'] ?? 0) > 0 && (int)($row['primary_id'] ?? 0) > 0;
+    }
     $sql = "SELECT
                 SUM(CASE WHEN c.COLUMN_NAME='id' AND c.EXTRA LIKE '%auto_increment%' THEN 1 ELSE 0 END) AS auto_increment_id,
                 SUM(CASE WHEN k.CONSTRAINT_NAME='PRIMARY' AND k.COLUMN_NAME='id' THEN 1 ELSE 0 END) AS primary_id
@@ -1007,6 +1214,10 @@ switch ($acao) {
 
     // ─────────────────────────────────────────────────
     case 'migration':
+        if (\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+            http_response_code(503);
+            retornar_json(false, 'A estrutura PostgreSQL é provisionada pelo DDL versionado.');
+        }
         if (empty($erros_migration)) {
             retornar_json(true, 'Tabelas verificadas/criadas com sucesso');
         } else {
@@ -1333,7 +1544,8 @@ switch ($acao) {
             if ($res_rel) {
                 while ($row = $res_rel->fetch_assoc()) $dados_rel[] = $row;
             } else {
-                retornar_json(false, 'Erro na consulta: ' . $conn->error);
+                error_log('[OS][Relatorio] Falha na consulta (' . (int)$conn->errno . ').');
+                retornar_json(false, 'Não foi possível gerar o relatório.', null, 503);
                 break;
             }
         }
@@ -1607,6 +1819,13 @@ switch ($acao) {
         $recursos_humanos = $dados['recursos_humanos'] ?? [];
 
         if (empty($titulo)) retornar_json(false, 'Título é obrigatório');
+        if (array_key_exists('projeto_etapa_id', $dados) && !os_etapa_pertence_tenant($conn, $tenant_id, $dados['projeto_etapa_id'])) {
+            retornar_json(false, 'Etapa de projeto não encontrada neste condomínio.', null, 404);
+        }
+        if (!is_array($recursos_humanos)) retornar_json(false, 'Recursos humanos inválidos.');
+        $recursos_humanos = os_resolver_recursos_humanos_tenant($conn, $recursos_humanos);
+        if ($recursos_humanos === null) retornar_json(false, 'Um ou mais colaboradores não pertencem ao condomínio atual.');
+        if (!os_assunto_pertence_tenant($conn, $assunto_id)) retornar_json(false, 'Assunto não encontrado neste condomínio.');
         if (!in_array($prioridade, ['baixa','media','alta','urgente'])) $prioridade = 'media';
         os_exigir_acao_departamento($departamento, 'criar');
         if ($morador_id) {
@@ -1618,6 +1837,17 @@ switch ($acao) {
             $morador_unidade = trim($morador_unidade);
         }
         if ($os_pai_id) os_exigir_acesso($os_pai_id, 'OS pai não encontrada');
+        $estruturaId = \ERP\Database\DatabaseDialect::isPostgres($conn)
+            ? $conn->query("SELECT is_identity, column_default FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'os_chamados' AND column_name = 'id' LIMIT 1")
+            : $conn->query("SELECT EXTRA FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'os_chamados' AND COLUMN_NAME = 'id' LIMIT 1");
+        $metaId = $estruturaId ? $estruturaId->fetch_assoc() : null;
+        $idGerado = \ERP\Database\DatabaseDialect::isPostgres($conn)
+            ? ($metaId && (($metaId['is_identity'] ?? 'NO') === 'YES' || preg_match('/^nextval\(/i', (string)($metaId['column_default'] ?? '')) === 1))
+            : ($metaId && stripos((string)($metaId['EXTRA'] ?? ''), 'auto_increment') !== false);
+        if (!$idGerado) {
+            http_response_code(503);
+            retornar_json(false, 'A estrutura de Ordens de Serviço ainda não possui identidade de ID. Execute a migration de integridade antes de criar novas O.S.', null, 503);
+        }
 
         if (!$os_eh_gestor) {
             if ($os_usuario_id <= 0) retornar_json(false, 'Sessão de usuário inválida');
@@ -1631,27 +1861,41 @@ switch ($acao) {
             $atendente_nome = '';
         }
 
-        // Gerar número sequencial único: OS-YYYY-NNNN
+        // O índice de numero é global; serialize a leitura do máximo com a inserção.
         $ano = date('Y');
-        // Busca tanto o formato antigo (OS-) quanto o novo (O.S-) para não repetir sequencial
-        $res = $conn->query("SELECT MAX(CAST(SUBSTRING_INDEX(numero, '-', -1) AS UNSIGNED)) as ultimo FROM os_chamados WHERE tenant_id = $tenant_id AND numero LIKE '%{$ano}-%'");
-        $row = $res ? $res->fetch_assoc() : null;
-        $seq = ($row && $row['ultimo']) ? (int)$row['ultimo'] + 1 : 1;
-        $numero = 'O.S-' . $ano . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
+        if (!os_adquirir_lock_numeracao($conn, (int)$ano)) {
+            http_response_code(503);
+            retornar_json(false, 'Não foi possível reservar a numeração da O.S. Tente novamente.');
+        }
+        $prefixoNumero = '%-' . $ano . '-%';
+        $stmtNumeros = null;
+        try {
+            $stmtNumeros = $conn->prepare('SELECT numero FROM os_chamados WHERE numero LIKE ?');
+            if (!$stmtNumeros || !$stmtNumeros->bind_param('s', $prefixoNumero) || !$stmtNumeros->execute()) {
+                throw new RuntimeException('os_number_scan_failed');
+            }
+            $resultadoNumeros = $stmtNumeros->get_result();
+            if (!$resultadoNumeros) throw new RuntimeException('os_number_result_failed');
+            $numeros = $resultadoNumeros->fetch_all(MYSQLI_ASSOC);
+            $stmtNumeros->close();
+            $stmtNumeros = null;
+        } catch (Throwable $e) {
+            if ($stmtNumeros) $stmtNumeros->close();
+            os_liberar_lock_numeracao($conn, (int)$ano);
+            os_log('erro', 'Falha ao consultar a numeração da O.S.', ['tipo_erro' => get_class($e)]);
+            http_response_code(503);
+            retornar_json(false, 'Não foi possível verificar a numeração de Ordens de Serviço.', null, 503);
+        }
+        $seq = os_sequencia_numero_anual($numeros, (int)$ano);
+        $numero = os_formatar_numero_anual((int)$ano, $seq, 'O.S-');
 
         // Usuário logado
         $usuario = obterUsuarioAutenticado();
         $criado_por_id   = $usuario ? (int)$usuario['id'] : null;
         $criado_por_nome = $usuario ? $usuario['nome'] : null;
 
-        // Não permita novo cadastro enquanto a estrutura ainda puder gerar id=0.
-        // A correção de banco fornecida cria PRIMARY KEY(id) e AUTO_INCREMENT.
-        $estruturaId = $conn->query("SELECT EXTRA FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'os_chamados' AND COLUMN_NAME = 'id' LIMIT 1");
-        $metaId = $estruturaId ? $estruturaId->fetch_assoc() : null;
-        if (!$metaId || stripos((string)$metaId['EXTRA'], 'auto_increment') === false) {
-            retornar_json(false, 'A estrutura de Ordens de Serviço ainda não possui AUTO_INCREMENT. Execute a migration de integridade antes de criar novas O.S.');
-        }
-
+        try {
+        if (!$conn->begin_transaction()) throw new RuntimeException('os_transaction_start_failed');
         // INSERT com 17 parâmetros, sem data_abertura que usa DEFAULT CURRENT_TIMESTAMP
         // Tipos: s=numero, s=titulo, i=assunto_id, s=departamento, s=prioridade,
         //        i=morador_id, s=morador_nome, s=morador_unidade,
@@ -1670,25 +1914,23 @@ switch ($acao) {
         // 16 parâmetros (s=numero, s=titulo, i=assunto_id, s=departamento, s=prioridade,
         //  i=morador_id, s=morador_nome, s=morador_unidade, i=atendente_id, s=atendente_nome,
         //  s=descricao, d=horas_estimadas, s=data_previsao, i=os_pai_id, i=criado_por_id, s=criado_por_nome)
-        $stmt->bind_param(
+        if (!$stmt->bind_param(
             'ississississdsiis',
             $tenant_id, $numero, $titulo, $assunto_id, $departamento, $prioridade,
             $morador_id, $morador_nome, $morador_unidade,
             $atendente_id, $atendente_nome,
             $descricao, $horas_estimadas, $data_previsao, $os_pai_id,
             $criado_por_id, $criado_por_nome
-        );
+        )) throw new RuntimeException('os_insert_bind_failed');
 
         if (!$stmt->execute()) {
-            os_log('erro', 'Erro ao criar O.S', ['error' => $conn->error, 'sql_error' => $stmt->error]);
-            retornar_json(false, 'Erro ao criar O.S: ' . $stmt->error);
+            throw new RuntimeException('os_insert_failed');
         }
         $os_id = (int)$conn->insert_id;
         // Não continue se o banco não devolver um identificador íntegro. Isso evita
         // registros novos com ID zero e vínculos ambíguos em interações e materiais.
         if ($os_id <= 0) {
-            os_log('erro', 'O.S criada sem ID válido', ['tenant_id' => $tenant_id, 'numero' => $numero]);
-            retornar_json(false, 'Não foi possível gerar o identificador da O.S. Execute a migration de integridade de Ordens de Serviço.');
+            throw new RuntimeException('os_insert_id_invalid');
         }
 
         // Projeto Público — flag aditiva; não faz parte do INSERT original para
@@ -1702,8 +1944,13 @@ switch ($acao) {
             $proj_percentual = (isset($dados['projeto_percentual']) && $dados['projeto_percentual'] !== '')
                 ? max(0, min(100, (int)$dados['projeto_percentual'])) : 0;
             $stmt_proj = $conn->prepare("UPDATE os_chamados SET projeto_publico=?, projeto_etapa_id=?, projeto_percentual=? WHERE tenant_id = $tenant_id AND id=?");
-            $stmt_proj->bind_param('iiii', $projeto_publico_flag, $proj_etapa_id, $proj_percentual, $os_id);
-            $stmt_proj->execute();
+            if (!$stmt_proj) throw new RuntimeException('os_project_update_prepare_failed');
+            if (!$stmt_proj->bind_param('iiii', $projeto_publico_flag, $proj_etapa_id, $proj_percentual, $os_id)) {
+                $stmt_proj->close();
+                throw new RuntimeException('os_project_update_bind_failed');
+            }
+            if (!$stmt_proj->execute()) { $stmt_proj->close(); throw new RuntimeException('os_project_update_failed'); }
+            $stmt_proj->close();
         }
 
         // Vincular recursos humanos
@@ -1711,16 +1958,24 @@ switch ($acao) {
             $stmt_rh = $conn->prepare(
                 "INSERT INTO os_recursos_humanos (tenant_id, os_id, colaborador_id, colaborador_nome, cargo, departamento) VALUES (?,?,?,?,?,?)"
             );
+            if (!$stmt_rh) throw new RuntimeException('os_resources_prepare_failed');
             foreach ($recursos_humanos as $rh) {
                 $col_id   = (int)($rh['id'] ?? 0);
                 $col_nome = $rh['nome'] ?? '';
                 $col_cargo = $rh['cargo'] ?? '';
                 $col_dep  = $rh['departamento'] ?? '';
                 if ($col_id && $col_nome) {
-                    $stmt_rh->bind_param('iiisss', $tenant_id, $os_id, $col_id, $col_nome, $col_cargo, $col_dep);
-                    $stmt_rh->execute();
+                    if (!$stmt_rh->bind_param('iiisss', $tenant_id, $os_id, $col_id, $col_nome, $col_cargo, $col_dep)) {
+                        $stmt_rh->close();
+                        throw new RuntimeException('os_resource_bind_failed');
+                    }
+                    if (!$stmt_rh->execute()) {
+                        $stmt_rh->close();
+                        throw new RuntimeException('os_resource_insert_failed');
+                    }
                 }
             }
+            $stmt_rh->close();
         }
 
         // Interação inicial automática
@@ -1728,8 +1983,23 @@ switch ($acao) {
         $stmt_int = $conn->prepare(
             "INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,?,'comentario',?,?,?)"
         );
-        $stmt_int->bind_param('iisis', $tenant_id, $os_id, $msg_inicial, $criado_por_id, $criado_por_nome);
-        $stmt_int->execute();
+        if (!$stmt_int) throw new RuntimeException('os_initial_interaction_prepare_failed');
+        if (!$stmt_int->bind_param('iisis', $tenant_id, $os_id, $msg_inicial, $criado_por_id, $criado_por_nome)) {
+            $stmt_int->close();
+            throw new RuntimeException('os_initial_interaction_bind_failed');
+        }
+        if (!$stmt_int->execute()) { $stmt_int->close(); throw new RuntimeException('os_initial_interaction_insert_failed'); }
+        $stmt_int->close();
+        if (!$conn->commit()) throw new RuntimeException('os_create_commit_failed');
+        } catch (Throwable $e) {
+            $conn->rollback();
+            os_liberar_lock_numeracao($conn, (int)$ano);
+            os_log('erro', 'Falha transacional ao criar O.S.', ['tipo_erro' => get_class($e)]);
+            retornar_json(false, 'Não foi possível criar a O.S. Tente novamente.', null, 503);
+        }
+        if (!os_liberar_lock_numeracao($conn, (int)$ano)) {
+            error_log('Não foi possível liberar o lock de numeração da O.S.');
+        }
 
         os_log('info', 'O.S criada', ['os_id' => $os_id, 'numero' => $numero]);
 
@@ -1738,7 +2008,7 @@ switch ($acao) {
                 $morador_id, $morador_unidade);
         } catch (Throwable $e_email_os) {
             os_log('aviso', 'Falha ao notificar abertura da O.S. por e-mail', [
-                'os_id' => $os_id, 'erro' => $e_email_os->getMessage()
+                'os_id' => $os_id, 'tipo_erro' => get_class($e_email_os)
             ]);
         }
 
@@ -1773,7 +2043,7 @@ switch ($acao) {
                 }
             }
         } catch (Exception $e_notif) {
-            os_log('aviso', 'Erro ao gerar notificações: ' . $e_notif->getMessage());
+            os_log('aviso', 'Falha ao gerar notificações da O.S.', ['tipo_erro' => get_class($e_notif)]);
         }
 
         $notificou_previsao = !empty($data_previsao) && !empty($atendente_id);
@@ -1799,8 +2069,18 @@ switch ($acao) {
         $atendente_nome = trim($dados['atendente_nome'] ?? '');
         $horas_estimadas = !empty($dados['horas_estimadas']) ? (float)$dados['horas_estimadas'] : null;
         $data_previsao = !empty($dados['data_previsao']) ? $dados['data_previsao'] : null;
+        $recursos_humanos = array_key_exists('recursos_humanos', $dados) ? $dados['recursos_humanos'] : null;
 
         if (empty($titulo)) retornar_json(false, 'Título é obrigatório');
+        if (array_key_exists('projeto_etapa_id', $dados) && !os_etapa_pertence_tenant($conn, $tenant_id, $dados['projeto_etapa_id'])) {
+            retornar_json(false, 'Etapa de projeto não encontrada neste condomínio.', null, 404);
+        }
+        if ($recursos_humanos !== null) {
+            if (!is_array($recursos_humanos)) retornar_json(false, 'Recursos humanos inválidos.');
+            $recursos_humanos = os_resolver_recursos_humanos_tenant($conn, $recursos_humanos);
+            if ($recursos_humanos === null) retornar_json(false, 'Um ou mais colaboradores não pertencem ao condomínio atual.');
+        }
+        if (!os_assunto_pertence_tenant($conn, $assunto_id)) retornar_json(false, 'Assunto não encontrado neste condomínio.');
         os_exigir_acao_departamento($departamento, 'editar');
         if ($morador_id) {
             $morador = os_resolver_morador_tenant($conn, $morador_id);
@@ -1852,7 +2132,8 @@ switch ($acao) {
         );
 
         if (!$stmt->execute()) {
-            retornar_json(false, 'Erro ao editar OS: ' . $conn->error);
+            error_log('[OS] Falha ao editar O.S. (' . (int)$conn->errno . ').');
+            retornar_json(false, 'Não foi possível editar a O.S.', null, 503);
         }
 
         // Projeto Público — mesma flag aditiva do `criar`, atualizada separadamente.
@@ -1867,7 +2148,7 @@ switch ($acao) {
             $temEtapaOuPercentualEditar = array_key_exists('projeto_etapa_id', $dados) || array_key_exists('projeto_percentual', $dados);
 
             $resAntesProj = $conn->query("SELECT o.projeto_etapa_id, o.projeto_percentual, e.nome AS etapa_nome
-                                           FROM os_chamados o LEFT JOIN os_etapas e ON e.id = o.projeto_etapa_id
+                                           FROM os_chamados o LEFT JOIN os_etapas e ON e.id = o.projeto_etapa_id AND e.tenant_id = o.tenant_id
                                            WHERE o.tenant_id = $tenant_id AND o.id = $id LIMIT 1");
             $antesProj = $resAntesProj ? $resAntesProj->fetch_assoc() : null;
             $etapaAnteriorId    = $antesProj ? (int)$antesProj['projeto_etapa_id'] : 0;
@@ -1905,19 +2186,18 @@ switch ($acao) {
                         $unomeProj, $etapaAnteriorNome ?: '—', $etapaNovaNome ?: '—',
                         $percentualAnterior, $percentualFinal
                     );
-                    $stmtAuditProj = $conn->prepare("INSERT INTO os_interacoes (os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,'nota_interna',?,?,?)");
-                    $stmtAuditProj->bind_param('isis', $id, $msgProj, $uidProj, $unomeProj);
+                    $stmtAuditProj = $conn->prepare("INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,?,'nota_interna',?,?,?)");
+                    $stmtAuditProj->bind_param('iisis', $tenant_id, $id, $msgProj, $uidProj, $unomeProj);
                     $stmtAuditProj->execute();
                 }
             }
         }
 
         // Atualizar recursos humanos (remove e recria)
-        $recursos_humanos = $dados['recursos_humanos'] ?? null;
         if ($recursos_humanos !== null && is_array($recursos_humanos)) {
             $conn->query("DELETE FROM os_recursos_humanos WHERE tenant_id = $tenant_id AND os_id = $id");
             $stmt_rh = $conn->prepare(
-                "INSERT INTO os_recursos_humanos (os_id, colaborador_id, colaborador_nome, cargo, departamento) VALUES (?,?,?,?,?)"
+                "INSERT INTO os_recursos_humanos (tenant_id, os_id, colaborador_id, colaborador_nome, cargo, departamento) VALUES (?,?,?,?,?,?)"
             );
             foreach ($recursos_humanos as $rh) {
                 $col_id   = (int)($rh['id'] ?? 0);
@@ -1925,7 +2205,7 @@ switch ($acao) {
                 $col_cargo = $rh['cargo'] ?? '';
                 $col_dep  = $rh['departamento'] ?? '';
                 if ($col_id && $col_nome) {
-                    $stmt_rh->bind_param('iisss', $id, $col_id, $col_nome, $col_cargo, $col_dep);
+                    $stmt_rh->bind_param('iiisss', $tenant_id, $id, $col_id, $col_nome, $col_cargo, $col_dep);
                     $stmt_rh->execute();
                 }
             }
@@ -1941,22 +2221,48 @@ switch ($acao) {
         if (!$id) retornar_json(false, 'ID inválido');
         $os = os_exigir_acao_os($id, 'excluir');
 
-        // Verificar se existe
-        $res = $conn->query("SELECT id, numero, status FROM os_chamados WHERE tenant_id = $tenant_id AND id = $id");
-        $os_excluir = $res ? $res->fetch_assoc() : null;
-        if (!$os_excluir) retornar_json(false, 'OS não encontrada');
-        if ($os_excluir['status'] === 'finalizado') retornar_json(false, 'Não é possível excluir uma OS finalizada');
+        if (!$conn->begin_transaction()) retornar_json(false, 'Não foi possível iniciar a exclusão da O.S.', null, 503);
+        try {
+            $escopoLock = os_escopo_sql();
+            $stmtLock = $conn->prepare("SELECT id, numero, status, departamento FROM os_chamados WHERE tenant_id = ? AND id = ? AND ($escopoLock) FOR UPDATE");
+            if (!$stmtLock) throw new RuntimeException('os_delete_lock_prepare_failed');
+            $stmtLock->bind_param('ii', $tenant_id, $id);
+            if (!$stmtLock->execute()) throw new RuntimeException('os_delete_lock_failed');
+            $osExcluir = $stmtLock->get_result()->fetch_assoc();
+            $stmtLock->close();
+            if (!$osExcluir) { $conn->rollback(); retornar_json(false, 'OS não encontrada', null, 404); }
+            if (!os_pode_acao_departamento((string)($osExcluir['departamento'] ?? ''), 'excluir')) {
+                $conn->rollback();
+                retornar_json(false, 'Você não possui permissão para excluir esta O.S. neste departamento.', null, 403);
+            }
+            if ($osExcluir['status'] === 'finalizado') {
+                $conn->rollback();
+                retornar_json(false, 'Não é possível excluir uma OS finalizada', null, 409);
+            }
 
-        // Excluir dependências
-        $conn->query("DELETE FROM os_interacoes WHERE tenant_id = $tenant_id AND os_id = $id");
-        $conn->query("DELETE FROM os_materiais_usados WHERE tenant_id = $tenant_id AND os_id = $id");
-        $conn->query("DELETE FROM os_recursos_humanos WHERE tenant_id = $tenant_id AND os_id = $id");
+            foreach (['os_interacoes', 'os_materiais_usados', 'os_recursos_humanos'] as $tabelaDependente) {
+                $stmtDependente = $conn->prepare("DELETE FROM $tabelaDependente WHERE tenant_id = ? AND os_id = ?");
+                if (!$stmtDependente || !$stmtDependente->bind_param('ii', $tenant_id, $id) || !$stmtDependente->execute()) {
+                    if ($stmtDependente) $stmtDependente->close();
+                    throw new RuntimeException('os_delete_dependency_failed');
+                }
+                $stmtDependente->close();
+            }
 
-        $stmt = $conn->prepare("DELETE FROM os_chamados WHERE tenant_id = $tenant_id AND id = ?");
-        $stmt->bind_param('i', $id);
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao excluir OS');
+            $stmtDelete = $conn->prepare('DELETE FROM os_chamados WHERE tenant_id = ? AND id = ?');
+            if (!$stmtDelete || !$stmtDelete->bind_param('ii', $tenant_id, $id) || !$stmtDelete->execute() || $stmtDelete->affected_rows !== 1) {
+                if ($stmtDelete) $stmtDelete->close();
+                throw new RuntimeException('os_delete_parent_failed');
+            }
+            $stmtDelete->close();
+            if (!$conn->commit()) throw new RuntimeException('os_delete_commit_failed');
+        } catch (Throwable $e) {
+            $conn->rollback();
+            error_log('Falha transacional ao excluir O.S. (' . get_class($e) . ').');
+            retornar_json(false, 'Não foi possível excluir a O.S.', null, 503);
+        }
 
-        os_log('info', 'OS excluída', ['os_id' => $id, 'numero' => $os_excluir['numero']]);
+        os_log('info', 'OS excluída', ['os_id' => $id]);
         retornar_json(true, 'OS excluída com sucesso');
         break;
 
@@ -2011,6 +2317,9 @@ switch ($acao) {
 
         if (!$os_id) retornar_json(false, 'os_id inválido');
         os_exigir_acao_os($os_id, 'editar');
+        if (array_key_exists('etapa_id', $dados) && !os_etapa_pertence_tenant($conn, $tenant_id, $dados['etapa_id'])) {
+            retornar_json(false, 'Etapa de projeto não encontrada neste condomínio.', null, 404);
+        }
         if (empty($mensagem)) retornar_json(false, 'Mensagem é obrigatória');
         if (!in_array($tipo, ['comentario','andamento','solucao','nota_interna'])) $tipo = 'comentario';
         if ($tipo === 'nota_interna') $publica = 0; // notas internas nunca são públicas
@@ -2038,10 +2347,13 @@ switch ($acao) {
         }
 
         $stmt = $conn->prepare(
-            "INSERT INTO os_interacoes (os_id, tipo, mensagem, anexos, usuario_id, usuario_nome, etapa_id, percentual, publica) VALUES (?,?,?,?,?,?,?,?,?)"
+            "INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, anexos, usuario_id, usuario_nome, etapa_id, percentual, publica) VALUES (?,?,?,?,?,?,?,?,?,?)"
         );
-        $stmt->bind_param('isssisiii', $os_id, $tipo, $mensagem, $anexos_json, $usuario_id, $usuario_nome, $etapa_id, $percentual, $publica);
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao adicionar interação: ' . $conn->error);
+        $stmt->bind_param('iisssisiii', $tenant_id, $os_id, $tipo, $mensagem, $anexos_json, $usuario_id, $usuario_nome, $etapa_id, $percentual, $publica);
+        if (!$stmt->execute()) {
+            error_log('[OS] Falha ao adicionar interação (' . (int)$conn->errno . ').');
+            retornar_json(false, 'Não foi possível adicionar a interação.', null, 503);
+        }
 
         $int_id = $conn->insert_id;
 
@@ -2083,8 +2395,8 @@ switch ($acao) {
                     $usuario_nome, $etapaAnteriorNomeProj ?: '—', $etapaNovaNomeProj ?: '—',
                     $percentualAnteriorProj, $percentual !== null ? $percentual : $percentualAnteriorProj
                 );
-                $stmtAuditInt = $conn->prepare("INSERT INTO os_interacoes (os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,'nota_interna',?,?,?)");
-                $stmtAuditInt->bind_param('isis', $os_id, $msgAuditInt, $usuario_id, $usuario_nome);
+                $stmtAuditInt = $conn->prepare("INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,?,'nota_interna',?,?,?)");
+                $stmtAuditInt->bind_param('iisis', $tenant_id, $os_id, $msgAuditInt, $usuario_id, $usuario_nome);
                 $stmtAuditInt->execute();
             }
         }
@@ -2133,10 +2445,20 @@ switch ($acao) {
         os_exigir_acao_os($os_id, 'editar');
         if ($horas_totais !== null && $horas_totais < 0) retornar_json(false, 'Horas totais não podem ser negativas');
 
-        $res = $conn->query("SELECT id, status, numero, titulo, morador_id, morador_unidade FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
-        $os  = $res ? $res->fetch_assoc() : null;
-        if (!$os) retornar_json(false, 'O.S não encontrada');
-        if ($os['status'] === 'finalizado') retornar_json(false, 'O.S já está finalizada');
+        if (!$conn->begin_transaction()) retornar_json(false, 'Não foi possível iniciar a finalização da O.S.', null, 503);
+        $escopoFinalizacao = os_escopo_sql();
+        $stmtOsLock = $conn->prepare("SELECT id, status, numero, titulo, morador_id, morador_unidade, departamento FROM os_chamados WHERE tenant_id = ? AND id = ? AND ($escopoFinalizacao) FOR UPDATE");
+        if (!$stmtOsLock) { $conn->rollback(); retornar_json(false, 'Não foi possível bloquear a O.S para finalização.', null, 503); }
+        $stmtOsLock->bind_param('ii', $tenant_id, $os_id);
+        if (!$stmtOsLock->execute()) { $stmtOsLock->close(); $conn->rollback(); retornar_json(false, 'Não foi possível bloquear a O.S para finalização.', null, 503); }
+        $os = $stmtOsLock->get_result()->fetch_assoc();
+        $stmtOsLock->close();
+        if (!$os) { $conn->rollback(); retornar_json(false, 'O.S não encontrada'); }
+        if (!os_pode_acao_departamento((string)($os['departamento'] ?? ''), 'editar')) {
+            $conn->rollback();
+            retornar_json(false, 'Você não possui a permissão necessária para finalizar a O.S. neste departamento.', null, 403);
+        }
+        if ($os['status'] === 'finalizado') { $conn->rollback(); retornar_json(false, 'O.S já está finalizada'); }
 
         // UPDATE dinâmico: inclui horas_estimadas e data_previsao se informados
         $set_extra    = '';
@@ -2145,44 +2467,41 @@ switch ($acao) {
         if ($horas_estimadas !== null) { $set_extra .= ', horas_estimadas=?'; $extra_types .= 'd'; $extra_values[] = $horas_estimadas; }
         if ($data_previsao   !== null) { $set_extra .= ', data_previsao=?';   $extra_types .= 's'; $extra_values[] = $data_previsao; }
 
-        $sql_fin = "UPDATE os_chamados SET status='finalizado', horas_totais=?, data_finalizacao=NOW(), observacao_finalizacao=?{$set_extra} WHERE tenant_id = $tenant_id AND id=?";
-        $stmt    = $conn->prepare($sql_fin);
-        $bind_types  = 'ds' . $extra_types . 'i';
-        $bind_values = array_merge([$horas_totais, $observacao], $extra_values, [$os_id]);
-        $stmt->bind_param($bind_types, ...$bind_values);
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao finalizar O.S: ' . $conn->error);
-
-        // Adicionar interação de finalização
-        $usuario      = obterUsuarioAutenticado();
-        $usuario_id   = $usuario ? (int)$usuario['id'] : null;
-        $usuario_nome = $usuario ? $usuario['nome'] : 'Sistema';
-        $msg_fin      = "O.S finalizada. Horas totais: {$horas_totais}h." . ($observacao ? " Observação: {$observacao}" : '');
-        $stmt_int     = $conn->prepare(
-            "INSERT INTO os_interacoes (os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,'solucao',?,?,?)"
-        );
-        $stmt_int->bind_param('isis', $os_id, $msg_fin, $usuario_id, $usuario_nome);
-        $stmt_int->execute();
-
-        // Baixar estoque automaticamente (materiais não baixados ainda)
-        $res_mats = $conn->query(
-            "SELECT * FROM os_materiais_usados WHERE tenant_id = $tenant_id AND os_id = $os_id AND estoque_baixado = 0"
-        );
-        $erros_estoque = [];
-        if ($res_mats) {
-            while ($mat = $res_mats->fetch_assoc()) {
-                $res_prod = $conn->query("SELECT quantidade_estoque FROM produtos_estoque WHERE tenant_id = $tenant_id AND id = " . (int)$mat['produto_id']);
-                if ($res_prod) {
-                    $prod = $res_prod->fetch_assoc();
-                    if ($prod) {
-                        $nova_qtd = max(0, (float)$prod['quantidade_estoque'] - (float)$mat['quantidade']);
-                        $conn->query("UPDATE produtos_estoque SET quantidade_estoque = $nova_qtd WHERE tenant_id = $tenant_id AND id = " . (int)$mat['produto_id']);
-                        $conn->query("UPDATE os_materiais_usados SET estoque_baixado = 1 WHERE tenant_id = $tenant_id AND id = " . (int)$mat['id']);
-                    }
-                }
+        try {
+            $sql_fin = "UPDATE os_chamados SET status='finalizado', horas_totais=?, data_finalizacao=NOW(), observacao_finalizacao=?{$set_extra} WHERE tenant_id = $tenant_id AND id=? AND status <> 'finalizado'";
+            $stmt = $conn->prepare($sql_fin);
+            if (!$stmt) throw new RuntimeException('os_finalize_prepare_failed');
+            $bind_types  = 'ds' . $extra_types . 'i';
+            $bind_values = array_merge([$horas_totais, $observacao], $extra_values, [$os_id]);
+            if (!$stmt->bind_param($bind_types, ...$bind_values) || !$stmt->execute() || $stmt->affected_rows !== 1) {
+                throw new RuntimeException('os_finalize_update_failed');
             }
+            $stmt->close();
+
+            $usuario = obterUsuarioAutenticado();
+            $usuario_id = $usuario ? (int)$usuario['id'] : null;
+            $usuario_nome = $usuario ? $usuario['nome'] : 'Sistema';
+            $msg_fin = "O.S finalizada. Horas totais: {$horas_totais}h." . ($observacao ? " Observação: {$observacao}" : '');
+            $stmt_int = $conn->prepare("INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,?,'solucao',?,?,?)");
+            if (!$stmt_int || !$stmt_int->bind_param('iisis', $tenant_id, $os_id, $msg_fin, $usuario_id, $usuario_nome)
+                || !$stmt_int->execute()) throw new RuntimeException('os_finalize_interaction_failed');
+            $stmt_int->close();
+
+            _os_baixar_materiais_em_transacao($conn, $tenant_id, $os_id);
+            if (!$conn->commit()) throw new RuntimeException('os_finalize_commit_failed');
+            $erros_estoque = [];
+        } catch (Throwable $e) {
+            $conn->rollback();
+            if ($e instanceof DomainException && $e->getMessage() === 'stock_insufficient') {
+                http_response_code(409);
+                retornar_json(false, 'Estoque insuficiente para finalizar esta O.S.', null, 409);
+            }
+            error_log('Falha ao finalizar O.S. (' . get_class($e) . ').');
+            http_response_code(503);
+            retornar_json(false, 'Não foi possível finalizar a O.S.', null, 503);
         }
 
-        os_log('info', 'O.S finalizada', ['os_id' => $os_id, 'numero' => $os['numero'], 'horas' => $horas_totais]);
+        os_log('info', 'O.S finalizada', ['os_id' => $os_id]);
 
         try {
             os_email_notificar_evento($conn, $tenant_id, 'fechamento', $os_id, $os['numero'], $os['titulo'],
@@ -2190,7 +2509,7 @@ switch ($acao) {
                 (string)($os['morador_unidade'] ?? ''), $observacao);
         } catch (Throwable $e_email_os) {
             os_log('aviso', 'Falha ao notificar fechamento da O.S. por e-mail', [
-                'os_id' => $os_id, 'erro' => $e_email_os->getMessage()
+                'os_id' => $os_id, 'tipo_erro' => get_class($e_email_os)
             ]);
         }
 
@@ -2211,30 +2530,63 @@ switch ($acao) {
         // Verificar se a O.S. está no escopo do gestor e possui edição no
         // departamento antes de consultar os dados específicos do portal.
         os_exigir_acao_os($id, 'editar');
-        $res_os = $conn->query("SELECT id, status, departamento, origem_portal, assumido_por_id FROM os_chamados WHERE tenant_id = $tenant_id AND id = $id");
-        $os_row = $res_os ? $res_os->fetch_assoc() : null;
-        if (!$os_row) retornar_json(false, 'OS não encontrada');
-        if ($os_row['origem_portal'] !== 'portal_morador') retornar_json(false, 'Esta OS não foi aberta pelo portal do morador');
-        if ($os_row['assumido_por_id']) retornar_json(false, 'Esta OS já foi assumida por outro atendente');
         $usuario = obterUsuarioAutenticado();
         $assumido_id   = $usuario ? (int)$usuario['id'] : null;
         $assumido_nome = $usuario ? $usuario['nome'] : 'Atendente';
         if (!$assumido_id) retornar_json(false, 'Usuário não autenticado');
-        $stmt = $conn->prepare(
-            "UPDATE os_chamados SET
-                assumido_por_id = ?, assumido_por_nome = ?, data_assumido = NOW(),
-                prioridade = ?, os_pai_id = ?,
-                status = IF(status='aberto','andamento',status),
-                data_inicio = IF(data_inicio IS NULL, NOW(), data_inicio) WHERE tenant_id = $tenant_id AND id = ?"
-        );
-        $stmt->bind_param('issii', $assumido_id, $assumido_nome, $prioridade, $os_pai_id, $id);
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao assumir OS: ' . $conn->error);
-        // Registrar interação
-        $msg_assumiu = "OS assumida por {$assumido_nome}. Prioridade classificada como: {$prioridade}.";
-        $stmt_int = $conn->prepare("INSERT INTO os_interacoes (os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,'andamento',?,?,?)");
-        $stmt_int->bind_param('isis', $id, $msg_assumiu, $assumido_id, $assumido_nome);
-        $stmt_int->execute();
-        os_log('info', 'OS do portal assumida', ['os_id' => $id, 'atendente' => $assumido_nome, 'prioridade' => $prioridade]);
+        if (!$conn->begin_transaction()) retornar_json(false, 'Não foi possível assumir a O.S. Tente novamente.', null, 503);
+        try {
+            $escopoAssumir = os_escopo_sql();
+            $stOs = $conn->prepare("SELECT id, origem_portal, assumido_por_id, departamento FROM os_chamados WHERE tenant_id = ? AND id = ? AND ($escopoAssumir) FOR UPDATE");
+            if (!$stOs) throw new RuntimeException('os_assume_lock_prepare_failed');
+            $stOs->bind_param('ii', $tenant_id, $id);
+            if (!$stOs->execute()) { $stOs->close(); throw new RuntimeException('os_assume_lock_failed'); }
+            $os_row = $stOs->get_result()->fetch_assoc();
+            $stOs->close();
+            if (!$os_row) { $conn->rollback(); retornar_json(false, 'OS não encontrada.', null, 404); }
+            if (!os_pode_acao_departamento((string)($os_row['departamento'] ?? ''), 'editar')) {
+                $conn->rollback();
+                retornar_json(false, 'Você não possui permissão para assumir esta O.S. neste departamento.', null, 403);
+            }
+            if ($os_row['origem_portal'] !== 'portal_morador') { $conn->rollback(); retornar_json(false, 'Esta OS não foi aberta pelo portal do morador.'); }
+            if ($os_row['assumido_por_id']) { $conn->rollback(); retornar_json(false, 'Esta OS já foi assumida por outro atendente.', null, 409); }
+            if ($os_pai_id !== null) {
+                $stPai = $conn->prepare('SELECT id FROM os_chamados WHERE tenant_id = ? AND id = ? AND id <> ? LIMIT 1');
+                if (!$stPai) throw new RuntimeException('os_parent_prepare_failed');
+                $stPai->bind_param('iii', $tenant_id, $os_pai_id, $id);
+                if (!$stPai->execute() || !$stPai->get_result()->fetch_assoc()) {
+                    $stPai->close();
+                    $conn->rollback();
+                    retornar_json(false, 'O.S pai inválida neste condomínio.', null, 404);
+                }
+                $stPai->close();
+            }
+            $stmt = $conn->prepare(
+                "UPDATE os_chamados SET
+                    assumido_por_id = ?, assumido_por_nome = ?, data_assumido = NOW(),
+                    prioridade = ?, os_pai_id = ?,
+                    status = IF(status='aberto','andamento',status),
+                    data_inicio = IF(data_inicio IS NULL, NOW(), data_inicio)
+                 WHERE tenant_id = ? AND id = ? AND assumido_por_id IS NULL"
+            );
+            if (!$stmt) throw new RuntimeException('os_assume_update_prepare_failed');
+            $stmt->bind_param('issiii', $assumido_id, $assumido_nome, $prioridade, $os_pai_id, $tenant_id, $id);
+            if (!$stmt->execute()) { $stmt->close(); throw new RuntimeException('os_assume_update_failed'); }
+            if ($stmt->affected_rows !== 1) { $stmt->close(); $conn->rollback(); retornar_json(false, 'Esta OS já foi assumida por outro atendente.', null, 409); }
+            $stmt->close();
+            $msg_assumiu = "OS assumida por {$assumido_nome}. Prioridade classificada como: {$prioridade}.";
+            $stmt_int = $conn->prepare("INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,?,'andamento',?,?,?)");
+            if (!$stmt_int) throw new RuntimeException('os_assume_interaction_prepare_failed');
+            $stmt_int->bind_param('iisis', $tenant_id, $id, $msg_assumiu, $assumido_id, $assumido_nome);
+            if (!$stmt_int->execute()) { $stmt_int->close(); throw new RuntimeException('os_assume_interaction_insert_failed'); }
+            $stmt_int->close();
+            if (!$conn->commit()) throw new RuntimeException('os_assume_commit_failed');
+        } catch (Throwable $e) {
+            $conn->rollback();
+            os_log('erro', 'Falha transacional ao assumir O.S. Portal', ['tipo_erro' => get_class($e)]);
+            retornar_json(false, 'Não foi possível assumir a O.S. Tente novamente.', null, 503);
+        }
+        os_log('info', 'O.S. do Portal assumida', ['os_id' => $id, 'prioridade' => $prioridade]);
         retornar_json(true, 'OS assumida com sucesso!', ['assumido_por' => $assumido_nome, 'prioridade' => $prioridade]);
         break;
     // ─────────────────────────────────────────────────
@@ -2262,6 +2614,7 @@ switch ($acao) {
     // ─────────────────────────────────────────────────
     case 'listar_departamentos':
         // Criar tabela central se ainda não existir e fazer seed inicial
+        if (!\ERP\Database\DatabaseDialect::isPostgres($conn)) {
         $conn->query("CREATE TABLE IF NOT EXISTS departamentos (
             id            INT AUTO_INCREMENT PRIMARY KEY,
             tenant_id     INT NOT NULL DEFAULT 1,
@@ -2272,6 +2625,7 @@ switch ($acao) {
             atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uk_tenant_nome (tenant_id, nome)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        }
         $cnt_dept = $conn->query("SELECT COUNT(*) as c FROM departamentos WHERE tenant_id = $tenant_id AND ativo=1");
         if ($cnt_dept && (int)$cnt_dept->fetch_assoc()['c'] === 0) {
             $seeds_dept = ['ADMINISTRATIVO','FINANCEIRO','JARDINAGEM','LIMPEZA','MANUTENÇÃO','PORTARIA','RONDA','SEGURANÇA','ZELADORIA'];
@@ -2447,15 +2801,15 @@ switch ($acao) {
             ]);
         } catch (Throwable $e_perm) {
             $conn->rollback();
-            os_log('erro', 'Falha ao salvar permissões de O.S.', ['erro' => $e_perm->getMessage(), 'usuario_id' => $alvo_id]);
+            os_log('erro', 'Falha ao salvar permissões de O.S.', ['tipo_erro' => get_class($e_perm)]);
             retornar_json(false, 'Não foi possível salvar as permissões de O.S.');
         }
         break;
 
     case 'listar_assuntos':
         $ativo = $_GET['ativo'] ?? '1';
-        $sql = "SELECT * FROM os_assuntos";
-        if ($ativo !== '') $sql .= " WHERE ativo = " . ($ativo === '0' ? 0 : 1);
+        $sql = "SELECT * FROM os_assuntos WHERE tenant_id = $tenant_id";
+        if ($ativo !== '') $sql .= " AND ativo = " . ($ativo === '0' ? 0 : 1);
         $sql .= " ORDER BY nome ASC";
         $res = $conn->query($sql);
         $lista = [];
@@ -2473,9 +2827,9 @@ switch ($acao) {
 
         if (empty($nome)) retornar_json(false, 'Nome é obrigatório');
 
-        $stmt = $conn->prepare("INSERT INTO os_assuntos (nome, descricao, departamento) VALUES (?,?,?)");
-        $stmt->bind_param('sss', $nome, $descricao, $departamento);
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao criar assunto: ' . $conn->error);
+        $stmt = $conn->prepare("INSERT INTO os_assuntos (tenant_id, nome, descricao, departamento) VALUES (?,?,?,?)");
+        $stmt->bind_param('isss', $tenant_id, $nome, $descricao, $departamento);
+        if (!$stmt->execute()) retornar_json(false, 'Não foi possível criar o assunto.');
 
         retornar_json(true, 'Assunto criado com sucesso', ['id' => $conn->insert_id]);
         break;
@@ -2525,8 +2879,8 @@ switch ($acao) {
         $res = $conn->query(
             "SELECT c.*, a.nome as assunto_nome
              FROM os_config_homem_hora c
-             LEFT JOIN os_assuntos a ON c.assunto_id = a.id
-             WHERE c.ativo = 1
+             LEFT JOIN os_assuntos a ON a.tenant_id = c.tenant_id AND c.assunto_id = a.id
+             WHERE c.tenant_id = $tenant_id AND c.ativo = 1
              ORDER BY c.descricao ASC"
         );
         $lista = [];
@@ -2545,6 +2899,16 @@ switch ($acao) {
         $custo_hora     = (float)($dados['custo_hora']     ?? 0);
 
         if (empty($descricao)) retornar_json(false, 'Descrição é obrigatória');
+        if ($assunto_id !== null) {
+            $stmtAssunto = $conn->prepare('SELECT 1 FROM os_assuntos WHERE tenant_id = ? AND id = ? LIMIT 1');
+            if (!$stmtAssunto) retornar_json(false, 'Não foi possível validar o assunto.');
+            $stmtAssunto->bind_param('ii', $tenant_id, $assunto_id);
+            if (!$stmtAssunto->execute() || !$stmtAssunto->get_result()->fetch_assoc()) {
+                $stmtAssunto->close();
+                retornar_json(false, 'Assunto não encontrado neste condomínio.');
+            }
+            $stmtAssunto->close();
+        }
 
         if ($id) {
             $stmt = $conn->prepare(
@@ -2553,12 +2917,12 @@ switch ($acao) {
             $stmt->bind_param('isddi', $assunto_id, $descricao, $horas_estimadas, $custo_hora, $id);
         } else {
             $stmt = $conn->prepare(
-                "INSERT INTO os_config_homem_hora (assunto_id, descricao, horas_estimadas, custo_hora) VALUES (?,?,?,?)"
+                "INSERT INTO os_config_homem_hora (tenant_id, assunto_id, descricao, horas_estimadas, custo_hora) VALUES (?,?,?,?,?)"
             );
-            $stmt->bind_param('isdd', $assunto_id, $descricao, $horas_estimadas, $custo_hora);
+            $stmt->bind_param('iisdd', $tenant_id, $assunto_id, $descricao, $horas_estimadas, $custo_hora);
         }
 
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao salvar configuração: ' . $conn->error);
+        if (!$stmt->execute()) retornar_json(false, 'Não foi possível salvar a configuração.');
 
         retornar_json(true, 'Configuração salva com sucesso', ['id' => $id ?: $conn->insert_id]);
         break;
@@ -2596,39 +2960,68 @@ switch ($acao) {
         $os_id         = (int)($dados['os_id'] ?? 0);
         $produto_id    = (int)($dados['produto_id'] ?? 0);
         $produto_nome  = trim($dados['produto_nome'] ?? '');
-        $quantidade    = (float)($dados['quantidade'] ?? 1);
-        $preco_unitario = (float)($dados['preco_unitario'] ?? 0);
+        $quantidade    = trim((string)($dados['quantidade'] ?? '1'));
+        $preco_unitario = trim((string)($dados['preco_unitario'] ?? '0'));
 
         if (!$os_id || !$produto_id) retornar_json(false, 'os_id e produto_id são obrigatórios');
         os_exigir_acao_os($os_id, 'editar');
-        if ($quantidade <= 0) retornar_json(false, 'Quantidade deve ser maior que zero');
-
-        // Verificar se OS não está finalizada
-        $res = $conn->query("SELECT status FROM os_chamados WHERE tenant_id = $tenant_id AND id = $os_id");
-        $os = $res ? $res->fetch_assoc() : null;
-        if (!$os) retornar_json(false, 'OS não encontrada');
-        if ($os['status'] === 'finalizado') retornar_json(false, 'OS já finalizada — não é possível adicionar materiais');
-
-        // Verificar produto e estoque disponível
-        $res_prod = $conn->query("SELECT nome, preco_unitario, quantidade_estoque FROM produtos_estoque WHERE tenant_id = $tenant_id AND id = $produto_id");
-        $prod = $res_prod ? $res_prod->fetch_assoc() : null;
-        if (!$prod) retornar_json(false, 'Produto não encontrado no estoque');
-        if ((float)$prod['quantidade_estoque'] <= 0) {
-            retornar_json(false, "Estoque do produto \"{$prod['nome']}\" está zerado");
+        if (!preg_match('/^(?:0|[1-9][0-9]{0,6})(?:\.[0-9]{1,3})?$/D', $quantidade) || (float)$quantidade <= 0) {
+            retornar_json(false, 'Quantidade inválida; use até três casas decimais.', null, 400);
         }
-        if ($quantidade > (float)$prod['quantidade_estoque']) {
-            retornar_json(false, "Estoque insuficiente para \"{$prod['nome']}\" — disponível: {$prod['quantidade_estoque']}");
+        if (!preg_match('/^(?:0|[1-9][0-9]{0,7})(?:\.[0-9]{1,2})?$/D', $preco_unitario)) {
+            retornar_json(false, 'Preço unitário inválido.', null, 400);
         }
-        if (empty($produto_nome)) $produto_nome = $prod['nome'];
-        if (!$preco_unitario) $preco_unitario = (float)$prod['preco_unitario'];
 
-        $stmt = $conn->prepare(
-            "INSERT INTO os_materiais_usados (os_id, produto_id, produto_nome, quantidade, preco_unitario) VALUES (?,?,?,?,?)"
-        );
-        $stmt->bind_param('iisdd', $os_id, $produto_id, $produto_nome, $quantidade, $preco_unitario);
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao adicionar material');
+        if (!$conn->begin_transaction()) retornar_json(false, 'Não foi possível iniciar a operação de material.', null, 503);
+        try {
+            $escopoMaterial = os_escopo_sql();
+            $stOs = $conn->prepare("SELECT status, departamento FROM os_chamados WHERE tenant_id = ? AND id = ? AND ($escopoMaterial) FOR UPDATE");
+            if (!$stOs) throw new RuntimeException('os_lock_failed');
+            $stOs->bind_param('ii', $tenant_id, $os_id);
+            if (!$stOs->execute()) throw new RuntimeException('os_lock_failed');
+            $osResult = $stOs->get_result();
+            $os = $osResult ? $osResult->fetch_assoc() : null;
+            $stOs->close();
+            if (!$os) { $conn->rollback(); retornar_json(false, 'OS não encontrada', null, 404); }
+            if (!os_pode_acao_departamento((string)($os['departamento'] ?? ''), 'editar')) {
+                $conn->rollback();
+                retornar_json(false, 'Você não possui permissão para editar materiais nesta O.S.', null, 403);
+            }
+            if ($os['status'] === 'finalizado') { $conn->rollback(); retornar_json(false, 'OS já finalizada — não é possível adicionar materiais', null, 409); }
 
-        retornar_json(true, 'Material adicionado com sucesso', ['id' => $conn->insert_id]);
+            $stProduto = $conn->prepare('SELECT nome, preco_unitario, quantidade_estoque, (quantidade_estoque >= ?) AS estoque_suficiente FROM produtos_estoque WHERE tenant_id = ? AND id = ? FOR UPDATE');
+            if (!$stProduto) throw new RuntimeException('product_lookup_failed');
+            $stProduto->bind_param('sii', $quantidade, $tenant_id, $produto_id);
+            if (!$stProduto->execute()) throw new RuntimeException('product_lookup_failed');
+            $produtoResult = $stProduto->get_result();
+            $prod = $produtoResult ? $produtoResult->fetch_assoc() : null;
+            $stProduto->close();
+            if (!$prod) { $conn->rollback(); retornar_json(false, 'Produto não encontrado neste condomínio.', null, 404); }
+            if ((int)$prod['estoque_suficiente'] !== 1) {
+                $conn->rollback();
+                retornar_json(false, 'Estoque insuficiente para adicionar este material.', null, 409);
+            }
+            $produto_nome = (string)$prod['nome'];
+            if (preg_match('/^0(?:\.0{1,2})?$/D', $preco_unitario)) {
+                $preco_unitario = trim((string)($prod['preco_unitario'] ?? '0'));
+                if (!preg_match('/^(?:0|[1-9][0-9]{0,7})(?:\.[0-9]{1,2})?$/D', $preco_unitario)) {
+                    throw new RuntimeException('material_price_invalid');
+                }
+            }
+            $stmt = $conn->prepare('INSERT INTO os_materiais_usados (tenant_id, os_id, produto_id, produto_nome, quantidade, preco_unitario) VALUES (?,?,?,?,?,?)');
+            if (!$stmt || !$stmt->bind_param('iiisss', $tenant_id, $os_id, $produto_id, $produto_nome, $quantidade, $preco_unitario)
+                || !$stmt->execute()) throw new RuntimeException('material_insert_failed');
+            $novoId = $conn->insert_id;
+            $stmt->close();
+            if ($novoId <= 0) throw new RuntimeException('material_insert_failed');
+            if (!$conn->commit()) throw new RuntimeException('material_add_commit_failed');
+        } catch (Throwable $e) {
+            $conn->rollback();
+            error_log('Falha ao adicionar material à O.S. (' . get_class($e) . ').');
+            retornar_json(false, 'Não foi possível adicionar o material à O.S.', null, 503);
+        }
+
+        retornar_json(true, 'Material adicionado com sucesso', ['id' => $novoId]);
         break;
 
     // ─────────────────────────────────────────────────
@@ -2636,16 +3029,67 @@ switch ($acao) {
         $id = (int)($_GET['id'] ?? $body['id'] ?? 0);
         if (!$id) retornar_json(false, 'ID inválido');
 
-        // Verificar se já foi baixado do estoque
-        $res = $conn->query("SELECT estoque_baixado, os_id FROM os_materiais_usados WHERE tenant_id = $tenant_id AND id = $id");
-        $mat = $res ? $res->fetch_assoc() : null;
+        $stMaterial = $conn->prepare('SELECT os_id FROM os_materiais_usados WHERE tenant_id = ? AND id = ? LIMIT 1');
+        if (!$stMaterial) retornar_json(false, 'Não foi possível consultar o material.', null, 503);
+        $stMaterial->bind_param('ii', $tenant_id, $id);
+        if (!$stMaterial->execute()) { $stMaterial->close(); retornar_json(false, 'Não foi possível consultar o material.', null, 503); }
+        $mat = $stMaterial->get_result()->fetch_assoc();
+        $stMaterial->close();
         if (!$mat) retornar_json(false, 'Material não encontrado');
         os_exigir_acao_os((int)$mat['os_id'], 'editar');
-        if ($mat['estoque_baixado']) retornar_json(false, 'Material já baixado do estoque — não pode ser removido');
+        $os_id = (int)$mat['os_id'];
+        if (!$conn->begin_transaction()) retornar_json(false, 'Não foi possível iniciar a remoção do material.', null, 503);
+        try {
+            $escopoRemocao = os_escopo_sql();
+            $stOs = $conn->prepare("SELECT id, departamento FROM os_chamados WHERE tenant_id = ? AND id = ? AND ($escopoRemocao) FOR UPDATE");
+            if (!$stOs) throw new RuntimeException('os_lock_failed');
+            $stOs->bind_param('ii', $tenant_id, $os_id);
+            if (!$stOs->execute()) {
+                $stOs->close();
+                $conn->rollback();
+                retornar_json(false, 'O.S não encontrada.', null, 404);
+            }
+            $osAtual = $stOs->get_result()->fetch_assoc();
+            $stOs->close();
+            if (!$osAtual) {
+                $conn->rollback();
+                retornar_json(false, 'O.S não encontrada.', null, 404);
+            }
+            if (!os_pode_acao_departamento((string)($osAtual['departamento'] ?? ''), 'editar')) {
+                $conn->rollback();
+                retornar_json(false, 'Você não possui permissão para remover materiais desta O.S.', null, 403);
+            }
 
-        $stmt = $conn->prepare("DELETE FROM os_materiais_usados WHERE tenant_id = $tenant_id AND id = ?");
-        $stmt->bind_param('i', $id);
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao remover material');
+            $stMatLock = $conn->prepare('SELECT estoque_baixado FROM os_materiais_usados WHERE tenant_id = ? AND os_id = ? AND id = ? FOR UPDATE');
+            if (!$stMatLock) throw new RuntimeException('material_lock_failed');
+            $stMatLock->bind_param('iii', $tenant_id, $os_id, $id);
+            if (!$stMatLock->execute()) { $stMatLock->close(); throw new RuntimeException('material_read_failed'); }
+            $materialAtual = $stMatLock->get_result()->fetch_assoc();
+            $stMatLock->close();
+            if (!$materialAtual) {
+                $conn->rollback();
+                retornar_json(false, 'Material não encontrado.', null, 404);
+            }
+            if ((int)$materialAtual['estoque_baixado'] !== 0) {
+                $conn->rollback();
+                retornar_json(false, 'Material já baixado do estoque — não pode ser removido.', null, 409);
+            }
+
+            $stmt = $conn->prepare('DELETE FROM os_materiais_usados WHERE tenant_id = ? AND os_id = ? AND id = ? AND estoque_baixado = 0');
+            if (!$stmt) throw new RuntimeException('material_delete_prepare_failed');
+            $stmt->bind_param('iii', $tenant_id, $os_id, $id);
+            if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+                $stmt->close();
+                $conn->rollback();
+                retornar_json(false, 'O material não pôde ser removido.', null, 409);
+            }
+            $stmt->close();
+            if (!$conn->commit()) throw new RuntimeException('material_remove_commit_failed');
+        } catch (Throwable $e) {
+            $conn->rollback();
+            error_log('Falha ao remover material da O.S. (' . get_class($e) . ').');
+            retornar_json(false, 'Não foi possível remover o material.', null, 503);
+        }
 
         retornar_json(true, 'Material removido com sucesso');
         break;
@@ -2655,30 +3099,38 @@ switch ($acao) {
         $os_id = (int)($_GET['os_id'] ?? $body['os_id'] ?? 0);
         if (!$os_id) retornar_json(false, 'os_id inválido');
         os_exigir_acao_os($os_id, 'editar');
-
-        $res_mats = $conn->query(
-            "SELECT * FROM os_materiais_usados WHERE tenant_id = $tenant_id AND os_id = $os_id AND estoque_baixado = 0"
-        );
-        $baixados = 0;
-        $erros = [];
-        if ($res_mats) {
-            while ($mat = $res_mats->fetch_assoc()) {
-                $res_prod = $conn->query("SELECT quantidade_estoque FROM produtos_estoque WHERE tenant_id = $tenant_id AND id = " . (int)$mat['produto_id']);
-                if ($res_prod) {
-                    $prod = $res_prod->fetch_assoc();
-                    if ($prod) {
-                        $nova_qtd = max(0, (float)$prod['quantidade_estoque'] - (float)$mat['quantidade']);
-                        $conn->query("UPDATE produtos_estoque SET quantidade_estoque = $nova_qtd WHERE tenant_id = $tenant_id AND id = " . (int)$mat['produto_id']);
-                        $conn->query("UPDATE os_materiais_usados SET estoque_baixado = 1 WHERE tenant_id = $tenant_id AND id = " . (int)$mat['id']);
-                        $baixados++;
-                    } else {
-                        $erros[] = 'Produto ID ' . $mat['produto_id'] . ' não encontrado';
-                    }
-                }
+        if (!$conn->begin_transaction()) retornar_json(false, 'Não foi possível iniciar a baixa de estoque.', null, 503);
+        try {
+            $escopoBaixa = os_escopo_sql();
+            $stOs = $conn->prepare("SELECT id, departamento FROM os_chamados WHERE tenant_id = ? AND id = ? AND ($escopoBaixa) FOR UPDATE");
+            if (!$stOs) throw new RuntimeException('os_lock_failed');
+            $stOs->bind_param('ii', $tenant_id, $os_id);
+            if (!$stOs->execute()) {
+                $stOs->close();
+                $conn->rollback();
+                retornar_json(false, 'O.S não encontrada', null, 404);
             }
+            $osAtual = $stOs->get_result()->fetch_assoc();
+            $stOs->close();
+            if (!$osAtual) {
+                $conn->rollback();
+                retornar_json(false, 'O.S não encontrada', null, 404);
+            }
+            if (!os_pode_acao_departamento((string)($osAtual['departamento'] ?? ''), 'editar')) {
+                $conn->rollback();
+                retornar_json(false, 'Você não possui permissão para baixar estoque desta O.S.', null, 403);
+            }
+            $baixados = _os_baixar_materiais_em_transacao($conn, $tenant_id, $os_id);
+            if (!$conn->commit()) throw new RuntimeException('stock_download_commit_failed');
+        } catch (Throwable $e) {
+            $conn->rollback();
+            if ($e instanceof DomainException && $e->getMessage() === 'stock_insufficient') {
+                retornar_json(false, 'Estoque insuficiente para baixar os materiais desta O.S.', null, 409);
+            }
+            error_log('Falha ao baixar estoque da O.S. (' . get_class($e) . ').');
+            retornar_json(false, 'Não foi possível baixar o estoque desta O.S.', null, 503);
         }
-
-        retornar_json(true, "$baixados material(is) baixado(s) do estoque", ['baixados' => $baixados, 'erros' => $erros]);
+        retornar_json(true, "$baixados material(is) baixado(s) do estoque", ['baixados' => $baixados]);
         break;
 
     // =====================================================
@@ -2697,7 +3149,8 @@ switch ($acao) {
 
         $resultado = _os_salvar_campos_projeto($conn, $tenant_id, $os_id, $dados);
         if (!$resultado['ok']) {
-            retornar_json(false, 'Erro ao salvar informações do projeto: ' . $conn->error);
+            error_log('[OS] Falha ao salvar informações do projeto (' . (int)$conn->errno . ').');
+            retornar_json(false, 'Não foi possível salvar as informações do projeto.', null, 503);
         }
 
         // Auditoria: só grava nota quando Etapa/Conclusão realmente mudaram —
@@ -2713,12 +3166,12 @@ switch ($acao) {
                 $unome, $aud['etapa_anterior'] ?: '—', $aud['etapa_nova'] ?: '—',
                 $aud['percentual_anterior'], $aud['percentual_novo']
             );
-            $stmt_audit = $conn->prepare("INSERT INTO os_interacoes (os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,'nota_interna',?,?,?)");
-            $stmt_audit->bind_param('isis', $os_id, $msg_audit, $uid, $unome);
+            $stmt_audit = $conn->prepare("INSERT INTO os_interacoes (tenant_id, os_id, tipo, mensagem, usuario_id, usuario_nome) VALUES (?,?,'nota_interna',?,?,?)");
+            $stmt_audit->bind_param('iisis', $tenant_id, $os_id, $msg_audit, $uid, $unome);
             $stmt_audit->execute();
         }
 
-        os_log('info', 'Projeto salvo', ['os_id' => $os_id, 'auditoria' => $aud]);
+        os_log('info', 'Projeto salvo', ['os_id' => $os_id]);
         retornar_json(true, 'Informações do projeto salvas com sucesso');
         break;
 
@@ -2790,8 +3243,8 @@ switch ($acao) {
     // ─────────────────────────────────────────────────
     case 'listar_etapas':
         $ativo = $_GET['ativo'] ?? '1';
-        $sql = "SELECT * FROM os_etapas";
-        if ($ativo !== '') $sql .= " WHERE ativo = " . ($ativo === '0' ? 0 : 1);
+        $sql = "SELECT * FROM os_etapas WHERE tenant_id = $tenant_id";
+        if ($ativo !== '') $sql .= " AND ativo = " . ($ativo === '0' ? 0 : 1);
         $sql .= " ORDER BY ordem ASC, nome ASC";
         $res = $conn->query($sql);
         $lista = [];
@@ -2807,9 +3260,12 @@ switch ($acao) {
         $ordem = (int)($dados['ordem'] ?? 0);
         if (empty($nome)) retornar_json(false, 'Nome é obrigatório');
 
-        $stmt = $conn->prepare("INSERT INTO os_etapas (nome, ordem) VALUES (?,?)");
-        $stmt->bind_param('si', $nome, $ordem);
-        if (!$stmt->execute()) retornar_json(false, 'Erro ao criar etapa: ' . $conn->error);
+        $stmt = $conn->prepare("INSERT INTO os_etapas (tenant_id, nome, ordem) VALUES (?,?,?)");
+        $stmt->bind_param('isi', $tenant_id, $nome, $ordem);
+        if (!$stmt->execute()) {
+            error_log('[OS] Falha ao criar etapa (' . (int)$conn->errno . ').');
+            retornar_json(false, 'Não foi possível criar a etapa.', null, 503);
+        }
 
         retornar_json(true, 'Etapa criada com sucesso', ['id' => $conn->insert_id]);
         break;
@@ -2845,6 +3301,13 @@ switch ($acao) {
             retornar_json(false, 'Etapa em uso por interações existentes. Inative-a em vez de excluir.');
         }
 
+        $referenciasProjeto = $conn->query("SELECT COUNT(*) AS total FROM os_chamados WHERE tenant_id = $tenant_id AND projeto_etapa_id = $id");
+        $rowProjeto = $referenciasProjeto ? $referenciasProjeto->fetch_assoc() : null;
+        if (!$rowProjeto) retornar_json(false, 'Não foi possível verificar referências da etapa.', null, 503);
+        if ((int)$rowProjeto['total'] > 0) {
+            retornar_json(false, 'Etapa em uso por projetos existentes. Inative-a em vez de excluir.', null, 409);
+        }
+
         $stmt = $conn->prepare("DELETE FROM os_etapas WHERE tenant_id = $tenant_id AND id = ?");
         $stmt->bind_param('i', $id);
         if (!$stmt->execute()) retornar_json(false, 'Erro ao excluir etapa');
@@ -2858,8 +3321,7 @@ switch ($acao) {
         if (!$os_id) retornar_json(false, 'os_id inválido');
         os_exigir_acao_os($os_id, 'visualizar');
 
-        $tab_doc = $conn->query("SHOW TABLES LIKE 'documentos'");
-        if (!$tab_doc || $tab_doc->num_rows === 0) retornar_json(true, 'OK', []);
+        if (!\ERP\Database\DatabaseDialect::tableExists($conn, 'documentos')) retornar_json(true, 'OK', []);
 
         $stmt = $conn->prepare("SELECT id, nome, descricao, status FROM documentos WHERE tenant_id = $tenant_id AND os_id = ? ORDER BY nome ASC");
         $stmt->bind_param('i', $os_id);
@@ -2881,8 +3343,7 @@ switch ($acao) {
         if (!is_array($doc_ids)) $doc_ids = [];
         $doc_ids = array_values(array_unique(array_filter(array_map('intval', $doc_ids))));
 
-        $tab_doc = $conn->query("SHOW TABLES LIKE 'documentos'");
-        if (!$tab_doc || $tab_doc->num_rows === 0) retornar_json(false, 'Módulo de documentos (GED) não disponível.');
+        if (!\ERP\Database\DatabaseDialect::tableExists($conn, 'documentos')) retornar_json(false, 'Módulo de documentos (GED) não disponível.', null, 503);
 
         // Substituição total: desvincula tudo que estava e revincula apenas os selecionados
         $conn->query("UPDATE documentos SET os_id = NULL WHERE tenant_id = $tenant_id AND os_id = $os_id");

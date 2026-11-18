@@ -5,6 +5,8 @@
 // Padrão MVC - Camada de Dados
 // Responsável por interagir com banco de dados para sessões
 
+require_once __DIR__ . '/../db/DatabaseDialect.php';
+
 class SessionModel {
     private $conexao;
     private $tabela = 'sessoes_usuarios';
@@ -21,6 +23,10 @@ class SessionModel {
      * Criar tabela de sessões se não existir
      */
     public function criarTabelaSessoes() {
+        if (class_exists(\ERP\Database\DatabaseDialect::class) && \ERP\Database\DatabaseDialect::isPostgres($this->conexao)) {
+            return true; // O schema PostgreSQL é provisionado pelo bundle versionado.
+        }
+
         $sql = "CREATE TABLE IF NOT EXISTS `{$this->tabela}` (
             `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
             `usuario_id` INT(11) NOT NULL,

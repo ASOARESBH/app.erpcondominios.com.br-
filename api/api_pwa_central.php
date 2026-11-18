@@ -26,13 +26,21 @@
 ob_start();
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_helper.php';
+require_once __DIR__ . '/helpers/pwa_security.php';
 ob_end_clean();
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
-$allowed = ['https://app.erpcondominios.com.br','http://app.erpcondominios.com.br','http://localhost','http://127.0.0.1'];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, $allowed)) header('Access-Control-Allow-Origin: ' . $origin);
+if ($origin !== '' && !pwa_origem_permitida($origin)) {
+    http_response_code(403);
+    echo json_encode(['sucesso' => false, 'mensagem' => 'Origem não autorizada.', 'dados' => null], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if ($origin !== '') {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+}
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -59,10 +67,27 @@ if ($metodo === 'POST') {
 $acao = $_GET['acao'] ?? $_GET['action'] ?? $body['acao'] ?? $body['action'] ?? '';
 
 if (!function_exists('_pwa_json')) {
-    function _pwa_json($ok, $msg, $dados = null) {
+    function _pwa_json($ok, $msg, $dados = null, int $statusHttp = 200) {
+        if ($statusHttp < 100 || $statusHttp > 599) $statusHttp = 500;
+        http_response_code($statusHttp);
         echo json_encode(['sucesso' => $ok, 'mensagem' => $msg, 'dados' => $dados], JSON_UNESCAPED_UNICODE);
         exit;
     }
+}
+
+$acoesEscritaPwaCentral = ['salvar_config', 'desativar_dispositivo', 'ativar_dispositivo', 'excluir_dispositivo', 'enviar_teste', 'atualizar_versao', 'upload_service_account'];
+if (!in_array($metodo, ['GET', 'POST'], true)) {
+    header('Allow: GET, POST, OPTIONS');
+    _pwa_json(false, 'Método não permitido.', null, 405);
+}
+if (in_array($acao, $acoesEscritaPwaCentral, true)) {
+    if ($metodo !== 'POST') _pwa_json(false, 'Esta ação exige POST.', null, 405);
+    if ($origin === '' || !pwa_origem_permitida($origin)) _pwa_json(false, 'Origem não autorizada.', null, 403);
+}
+
+if (defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql') {
+    http_response_code(503);
+    _pwa_json(false, 'Central PWA indisponível até o provisionamento e a homologação PostgreSQL.');
 }
 
 // ============================================================
@@ -77,6 +102,7 @@ function _safe_count($conn, $sql) {
 
 // Cria as tabelas PWA se não existirem (idempotente, executado em toda requisição)
 function _pwa_garantir_tabelas($conn) {
+    if (!\ERP\Database\DatabaseDialect::isPostgres($conn)) {
     $conn->query("CREATE TABLE IF NOT EXISTS pwa_versao (
         id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
         versao        VARCHAR(20)  NOT NULL DEFAULT '1.0.0',
@@ -123,6 +149,7 @@ function _pwa_garantir_tabelas($conn) {
     if (!in_array('device_model',   $cols)) @$conn->query("ALTER TABLE pwa_fcm_tokens ADD COLUMN device_model   VARCHAR(100) NULL");
     if (!in_array('device_os',      $cols)) @$conn->query("ALTER TABLE pwa_fcm_tokens ADD COLUMN device_os      VARCHAR(100) NULL");
     if (!in_array('device_browser', $cols)) @$conn->query("ALTER TABLE pwa_fcm_tokens ADD COLUMN device_browser VARCHAR(100) NULL");
+    }
 
     // Insere chaves default de configuração PWA se não existirem
     $defaults = [
@@ -148,7 +175,8 @@ function _pwa_garantir_tabelas($conn) {
         'fcm_service_account_path'  => '',
         'fcm_service_account_email' => '',
     ];
-    $stmt_d = @$conn->prepare("INSERT IGNORE INTO pwa_configuracoes (chave, valor) VALUES (?, ?)");
+    $seed_sql = \ERP\Database\DatabaseDialect::idempotentInsertSql($conn, "INSERT INTO pwa_configuracoes (chave, valor) VALUES (?, ?)");
+    $stmt_d = @$conn->prepare($seed_sql);
     if ($stmt_d) {
         foreach ($defaults as $k => $v) {
             $stmt_d->bind_param('ss', $k, $v);
@@ -162,6 +190,11 @@ function _pwa_config($conn) {
     $cfg = [];
     if ($res) while ($r = $res->fetch_assoc()) $cfg[$r['chave']] = $r['valor'];
     return $cfg;
+}
+
+function _pwa_install_url(array $config): string {
+    $url = trim((string)($config['pwa_install_url'] ?? ''));
+    return pwa_url_destino_valida($url) ? $url : '/frontend/portal_morador.html';
 }
 
 function _sa_path() {
@@ -383,6 +416,7 @@ switch ($acao) {
     // ─── DASHBOARD STATUS ─────────────────────────────────────
     case 'dashboard_status':
         $cfg        = _pwa_config($conn);
+        $install_url = _pwa_install_url($cfg);
         $sa_existe  = _sa_existe();
         $firebase_ok = !empty($cfg['fcm_api_key']) && $cfg['fcm_api_key'] !== 'SUBSTITUA_PELO_SEU_API_KEY';
         $pwa_ativo  = ($cfg['pwa_ativo'] ?? '1') === '1';
@@ -421,7 +455,7 @@ switch ($acao) {
             'cache_version'     => $cfg['pwa_cache_version']  ?? 'portal-morador-v1.0.0',
             'nome_app'          => $cfg['pwa_nome_app']        ?? 'Portal do Morador',
             'tema_cor'          => $cfg['pwa_tema_cor']        ?? '#2563eb',
-            'install_url'       => $cfg['pwa_install_url']     ?? '/frontend/portal_morador.html',
+            'install_url'       => $install_url,
         ]);
 
     // ─── HEALTH CHECK ─────────────────────────────────────────
@@ -486,7 +520,7 @@ switch ($acao) {
             $sa = _sa_ler();
             $sa_valido = !empty($sa['client_email']) && !empty($sa['private_key']) && !empty($sa['project_id']);
             $checks[] = ['item' => 'Service Account (estrutura)', 'status' => $sa_valido ? 'ok' : 'erro',
-                'detalhe' => $sa_valido ? 'client_email: ' . ($sa['client_email'] ?? '?') : 'JSON inválido ou campos ausentes'];
+                'detalhe' => $sa_valido ? 'Service Account estruturalmente válido' : 'JSON inválido ou campos ausentes'];
         }
 
         // 6. OAuth2 Token Cache
@@ -537,23 +571,19 @@ switch ($acao) {
 
     // ─── OBTER CONFIG ─────────────────────────────────────────
     case 'obter_config':
-        $cfg = _pwa_config($conn);
-        // Ocultar API Key parcialmente por segurança
-        if (!empty($cfg['fcm_api_key']) && strlen($cfg['fcm_api_key']) > 8) {
-            $cfg['fcm_api_key_preview'] = substr($cfg['fcm_api_key'], 0, 6) . '****' . substr($cfg['fcm_api_key'], -4);
-        }
-        // Metadados do Service Account
+        $configAtual = _pwa_config($conn);
+        $configAtual['pwa_install_url'] = _pwa_install_url($configAtual);
+        $cfg = pwa_config_publica($configAtual);
         $cfg['service_account_existe'] = _sa_existe();
-        if (_sa_existe()) {
-            $sa = _sa_ler();
-            $cfg['service_account_email']   = $sa['client_email']  ?? '';
-            $cfg['service_account_project'] = $sa['project_id']    ?? '';
-        }
         _pwa_json(true, 'Configurações carregadas', $cfg);
 
     // ─── SALVAR CONFIG ────────────────────────────────────────
     case 'salvar_config':
         verificarPermissao('gerente');
+        if (array_key_exists('pwa_install_url', $body)
+            && (!is_string($body['pwa_install_url']) || !pwa_url_destino_valida(trim($body['pwa_install_url'])))) {
+            _pwa_json(false, 'A URL de instalação deve ser um caminho relativo seguro do próprio site.', null, 400);
+        }
         $campos_permitidos = [
             'fcm_api_key','fcm_auth_domain','fcm_project_id','fcm_storage_bucket',
             'fcm_messaging_sender_id','fcm_app_id','fcm_vapid_key',
@@ -600,13 +630,20 @@ switch ($acao) {
         }
 
         $w = implode(' AND ', $where);
-        $total_res = $conn->query("SELECT COUNT(*) c FROM pwa_fcm_tokens t LEFT JOIN moradores m ON t.morador_id = m.id WHERE {$w}");
-        $total = (int)($total_res ? $total_res->fetch_assoc()['c'] : 0);
+        $total_stmt = $conn->prepare("SELECT COUNT(*) c FROM pwa_fcm_tokens t LEFT JOIN moradores m ON t.morador_id = m.id WHERE {$w}");
+        if (!$total_stmt || ($types !== '' && !$total_stmt->bind_param($types, ...$params)) || !$total_stmt->execute()) {
+            http_response_code(503);
+            _pwa_json(false, 'Não foi possível contar os dispositivos.');
+        }
+        $total_res = $total_stmt->get_result();
+        if (!$total_res) { $total_stmt->close(); http_response_code(503); _pwa_json(false, 'Não foi possível contar os dispositivos.'); }
+        $total = (int)($total_res->fetch_assoc()['c'] ?? 0);
+        $total_stmt->close();
 
         $sql = "SELECT t.id, t.morador_id, t.plataforma, t.ativo,
                        t.device_info, t.device_model, t.device_os, t.device_browser,
                        t.criado_em, t.atualizado_em, t.ultimo_uso,
-                       LEFT(t.fcm_token, 20) AS token_preview,
+                       CASE WHEN t.fcm_token IS NOT NULL AND t.fcm_token <> '' THEN 1 ELSE 0 END AS token_configurado,
                        m.nome AS morador_nome, m.unidade_numero
                 FROM pwa_fcm_tokens t
                 LEFT JOIN moradores m ON t.morador_id = m.id
@@ -680,12 +717,13 @@ switch ($acao) {
             $project_id
         );
 
-        _pwa_log($conn, $resultado['sucesso'] ? 'push_enviado' : 'push_erro',
-            $resultado['sucesso'] ? 'info' : 'erro',
-            "Teste para token #{$token_id} (" . ($row['nome'] ?? 'morador') . "): " . ($resultado['sucesso'] ? 'OK' : $resultado['erro']),
-            $resultado, $row['morador_id'], $token_id
+        $pushTesteOk = !empty($resultado['sucesso']);
+        _pwa_log($conn, $pushTesteOk ? 'push_enviado' : 'push_erro',
+            $pushTesteOk ? 'info' : 'erro',
+            $pushTesteOk ? 'Teste de push enviado.' : 'Falha no envio do teste de push.',
+            ['sucesso' => $pushTesteOk], $row['morador_id'], $token_id
         );
-        _pwa_json($resultado['sucesso'], $resultado['sucesso'] ? 'Push de teste enviado com sucesso' : 'Falha ao enviar: ' . $resultado['erro'], $resultado);
+        _pwa_json($pushTesteOk, $pushTesteOk ? 'Push de teste enviado com sucesso' : 'Falha ao enviar push de teste.', ['sucesso' => $pushTesteOk]);
 
     // ─── LISTAR LOGS ──────────────────────────────────────────
     case 'listar_logs':
@@ -707,7 +745,15 @@ switch ($acao) {
         if ($data_ate){ $where[] = 'DATE(l.criado_em) <= ?'; $params[] = $data_ate; $types .= 's'; }
 
         $w = implode(' AND ', $where);
-        $total = _safe_count($conn, "SELECT COUNT(*) c FROM pwa_logs l WHERE {$w}");
+        $total_stmt = $conn->prepare("SELECT COUNT(*) c FROM pwa_logs l WHERE {$w}");
+        if (!$total_stmt || ($types !== '' && !$total_stmt->bind_param($types, ...$params)) || !$total_stmt->execute()) {
+            http_response_code(503);
+            _pwa_json(false, 'Não foi possível contar os registros de auditoria.');
+        }
+        $total_res = $total_stmt->get_result();
+        if (!$total_res) { $total_stmt->close(); http_response_code(503); _pwa_json(false, 'Não foi possível contar os registros de auditoria.'); }
+        $total = (int)($total_res->fetch_assoc()['c'] ?? 0);
+        $total_stmt->close();
 
         $sql = "SELECT l.*, m.nome AS morador_nome FROM pwa_logs l LEFT JOIN moradores m ON l.morador_id=m.id WHERE {$w} ORDER BY l.criado_em DESC LIMIT ? OFFSET ?";
         $params[] = $limite; $params[] = $offset; $types .= 'ii';
@@ -830,8 +876,8 @@ switch ($acao) {
         // Invalidar cache de OAuth
         $conn->query("DELETE FROM pwa_oauth_cache");
 
-        _pwa_log($conn, 'config_salva', 'info', "Service Account atualizado — projeto: {$proj_id}, email: {$email}");
-        _pwa_json(true, 'Service Account salvo com sucesso', ['project_id' => $proj_id, 'client_email' => $email]);
+        _pwa_log($conn, 'config_salva', 'info', 'Service Account atualizado.');
+        _pwa_json(true, 'Service Account salvo com sucesso', ['service_account_existe' => true]);
 
     default:
         _pwa_json(false, "Ação '{$acao}' não reconhecida");

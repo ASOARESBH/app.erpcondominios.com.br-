@@ -46,7 +46,8 @@ if (!function_exists('log_fin')) {
         // Garantir que a tabela existe (criação lazy)
         static $tabela_ok = false;
         if (!$tabela_ok && $conn) {
-            $conn->query("CREATE TABLE IF NOT EXISTS `logs_financeiro` (
+            if (!\ERP\Database\DatabaseDialect::isPostgres($conn)) {
+                $conn->query("CREATE TABLE IF NOT EXISTS `logs_financeiro` (
               `id`             bigint(20)   NOT NULL AUTO_INCREMENT,
               `modulo`         varchar(50)  NOT NULL,
               `nivel`          enum('INFO','AVISO','ERRO','DEBUG','CRITICO') NOT NULL DEFAULT 'INFO',
@@ -67,6 +68,7 @@ if (!function_exists('log_fin')) {
               KEY `idx_nivel`   (`nivel`),
               KEY `idx_criado`  (`criado_em`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            }
             $tabela_ok = true;
         }
 

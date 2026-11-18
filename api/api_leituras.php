@@ -268,13 +268,20 @@ function calcularValor($consumo) {
 // Sem limite configurado, o alerta fica desligado (nunca existiu essa
 // configuração antes — não dá para presumir um valor "seguro" por conta própria).
 function _limite_consumo_alerta($conexao, $tenantId) {
-    mysqli_query($conexao, "CREATE TABLE IF NOT EXISTS `hidrometro_config` (
-        `tenant_id` INT(11) NOT NULL,
-        `limite_consumo_m3` DECIMAL(10,2) NULL DEFAULT NULL,
-        `atualizado_em` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (`tenant_id`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+        if (!\ERP\Database\DatabaseDialect::tableExists($conexao, 'hidrometro_config')) return null;
+    } else {
+        mysqli_query($conexao, "CREATE TABLE IF NOT EXISTS `hidrometro_config` (
+            `tenant_id` INT(11) NOT NULL,
+            `limite_consumo_m3` DECIMAL(10,2) NULL DEFAULT NULL,
+            `atualizado_em` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`tenant_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
     $res = mysqli_query($conexao, "SELECT limite_consumo_m3 FROM hidrometro_config WHERE tenant_id=" . (int) $tenantId . " LIMIT 1");
+    if (!$res && \ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+        throw new RuntimeException('Falha ao consultar limite de consumo.');
+    }
     $row = $res ? mysqli_fetch_assoc($res) : null;
     return ($row && $row['limite_consumo_m3'] !== null) ? (float) $row['limite_consumo_m3'] : null;
 }

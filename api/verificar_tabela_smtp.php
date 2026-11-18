@@ -6,12 +6,16 @@
  */
 
 require_once 'config.php';
-require_once 'tenant_helper.php';;
+require_once 'tenant_helper.php';
 
 // Conectar ao banco
 $conexao = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if (!$conexao) {
     die("Erro ao conectar: " . mysqli_connect_error());
+}
+if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+    http_response_code(409);
+    exit('Ferramenta manual de schema indisponível no PostgreSQL; aplique o DDL versionado.');
 }
 
 mysqli_set_charset($conexao, 'utf8mb4');
@@ -19,10 +23,7 @@ mysqli_set_charset($conexao, 'utf8mb4');
 echo "<h2>Verificação da Tabela configuracao_smtp</h2>";
 
 // Verificar se a tabela existe
-$sql_check = "SHOW TABLES LIKE 'configuracao_smtp'";
-$resultado = mysqli_query($conexao, $sql_check);
-
-if (mysqli_num_rows($resultado) > 0) {
+if (\ERP\Database\DatabaseDialect::tableExists($conexao, 'configuracao_smtp')) {
     echo "<p style='color: green;'>✅ Tabela 'configuracao_smtp' existe!</p>";
     
     // Verificar estrutura
@@ -106,10 +107,7 @@ echo "<hr><h2>Verificação de Outras Tabelas</h2>";
 $tabelas = ['email_templates', 'email_log'];
 
 foreach ($tabelas as $tabela) {
-    $sql_check = "SHOW TABLES LIKE '$tabela'";
-    $resultado = mysqli_query($conexao, $sql_check);
-    
-    if (mysqli_num_rows($resultado) > 0) {
+    if (\ERP\Database\DatabaseDialect::tableExists($conexao, $tabela)) {
         echo "<p style='color: green;'>✅ Tabela '$tabela' existe</p>";
     } else {
         echo "<p style='color: orange;'>⚠️ Tabela '$tabela' NÃO existe</p>";

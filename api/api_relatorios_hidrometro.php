@@ -573,13 +573,15 @@ if ($tipo === 'analitico') {
 
     // Índice composto para acelerar a busca da última leitura por hidrômetro
     // (criação idempotente — não bloqueia o relatório caso não seja possível criar).
-    try {
-        $idxCheck = $conexao->query("SELECT COUNT(1) as qtd FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'leituras' AND INDEX_NAME = 'idx_hidrometro_data'");
-        if ($idxCheck && ($idxRow = $idxCheck->fetch_assoc()) && intval($idxRow['qtd']) === 0) {
-            $conexao->query("CREATE INDEX idx_hidrometro_data ON leituras(hidrometro_id, data_leitura)");
+    if (!\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+        try {
+            $idxCheck = $conexao->query("SELECT COUNT(1) as qtd FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'leituras' AND INDEX_NAME = 'idx_hidrometro_data'");
+            if ($idxCheck && ($idxRow = $idxCheck->fetch_assoc()) && intval($idxRow['qtd']) === 0) {
+                $conexao->query("CREATE INDEX idx_hidrometro_data ON leituras(hidrometro_id, data_leitura)");
+            }
+        } catch (Throwable $e) {
+            // Segue sem o índice — impacta apenas performance, não a corretude do relatório.
         }
-    } catch (Throwable $e) {
-        // Segue sem o índice — impacta apenas performance, não a corretude do relatório.
     }
 
     $status_analitico    = isset($_GET['status'])    ? trim($_GET['status'])    : '';

@@ -30,14 +30,18 @@ $conexao = conectar_banco();
 $tenant_id = exigirTenantId();
 
 function _tem_coluna($conexao, $tabela, $coluna) {
-    $resultado = $conexao->query("SHOW COLUMNS FROM `$tabela` LIKE '$coluna'");
-    return $resultado && $resultado->num_rows > 0;
+    try {
+        return \ERP\Database\DatabaseDialect::columnExists($conexao, $tabela, $coluna);
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 function _garantir_coluna($conexao, $tabela, $coluna, $definicao) {
+    if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) return;
     if (!_tem_coluna($conexao, $tabela, $coluna)) {
         if (!$conexao->query("ALTER TABLE `$tabela` ADD COLUMN `$coluna` $definicao")) {
-            error_log("[api_rfid] Falha ao adicionar coluna $coluna em $tabela: " . $conexao->error);
+            error_log("[api_rfid] Falha ao adicionar coluna $coluna em $tabela.");
         }
     }
 }

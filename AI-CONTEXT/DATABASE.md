@@ -70,6 +70,32 @@ por unidade. A migration idempotente MySQL/MariaDB 5.7 é
 O diagnóstico de divergências com a unidade atual do morador fica em
 `sql/diagnostico_os_unidade_divergente.sql` e é somente leitura.
 
+Os endpoints internos e do Portal exigem `tenant_id` em `os_chamados`, `os_assuntos`,
+`os_interacoes` e demais tabelas filhas consultadas. Estrutura ausente/incompleta falha
+fechada; a validação de readiness não deve inventar backfill de tenant em registros legados.
+`os_chamados.numero` é globalmente único: os fluxos interno, Portal do Morador e Portal do
+Colaborador reservam o mesmo lock anual do banco, leem o maior sufixo existente em todos os
+tenants e preservam seus prefixos históricos (`O.S-` e `OS-`). Chamado e interação inicial
+devem ser atômicos; os filhos também recebem o tenant autenticado.
+
+### 8.1 Financeiro bancário — readiness e migração tenant
+
+`api/api_contas_bancarias.php` só libera CRUD quando as tabelas de contas, movimentos,
+OFX, conciliações e contas a pagar/receber possuem `tenant_id`; caso contrário retorna
+503. As migrations financeiras históricas não garantem essa coluna em tabelas existentes.
+Não remover o gate nem preencher `tenant_id` automaticamente: base MySQL legada requer
+inventário e migration aprovada com plano de mapeamento/rollback antes de qualquer deploy.
+No PostgreSQL, o endpoint exige schema versionado e não pode executar DDL runtime.
+Em instalações novas, a migration MySQL só deve responder sucesso após provisionar as
+colunas financeiras v2 usadas pelo endpoint; falha de upgrade deixa a readiness bloqueada.
+O bootstrap provisiona os campos de movimento, histórico OFX, ledger e vínculos de título
+(`movimentacao_bancaria_id`, `conta_bancaria_id`, `conciliado`, `data_conciliacao` e
+`usuario_conciliacao`) sem inferir tenant em linhas antigas. O seed bancário é aditivo e sua
+completude é verificada pelos 330 códigos versionados; não há fallback que declare um seed
+parcial como concluído. Conciliação e reversão mantêm movimento, título e ledger na mesma
+transação; a importação OFX já commitada não deve virar erro retryável por falha posterior
+de pós-processamento.
+
 ## 9. URL pública de Projetos
 
 `tenants.projetos_slug` guarda o identificador opcional usado nas rotas públicas

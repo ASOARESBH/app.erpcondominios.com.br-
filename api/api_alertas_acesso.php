@@ -21,7 +21,22 @@ $acao = $_GET['acao'] ?? $_POST['acao'] ?? $body['acao'] ?? '';
 $rbac = function_exists('rbacTabelasDisponiveis') && rbacTabelasDisponiveis($conexao);
 if ($rbac) { rbacExigir($conexao, 'sistema', $metodo === 'GET' ? 'visualizar' : 'configurar'); }
 else { verificarPermissao('admin'); }
-function alerta_colunas($conexao, $tabela) { $ok=[]; $r=$conexao->query("SHOW COLUMNS FROM `$tabela`"); if($r) while($x=$r->fetch_assoc()) $ok[]=$x['Field']; return $ok; }
+function alerta_colunas($conexao, $tabela) {
+    if (preg_match('/\A[a-z_][a-z0-9_]*\z/i', (string)$tabela) !== 1) return [];
+    $schemaExpr = \ERP\Database\DatabaseDialect::isPostgres($conexao) ? 'current_schema()' : 'DATABASE()';
+    $stmt = $conexao->prepare("SELECT column_name FROM information_schema.columns WHERE table_schema = $schemaExpr AND table_name = ? ORDER BY ordinal_position");
+    if (!$stmt || !$stmt->bind_param('s', $tabela) || !$stmt->execute()) {
+        if ($stmt) $stmt->close();
+        return [];
+    }
+    $result = $stmt->get_result();
+    if (!$result) { $stmt->close(); return []; }
+    $columns = [];
+    while ($row = $result->fetch_assoc()) $columns[] = $row['column_name'];
+    $result->free();
+    $stmt->close();
+    return $columns;
+}
 if ($acao === 'opcoes') {
     $veiculos=[]; $moradores=[]; $unidades=[];
     $r=$conexao->query("SELECT id,placa,modelo,cor,morador_id FROM veiculos WHERE tenant_id=$tenant_id AND ativo=1 ORDER BY placa"); if($r) while($x=$r->fetch_assoc()) $veiculos[]=$x;

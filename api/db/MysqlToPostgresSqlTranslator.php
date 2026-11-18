@@ -745,7 +745,23 @@ final class MysqlToPostgresSqlTranslator
             if (count($left) !== 1 || ($column = self::simpleIdentifier($left[0])) === null) {
                 throw new SqlTranslationException('MYSQL_ON_DUPLICATE_KEY_UNSUPPORTED');
             }
-            $right = self::rewriteValuesCalls(array_slice($segment, $equals + 1), $insertColumns);
+            $rightTokens = array_slice($segment, $equals + 1);
+            $rightSignificant = self::significantTokens($rightTokens);
+            if (count($rightSignificant) === 4 && $rightSignificant[0][0] === 'word'
+                && strtoupper($rightSignificant[0][1]) === 'LAST_INSERT_ID'
+                && $rightSignificant[1] === ['symbol', '('] && $rightSignificant[3] === ['symbol', ')']
+                && self::simpleIdentifier($rightSignificant[2]) === $column) {
+                // MySQL uses id = LAST_INSERT_ID(id) to make an upsert expose
+                // the existing row's id as insert_id. PostgreSQL's adapter
+                // obtains that same row id from RETURNING; keep the assignment
+                // idempotent and do not call lastval() inside the update.
+                $right = [$rightSignificant[2]];
+            } else {
+                if (self::containsWord([$rightTokens], ['LAST_INSERT_ID'])) {
+                    throw new SqlTranslationException('MYSQL_LAST_INSERT_ID_CONTEXT_UNSUPPORTED');
+                }
+                $right = self::rewriteValuesCalls($rightTokens, $insertColumns);
+            }
             if (self::significantTokens($right) === []) {
                 throw new SqlTranslationException('MYSQL_ON_DUPLICATE_KEY_UNSUPPORTED');
             }

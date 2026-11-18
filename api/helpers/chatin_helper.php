@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../db/DatabaseDialect.php';
 /**
  * ERP CONDOMÍNIOS — CHAT-IN (núcleo)
  *
@@ -67,9 +68,11 @@ function chatin_linha(mysqli $c, $sql, $tipos = '', array $params = []) {
 function chatin_tabela_existe(mysqli $c, $tabela) {
     static $cache = [];
     if (array_key_exists($tabela, $cache)) return $cache[$tabela];
-    // SHOW TABLES (padrão do projeto): não depende de privilégio em INFORMATION_SCHEMA.
-    $r = $c->query("SHOW TABLES LIKE '" . $c->real_escape_string((string)$tabela) . "'");
-    return $cache[$tabela] = ($r && $r->num_rows > 0);
+    try {
+        return $cache[$tabela] = \ERP\Database\DatabaseDialect::tableExists($c, (string)$tabela);
+    } catch (Throwable $e) {
+        return $cache[$tabela] = false;
+    }
 }
 
 function chatin_colunas_tabela(mysqli $c, $tabela) {
@@ -78,11 +81,18 @@ function chatin_colunas_tabela(mysqli $c, $tabela) {
     $k = spl_object_id($c) . ':' . $tabela;
     if (array_key_exists($k, $cache)) return $cache[$k];
     if (!chatin_tabela_existe($c, $tabela)) return $cache[$k] = [];
-    $r = $c->query('SHOW COLUMNS FROM `' . $tabela . '`');
-    if (!$r) return $cache[$k] = [];
+    $schemaExpr = \ERP\Database\DatabaseDialect::isPostgres($c) ? 'current_schema()' : 'DATABASE()';
+    $stmt = $c->prepare("SELECT column_name AS field_name, data_type AS type_name FROM information_schema.columns WHERE table_schema = $schemaExpr AND table_name = ?");
+    if (!$stmt || !$stmt->bind_param('s', $tabela) || !$stmt->execute()) {
+        if ($stmt) $stmt->close();
+        return $cache[$k] = [];
+    }
+    $r = $stmt->get_result();
+    if (!$r) { $stmt->close(); return $cache[$k] = []; }
     $colunas = [];
-    while ($linha = $r->fetch_assoc()) $colunas[$linha['Field']] = ['Type' => (string)$linha['Type']];
+    while ($linha = $r->fetch_assoc()) $colunas[$linha['field_name']] = ['Type' => (string)$linha['type_name']];
     $r->free();
+    $stmt->close();
     return $cache[$k] = $colunas;
 }
 
@@ -101,7 +111,7 @@ function chatin_v2_instalado(mysqli $c) {
     return chatin_instalado($c) && chatin_tabela_existe($c, 'chatin_configuracoes');
 }
 
-function chatin_config_tenant(mysqli $c, $tenantId, $forcarReleitura = false, $bloqueante = false) {
+function chatin_config_tenant(mysqli $c, $tenantId, $forcarReleitura = false) {
     static $cache = [];
     $cacheKey = spl_object_id($c) . ':' . (int)$tenantId;
     if (!$forcarReleitura && array_key_exists($cacheKey, $cache)) return $cache[$cacheKey];
@@ -120,7 +130,7 @@ function chatin_config_tenant(mysqli $c, $tenantId, $forcarReleitura = false, $b
             throw new ChatInErro('A configuração Chat-In está incompleta; aplique a migration aprovada.', 503, 'MIGRATION_V2_PENDENTE');
         }
     }
-    $linha = chatin_linha($c, 'SELECT ativo, usuario_usuario, usuario_morador, morador_inicia_com_equipe, morador_morador, recurso_sons, recurso_cutucar, recurso_digitando, recurso_emojis, recurso_push_app, grupos_visiveis_moradores_json, filtro_moradores_json FROM chatin_configuracoes WHERE tenant_id = ? LIMIT 1' . ($bloqueante ? ' LOCK IN SHARE MODE' : ''), 'i', [(int)$tenantId]);
+    $linha = chatin_linha($c, 'SELECT ativo, usuario_usuario, usuario_morador, morador_inicia_com_equipe, morador_morador, recurso_sons, recurso_cutucar, recurso_digitando, recurso_emojis, recurso_push_app, grupos_visiveis_moradores_json, filtro_moradores_json FROM chatin_configuracoes WHERE tenant_id = ? LIMIT 1', 'i', [(int)$tenantId]);
     if (!$linha) return $cache[$cacheKey] = $padrao;
     foreach ($padrao as $chave => $valor) {
         if (strpos($chave, 'recurso_') === 0 || in_array($chave, ['ativo','usuario_usuario','usuario_morador','morador_inicia_com_equipe','morador_morador'], true)) $padrao[$chave] = (int)$linha[$chave] === 1;

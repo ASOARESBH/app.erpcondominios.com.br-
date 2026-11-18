@@ -17,9 +17,11 @@ if (!function_exists('protocolo_notificacao_debug')) {
 
 if (!function_exists('protocolo_notificacao_tabela_existe')) {
     function protocolo_notificacao_tabela_existe(mysqli $conexao, $tabela) {
-        $tabela_segura = $conexao->real_escape_string($tabela);
-        $resultado = $conexao->query("SHOW TABLES LIKE '{$tabela_segura}'");
-        return $resultado && $resultado->num_rows > 0;
+        try {
+            return \ERP\Database\DatabaseDialect::tableExists($conexao, (string)$tabela);
+        } catch (Throwable $e) {
+            return false;
+        }
     }
 }
 
@@ -222,20 +224,30 @@ if (!function_exists('protocolo_criar_notificacao_morador')) {
             "INSERT INTO notificacoes_morador
              (tenant_id, morador_id, protocolo_id, tipo, titulo, mensagem, descricao_mercadoria, nome_recebedor, push_status)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pendente')
-             ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), atualizado_em = NOW()"
+             ON DUPLICATE KEY UPDATE id = id, atualizado_em = NOW()"
         );
         if (!$stmt) {
-            protocolo_notificacao_debug('insert_evento_falhou', ['erro' => $conexao->error, 'protocolo_id' => $protocolo_id]);
+            protocolo_notificacao_debug('insert_evento_falhou', ['protocolo_id' => $protocolo_id]);
             return ['sucesso' => false, 'motivo' => 'insert_falhou'];
         }
-        $stmt->bind_param('iiisssss', $tenant_id, $morador_id, $protocolo_id, $tipo, $titulo, $corpo, $descricao_mercadoria, $nome_recebedor);
-        if (!$stmt->execute()) {
-            protocolo_notificacao_debug('insert_evento_execucao_falhou', ['erro' => $stmt->error, 'protocolo_id' => $protocolo_id]);
+        if (!$stmt->bind_param('iiisssss', $tenant_id, $morador_id, $protocolo_id, $tipo, $titulo, $corpo, $descricao_mercadoria, $nome_recebedor) || !$stmt->execute()) {
+            protocolo_notificacao_debug('insert_evento_execucao_falhou', ['protocolo_id' => $protocolo_id]);
             $stmt->close();
             return ['sucesso' => false, 'motivo' => 'insert_falhou'];
         }
-        $notificacao_id = (int)$conexao->insert_id;
         $stmt->close();
+        $idStmt = $conexao->prepare('SELECT id FROM notificacoes_morador WHERE tenant_id = ? AND morador_id = ? AND protocolo_id = ? AND tipo = ? LIMIT 1');
+        if (!$idStmt || !$idStmt->bind_param('iiis', $tenant_id, $morador_id, $protocolo_id, $tipo) || !$idStmt->execute()) {
+            if ($idStmt) $idStmt->close();
+            return ['sucesso' => false, 'motivo' => 'insert_falhou'];
+        }
+        $idResult = $idStmt->get_result();
+        if (!$idResult) { $idStmt->close(); return ['sucesso' => false, 'motivo' => 'insert_falhou']; }
+        $idRow = $idResult->fetch_assoc() ?: [];
+        $notificacao_id = (int)($idRow['id'] ?? 0);
+        $idResult->free();
+        $idStmt->close();
+        if ($notificacao_id <= 0) return ['sucesso' => false, 'motivo' => 'insert_falhou'];
 
         $configuracoes = protocolo_notificacao_config($conexao, $tenant_id);
         if (($configuracoes['push_encomenda_ativo'] ?? '1') === '0') {

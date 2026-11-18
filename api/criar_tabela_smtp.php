@@ -13,6 +13,10 @@ $conexao = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if (!$conexao) {
     die("❌ Erro ao conectar: " . mysqli_connect_error());
 }
+if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+    http_response_code(409);
+    exit('Ferramenta manual de schema indisponível no PostgreSQL; aplique o DDL versionado.');
+}
 
 mysqli_set_charset($conexao, 'utf8mb4');
 

@@ -17,6 +17,8 @@
  * `(tenant_id, codigo)`.
  */
 
+require_once __DIR__ . '/../db/DatabaseDialect.php';
+
 if (!function_exists('_email_config_colunas')) {
     function _email_config_colunas($conexao, $tabela) {
         $cols = [];
@@ -28,8 +30,22 @@ if (!function_exists('_email_config_colunas')) {
 
 if (!function_exists('_email_config_tem_indice')) {
     function _email_config_tem_indice($conexao, $tabela, $indice) {
-        $res = mysqli_query($conexao, "SHOW INDEX FROM `$tabela` WHERE Key_name = '" . mysqli_real_escape_string($conexao, $indice) . "'");
-        return $res && mysqli_num_rows($res) > 0;
+        if (preg_match('/\A[a-z_][a-z0-9_]*\z/i', (string)$tabela) !== 1
+            || preg_match('/\A[a-z_][a-z0-9_]*\z/i', (string)$indice) !== 1) return false;
+        $sql = \ERP\Database\DatabaseDialect::isPostgres($conexao)
+            ? 'SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = ? AND indexname = ? LIMIT 1'
+            : 'SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? LIMIT 1';
+        $stmt = $conexao->prepare($sql);
+        if (!$stmt || !$stmt->bind_param('ss', $tabela, $indice) || !$stmt->execute()) {
+            if ($stmt) $stmt->close();
+            return false;
+        }
+        $result = $stmt->get_result();
+        if (!$result) { $stmt->close(); return false; }
+        $exists = $result->fetch_assoc() !== null;
+        $result->free();
+        $stmt->close();
+        return $exists;
     }
 }
 
@@ -119,6 +135,15 @@ if (!function_exists('email_config_seed_alertas_padrao')) {
 
 if (!function_exists('email_config_garantir_tabelas')) {
     function email_config_garantir_tabelas($conexao) {
+        if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+            mysqli_query($conexao, "UPDATE configuracao_smtp
+                SET email_provider = 'smtp'
+                WHERE email_provider = 'brevo'
+                  AND (api_key IS NULL OR api_key = '')
+                  AND smtp_host != ''
+                  AND smtp_usuario != ''");
+            return;
+        }
         // ── configuracao_smtp (global — remetente único da plataforma) ──────
         mysqli_query($conexao, "CREATE TABLE IF NOT EXISTS `configuracao_smtp` (
             `id`               INT(11)      NOT NULL AUTO_INCREMENT,

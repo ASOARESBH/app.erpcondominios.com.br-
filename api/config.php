@@ -21,6 +21,9 @@ if (!function_exists('erp_responder_configuracao_indisponivel')) {
 
 require_once __DIR__ . '/db/PrivateConfigPath.php';
 require_once __DIR__ . '/db/DatabaseDriverSelector.php';
+if (!class_exists(\ERP\Database\DatabaseDialect::class, false)) {
+    require_once __DIR__ . '/db/DatabaseDialect.php';
+}
 if (!class_exists(\ERP\Database\DatabaseTimezone::class, false)) {
     require_once __DIR__ . '/db/DatabaseTimezone.php';
 }
@@ -185,7 +188,10 @@ if (!function_exists('sanitizar')) {
 }
 
 if (!function_exists('retornar_json')) {
-    function retornar_json($sucesso, $mensagem, $dados = null) {
+    function retornar_json($sucesso, $mensagem, $dados = null, ?int $statusHttp = null) {
+        if ($statusHttp !== null && $statusHttp >= 100 && $statusHttp <= 599) {
+            http_response_code($statusHttp);
+        }
         header('Content-Type: application/json; charset=utf-8');
         $resposta = ['sucesso' => (bool)$sucesso, 'mensagem' => $mensagem];
         if ($dados !== null) {
