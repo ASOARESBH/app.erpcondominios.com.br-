@@ -1256,7 +1256,9 @@ class LoadTransactionTests(unittest.TestCase):
                 raise AssertionError("COPY executed without the source snapshot")
             if not args[1].transaction_active:
                 raise AssertionError("COPY executed outside transaction")
-            return (copy_side_effect or (lambda *call_args: 2))(*args)
+            copied = (copy_side_effect or (lambda *call_args: 2))(*args)
+            args[1].statements.append((f"COPY:{args[2]['name']}", True))
+            return copied
 
         patches.enter_context(patch.object(loader, "_execute_bundle_script", side_effect=execute_script))
         patches.enter_context(patch.object(loader, "_copy_table", side_effect=copy_table))
@@ -1285,6 +1287,8 @@ class LoadTransactionTests(unittest.TestCase):
         self.assertTrue(all("DROP DATABASE" not in item.upper() for item, _ in target.statements))
         self.assertTrue(all(active for item, active in target.statements if "DROP SCHEMA" in item or item.startswith("SCRIPT:")))
         self.assertEqual(sum(item.startswith("SCRIPT:") for item, _ in target.statements), len(loader.SCRIPT_NAMES))
+        statement_names = [item for item, _active in target.statements]
+        self.assertLess(statement_names.index("COPY:synthetic_table"), statement_names.index("SCRIPT:05_on_update_triggers.sql"))
         self.assertEqual(reports[0]["status"], "STARTED")
         self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_PENDING_RECONCILIATION")
         self.assertTrue(source.closed)
