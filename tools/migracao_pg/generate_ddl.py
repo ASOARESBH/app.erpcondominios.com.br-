@@ -41,9 +41,10 @@ def _unique_object(pairs):
 
 def _generator_fingerprint() -> str:
     digest = hashlib.sha256()
-    for name in ("generate_ddl.py", "ddl.py", "type_mapping.py"):
+    for name in ("generate_ddl.py", "ddl.py", "generated_columns.py", "type_mapping.py", "070_business_triggers_tenant_scoped.sql"):
         digest.update(name.encode("utf-8") + b"\0")
-        digest.update(Path(__file__).with_name(name).read_bytes())
+        path = (Path(__file__).resolve().parents[2] / "sql" / "postgresql" / name) if name.endswith(".sql") else Path(__file__).with_name(name)
+        digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
 
@@ -90,7 +91,7 @@ def main() -> int:
     bundle.report["generator_code_sha256"] = generator_hash
     bundle.report["application_role_sha256"] = role_hash
     bundle.report["snapshot_file_sha256"] = snapshot_sha256
-    safety_header = "-- REVIEW ARTIFACT: DO NOT APPLY until report.json has executable_complete=true and required reviews are approved.\n"
+    safety_header = "-- LOAD ARTIFACT: DO NOT APPLY unless report.json has load_executable_complete=true and required load reviews are approved.\n"
     script_artifacts = {
         filename: (safety_header + f"-- Generator code SHA-256: {generator_hash}\n" + content).rstrip("\n") + "\n"
         for filename, content in bundle.scripts.items()
@@ -120,6 +121,7 @@ def main() -> int:
         "application_role_sha256": role_hash,
         "generator_code_sha256": generator_hash,
         "output_directory": str(output_dir),
+        "load_executable_complete": bundle.report["load_executable_complete"],
         "executable_complete": bundle.report["executable_complete"],
         "review_items": len(bundle.report["review_items"]),
         "blocked_tables": len(bundle.report["blocked_tables"]),
@@ -128,7 +130,7 @@ def main() -> int:
         "foreign_keys_generated_not_valid": bundle.report["foreign_keys"]["generated_not_valid"],
         "foreign_keys_deferred": len(bundle.report["foreign_keys"]["deferred"]),
     }, sort_keys=True))
-    return 0 if bundle.report["executable_complete"] else 2
+    return 0 if bundle.report["load_executable_complete"] else 2
 
 
 if __name__ == "__main__":

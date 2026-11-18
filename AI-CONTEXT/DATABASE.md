@@ -1,6 +1,6 @@
 # Banco de Dados
 
-Banco de dados relacional MySQL hospedado na HostGator.
+Historicamente, o ERP usou MySQL na HostGator. Em 18/11/2026, o banco ativo de produção é MySQL na Hetzner (`erpcondominios_stage_20261114`); a migração para PostgreSQL ainda está em homologação e não substitui a produção.
 
 ## 1. Tabelas Principais (Core)
 - `moradores`, `dependentes`, `unidades`, `veiculos`, `visitantes`
@@ -180,3 +180,22 @@ Nas APIs protegidas que chamam `verificarAutenticacao()` no perfil PostgreSQL, o
 A cobertura P3.2 é contratual/sintética. Os testes de database/adapter executados anteriormente usaram MySQL 8.0.46 e PostgreSQL 16.15, não PostgreSQL 18 nem o schema completo; a matriz HTTP/PHP-FPM contra os clones isolados permanece gate separado. Nenhum resultado sintético autoriza ativar PostgreSQL em produção.
 
 Na reconstrução atual, a suíte conta 27 casos sintéticos do núcleo (os 26 da P3.1b mais um teste `bind_param` com SQL NULL), 56 assertions do processo pai no harness sem `mysqli` nativa e 58 no CLI nativo, 13 cenários sintéticos de bootstrap e 20 testes auth/RBAC. Dois harnesses separados acrescentam cinco cenários do endpoint `verificar_sessao.php` (querystring ignorada com contexto válido, contexto ausente, host não confiável, subdomínio incompatível e subdomínio confiável) e dois da auditoria (IP `NULL` efetivamente ligado e padrão legado com IP). Nos casos inválidos, o harness verifica que `$_SESSION` fica vazia — incluindo identidade, tenant, `_rbac_sessao_id` e `_rbac_cache` — e que o ID de sessão anterior foi aposentado; uma querystring não altera os valores de tenant já vinculados. Os harnesses cobrem precedência do seletor por ambiente, configuração ausente/inválida, aliases divergentes, timezone geográfico inválido, offset literal ou alias `Etc/GMT` fixo, e timezone nulo; o auto-prepend e o bootstrap API testam essa recusa também no perfil MySQL, portas e rótulos DNS inválidos, domínio-base confiável versus Host alheio e bloqueio estático do Host antes do fallback de tenant único tanto no endpoint de login como em `auth_helper`. O novo teste executa o endpoint de sessão em CLI com fixtures isoladas e não constitui homologação HTTP/PHP-FPM. Não foram feitos novos testes com engines reais após a reconstrução. No corpus recursivo idêntico de `api/*.php`, `origin/pg/p3-1b-dropin` tem 347 arquivos e 1.678 findings em 145 arquivos afetados; esta branch tem 350 arquivos e 1.668/142 (redução líquida de 10 findings e 3 arquivos afetados). Entre os 14 PHPs de API alterados, os 7 findings deliberados ficam concentrados em `api/db/DatabaseDialect.php` como variantes MySQL do helper; os outros 13 não introduzem findings. A seleção do driver no helper é exercitada com a facade `mysqli` P3.1b, não apenas com o adapter PostgreSQL interno. `DatabaseTimezone` aceita somente zonas geográficas IANA reconhecidas pelo PHP ou o literal `UTC`, recusando offsets fixos e aliases `Etc/GMT`; o auto-prepend e o bootstrap API falham de modo consistente para ambos os drivers quando o timezone é inválido ou nulo.
+
+
+## 22. PostgreSQL P2 — estado dos bancos e ensaio de 18/11/2026
+
+A identificação “stage” no nome abaixo é histórica. Até uma virada aprovada, MySQL continua sendo o banco de produção e os alvos PostgreSQL são cópias de ensaio.
+
+| Banco/schema | Engine e finalidade | Proteção/estado em 18/11/2026 |
+|---|---|---|
+| `erpcondominios_stage_20261114` | MySQL ativo de produção na Hetzner | Intocado nesta tarefa; não é target de carga. |
+| `erpcondominios` | MySQL antigo de rollback | Preservado; não é origem de P2. |
+| `erp_pg_source` | Clone MySQL isolado de `erpcondominios_stage_20261114` | Atualizado do backup diário verificado `erpcondominios-20261118T120726Z-369506.sql.gz`; 276 tabelas, 7 triggers, zero views/routines. `pg_reader@localhost` tem privilégios somente leitura no próprio clone. |
+| `erp_hml_mysql` | Clone MySQL isolado para HML/8444 | Não é origem da P2 nem banco de produção. |
+| `erp_pg_dev` | PostgreSQL 18, target destrutível de desenvolvimento/8443 | Carga de ensaio com 276 tabelas e 213.515 linhas; uma FK pendente SQLSTATE `42804`; integrações de saída neutralizadas. Não está aceito para produção. |
+
+O ensaio de 18/11 usou `carga_rapida_pg.py` (branch `pg/carga-rapida`, SHA-256 `2811b003465d885029def0c7ebe0ead1ec58bfdf42088fbd04e7ec85f61108d7`), e não o `rebuild.sh` versionado da P2. O carregador reportou 276/276 tabelas, 213.515 linhas em ambos os lados, zero divergências e zero falhas; dez FKs foram validadas sem órfãos. A FK `rbac_auditoria.fk_rbac_auditoria_sessao` não foi criada por incompatibilidade de tipos (`42804`). Portanto, a carga é um ensaio real, mas não prova a reprodutibilidade do pipeline versionado nem constitui aceite P2.
+
+As sete triggers de negócio foram traduzidas com isolamento `tenant_id`, conforme política explicitamente autorizada por André (não é tradução literal do escopo MySQL). O harness no PostgreSQL passou 10/10; as fixtures foram revertidas e 11 sequences restauradas. Depois, o script versionado foi aplicado somente ao `erp_pg_dev` e as sete triggers foram confirmadas habilitadas. Na próxima reconstrução, elas devem ser instaladas pelo bundle versionado após a cópia/ajuste das sequences.
+
+P2 permanece **BLOQUEADA / NÃO ACEITA PARA PRODUÇÃO** até corrigir a FK `42804`, repetir a carga pelo pipeline `rebuild.sh`/bundle versionado e reconciliar todos os objetos, revisar as exceções de normalização e concluir a homologação isolada em 8443. Nenhuma informação de linhas, senhas, tokens ou credenciais é registrada aqui.

@@ -46,7 +46,119 @@ class TargetConfigTests(unittest.TestCase):
                 loader._validate_target_config(candidate)
 
 
+class SourceSnapshotProofTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.snapshot = {
+            "structural_fingerprint_sha256": "a" * 64,
+            "source_schema": loader.SOURCE_SCHEMA,
+            "source_grants_read_only": True,
+            "source_schema_wide_select": True,
+            "metadata_visibility": {key: True for key in ("views", "triggers", "routines", "events")},
+            "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
+            "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
+        }
+
+    def test_accepts_live_snapshot_with_complete_proofs(self) -> None:
+        loader._validate_source_snapshot(dict(self.snapshot), dict(self.snapshot))
+
+    def test_rejects_missing_or_changed_live_proofs(self) -> None:
+        cases = (
+            ("source_grants_read_only", False, "SOURCE_CATALOG_PROOF_INVALID"),
+            ("source_schema_wide_select", False, "SOURCE_SCHEMA_SELECT_PROOF_INVALID"),
+            ("catalog_consistency_check", None, "SOURCE_CATALOG_CONSISTENCY_UNPROVEN"),
+            ("timestamp_transfer_contract", {"source_session": "local", "target_wall_time": "UTC"}, "SOURCE_TIMESTAMP_TRANSFER_CONTRACT_INVALID"),
+        )
+        for key, value, code in cases:
+            current = dict(self.snapshot)
+            current[key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(LoaderError, code):
+                loader._validate_source_snapshot(current, self.snapshot)
+
+    def test_rejects_incomplete_metadata_visibility(self) -> None:
+        current = dict(self.snapshot)
+        current["metadata_visibility"] = dict(self.snapshot["metadata_visibility"], events=False)
+        with self.assertRaisesRegex(LoaderError, "SOURCE_METADATA_VISIBILITY_UNPROVEN"):
+            loader._validate_source_snapshot(current, self.snapshot)
+
+
+class IdentityPlanValidationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.snapshot = {"tables": [{"name": "synthetic", "columns": [
+            {"name": "id", "extra": "auto_increment"}, {"name": "label", "extra": ""},
+        ], "source_next_auto_increment": 2}]}
+        self.mappings = {"synthetic": {"target_schema": "erp", "types": {"id": object(), "label": object()}}}
+        self.valid = [{
+            "table": "synthetic", "target_schema": "erp", "column": "id", "strategy": "identity",
+            "source_next_auto_increment": 2,
+        }]
+
+    def test_accepts_exact_identity_plan(self) -> None:
+        result = loader._validated_identity_plan(self.snapshot, ["synthetic"], self.mappings, self.valid)
+        self.assertEqual(result["synthetic"][0]["column"], "id")
+        self.assertEqual(result["synthetic"][0]["strategy"], "identity")
+
+    def test_rejects_allocator_that_differs_from_snapshot(self) -> None:
+        item = dict(self.valid[0], source_next_auto_increment=999)
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_IDENTITY_PLAN_INVALID"):
+            loader._validated_identity_plan(self.snapshot, ["synthetic"], self.mappings, [item])
+
+    def test_run_load_rejects_bad_allocator_before_report_or_connection(self) -> None:
+        report = {
+            "application_role_sha256": hashlib.sha256(b"erp_app").hexdigest(),
+            "generated_tables": ["synthetic"],
+            "auto_increment": {"columns": [dict(self.valid[0], source_next_auto_increment=999)]},
+        }
+        with patch.object(loader, "validate_bundle", return_value=(None, report, self.snapshot)), \
+             patch.object(loader, "_require_load_runtime"), \
+             patch.object(loader, "_source_defaults_path", return_value=Path("/tmp/synthetic-source.cnf")), \
+             patch.object(loader, "_load_target_config", return_value={"application_user": "erp_app"}), \
+             patch.object(loader, "_validate_column_mappings", return_value=self.mappings), \
+             patch.object(loader, "_write_report_exclusive") as write_report, \
+             patch.object(loader, "_connect_source") as connect_source:
+            with self.assertRaisesRegex(LoaderError, "BUNDLE_IDENTITY_PLAN_INVALID"):
+                loader.run_load("synthetic", report_path=Path("/tmp/synthetic-load-report.json"))
+        write_report.assert_not_called()
+        connect_source.assert_not_called()
+
+    def test_rejects_ghost_table_and_column(self) -> None:
+        for table, column in (("ghost", "id"), ("synthetic", "ghost")):
+            item = dict(self.valid[0], table=table, column=column)
+            with self.subTest(table=table, column=column), self.assertRaisesRegex(LoaderError, "BUNDLE_IDENTITY_PLAN_INVALID"):
+                loader._validated_identity_plan(self.snapshot, ["synthetic"], self.mappings, [item])
+
+    def test_rejects_missing_or_duplicate_identity(self) -> None:
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_IDENTITY_PLAN_INCOMPLETE"):
+            loader._validated_identity_plan(self.snapshot, ["synthetic"], self.mappings, [])
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_IDENTITY_PLAN_INVALID"):
+            loader._validated_identity_plan(self.snapshot, ["synthetic"], self.mappings, self.valid * 2)
+
+    def test_rejects_invalid_strategy_schema_and_allocator(self) -> None:
+        for changes in (
+            {"strategy": "invalid"},
+            {"target_schema": "legado"},
+            {"source_next_auto_increment": True},
+        ):
+            item = dict(self.valid[0], **changes)
+            with self.subTest(changes=changes), self.assertRaisesRegex(LoaderError, "BUNDLE_IDENTITY_PLAN_INVALID"):
+                loader._validated_identity_plan(self.snapshot, ["synthetic"], self.mappings, [item])
+
+    def test_unsigned_pair_requires_safe_sequence_identifiers(self) -> None:
+        item = dict(self.valid[0], strategy="unsigned_sequence_pair", low_sequence="bad-name", high_sequence="u64_high_id")
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_IDENTITY_PLAN_INVALID"):
+            loader._validated_identity_plan(self.snapshot, ["synthetic"], self.mappings, [item])
+
+
 class NulPolicyTests(unittest.TestCase):
+    def test_nul_audit_fallback_key_uses_original_source_row_without_primary_key(self) -> None:
+        column = {"name": "description", "data_type": "varchar", "character_set": "utf8mb4"}
+        original = "synthetic\x00text"
+        raw = loader._source_value_bytes(original, column)
+        digest = hashlib.sha256(len(raw).to_bytes(8, "big") + raw).hexdigest()
+
+        key = loader._audit_pk_text({"primary_key": []}, [column], (original,))
+
+        self.assertEqual(key, json.dumps({"source_row_sha256": digest}, sort_keys=True, separators=(",", ":")))
+
     def test_binary_nul_scan_compares_server_and_python_bytes_without_normalizing(self) -> None:
         class Guard:
             def sample_if_due(self):
@@ -123,8 +235,9 @@ class NulPolicyTests(unittest.TestCase):
         snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
             {"name": "payload", "data_type": "varbinary"},
         ]}]}
-        with self.assertRaisesRegex(LoaderError, "SOURCE_BINARY_NUL_DETECTOR_DISAGREEMENT"):
-            loader._scan_source_binary_policy(Source(), snapshot, Guard())
+        result = loader._scan_source_binary_policy(Source(), snapshot, Guard())
+        self.assertEqual(result[0]["scan_status"], "FAILED")
+        self.assertEqual(result[0]["scan_failure_code"], "SOURCE_BINARY_NUL_DETECTOR_DISAGREEMENT")
 
     def test_sensitive_name_does_not_override_approved_text_nul_normalization(self) -> None:
         human_text_finding = {
@@ -135,8 +248,11 @@ class NulPolicyTests(unittest.TestCase):
             "name_suggests_sensitive": True,
         }
         self.assertFalse(loader._text_findings_require_review([human_text_finding]))
-        invalid_text_finding = {**human_text_finding, "non_utf8_cells": 1}
+        invalid_text_finding = {**human_text_finding, "table": "residentes", "column": "observacao", "cells_scanned": 20, "non_utf8_cells": 1}
         self.assertTrue(loader._text_findings_require_review([invalid_text_finding]))
+        self.assertEqual(loader._text_policy_table_failures([invalid_text_finding]), [{
+            "table": "residentes", "column": "observacao", "reason": "SOURCE_TEXT_INVALID_UTF8", "affected_cells": 1,
+        }])
 
     def test_text_nul_is_removed_and_exact_source_bytes_are_recorded(self) -> None:
         counts = {}
@@ -290,8 +406,38 @@ class NulPolicyTests(unittest.TestCase):
         snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
             {"name": "payload", "data_type": "json", "character_set": "utf8mb4"},
         ]}]}
-        with self.assertRaisesRegex(LoaderError, "JSON_NUL_NORMALIZATION_KEY_COLLISION"):
-            loader._scan_source_text_policy(Source(), snapshot, Guard())
+        result = loader._scan_source_text_policy(Source(), snapshot, Guard())
+        self.assertEqual(result[0]["scan_status"], "FAILED")
+        self.assertEqual(result[0]["scan_failure_code"], "JSON_NUL_NORMALIZATION_KEY_COLLISION")
+
+    def test_unscannable_charset_reports_expected_cell_count(self) -> None:
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, _query):
+                return None
+
+            def fetchone(self):
+                return (5,)
+
+        class Source:
+            def cursor(self, _cursor_class=None):
+                return Cursor()
+
+        for charset, expected_reason in (("binary", "SOURCE_TEXT_CHARSET_BINARY"), ("unsupported_charset", "SOURCE_TEXT_CHARSET_UNSUPPORTED")):
+            snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
+                {"name": "payload", "data_type": "text", "character_set": charset},
+            ]}]}
+            finding = loader._scan_source_text_policy(Source(), snapshot, _MemoryGuard())[0]
+            self.assertEqual(finding["cells_expected"], 5)
+            self.assertEqual(finding["cells_scanned"], 0)
+            failure = loader._text_policy_table_failures([finding])[0]
+            self.assertEqual(failure["reason"], expected_reason)
+            self.assertEqual(failure["affected_cells"], 5)
 
     def test_scan_compares_legacy_python_binary_sql_and_python_bytes(self) -> None:
         class Cursor:
@@ -403,6 +549,39 @@ class NulPolicyTests(unittest.TestCase):
 
 
 class NormalizeMysqlValueTests(unittest.TestCase):
+    def test_generated_water_column_is_excluded_from_copy_columns(self) -> None:
+        snapshot = {
+            "source_no_backslash_escapes": False,
+            "tables": [{
+                "name": "lancamentos_agua", "type": "BASE TABLE", "columns": [
+                    {"name": "id", "ordinal": 1, "data_type": "int", "column_type": "int", "nullable": False, "extra": "auto_increment"},
+                    {"name": "leitura_anterior", "ordinal": 2, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": False, "extra": ""},
+                    {"name": "leitura_atual", "ordinal": 3, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": False, "extra": ""},
+                    {"name": "consumo", "ordinal": 4, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": True, "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1", "generated_expression_sha256": "b" * 64},
+                ],
+            }],
+        }
+        report = {
+            "collation_overrides": {}, "collation_decisions": [],
+            "table_schemas": {"lancamentos_agua": "erp"},
+        }
+        mapping = loader._validate_column_mappings(snapshot, report, ["lancamentos_agua"])["lancamentos_agua"]
+        self.assertEqual([column["name"] for column in mapping["columns"]], ["id", "leitura_anterior", "leitura_atual", "consumo"])
+        self.assertEqual([column["name"] for column in mapping["copy_columns"]], ["id", "leitura_anterior", "leitura_atual"])
+        self.assertEqual([column["name"] for column in mapping["generated_columns"]], ["consumo"])
+
+    def test_loader_fails_closed_on_unknown_generated_column(self) -> None:
+        snapshot = {
+            "source_no_backslash_escapes": False,
+            "tables": [{"name": "unknown", "type": "BASE TABLE", "columns": [
+                {"name": "generated", "ordinal": 1, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": True, "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "unknown.v1"},
+                {"name": "base", "ordinal": 2, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": True, "extra": ""},
+            ]}],
+        }
+        report = {"collation_overrides": {}, "collation_decisions": [], "table_schemas": {"unknown": "erp"}}
+        with self.assertRaisesRegex(LoaderError, "GENERATED_COLUMN_TRANSLATION_REQUIRED"):
+            loader._validate_column_mappings(snapshot, report, ["unknown"])
+
     def test_null_stays_null(self) -> None:
         self.assertIsNone(normalize_mysql_value(None, {"data_type": "varchar", "column_type": "varchar(20)"}))
 
@@ -536,7 +715,7 @@ class BundleValidationTests(unittest.TestCase):
     def test_real_versioned_bundle_is_blocked_when_collector_code_is_stale(self) -> None:
         candidate = next(loader.BUNDLE_ROOT.glob("catalog-*-code-*/report.json"))
         bundle_name = candidate.parent.name
-        with self.assertRaisesRegex(LoaderError, "BUNDLE_COLLECTOR_CODE_MISMATCH"):
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_(COLLECTOR_CODE_MISMATCH|CATALOG_FINGERPRINT_MISMATCH)"):
             validate_bundle(bundle_name, require_executable=False)
 
     def test_bundle_name_is_allowlisted(self) -> None:
@@ -573,6 +752,7 @@ class SourceConnectionSetupTests(unittest.TestCase):
                 self.cursor_classes = []
                 self.statements = []
                 self.closed = False
+                self.server_status = 0
 
             def cursor(self, cursor_class=None):
                 self.cursor_classes.append(cursor_class)
@@ -589,9 +769,14 @@ class SourceConnectionSetupTests(unittest.TestCase):
             return connection
 
         snapshot = {"source_schema": "erp_pg_source"}
+        def keep_consistent_snapshot(active_connection, *, keep_snapshot):
+            self.assertTrue(keep_snapshot)
+            active_connection.server_status = pymysql.constants.SERVER_STATUS.SERVER_STATUS_IN_TRANS
+            return snapshot
+
         with patch.object(pymysql, "connect", side_effect=connect), \
              patch.object(loader, "_mysql_socket_options", return_value={"unix_socket": "/run/mysqld/mysqld.sock"}), \
-             patch.object(loader, "collect_catalog", return_value=snapshot) as collect:
+             patch.object(loader, "collect_catalog", side_effect=keep_consistent_snapshot) as collect:
             actual_connection, actual_snapshot = loader._connect_source(Path("/root-only/source.cnf"))
 
         self.assertIs(actual_connection, connection)
@@ -599,7 +784,46 @@ class SourceConnectionSetupTests(unittest.TestCase):
         self.assertIs(captured["cursorclass"], pymysql.cursors.DictCursor)
         self.assertTrue(captured["autocommit"])
         self.assertEqual(connection.cursor_classes, [pymysql.cursors.Cursor])
+        self.assertTrue(connection.server_status & pymysql.constants.SERVER_STATUS.SERVER_STATUS_IN_TRANS)
         collect.assert_called_once_with(connection, keep_snapshot=True)
+
+    def test_connect_source_rejects_catalog_snapshot_that_is_not_left_active(self):
+        import pymysql
+
+        class Cursor:
+            def execute(self, statement):
+                return None
+
+            def fetchone(self):
+                return ("pg_reader@localhost", "erp_pg_source", "8.0.synthetic")
+
+            def close(self):
+                return None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                self.close()
+
+        class Connection:
+            server_status = 0
+
+            def cursor(self, cursor_class=None):
+                return Cursor()
+
+            def close(self):
+                self.closed = True
+
+        connection = Connection()
+        with patch.object(pymysql, "connect", return_value=connection), \
+             patch.object(loader, "_mysql_socket_options", return_value={"unix_socket": "/run/mysqld/mysqld.sock"}), \
+             patch.object(loader, "collect_catalog", return_value={"source_schema": "erp_pg_source"}):
+            with self.assertRaises(loader.LoaderError) as error:
+                loader._connect_source(Path("/root-only/source.cnf"))
+
+        self.assertEqual(error.exception.code, "MYSQL_SOURCE_CONSISTENT_SNAPSHOT_NOT_ACTIVE")
+        self.assertTrue(connection.closed)
 
 
 class RebuildRunnerSecurityTests(unittest.TestCase):
@@ -774,22 +998,29 @@ class _FakeTarget:
         self.fail_rollback = False
         self.fail_close = False
         self.count_results = []
+        self.transaction_depth = 0
 
     def cursor(self):
         return _FakeCursor(self)
 
     @contextmanager
     def transaction(self):
-        self.transaction_active = True
+        outermost = self.transaction_depth == 0
+        self.transaction_depth += 1
+        if outermost:
+            self.transaction_active = True
         try:
             yield
         except Exception:
             self.rollbacks += 1
             raise
         else:
-            self.commits += 1
+            if outermost:
+                self.commits += 1
         finally:
-            self.transaction_active = False
+            self.transaction_depth -= 1
+            if outermost:
+                self.transaction_active = False
 
     def rollback(self) -> None:
         self.rollbacks += 1
@@ -972,15 +1203,16 @@ class _FakeSource:
 
 
 class LoadTransactionTests(unittest.TestCase):
-    def _call_load(self, copy_side_effect=None):
+    def _call_load(self, copy_side_effect=None, table_names=None):
         source = _FakeSource()
         target = _FakeTarget()
         captured_reports = []
         role = "erp_app"
         config = {"user": "erp_p2_loader", "application_user": role}
+        names = table_names or ["synthetic_table"]
         report = {
             "application_role_sha256": hashlib.sha256(role.encode()).hexdigest(),
-            "generated_tables": ["synthetic_table"],
+            "generated_tables": names,
             "generated_scripts_sha256": {name: "0" * 64 for name in loader.SCRIPT_NAMES},
             "catalog_fingerprint_sha256": "f" * 64,
             "generator_version": "test",
@@ -988,12 +1220,17 @@ class LoadTransactionTests(unittest.TestCase):
             "unique_indexes_post_load": [],
             "foreign_keys_post_load": [],
             "zero_date_nullable_columns": [],
+            "auto_increment": {"columns": []},
         }
         snapshot = {
             "source_schema": "erp_pg_source",
             "source_grants_read_only": True,
+            "source_schema_wide_select": True,
+            "metadata_visibility": {key: True for key in ("views", "triggers", "routines", "events")},
+            "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
+            "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
             "structural_fingerprint_sha256": "a" * 64,
-            "tables": [{"name": "synthetic_table", "type": "BASE TABLE"}],
+            "tables": [{"name": name, "type": "BASE TABLE", "columns": []} for name in names],
             "source_no_backslash_escapes": False,
         }
         patches = ExitStack()
@@ -1001,7 +1238,7 @@ class LoadTransactionTests(unittest.TestCase):
         patches.enter_context(patch.object(loader, "validate_bundle", return_value=(Path("/tmp/bundle"), report, snapshot)))
         patches.enter_context(patch.object(loader, "_source_defaults_path", return_value=Path("/tmp/source.cnf")))
         patches.enter_context(patch.object(loader, "_load_target_config", return_value=config))
-        patches.enter_context(patch.object(loader, "_validate_column_mappings", return_value={"synthetic_table": {}}))
+        patches.enter_context(patch.object(loader, "_validate_column_mappings", return_value={name: {} for name in names}))
         patches.enter_context(patch.object(loader, "_connect_source", return_value=(source, snapshot)))
         patches.enter_context(patch.object(loader, "_connect_target", return_value=target))
         private_tmp = tempfile.TemporaryDirectory(prefix="p2-loader-test-")
@@ -1019,7 +1256,9 @@ class LoadTransactionTests(unittest.TestCase):
                 raise AssertionError("COPY executed without the source snapshot")
             if not args[1].transaction_active:
                 raise AssertionError("COPY executed outside transaction")
-            return (copy_side_effect or (lambda *call_args: 2))(*args)
+            copied = (copy_side_effect or (lambda *call_args: 2))(*args)
+            args[1].statements.append((f"COPY:{args[2]['name']}", True))
+            return copied
 
         patches.enter_context(patch.object(loader, "_execute_bundle_script", side_effect=execute_script))
         patches.enter_context(patch.object(loader, "_copy_table", side_effect=copy_table))
@@ -1048,6 +1287,10 @@ class LoadTransactionTests(unittest.TestCase):
         self.assertTrue(all("DROP DATABASE" not in item.upper() for item, _ in target.statements))
         self.assertTrue(all(active for item, active in target.statements if "DROP SCHEMA" in item or item.startswith("SCRIPT:")))
         self.assertEqual(sum(item.startswith("SCRIPT:") for item, _ in target.statements), len(loader.SCRIPT_NAMES))
+        statement_names = [item for item, _active in target.statements]
+        self.assertLess(statement_names.index("COPY:synthetic_table"), statement_names.index("SCRIPT:05_on_update_triggers.sql"))
+        self.assertLess(statement_names.index("COPY:synthetic_table"), statement_names.index("SCRIPT:40_business_triggers.sql"))
+        self.assertLess(statement_names.index("SCRIPT:30_post_load_sequences.sql"), statement_names.index("SCRIPT:40_business_triggers.sql"))
         self.assertEqual(reports[0]["status"], "STARTED")
         self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_PENDING_RECONCILIATION")
         self.assertTrue(source.closed)
@@ -1055,30 +1298,67 @@ class LoadTransactionTests(unittest.TestCase):
         self.assertFalse(source.snapshot_active)
         self.assertTrue(target.closed)
 
-    def test_copy_error_rolls_back_entire_target_transaction(self) -> None:
+    def test_copy_error_rolls_back_only_table_and_records_failure(self) -> None:
         def fail_copy(*args):
-            raise LoaderError("SYNTHETIC_COPY_FAILURE")
+            error = LoaderError("SYNTHETIC_COPY_FAILURE")
+            error.column = "synthetic_column"
+            error.source_rows = 2
+            raise error
 
         patches, source, target, reports = self._call_load(copy_side_effect=fail_copy)
+        patches.enter_context(patch.object(loader, "_row_count", return_value=0))
         try:
-            with self.assertRaisesRegex(LoaderError, "SYNTHETIC_COPY_FAILURE"):
-                loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
+            result = loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
         finally:
             patches.close()
-        self.assertEqual(target.commits, 0)
+        self.assertEqual(result["status"], "LOAD_PARTIAL_PENDING_RECONCILIATION")
+        self.assertEqual(result["table_failures"], [{
+            "table": "synthetic_table", "column": "synthetic_column", "reason": "SYNTHETIC_COPY_FAILURE",
+            "source_rows": 2, "target_rows": 0,
+        }])
+        self.assertEqual(target.commits, 1)
         self.assertGreaterEqual(target.rollbacks, 1)
-        self.assertEqual(reports[-1]["status"], "FAILED_ROLLED_BACK")
-        self.assertEqual(reports[-1]["failure_code"], "SYNTHETIC_COPY_FAILURE")
+        self.assertEqual(reports[-1]["status"], "LOAD_PARTIAL_PENDING_RECONCILIATION")
         self.assertTrue(source.closed)
         self.assertGreaterEqual(source.rollbacks, 1)
         self.assertFalse(source.snapshot_active)
         self.assertTrue(target.closed)
 
-    def test_rollback_failure_is_written_as_unconfirmed(self) -> None:
-        def fail_copy(*args):
-            raise LoaderError("SYNTHETIC_COPY_FAILURE")
+    def test_copy_failure_does_not_prevent_later_table_from_loading(self) -> None:
+        calls = []
 
-        patches, source, target, reports = self._call_load(copy_side_effect=fail_copy)
+        def fail_first_table(source, target, table, *args):
+            calls.append(table["name"])
+            if table["name"] == "first_table":
+                error = LoaderError("SYNTHETIC_COPY_FAILURE")
+                error.column = "synthetic_column"
+                error.source_rows = 2
+                raise error
+            return 3
+
+        patches, source, target, _reports = self._call_load(
+            copy_side_effect=fail_first_table,
+            table_names=["first_table", "second_table"],
+        )
+        patches.enter_context(patch.object(loader, "_row_count", side_effect=lambda _target, table_name, *_args: 0 if table_name == "first_table" else 3))
+        try:
+            result = loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
+        finally:
+            patches.close()
+        self.assertEqual(calls, ["first_table", "second_table"])
+        self.assertEqual(result["status"], "LOAD_PARTIAL_PENDING_RECONCILIATION")
+        self.assertEqual(result["tables_loaded"], 1)
+        self.assertEqual(result["table_failures"][0]["table"], "first_table")
+        self.assertEqual(result["table_counts"][1]["table"], "second_table")
+        self.assertEqual(result["table_counts"][1]["status"], "COPIED")
+        self.assertGreaterEqual(target.rollbacks, 1)
+        self.assertEqual(target.commits, 1)
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
+
+    def test_rollback_failure_is_written_as_unconfirmed(self) -> None:
+        patches, source, target, reports = self._call_load()
+        patches.enter_context(patch.object(loader, "_apply_enum_checks", side_effect=LoaderError("SYNTHETIC_ENUM_CHECK_FAILURE")))
         target.fail_rollback = True
         try:
             with self.assertRaisesRegex(LoaderError, "POSTGRES_ROLLBACK_UNCONFIRMED"):
@@ -1105,28 +1385,148 @@ class LoadTransactionTests(unittest.TestCase):
         self.assertTrue(source.closed)
         self.assertTrue(target.closed)
 
-    def test_source_close_failure_after_commit_does_not_mask_pending_reconciliation(self) -> None:
+    def test_source_close_failure_after_commit_blocks_reconciliation(self) -> None:
         patches, source, target, reports = self._call_load()
         source.fail_close = True
         try:
-            result = loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
+            with self.assertRaisesRegex(LoaderError, "POST_LOAD_CLEANUP_UNCONFIRMED"):
+                loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
         finally:
             patches.close()
-        self.assertEqual(result["status"], "LOAD_COMMITTED_PENDING_RECONCILIATION")
-        self.assertFalse(result["source_cleanup_confirmed"])
-        self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_PENDING_RECONCILIATION")
+        self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_CLEANUP_UNCONFIRMED")
+        self.assertEqual(reports[-1]["failure_code"], "POST_LOAD_CLEANUP_UNCONFIRMED")
+        self.assertFalse(reports[-1]["source_cleanup_confirmed"])
         self.assertTrue(target.closed)
 
-    def test_target_close_failure_is_reported_without_masking_commit(self) -> None:
+    def test_target_close_failure_after_commit_blocks_reconciliation(self) -> None:
         patches, source, target, reports = self._call_load()
         target.fail_close = True
         try:
-            result = loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
+            with self.assertRaisesRegex(LoaderError, "POST_LOAD_CLEANUP_UNCONFIRMED"):
+                loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
         finally:
             patches.close()
-        self.assertEqual(result["status"], "LOAD_COMMITTED_PENDING_RECONCILIATION")
-        self.assertFalse(result["target_cleanup_confirmed"])
-        self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_PENDING_RECONCILIATION")
+        self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_CLEANUP_UNCONFIRMED")
+        self.assertEqual(reports[-1]["failure_code"], "POST_LOAD_CLEANUP_UNCONFIRMED")
+        self.assertFalse(reports[-1]["target_cleanup_confirmed"])
+        self.assertTrue(source.closed)
+
+
+class ReconciliationCleanupTests(unittest.TestCase):
+    def _run_with_cleanup_failure(
+        self,
+        *,
+        fail_source_close: bool = False,
+        fail_target_close: bool = False,
+        failed_load_flag: str | None = None,
+        partial_load: bool = False,
+        partial_without_failures: bool = False,
+    ):
+        source = _FakeSource()
+        target = _FakeTarget()
+        source.fail_close = fail_source_close
+        target.fail_close = fail_target_close
+        role = "erp_app"
+        snapshot = {
+            "source_schema": loader.SOURCE_SCHEMA,
+            "tables": [],
+            "structural_fingerprint_sha256": "a" * 64,
+            "source_grants_read_only": True,
+            "source_schema_wide_select": True,
+            "metadata_visibility": {key: True for key in ("views", "triggers", "routines", "events")},
+            "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
+            "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
+        }
+        bundle_report = {
+            "catalog_fingerprint_sha256": "f" * 64,
+            "application_role_sha256": hashlib.sha256(role.encode()).hexdigest(),
+            "generated_tables": [],
+            "auto_increment": {"columns": []},
+        }
+        load_report = {
+            "status": "LOAD_PARTIAL_PENDING_RECONCILIATION" if partial_load else "LOAD_COMMITTED_PENDING_RECONCILIATION",
+            "bundle_catalog_fingerprint": "f" * 64,
+            "table_failures": ([{"table": "synthetic", "reason": "SYNTHETIC_COPY_FAILURE", "source_rows": 1, "target_rows": 0}] if partial_load and not partial_without_failures else []),
+            "source_cleanup_confirmed": failed_load_flag != "source_cleanup_confirmed",
+            "target_cleanup_confirmed": failed_load_flag != "target_cleanup_confirmed",
+            "nul_spool_cleanup_confirmed": failed_load_flag != "nul_spool_cleanup_confirmed",
+        }
+        reports = []
+
+        class Guard:
+            def start_monitor(self, connection): pass
+            def sample(self): pass
+            def set_connection(self, connection): pass
+            def sample_if_due(self): pass
+            def _raise_if_stopped(self): pass
+            def stop_monitor(self): pass
+
+        with patch.object(loader, "validate_bundle", return_value=(Path("/tmp/bundle"), bundle_report, snapshot)), \
+             patch.object(loader, "_read_reconciliation_report", return_value=load_report), \
+             patch.object(loader, "_source_defaults_path", return_value=Path("/tmp/source.cnf")), \
+             patch.object(loader, "_load_target_config", return_value={"application_user": role}), \
+             patch.object(loader, "_validate_column_mappings", return_value={}), \
+             patch.object(loader, "_validated_identity_plan", return_value={}), \
+             patch.object(loader, "_connect_source", return_value=(source, snapshot)), \
+             patch.object(loader, "_validate_source_snapshot"), \
+             patch.object(loader, "_connect_target", return_value=target), \
+             patch.object(loader, "_MemoryGuard", Guard), \
+             patch("tools.migracao_pg.reconcile.reconcile", return_value={"status": "DIVERGED" if partial_load and not partial_without_failures else "RECONCILED"}), \
+             patch.object(loader, "_replace_report", side_effect=lambda payload, path: reports.append(dict(payload))):
+            result = loader.run_reconcile("synthetic-bundle", None, Path("/tmp/report.json"))
+        return result, reports, source, target
+
+    def test_reconcile_rejects_load_without_confirmed_cleanup_before_connecting(self) -> None:
+        for failed_flag in (
+            "source_cleanup_confirmed",
+            "target_cleanup_confirmed",
+            "nul_spool_cleanup_confirmed",
+        ):
+            with self.subTest(failed_flag=failed_flag):
+                result, reports, source, target = self._run_with_cleanup_failure(failed_load_flag=failed_flag)
+                self.assertEqual(result["status"], "BLOCKED")
+                self.assertEqual(result["failure_code"], "LOAD_CLEANUP_UNCONFIRMED")
+                self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_RECONCILIATION_BLOCKED")
+                self.assertFalse(source.closed)
+                self.assertFalse(target.closed)
+
+    def test_partial_load_reconciliation_remains_partial_and_diverged(self) -> None:
+        result, reports, source, target = self._run_with_cleanup_failure(partial_load=True)
+        self.assertEqual(result["status"], "DIVERGED")
+        self.assertEqual(reports[-1]["status"], "LOAD_PARTIAL_RECONCILIATION_DIVERGED")
+        self.assertEqual(reports[-1]["reconciliation_previous_status"], "LOAD_PARTIAL_PENDING_RECONCILIATION")
+        self.assertEqual(reports[-1]["table_failures"][0]["reason"], "SYNTHETIC_COPY_FAILURE")
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
+
+    def test_wrapper_never_accepts_partial_status_without_failure_evidence(self) -> None:
+        result, reports, source, target = self._run_with_cleanup_failure(
+            partial_load=True,
+            partial_without_failures=True,
+        )
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["failure_code"], "PARTIAL_LOAD_CANNOT_BE_ACCEPTED")
+        self.assertEqual(reports[-1]["status"], "LOAD_PARTIAL_RECONCILIATION_BLOCKED")
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
+
+    def test_source_close_failure_blocks_reconciled_result(self) -> None:
+        result, reports, source, target = self._run_with_cleanup_failure(fail_source_close=True)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["failure_code"], "RECONCILIATION_CLEANUP_FAILED")
+        self.assertIn("SOURCE_CLOSE", result["cleanup_failures"])
+        self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_RECONCILIATION_BLOCKED")
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
+
+    def test_target_close_failure_blocks_reconciled_result(self) -> None:
+        result, reports, source, target = self._run_with_cleanup_failure(fail_target_close=True)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["failure_code"], "RECONCILIATION_CLEANUP_FAILED")
+        self.assertIn("TARGET_CLOSE", result["cleanup_failures"])
+        self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_RECONCILIATION_BLOCKED")
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
 
 
 if __name__ == "__main__":

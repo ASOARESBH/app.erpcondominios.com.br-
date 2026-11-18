@@ -4,6 +4,12 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — ensaio controlado (2026-11-18)
+- Atualizado o clone MySQL read-only `erp_pg_source` do backup diário validado de `erpcondominios_stage_20261114`; o ensaio separado carregou `erp_pg_dev` com 276/276 tabelas e 213.515/213.515 linhas. A carga usou `carga_rapida_pg.py`, não o `rebuild.sh` versionado; portanto a equivalência do pipeline P2 ainda não foi demonstrada.
+- Resultado não aceito: dez FKs validadas sem órfãos, uma FK não criada por incompatibilidade de tipos (`rbac_auditoria.fk_rbac_auditoria_sessao`, SQLSTATE `42804`). Exceções agregadas incluem 439 datas zero, 214 ENUMs fora da lista e dois relaxamentos NOT NULL; nenhum valor de linha foi registrado no changelog.
+- Implementado suporte fail-closed para generated columns e falhas parciais, incluindo `lancamentos_agua.consumo` calculado, além da tradução pós-carga das sete triggers segundo a política tenant-scoped aprovada por André. Harness PostgreSQL: 10/10; aplicação persistente somente em `erp_pg_dev`; as verificações agregadas de SMTP/e-mail, FCM, ControlID, câmeras/monitoramento e fila ControlID ficaram zeradas somente nesse target.
+- Suíte sintética P2: 190 testes aprovados com a venv de dependências do pipeline. P2 continua BLOQUEADA / NÃO ACEITA para produção até resolver a FK, repetir a carga com o bundle/rebuild versionado, reconciliar tudo e concluir o gate isolado 8443. Produção, DNS, cutover e `main` não foram alterados.
+
 
 ### Projeto PostgreSQL P3.1b — shim mysqli sobre PDO (branch isolada, 2026-11-15)
 - Adicionado bootstrap opt-in via `auto_prepend_file` para aliases mysqli e 26 funções procedurais, sem carregar junto da extensão nativa. MySQL continua default; PostgreSQL exige perfil próprio e schema, enquanto argumentos de conexão divergentes são rejeitados.

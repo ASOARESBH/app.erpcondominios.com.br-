@@ -12,11 +12,12 @@ import stat
 import tempfile
 from typing import Any
 
+from .generated_columns import declares_generated_column, identify_generated_column
 from .type_mapping import TypeMappingError, parse_mysql_enum, quote_literal
 
 
 SOURCE_SCHEMA = "erp_pg_source"
-CATALOG_VERSION = 2
+CATALOG_VERSION = 3
 SAFE_TEXT_DEFAULT_NAMES = frozenset({
     "status", "estado", "situacao", "tipo", "categoria", "nivel", "ativo", "habilitado",
     "enabled", "visivel", "publicado", "prioridade", "modo", "origem", "formato", "cor",
@@ -40,6 +41,15 @@ class CatalogError(RuntimeError):
     pass
 
 
+def _collector_fingerprint() -> str:
+    digest = hashlib.sha256()
+    for name in ("catalog.py", "generated_columns.py"):
+        digest.update(name.encode("utf-8") + b"\0")
+        digest.update(Path(__file__).with_name(name).read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def _validate_defaults_file(path: Path) -> None:
     try:
         info = path.stat()
@@ -59,13 +69,29 @@ def _mysql_socket_options(path: Path) -> dict[str, str]:
         raise CatalogError("MYSQL_DEFAULTS_FILE_UNREADABLE") from error
     if not loaded or not options.has_section("client"):
         raise CatalogError("MYSQL_CLIENT_GROUP_REQUIRED")
+    if options.get("client", "user", fallback="").strip() != "pg_reader":
+        raise CatalogError("MYSQL_ACCOUNT_MUST_BE_PG_READER")
     protocol = options.get("client", "protocol", fallback="").strip().lower()
     if protocol not in {"socket", "unix_socket"}:
         raise CatalogError("MYSQL_PROTOCOL_MUST_BE_SOCKET")
     socket_path = options.get("client", "socket", fallback="/run/mysqld/mysqld.sock").strip()
-    if not socket_path.startswith("/") or "\x00" in socket_path:
-        raise CatalogError("MYSQL_SOCKET_PATH_INVALID")
+    if socket_path not in {"/run/mysqld/mysqld.sock", "/var/run/mysqld/mysqld.sock"}:
+        raise CatalogError("MYSQL_SOCKET_PATH_NOT_ALLOWLISTED")
     return {"unix_socket": socket_path}
+
+
+def _foreign_key_action_rules(
+    table: str, name: str, rules_by_key: dict[tuple[str, str], list[dict[str, Any]]]
+) -> tuple[str, str]:
+    rows = rules_by_key.get((table, name), [])
+    if len(rows) != 1:
+        raise CatalogError("FOREIGN_KEY_RULES_MISSING_OR_AMBIGUOUS")
+    update_rule = str(rows[0].get("update_rule", "")).upper()
+    delete_rule = str(rows[0].get("delete_rule", "")).upper()
+    allowed = {"NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"}
+    if update_rule not in allowed or delete_rule not in allowed:
+        raise CatalogError("FOREIGN_KEY_RULES_INVALID")
+    return update_rule, delete_rule
 
 
 def _safe_default(column: dict[str, Any], *, no_backslash_escapes: bool = False) -> dict[str, str] | None:
@@ -339,6 +365,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
         cursor.close()
         raise CatalogError("MYSQL_DATABASE_MUST_BE_ERP_PG_SOURCE")
 
+    cursor.execute("SET SESSION time_zone = '+00:00'")
     cursor.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
     completed = False
     try:
@@ -388,9 +415,24 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 if default["kind"] == "review":
                     review_items.append({"table": table, "column": column["name"], "code": default["code"]})
             expression = str(row.get("generation_expression") or "")
-            if expression:
+            if expression or declares_generated_column(column):
                 column["generated_expression_present"] = True
-                review_items.append({"table": table, "column": column["name"], "code": "GENERATED_COLUMN_REVIEW_REQUIRED"})
+                column["generated_expression_sha256"] = hashlib.sha256(expression.encode("utf-8")).hexdigest()
+                if not expression:
+                    review_items.append({"table": table, "column": column["name"], "code": "GENERATED_COLUMN_EXPRESSION_MISSING"})
+                else:
+                    generated_spec = identify_generated_column(
+                        table,
+                        column["name"],
+                        column["data_type"],
+                        column["column_type"],
+                        column["extra"],
+                        expression,
+                    )
+                    if generated_spec is None:
+                        review_items.append({"table": table, "column": column["name"], "code": "GENERATED_COLUMN_REVIEW_REQUIRED"})
+                    else:
+                        column["generated_expression_key"] = generated_spec["key"]
             columns.setdefault(table, []).append(column)
 
         index_rows = _rows(cursor, """
@@ -421,7 +463,10 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             WHERE constraint_schema=%s
             ORDER BY table_name, constraint_name
         """, (SOURCE_SCHEMA,))
-        fk_rules = {(str(row["table_name"]), str(row["constraint_name"])): row for row in referential}
+        fk_rules: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for rule in referential:
+            key = (str(rule["table_name"]), str(rule["constraint_name"]))
+            fk_rules.setdefault(key, []).append(rule)
         fks: list[dict[str, Any]] = []
         pk_map: dict[str, list[dict[str, Any]]] = {}
         fk_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -434,7 +479,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 fk_groups.setdefault((str(row["table_name"]), str(row["constraint_name"])), []).append(row)
         for (table, name), rows in sorted(fk_groups.items()):
             rows.sort(key=lambda item: int(item["ordinal_position"]))
-            rules = fk_rules.get((table, name))
+            update_rule, delete_rule = _foreign_key_action_rules(table, name, fk_rules)
             fks.append({
                 "table": table,
                 "name": name,
@@ -442,8 +487,8 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 "referenced_schema": str(rows[0]["referenced_table_schema"]),
                 "referenced_table": str(rows[0]["referenced_table_name"]),
                 "referenced_columns": [str(row["referenced_column_name"]) for row in rows],
-                "update_rule": str(rules["update_rule"]).upper() if rules else "NO ACTION",
-                "delete_rule": str(rules["delete_rule"]).upper() if rules else "NO ACTION",
+                "update_rule": update_rule,
+                "delete_rule": delete_rule,
             })
 
         checks = _rows(cursor, """
@@ -534,7 +579,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             })
         snapshot: dict[str, Any] = {
             "catalog_version": CATALOG_VERSION,
-            "collector_code_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "collector_code_sha256": _collector_fingerprint(),
             "source_schema": SOURCE_SCHEMA,
             "source_server_version": str(identity["server_version"]).split("-", 1)[0],
             "source_no_backslash_escapes": no_backslash_escapes,

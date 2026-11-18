@@ -5,21 +5,33 @@ from datetime import date, datetime
 import hashlib
 import json
 import re
+from pathlib import Path
 from collections import Counter
 from typing import Any
 
+from .generated_columns import declares_generated_column, generated_dependencies_valid, target_generated_column
 from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, quote_identifier, quote_literal
 
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "1.5.3"
+GENERATOR_VERSION = "1.8.0"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
 POSTGRES_SEQUENCE_MAX = 9223372036854775807
 UNSIGNED_BIGINT_OFFSET = 9223372036854775808
 MYSQL_UNSIGNED_BIGINT_MAX = 18446744073709551615
+BUSINESS_TRIGGER_SOURCE_SHA256 = {
+    ("checklist_veicular", "trg_atualizar_km_acumulado", "AFTER", "UPDATE"): "236afd03ce87d410571b1e9bab6b461a7543a8f72308a2d3f0cfbf752ff67413",
+    ("dependentes", "tr_dependente_ativar_veiculos", "BEFORE", "UPDATE"): "87c2eabb8e13760db61ea1a5d9bd01ef7a92689e546eada1b916a62a5d98e8a4",
+    ("dependentes", "tr_dependente_deletar_veiculos", "BEFORE", "DELETE"): "c9c617367a42f86f625a2c04b6cf1384caa19bdf04f0df5d713e88ed3708362f",
+    ("dependentes", "tr_dependente_inativar_veiculos", "BEFORE", "UPDATE"): "26d1ff52cc0fca6d6e4f7a93ea3b940788866fa6214522e4ac06126c31cf50a1",
+    ("logs_validacoes_dispositivo", "after_validacao_dispositivo_insert", "AFTER", "INSERT"): "c8ed66f274c4d58f1092980c89bca871fb7871f777c8eeae250b47bb2342fd18",
+    ("produtos_estoque", "trg_alerta_estoque_baixo", "AFTER", "UPDATE"): "c1fcba675ba3423c1bcbc50d65ca38e8e60f800313cfc739ac1cadf8a1235c97",
+    ("qrcode_tokens", "after_qrcode_token_insert", "AFTER", "INSERT"): "bd36dac166ce871c10a393d8f959206c43bc2f4f8c22adb5926064e5c38d0ab8",
+}
+BUSINESS_TRIGGER_SCRIPT = Path(__file__).resolve().parents[2] / "sql" / "postgresql" / "070_business_triggers_tenant_scoped.sql"
 
 
 class DdlGenerationError(RuntimeError):
@@ -302,7 +314,7 @@ def generate_ddl(
     collation_overrides: dict[str, str] | None = None,
     application_role: str | None = None,
 ) -> DdlBundle:
-    if snapshot.get("catalog_version") != 2 or snapshot.get("source_schema") != SOURCE_SCHEMA:
+    if snapshot.get("catalog_version") != 3 or snapshot.get("source_schema") != SOURCE_SCHEMA:
         raise DdlGenerationError("CATALOG_VERSION_OR_SOURCE_NOT_ALLOWLISTED")
     fingerprint = snapshot.get("fingerprint_sha256")
     if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
@@ -355,7 +367,8 @@ def generate_ddl(
         "unique_indexes_post_load": [],
         "foreign_keys_post_load": [],
         "foreign_keys": {"generated_not_valid": 0, "unsupported": [], "deferred": []},
-        "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "unsigned_sequence_pairs": 0},
+        "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "generated_columns": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "unsigned_sequence_pairs": 0},
+        "generated_columns": [],
         "auto_increment": {
             "post_load_sync_required": True,
             "sync_policy": "ONE_SHOT_BEFORE_APPLICATION_WRITES",
@@ -402,8 +415,20 @@ def generate_ddl(
             report["review_items"].append({"object_type": object_type, "code": "METADATA_VISIBILITY_NOT_CONFIRMED"})
     if snapshot.get("unresolved_role_grants"):
         report["review_items"].append({"code": "SOURCE_ROLE_GRANTS_UNRESOLVED"})
-    for trigger in snapshot.get("triggers", []):
-        report["review_items"].append({
+    source_triggers = snapshot.get("triggers", [])
+    actual_trigger_hashes = {
+        (str(trigger.get("table", "")), str(trigger.get("name", "")),
+         str(trigger.get("timing", "")).upper(), str(trigger.get("event", "")).upper()):
+        str(trigger.get("body_sha256", ""))
+        for trigger in source_triggers
+    }
+    business_triggers_approved = (
+        len(source_triggers) == len(BUSINESS_TRIGGER_SOURCE_SHA256)
+        and actual_trigger_hashes == BUSINESS_TRIGGER_SOURCE_SHA256
+    )
+    trigger_translation_items = []
+    for trigger in (() if business_triggers_approved else source_triggers):
+        trigger_translation_items.append({
             "table": str(trigger.get("table", "")),
             "trigger": str(trigger.get("name", "")),
             "body_sha256": str(trigger.get("body_sha256", "")),
@@ -468,9 +493,15 @@ def generate_ddl(
             for column in columns:
                 name = str(column["name"])
                 _ident(name)
-                if column.get("generated_expression_present"):
-                    raise TypeMappingError("GENERATED_COLUMN_TRANSLATION_REQUIRED")
                 data_type = str(column["data_type"])
+                generated_spec = target_generated_column(table_name, column)
+                if (column.get("generated_expression_present") is True or declares_generated_column(column)) and generated_spec is None:
+                    raise TypeMappingError("GENERATED_COLUMN_TRANSLATION_REQUIRED")
+                if generated_spec is not None:
+                    if not generated_dependencies_valid(table_name, column, columns):
+                        raise TypeMappingError("GENERATED_COLUMN_DEPENDENCY_UNSUPPORTED")
+                    if data_type.lower() != "decimal" or column.get("default") is not None:
+                        raise TypeMappingError("GENERATED_COLUMN_METADATA_UNSUPPORTED")
                 target_collation = _target_collation(column, overrides, table_name, report) if _textual(data_type) else None
                 mapping = map_mysql_type(
                     str(column["column_type"]),
@@ -481,7 +512,16 @@ def generate_ddl(
                 table_column_types[name] = (mapping.sql_type, mapping.collation_sql)
                 declaration = f"{_ident(name)} {mapping.declaration}"
                 extra = str(column.get("extra", "")).lower()
-                if "auto_increment" in extra:
+                if generated_spec is not None:
+                    declaration += f" GENERATED ALWAYS AS ({generated_spec['target_expression']}) STORED"
+                    report["generated_columns"].append({
+                        "table": table_name,
+                        "column": name,
+                        "key": generated_spec["key"],
+                        "dependencies": list(generated_spec["dependencies"]),
+                    })
+                    report["generated"]["generated_columns"] += 1
+                elif "auto_increment" in extra:
                     if mapping.sql_type == "NUMERIC(20,0)":
                         sequence_key = f"{target_schema}.{table_name}.{name}"
                         table_allocators.append({
@@ -499,7 +539,7 @@ def generate_ddl(
                     nullable = True
                 if not nullable:
                     declaration += " NOT NULL"
-                default_sql = _sql_default(
+                default_sql = None if generated_spec is not None else _sql_default(
                     column,
                     table_name,
                     report,
@@ -526,7 +566,7 @@ def generate_ddl(
                         "status": "CHECK_AFTER_VALUE_SCAN",
                     })
                 report["review_items"].extend({"table": table_name, "column": name, "code": code} for code in mapping.review_codes)
-                if "on update current_timestamp" in extra:
+                if "on update current_timestamp" in extra and generated_spec is None:
                     if data_type.lower() not in {"timestamp", "datetime"}:
                         report["review_items"].append({"table": table_name, "column": name, "code": "ON_UPDATE_NON_TEMPORAL_TYPE"})
                     else:
@@ -829,9 +869,34 @@ def generate_ddl(
         "20_foreign_keys_not_valid.sql": "\n\n".join(fk_statements),
         "30_post_load_sequences.sql": "\n\n".join(_identity_sequence_script(fingerprint, identity_columns)),
     }
+    if business_triggers_approved:
+        if BUSINESS_TRIGGER_SCRIPT.is_symlink() or not BUSINESS_TRIGGER_SCRIPT.is_file():
+            raise DdlGenerationError("APPROVED_BUSINESS_TRIGGER_SCRIPT_MISSING")
+        business_trigger_sql = BUSINESS_TRIGGER_SCRIPT.read_text(encoding="utf-8")
+        if len(re.findall(r"\bCREATE\s+TRIGGER\b", business_trigger_sql, flags=re.IGNORECASE)) != 7:
+            raise DdlGenerationError("APPROVED_BUSINESS_TRIGGER_SCRIPT_INVALID")
+        scripts["40_business_triggers.sql"] = business_trigger_sql
+        report["translated_business_triggers"] = [
+            {"table": table, "trigger": name, "timing": timing, "event": event,
+             "source_body_sha256": body_sha256}
+            for (table, name, timing, event), body_sha256 in sorted(BUSINESS_TRIGGER_SOURCE_SHA256.items())
+        ]
+    else:
+        scripts["40_business_triggers.sql"] = "-- No approved translation for the current source trigger catalog.\n"
+        report["translated_business_triggers"] = []
     scripts = {name: f"-- Collation overrides SHA-256: {overrides_sha256}\n\n{content}" for name, content in scripts.items()}
     report["generated_tables"] = sorted(emitted_tables)
-    report["executable_complete"] = not report["blocked_tables"] and not report["unsupported_indexes"] and not report["deferred_indexes"] and not report["foreign_keys"]["unsupported"] and not report["foreign_keys"]["deferred"] and not report["review_items"]
+    non_trigger_reviews = [item for item in report["review_items"] if item.get("code") != "BUSINESS_TRIGGER_TRANSLATION_REQUIRED"]
+    report["load_executable_complete"] = (
+        not report["blocked_tables"]
+        and not report["unsupported_indexes"]
+        and not report["deferred_indexes"]
+        and not report["foreign_keys"]["unsupported"]
+        and not report["foreign_keys"]["deferred"]
+        and not non_trigger_reviews
+    )
+    report["executable_complete"] = report["load_executable_complete"] and not trigger_translation_items
+    report["post_load_trigger_translation_required"] = trigger_translation_items
     return DdlBundle(scripts=scripts, report=report)
 
 
