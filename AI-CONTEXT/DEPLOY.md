@@ -62,3 +62,34 @@ O cluster PostgreSQL 18.6 `18/main` foi iniciado localmente em `2.29.161.106`, c
 O monitoramento de memória por mais de cinco minutos permaneceu acima de 5,5 GB disponíveis, PSI `avg10=0.00`; o PostgreSQL dev ficou ativo e serviços MySQL, Nginx e PHP-FPM de produção permaneceram ativos. `nginx -t` passou; smoke local confirmou `/` = 200 e `/frontend/login.html` = 301 para `/`.
 
 P1 ainda não está aceito/completo: o backup diário só poderá ser copiado para `erp_pg_source` entre 23h–06h BRT, verificado e carregado com `--single-transaction`; não ler o banco de produção `erpcondominios` pelo pipeline. `php8.3-pgsql` está instalado e o `conf.d` do FPM atual inclui `pgsql`/`pdo_pgsql` **e** `mysqli`/`pdo_mysql`/`mysqlnd`; há somente `php8.3-fpm.service` e o pool `www.conf`. Portanto, isto não é runtime PG isolado. `pg_reader`, segunda instância PHP-FPM sem módulos MySQL, camada PHP de compatibilidade, vhosts `8443`/`8444`, Basic Auth e regras temporárias de firewall ainda não foram preparados. Não foram alterados configuração/serviços de produção, Nginx, UFW, DNS, releases ou `current`. Como não foi capturada uma baseline de checksums antes do P1, o critério de igualdade de checksums de produção antes/depois ainda não está demonstrado. Prosseguir com o FPM/vhosts somente depois que a camada de compatibilidade e seu teste diferencial estiverem revisados; qualquer ação de produção continua gate separado.
+
+
+## Release PostgreSQL isolado — vhost de revisão 8443 (2026-11-18)
+
+Este release serve exclusivamente ao teste manual do PostgreSQL; não é deploy da aplicação de produção. O vhost escuta somente em `127.0.0.1:8443`, mantém TLS e Basic Auth, e não recebeu regra UFW. Produção segue MySQL: `/var/www/erpcondominios/current` permaneceu na release `7c834ff90905857c58431855d02d432cef91963f`; não houve alteração no pool PHP padrão, no vhost de produção, DNS, crons ou bancos ativos/rollback.
+
+Release imutável ativo: `/var/www/erpcondominios-pg/releases/ca4135c0b9cc891dcb80773e9337ca642dc05032`, com árvore combinada de `main` (`8a094acb2e1968ab92109a6e77faba16494fb7b5`) + `pg/integracao` (`45a1de72725b5e1f1563e915a1807a0baced335b`). `current` desse root isolado aponta ao release; rollback isolado: `/var/www/erpcondominios-pg/releases/0578cf3ba43b79376e86ccf746d4d86965912af8`. O pacote passou manifesto SHA-256, `nginx -t` e `php-fpm8.3 -t`; depois da troca atômica, somente `php8.3-fpm-pg` e Nginx foram recarregados. O pool PG usa configuração privada opt-in `ERP_DB_DRIVER=pgsql`, schema `erp`, alvo `erp_pg_dev`, tradutor fail-closed e integrações de saída desligadas. Não registrar os valores dessa configuração.
+
+O certificado TLS de domínio que já serve o vhost produtivo foi referenciado pelo vhost 8443 (sem copiar nem imprimir chave); o hostname `app.erpcondominios.com.br` valida a cadeia e o SAN. Para chegar ao listener loopback mantendo o certificado confiável, o operador deve fazer o túnel SSH na máquina de teste, com sua chave autorizada:
+
+```powershell
+ssh -i "$HOME\.ssh\manus_erp_hetzner" -N -o ExitOnForwardFailure=yes -L 8443:127.0.0.1:8443 manus-admin@2.29.161.106
+```
+
+Com o túnel aberto, adicionar temporariamente, como administrador, esta linha ao arquivo `C:\Windows\System32\drivers\etc\hosts`:
+
+```text
+127.0.0.1 app.erpcondominios.com.br
+```
+
+Abrir `https://app.erpcondominios.com.br:8443/` e, depois do teste, remover a linha de `hosts` e encerrar o túnel. Isso altera apenas a resolução local durante o teste, não o DNS público. Basic Auth exige usuário `pg-review`; a senha é mantida somente no arquivo root-only `/root/carga-pg/pg-8443-review.pass` (`0600`) e não deve ser enviada pelo chat. O administrador pode obtê-la diretamente em sua sessão SSH autorizada, por exemplo `sudo -n cat /root/carga-pg/pg-8443-review.pass`; não reutilizar a senha Basic como credencial ERP. Usar somente usuários sintéticos de teste, nunca credenciais de moradores/funcionários reais. O login Portal Bearer ainda pode responder 503 no perfil PostgreSQL por contrato P3.2; esse comportamento não deve ser confundido com aceitação do Portal.
+
+Smoke de 18/11, realizado localmente com hostname/domínio e certificado verificado, sem sessão ERP: sem Basic Auth `/` → 401; com Basic `/` → 200 e `<base href="/frontend/">`; `/frontend/login.html` → 301 para `/`; `?expired=1` preservado; `/login.html` → 301; `config.js`, `i18n.js`, JSON `pt-BR` e CSS → 200; API sem sessão → 401; tentativa de caminho Firebase → 404; logins alternativos de morador e fornecedor → 200. O arquivo Basic original foi restaurado após o smoke temporário; a conta `pg-review` é separada e persistente para a revisão manual. Checksums de 134 arquivos/configurações do baseline fora do vhost PG permaneceram iguais. Smoke da produção antes/depois: raiz 200, login legado 301, API anônima 401; `current` produtivo permaneceu na mesma release. Não foi feito login autenticado real, não se testou comportamento funcional de módulo/Portal, e o smoke não remove a pendência P2 da FK `42804` nem substitui reconciliação integral.
+
+Para rollback da release isolada, sem tocar produção:
+
+```bash
+sudo bash -c 'set -e; tmp=/var/www/erpcondominios-pg/.current-rollback-$$; ln -s /var/www/erpcondominios-pg/releases/0578cf3ba43b79376e86ccf746d4d86965912af8 "$tmp"; mv -Tf "$tmp" /var/www/erpcondominios-pg/current; systemctl reload php8.3-fpm-pg; systemctl reload nginx'
+```
+
+Se for necessário reverter também o certificado/ajustes específicos do vhost, restaurar somente o backup isolado `/root/carga-pg/8443-release-backup-20261118T225054Z/pg-vhost-before-cert-fix.conf`, executar `nginx -t` e recarregar Nginx; não restaurar configuração de produção como parte desse rollback.
