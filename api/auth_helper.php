@@ -87,6 +87,7 @@ function verificarAutenticacao($exigir_autenticacao = true, $permissao_minima = 
     if (empty($tenant_id)) {
         $tenant_id = _tentarResolverTenantLegado((int)$usuario_id);
         if (empty($tenant_id) && $exigir_autenticacao) {
+            if ($_SESSION !== []) erp_auth_limpar_sessao_operacional();
             http_response_code(403);
             echo json_encode([
                 'sucesso'  => false,
@@ -102,11 +103,11 @@ function verificarAutenticacao($exigir_autenticacao = true, $permissao_minima = 
     // explicitamente revogada é encerrada imediatamente.
     if (!empty($tenant_id)) {
         $conexao_rbac_sessao = null;
+        $validacao_tenant_concluida = false;
         try {
             require_once __DIR__ . '/config.php';
             $conexao_rbac_sessao = conectar_banco();
-            if (\ERP\Database\DatabaseDialect::isPostgres($conexao_rbac_sessao)
-                && !usuarioTemAcessoTenantAtivo($conexao_rbac_sessao, (int)$usuario_id, (int)$tenant_id)) {
+            if (!usuarioTemAcessoTenantAtivo($conexao_rbac_sessao, (int)$usuario_id, (int)$tenant_id)) {
                 $_SESSION = [];
                 if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
                 fechar_conexao($conexao_rbac_sessao);
@@ -121,6 +122,7 @@ function verificarAutenticacao($exigir_autenticacao = true, $permissao_minima = 
                 }
                 return false;
             }
+            $validacao_tenant_concluida = true;
             if (rbacTabelasDisponiveis($conexao_rbac_sessao) && !rbacValidarSessaoAtual($conexao_rbac_sessao, (int)$usuario_id, (int)$tenant_id)) {
                 $_SESSION = [];
                 if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
@@ -135,8 +137,10 @@ function verificarAutenticacao($exigir_autenticacao = true, $permissao_minima = 
             fechar_conexao($conexao_rbac_sessao);
         } catch (Throwable $e) {
             if ($conexao_rbac_sessao !== null) fechar_conexao($conexao_rbac_sessao);
-            error_log('[auth_helper] Falha ao verificar a sessão RBAC.');
-            if (defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql') {
+            error_log($validacao_tenant_concluida
+                ? '[auth_helper] Falha ao verificar a sessão RBAC.'
+                : '[auth_helper] Falha ao validar o vínculo do tenant.');
+            if (!$validacao_tenant_concluida || (defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql')) {
                 if ($exigir_autenticacao) {
                     http_response_code(503);
                     echo json_encode([
@@ -175,12 +179,13 @@ function _tentarResolverTenantLegado($usuario_id) {
         $conexao = conectar_banco();
 
         $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
-        if ($isPostgres && !resolverContextoHostTenantPostgres()['trusted']) {
+        $hostTenant = $isPostgres ? resolverContextoHostTenantPostgres() : resolverContextoHostTenant();
+        if (!$hostTenant['trusted']) {
             erp_auth_limpar_sessao_operacional();
             fechar_conexao($conexao);
             return null;
         }
-        $slug = resolverTenantSlugDaUrl(!$isPostgres);
+        $slug = $hostTenant['slug'];
         if ($isPostgres) {
             $sql = "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
                            t.plano, t.status, t.logo_url, t.email_principal, t.modulos_habilitados
@@ -215,12 +220,14 @@ function _tentarResolverTenantLegado($usuario_id) {
         }
 
         if ($slug) {
-            $tenant = carregarTenantPorSlug($conexao, $slug);
-            if ($tenant) {
-                injetarTenantNaSessao($tenant);
+            $tenant = carregarTenantPorSlugAutorizado($conexao, (int)$usuario_id, $slug);
+            if (!$tenant) {
                 fechar_conexao($conexao);
-                return (int)$tenant['id'];
+                return null;
             }
+            injetarTenantNaSessao($tenant);
+            fechar_conexao($conexao);
+            return (int)$tenant['id'];
         }
 
         $stmt = $conexao->prepare(
@@ -229,14 +236,15 @@ function _tentarResolverTenantLegado($usuario_id) {
              FROM tenants t
              INNER JOIN usuario_tenant ut ON ut.tenant_id = t.id
              WHERE ut.usuario_id = ? AND t.status = 'ativo' AND ut.ativo = 1
-             ORDER BY t.id ASC LIMIT 1"
+             ORDER BY t.id ASC LIMIT 2"
         );
         if ($stmt) {
             $stmt->bind_param('i', $usuario_id);
             $stmt->execute();
             $res = $stmt->get_result();
-            if ($res->num_rows > 0) {
-                $tenant = $res->fetch_assoc();
+            $tenants_usuario = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+            if (count($tenants_usuario) === 1) {
+                $tenant = $tenants_usuario[0];
                 $stmt->close();
                 injetarTenantNaSessao($tenant);
                 fechar_conexao($conexao);
@@ -245,12 +253,8 @@ function _tentarResolverTenantLegado($usuario_id) {
             $stmt->close();
         }
 
-        $tenant = carregarTenantPorId($conexao, 1);
         fechar_conexao($conexao);
-        if ($tenant) {
-            injetarTenantNaSessao($tenant);
-            return 1;
-        }
+        return null;
     } catch (Throwable $e) {
         if ($conexao !== null) fechar_conexao($conexao);
         error_log('[auth_helper] Falha ao resolver o tenant legado.');

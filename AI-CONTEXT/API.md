@@ -147,6 +147,10 @@ Na lista paginada, `GET api/api_moradores.php?unidade=...&unidade_exata=1` compa
 consegue consultar moradores, dependentes, anexos e relatórios, mas não vê nem executa
 criar, editar ou excluir.
 
+### Contexto tenant MySQL do ERP
+
+No login e na recuperação de sessão ERP, `?tenant` não escolhe condomínio. O Host é validado contra `ERP_TRUSTED_TENANT_DOMAINS`; tenant por slug exige usuário ativo com vínculo ativo, salvo `super_admin` global consultado no banco. Sem slug, somente vínculo ativo único pode ser usado; ausência/ambiguidade falha fechado. Não criar vínculo automaticamente nem usar tenant 1 como fallback. No MySQL, `verificar_sessao.php` chama `verificarAutenticacao(true)` para revalidar usuário/tenant/vínculo; o caminho PostgreSQL mantém a validação local da sessão/Host e não abre conexão adicional nesse endpoint.
+
 
 ## 12. Parâmetros de Moradores e Dependentes
 

@@ -17,6 +17,12 @@
 - Após autenticação válida, regenere o ID PHP e limpe a sessão anterior antes de definir a nova identidade/tenant; nenhum `_rbac_sessao_id`, cache ou identidade de outro usuário/tenant pode sobreviver à troca de conta. Se falhar antes do commit, destrua a sessão PHP parcial e faça rollback transacional. No login Bearer do Portal MySQL, remova tokens anteriores/inserir o novo token dentro de transação InnoDB e só confirme depois de a resposta estar pronta; rollback precisa restaurar tokens anteriores. Se o commit foi confirmado, uma falha tardia deve devolver a resposta de sucesso já serializada, sem revogar o token durável. O token Bearer Portal PostgreSQL continua bloqueado até portabilidade/homologação próprias.
 - O Portal do Morador no PostgreSQL permanece indisponível (503) até a sessão Bearer e o schema correspondente serem portados e homologados. Esta nota não autoriza seleção de driver em produção.
 
+### Hardening MySQL — contexto de tenant ERP (2026-11-18)
+
+- No login, no `auth_helper.php` e em `verificar_sessao.php`, `?tenant` não seleciona contexto. Host/subdomínio é aceito somente para domínios confiáveis e o tenant deve estar ativo e vinculado ao usuário ativo; `super_admin` global é verificado no banco.
+- Sem slug, somente um vínculo ativo inequívoco pode ser usado. Contexto ausente, ambíguo, usuário inativo, tenant inativo ou vínculo revogado falha fechado; não há fallback automático para tenant 1 nem criação de vínculo no login.
+- Domínios adicionais devem ser configurados em `ERP_TRUSTED_TENANT_DOMAINS` no arquivo privado; não confiar em `Host` arbitrário nem em parâmetro do cliente.
+
 ## 2. Hierarquia de Permissões
 Definida no `auth_helper.php`:
 1. `visualizador` (Apenas leitura)

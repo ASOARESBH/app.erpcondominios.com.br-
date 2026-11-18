@@ -66,18 +66,18 @@ if (ERP_DB_DRIVER === 'pgsql') {
         echo json_encode(['sucesso' => false, 'mensagem' => 'Contexto do condomínio inválido.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    $usuarioAutenticado = [
+        'id' => $_SESSION['usuario_id'] ?? null,
+        'nome' => $_SESSION['usuario_nome'] ?? '',
+        'email' => $_SESSION['usuario_email'] ?? '',
+        'funcao' => $_SESSION['usuario_funcao'] ?? '',
+        'departamento' => $_SESSION['usuario_departamento'] ?? '',
+        'permissao' => $_SESSION['usuario_permissao'] ?? 'operador',
+        'tenant_id' => (int)$tenantIdSessao,
+    ];
 } else {
-    // A recuperação por querystring permanece restrita ao fluxo legado MySQL.
-    $tenant_id = $_SESSION['tenant_id'] ?? null;
-    if (empty($tenant_id)) {
-        $slug = resolverTenantSlugDaUrl();
-        if ($slug) {
-            $conexao = conectar_banco();
-            $tenant  = carregarTenantPorSlug($conexao, $slug);
-            if ($tenant) injetarTenantNaSessao($tenant);
-            fechar_conexao($conexao);
-        }
-    }
+    // MySQL usa o mesmo vínculo ativo obrigatório; querystring não escolhe tenant.
+    $usuarioAutenticado = verificarAutenticacao(true);
 }
 
 echo json_encode([
@@ -85,15 +85,15 @@ echo json_encode([
     'mensagem'=> 'Sessão válida',
     'dados'   => [
         'usuario' => [
-            'id'          => $_SESSION['usuario_id']          ?? null,
-            'nome'        => $_SESSION['usuario_nome']         ?? '',
-            'email'       => $_SESSION['usuario_email']        ?? '',
-            'funcao'      => $_SESSION['usuario_funcao']       ?? '',
-            'departamento'=> $_SESSION['usuario_departamento'] ?? '',
-            'permissao'   => $_SESSION['usuario_permissao']    ?? 'operador',
+            'id'          => $usuarioAutenticado['id'],
+            'nome'        => $usuarioAutenticado['nome'] ?? '',
+            'email'       => $usuarioAutenticado['email'] ?? '',
+            'funcao'      => $usuarioAutenticado['funcao'] ?? '',
+            'departamento'=> $usuarioAutenticado['departamento'] ?? '',
+            'permissao'   => $usuarioAutenticado['permissao'] ?? 'operador',
         ],
         'tenant' => [
-            'id'    => (int)($_SESSION['tenant_id']   ?? 1),
+            'id'    => (int)$usuarioAutenticado['tenant_id'],
             'slug'  => $_SESSION['tenant_slug']        ?? '',
             'nome'  => $_SESSION['tenant_nome']        ?? '',
             'plano' => $_SESSION['tenant_plano']       ?? 'basico',
