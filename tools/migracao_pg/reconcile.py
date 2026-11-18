@@ -28,12 +28,14 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from .ddl import POSTGRES_SEQUENCE_MAX, UNSIGNED_BIGINT_OFFSET, MYSQL_UNSIGNED_BIGINT_MAX
+from .generated_columns import declares_generated_column, generated_dependencies_valid
 from .type_mapping import TemporalValueError, normalize_temporal_value, parse_mysql_enum
 
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_DATABASE = "erp_pg_dev"
 TARGET_SCHEMAS = frozenset({"erp", "legado"})
 LOAD_PENDING_STATUS = "LOAD_COMMITTED_PENDING_RECONCILIATION"
+LOAD_PARTIAL_STATUS = "LOAD_PARTIAL_PENDING_RECONCILIATION"
 TEXT_TYPES = frozenset({"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext", "enum", "set", "json"})
 BINARY_TYPES = frozenset({"binary", "varbinary", "tinyblob", "blob", "mediumblob", "longblob"})
 INTEGER_TYPES = frozenset({"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "year"})
@@ -416,7 +418,7 @@ def _validate_contract(
     if not isinstance(transfer, dict) or transfer.get("source_session") != "UTC" or transfer.get("target_wall_time") != "America/Sao_Paulo":
         _fail("TEMPORAL_CONTRACT_UNPROVEN")
 
-    if report.get("status") != LOAD_PENDING_STATUS:
+    if report.get("status") not in {LOAD_PENDING_STATUS, LOAD_PARTIAL_STATUS}:
         _fail("LOAD_COMMIT_EVIDENCE_INVALID")
     if report.get("source_schema") != SOURCE_SCHEMA or report.get("target_database") != TARGET_DATABASE:
         _fail("LOAD_SCOPE_MISMATCH")
@@ -462,6 +464,10 @@ def _validate_contract(
         mapped_names = [c.get("name") if isinstance(c, dict) else None for c in columns]
         if mapped_names != expected_names or len(set(expected_names)) != len(expected_names):
             _fail("COLUMN_ORDER_OR_MAPPING_MISMATCH")
+        for column in source_columns:
+            if declares_generated_column(column) or column.get("generated_expression_present") is True:
+                if column.get("generated_expression_present") is not True or not generated_dependencies_valid(name, column, source_columns):
+                    _fail("GENERATED_COLUMN_MAPPING_UNAPPROVED")
         if set(types) != set(expected_names):
             _fail("COLUMN_TYPE_MAPPING_INCOMPLETE")
         if table.get("source_next_auto_increment") is not None and not any("auto_increment" in str(c.get("extra", "")).lower() for c in source_columns):
@@ -472,16 +478,21 @@ def _validate_contract(
     table_counts = report.get("table_counts")
     if not isinstance(table_counts, list):
         _fail("LOAD_TABLE_COUNTS_EVIDENCE_MISSING")
-    load_counts: dict[str, dict[str, int]] = {}
+    failure_evidence = _load_table_failures(report)
+    failed_tables = {item["table"] for item in failure_evidence}
+    load_counts: dict[str, dict[str, int | None]] = {}
     for entry in table_counts:
         if not isinstance(entry, dict) or not isinstance(entry.get("table"), str):
             _fail("LOAD_TABLE_COUNTS_EVIDENCE_INVALID")
         name = entry["table"]
         if name in load_counts or name not in tables:
             _fail("LOAD_TABLE_COUNTS_EVIDENCE_INVALID")
-        values: dict[str, int] = {}
+        values: dict[str, int | None] = {}
         for key in ("source_rows", "target_rows"):
             value = entry.get(key)
+            if value is None and name in failed_tables:
+                values[key] = None
+                continue
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 _fail("LOAD_TABLE_COUNTS_EVIDENCE_INVALID")
             values[key] = value
@@ -884,6 +895,8 @@ def _new_accumulator(table: dict[str, Any], mapping: dict[str, Any], store: _Dis
         "tenant_hashes": store.counter(prefix + ":tenant_rows"),
         "enum": {c["name"]: store.counter(f"{prefix}:enum:{c['name']}")
                  for c in columns if str(c.get("data_type", "")).lower() == "enum"},
+        "generated": {c["name"]: store.counter(f"{prefix}:generated:{c['name']}")
+                      for c in columns if c.get("generated_expression_present") is True},
         "nul_audit_values": {
             c["name"]: store.counter(f"{side}:nul_audit") for c in columns
             if str(c.get("data_type", "")).lower() in TEXT_TYPES
@@ -971,6 +984,11 @@ def _accumulate_row(acc: dict[str, Any], values: list[Any], table: dict[str, Any
         name = str(column["name"])
         kind = str(column.get("data_type", "")).lower()
         raw, nul = _canonical_value(value, column, is_source=is_source)
+        if column.get("generated_expression_present") is True:
+            generated_counter = acc["generated"].get(name)
+            if generated_counter is None:
+                _fail("GENERATED_COLUMN_MAPPING_MISSING")
+            generated_counter.add(raw)
         name_bytes = name.encode("utf-8")
         row_digest.update(_frame(b"C", name_bytes))
         row_digest.update(_frame(b"V", raw))
@@ -1143,6 +1161,33 @@ def _validate_load_counts(report: dict[str, Any], table_names: list[str], source
         and entries[name]["target_rows"] == target_acc[name]["count"]
         for name in table_names
     )
+
+
+def _load_table_failures(report: dict[str, Any]) -> list[dict[str, Any]]:
+    failures = report.get("table_failures", [])
+    if not isinstance(failures, list):
+        _fail("LOAD_TABLE_FAILURE_EVIDENCE_INVALID")
+    sanitized: list[dict[str, Any]] = []
+    for item in failures:
+        if not isinstance(item, dict) or not isinstance(item.get("table"), str) or not isinstance(item.get("reason"), str):
+            _fail("LOAD_TABLE_FAILURE_EVIDENCE_INVALID")
+        if not re.fullmatch(r"[A-Z0-9_]{1,96}", item["reason"]):
+            _fail("LOAD_TABLE_FAILURE_EVIDENCE_INVALID")
+        row: dict[str, Any] = {"table": item["table"], "reason": item["reason"]}
+        column = item.get("column")
+        if column is not None:
+            if not isinstance(column, str):
+                _fail("LOAD_TABLE_FAILURE_EVIDENCE_INVALID")
+            row["column"] = column
+        for key in ("source_rows", "target_rows", "affected_cells"):
+            value = item.get(key)
+            if value is not None:
+                row[key] = _int_metric(value)
+        sanitized.append(row)
+    partial_status = report.get("status") == LOAD_PARTIAL_STATUS
+    if partial_status != bool(sanitized):
+        _fail("LOAD_PARTIAL_FAILURE_EVIDENCE_INCONSISTENT")
+    return sanitized
 
 
 def _validate_policy_evidence(
@@ -1862,6 +1907,14 @@ def _aggregate_metric_results(tables: dict[str, dict[str, Any]], source_acc: dic
                 "octet_lengths_equal": (left["nonnull"], left["octets"]) == (right["nonnull"], right["octets"]),
                 "bytewise_hashes_equal": left["hashes"].equals(right["hashes"]),
             }
+        if set(source["generated"]) != set(target["generated"]):
+            _fail("GENERATED_COLUMN_MAPPING_MISSING")
+        generated: dict[str, Any] = {}
+        for column, left in source["generated"].items():
+            right = target["generated"].get(column)
+            if right is None:
+                _fail("GENERATED_COLUMN_MAPPING_MISSING")
+            generated[column] = {"calculated_values_equal": left.equals(right)}
         tenant_left, tenant_right = source["tenant"], target["tenant"]
         tenant_equal = tenant_left.equals(tenant_right)
         tenant_hashes_equal = source["tenant_hashes"].equals(target["tenant_hashes"])
@@ -1878,6 +1931,7 @@ def _aggregate_metric_results(tables: dict[str, dict[str, Any]], source_acc: dic
             "max_ids": maxima,
             "numeric_sums": numeric,
             "binary_lengths": binary,
+            "generated_columns": generated,
             "tenant_distribution": {
                 "source_tenant_count": tenant_left.unique_count(),
                 "target_tenant_count": tenant_right.unique_count(),
@@ -1909,7 +1963,7 @@ def reconcile(
     metric_status: dict[str, str] = {}
     tables_manifest: dict[str, dict[str, Any]] = {}
     result: dict[str, Any] = {
-        "reconciler_version": 2,
+        "reconciler_version": 3,
         "source_schema": SOURCE_SCHEMA,
         "target_database": TARGET_DATABASE,
         "allowed_target_schemas": sorted(TARGET_SCHEMAS),
@@ -1919,10 +1973,12 @@ def reconcile(
         "tables": {},
         "elapsed_seconds": None,
         "temporary_store_cleanup": "PENDING",
+        "table_failures": [],
     }
     try:
         counter_store = _DiskCounterStore(temp_root=temp_root)
         tables_manifest, normalized_mappings = _validate_contract(source, target, snapshot, report, mappings)
+        result["table_failures"] = _load_table_failures(report)
         names = sorted(tables_manifest)
         source_acc: dict[str, dict[str, Any]] = {}
         target_acc: dict[str, dict[str, Any]] = {}
@@ -1950,6 +2006,7 @@ def reconcile(
         binary_length_equal = all(all(metric["octet_lengths_equal"] for metric in v["binary_lengths"].values()) for v in table_results.values())
         binary_hash_equal = all(all(metric["bytewise_hashes_equal"] for metric in v["binary_lengths"].values()) for v in table_results.values())
         metric_status["row_count"] = "PASS" if row_count_equal else "DIVERGED"
+        metric_status["load_table_failures"] = "DIVERGED" if result["table_failures"] else "PASS"
         metric_status["row_hash_multiset"] = "PASS" if row_hash_equal else "DIVERGED"
         metric_status["max_id"] = "PASS" if all(all(v["equal"] for v in table["max_ids"].values()) for table in table_results.values()) else "DIVERGED"
         metric_status["numeric_sums"] = "PASS" if numeric_equal else "DIVERGED"
@@ -1960,6 +2017,11 @@ def reconcile(
 
         enum_evidence_equal, enum_values_equal = _enum_metric(report, tables_manifest, source_acc, target_acc)
         metric_status["enum_values"] = "PASS" if enum_evidence_equal and enum_values_equal else "DIVERGED"
+        generated_values_equal = all(
+            all(column["calculated_values_equal"] for column in table_result["generated_columns"].values())
+            for table_result in table_results.values()
+        )
+        metric_status["generated_columns"] = "PASS" if generated_values_equal else "DIVERGED"
 
         nul_ok, nul_equal, nul_blockers = _validate_policy_evidence(snapshot, report, tables_manifest, source_acc, target_acc)
         metric_status["nul_normalization"] = "BLOCKED" if not nul_ok else ("PASS" if nul_equal else "DIVERGED")

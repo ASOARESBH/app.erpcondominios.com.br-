@@ -12,7 +12,7 @@ from unittest.mock import patch
 from tools.migracao_pg.loader import _audit_pk_text as loader_audit_pk_text
 from tools.migracao_pg.loader import _MemoryGuard
 from tools.migracao_pg.ddl import MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX
-from tools.migracao_pg.reconcile import _DiskCounterStore, _foreign_key_metric
+from tools.migracao_pg.reconcile import _DiskCounterStore, _accumulate_row, _aggregate_metric_results, _foreign_key_metric, _new_accumulator
 from tools.migracao_pg.reconcile import _audit_pk_text as reconcile_audit_pk_text
 from tools.migracao_pg.reconcile import canonical_row_sha256, reconcile
 
@@ -283,6 +283,36 @@ class CanonicalRowHashTests(unittest.TestCase):
         self.assertEqual(canonical_row_sha256(("-24:00:00",), time_col), canonical_row_sha256((-timedelta(hours=24),), time_col, is_source=False))
 
 
+class GeneratedColumnMetricTests(unittest.TestCase):
+    def test_calculated_values_are_compared_explicitly_source_vs_target(self):
+        table = {
+            "name": "lancamentos_agua",
+            "columns": [
+                {"name": "id", "ordinal": 1, "data_type": "int", "column_type": "int", "extra": "auto_increment"},
+                {"name": "leitura_anterior", "ordinal": 2, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "leitura_atual", "ordinal": 3, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "consumo", "ordinal": 4, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1"},
+            ],
+        }
+        store = _DiskCounterStore()
+        try:
+            source = _new_accumulator(table, {}, store, side="source", table_name=table["name"])
+            target = _new_accumulator(table, {}, store, side="target", table_name=table["name"])
+            _accumulate_row(source, [1, Decimal("10.00"), Decimal("12.50"), Decimal("2.50")], table, {}, is_source=True)
+            _accumulate_row(target, [1, Decimal("10.00"), Decimal("12.50"), Decimal("2.50")], table, {}, is_source=False)
+            store.commit()
+            result = _aggregate_metric_results({table["name"]: table}, {table["name"]: source}, {table["name"]: target})
+            self.assertTrue(result[table["name"]]["generated_columns"]["consumo"]["calculated_values_equal"])
+
+            mismatched = _new_accumulator(table, {}, store, side="target-mismatch", table_name=table["name"])
+            _accumulate_row(mismatched, [1, Decimal("10.00"), Decimal("12.50"), Decimal("2.49")], table, {}, is_source=False)
+            store.commit()
+            result = _aggregate_metric_results({table["name"]: table}, {table["name"]: source}, {table["name"]: mismatched})
+            self.assertFalse(result[table["name"]]["generated_columns"]["consumo"]["calculated_values_equal"])
+        finally:
+            store.close()
+
+
 class MemoryGuardCancellationTests(unittest.TestCase):
     def test_memory_guard_closes_source_connection_when_cancel_safe_is_unavailable(self):
         class SourceConnection:
@@ -320,6 +350,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
         self.assertEqual(result["status"], "RECONCILED", result)
         self.assertEqual(result["metrics"], {
             "row_count": "PASS",
+            "load_table_failures": "PASS",
             "row_hash_multiset": "PASS",
             "max_id": "PASS",
             "numeric_sums": "PASS",
@@ -328,6 +359,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
             "tenant_distribution": "PASS",
             "tenant_row_hashes": "PASS",
             "enum_values": "PASS",
+            "generated_columns": "PASS",
             "nul_normalization": "PASS",
             "nul_audit_preservation": "PASS",
             "foreign_keys_orphans": "PASS",
@@ -337,6 +369,26 @@ class ReconciliationMetricsTests(unittest.TestCase):
         self.assertNotIn("hi", repr(result))
         self.assertNotIn("hithere", repr(result))
         self.assertNotIn(hashlib.sha256(b"private row data").hexdigest(), repr(result))
+
+    def test_partial_load_failure_is_reported_and_never_accepted(self):
+        source, target, snapshot, report, mappings = base_contract()
+        report["status"] = "LOAD_PARTIAL_PENDING_RECONCILIATION"
+        report["table_counts"][0]["source_rows"] = None
+        report["table_failures"] = [{
+            "table": "synthetic", "column": "description", "reason": "SOURCE_TEXT_INVALID_UTF8",
+            "source_rows": 1, "target_rows": 0, "affected_cells": 1,
+        }]
+        result = reconcile(source, target, snapshot, report, mappings)
+        self.assertEqual(result["status"], "DIVERGED")
+        self.assertEqual(result["metrics"]["load_table_failures"], "DIVERGED")
+        self.assertEqual(result["table_failures"], report["table_failures"])
+
+    def test_partial_load_without_failure_evidence_is_blocked(self):
+        source, target, snapshot, report, mappings = base_contract()
+        report["status"] = "LOAD_PARTIAL_PENDING_RECONCILIATION"
+        result = reconcile(source, target, snapshot, report, mappings)
+        self.assertNotEqual(result["status"], "RECONCILED")
+        self.assertEqual(result["failure_code"], "LOAD_PARTIAL_FAILURE_EVIDENCE_INCONSISTENT")
 
     def test_checkpoint_runs_for_source_and_target_streams(self):
         source, target, snapshot, report, mappings = base_contract()

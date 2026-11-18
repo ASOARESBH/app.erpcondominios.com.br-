@@ -346,14 +346,21 @@ load_result=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SY
     --source-defaults-file "$source_defaults_file" \
     --report-file "$report_file")
 printf '%s\n' "$load_result"
+load_complete=0
+if printf '%s' "$load_result" | /usr/bin/env -i "PATH=$SYSTEM_PATH" "$python_bin" -E -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("status") == "LOAD_COMMITTED_PENDING_RECONCILIATION" else 1)'; then
+    load_complete=1
+fi
 
 phase='reconciliation'
+set +e
 reconciliation_result=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 "$python_bin" -E -B -m tools.migracao_pg.loader reconcile \
     --bundle-name "$bundle" \
     --source-defaults-file "$source_defaults_file" \
     --report-file "$report_file")
+reconciliation_exit=$?
+set -e
 printf '%s\n' "$reconciliation_result"
-if ! printf '%s' "$reconciliation_result" | /usr/bin/env -i "PATH=$SYSTEM_PATH" "$python_bin" -E -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("status") == "RECONCILED" else 1)'; then
+if (( load_complete != 1 || reconciliation_exit != 0 )) || ! printf '%s' "$reconciliation_result" | /usr/bin/env -i "PATH=$SYSTEM_PATH" "$python_bin" -E -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("status") == "RECONCILED" else 1)'; then
     printf 'REBUILD_ERROR=RECONCILIATION_NOT_ACCEPTED\n' >&2
     exit 78
 fi

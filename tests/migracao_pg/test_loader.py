@@ -235,8 +235,9 @@ class NulPolicyTests(unittest.TestCase):
         snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
             {"name": "payload", "data_type": "varbinary"},
         ]}]}
-        with self.assertRaisesRegex(LoaderError, "SOURCE_BINARY_NUL_DETECTOR_DISAGREEMENT"):
-            loader._scan_source_binary_policy(Source(), snapshot, Guard())
+        result = loader._scan_source_binary_policy(Source(), snapshot, Guard())
+        self.assertEqual(result[0]["scan_status"], "FAILED")
+        self.assertEqual(result[0]["scan_failure_code"], "SOURCE_BINARY_NUL_DETECTOR_DISAGREEMENT")
 
     def test_sensitive_name_does_not_override_approved_text_nul_normalization(self) -> None:
         human_text_finding = {
@@ -247,8 +248,11 @@ class NulPolicyTests(unittest.TestCase):
             "name_suggests_sensitive": True,
         }
         self.assertFalse(loader._text_findings_require_review([human_text_finding]))
-        invalid_text_finding = {**human_text_finding, "non_utf8_cells": 1}
+        invalid_text_finding = {**human_text_finding, "table": "residentes", "column": "observacao", "cells_scanned": 20, "non_utf8_cells": 1}
         self.assertTrue(loader._text_findings_require_review([invalid_text_finding]))
+        self.assertEqual(loader._text_policy_table_failures([invalid_text_finding]), [{
+            "table": "residentes", "column": "observacao", "reason": "SOURCE_TEXT_INVALID_UTF8", "affected_cells": 1,
+        }])
 
     def test_text_nul_is_removed_and_exact_source_bytes_are_recorded(self) -> None:
         counts = {}
@@ -402,8 +406,38 @@ class NulPolicyTests(unittest.TestCase):
         snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
             {"name": "payload", "data_type": "json", "character_set": "utf8mb4"},
         ]}]}
-        with self.assertRaisesRegex(LoaderError, "JSON_NUL_NORMALIZATION_KEY_COLLISION"):
-            loader._scan_source_text_policy(Source(), snapshot, Guard())
+        result = loader._scan_source_text_policy(Source(), snapshot, Guard())
+        self.assertEqual(result[0]["scan_status"], "FAILED")
+        self.assertEqual(result[0]["scan_failure_code"], "JSON_NUL_NORMALIZATION_KEY_COLLISION")
+
+    def test_unscannable_charset_reports_expected_cell_count(self) -> None:
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, _query):
+                return None
+
+            def fetchone(self):
+                return (5,)
+
+        class Source:
+            def cursor(self, _cursor_class=None):
+                return Cursor()
+
+        for charset, expected_reason in (("binary", "SOURCE_TEXT_CHARSET_BINARY"), ("unsupported_charset", "SOURCE_TEXT_CHARSET_UNSUPPORTED")):
+            snapshot = {"tables": [{"name": "synthetic", "type": "BASE TABLE", "columns": [
+                {"name": "payload", "data_type": "text", "character_set": charset},
+            ]}]}
+            finding = loader._scan_source_text_policy(Source(), snapshot, _MemoryGuard())[0]
+            self.assertEqual(finding["cells_expected"], 5)
+            self.assertEqual(finding["cells_scanned"], 0)
+            failure = loader._text_policy_table_failures([finding])[0]
+            self.assertEqual(failure["reason"], expected_reason)
+            self.assertEqual(failure["affected_cells"], 5)
 
     def test_scan_compares_legacy_python_binary_sql_and_python_bytes(self) -> None:
         class Cursor:
@@ -515,6 +549,39 @@ class NulPolicyTests(unittest.TestCase):
 
 
 class NormalizeMysqlValueTests(unittest.TestCase):
+    def test_generated_water_column_is_excluded_from_copy_columns(self) -> None:
+        snapshot = {
+            "source_no_backslash_escapes": False,
+            "tables": [{
+                "name": "lancamentos_agua", "type": "BASE TABLE", "columns": [
+                    {"name": "id", "ordinal": 1, "data_type": "int", "column_type": "int", "nullable": False, "extra": "auto_increment"},
+                    {"name": "leitura_anterior", "ordinal": 2, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": False, "extra": ""},
+                    {"name": "leitura_atual", "ordinal": 3, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": False, "extra": ""},
+                    {"name": "consumo", "ordinal": 4, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": True, "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1", "generated_expression_sha256": "b" * 64},
+                ],
+            }],
+        }
+        report = {
+            "collation_overrides": {}, "collation_decisions": [],
+            "table_schemas": {"lancamentos_agua": "erp"},
+        }
+        mapping = loader._validate_column_mappings(snapshot, report, ["lancamentos_agua"])["lancamentos_agua"]
+        self.assertEqual([column["name"] for column in mapping["columns"]], ["id", "leitura_anterior", "leitura_atual", "consumo"])
+        self.assertEqual([column["name"] for column in mapping["copy_columns"]], ["id", "leitura_anterior", "leitura_atual"])
+        self.assertEqual([column["name"] for column in mapping["generated_columns"]], ["consumo"])
+
+    def test_loader_fails_closed_on_unknown_generated_column(self) -> None:
+        snapshot = {
+            "source_no_backslash_escapes": False,
+            "tables": [{"name": "unknown", "type": "BASE TABLE", "columns": [
+                {"name": "generated", "ordinal": 1, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": True, "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "unknown.v1"},
+                {"name": "base", "ordinal": 2, "data_type": "decimal", "column_type": "decimal(10,2)", "nullable": True, "extra": ""},
+            ]}],
+        }
+        report = {"collation_overrides": {}, "collation_decisions": [], "table_schemas": {"unknown": "erp"}}
+        with self.assertRaisesRegex(LoaderError, "GENERATED_COLUMN_TRANSLATION_REQUIRED"):
+            loader._validate_column_mappings(snapshot, report, ["unknown"])
+
     def test_null_stays_null(self) -> None:
         self.assertIsNone(normalize_mysql_value(None, {"data_type": "varchar", "column_type": "varchar(20)"}))
 
@@ -648,7 +715,7 @@ class BundleValidationTests(unittest.TestCase):
     def test_real_versioned_bundle_is_blocked_when_collector_code_is_stale(self) -> None:
         candidate = next(loader.BUNDLE_ROOT.glob("catalog-*-code-*/report.json"))
         bundle_name = candidate.parent.name
-        with self.assertRaisesRegex(LoaderError, "BUNDLE_COLLECTOR_CODE_MISMATCH"):
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_(COLLECTOR_CODE_MISMATCH|CATALOG_FINGERPRINT_MISMATCH)"):
             validate_bundle(bundle_name, require_executable=False)
 
     def test_bundle_name_is_allowlisted(self) -> None:
@@ -931,22 +998,29 @@ class _FakeTarget:
         self.fail_rollback = False
         self.fail_close = False
         self.count_results = []
+        self.transaction_depth = 0
 
     def cursor(self):
         return _FakeCursor(self)
 
     @contextmanager
     def transaction(self):
-        self.transaction_active = True
+        outermost = self.transaction_depth == 0
+        self.transaction_depth += 1
+        if outermost:
+            self.transaction_active = True
         try:
             yield
         except Exception:
             self.rollbacks += 1
             raise
         else:
-            self.commits += 1
+            if outermost:
+                self.commits += 1
         finally:
-            self.transaction_active = False
+            self.transaction_depth -= 1
+            if outermost:
+                self.transaction_active = False
 
     def rollback(self) -> None:
         self.rollbacks += 1
@@ -1129,15 +1203,16 @@ class _FakeSource:
 
 
 class LoadTransactionTests(unittest.TestCase):
-    def _call_load(self, copy_side_effect=None):
+    def _call_load(self, copy_side_effect=None, table_names=None):
         source = _FakeSource()
         target = _FakeTarget()
         captured_reports = []
         role = "erp_app"
         config = {"user": "erp_p2_loader", "application_user": role}
+        names = table_names or ["synthetic_table"]
         report = {
             "application_role_sha256": hashlib.sha256(role.encode()).hexdigest(),
-            "generated_tables": ["synthetic_table"],
+            "generated_tables": names,
             "generated_scripts_sha256": {name: "0" * 64 for name in loader.SCRIPT_NAMES},
             "catalog_fingerprint_sha256": "f" * 64,
             "generator_version": "test",
@@ -1155,7 +1230,7 @@ class LoadTransactionTests(unittest.TestCase):
             "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
             "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
             "structural_fingerprint_sha256": "a" * 64,
-            "tables": [{"name": "synthetic_table", "type": "BASE TABLE", "columns": []}],
+            "tables": [{"name": name, "type": "BASE TABLE", "columns": []} for name in names],
             "source_no_backslash_escapes": False,
         }
         patches = ExitStack()
@@ -1163,7 +1238,7 @@ class LoadTransactionTests(unittest.TestCase):
         patches.enter_context(patch.object(loader, "validate_bundle", return_value=(Path("/tmp/bundle"), report, snapshot)))
         patches.enter_context(patch.object(loader, "_source_defaults_path", return_value=Path("/tmp/source.cnf")))
         patches.enter_context(patch.object(loader, "_load_target_config", return_value=config))
-        patches.enter_context(patch.object(loader, "_validate_column_mappings", return_value={"synthetic_table": {}}))
+        patches.enter_context(patch.object(loader, "_validate_column_mappings", return_value={name: {} for name in names}))
         patches.enter_context(patch.object(loader, "_connect_source", return_value=(source, snapshot)))
         patches.enter_context(patch.object(loader, "_connect_target", return_value=target))
         private_tmp = tempfile.TemporaryDirectory(prefix="p2-loader-test-")
@@ -1217,30 +1292,67 @@ class LoadTransactionTests(unittest.TestCase):
         self.assertFalse(source.snapshot_active)
         self.assertTrue(target.closed)
 
-    def test_copy_error_rolls_back_entire_target_transaction(self) -> None:
+    def test_copy_error_rolls_back_only_table_and_records_failure(self) -> None:
         def fail_copy(*args):
-            raise LoaderError("SYNTHETIC_COPY_FAILURE")
+            error = LoaderError("SYNTHETIC_COPY_FAILURE")
+            error.column = "synthetic_column"
+            error.source_rows = 2
+            raise error
 
         patches, source, target, reports = self._call_load(copy_side_effect=fail_copy)
+        patches.enter_context(patch.object(loader, "_row_count", return_value=0))
         try:
-            with self.assertRaisesRegex(LoaderError, "SYNTHETIC_COPY_FAILURE"):
-                loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
+            result = loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
         finally:
             patches.close()
-        self.assertEqual(target.commits, 0)
+        self.assertEqual(result["status"], "LOAD_PARTIAL_PENDING_RECONCILIATION")
+        self.assertEqual(result["table_failures"], [{
+            "table": "synthetic_table", "column": "synthetic_column", "reason": "SYNTHETIC_COPY_FAILURE",
+            "source_rows": 2, "target_rows": 0,
+        }])
+        self.assertEqual(target.commits, 1)
         self.assertGreaterEqual(target.rollbacks, 1)
-        self.assertEqual(reports[-1]["status"], "FAILED_ROLLED_BACK")
-        self.assertEqual(reports[-1]["failure_code"], "SYNTHETIC_COPY_FAILURE")
+        self.assertEqual(reports[-1]["status"], "LOAD_PARTIAL_PENDING_RECONCILIATION")
         self.assertTrue(source.closed)
         self.assertGreaterEqual(source.rollbacks, 1)
         self.assertFalse(source.snapshot_active)
         self.assertTrue(target.closed)
 
-    def test_rollback_failure_is_written_as_unconfirmed(self) -> None:
-        def fail_copy(*args):
-            raise LoaderError("SYNTHETIC_COPY_FAILURE")
+    def test_copy_failure_does_not_prevent_later_table_from_loading(self) -> None:
+        calls = []
 
-        patches, source, target, reports = self._call_load(copy_side_effect=fail_copy)
+        def fail_first_table(source, target, table, *args):
+            calls.append(table["name"])
+            if table["name"] == "first_table":
+                error = LoaderError("SYNTHETIC_COPY_FAILURE")
+                error.column = "synthetic_column"
+                error.source_rows = 2
+                raise error
+            return 3
+
+        patches, source, target, _reports = self._call_load(
+            copy_side_effect=fail_first_table,
+            table_names=["first_table", "second_table"],
+        )
+        patches.enter_context(patch.object(loader, "_row_count", side_effect=lambda _target, table_name, *_args: 0 if table_name == "first_table" else 3))
+        try:
+            result = loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"))
+        finally:
+            patches.close()
+        self.assertEqual(calls, ["first_table", "second_table"])
+        self.assertEqual(result["status"], "LOAD_PARTIAL_PENDING_RECONCILIATION")
+        self.assertEqual(result["tables_loaded"], 1)
+        self.assertEqual(result["table_failures"][0]["table"], "first_table")
+        self.assertEqual(result["table_counts"][1]["table"], "second_table")
+        self.assertEqual(result["table_counts"][1]["status"], "COPIED")
+        self.assertGreaterEqual(target.rollbacks, 1)
+        self.assertEqual(target.commits, 1)
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
+
+    def test_rollback_failure_is_written_as_unconfirmed(self) -> None:
+        patches, source, target, reports = self._call_load()
+        patches.enter_context(patch.object(loader, "_apply_enum_checks", side_effect=LoaderError("SYNTHETIC_ENUM_CHECK_FAILURE")))
         target.fail_rollback = True
         try:
             with self.assertRaisesRegex(LoaderError, "POSTGRES_ROLLBACK_UNCONFIRMED"):
@@ -1301,6 +1413,8 @@ class ReconciliationCleanupTests(unittest.TestCase):
         fail_source_close: bool = False,
         fail_target_close: bool = False,
         failed_load_flag: str | None = None,
+        partial_load: bool = False,
+        partial_without_failures: bool = False,
     ):
         source = _FakeSource()
         target = _FakeTarget()
@@ -1324,8 +1438,9 @@ class ReconciliationCleanupTests(unittest.TestCase):
             "auto_increment": {"columns": []},
         }
         load_report = {
-            "status": "LOAD_COMMITTED_PENDING_RECONCILIATION",
+            "status": "LOAD_PARTIAL_PENDING_RECONCILIATION" if partial_load else "LOAD_COMMITTED_PENDING_RECONCILIATION",
             "bundle_catalog_fingerprint": "f" * 64,
+            "table_failures": ([{"table": "synthetic", "reason": "SYNTHETIC_COPY_FAILURE", "source_rows": 1, "target_rows": 0}] if partial_load and not partial_without_failures else []),
             "source_cleanup_confirmed": failed_load_flag != "source_cleanup_confirmed",
             "target_cleanup_confirmed": failed_load_flag != "target_cleanup_confirmed",
             "nul_spool_cleanup_confirmed": failed_load_flag != "nul_spool_cleanup_confirmed",
@@ -1350,7 +1465,7 @@ class ReconciliationCleanupTests(unittest.TestCase):
              patch.object(loader, "_validate_source_snapshot"), \
              patch.object(loader, "_connect_target", return_value=target), \
              patch.object(loader, "_MemoryGuard", Guard), \
-             patch("tools.migracao_pg.reconcile.reconcile", return_value={"status": "RECONCILED"}), \
+             patch("tools.migracao_pg.reconcile.reconcile", return_value={"status": "DIVERGED" if partial_load and not partial_without_failures else "RECONCILED"}), \
              patch.object(loader, "_replace_report", side_effect=lambda payload, path: reports.append(dict(payload))):
             result = loader.run_reconcile("synthetic-bundle", None, Path("/tmp/report.json"))
         return result, reports, source, target
@@ -1368,6 +1483,26 @@ class ReconciliationCleanupTests(unittest.TestCase):
                 self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_RECONCILIATION_BLOCKED")
                 self.assertFalse(source.closed)
                 self.assertFalse(target.closed)
+
+    def test_partial_load_reconciliation_remains_partial_and_diverged(self) -> None:
+        result, reports, source, target = self._run_with_cleanup_failure(partial_load=True)
+        self.assertEqual(result["status"], "DIVERGED")
+        self.assertEqual(reports[-1]["status"], "LOAD_PARTIAL_RECONCILIATION_DIVERGED")
+        self.assertEqual(reports[-1]["reconciliation_previous_status"], "LOAD_PARTIAL_PENDING_RECONCILIATION")
+        self.assertEqual(reports[-1]["table_failures"][0]["reason"], "SYNTHETIC_COPY_FAILURE")
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
+
+    def test_wrapper_never_accepts_partial_status_without_failure_evidence(self) -> None:
+        result, reports, source, target = self._run_with_cleanup_failure(
+            partial_load=True,
+            partial_without_failures=True,
+        )
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["failure_code"], "PARTIAL_LOAD_CANNOT_BE_ACCEPTED")
+        self.assertEqual(reports[-1]["status"], "LOAD_PARTIAL_RECONCILIATION_BLOCKED")
+        self.assertTrue(source.closed)
+        self.assertTrue(target.closed)
 
     def test_source_close_failure_blocks_reconciled_result(self) -> None:
         result, reports, source, target = self._run_with_cleanup_failure(fail_source_close=True)

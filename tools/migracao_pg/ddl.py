@@ -8,13 +8,14 @@ import re
 from collections import Counter
 from typing import Any
 
+from .generated_columns import declares_generated_column, generated_dependencies_valid, target_generated_column
 from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, quote_identifier, quote_literal
 
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "1.5.3"
+GENERATOR_VERSION = "1.7.0"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
 POSTGRES_SEQUENCE_MAX = 9223372036854775807
@@ -302,7 +303,7 @@ def generate_ddl(
     collation_overrides: dict[str, str] | None = None,
     application_role: str | None = None,
 ) -> DdlBundle:
-    if snapshot.get("catalog_version") != 2 or snapshot.get("source_schema") != SOURCE_SCHEMA:
+    if snapshot.get("catalog_version") != 3 or snapshot.get("source_schema") != SOURCE_SCHEMA:
         raise DdlGenerationError("CATALOG_VERSION_OR_SOURCE_NOT_ALLOWLISTED")
     fingerprint = snapshot.get("fingerprint_sha256")
     if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
@@ -355,7 +356,8 @@ def generate_ddl(
         "unique_indexes_post_load": [],
         "foreign_keys_post_load": [],
         "foreign_keys": {"generated_not_valid": 0, "unsupported": [], "deferred": []},
-        "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "unsigned_sequence_pairs": 0},
+        "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "generated_columns": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "unsigned_sequence_pairs": 0},
+        "generated_columns": [],
         "auto_increment": {
             "post_load_sync_required": True,
             "sync_policy": "ONE_SHOT_BEFORE_APPLICATION_WRITES",
@@ -402,8 +404,9 @@ def generate_ddl(
             report["review_items"].append({"object_type": object_type, "code": "METADATA_VISIBILITY_NOT_CONFIRMED"})
     if snapshot.get("unresolved_role_grants"):
         report["review_items"].append({"code": "SOURCE_ROLE_GRANTS_UNRESOLVED"})
+    trigger_translation_items = []
     for trigger in snapshot.get("triggers", []):
-        report["review_items"].append({
+        trigger_translation_items.append({
             "table": str(trigger.get("table", "")),
             "trigger": str(trigger.get("name", "")),
             "body_sha256": str(trigger.get("body_sha256", "")),
@@ -468,9 +471,15 @@ def generate_ddl(
             for column in columns:
                 name = str(column["name"])
                 _ident(name)
-                if column.get("generated_expression_present"):
-                    raise TypeMappingError("GENERATED_COLUMN_TRANSLATION_REQUIRED")
                 data_type = str(column["data_type"])
+                generated_spec = target_generated_column(table_name, column)
+                if (column.get("generated_expression_present") is True or declares_generated_column(column)) and generated_spec is None:
+                    raise TypeMappingError("GENERATED_COLUMN_TRANSLATION_REQUIRED")
+                if generated_spec is not None:
+                    if not generated_dependencies_valid(table_name, column, columns):
+                        raise TypeMappingError("GENERATED_COLUMN_DEPENDENCY_UNSUPPORTED")
+                    if data_type.lower() != "decimal" or column.get("default") is not None:
+                        raise TypeMappingError("GENERATED_COLUMN_METADATA_UNSUPPORTED")
                 target_collation = _target_collation(column, overrides, table_name, report) if _textual(data_type) else None
                 mapping = map_mysql_type(
                     str(column["column_type"]),
@@ -481,7 +490,16 @@ def generate_ddl(
                 table_column_types[name] = (mapping.sql_type, mapping.collation_sql)
                 declaration = f"{_ident(name)} {mapping.declaration}"
                 extra = str(column.get("extra", "")).lower()
-                if "auto_increment" in extra:
+                if generated_spec is not None:
+                    declaration += f" GENERATED ALWAYS AS ({generated_spec['target_expression']}) STORED"
+                    report["generated_columns"].append({
+                        "table": table_name,
+                        "column": name,
+                        "key": generated_spec["key"],
+                        "dependencies": list(generated_spec["dependencies"]),
+                    })
+                    report["generated"]["generated_columns"] += 1
+                elif "auto_increment" in extra:
                     if mapping.sql_type == "NUMERIC(20,0)":
                         sequence_key = f"{target_schema}.{table_name}.{name}"
                         table_allocators.append({
@@ -499,7 +517,7 @@ def generate_ddl(
                     nullable = True
                 if not nullable:
                     declaration += " NOT NULL"
-                default_sql = _sql_default(
+                default_sql = None if generated_spec is not None else _sql_default(
                     column,
                     table_name,
                     report,
@@ -526,7 +544,7 @@ def generate_ddl(
                         "status": "CHECK_AFTER_VALUE_SCAN",
                     })
                 report["review_items"].extend({"table": table_name, "column": name, "code": code} for code in mapping.review_codes)
-                if "on update current_timestamp" in extra:
+                if "on update current_timestamp" in extra and generated_spec is None:
                     if data_type.lower() not in {"timestamp", "datetime"}:
                         report["review_items"].append({"table": table_name, "column": name, "code": "ON_UPDATE_NON_TEMPORAL_TYPE"})
                     else:
@@ -831,7 +849,17 @@ def generate_ddl(
     }
     scripts = {name: f"-- Collation overrides SHA-256: {overrides_sha256}\n\n{content}" for name, content in scripts.items()}
     report["generated_tables"] = sorted(emitted_tables)
-    report["executable_complete"] = not report["blocked_tables"] and not report["unsupported_indexes"] and not report["deferred_indexes"] and not report["foreign_keys"]["unsupported"] and not report["foreign_keys"]["deferred"] and not report["review_items"]
+    non_trigger_reviews = [item for item in report["review_items"] if item.get("code") != "BUSINESS_TRIGGER_TRANSLATION_REQUIRED"]
+    report["load_executable_complete"] = (
+        not report["blocked_tables"]
+        and not report["unsupported_indexes"]
+        and not report["deferred_indexes"]
+        and not report["foreign_keys"]["unsupported"]
+        and not report["foreign_keys"]["deferred"]
+        and not non_trigger_reviews
+    )
+    report["executable_complete"] = report["load_executable_complete"] and not trigger_translation_items
+    report["post_load_trigger_translation_required"] = trigger_translation_items
     return DdlBundle(scripts=scripts, report=report)
 
 

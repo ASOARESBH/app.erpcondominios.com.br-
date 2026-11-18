@@ -10,11 +10,12 @@ from tempfile import TemporaryDirectory
 from tools.migracao_pg.catalog import CatalogError, _atomic_json, _foreign_key_action_rules, _grants_are_read_only, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, collect_catalog
 from tools.migracao_pg.ddl import DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
 from tools.migracao_pg.generate_ddl import main as generate_ddl_main
+from tools.migracao_pg.generated_columns import identify_generated_column
 
 
 def sample_snapshot() -> dict:
     snapshot = {
-        "catalog_version": 2,
+        "catalog_version": 3,
         "source_schema": "erp_pg_source",
         "source_server_version": "8.4.13",
         "captured_at_utc": "2026-11-16T00:00:00+00:00",
@@ -128,6 +129,22 @@ class FakeConnection:
 
 
 class CatalogTests(unittest.TestCase):
+    def test_generated_column_allowlist_accepts_only_the_approved_water_expression(self) -> None:
+        approved = identify_generated_column(
+            "lancamentos_agua", "consumo", "decimal", "decimal(10,2)", "STORED GENERATED",
+            "((`leitura_atual` - `leitura_anterior`))",
+        )
+        self.assertEqual(approved["key"], "lancamentos_agua.consumo.v1")
+        self.assertEqual(approved["target_expression"], '"leitura_atual" - "leitura_anterior"')
+        self.assertIsNone(identify_generated_column(
+            "lancamentos_agua", "consumo", "decimal", "decimal(10,2)", "VIRTUAL GENERATED",
+            "(`leitura_atual` - `leitura_anterior`)",
+        ))
+        self.assertIsNone(identify_generated_column(
+            "lancamentos_agua", "consumo", "decimal", "decimal(10,2)", "STORED GENERATED",
+            "`leitura_atual` + `leitura_anterior`",
+        ))
+
     def test_catalog_connection_requires_unix_socket(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "client.cnf"
@@ -287,6 +304,25 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY", connection.statements)
         self.assertFalse(connection.rolled_back)
 
+    def test_catalog_marks_generated_extra_without_expression_as_review(self) -> None:
+        class MissingExpressionCursor(FakeCursor):
+            def execute(self, sql: str, args=()) -> None:
+                super().execute(sql, args)
+                if "generation_expression" in sql:
+                    self.current[0]["extra"] = "STORED GENERATED"
+                    self.current[0]["generation_expression"] = ""
+
+        class MissingExpressionConnection(FakeConnection):
+            def __init__(self) -> None:
+                self.c = MissingExpressionCursor()
+                self.statements = self.c.statements
+                self.rolled_back = False
+
+        result = collect_catalog(MissingExpressionConnection())
+        column = result["tables"][0]["columns"][0]
+        self.assertTrue(column["generated_expression_present"])
+        self.assertIn("GENERATED_COLUMN_EXPRESSION_MISSING", {item["code"] for item in result["review_items"]})
+
     def test_catalog_output_is_private_and_never_overwritten(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "snapshot.json"
@@ -338,11 +374,77 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("pg_catalog.pg_sequence_last_value(v_sequence::regclass)", sequences)
         self.assertNotIn("BEGIN;", sequences)
         self.assertNotIn("COMMIT;", sequences)
-        self.assertIn("LOCK TABLE \"erp\".\"parent\" IN ACCESS EXCLUSIVE MODE", sequences)
+        self.assertIn('LOCK TABLE "erp"."parent" IN ACCESS EXCLUSIVE MODE', sequences)
         self.assertIn("post-load sequence sync is one-shot", sequences)
         self.assertIn("sequence sync already started; manual recovery required", sequences)
         self.assertEqual(bundle.report["auto_increment"]["generated"], 1)
         self.assertFalse(bundle.report["executable_complete"])
+
+    def test_ddl_maps_approved_generated_water_consumption_and_defers_business_triggers(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["triggers"] = [{"name": "water_business", "table": "lancamentos_agua", "event": "INSERT", "body_sha256": "a" * 64}]
+        snapshot["tables"].append({
+            "name": "lancamentos_agua", "type": "BASE TABLE", "engine": "InnoDB",
+            "source_collation": "utf8mb4_unicode_ci", "source_next_auto_increment": 2,
+            "columns": [
+                {"name": "id", "ordinal": 1, "nullable": False, "data_type": "int", "column_type": "int", "extra": "auto_increment"},
+                {"name": "leitura_anterior", "ordinal": 2, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "leitura_atual", "ordinal": 3, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "consumo", "ordinal": 4, "nullable": True, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1", "generated_expression_sha256": "b" * 64},
+            ],
+            "primary_key": [{"ordinal": 1, "column": "id"}],
+        })
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        table_ddl = bundle.scripts["00_tables.sql"]
+        self.assertIn('"consumo" NUMERIC(10,2) GENERATED ALWAYS AS ("leitura_atual" - "leitura_anterior") STORED', table_ddl)
+        self.assertEqual(bundle.report["generated"]["generated_columns"], 1)
+        self.assertTrue(bundle.report["load_executable_complete"])
+        self.assertFalse(bundle.report["executable_complete"])
+        self.assertEqual(len(bundle.report["post_load_trigger_translation_required"]), 1)
+
+    def test_ddl_blocks_unknown_generated_column_expression_key(self) -> None:
+        snapshot = sample_snapshot()
+        column = snapshot["tables"][0]["columns"][0]
+        column.update({"generated_expression_present": True, "generated_expression_key": "unknown.v1", "extra": "STORED GENERATED"})
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertFalse(bundle.report["load_executable_complete"])
+        self.assertIn("GENERATED_COLUMN_TRANSLATION_REQUIRED", {item["code"] for item in bundle.report["blocked_tables"]})
+
+    def test_ddl_blocks_generated_water_with_text_dependency(self) -> None:
+        snapshot = sample_snapshot()
+        table = {
+            "name": "lancamentos_agua", "type": "BASE TABLE", "engine": "InnoDB",
+            "source_collation": "utf8mb4_unicode_ci", "columns": [
+                {"name": "leitura_anterior", "ordinal": 1, "nullable": False, "data_type": "varchar", "column_type": "varchar(20)", "extra": ""},
+                {"name": "leitura_atual", "ordinal": 2, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "consumo", "ordinal": 3, "nullable": True, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1"},
+            ], "primary_key": [],
+        }
+        snapshot["tables"].append(table)
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertFalse(bundle.report["load_executable_complete"])
+        self.assertIn("GENERATED_COLUMN_DEPENDENCY_UNSUPPORTED", {item["code"] for item in bundle.report["blocked_tables"]})
+        self.assertNotIn('"consumo" NUMERIC(10,2) GENERATED ALWAYS', bundle.scripts["00_tables.sql"])
+
+    def test_ddl_blocks_generated_dependency_that_is_itself_generated(self) -> None:
+        snapshot = sample_snapshot()
+        table = {
+            "name": "lancamentos_agua", "type": "BASE TABLE", "engine": "InnoDB",
+            "source_collation": "utf8mb4_unicode_ci", "columns": [
+                {"name": "leitura_anterior", "ordinal": 1, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True},
+                {"name": "leitura_atual", "ordinal": 2, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "consumo", "ordinal": 3, "nullable": True, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1"},
+            ], "primary_key": [],
+        }
+        snapshot["tables"].append(table)
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertFalse(bundle.report["load_executable_complete"])
+        blocked_codes = {item["code"] for item in bundle.report["blocked_tables"]}
+        self.assertTrue(blocked_codes & {"GENERATED_COLUMN_DEPENDENCY_UNSUPPORTED", "GENERATED_COLUMN_TRANSLATION_REQUIRED"})
 
     def test_backup_tables_are_created_in_legacy_schema(self) -> None:
         snapshot = sample_snapshot()
@@ -601,7 +703,7 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("GREATEST(COALESCE(v_max, 0), 0)", bundle.scripts["30_post_load_sequences.sql"])
         self.assertFalse(bundle.report["executable_complete"])
 
-    def test_cli_writes_non_executable_bundle_once_and_refuses_overwrite(self) -> None:
+    def test_cli_writes_load_executable_bundle_once_and_refuses_overwrite(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             snapshot_path = root / "snapshot.json"
@@ -609,7 +711,7 @@ class CatalogTests(unittest.TestCase):
             snapshot_path.write_text(json.dumps(sample_snapshot()), encoding="utf-8")
             args = ["generate_ddl", "--snapshot", str(snapshot_path), "--output-dir", str(output_dir)]
             with patch("sys.argv", args):
-                self.assertEqual(generate_ddl_main(), 2)
+                self.assertEqual(generate_ddl_main(), 0)
             bundles = list(output_dir.glob("catalog-*-collation-*"))
             self.assertEqual(len(bundles), 1)
             self.assertTrue((bundles[0] / "BUNDLE_COMPLETE").is_file())
@@ -617,6 +719,8 @@ class CatalogTests(unittest.TestCase):
             self.assertTrue(snapshot_copy.is_file())
             self.assertEqual(json.loads(snapshot_copy.read_text(encoding="utf-8"))["fingerprint_sha256"], sample_snapshot()["fingerprint_sha256"])
             report = json.loads((bundles[0] / "report.json").read_text(encoding="utf-8"))
+            self.assertTrue(report["load_executable_complete"])
+            self.assertFalse(report["executable_complete"])
             self.assertEqual(report["snapshot_file_sha256"], hashlib.sha256(snapshot_copy.read_bytes()).hexdigest())
             self.assertEqual(len(report["generated_tables"]), report["generated"]["tables"])
             scripts = report["generated_scripts_sha256"]

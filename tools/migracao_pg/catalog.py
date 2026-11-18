@@ -12,11 +12,12 @@ import stat
 import tempfile
 from typing import Any
 
+from .generated_columns import declares_generated_column, identify_generated_column
 from .type_mapping import TypeMappingError, parse_mysql_enum, quote_literal
 
 
 SOURCE_SCHEMA = "erp_pg_source"
-CATALOG_VERSION = 2
+CATALOG_VERSION = 3
 SAFE_TEXT_DEFAULT_NAMES = frozenset({
     "status", "estado", "situacao", "tipo", "categoria", "nivel", "ativo", "habilitado",
     "enabled", "visivel", "publicado", "prioridade", "modo", "origem", "formato", "cor",
@@ -38,6 +39,15 @@ SENSITIVE_DEFAULT_NAME_RE = re.compile(
 
 class CatalogError(RuntimeError):
     pass
+
+
+def _collector_fingerprint() -> str:
+    digest = hashlib.sha256()
+    for name in ("catalog.py", "generated_columns.py"):
+        digest.update(name.encode("utf-8") + b"\0")
+        digest.update(Path(__file__).with_name(name).read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _validate_defaults_file(path: Path) -> None:
@@ -405,9 +415,24 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 if default["kind"] == "review":
                     review_items.append({"table": table, "column": column["name"], "code": default["code"]})
             expression = str(row.get("generation_expression") or "")
-            if expression:
+            if expression or declares_generated_column(column):
                 column["generated_expression_present"] = True
-                review_items.append({"table": table, "column": column["name"], "code": "GENERATED_COLUMN_REVIEW_REQUIRED"})
+                column["generated_expression_sha256"] = hashlib.sha256(expression.encode("utf-8")).hexdigest()
+                if not expression:
+                    review_items.append({"table": table, "column": column["name"], "code": "GENERATED_COLUMN_EXPRESSION_MISSING"})
+                else:
+                    generated_spec = identify_generated_column(
+                        table,
+                        column["name"],
+                        column["data_type"],
+                        column["column_type"],
+                        column["extra"],
+                        expression,
+                    )
+                    if generated_spec is None:
+                        review_items.append({"table": table, "column": column["name"], "code": "GENERATED_COLUMN_REVIEW_REQUIRED"})
+                    else:
+                        column["generated_expression_key"] = generated_spec["key"]
             columns.setdefault(table, []).append(column)
 
         index_rows = _rows(cursor, """
@@ -554,7 +579,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             })
         snapshot: dict[str, Any] = {
             "catalog_version": CATALOG_VERSION,
-            "collector_code_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "collector_code_sha256": _collector_fingerprint(),
             "source_schema": SOURCE_SCHEMA,
             "source_server_version": str(identity["server_version"]).split("-", 1)[0],
             "source_no_backslash_escapes": no_backslash_escapes,
