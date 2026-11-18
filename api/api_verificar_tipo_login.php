@@ -250,13 +250,14 @@ try {
 
         // 5a. Identificar tenant pelo subdomínio da requisição
         $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
-        if ($isPostgres && !resolverContextoHostTenantPostgres()['trusted']) {
+        $hostTenant = $isPostgres ? resolverContextoHostTenantPostgres() : resolverContextoHostTenant();
+        if (!$hostTenant['trusted']) {
             fechar_conexao($conexao);
             invalidar_sessao_anterior_login_pg();
             http_response_code(403);
             retornar_json(false, 'Acesso ao domínio não autorizado.');
         }
-        $tenant_slug = resolverTenantSlugDaUrl(!$isPostgres);
+        $tenant_slug = $hostTenant['slug'];
         $tenant = null;
 
         if ($tenant_slug) {
@@ -291,8 +292,13 @@ try {
                     retornar_json(false, 'Acesso ao condomínio não autorizado.');
                 }
             } else {
-                // Modo subdomínio MySQL legado: buscar tenant pelo slug.
-                $tenant = carregarTenantPorSlug($conexao, $tenant_slug);
+                $tenant = carregarTenantPorSlugAutorizado($conexao, (int)$dados_erp['id'], $tenant_slug);
+                if (!$tenant) {
+                    fechar_conexao($conexao);
+                    invalidar_sessao_anterior_login_pg();
+                    http_response_code(403);
+                    retornar_json(false, 'Acesso ao condomínio não autorizado.');
+                }
             }
         }
 
@@ -325,23 +331,7 @@ try {
             $stmt_t->close();
 
             if (count($tenants_usuario) === 0) {
-                // Fallback: usuário não tem vínculo na usuario_tenant
-                // Compatibilidade com instalações antigas — usa tenant_id = 1
                 $tenant = null;
-                if (!$isPostgres) {
-                    $tenant = carregarTenantPorId($conexao, 1);
-                }
-                if ($tenant && !$isPostgres) {
-                    // Criar vínculo automaticamente para não repetir este fallback
-                    $sql_vinculo = \ERP\Database\DatabaseDialect::idempotentInsertSql(
-                        $conexao,
-                        'INSERT INTO usuario_tenant (usuario_id, tenant_id, permissao, ativo) VALUES (?, 1, ?, 1)'
-                    );
-                    $stmt_ins = $conexao->prepare($sql_vinculo);
-                    $stmt_ins->bind_param('is', $dados_erp['id'], $dados_erp['permissao']);
-                    $stmt_ins->execute();
-                    $stmt_ins->close();
-                }
             } elseif (count($tenants_usuario) === 1) {
                 // Apenas 1 tenant: usar automaticamente
                 $tenant = $tenants_usuario[0];
@@ -378,7 +368,7 @@ try {
             }
         }
 
-        if ($tenant && $isPostgres) {
+        if ($tenant) {
             $dados_erp['permissao'] = erpPermissaoLoginEfetiva(
                 $permissao_global,
                 isset($tenant['permissao']) ? (string)$tenant['permissao'] : null
@@ -471,9 +461,11 @@ try {
             $tenant_morador = $res_tm->fetch_assoc();
         }
         $stmt_tm->close();
-        // Fallback: tenant 1
         if (!$tenant_morador) {
-            $tenant_morador = carregarTenantPorId($conexao, 1);
+            fechar_conexao($conexao);
+            invalidar_sessao_anterior_login_pg();
+            http_response_code(403);
+            retornar_json(false, 'Condomínio do morador indisponível.');
         }
 
         // Limpar tokens antigos e inserir novo

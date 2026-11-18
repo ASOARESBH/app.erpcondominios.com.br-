@@ -34,7 +34,7 @@ if (!defined('TENANT_HELPER_LOADED')) {
      *
      * @return array{trusted: bool, slug: ?string}
      */
-    function resolverContextoHostTenantPostgres(): array {
+    function resolverContextoHostTenant(bool $requireExplicitConfiguration = false): array {
         $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
         if (!is_string($host) || preg_match('/\A([A-Za-z0-9.-]+)(?::([0-9]{1,5}))?\z/D', $host, $matches) !== 1) {
             return ['trusted' => false, 'slug' => null];
@@ -49,7 +49,9 @@ if (!defined('TENANT_HELPER_LOADED')) {
             return ['trusted' => false, 'slug' => null];
         }
 
-        $trustedDomains = defined('ERP_TRUSTED_TENANT_DOMAINS') ? ERP_TRUSTED_TENANT_DOMAINS : null;
+        $trustedDomains = defined('ERP_TRUSTED_TENANT_DOMAINS')
+            ? ERP_TRUSTED_TENANT_DOMAINS
+            : ($requireExplicitConfiguration ? null : ['erpcondominios.com.br']);
         if (!is_array($trustedDomains) || !array_is_list($trustedDomains)) {
             return ['trusted' => false, 'slug' => null];
         }
@@ -81,38 +83,18 @@ if (!defined('TENANT_HELPER_LOADED')) {
         return ['trusted' => false, 'slug' => null];
     }
 
+    function resolverContextoHostTenantPostgres(): array {
+        return resolverContextoHostTenant(true);
+    }
+
     /**
-     * Resolve o slug do tenant a partir da URL da requisição.
-     * Suporta subdomínio e domínio único, mantendo querystring apenas no fluxo legado.
+     * Resolve o slug do tenant a partir do Host allowlisted.
      *
      * @return string|null Slug do tenant ou null se não identificado
      */
-    function resolverTenantSlugDaUrl(bool $allowDebugQuery = true): ?string {
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
-        if (!$allowDebugQuery) {
-            $contexto = resolverContextoHostTenantPostgres();
-            return $contexto['trusted'] ? $contexto['slug'] : null;
-        }
-
-        $host = preg_replace('/:\d+$/', '', (string)$host);
-
-        // Modo subdomínio: serra.erpcondominios.com.br → 'serra'
-        // Ignora www, app, api, localhost, 127.0.0.1
-        $ignorar = ['www', 'app', 'api', 'localhost', '127'];
-        $partes = explode('.', $host);
-        if (count($partes) >= 3) {
-            $sub = strtolower($partes[0]);
-            if (!in_array($sub, $ignorar) && preg_match('/^[a-z0-9\-]+$/', $sub)) {
-                return $sub;
-            }
-        }
-
-        // Modo domínio único: parâmetro GET ?tenant=slug (apenas dev/debug)
-        if ($allowDebugQuery && !empty($_GET['tenant']) && preg_match('/^[a-z0-9\-]+$/', $_GET['tenant'])) {
-            return strtolower(trim($_GET['tenant']));
-        }
-
-        return null;
+    function resolverTenantSlugDaUrl(bool $legacyCompatibilityParameter = false): ?string {
+        $contexto = resolverContextoHostTenant();
+        return $contexto['trusted'] ? $contexto['slug'] : null;
     }
 
     /**
@@ -139,6 +121,36 @@ if (!defined('TENANT_HELPER_LOADED')) {
         $tenant = $res->num_rows > 0 ? $res->fetch_assoc() : null;
         $stmt->close();
         return $tenant;
+    }
+
+    function carregarTenantPorSlugAutorizado($conexao, int $usuario_id, string $slug): ?array {
+        if (!\ERP\Database\DatabaseDialect::supports($conexao)
+            || $usuario_id < 0
+            || preg_match('/\A[a-z0-9][a-z0-9-]{0,62}\z/D', $slug) !== 1) {
+            return null;
+        }
+        $stmt = $conexao->prepare(
+            "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.cnpj,
+                    t.plano, t.status, t.logo_url, t.email_principal, t.modulos_habilitados,
+                    ut.permissao
+             FROM tenants t
+             INNER JOIN usuarios u ON u.id = ? AND u.ativo = 1
+             LEFT JOIN usuario_tenant ut ON ut.tenant_id = t.id
+                 AND ut.usuario_id = u.id AND ut.ativo = 1
+             WHERE t.slug = ? AND t.status = 'ativo'
+               AND (LOWER(COALESCE(u.permissao, '')) = 'super_admin' OR ut.usuario_id IS NOT NULL)
+             LIMIT 1"
+        );
+        if (!$stmt) return null;
+        $stmt->bind_param('is', $usuario_id, $slug);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return null;
+        }
+        $result = $stmt->get_result();
+        $tenant = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        return $tenant ?: null;
     }
 
     /**

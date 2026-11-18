@@ -251,7 +251,7 @@ try {
             $_SERVER['HTTP_HOST'] = 'erpcondominios.com.br';
             p3AssertSame(['trusted' => true, 'slug' => null], resolverContextoHostTenantPostgres(), 'Domínio-base exato deve ser confiável sem selecionar tenant.');
             $_SERVER['HTTP_HOST'] = 'app.erpcondominios.com.br';
-            p3AssertSame('qa-tenant', resolverTenantSlugDaUrl(true), 'Comportamento debug legado fica explícito apenas quando habilitado.');
+            p3AssertSame(null, resolverTenantSlugDaUrl(true), 'Argumento legado não pode reativar a querystring como fonte de tenant.');
 
             $_SERVER['HTTP_HOST'] = 'predio.example.net';
             p3AssertSame(null, resolverTenantSlugDaUrl(false), 'Domínio alheio não pode selecionar tenant.');
@@ -271,9 +271,9 @@ try {
     $test('login PostgreSQL bloqueia Host não confiável antes do fallback de tenant único', static function (): void {
         $source = file_get_contents(__DIR__ . '/../api/api_verificar_tipo_login.php');
         p3AssertSame(true, is_string($source), 'O endpoint de login deve estar disponível para inspeção estática.');
-        $hostGate = strpos($source, "if (\$isPostgres && !resolverContextoHostTenantPostgres()['trusted']) {");
+        $hostGate = strpos($source, "if (!\$hostTenant['trusted']) {");
         $fallback = $hostGate === false ? false : strpos($source, 'if (!$tenant) {', $hostGate);
-        p3AssertSame(true, $hostGate !== false && $fallback !== false && $hostGate < $fallback, 'Host PostgreSQL não confiável deve falhar antes do fallback de tenant único.');
+        p3AssertSame(true, str_contains($source, '$hostTenant = $isPostgres ? resolverContextoHostTenantPostgres() : resolverContextoHostTenant();') && $hostGate !== false && $fallback !== false && $hostGate < $fallback, 'Host não confiável deve falhar antes do fallback de tenant único.');
         $gateEnd = substr($source, $hostGate, $fallback - $hostGate);
         p3AssertSame(true, str_contains($gateEnd, 'invalidar_sessao_anterior_login_pg()') && str_contains($gateEnd, 'http_response_code(403)'), 'A falha de host deve invalidar a sessão anterior e responder 403.');
     });
@@ -282,8 +282,8 @@ try {
         $source = file_get_contents(__DIR__ . '/../api/auth_helper.php');
         p3AssertSame(true, is_string($source), 'O helper de autenticação deve estar disponível para inspeção estática.');
         $resolver = strpos($source, 'function _tentarResolverTenantLegado');
-        $hostGate = $resolver === false ? false : strpos($source, "if (\$isPostgres && !resolverContextoHostTenantPostgres()['trusted']) {", $resolver);
-        $slugResolution = $hostGate === false ? false : strpos($source, 'resolverTenantSlugDaUrl(!$isPostgres)', $hostGate);
+        $hostGate = $resolver === false ? false : strpos($source, "if (!\$hostTenant['trusted']) {", $resolver);
+        $slugResolution = $hostGate === false ? false : strpos($source, "\$slug = \$hostTenant['slug'];", $hostGate);
         $query = $slugResolution === false ? false : strpos($source, 'FROM tenants t', $slugResolution);
         p3AssertSame(true, $hostGate !== false && $slugResolution !== false && $query !== false && $hostGate < $slugResolution && $slugResolution < $query, 'O Host precisa ser validado antes de resolver slug ou consultar vínculos do tenant.');
         $gate = substr($source, $hostGate, $slugResolution - $hostGate);
@@ -498,6 +498,7 @@ try {
 
     $test('Portal PostgreSQL bloqueia antes de escrita e o verificador não expõe session_id', static function (): void {
         $login = file_get_contents(__DIR__ . '/../api/api_verificar_tipo_login.php');
+        $helper = file_get_contents(__DIR__ . '/../api/tenant_helper.php');
         $authHelper = file_get_contents(__DIR__ . '/../api/auth_helper.php');
         $session = file_get_contents(__DIR__ . '/../api/verificar_sessao_completa.php');
         $frontend = file_get_contents(__DIR__ . '/../frontend/login.html');
@@ -515,7 +516,7 @@ try {
         $portalResponse = strpos($login, '$respostaPortal = json_encode([', $portalStart);
         $portalCommit = strpos($login, '$conexao->commit()', $portalStart);
         $portalAudit = strpos($login, 'registrar_log($log_tipo', $portalStart);
-        $portalClose = strpos($login, 'fechar_conexao($conexao);', $portalStart);
+        $portalClose = strpos($login, 'fechar_conexao($conexao);', $portalAudit);
         $catchStart = strrpos($login, '} catch (Throwable $e) {');
         $catchBlock = is_int($catchStart) ? substr($login, $catchStart) : '';
         $portalDdl = file_get_contents(__DIR__ . '/../sql/database_portal.sql');
@@ -550,9 +551,9 @@ try {
         p3AssertSame(true, is_int($postBarrier) && is_int($postTimeoutConfig) && is_int($postPortalUpdate) && $postBarrier < $postTimeoutConfig && $postTimeoutConfig < $postPortalUpdate, 'POST deve bloquear Portal antes de ler config_sessao ou atualizar sessão Bearer.');
         p3AssertSame(false, str_contains($session, 'session_id()'), 'A resposta do verificador não pode incluir o PHP session_id.');
         p3AssertSame(true, str_contains($session, 'if ($uid >= 0)'), 'ID de usuário zero deve atualizar o estado sessao_inativa no verificador.');
-        p3AssertSame(true, str_contains($login, "OR ? = 'super_admin'") && str_contains($login, 't.slug = ?') && str_contains($login, 'resolverTenantSlugDaUrl(!$isPostgres)'), 'super_admin global só pode acessar tenant ativo resolvido pelo host do servidor.');
+        p3AssertSame(true, str_contains($login, 'carregarTenantPorSlugAutorizado($conexao, (int)$dados_erp[\'id\'], $tenant_slug)') && str_contains($helper, "LOWER(COALESCE(u.permissao, '')) = 'super_admin'") && str_contains($login, '$hostTenant = $isPostgres ? resolverContextoHostTenantPostgres() : resolverContextoHostTenant();'), 'Login MySQL e PostgreSQL só podem usar Host validado e tenant ativo vinculado ou autorizado por super_admin global.');
         p3AssertSame(false, str_contains($login, 'tenant_slug_escolhido') || str_contains($frontend, 'tenant_slug_escolhido') || str_contains($frontend, '_escolherTenant') || str_contains($frontend, '_criarPopupTenant'), 'P3.2 não pode aceitar seleção tenant do cliente nem reenviar senha para um segundo POST.');
-        p3AssertSame(true, str_contains($authHelper, '$slug = resolverTenantSlugDaUrl(!$isPostgres);'), 'Auth helper não pode aceitar ?tenant como contexto PostgreSQL.');
+        p3AssertSame(true, str_contains($authHelper, '$hostTenant = $isPostgres ? resolverContextoHostTenantPostgres() : resolverContextoHostTenant();') && str_contains($authHelper, 'carregarTenantPorSlugAutorizado($conexao, (int)$usuario_id, $slug)'), 'Auth helper deve ignorar ?tenant e validar vínculo quando recuperar contexto MySQL.');
         p3AssertSame(true, str_contains($login, 'erpPermissaoLoginEfetiva(') && str_contains($login, "\$_SESSION['usuario_permissao']    = \$dados_erp['permissao']"), 'A permissão efetiva precisa ser aplicada antes de criar a sessão do tenant validado.');
         $ambiguousTenant = strpos($login, "invalidar_sessao_anterior_login_pg();\n                    http_response_code(409);\n                    retornar_json(false, 'O contexto do condomínio não pôde ser determinado para esta conta.')");
         p3AssertSame(true, is_int($ambiguousTenant), 'A resposta 409 PostgreSQL deve invalidar sessão prévia antes de retornar.');
@@ -579,6 +580,23 @@ try {
         p3AssertSame(true, str_contains($frontend, "function _limparCredenciaisPendentes()") && str_contains($frontend, "_pendEmail = '';\n            _pendSenha = ''"), 'Helper deve apagar email/senha temporários.');
         p3AssertSame(true, is_int($cancelStart) && is_int($cancelClear), 'Cancelar seleção deve apagar credenciais pendentes.');
         p3AssertSame(true, substr_count($frontend, '_limparCredenciaisPendentes();') >= 7, 'Falhas e respostas terminais devem limpar as credenciais em memória.');
+    });
+
+    $test('fallback MySQL não seleciona tenant sem vínculo nem tenant 1', static function (): void {
+        $helper = file_get_contents(__DIR__ . '/../api/tenant_helper.php');
+        $authHelper = file_get_contents(__DIR__ . '/../api/auth_helper.php');
+        $login = file_get_contents(__DIR__ . '/../api/api_verificar_tipo_login.php');
+        $session = file_get_contents(__DIR__ . '/../api/verificar_sessao.php');
+        p3AssertSame(true, str_contains($helper, 'function carregarTenantPorSlugAutorizado(')
+            && str_contains($helper, 'INNER JOIN usuarios u ON u.id = ? AND u.ativo = 1')
+            && str_contains($helper, 'ut.ativo = 1')
+            && str_contains($helper, "LOWER(COALESCE(u.permissao, '')) = 'super_admin'"), 'Resolver por slug exige usuário ativo e vínculo ativo, salvo super_admin global do banco.');
+        p3AssertSame(false, str_contains($login, 'carregarTenantPorId($conexao, 1)')
+            || str_contains($login, 'VALUES (?, 1, ?, 1)'), 'Login não deve criar vínculo nem cair automaticamente no tenant 1.');
+        p3AssertSame(false, str_contains($authHelper, 'carregarTenantPorId($conexao, 1)'), 'Sessão sem vínculo não deve receber tenant 1.');
+        p3AssertSame(true, str_contains($session, '$usuarioAutenticado = verificarAutenticacao(true);')
+            && str_contains($session, "=> (int)\$usuarioAutenticado")
+            && str_contains($session, "'tenant_id'"), 'Verificador de sessão deve usar o tenant já autenticado, sem fallback próprio.');
     });
 
     session_write_close();

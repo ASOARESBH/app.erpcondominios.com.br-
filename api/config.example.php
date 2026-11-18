@@ -13,6 +13,7 @@ define('ERP_DB_USER', 'USUARIO_DO_BANCO');
 define('ERP_DB_PASS', 'SENHA_FORTE_FORA_DO_GIT');
 define('ERP_DB_CHARSET', 'utf8mb4');
 define('ERP_TIMEZONE', 'America/Sao_Paulo');
+define('ERP_TRUSTED_TENANT_DOMAINS', ['erpcondominios.com.br']);
 // Use uma zona geográfica IANA ou UTC; offsets fixos, inclusive Etc/GMT, falham fechado em ambos os drivers.
 
 /*
@@ -26,7 +27,6 @@ define('ERP_TIMEZONE', 'America/Sao_Paulo');
  * define('ERP_PG_USER', 'erp_app');
  * define('ERP_PG_PASS', 'SENHA_FORTE_FORA_DO_GIT');
  * define('ERP_PG_SCHEMA', 'erp');
- * define('ERP_TRUSTED_TENANT_DOMAINS', ['erpcondominios.com.br']);
  *
  * O pool PHP-FPM isolado deve carregar api/db/MysqliDropInAutoPrepend.php.
  */
