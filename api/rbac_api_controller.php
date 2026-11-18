@@ -144,7 +144,7 @@ function rbacSalvarExcecoesLegadas($conexao, $tenantId, $alvoId, array $permisso
                     $stSave->bind_param('iii',$alvoId,$tenantId,$permissaoId);
                 } else {
                     $motivo='Central RBAC';
-                    $stSave=$conexao->prepare("INSERT INTO rbac_usuario_permissoes (usuario_id,tenant_id,permissao_id,efeito,escopo_dados,motivo,atribuido_por_usuario_id,revogado_em) VALUES (?,?,?,?,'GLOBAL',?,?,NULL) ON DUPLICATE KEY UPDATE efeito=VALUES(efeito),escopo_dados='GLOBAL',motivo=VALUES(motivo),atribuido_por_usuario_id=VALUES(atribuido_por_usuario_id),revogado_em=NULL,atualizado_em=NOW()");
+                    $stSave=$conexao->prepare(\ERP\Database\DatabaseDialect::rbacUserPermissionUpsertSql($conexao));
                     if (!$stSave) throw new RuntimeException('prepare exceção: ' . $conexao->error);
                     $stSave->bind_param('iiissi',$alvoId,$tenantId,$permissaoId,$estado,$motivo,$ator);
                 }
