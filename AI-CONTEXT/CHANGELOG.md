@@ -4,6 +4,10 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL — carga direta para teste manual (2026-11-18)
+- Adicionado `tools/migracao_pg/carga_rapida_pg.py`: copia `erp_pg_source` (MySQL) para `erp_pg_dev` (PostgreSQL) com as regras de tipo aprovadas, reconciliação por tabela e relatório sem dados. Bloqueia origens de produção e destinos fora da allowlist. Detalhes em DATABASE.md §22.
+- Validado localmente com fixture sintética (8/8 tabelas). Produção não lida nem alterada.
+
 
 ### Projeto PostgreSQL P3.1b — shim mysqli sobre PDO (branch isolada, 2026-11-15)
 - Adicionado bootstrap opt-in via `auto_prepend_file` para aliases mysqli e 26 funções procedurais, sem carregar junto da extensão nativa. MySQL continua default; PostgreSQL exige perfil próprio e schema, enquanto argumentos de conexão divergentes são rejeitados.
