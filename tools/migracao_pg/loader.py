@@ -2373,7 +2373,7 @@ def run_preflight(bundle_name: str, defaults_file: str | None = None, profile: s
         "binary_nul_detector_methods": {
             "method_b": "MySQL SUM(INSTR(BINARY column, 0x00) > 0)",
             "method_c": "Python b'\\x00' in bytes from CAST(column AS BINARY)",
-            "normalization": "none; COPY to BYTEA preserves source bytes",
+            "normalization": "none; canonical Base64 preserves tenant_arquivos.conteudo bytes; BYTEA preserves other binary columns",
         },
         "target_scope": target_summary,
         "source_table_counts": source_report,
