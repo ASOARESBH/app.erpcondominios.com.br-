@@ -709,7 +709,7 @@ def _integer(value: Any) -> int:
     _fail("INTEGER_VALUE_INVALID")
 
 
-def _temporal_payload(value: Any, kind: str) -> bytes:
+def _temporal_payload(value: Any, kind: str, *, time_as_interval: bool | None = None) -> bytes:
     try:
         if kind == "date" and isinstance(value, date) and not isinstance(value, datetime):
             text = value.isoformat()
@@ -717,10 +717,10 @@ def _temporal_payload(value: Any, kind: str) -> bytes:
             if value.tzinfo is not None:
                 _fail("TARGET_TEMPORAL_TIMEZONE_INVALID")
             text = value.isoformat(sep="T", timespec="microseconds" if value.microsecond else "seconds")
-        elif kind == "time" and isinstance(value, timedelta):
+        elif kind == "time" and isinstance(value, timedelta) and time_as_interval is True:
             micros = (value.days * 86400 + value.seconds) * 1_000_000 + value.microseconds
             text = str(micros)
-        elif kind == "time" and isinstance(value, time) and value.tzinfo is None:
+        elif kind == "time" and isinstance(value, time) and value.tzinfo is None and time_as_interval is False:
             micros = ((value.hour * 60 + value.minute) * 60 + value.second) * 1_000_000 + value.microsecond
             text = str(micros)
         elif isinstance(value, str):
@@ -733,10 +733,10 @@ def _temporal_payload(value: Any, kind: str) -> bytes:
                     _fail("TARGET_TEMPORAL_TIMEZONE_INVALID")
                 text = parsed.isoformat(sep="T", timespec="microseconds" if parsed.microsecond else "seconds")
             elif kind == "time":
-                normalized = normalize_temporal_value(value, "time")
-                if not isinstance(normalized, timedelta):
+                normalized = normalize_temporal_value(value, "time", time_as_interval=time_as_interval)
+                if not isinstance(normalized, (time, timedelta)):
                     _fail("TEMPORAL_VALUE_INVALID")
-                return _temporal_payload(normalized, "time")
+                return _temporal_payload(normalized, "time", time_as_interval=time_as_interval)
             else:
                 _fail("TEMPORAL_TYPE_UNSUPPORTED")
         else:
@@ -759,6 +759,9 @@ def _canonical_value(value: Any, column: dict[str, Any], *, is_source: bool) -> 
     elif kind in NUMERIC_TYPES:
         _number, canonical = _fixed_decimal(value, column)
     elif kind in {"date", "datetime", "timestamp", "time"}:
+        time_as_interval = column.get("time_uses_interval") if kind == "time" else None
+        if kind == "time" and not isinstance(time_as_interval, bool):
+            _fail("MYSQL_TIME_RANGE_SCAN_REQUIRED")
         if is_source:
             raw = value
             if isinstance(raw, (bytes, bytearray, memoryview)):
@@ -773,12 +776,13 @@ def _canonical_value(value: Any, column: dict[str, Any], *, is_source: bool) -> 
                     zero_date_to_null=True,
                     source_timezone="UTC",
                     target_timezone="America/Sao_Paulo",
+                    time_as_interval=time_as_interval,
                 )
             except TemporalValueError:
                 _fail("TEMPORAL_VALUE_INVALID")
             if value is None:
                 return b"N", nul
-        canonical = _temporal_payload(value, kind)
+        canonical = _temporal_payload(value, kind, time_as_interval=time_as_interval)
     elif kind in BINARY_TYPES:
         if not isinstance(value, (bytes, bytearray, memoryview)):
             _fail("BINARY_VALUE_NOT_BYTES")

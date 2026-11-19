@@ -3,11 +3,12 @@ from __future__ import annotations
 import unittest
 import json
 import hashlib
+import stat
 from pathlib import Path
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
-from tools.migracao_pg.catalog import CatalogError, SENSITIVE_DEFAULT_NAME_RE, _admin_verifies_source_has_no_routines_or_events, _atomic_json, _collector_fingerprint, _foreign_key_action_rules, _grants_match_source_clone_allowlist, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, _structural_fingerprint, collect_catalog
+from tools.migracao_pg.catalog import CatalogError, _admin_verifies_source_has_no_routines_or_events, _atomic_json, _collector_fingerprint, _foreign_key_action_rules, _grants_match_source_clone_allowlist, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, _structural_fingerprint, collect_catalog
 from tools.migracao_pg.ddl import BUSINESS_TRIGGER_SOURCE_SHA256, DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
 from tools.migracao_pg.generate_ddl import main as generate_ddl_main
 from tools.migracao_pg.generated_columns import identify_generated_column
@@ -15,7 +16,8 @@ from tools.migracao_pg.generated_columns import identify_generated_column
 
 def sample_snapshot() -> dict:
     snapshot = {
-        "catalog_version": 8,
+        "catalog_version": 9,
+        "time_range_policy_id": "mysql_time_clock_or_extended_interval_v2_data_and_default",
         "source_schema": "erp_pg_source",
         "source_server_version": "8.4.13",
         "captured_at_utc": "2026-11-16T00:00:00+00:00",
@@ -142,6 +144,36 @@ class FakeConnection:
 
     def rollback(self):
         self.rolled_back = True
+
+
+class TimeRangeCursor(FakeCursor):
+    def __init__(self, extended: bool, default_value: str = "09:30:00") -> None:
+        super().__init__()
+        self.extended = extended
+        self.default_value = default_value
+        self.range_query = ""
+
+    def execute(self, sql: str, args=()) -> None:
+        if "TIME_TO_SEC" in sql:
+            self.statements.append(sql)
+            self.range_query = sql
+            self.current = [{"has_extended_time_0": int(self.extended)}]
+            return
+        super().execute(sql, args)
+        if "information_schema.columns" in sql and "generation_expression" in sql:
+            self.current.append({
+                "table_name": "x", "column_name": "scheduled_time", "ordinal_position": 3,
+                "column_default": self.default_value, "is_nullable": "YES", "data_type": "time",
+                "column_type": "time", "character_set_name": None, "collation_name": None,
+                "extra": "", "generation_expression": "",
+            })
+
+
+class TimeRangeConnection(FakeConnection):
+    def __init__(self, extended: bool, default_value: str = "09:30:00") -> None:
+        self.c = TimeRangeCursor(extended, default_value)
+        self.statements = self.c.statements
+        self.rolled_back = False
 
 
 class CatalogTests(unittest.TestCase):
@@ -348,7 +380,8 @@ class CatalogTests(unittest.TestCase):
         codes = {item["code"] for item in result["review_items"]}
         self.assertIn("MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED", codes)
         self.assertIn("MYSQL_CHECK_NOT_ENFORCED_REVIEW_REQUIRED", codes)
-        self.assertIn("TEXT_DEFAULT_REVIEW_REQUIRED", codes)
+        self.assertNotIn("TEXT_DEFAULT_REVIEW_REQUIRED", codes)
+        self.assertEqual(result["tables"][0]["columns"][1]["default"], {"kind": "sql", "expression": "'classico'"})
         self.assertTrue(all("translation" not in check for check in result["check_constraints"]))
         check_reviews = [item for item in result["review_items"] if item["code"].startswith("MYSQL_CHECK_")]
         self.assertEqual(len(check_reviews), 2)
@@ -375,15 +408,34 @@ class CatalogTests(unittest.TestCase):
                 {item["code"] for item in bundle.report["review_items"]},
             )
 
-    def test_catalog_default_allowlist_handles_text_literals_and_sensitive_names(self) -> None:
+    def test_catalog_copies_all_text_literals_including_sensitive_names_and_empty_values(self) -> None:
         stamp = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "CURRENT_TIMESTAMP"}
         self.assertEqual(_safe_default(stamp), {"kind": "sql", "expression": "timezone('America/Sao_Paulo', statement_timestamp())"})
-        safe = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "active"}
-        safe_default = _safe_default(safe)
-        self.assertEqual(safe_default, {"kind": "sql", "expression": "'active'"})
+        values = (
+            ("status", "active", "'active'"),
+            ("api_token", "secret-default", "'secret-default'"),
+            ("bridge_api_key", "", "''"),
+            ("smtp_host", "localhost", "'localhost'"),
+            ("value", "O'Brien", "'O''Brien'"),
+            ("value", "NULL", "'NULL'"),
+            ("value", "line\\nfeed", "'line\\nfeed'"),
+        )
+        for name, value, expected in values:
+            column = {"name": name, "data_type": "varchar", "column_type": "varchar(100)", "column_default": value}
+            with self.subTest(name=name, value=value):
+                safe_default = _safe_default(column)
+                self.assertEqual(safe_default, {"kind": "sql", "expression": expected})
+                report = {"review_items": []}
+                self.assertEqual(
+                    _sql_default({**column, "nullable": True, "default": safe_default}, "synthetic", report),
+                    expected,
+                )
+                self.assertEqual(report["review_items"], [])
+        self.assertEqual(
+            _safe_default({"name": "value", "data_type": "varchar", "column_type": "varchar(10)", "column_default": "nul\x00value"}),
+            {"kind": "review", "code": "TEXT_LITERAL_DEFAULT_UNSUPPORTED"},
+        )
         report = {"review_items": []}
-        self.assertEqual(_sql_default({**safe, "nullable": True, "default": safe_default}, "synthetic", report), "'active'")
-        self.assertEqual(report["review_items"], [])
         for data_type in ("char", "varchar", "nchar", "nvarchar", "text"):
             column = {"name": "status", "data_type": data_type, "column_type": f"{data_type}(40)", "nullable": True,
                       "default": {"kind": "sql", "expression": "'active'"}}
@@ -391,136 +443,49 @@ class CatalogTests(unittest.TestCase):
         escaped = {"name": "status", "data_type": "varchar", "column_type": "varchar(40)", "nullable": True,
                    "default": {"kind": "sql", "expression": "'O''Brien'"}}
         self.assertEqual(_sql_default(escaped, "synthetic", report), "'O''Brien'")
-        sensitive = {"name": "api_token", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "active"}
-        self.assertEqual(_safe_default(sensitive), {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"})
         expression = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "default_value()", "extra": "DEFAULT_GENERATED"}
         self.assertEqual(_safe_default(expression), {"kind": "review", "code": "TEXT_EXPRESSION_DEFAULT_REVIEW_REQUIRED"})
-        text_null = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "NULL"}
-        self.assertEqual(_safe_default(text_null), {"kind": "review", "code": "AMBIGUOUS_TEXT_NULL_DEFAULT_REVIEW_REQUIRED"})
 
-    def test_catalog_text_default_requires_positive_safe_column_and_value_classification(self) -> None:
-        self.assertEqual(
-            _safe_default({"name": "salt", "data_type": "varchar", "column_type": "varchar(64)", "column_default": "active"}),
-            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
-        )
-        self.assertEqual(
-            _safe_default({"name": "status", "data_type": "varchar", "column_type": "varchar(64)", "column_default": "secret-default"}),
-            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
-        )
+    def test_text_enum_default_is_copied_as_a_quoted_literal(self) -> None:
         enum = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "A"}
         self.assertEqual(_safe_default(enum), {"kind": "sql", "expression": "'A'"})
         enum_null = {"data_type": "enum", "column_type": "enum('NULL','B')", "column_default": "NULL"}
         self.assertEqual(_safe_default(enum_null), {"kind": "sql", "expression": "'NULL'"})
-        enum_null_ambiguous = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "NULL"}
-        self.assertEqual(_safe_default(enum_null_ambiguous), {"kind": "review", "code": "AMBIGUOUS_ENUM_NULL_DEFAULT_REVIEW_REQUIRED"})
-
-    def test_catalog_text_defaults_accept_only_semantic_portable_patterns(self) -> None:
-        accepted = (
-            ({"name": "cor", "data_type": "varchar", "column_type": "varchar(7)", "column_default": "#AABBCC"}, "'#AABBCC'"),
-            ({"name": "cor", "data_type": "varchar", "column_type": "varchar(7)", "column_default": "#a1b2c3"}, "'#a1b2c3'"),
-            ({"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2.3"}, "'1.2.3'"),
-            ({"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2"}, "'1.2'"),
-            ({"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2.3.4"}, "'1.2.3.4'"),
-            ({"name": "layout_versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "2.0"}, "'2.0'"),
-            ({"name": "versao_calculo", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "v1.2.3"}, "'v1.2.3'"),
-            ({"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "pt-BR"}, "'pt-BR'"),
-            ({"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "en-US"}, "'en-US'"),
-            ({"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "es-ES"}, "'es-ES'"),
-            ({"name": "push_status", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "pendente"}, "'pendente'"),
-        )
-        for column, expected in accepted:
-            with self.subTest(column=column["name"]):
-                self.assertEqual(_safe_default(column), {"kind": "sql", "expression": expected})
-
-        rejected = (
-            {"name": "cor", "data_type": "varchar", "column_type": "varchar(7)", "column_default": "#ABC"},
-            {"name": "cor", "data_type": "varchar", "column_type": "varchar(8)", "column_default": "#AABBCC\n"},
-            {"name": "cor", "data_type": "varchar", "column_type": "varchar(7)", "column_default": "#12G456"},
-            {"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2-beta"},
-            {"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2.3.4.5"},
-            {"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1..2"},
-            {"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "pt-PT"},
-            {"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "en-us"},
-            {"name": "token_type", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "Bearer"},
-            {"name": "smtp_host", "data_type": "varchar", "column_type": "varchar(64)", "column_default": "localhost"},
-        )
-        for column in rejected:
-            with self.subTest(column=column["name"]):
-                self.assertEqual(_safe_default(column), {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"})
-
-    def test_catalog_text_default_can_use_only_its_enforced_check_domain(self) -> None:
-        column = {
-            "name": "som_tipo",
-            "data_type": "varchar",
-            "column_type": "varchar(20)",
-            "column_default": "classico",
-        }
-        self.assertEqual(
-            _safe_default(
-                column,
-                check_allowed_text_values=frozenset({"classico", "campainha", "suave"}),
-                check_domain_key="chatin_preferencias.som_tipo",
-            ),
-            {"kind": "sql", "expression": "'classico'"},
-        )
-        arbitrary = {**column, "name": "email"}
-        self.assertEqual(
-            _safe_default(
-                arbitrary,
-                check_allowed_text_values=frozenset({"classico", "campainha", "suave"}),
-                check_domain_key="user_profiles.email",
-            ),
-            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
-        )
-        sensitive = {**column, "name": "token_type"}
-        self.assertEqual(
-            _safe_default(sensitive, check_allowed_text_values=frozenset({"classico", "campainha", "suave"})),
-            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
-        )
-        for name in ("token_type", "email", "username", "ip_address", "smtp_host", "url_destino", "oauth_client_id", "access_code"):
-            candidate = {**column, "name": name}
-            with self.subTest(name=name):
-                self.assertIsNotNone(SENSITIVE_DEFAULT_NAME_RE.search(name))
-                self.assertEqual(
-                    _safe_default(
-                        candidate,
-                        check_allowed_text_values=frozenset({"classico", "campainha", "suave"}),
-                        check_domain_key=f"integration_config.{name}",
-                    ),
-                    {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
-                )
-        for name in ("status", "icone", "cor", "origem"):
-            with self.subTest(safe_name=name):
-                self.assertIsNone(SENSITIVE_DEFAULT_NAME_RE.search(name))
-        self.assertEqual(
-            _safe_default({"name": "token_type", "data_type": "varchar", "column_type": "varchar(40)", "column_default": ""}),
-            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
-        )
+        enum_literal = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "O'Brien"}
+        self.assertEqual(_safe_default(enum_literal), {"kind": "sql", "expression": "'O''Brien'"})
 
     def test_temporal_defaults_are_canonicalized_without_source_timezone_guessing(self) -> None:
         date_default = {"data_type": "date", "column_type": "date", "column_default": "0000-00-00"}
         time_default = {"data_type": "time", "column_type": "time", "column_default": "-25:00:00"}
+        clock_default = {"data_type": "time", "column_type": "time", "column_default": "09:30:00"}
         timestamp_default = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "2026-11-17 00:00:00"}
         zero_timestamp_default = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "0000-00-00 00:00:00"}
         self.assertEqual(_safe_default(date_default), {"kind": "sql", "expression": "NULL"})
-        self.assertEqual(_safe_default(time_default), {"kind": "sql", "expression": "INTERVAL '-25:00:00'"})
+        self.assertEqual(_safe_default(time_default, time_has_extended_values=True), {"kind": "sql", "expression": "INTERVAL '-25:00:00'"})
+        self.assertEqual(_safe_default(clock_default, time_has_extended_values=False), {"kind": "sql", "expression": "TIME '09:30:00'"})
         self.assertEqual(_safe_default(timestamp_default), {"kind": "sql", "expression": "TIMESTAMP '2026-11-17 00:00:00'"})
         self.assertEqual(_safe_default(zero_timestamp_default), {"kind": "sql", "expression": "NULL"})
         fractional_timestamp_default = dict(timestamp_default, column_default="2026-11-17 00:00:00.123456")
         self.assertEqual(_safe_default(fractional_timestamp_default), {"kind": "review", "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED"})
+        time_function_default = {"data_type": "time", "column_type": "time", "column_default": "CURRENT_TIMESTAMP", "extra": "DEFAULT_GENERATED"}
+        self.assertEqual(_safe_default(time_function_default, time_has_extended_values=False), {"kind": "review", "code": "CURRENT_TIMESTAMP_DEFAULT_TYPE_REVIEW_REQUIRED"})
 
         snapshot = sample_snapshot()
         snapshot["tables"][0]["columns"].extend([
             {"name": "zero_date", "ordinal": 3, "nullable": False, "data_type": "date", "column_type": "date", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(date_default)},
-            {"name": "elapsed", "ordinal": 4, "nullable": False, "data_type": "time", "column_type": "time", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(time_default)},
-            {"name": "stamp_default", "ordinal": 5, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(timestamp_default)},
-            {"name": "zero_timestamp", "ordinal": 6, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(zero_timestamp_default)},
+            {"name": "elapsed", "ordinal": 4, "nullable": False, "data_type": "time", "column_type": "time", "character_set": None, "source_collation": None, "extra": "", "time_uses_interval": True, "default": _safe_default(time_default, time_has_extended_values=True)},
+            {"name": "clock_time", "ordinal": 5, "nullable": False, "data_type": "time", "column_type": "time", "character_set": None, "source_collation": None, "extra": "", "time_uses_interval": False, "default": _safe_default(clock_default, time_has_extended_values=False)},
+            {"name": "stamp_default", "ordinal": 6, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(timestamp_default)},
+            {"name": "zero_timestamp", "ordinal": 7, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(zero_timestamp_default)},
         ])
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot)
         tables = bundle.scripts["00_tables.sql"]
         self.assertIn('"zero_date" DATE DEFAULT NULL', tables)
         self.assertIn('"elapsed" INTERVAL NOT NULL DEFAULT INTERVAL \'-25:00:00\'', tables)
+        self.assertIn('"clock_time" TIME(0) NOT NULL DEFAULT TIME \'09:30:00\'', tables)
+        self.assertEqual(bundle.report["time_mapping"]["interval_columns"], [{"table": "parent", "column": "elapsed"}])
+        self.assertEqual(bundle.report["time_mapping"]["clock_columns"], [{"table": "parent", "column": "clock_time"}])
         self.assertIn('"stamp_default" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT TIMESTAMP \'2026-11-17 00:00:00\'', tables)
         self.assertIn('"zero_timestamp" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL', tables)
 
@@ -543,6 +508,39 @@ class CatalogTests(unittest.TestCase):
             index for index, statement in enumerate(connection.statements) if "SHOW GRANTS" in statement
         ))
         self.assertTrue(connection.rolled_back)
+
+    def test_catalog_time_range_scan_selects_boolean_mapping_per_column(self) -> None:
+        for extended, default, expected_default, expected_interval, default_extended in (
+            (False, "09:30:00", "TIME '09:30:00'", False, False),
+            (True, "-01:00:00", "INTERVAL '-01:00:00'", True, True),
+            (False, "-01:00:00", "INTERVAL '-01:00:00'", True, True),
+        ):
+            with self.subTest(extended=extended):
+                connection = TimeRangeConnection(extended, default)
+                result = collect_catalog(connection)
+                column = next(item for item in result["tables"][0]["columns"] if item["name"] == "scheduled_time")
+                self.assertIs(column["time_has_extended_values"], extended)
+                self.assertIs(column["time_default_has_extended_value"], default_extended)
+                self.assertIs(column["time_uses_interval"], expected_interval)
+                self.assertEqual(column["default"], {"kind": "sql", "expression": expected_default})
+                self.assertIn("MIN(TIME_TO_SEC(`scheduled_time`)) < 0", connection.c.range_query)
+                self.assertIn("MAX(TIME_TO_SEC(`scheduled_time`)) > 86399", connection.c.range_query)
+                self.assertTrue(connection.rolled_back)
+
+    def test_catalog_time_range_scan_fails_closed_on_invalid_result(self) -> None:
+        class InvalidTimeRangeCursor(TimeRangeCursor):
+            def execute(self, sql: str, args=()) -> None:
+                if "TIME_TO_SEC" in sql:
+                    self.statements.append(sql)
+                    self.current = [{"has_extended_time_0": None}]
+                    return
+                super().execute(sql, args)
+
+        connection = FakeConnection()
+        connection.c = InvalidTimeRangeCursor(False)
+        connection.statements = connection.c.statements
+        with self.assertRaisesRegex(CatalogError, "TIME_RANGE_SCAN_RESULT_INVALID"):
+            collect_catalog(connection)
 
     def test_unsigned_bigint_range_scan_records_only_boolean_metadata(self) -> None:
         class UnsignedBigintCursor(FakeCursor):
@@ -1163,6 +1161,9 @@ class CatalogTests(unittest.TestCase):
                 self.assertEqual(generate_ddl_main(), 2)
             bundles = list(output_dir.glob("catalog-*-collation-*"))
             self.assertEqual(len(bundles), 1)
+            self.assertEqual(stat.S_IMODE(bundles[0].stat().st_mode), 0o700)
+            for artifact in bundles[0].iterdir():
+                self.assertEqual(stat.S_IMODE(artifact.stat().st_mode), 0o600)
             self.assertTrue((bundles[0] / "BUNDLE_COMPLETE").is_file())
             snapshot_copy = bundles[0] / "catalog_snapshot.json"
             self.assertTrue(snapshot_copy.is_file())

@@ -19,37 +19,10 @@ from .check_translation import CheckTranslationError, translate_mysql_check_clau
 
 
 SOURCE_SCHEMA = "erp_pg_source"
-CATALOG_VERSION = 8
+CATALOG_VERSION = 9
 SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
+TIME_RANGE_POLICY_ID = "mysql_time_clock_or_extended_interval_v2_data_and_default"
 POSTGRES_SIGNED_BIGINT_MAX = 9223372036854775807
-SAFE_TEXT_DEFAULT_NAMES = frozenset({
-    "status", "estado", "situacao", "tipo", "categoria", "nivel", "ativo", "habilitado",
-    "enabled", "visivel", "publicado", "prioridade", "modo", "origem", "formato", "cor",
-    "idioma", "locale", "canal", "metodo", "perfil", "escopo", "acao", "frequencia",
-    "periodo", "unidade_medida", "versao", "tema", "push_status", "layout_versao",
-    "versao_calculo",
-})
-SAFE_TEXT_DEFAULT_VALUES = frozenset({
-    "0", "1", "active", "inactive", "enabled", "disabled", "yes", "no", "sim", "não", "nao",
-    "s", "n", "true", "false", "ativo", "inativo", "aberto", "fechado", "pendente",
-    "cancelado", "cancelada", "concluido", "concluida", "rascunho", "draft", "publicado",
-    "publicada", "normal", "padrao", "padrão",
-})
-SENSITIVE_DEFAULT_NAME_RE = re.compile(
-    r"(?:token|hash|senha|password|secret|chave|key|slug|uuid|path|caminho|file|arquivo|"
-    r"signature|assinatura|payload|credential|auth|username|usuario|user|login|email|e-mail|"
-    r"phone|telefone|cpf|documento|address|endereco|birth|nascimento)|"
-    r"(?:^|_)(?:ip|host|hostname|domain|url|uri|endpoint|dsn|smtp|oauth|client|client_id|"
-    r"param|params|bearer|authorization|access|refresh|api)(?:_|$)",
-    re.IGNORECASE,
-)
-SAFE_TEXT_VERSION_DEFAULT_NAMES = frozenset({"versao", "layout_versao", "versao_calculo"})
-SAFE_CHECK_TEXT_DEFAULT_COLUMNS = frozenset({"chatin_preferencias.som_tipo"})
-SUPPORTED_LOCALE_DEFAULTS = frozenset({"pt-BR", "en-US", "es-ES"})
-HEX_COLOR_DEFAULT_RE = re.compile(r"#[0-9A-Fa-f]{6}\Z")
-NUMERIC_VERSION_DEFAULT_RE = re.compile(r"v?\d+(?:\.\d+){1,3}\Z", re.IGNORECASE)
-
-
 class CatalogError(RuntimeError):
     pass
 
@@ -120,8 +93,7 @@ def _safe_default(
     column: dict[str, Any],
     *,
     no_backslash_escapes: bool = False,
-    check_allowed_text_values: frozenset[str] = frozenset(),
-    check_domain_key: str | None = None,
+    time_has_extended_values: bool | None = None,
 ) -> dict[str, str] | None:
     value = column.get("column_default")
     if value is None:
@@ -129,44 +101,13 @@ def _safe_default(
     raw = str(value)
     data_type = str(column["data_type"]).lower()
     upper = raw.upper().strip()
-    if data_type == "enum":
-        try:
-            labels = parse_mysql_enum(str(column["column_type"]), no_backslash_escapes=no_backslash_escapes)
-        except TypeMappingError:
-            return {"kind": "review", "code": "ENUM_METADATA_REVIEW_REQUIRED"}
-        if raw in labels:
-            return {"kind": "sql", "expression": quote_literal(raw)}
-        if upper == "NULL":
-            return {"kind": "review", "code": "AMBIGUOUS_ENUM_NULL_DEFAULT_REVIEW_REQUIRED"}
-        return {"kind": "review", "code": "ENUM_DEFAULT_OUTSIDE_LABELS"}
-    if data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext"}:
-        column_name = column.get("name", column.get("column_name"))
-        if not isinstance(column_name, str) or SENSITIVE_DEFAULT_NAME_RE.search(column_name):
-            return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
-        name = column_name.lower()
-        if raw == "":
-            return {"kind": "sql", "expression": "''"}
-        if upper == "NULL":
-            return {"kind": "review", "code": "AMBIGUOUS_TEXT_NULL_DEFAULT_REVIEW_REQUIRED"}
-        check_domain_match = (
-            check_domain_key in SAFE_CHECK_TEXT_DEFAULT_COLUMNS
-            and check_domain_key.rsplit(".", 1)[-1] == name
-            and raw in check_allowed_text_values
-        )
-        if column_name.lower() not in SAFE_TEXT_DEFAULT_NAMES and not check_domain_match:
-            return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
+    if data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext", "enum"}:
         if "default_generated" in str(column.get("extra", "")).lower():
             return {"kind": "review", "code": "TEXT_EXPRESSION_DEFAULT_REVIEW_REQUIRED"}
-        approved_value = raw.casefold() in SAFE_TEXT_DEFAULT_VALUES or raw in check_allowed_text_values
-        approved_color = name == "cor" and HEX_COLOR_DEFAULT_RE.fullmatch(raw) is not None
-        approved_version = name in SAFE_TEXT_VERSION_DEFAULT_NAMES and NUMERIC_VERSION_DEFAULT_RE.fullmatch(raw) is not None
-        approved_locale = name == "locale" and raw in SUPPORTED_LOCALE_DEFAULTS
-        if not (approved_value or approved_color or approved_version or approved_locale):
-            return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
         try:
             return {"kind": "sql", "expression": quote_literal(raw)}
         except TypeMappingError:
-            return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
+            return {"kind": "review", "code": "TEXT_LITERAL_DEFAULT_UNSUPPORTED"}
     if upper == "NULL":
         return {"kind": "sql", "expression": "NULL"}
 
@@ -177,7 +118,9 @@ def _safe_default(
             return {"kind": "review", "code": "FRACTIONAL_DEFAULT_PRECISION_REVIEW_REQUIRED"}
         if data_type == "timestamp":
             return {"kind": "sql", "expression": "timezone('America/Sao_Paulo', statement_timestamp())"}
-        return {"kind": "sql", "expression": "LOCALTIMESTAMP(0)"}
+        if data_type == "datetime":
+            return {"kind": "sql", "expression": "LOCALTIMESTAMP(0)"}
+        return {"kind": "review", "code": "CURRENT_TIMESTAMP_DEFAULT_TYPE_REVIEW_REQUIRED"}
 
     if data_type in {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "numeric", "float", "double", "real", "year"}:
         if re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", raw.strip()):
@@ -203,6 +146,8 @@ def _safe_default(
             return {"kind": "review", "code": "STATIC_DATETIME_DEFAULT_REVIEW_REQUIRED"}
         return {"kind": "sql", "expression": f"TIMESTAMP {quote_literal(parsed_datetime.isoformat(sep=' ', timespec='seconds'))}"}
     if data_type == "time":
+        if not isinstance(time_has_extended_values, bool):
+            return {"kind": "review", "code": "TIME_DEFAULT_RANGE_SCAN_REQUIRED"}
         time_match = re.fullmatch(r"([+-]?\d{1,3}:\d{2}:\d{2})(?:\.(\d{1,6}))?", raw)
         if not time_match:
             return {"kind": "review", "code": "STATIC_TIME_DEFAULT_REVIEW_REQUIRED"}
@@ -211,7 +156,14 @@ def _safe_default(
         if hours > 838 or minutes > 59 or seconds > 59:
             return {"kind": "review", "code": "STATIC_TIME_DEFAULT_REVIEW_REQUIRED"}
         canonical = base_value + (("." + fraction.ljust(6, "0")) if fraction else "")
-        return {"kind": "sql", "expression": f"INTERVAL {quote_literal(canonical)}"}
+        if time_has_extended_values:
+            return {"kind": "sql", "expression": f"INTERVAL {quote_literal(canonical)}"}
+        if _time_default_has_extended_range(raw):
+            return {"kind": "review", "code": "STATIC_TIME_DEFAULT_OUTSIDE_TIME_OF_DAY_RANGE"}
+        clock_value = canonical.lstrip("+")
+        if clock_value.startswith("-"):
+            clock_value = clock_value[1:]
+        return {"kind": "sql", "expression": f"TIME {quote_literal(clock_value)}"}
     if data_type == "timestamp":
         if re.fullmatch(r"0000-00-00(?: 00:00:00(?:\.0+)?)?", raw):
             return {"kind": "sql", "expression": "NULL"}
@@ -224,7 +176,7 @@ def _safe_default(
         canonical = parsed_timestamp.isoformat(sep=" ", timespec="seconds")
         return {"kind": "sql", "expression": f"TIMESTAMP {quote_literal(canonical)}"}
 
-    # Arbitrary strings/JSON/functions are not copied into the shared catalog.
+    # Function defaults not explicitly mapped above remain fail-closed.
     return {"kind": "review", "code": "UNSAFE_LITERAL_OR_FUNCTION_DEFAULT"}
 
 
@@ -268,6 +220,54 @@ def _unsigned_bigint_range_scan(cursor: Any, table: str, columns: list[str]) -> 
         else:
             raise CatalogError("UNSIGNED_BIGINT_RANGE_SCAN_RESULT_INVALID")
     return result
+
+
+def _time_range_scan(cursor: Any, table: str, columns: list[str]) -> dict[str, bool]:
+    if not columns:
+        return {}
+    aliases = [f"has_extended_time_{index}" for index in range(len(columns))]
+    projections = [
+        "COALESCE((MIN(TIME_TO_SEC({column})) < 0 OR "
+        "MAX(TIME_TO_SEC({column})) > 86399), 0) AS {alias}".format(
+            column=_mysql_identifier(column), alias=_mysql_identifier(alias)
+        )
+        for column, alias in zip(columns, aliases)
+    ]
+    query = (
+        f"SELECT {', '.join(projections)} FROM "
+        f"{_mysql_identifier(SOURCE_SCHEMA)}.{_mysql_identifier(table)}"
+    )
+    try:
+        cursor.execute(query)
+        row = cursor.fetchone()
+    except Exception as error:
+        raise CatalogError("TIME_RANGE_SCAN_FAILED") from error
+    if not isinstance(row, dict):
+        raise CatalogError("TIME_RANGE_SCAN_RESULT_INVALID")
+    result: dict[str, bool] = {}
+    for column, alias in zip(columns, aliases):
+        value = next((item for key, item in row.items() if str(key).lower() == alias), None)
+        if isinstance(value, bool):
+            result[column] = value
+        elif value in (0, 1):
+            result[column] = bool(value)
+        else:
+            raise CatalogError("TIME_RANGE_SCAN_RESULT_INVALID")
+    return result
+
+
+def _time_default_has_extended_range(value: object, extra: object = "") -> bool:
+    if value is None or "default_generated" in str(extra).lower():
+        return False
+    match = re.fullmatch(r"([+-]?)(\d{1,3}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?", str(value))
+    if not match:
+        return False
+    sign, hours, minutes, seconds, fraction = match.groups()
+    microseconds = int((fraction or "").ljust(6, "0"))
+    total = ((int(hours) * 60 + int(minutes)) * 60 + int(seconds)) * 1_000_000 + microseconds
+    if sign == "-":
+        total = -total
+    return total < 0 or total > 86399 * 1_000_000
 
 
 def _index_columns(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -503,16 +503,24 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             if str(item.get("table_type", "")).upper() == "BASE TABLE"
         }
         unsigned_bigint_columns: dict[str, list[str]] = {}
+        time_columns: dict[str, list[str]] = {}
         for row in raw_columns:
             column_type = str(row.get("column_type", ""))
-            if str(row.get("table_name", "")) in base_tables \
-                and str(row.get("data_type", "")).lower() == "bigint" and re.search(
+            table_name = str(row.get("table_name", ""))
+            data_type = str(row.get("data_type", "")).lower()
+            if table_name in base_tables and data_type == "bigint" and re.search(
                 r"\b(?:unsigned|zerofill)\b", column_type, re.IGNORECASE
             ):
-                unsigned_bigint_columns.setdefault(str(row["table_name"]), []).append(str(row["column_name"]))
+                unsigned_bigint_columns.setdefault(table_name, []).append(str(row["column_name"]))
+            if table_name in base_tables and data_type == "time":
+                time_columns.setdefault(table_name, []).append(str(row["column_name"]))
         unsigned_bigint_ranges = {
             table: _unsigned_bigint_range_scan(cursor, table, columns)
             for table, columns in sorted(unsigned_bigint_columns.items())
+        }
+        time_extended_ranges = {
+            table: _time_range_scan(cursor, table, columns)
+            for table, columns in sorted(time_columns.items())
         }
         columns: dict[str, list[dict[str, Any]]] = {}
         review_items: list[dict[str, str]] = []
@@ -530,7 +538,24 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             }
             if str(row.get("data_type", "")).lower() == "bigint" and column["name"] in unsigned_bigint_ranges.get(table, {}):
                 column["unsigned_bigint_exceeds_signed_limit"] = unsigned_bigint_ranges[table][column["name"]]
-            default = _safe_default(row, no_backslash_escapes=no_backslash_escapes)
+            if str(row.get("data_type", "")).lower() == "time" and table in base_tables:
+                if column["name"] not in time_extended_ranges.get(table, {}):
+                    raise CatalogError("TIME_RANGE_SCAN_RESULT_INVALID")
+                time_extended = time_extended_ranges[table][column["name"]]
+                time_extended_default = _time_default_has_extended_range(
+                    row.get("column_default"), row.get("extra")
+                )
+                column["time_has_extended_values"] = time_extended
+                column["time_default_has_extended_value"] = time_extended_default
+                time_uses_interval = time_extended or time_extended_default
+                column["time_uses_interval"] = time_uses_interval
+            else:
+                time_uses_interval = None
+            default = _safe_default(
+                row,
+                no_backslash_escapes=no_backslash_escapes,
+                time_has_extended_values=time_uses_interval,
+            )
             if default is not None:
                 column["default"] = default
                 if default["kind"] == "review":
@@ -643,40 +668,6 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 continue
             check_docs.append({"table": table_name, "name": constraint_name, "enforced": True, "definition_sha256": definition_sha256, "translation": translation})
 
-        raw_columns_by_key = {
-            (str(row["table_name"]), str(row["column_name"])): row
-            for row in raw_columns
-        }
-        for check in check_docs:
-            translation = check.get("translation")
-            if not isinstance(translation, dict) or translation.get("kind") != "text_in_list":
-                continue
-            table_name = str(check["table"])
-            column_name = str(translation["column"])
-            raw_column = raw_columns_by_key.get((table_name, column_name))
-            if raw_column is None:
-                continue
-            safe_default = _safe_default(
-                raw_column,
-                no_backslash_escapes=no_backslash_escapes,
-                check_allowed_text_values=frozenset(str(value) for value in translation["values"]),
-                check_domain_key=f"{table_name}.{column_name}",
-            )
-            if safe_default is None or safe_default.get("kind") != "sql":
-                continue
-            for column in columns.get(table_name, []):
-                if column.get("name") == column_name:
-                    column["default"] = safe_default
-                    review_items[:] = [
-                        item for item in review_items
-                        if not (
-                            item.get("table") == table_name
-                            and item.get("column") == column_name
-                            and item.get("code") == "TEXT_DEFAULT_REVIEW_REQUIRED"
-                        )
-                    ]
-                    break
-
         trigger_rows = _rows(cursor, """
             SELECT trigger_name, event_manipulation, event_object_table, action_timing,
                    action_statement
@@ -758,6 +749,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             })
         snapshot: dict[str, Any] = {
             "catalog_version": CATALOG_VERSION,
+            "time_range_policy_id": TIME_RANGE_POLICY_ID,
             "collector_code_sha256": _collector_fingerprint(),
             "source_schema": SOURCE_SCHEMA,
             "source_server_version": str(identity["server_version"]).split("-", 1)[0],

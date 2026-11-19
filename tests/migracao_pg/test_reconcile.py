@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 import hashlib
 import os
 import stat
@@ -298,8 +298,15 @@ class CanonicalRowHashTests(unittest.TestCase):
             canonical_row_sha256(("2025-01-02 03:04:05",), timestamp, is_source=True),
             canonical_row_sha256(("2025-01-02T00:04:05",), timestamp, is_source=False),
         )
-        time_col = [{"name": "duration", "data_type": "time", "column_type": "time"}]
+        time_col = [{"name": "duration", "data_type": "time", "column_type": "time", "time_uses_interval": True}]
         self.assertEqual(canonical_row_sha256(("-24:00:00",), time_col), canonical_row_sha256((-timedelta(hours=24),), time_col, is_source=False))
+
+    def test_temporal_contract_normalizes_clock_time_as_postgres_time(self):
+        time_col = [{"name": "clock", "data_type": "time", "column_type": "time", "time_uses_interval": False}]
+        self.assertEqual(
+            canonical_row_sha256(("09:30:00",), time_col, is_source=True),
+            canonical_row_sha256((time(9, 30),), time_col, is_source=False),
+        )
 
 
 class GeneratedColumnMetricTests(unittest.TestCase):

@@ -156,6 +156,7 @@ def map_mysql_type(
     column_name: str | None = None,
     no_backslash_escapes: bool = False,
     unsigned_bigint_exceeds_signed_limit: bool | None = None,
+    time_uses_interval: bool | None = None,
 ) -> TypeMapping:
     """Map MySQL INFORMATION_SCHEMA.COLUMN_TYPE to a PostgreSQL declaration.
 
@@ -236,12 +237,16 @@ def map_mysql_type(
         precision = int(precision_match.group(1) or 0)
         if precision > 6:
             raise TypeMappingError("UNSUPPORTED_TEMPORAL_PRECISION")
+        if base == "time":
+            if not isinstance(time_uses_interval, bool):
+                raise TypeMappingError("MYSQL_TIME_RANGE_SCAN_REQUIRED")
+            temporal = "INTERVAL" if time_uses_interval else f"TIME({precision})"
+            return TypeMapping(temporal)
         if precision > 0 and base != "time":
             reviews.append("FRACTIONAL_SECONDS_REVIEW_REQUIRED")
         temporal = {
             "datetime": "TIMESTAMP(0) WITHOUT TIME ZONE",
             "timestamp": "TIMESTAMP(0) WITHOUT TIME ZONE",
-            "time": "INTERVAL",
         }[base]
         return TypeMapping(temporal, review_codes=tuple(reviews))
 
@@ -338,6 +343,7 @@ def normalize_temporal_value(
     zero_date_to_null: bool = True,
     source_timezone: str = "UTC",
     target_timezone: str = "America/Sao_Paulo",
+    time_as_interval: bool | None = None,
 ) -> date | datetime | time | timedelta | None:
     """Normalize temporal data without silently discarding precision/range.
 
@@ -347,6 +353,8 @@ def normalize_temporal_value(
     kind = mysql_type.strip().lower().split("(", 1)[0]
     if kind not in {"date", "datetime", "timestamp", "time"}:
         raise TemporalValueError("UNSUPPORTED_TEMPORAL_TYPE")
+    if kind == "time" and not isinstance(time_as_interval, bool):
+        raise TemporalValueError("MYSQL_TIME_RANGE_SCAN_REQUIRED")
     if value is None:
         return None
 
@@ -388,7 +396,15 @@ def normalize_temporal_value(
             return wall
 
         if isinstance(value, timedelta):
-            return value
+            if time_as_interval:
+                return value
+            total_microseconds = (value.days * 86400 + value.seconds) * 1_000_000 + value.microseconds
+            if not 0 <= total_microseconds <= 86399 * 1_000_000:
+                raise TemporalValueError("MYSQL_TIME_VALUE_OUTSIDE_TIME_OF_DAY_RANGE")
+            hours, remainder = divmod(total_microseconds, 3_600_000_000)
+            minutes, remainder = divmod(remainder, 60_000_000)
+            seconds, microseconds = divmod(remainder, 1_000_000)
+            return time(int(hours), int(minutes), int(seconds), int(microseconds))
         if raw is not None:
             time_match = re.fullmatch(r"([+-]?)(\d{1,3}):(\d{2}):(\d{2})(?:\.(\d+))?", raw)
             if not time_match:
@@ -399,11 +415,20 @@ def normalize_temporal_value(
                 raise TemporalValueError("MYSQL_TIME_VALUE_OUT_OF_SOURCE_RANGE")
             microsecond = int((fraction or "").ljust(6, "0"))
             total = timedelta(hours=hour, minutes=minute, seconds=second, microseconds=microsecond)
-            return -total if sign == "-" else total
+            total = -total if sign == "-" else total
+            if time_as_interval:
+                return total
+            if total < timedelta(0) or total > timedelta(seconds=86399):
+                raise TemporalValueError("MYSQL_TIME_VALUE_OUTSIDE_TIME_OF_DAY_RANGE")
+            return time(hour, minute, second, microsecond)
         if not isinstance(value, time):
             raise TypeError
         if value.tzinfo is not None:
             raise TemporalValueError("MYSQL_TIME_MUST_REMAIN_TIMEZONE_NAIVE")
+        if not time_as_interval:
+            if (value.hour, value.minute, value.second, value.microsecond) > (23, 59, 59, 0):
+                raise TemporalValueError("MYSQL_TIME_VALUE_OUTSIDE_TIME_OF_DAY_RANGE")
+            return value
         return timedelta(hours=value.hour, minutes=value.minute, seconds=value.second, microseconds=value.microsecond)
     except TemporalValueError:
         raise

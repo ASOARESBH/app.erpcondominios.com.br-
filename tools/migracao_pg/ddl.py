@@ -9,6 +9,7 @@ from pathlib import Path
 from collections import Counter
 from typing import Any
 
+from .catalog import TIME_RANGE_POLICY_ID
 from .check_translation import CheckTranslationError, render_check_translation
 from .generated_columns import declares_generated_column, generated_dependencies_valid, target_generated_column
 from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, quote_identifier, quote_literal
@@ -17,7 +18,7 @@ SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "2.3.0"
+GENERATOR_VERSION = "2.4.0"
 SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
@@ -191,7 +192,7 @@ def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, 
         if data_type in {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "numeric", "float", "double", "real", "year"}:
             if re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", expression):
                 return expression
-        elif data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext"}:
+        elif data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext", "enum"}:
             if expression == "''" or re.fullmatch(r"'(?:[^']|'')*'", expression):
                 literal = expression[1:-1].replace("''", "'")
                 if "\x00" not in literal and quote_literal(literal) == expression:
@@ -218,18 +219,21 @@ def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, 
                 else:
                     return expression
         elif data_type == "time":
-            match = re.fullmatch(r"INTERVAL '([+-]?\d{1,3}:\d{2}:\d{2}(?:\.\d{1,6})?)'", expression)
-            if match:
-                hours, minutes, seconds = (int(part) for part in match.group(1).lstrip("+-").split(":", 2))
-                if hours <= 838 and minutes <= 59 and seconds <= 59:
-                    return expression
-        elif data_type == "enum":
-            try:
-                labels = parse_mysql_enum(str(column.get("column_type", "")), no_backslash_escapes=no_backslash_escapes)
-                if any(expression == quote_literal(label) for label in labels):
-                    return expression
-            except TypeMappingError:
-                pass
+            if column.get("time_uses_interval") is True:
+                match = re.fullmatch(r"INTERVAL '([+-]?\d{1,3}:\d{2}:\d{2}(?:\.\d{1,6})?)'", expression)
+                if match:
+                    hours, minutes, seconds = (int(part) for part in match.group(1).lstrip("+-").split(":", 2))
+                    if hours <= 838 and minutes <= 59 and seconds <= 59:
+                        return expression
+            elif column.get("time_uses_interval") is False:
+                match = re.fullmatch(r"TIME '((?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?)'", expression)
+                if match:
+                    try:
+                        parsed = datetime.strptime(match.group(1).split(".", 1)[0], "%H:%M:%S")
+                    except ValueError:
+                        parsed = None
+                    if parsed is not None:
+                        return expression
         report["review_items"].append({"table": table, "column": str(column["name"]), "code": "DEFAULT_EXPRESSION_NOT_ALLOWLISTED"})
         return None
     report["review_items"].append({"table": table, "column": str(column["name"]), "code": str(default.get("code", "DEFAULT_REVIEW_REQUIRED"))})
@@ -363,7 +367,8 @@ def generate_ddl(
     collation_overrides: dict[str, str] | None = None,
     application_role: str | None = None,
 ) -> DdlBundle:
-    if snapshot.get("catalog_version") != 8 or snapshot.get("source_schema") != SOURCE_SCHEMA:
+    if snapshot.get("catalog_version") != 9 or snapshot.get("source_schema") != SOURCE_SCHEMA \
+        or snapshot.get("time_range_policy_id") != TIME_RANGE_POLICY_ID:
         raise DdlGenerationError("CATALOG_VERSION_OR_SOURCE_NOT_ALLOWLISTED")
     fingerprint = snapshot.get("fingerprint_sha256")
     if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
@@ -400,6 +405,13 @@ def generate_ddl(
         "zero_date_nullable_columns": [],
         "enum_checks_deferred": [],
         "translated_check_constraints": [],
+        "time_mapping": {
+            "policy_id": TIME_RANGE_POLICY_ID,
+            "clock_columns": [],
+            "interval_columns": [],
+            "extended_data_columns": [],
+            "extended_default_columns": [],
+        },
         "source_schema": SOURCE_SCHEMA,
         "target_schema": TARGET_SCHEMA,
         "legacy_schema": LEGACY_SCHEMA,
@@ -613,7 +625,19 @@ def generate_ddl(
                     column_name=name,
                     no_backslash_escapes=bool(snapshot.get("source_no_backslash_escapes", False)),
                     unsigned_bigint_exceeds_signed_limit=unsigned_bigint_flags.get((table_name, name)),
+                    time_uses_interval=column.get("time_uses_interval"),
                 )
+                if data_type.lower() == "time":
+                    if column.get("time_uses_interval") is True:
+                        report["time_mapping"]["interval_columns"].append({"table": table_name, "column": name})
+                        if column.get("time_has_extended_values") is True:
+                            report["time_mapping"]["extended_data_columns"].append({"table": table_name, "column": name})
+                        if column.get("time_default_has_extended_value") is True:
+                            report["time_mapping"]["extended_default_columns"].append({"table": table_name, "column": name})
+                    elif column.get("time_uses_interval") is False:
+                        report["time_mapping"]["clock_columns"].append({"table": table_name, "column": name})
+                    else:
+                        raise TypeMappingError("MYSQL_TIME_RANGE_SCAN_REQUIRED")
                 table_column_types[name] = (mapping.sql_type, mapping.collation_sql)
                 declaration = f"{_ident(name)} {mapping.declaration}"
                 extra = str(column.get("extra", "")).lower()

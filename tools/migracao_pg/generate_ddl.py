@@ -20,7 +20,7 @@ def _write_new_file(path: Path, content: str) -> None:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
-        os.chmod(temp_name, 0o644)
+        os.chmod(temp_name, 0o600)
         os.link(temp_name, path)
     except FileExistsError as error:
         raise SystemExit("OUTPUT_ALREADY_EXISTS") from error
@@ -106,7 +106,7 @@ def main() -> int:
         for filename, content in sorted(script_artifacts.items())
     }
     output_dir.parent.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(mode=0o755, exist_ok=False)
+    output_dir.mkdir(mode=0o700, exist_ok=False)
     try:
         for filename, content in script_artifacts.items():
             _write_new_file(output_dir / filename, content)

@@ -47,14 +47,22 @@ class TargetConfigTests(unittest.TestCase):
                 loader._validate_target_config(candidate)
 
     def test_cutover_target_profile_rejects_development_and_mysql_names(self) -> None:
-        candidate = dict(self.config, dbname="erp_pg_cutover_synthetic")
-        self.assertEqual(loader._validate_target_config(candidate, "cutover")["dbname"], "erp_pg_cutover_synthetic")
+        candidate = dict(
+            self.config,
+            dbname=loader.CUTOVER_TARGET_DATABASE,
+            user=loader.CUTOVER_MIGRATION_ROLE,
+            application_user=loader.CUTOVER_APPLICATION_ROLE,
+        )
+        self.assertEqual(loader._validate_target_config(candidate, "cutover")["dbname"], loader.CUTOVER_TARGET_DATABASE)
         for name in (
             "erp_pg_dev", "erp_pg_source", "erp_hml_mysql",
-            "erpcondominios", "erpcondominios_stage_20261114", "postgres",
+            "erpcondominios", "erpcondominios_stage_20261114", "postgres", "erp_pg_cutover_synthetic",
         ):
             with self.subTest(dbname=name), self.assertRaisesRegex(LoaderError, "TARGET_CONFIG_SCOPE_MISMATCH"):
-                loader._validate_target_config(dict(self.config, dbname=name), "cutover")
+                loader._validate_target_config(dict(candidate, dbname=name), "cutover")
+        for key, value in (("user", "erp_p2_loader"), ("application_user", "erp_app")):
+            with self.subTest(key=key), self.assertRaisesRegex(LoaderError, "TARGET_ROLE_SEPARATION_REQUIRED"):
+                loader._validate_target_config(dict(candidate, **{key: value}), "cutover")
         with self.assertRaisesRegex(LoaderError, "TARGET_PROFILE_NOT_ALLOWLISTED"):
             loader._validate_target_config(candidate, "unknown")
 
@@ -711,13 +719,23 @@ class NormalizeMysqlValueTests(unittest.TestCase):
 
     def test_time_negative_and_extended_range_are_preserved_as_interval(self) -> None:
         self.assertEqual(
-            normalize_mysql_value(b"-01:00:00", {"data_type": "time", "column_type": "time"}),
+            normalize_mysql_value(b"-01:00:00", {"data_type": "time", "column_type": "time", "time_uses_interval": True}),
             -timedelta(hours=1),
         )
         self.assertEqual(
-            normalize_mysql_value(b"838:00:00", {"data_type": "time", "column_type": "time"}),
+            normalize_mysql_value(b"838:00:00", {"data_type": "time", "column_type": "time", "time_uses_interval": True}),
             timedelta(hours=838),
         )
+
+    def test_clock_time_values_are_loaded_as_time_and_require_catalog_flag(self) -> None:
+        from datetime import time
+
+        self.assertEqual(
+            normalize_mysql_value(b"09:30:00", {"data_type": "time", "column_type": "time", "time_uses_interval": False}),
+            time(9, 30),
+        )
+        with self.assertRaisesRegex(LoaderError, "MYSQL_TIME_RANGE_SCAN_REQUIRED"):
+            normalize_mysql_value(b"09:30:00", {"data_type": "time", "column_type": "time"})
 
     def test_bit_width_is_preserved(self) -> None:
         self.assertEqual(normalize_mysql_value(b"\x05", {"data_type": "bit", "column_type": "bit(3)"}), "101")
@@ -1020,6 +1038,70 @@ class SanitizedDiagnosticsTests(unittest.TestCase):
         self.assertEqual(str(error), "POSTGRES_REBUILD_TRANSACTION_FAILED")
         self.assertEqual(error.sqlstate, "23505")
         self.assertIsNone(LoaderError("SAFE_CODE", "raw database error").sqlstate)
+
+
+class TargetPreflightTests(unittest.TestCase):
+    def _connection(self, row):
+        class Cursor:
+            def execute(self, query, params=None):
+                self.row = row
+
+            def fetchone(self):
+                return self.row
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class Connection:
+            def cursor(self):
+                return Cursor()
+
+        return Connection()
+
+    def test_accepts_dedicated_cutover_roles_with_only_required_privileges(self) -> None:
+        row = (
+            "erpcondominios_pg", "erp_p2_cutover_loader", False, False, False, False, False, True, True,
+            None, None, True, False, False, False, False, False, 0, 0,
+        )
+        result = loader._target_preflight(
+            self._connection(row), "erp_p2_cutover_loader", "erpcondominios_app", "erpcondominios_pg"
+        )
+        self.assertTrue(result["migrator_login_non_elevated"])
+        self.assertTrue(result["application_role_non_elevated"])
+        self.assertEqual(result["migrator_role_memberships"], 0)
+        self.assertEqual(result["application_role_memberships"], 0)
+
+    def test_rejects_elevated_or_inherited_cutover_roles(self) -> None:
+        valid = [
+            "erpcondominios_pg", "erp_p2_cutover_loader", False, False, False, False, False, True, True,
+            None, None, True, False, False, False, False, False, 0, 0,
+        ]
+        cases = (
+            (2, True, "TARGET_MIGRATOR_PRIVILEGE_INVALID"),
+            (3, True, "TARGET_MIGRATOR_PRIVILEGE_INVALID"),
+            (4, True, "TARGET_MIGRATOR_PRIVILEGE_INVALID"),
+            (5, True, "TARGET_MIGRATOR_PRIVILEGE_INVALID"),
+            (6, True, "TARGET_MIGRATOR_PRIVILEGE_INVALID"),
+            (7, False, "TARGET_MIGRATOR_PRIVILEGE_INVALID"),
+            (12, True, "TARGET_APPLICATION_ROLE_PRIVILEGE_INVALID"),
+            (13, True, "TARGET_APPLICATION_ROLE_PRIVILEGE_INVALID"),
+            (14, True, "TARGET_APPLICATION_ROLE_PRIVILEGE_INVALID"),
+            (15, True, "TARGET_APPLICATION_ROLE_PRIVILEGE_INVALID"),
+            (16, True, "TARGET_APPLICATION_ROLE_PRIVILEGE_INVALID"),
+            (17, 1, "TARGET_APPLICATION_ROLE_MEMBERSHIP_FORBIDDEN"),
+            (18, 1, "TARGET_MIGRATOR_ROLE_MEMBERSHIP_FORBIDDEN"),
+        )
+        for index, value, code in cases:
+            candidate = list(valid)
+            candidate[index] = value
+            with self.subTest(index=index), self.assertRaisesRegex(LoaderError, code):
+                loader._target_preflight(
+                    self._connection(tuple(candidate)),
+                    "erp_p2_cutover_loader", "erpcondominios_app", "erpcondominios_pg",
+                )
 
 
 class _FakeCursor:

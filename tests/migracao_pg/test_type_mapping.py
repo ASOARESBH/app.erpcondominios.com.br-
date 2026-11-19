@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from tools.migracao_pg.type_mapping import (
     TemporalValueError,
@@ -20,7 +20,8 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(map_mysql_type("datetime").sql_type, "TIMESTAMP(0) WITHOUT TIME ZONE")
         self.assertEqual(map_mysql_type("timestamp").sql_type, "TIMESTAMP(0) WITHOUT TIME ZONE")
         self.assertEqual(map_mysql_type("timestamp").review_codes, ())
-        self.assertEqual(map_mysql_type("time").sql_type, "INTERVAL")
+        self.assertEqual(map_mysql_type("time", time_uses_interval=False).sql_type, "TIME(0)")
+        self.assertEqual(map_mysql_type("time", time_uses_interval=True).sql_type, "INTERVAL")
         self.assertEqual(map_mysql_type("tinyint", column_name="tiny_value").sql_type, "SMALLINT")
         self.assertEqual(map_mysql_type("int unsigned", column_name="int_unsigned_value").sql_type, "BIGINT")
         self.assertEqual(map_mysql_type("decimal(12,4)").sql_type, "NUMERIC(12,4)")
@@ -111,8 +112,11 @@ class TypeMappingTests(unittest.TestCase):
 
     def test_temporal_precision_and_unlisted_types_fail_closed(self) -> None:
         self.assertIn("FRACTIONAL_SECONDS_REVIEW_REQUIRED", map_mysql_type("datetime(6)").review_codes)
-        self.assertEqual(map_mysql_type("time").sql_type, "INTERVAL")
-        self.assertEqual(map_mysql_type("time(6)").review_codes, ())
+        self.assertEqual(map_mysql_type("time", time_uses_interval=True).sql_type, "INTERVAL")
+        self.assertEqual(map_mysql_type("time(6)", time_uses_interval=False).sql_type, "TIME(6)")
+        self.assertEqual(map_mysql_type("time(6)", time_uses_interval=True).sql_type, "INTERVAL")
+        with self.assertRaisesRegex(TypeMappingError, "MYSQL_TIME_RANGE_SCAN_REQUIRED"):
+            map_mysql_type("time")
         with self.assertRaisesRegex(TypeMappingError, "MANUAL_TYPE_MAPPING_REQUIRED"):
             map_mysql_type("geometry")
 
@@ -156,17 +160,26 @@ class TemporalNormalizationTests(unittest.TestCase):
         with self.assertRaisesRegex(TemporalValueError, "DATETIME_MUST_REMAIN_TIMEZONE_NAIVE"):
             normalize_temporal_value(datetime.fromisoformat("2025-01-02T03:04:05+00:00"), "datetime")
 
-    def test_time_maps_to_interval_and_preserves_negative_extended_range(self) -> None:
-        self.assertEqual(normalize_temporal_value("23:59:59", "time"), timedelta(hours=23, minutes=59, seconds=59))
-        self.assertEqual(normalize_temporal_value("24:00:00", "time"), timedelta(hours=24))
-        self.assertEqual(normalize_temporal_value("-01:00:00", "time"), -timedelta(hours=1))
-        self.assertEqual(normalize_temporal_value("-838:59:59", "time"), -timedelta(hours=838, minutes=59, seconds=59))
-        self.assertEqual(normalize_temporal_value("12:30:45.123456", "time(6)"), timedelta(hours=12, minutes=30, seconds=45, microseconds=123456))
+    def test_time_range_scan_selects_clock_time_or_interval(self) -> None:
+        self.assertEqual(normalize_temporal_value("23:59:59", "time", time_as_interval=False), time(23, 59, 59))
+        self.assertEqual(normalize_temporal_value("00:00:00", "time", time_as_interval=False), time(0, 0, 0))
+        self.assertEqual(normalize_temporal_value("12:30:45.123456", "time(6)", time_as_interval=False), time(12, 30, 45, 123456))
+        self.assertEqual(normalize_temporal_value("23:59:59", "time", time_as_interval=True), timedelta(hours=23, minutes=59, seconds=59))
+        self.assertEqual(normalize_temporal_value("24:00:00", "time", time_as_interval=True), timedelta(hours=24))
+        self.assertEqual(normalize_temporal_value("-01:00:00", "time", time_as_interval=True), -timedelta(hours=1))
+        self.assertEqual(normalize_temporal_value("-838:59:59", "time", time_as_interval=True), -timedelta(hours=838, minutes=59, seconds=59))
+        self.assertEqual(normalize_temporal_value("12:30:45.123456", "time(6)", time_as_interval=True), timedelta(hours=12, minutes=30, seconds=45, microseconds=123456))
+        with self.assertRaisesRegex(TemporalValueError, "MYSQL_TIME_VALUE_OUTSIDE_TIME_OF_DAY_RANGE"):
+            normalize_temporal_value("24:00:00", "time", time_as_interval=False)
+        with self.assertRaisesRegex(TemporalValueError, "MYSQL_TIME_VALUE_OUTSIDE_TIME_OF_DAY_RANGE"):
+            normalize_temporal_value("-00:00:01", "time", time_as_interval=False)
+        with self.assertRaisesRegex(TemporalValueError, "MYSQL_TIME_RANGE_SCAN_REQUIRED"):
+            normalize_temporal_value("12:00:00", "time")
         with self.assertRaisesRegex(TemporalValueError, "MYSQL_TIME_VALUE_OUT_OF_SOURCE_RANGE"):
-            normalize_temporal_value("839:00:00", "time")
+            normalize_temporal_value("839:00:00", "time", time_as_interval=True)
 
     def test_time_fraction_is_preserved_in_interval(self) -> None:
-        self.assertEqual(normalize_temporal_value("12:00:00.000001", "time"), timedelta(hours=12, microseconds=1))
+        self.assertEqual(normalize_temporal_value("12:00:00.000001", "time", time_as_interval=True), timedelta(hours=12, microseconds=1))
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ from typing import Any
 if os.geteuid() == 0 and os.environ.get("ERP_P2_ROOT_LAUNCHER_VERIFIED") != "1":
     raise SystemExit("LOADER_ROOT_EXECUTION_REQUIRES_REBUILD_RUNNER")
 
-from .catalog import CatalogError, SOURCE_GRANT_POLICY_ID, SOURCE_SCHEMA, _collector_fingerprint, _mysql_socket_options, _structural_fingerprint, _validate_defaults_file, collect_catalog
+from .catalog import CatalogError, SOURCE_GRANT_POLICY_ID, SOURCE_SCHEMA, TIME_RANGE_POLICY_ID, _collector_fingerprint, _mysql_socket_options, _structural_fingerprint, _validate_defaults_file, collect_catalog
 from .ddl import GENERATOR_VERSION, LEGACY_SCHEMA, MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX, TARGET_SCHEMA, _schema_for_table, canonical_fingerprint
 from .generate_ddl import _generator_fingerprint
 from .generated_columns import is_generated_column, target_generated_column
@@ -34,6 +34,11 @@ from .type_mapping import (
 
 BUNDLE_ROOT = Path("/var/lib/erpcondominios-pg/p2-bundles")
 TARGET_DATABASE = "erp_pg_dev"
+CUTOVER_TARGET_DATABASE = "erpcondominios_pg"
+DEVELOPMENT_MIGRATION_ROLE = "erp_p2_loader"
+DEVELOPMENT_APPLICATION_ROLE = "erp_app"
+CUTOVER_MIGRATION_ROLE = "erp_p2_cutover_loader"
+CUTOVER_APPLICATION_ROLE = "erpcondominios_app"
 MIGRATION_TARGET_CONFIGS = {
     "development": Path("/etc/erpcondominios-pg/secrets/p2-loader.cnf"),
     "cutover": Path("/etc/erpcondominios-pg/secrets/p2-loader-cutover.cnf"),
@@ -174,7 +179,8 @@ def validate_bundle(bundle_name: str, *, require_executable: bool = True) -> tup
         raise LoaderError("BUNDLE_SOURCE_SCHEMA_MISMATCH")
     if report.get("target_schema") != TARGET_SCHEMA:
         raise LoaderError("BUNDLE_TARGET_SCHEMA_MISMATCH")
-    if snapshot.get("catalog_version") != 8 or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
+    if snapshot.get("catalog_version") != 9 or snapshot.get("time_range_policy_id") != TIME_RANGE_POLICY_ID \
+        or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
         raise LoaderError("BUNDLE_CATALOG_FINGERPRINT_MISMATCH")
     if report.get("catalog_fingerprint_sha256") != snapshot.get("fingerprint_sha256"):
         raise LoaderError("BUNDLE_REPORT_CATALOG_MISMATCH")
@@ -449,12 +455,12 @@ def _validate_target_config(config: dict[str, Any], profile: str = "development"
         raise LoaderError("TARGET_CONFIG_SHAPE_INVALID")
     if profile == "development":
         database_allowed = config["dbname"] == TARGET_DATABASE
+        expected_user = DEVELOPMENT_MIGRATION_ROLE
+        expected_application_user = DEVELOPMENT_APPLICATION_ROLE
     elif profile == "cutover":
-        database_allowed = (
-            isinstance(config["dbname"], str)
-            and re.fullmatch(r"erp[a-z0-9_]{3,60}", config["dbname"]) is not None
-            and config["dbname"] not in PROTECTED_TARGET_DATABASES
-        )
+        database_allowed = config["dbname"] == CUTOVER_TARGET_DATABASE
+        expected_user = CUTOVER_MIGRATION_ROLE
+        expected_application_user = CUTOVER_APPLICATION_ROLE
     else:
         raise LoaderError("TARGET_PROFILE_NOT_ALLOWLISTED")
     if not database_allowed or config["schema"] != TARGET_SCHEMA:
@@ -468,7 +474,7 @@ def _validate_target_config(config: dict[str, Any], profile: str = "development"
     config["port"] = int(config["port"])
     if not 1 <= config["port"] <= 65535:
         raise LoaderError("TARGET_PORT_INVALID")
-    if config["user"] != "erp_p2_loader" or config["application_user"] != "erp_app":
+    if config["user"] != expected_user or config["application_user"] != expected_application_user:
         raise LoaderError("TARGET_ROLE_SEPARATION_REQUIRED")
     if not isinstance(config["password"], str) or not config["password"] or "\x00" in config["password"]:
         raise LoaderError("TARGET_CREDENTIAL_MISSING")
@@ -573,7 +579,11 @@ def _connect_target(config: dict[str, Any]):
             user=config["user"],
             password=config["password"],
             connect_timeout=10,
-            application_name="erp-p2-development-rebuild",
+            application_name=(
+                "erp-p2-cutover-rebuild"
+                if config.get("dbname") == CUTOVER_TARGET_DATABASE
+                else "erp-p2-development-rebuild"
+            ),
             autocommit=True,
         )
     except Exception as error:
@@ -590,20 +600,34 @@ def _target_preflight(
         with connection.cursor() as cursor:
             cursor.execute(
                 """SELECT current_database(), current_user,
-                          COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname=current_user), FALSE),
+                          COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname=current_user), TRUE),
+                          COALESCE((SELECT rolcreatedb FROM pg_roles WHERE rolname=current_user), TRUE),
+                          COALESCE((SELECT rolcreaterole FROM pg_roles WHERE rolname=current_user), TRUE),
+                          COALESCE((SELECT rolreplication FROM pg_roles WHERE rolname=current_user), TRUE),
+                          COALESCE((SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user), TRUE),
+                          COALESCE((SELECT rolcanlogin FROM pg_roles WHERE rolname=current_user), FALSE),
                           has_database_privilege(current_user, current_database(), 'CREATE'),
                           (SELECT nspowner = (SELECT oid FROM pg_roles WHERE rolname=current_user)
                              FROM pg_namespace WHERE nspname = %s),
                           (SELECT nspowner = (SELECT oid FROM pg_roles WHERE rolname=current_user)
                              FROM pg_namespace WHERE nspname = %s),
                           EXISTS(SELECT 1 FROM pg_roles WHERE rolname = %s),
-                          COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname = %s), FALSE)""",
-                (TARGET_SCHEMA, LEGACY_SCHEMA, application_user, application_user),
+                          COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname = %s), TRUE),
+                          COALESCE((SELECT rolcreatedb FROM pg_roles WHERE rolname = %s), TRUE),
+                          COALESCE((SELECT rolcreaterole FROM pg_roles WHERE rolname = %s), TRUE),
+                          COALESCE((SELECT rolreplication FROM pg_roles WHERE rolname = %s), TRUE),
+                          COALESCE((SELECT rolbypassrls FROM pg_roles WHERE rolname = %s), TRUE),
+                          (SELECT count(*) FROM pg_auth_members WHERE member =
+                             (SELECT oid FROM pg_roles WHERE rolname = %s)),
+                          (SELECT count(*) FROM pg_auth_members WHERE member =
+                             (SELECT oid FROM pg_roles WHERE rolname = current_user))""",
+                (TARGET_SCHEMA, LEGACY_SCHEMA, application_user, application_user, application_user,
+                 application_user, application_user, application_user, application_user),
             )
             row = cursor.fetchone()
     except Exception as error:
         raise LoaderError("POSTGRES_TARGET_PREFLIGHT_FAILED", _sqlstate(error)) from error
-    if not row or len(row) != 8:
+    if not row or len(row) != 19:
         raise LoaderError("POSTGRES_TARGET_PREFLIGHT_INVALID")
     if row[0] != expected_database:
         raise LoaderError("POSTGRES_TARGET_DATABASE_MISMATCH")
@@ -611,26 +635,32 @@ def _target_preflight(
         raise LoaderError("POSTGRES_TARGET_ROLE_MISMATCH")
     if row[1] == application_user:
         raise LoaderError("TARGET_ROLE_SEPARATION_REQUIRED")
-    if not bool(row[6]):
+    if not bool(row[11]):
         raise LoaderError("TARGET_APPLICATION_ROLE_MISSING")
-    if bool(row[7]):
-        raise LoaderError("TARGET_APPLICATION_ROLE_SUPERUSER_FORBIDDEN")
-    is_superuser = bool(row[2])
-    can_create_schema = bool(row[3])
-    owns_schemas = all(bool(value) for value in row[4:6] if value is not None)
+    if any(bool(value) for value in row[12:17]):
+        raise LoaderError("TARGET_APPLICATION_ROLE_PRIVILEGE_INVALID")
+    if int(row[17]) != 0:
+        raise LoaderError("TARGET_APPLICATION_ROLE_MEMBERSHIP_FORBIDDEN")
+    if int(row[18]) != 0:
+        raise LoaderError("TARGET_MIGRATOR_ROLE_MEMBERSHIP_FORBIDDEN")
+    if any(bool(row[index]) for index in (2, 3, 4, 5, 6)) or not bool(row[7]):
+        raise LoaderError("TARGET_MIGRATOR_PRIVILEGE_INVALID")
+    can_create_schema = bool(row[8])
+    owns_schemas = all(bool(value) for value in row[9:11] if value is not None)
     if not can_create_schema:
         raise LoaderError("POSTGRES_TARGET_CREATE_SCHEMA_PRIVILEGE_REQUIRED")
-    if is_superuser:
-        raise LoaderError("TARGET_MIGRATOR_SUPERUSER_FORBIDDEN")
-    if not is_superuser and not owns_schemas:
+    if not owns_schemas:
         raise LoaderError("POSTGRES_TARGET_SCHEMA_OWNER_REQUIRED")
     return {
         "database_matches": True,
         "local_endpoint": True,
+        "migrator_login_non_elevated": True,
+        "migrator_role_memberships": 0,
         "schema_create_privilege": can_create_schema,
         "existing_schemas_owned_or_absent": owns_schemas,
         "application_role_separate": True,
-        "application_role_not_superuser": True,
+        "application_role_non_elevated": True,
+        "application_role_memberships": 0,
     }
 
 
@@ -1358,6 +1388,7 @@ def normalize_mysql_value(
                 zero_date_to_null=True,
                 source_timezone="UTC",
                 target_timezone="America/Sao_Paulo",
+                time_as_interval=column.get("time_uses_interval") if data_type == "time" else None,
             )
             if zero_date and normalization_counts is None:
                 raise LoaderError("ZERO_DATE_NORMALIZATION_REPORT_REQUIRED")
@@ -1498,6 +1529,7 @@ def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], 
                     target_collation=target_collation,
                     column_name=name,
                     no_backslash_escapes=no_backslash_escapes,
+                    time_uses_interval=column.get("time_uses_interval"),
                 )
                 if str(column.get("data_type", "")).lower() == "enum":
                     enum_labels[name] = parse_mysql_enum(
