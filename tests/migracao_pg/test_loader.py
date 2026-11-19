@@ -80,6 +80,18 @@ class TargetConfigTests(unittest.TestCase):
             self.assertFalse(marker.exists())
 
 
+class SourceCountResultTests(unittest.TestCase):
+    def test_accepts_dict_cursor_and_tuple_cursor_counts(self) -> None:
+        self.assertEqual(loader._source_count_value({"row_count": 0}), 0)
+        self.assertEqual(loader._source_count_value({"row_count": 17}), 17)
+        self.assertEqual(loader._source_count_value((17,)), 17)
+
+    def test_rejects_invalid_count_shapes_and_values(self) -> None:
+        for row in (None, {}, {"row_count": True}, {"row_count": "1"}, {"row_count": -1}, (), (True,), (1, 2)):
+            with self.subTest(row_type=type(row).__name__), self.assertRaisesRegex(LoaderError, "SOURCE_ROW_COUNT_INVALID"):
+                loader._source_count_value(row)
+
+
 class SourceSnapshotProofTests(unittest.TestCase):
     def setUp(self) -> None:
         self.snapshot = {

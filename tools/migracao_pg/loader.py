@@ -683,6 +683,13 @@ def _source_row_count(connection: Any, table: str) -> int:
     return row[0]
 
 
+def _source_count_value(row: Any, error_code: str = "SOURCE_ROW_COUNT_INVALID") -> int:
+    value = row.get("row_count") if isinstance(row, dict) else row[0] if isinstance(row, (tuple, list)) and len(row) == 1 else None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise LoaderError(error_code)
+    return value
+
+
 def _source_value_bytes(value: Any, column: dict[str, Any]) -> bytes:
     if value is None:
         return b"N"
@@ -2245,11 +2252,9 @@ def run_preflight(bundle_name: str, defaults_file: str | None = None, profile: s
                     continue
                 name = str(table["name"])
                 with source.cursor() as cursor:
-                    cursor.execute(f"SELECT COUNT(*) FROM {_mysql_ident(SOURCE_SCHEMA)}.{_mysql_ident(name)}")
+                    cursor.execute(f"SELECT COUNT(*) AS row_count FROM {_mysql_ident(SOURCE_SCHEMA)}.{_mysql_ident(name)}")
                     row = cursor.fetchone()
-                if not row or isinstance(row[0], bool) or int(row[0]) < 0:
-                    raise LoaderError("SOURCE_ROW_COUNT_INVALID")
-                source_report.append({"table": name, "rows": int(row[0])})
+                source_report.append({"table": name, "rows": _source_count_value(row)})
         finally:
             source.rollback()
     finally:
