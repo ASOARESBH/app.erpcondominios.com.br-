@@ -4,6 +4,11 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — preflight v9 aprovado; carga bloqueada por payload binário (2026-11-19)
+- Publicado e instalado fora do runtime `current` o release imutável `dd51295185239c326bebf6c913332461368bf0b1`. Suíte P2: 219/219; `py_compile`, `bash -n` e `git diff --check`: PASS. Catálogo v9 e bundle privado: 276 tabelas, 0 views/routines/events, 0 reviews, `executable_complete=true`; preflight development somente leitura PASS com source/bundle alinhados (213.984 linhas agregadas).
+- Pré-scan textual de 1.406 colunas encontrou 0 células com NUL e 0 divergências entre os métodos; TIME: 16 colunas de relógio e 0 de duração estendida. O scan binário detectou NUL real em `tenant_arquivos.conteudo` (`longblob`): 516 de 518 células não nulas, 3.347.652 bytes NUL em 206.367.630 bytes examinados; SQL binário e leitura Python concordaram. Por gate de preservação de payload binário, nenhum `rebuild.sh load` nem quick-loader em `erp_pg_teste` foi executado; a carga, comparação com quick-loader, reinstalação de triggers, neutralização pós-carga e duração ponta a ponta ficam pendentes da decisão e de adaptação byte-exata.
+- `erp_pg_dev` não foi alterado; `erpcondominios_pg` segue vazio e as roles cutover NOLOGIN. Source, MySQL ativo/rollback, `main`, DNS e runtime `current` permaneceram intocados. P2 segue bloqueada; P5 permanece planejamento.
+
 ### Projeto PostgreSQL P2 — catálogo v9, defaults/TIME e target cutover preparado (2026-11-19)
 - André autorizou a cópia literal de defaults textuais, inclusive vazios/sensíveis; expressões e funções sem mapeamento continuam fail-closed. Catálogo v9/DDL 2.4.0 armazenam o default integral no snapshot e no SQL gerado; esses artefatos podem conter configuração/credenciais, são criados somente em diretório privado 0700 com arquivos 0600 e nunca podem ser commitados, logados ou tratados como sanitizados.
 - MySQL TIME usa `TIME(p)` quando os dados e default estão em faixa civil; dados negativos/estendidos ou default estendido selecionam `INTERVAL`. O catálogo guarda flags agregadas e reporta nomes técnicos, sem valores. O alvo quick-loader `time` legado é uma política distinta e não deve ser usado para declarar equivalência com P2.
