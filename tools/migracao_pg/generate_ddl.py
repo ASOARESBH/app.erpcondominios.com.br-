@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 
+from .catalog import _collector_fingerprint, _structural_fingerprint
 from .ddl import DdlGenerationError, canonical_fingerprint, generate_ddl
 
 
@@ -41,7 +42,7 @@ def _unique_object(pairs):
 
 def _generator_fingerprint() -> str:
     digest = hashlib.sha256()
-    for name in ("generate_ddl.py", "ddl.py", "generated_columns.py", "type_mapping.py", "070_business_triggers_tenant_scoped.sql"):
+    for name in ("generate_ddl.py", "ddl.py", "generated_columns.py", "type_mapping.py", "check_translation.py", "070_business_triggers_tenant_scoped.sql"):
         digest.update(name.encode("utf-8") + b"\0")
         path = (Path(__file__).resolve().parents[2] / "sql" / "postgresql" / name) if name.endswith(".sql") else Path(__file__).with_name(name)
         digest.update(path.read_bytes())
@@ -63,6 +64,10 @@ def main() -> int:
         raise SystemExit("SNAPSHOT_INVALID")
     if not isinstance(snapshot, dict) or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
         raise SystemExit("SNAPSHOT_FINGERPRINT_MISMATCH")
+    if snapshot.get("collector_code_sha256") != _collector_fingerprint():
+        raise SystemExit("SNAPSHOT_COLLECTOR_CODE_MISMATCH")
+    if snapshot.get("structural_fingerprint_sha256") != _structural_fingerprint(snapshot):
+        raise SystemExit("SNAPSHOT_STRUCTURAL_FINGERPRINT_MISMATCH")
     fingerprint = str(snapshot["fingerprint_sha256"])
     snapshot_artifact = snapshot_text if snapshot_text.endswith("\n") else snapshot_text + "\n"
     snapshot_sha256 = hashlib.sha256(snapshot_artifact.encode("utf-8")).hexdigest()

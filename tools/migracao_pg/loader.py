@@ -20,7 +20,7 @@ from typing import Any
 if os.geteuid() == 0 and os.environ.get("ERP_P2_ROOT_LAUNCHER_VERIFIED") != "1":
     raise SystemExit("LOADER_ROOT_EXECUTION_REQUIRES_REBUILD_RUNNER")
 
-from .catalog import CatalogError, SOURCE_GRANT_POLICY_ID, SOURCE_SCHEMA, _collector_fingerprint, _mysql_socket_options, _validate_defaults_file, collect_catalog
+from .catalog import CatalogError, SOURCE_GRANT_POLICY_ID, SOURCE_SCHEMA, _collector_fingerprint, _mysql_socket_options, _structural_fingerprint, _validate_defaults_file, collect_catalog
 from .ddl import GENERATOR_VERSION, LEGACY_SCHEMA, MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX, TARGET_SCHEMA, _schema_for_table, canonical_fingerprint
 from .generate_ddl import _generator_fingerprint
 from .generated_columns import is_generated_column, target_generated_column
@@ -174,12 +174,14 @@ def validate_bundle(bundle_name: str, *, require_executable: bool = True) -> tup
         raise LoaderError("BUNDLE_SOURCE_SCHEMA_MISMATCH")
     if report.get("target_schema") != TARGET_SCHEMA:
         raise LoaderError("BUNDLE_TARGET_SCHEMA_MISMATCH")
-    if snapshot.get("catalog_version") != 7 or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
+    if snapshot.get("catalog_version") != 8 or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
         raise LoaderError("BUNDLE_CATALOG_FINGERPRINT_MISMATCH")
     if report.get("catalog_fingerprint_sha256") != snapshot.get("fingerprint_sha256"):
         raise LoaderError("BUNDLE_REPORT_CATALOG_MISMATCH")
     if snapshot.get("collector_code_sha256") != _collector_fingerprint():
         raise LoaderError("BUNDLE_COLLECTOR_CODE_MISMATCH")
+    if snapshot.get("structural_fingerprint_sha256") != _structural_fingerprint(snapshot):
+        raise LoaderError("BUNDLE_STRUCTURAL_FINGERPRINT_MISMATCH")
     if snapshot.get("source_grant_policy_id") != SOURCE_GRANT_POLICY_ID \
         or snapshot.get("source_grants_policy_accepted") is not True \
         or snapshot.get("source_routines_events_zero_verified") is not True \

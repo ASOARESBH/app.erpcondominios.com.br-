@@ -15,17 +15,19 @@ from typing import Any
 
 from .generated_columns import declares_generated_column, identify_generated_column
 from .type_mapping import TypeMappingError, parse_mysql_enum, quote_literal
+from .check_translation import CheckTranslationError, translate_mysql_check_clause
 
 
 SOURCE_SCHEMA = "erp_pg_source"
-CATALOG_VERSION = 7
+CATALOG_VERSION = 8
 SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
 POSTGRES_SIGNED_BIGINT_MAX = 9223372036854775807
 SAFE_TEXT_DEFAULT_NAMES = frozenset({
     "status", "estado", "situacao", "tipo", "categoria", "nivel", "ativo", "habilitado",
     "enabled", "visivel", "publicado", "prioridade", "modo", "origem", "formato", "cor",
     "idioma", "locale", "canal", "metodo", "perfil", "escopo", "acao", "frequencia",
-    "periodo", "unidade_medida", "versao", "tema",
+    "periodo", "unidade_medida", "versao", "tema", "push_status", "layout_versao",
+    "versao_calculo",
 })
 SAFE_TEXT_DEFAULT_VALUES = frozenset({
     "0", "1", "active", "inactive", "enabled", "disabled", "yes", "no", "sim", "não", "nao",
@@ -35,9 +37,17 @@ SAFE_TEXT_DEFAULT_VALUES = frozenset({
 })
 SENSITIVE_DEFAULT_NAME_RE = re.compile(
     r"(?:token|hash|senha|password|secret|chave|key|slug|uuid|path|caminho|file|arquivo|"
-    r"signature|assinatura|payload|credential|auth)",
+    r"signature|assinatura|payload|credential|auth|username|usuario|user|login|email|e-mail|"
+    r"phone|telefone|cpf|documento|address|endereco|birth|nascimento)|"
+    r"(?:^|_)(?:ip|host|hostname|domain|url|uri|endpoint|dsn|smtp|oauth|client|client_id|"
+    r"param|params|bearer|authorization|access|refresh|api)(?:_|$)",
     re.IGNORECASE,
 )
+SAFE_TEXT_VERSION_DEFAULT_NAMES = frozenset({"versao", "layout_versao", "versao_calculo"})
+SAFE_CHECK_TEXT_DEFAULT_COLUMNS = frozenset({"chatin_preferencias.som_tipo"})
+SUPPORTED_LOCALE_DEFAULTS = frozenset({"pt-BR", "en-US", "es-ES"})
+HEX_COLOR_DEFAULT_RE = re.compile(r"#[0-9A-Fa-f]{6}\Z")
+NUMERIC_VERSION_DEFAULT_RE = re.compile(r"v?\d+(?:\.\d+){1,3}\Z", re.IGNORECASE)
 
 
 class CatalogError(RuntimeError):
@@ -46,11 +56,20 @@ class CatalogError(RuntimeError):
 
 def _collector_fingerprint() -> str:
     digest = hashlib.sha256()
-    for name in ("catalog.py", "generated_columns.py"):
+    for name in ("catalog.py", "generated_columns.py", "check_translation.py", "type_mapping.py"):
         digest.update(name.encode("utf-8") + b"\0")
         digest.update(Path(__file__).with_name(name).read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def _structural_fingerprint(snapshot: dict[str, Any]) -> str:
+    structural_state = {
+        key: value for key, value in snapshot.items()
+        if key not in {"captured_at_utc", "catalog_consistency_check", "structural_fingerprint_sha256", "fingerprint_sha256"}
+    }
+    structural = json.dumps(structural_state, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(structural).hexdigest()
 
 
 def _validate_defaults_file(path: Path) -> None:
@@ -97,7 +116,13 @@ def _foreign_key_action_rules(
     return update_rule, delete_rule
 
 
-def _safe_default(column: dict[str, Any], *, no_backslash_escapes: bool = False) -> dict[str, str] | None:
+def _safe_default(
+    column: dict[str, Any],
+    *,
+    no_backslash_escapes: bool = False,
+    check_allowed_text_values: frozenset[str] = frozenset(),
+    check_domain_key: str | None = None,
+) -> dict[str, str] | None:
     value = column.get("column_default")
     if value is None:
         return None
@@ -115,17 +140,28 @@ def _safe_default(column: dict[str, Any], *, no_backslash_escapes: bool = False)
             return {"kind": "review", "code": "AMBIGUOUS_ENUM_NULL_DEFAULT_REVIEW_REQUIRED"}
         return {"kind": "review", "code": "ENUM_DEFAULT_OUTSIDE_LABELS"}
     if data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext"}:
+        column_name = column.get("name", column.get("column_name"))
+        if not isinstance(column_name, str) or SENSITIVE_DEFAULT_NAME_RE.search(column_name):
+            return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
+        name = column_name.lower()
         if raw == "":
             return {"kind": "sql", "expression": "''"}
         if upper == "NULL":
             return {"kind": "review", "code": "AMBIGUOUS_TEXT_NULL_DEFAULT_REVIEW_REQUIRED"}
-        column_name = column.get("name", column.get("column_name"))
-        if not isinstance(column_name, str) or column_name.lower() not in SAFE_TEXT_DEFAULT_NAMES \
-            or SENSITIVE_DEFAULT_NAME_RE.search(column_name):
+        check_domain_match = (
+            check_domain_key in SAFE_CHECK_TEXT_DEFAULT_COLUMNS
+            and check_domain_key.rsplit(".", 1)[-1] == name
+            and raw in check_allowed_text_values
+        )
+        if column_name.lower() not in SAFE_TEXT_DEFAULT_NAMES and not check_domain_match:
             return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
         if "default_generated" in str(column.get("extra", "")).lower():
             return {"kind": "review", "code": "TEXT_EXPRESSION_DEFAULT_REVIEW_REQUIRED"}
-        if raw.casefold() not in SAFE_TEXT_DEFAULT_VALUES:
+        approved_value = raw.casefold() in SAFE_TEXT_DEFAULT_VALUES or raw in check_allowed_text_values
+        approved_color = name == "cor" and HEX_COLOR_DEFAULT_RE.fullmatch(raw) is not None
+        approved_version = name in SAFE_TEXT_VERSION_DEFAULT_NAMES and NUMERIC_VERSION_DEFAULT_RE.fullmatch(raw) is not None
+        approved_locale = name == "locale" and raw in SUPPORTED_LOCALE_DEFAULTS
+        if not (approved_value or approved_color or approved_version or approved_locale):
             return {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"}
         try:
             return {"kind": "sql", "expression": quote_literal(raw)}
@@ -585,6 +621,61 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             WHERE tc.table_schema=%s AND tc.constraint_type='CHECK'
             ORDER BY tc.table_name, tc.constraint_name
         """, (SOURCE_SCHEMA,))
+        check_docs: list[dict[str, Any]] = []
+        for row in checks:
+            table_name = str(row["table_name"])
+            constraint_name = str(row["constraint_name"])
+            definition_sha256 = hashlib.sha256(str(row["check_clause"]).encode("utf-8")).hexdigest()
+            if str(row.get("enforced", "YES")).upper() != "YES":
+                review_items.append({"table": table_name, "constraint": constraint_name, "code": "MYSQL_CHECK_NOT_ENFORCED_REVIEW_REQUIRED"})
+                check_docs.append({"table": table_name, "name": constraint_name, "enforced": False, "definition_sha256": definition_sha256})
+                continue
+            column_metadata = {str(column["name"]): column for column in columns.get(table_name, [])}
+            try:
+                translation = translate_mysql_check_clause(
+                    str(row["check_clause"]),
+                    columns=column_metadata,
+                    no_backslash_escapes=no_backslash_escapes,
+                )
+            except CheckTranslationError:
+                review_items.append({"table": table_name, "constraint": constraint_name, "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED"})
+                check_docs.append({"table": table_name, "name": constraint_name, "enforced": True, "definition_sha256": definition_sha256})
+                continue
+            check_docs.append({"table": table_name, "name": constraint_name, "enforced": True, "definition_sha256": definition_sha256, "translation": translation})
+
+        raw_columns_by_key = {
+            (str(row["table_name"]), str(row["column_name"])): row
+            for row in raw_columns
+        }
+        for check in check_docs:
+            translation = check.get("translation")
+            if not isinstance(translation, dict) or translation.get("kind") != "text_in_list":
+                continue
+            table_name = str(check["table"])
+            column_name = str(translation["column"])
+            raw_column = raw_columns_by_key.get((table_name, column_name))
+            if raw_column is None:
+                continue
+            safe_default = _safe_default(
+                raw_column,
+                no_backslash_escapes=no_backslash_escapes,
+                check_allowed_text_values=frozenset(str(value) for value in translation["values"]),
+                check_domain_key=f"{table_name}.{column_name}",
+            )
+            if safe_default is None or safe_default.get("kind") != "sql":
+                continue
+            for column in columns.get(table_name, []):
+                if column.get("name") == column_name:
+                    column["default"] = safe_default
+                    review_items[:] = [
+                        item for item in review_items
+                        if not (
+                            item.get("table") == table_name
+                            and item.get("column") == column_name
+                            and item.get("code") == "TEXT_DEFAULT_REVIEW_REQUIRED"
+                        )
+                    ]
+                    break
 
         trigger_rows = _rows(cursor, """
             SELECT trigger_name, event_manipulation, event_object_table, action_timing,
@@ -686,24 +777,19 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             "tables": table_docs,
             "indexes": indexes,
             "foreign_keys": fks,
-            "check_constraints": [{
-                "table": str(row["table_name"]),
-                "name": str(row["constraint_name"]),
-                "definition_sha256": hashlib.sha256(str(row["check_clause"]).encode("utf-8")).hexdigest(),
-                "enforced": str(row.get("enforced", "YES")).upper() == "YES",
-            } for row in checks],
+            "check_constraints": check_docs,
             "triggers": triggers,
             "views": views,
             "routines": routines,
             "events": events,
-            "review_items": sorted(review_items, key=lambda item: (item["table"], item["column"], item["code"])),
+            "review_items": sorted(review_items, key=lambda item: (
+                str(item.get("table", "")),
+                str(item.get("column", "")),
+                str(item.get("constraint", "")),
+                str(item.get("code", "")),
+            )),
         }
-        structural_state = {
-            key: value for key, value in snapshot.items()
-            if key not in {"captured_at_utc", "catalog_consistency_check"}
-        }
-        structural = json.dumps(structural_state, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        snapshot["structural_fingerprint_sha256"] = hashlib.sha256(structural).hexdigest()
+        snapshot["structural_fingerprint_sha256"] = _structural_fingerprint(snapshot)
         canonical = json.dumps(snapshot, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         snapshot["fingerprint_sha256"] = hashlib.sha256(canonical).hexdigest()
         completed = True

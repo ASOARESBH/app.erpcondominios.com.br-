@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
-from tools.migracao_pg.catalog import CatalogError, _admin_verifies_source_has_no_routines_or_events, _atomic_json, _foreign_key_action_rules, _grants_match_source_clone_allowlist, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, collect_catalog
+from tools.migracao_pg.catalog import CatalogError, SENSITIVE_DEFAULT_NAME_RE, _admin_verifies_source_has_no_routines_or_events, _atomic_json, _collector_fingerprint, _foreign_key_action_rules, _grants_match_source_clone_allowlist, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, _structural_fingerprint, collect_catalog
 from tools.migracao_pg.ddl import BUSINESS_TRIGGER_SOURCE_SHA256, DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
 from tools.migracao_pg.generate_ddl import main as generate_ddl_main
 from tools.migracao_pg.generated_columns import identify_generated_column
@@ -15,7 +15,7 @@ from tools.migracao_pg.generated_columns import identify_generated_column
 
 def sample_snapshot() -> dict:
     snapshot = {
-        "catalog_version": 7,
+        "catalog_version": 8,
         "source_schema": "erp_pg_source",
         "source_server_version": "8.4.13",
         "captured_at_utc": "2026-11-16T00:00:00+00:00",
@@ -71,6 +71,8 @@ def sample_snapshot() -> dict:
         "review_items": [],
         "fingerprint_sha256": "",
     }
+    snapshot["collector_code_sha256"] = _collector_fingerprint()
+    snapshot["structural_fingerprint_sha256"] = _structural_fingerprint(snapshot)
     snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
     return snapshot
 
@@ -82,6 +84,7 @@ class FakeCursor:
 
     def execute(self, sql: str, args=()) -> None:
         self.statements.append(sql)
+        table_name = getattr(self, "table_name", "x")
         if "CURRENT_USER()" in sql:
             self.current = [{"connected_account": "pg_reader@localhost", "selected_database": "erp_pg_source", "server_version": "8.4.13"}]
         elif "SHOW GRANTS" in sql:
@@ -92,16 +95,21 @@ class FakeCursor:
         elif "information_schema.user_privileges" in sql:
             self.current = [{"privilege_type": "ALL PRIVILEGES"}]
         elif "information_schema.tables" in sql:
-            self.current = [{"table_name": "x", "table_type": "BASE TABLE", "engine": "InnoDB", "table_collation": "utf8mb4_unicode_ci", "auto_increment": None}]
+            self.current = [{"table_name": table_name, "table_type": "BASE TABLE", "engine": "InnoDB", "table_collation": "utf8mb4_unicode_ci", "auto_increment": None}]
         elif "information_schema.columns" in sql:
             if "generation_expression" in sql:
-                self.current = [{"table_name": "x", "column_name": "id", "ordinal_position": 1, "column_default": None, "is_nullable": "NO", "data_type": "int", "column_type": "int", "character_set_name": None, "collation_name": None, "extra": "", "generation_expression": ""}]
+                self.current = [
+                    {"table_name": table_name, "column_name": "id", "ordinal_position": 1, "column_default": None, "is_nullable": "NO", "data_type": "int", "column_type": "int", "character_set_name": None, "collation_name": None, "extra": "", "generation_expression": ""},
+                    {"table_name": table_name, "column_name": "som_tipo", "ordinal_position": 2, "column_default": "classico", "is_nullable": "NO", "data_type": "varchar", "column_type": "varchar(20)", "character_set_name": "utf8mb4", "collation_name": "utf8mb4_unicode_ci", "extra": "", "generation_expression": ""},
+                ]
             else:
                 self.current = []
         elif "information_schema.statistics" in sql:
             self.current = []
         elif "information_schema.key_column_usage" in sql:
-            self.current = [{"table_name": "x", "constraint_name": "PRIMARY", "ordinal_position": 1, "column_name": "id", "referenced_table_schema": None, "referenced_table_name": None, "referenced_column_name": None}]
+            self.current = [{"table_name": table_name, "constraint_name": "PRIMARY", "ordinal_position": 1, "column_name": "id", "referenced_table_schema": None, "referenced_table_name": None, "referenced_column_name": None}]
+        elif "cc.check_clause" in sql:
+            self.current = getattr(self, "check_rows", [])
         elif "information_schema.table_constraints" in sql:
             self.current = []
         elif "information_schema.referential_constraints" in sql:
@@ -284,6 +292,68 @@ class CatalogTests(unittest.TestCase):
         self.assertNotIn("from information_schema.routines", executed)
         self.assertNotIn("from information_schema.events", executed)
 
+    def test_catalog_check_capture_stores_only_validated_translation(self) -> None:
+        connection = FakeConnection()
+        connection.c.table_name = "chatin_preferencias"
+        connection.c.check_rows = [{
+            "table_name": "chatin_preferencias",
+            "constraint_name": "chk_id_range",
+            "check_clause": "((`id` BETWEEN 1 AND 9))",
+            "enforced": "YES",
+        }, {
+            "table_name": "chatin_preferencias",
+            "constraint_name": "chk_som_tipo",
+            "check_clause": "((`som_tipo` IN (_utf8mb4'classico', _utf8mb4'campainha', _utf8mb4'suave'))) ",
+            "enforced": "YES",
+        }]
+        with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=True):
+            result = collect_catalog(connection)
+        self.assertEqual(result["check_constraints"], [{
+            "table": "chatin_preferencias",
+            "name": "chk_id_range",
+            "enforced": True,
+            "definition_sha256": hashlib.sha256("((`id` BETWEEN 1 AND 9))".encode("utf-8")).hexdigest(),
+            "translation": {"kind": "numeric_between", "column": "id", "lower": "1", "upper": "9"},
+        }, {
+            "table": "chatin_preferencias",
+            "name": "chk_som_tipo",
+            "enforced": True,
+            "definition_sha256": hashlib.sha256("((`som_tipo` IN (_utf8mb4'classico', _utf8mb4'campainha', _utf8mb4'suave'))) ".encode("utf-8")).hexdigest(),
+            "translation": {"kind": "text_in_list", "column": "som_tipo", "values": ["classico", "campainha", "suave"]},
+        }])
+        serialized = json.dumps(result["check_constraints"], ensure_ascii=False)
+        self.assertNotIn("check_clause", serialized)
+        self.assertNotIn("BETWEEN 1 AND 9", serialized)
+        self.assertNotIn("_utf8mb4", serialized)
+        self.assertFalse(any(item["code"] == "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED" for item in result["review_items"]))
+        self.assertFalse(any(item.get("table") == "chatin_preferencias" and item.get("column") == "som_tipo" and item["code"] == "TEXT_DEFAULT_REVIEW_REQUIRED" for item in result["review_items"]))
+        captured_columns = {column["name"]: column for column in result["tables"][0]["columns"]}
+        self.assertEqual(captured_columns["som_tipo"]["default"], {"kind": "sql", "expression": "'classico'"})
+
+    def test_catalog_keeps_untranslated_and_unenforced_checks_as_reviews(self) -> None:
+        connection = FakeConnection()
+        connection.c.check_rows = [{
+            "table_name": "x",
+            "constraint_name": "chk_unsupported",
+            "check_clause": "LOWER(`som_tipo`) IN (_utf8mb4'a', _utf8mb4'b')",
+            "enforced": "YES",
+        }, {
+            "table_name": "x",
+            "constraint_name": "chk_not_enforced",
+            "check_clause": "((`som_tipo` IN (_utf8mb4'classico', _utf8mb4'campainha'))) ",
+            "enforced": "NO",
+        }]
+        with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=True):
+            result = collect_catalog(connection)
+        codes = {item["code"] for item in result["review_items"]}
+        self.assertIn("MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED", codes)
+        self.assertIn("MYSQL_CHECK_NOT_ENFORCED_REVIEW_REQUIRED", codes)
+        self.assertIn("TEXT_DEFAULT_REVIEW_REQUIRED", codes)
+        self.assertTrue(all("translation" not in check for check in result["check_constraints"]))
+        check_reviews = [item for item in result["review_items"] if item["code"].startswith("MYSQL_CHECK_")]
+        self.assertEqual(len(check_reviews), 2)
+        self.assertTrue(all({"table", "constraint", "code"} <= set(item) for item in check_reviews))
+
     def test_catalog_without_admin_zero_proof_keeps_routines_events_unverified(self) -> None:
         with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=False):
             result = collect_catalog(FakeConnection())
@@ -325,7 +395,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(_safe_default(sensitive), {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"})
         expression = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "default_value()", "extra": "DEFAULT_GENERATED"}
         self.assertEqual(_safe_default(expression), {"kind": "review", "code": "TEXT_EXPRESSION_DEFAULT_REVIEW_REQUIRED"})
-        text_null = {"data_type": "varchar", "column_type": "varchar(100)", "column_default": "NULL"}
+        text_null = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "NULL"}
         self.assertEqual(_safe_default(text_null), {"kind": "review", "code": "AMBIGUOUS_TEXT_NULL_DEFAULT_REVIEW_REQUIRED"})
 
     def test_catalog_text_default_requires_positive_safe_column_and_value_classification(self) -> None:
@@ -343,6 +413,89 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(_safe_default(enum_null), {"kind": "sql", "expression": "'NULL'"})
         enum_null_ambiguous = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "NULL"}
         self.assertEqual(_safe_default(enum_null_ambiguous), {"kind": "review", "code": "AMBIGUOUS_ENUM_NULL_DEFAULT_REVIEW_REQUIRED"})
+
+    def test_catalog_text_defaults_accept_only_semantic_portable_patterns(self) -> None:
+        accepted = (
+            ({"name": "cor", "data_type": "varchar", "column_type": "varchar(7)", "column_default": "#AABBCC"}, "'#AABBCC'"),
+            ({"name": "cor", "data_type": "varchar", "column_type": "varchar(7)", "column_default": "#a1b2c3"}, "'#a1b2c3'"),
+            ({"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2.3"}, "'1.2.3'"),
+            ({"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2"}, "'1.2'"),
+            ({"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2.3.4"}, "'1.2.3.4'"),
+            ({"name": "layout_versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "2.0"}, "'2.0'"),
+            ({"name": "versao_calculo", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "v1.2.3"}, "'v1.2.3'"),
+            ({"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "pt-BR"}, "'pt-BR'"),
+            ({"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "en-US"}, "'en-US'"),
+            ({"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "es-ES"}, "'es-ES'"),
+            ({"name": "push_status", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "pendente"}, "'pendente'"),
+        )
+        for column, expected in accepted:
+            with self.subTest(column=column["name"]):
+                self.assertEqual(_safe_default(column), {"kind": "sql", "expression": expected})
+
+        rejected = (
+            {"name": "cor", "data_type": "varchar", "column_type": "varchar(7)", "column_default": "#ABC"},
+            {"name": "cor", "data_type": "varchar", "column_type": "varchar(8)", "column_default": "#AABBCC\n"},
+            {"name": "cor", "data_type": "varchar", "column_type": "varchar(7)", "column_default": "#12G456"},
+            {"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2-beta"},
+            {"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1.2.3.4.5"},
+            {"name": "versao", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "1..2"},
+            {"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "pt-PT"},
+            {"name": "locale", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "en-us"},
+            {"name": "token_type", "data_type": "varchar", "column_type": "varchar(16)", "column_default": "Bearer"},
+            {"name": "smtp_host", "data_type": "varchar", "column_type": "varchar(64)", "column_default": "localhost"},
+        )
+        for column in rejected:
+            with self.subTest(column=column["name"]):
+                self.assertEqual(_safe_default(column), {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"})
+
+    def test_catalog_text_default_can_use_only_its_enforced_check_domain(self) -> None:
+        column = {
+            "name": "som_tipo",
+            "data_type": "varchar",
+            "column_type": "varchar(20)",
+            "column_default": "classico",
+        }
+        self.assertEqual(
+            _safe_default(
+                column,
+                check_allowed_text_values=frozenset({"classico", "campainha", "suave"}),
+                check_domain_key="chatin_preferencias.som_tipo",
+            ),
+            {"kind": "sql", "expression": "'classico'"},
+        )
+        arbitrary = {**column, "name": "email"}
+        self.assertEqual(
+            _safe_default(
+                arbitrary,
+                check_allowed_text_values=frozenset({"classico", "campainha", "suave"}),
+                check_domain_key="user_profiles.email",
+            ),
+            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
+        )
+        sensitive = {**column, "name": "token_type"}
+        self.assertEqual(
+            _safe_default(sensitive, check_allowed_text_values=frozenset({"classico", "campainha", "suave"})),
+            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
+        )
+        for name in ("token_type", "email", "username", "ip_address", "smtp_host", "url_destino", "oauth_client_id", "access_code"):
+            candidate = {**column, "name": name}
+            with self.subTest(name=name):
+                self.assertIsNotNone(SENSITIVE_DEFAULT_NAME_RE.search(name))
+                self.assertEqual(
+                    _safe_default(
+                        candidate,
+                        check_allowed_text_values=frozenset({"classico", "campainha", "suave"}),
+                        check_domain_key=f"integration_config.{name}",
+                    ),
+                    {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
+                )
+        for name in ("status", "icone", "cor", "origem"):
+            with self.subTest(safe_name=name):
+                self.assertIsNone(SENSITIVE_DEFAULT_NAME_RE.search(name))
+        self.assertEqual(
+            _safe_default({"name": "token_type", "data_type": "varchar", "column_type": "varchar(40)", "column_default": ""}),
+            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
+        )
 
     def test_temporal_defaults_are_canonicalized_without_source_timezone_guessing(self) -> None:
         date_default = {"data_type": "date", "column_type": "date", "column_default": "0000-00-00"}
@@ -791,6 +944,51 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(any(item.get("code") == "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED" for item in bundle.report["review_items"]))
         self.assertFalse(bundle.report["executable_complete"])
 
+    def test_validated_mysql_check_translations_are_emitted_as_postgres_constraints(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["check_constraints"] = [
+            {
+                "table": "parent",
+                "name": "chk_name_values",
+                "enforced": True,
+                "translation": {"kind": "text_in_list", "column": "name", "values": ["alpha", "beta"]},
+            },
+            {
+                "table": "child",
+                "name": "chk_parent_id_range",
+                "enforced": True,
+                "translation": {"kind": "numeric_between", "column": "parent_id", "lower": "1", "upper": "100"},
+            },
+        ]
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
+        tables = bundle.scripts["00_tables.sql"]
+        self.assertIn('CHECK ("name" IN (\'alpha\', \'beta\'))', tables)
+        self.assertIn('CHECK ("parent_id" BETWEEN 1 AND 100)', tables)
+        self.assertEqual(bundle.report["generated"]["check_constraints"], 2)
+        self.assertEqual(len(bundle.report["translated_check_constraints"]), 2)
+        self.assertNotIn("MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED", {item["code"] for item in bundle.report["review_items"]})
+
+    def test_duplicate_or_invalid_column_metadata_blocks_table(self) -> None:
+        snapshots = []
+        duplicate_name = sample_snapshot()
+        duplicate_name["tables"][0]["columns"].append({**duplicate_name["tables"][0]["columns"][1], "ordinal": 3})
+        snapshots.append((duplicate_name, "DUPLICATE_COLUMN_METADATA"))
+        duplicate_ordinal = sample_snapshot()
+        duplicate_ordinal["tables"][0]["columns"][1]["ordinal"] = 1
+        snapshots.append((duplicate_ordinal, "COLUMN_ORDINAL_METADATA_INVALID"))
+        missing_ordinal = sample_snapshot()
+        del missing_ordinal["tables"][0]["columns"][1]["ordinal"]
+        snapshots.append((missing_ordinal, "COLUMN_ORDINAL_METADATA_INVALID"))
+
+        for snapshot, expected_code in snapshots:
+            with self.subTest(expected_code=expected_code):
+                snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+                bundle = generate_ddl(snapshot)
+                blocked = {item["table"]: item["code"] for item in bundle.report["blocked_tables"]}
+                self.assertEqual(blocked.get("parent"), expected_code)
+                self.assertFalse(bundle.report["executable_complete"])
+
     def test_fulltext_index_is_emitted_as_portuguese_gin(self) -> None:
         snapshot = sample_snapshot()
         snapshot["indexes"].append({"table": "parent", "name": "fts_name", "non_unique": True, "type": "FULLTEXT", "visible": True, "columns": [{"ordinal": 1, "name": "name", "prefix_length": None, "direction": "ASC", "expression_present": False}]})
@@ -981,6 +1179,23 @@ class CatalogTests(unittest.TestCase):
             self.assertIn('executable_complete": false', (bundles[0] / "report.json").read_text(encoding="utf-8"))
             with patch("sys.argv", args), self.assertRaisesRegex(SystemExit, "OUTPUT_ALREADY_EXISTS"):
                 generate_ddl_main()
+
+    def test_cli_rejects_recomputed_canonical_hash_with_stale_structural_provenance(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot = sample_snapshot()
+            snapshot["check_constraints"] = [{
+                "table": "child",
+                "name": "synthetic_check",
+                "enforced": True,
+                "translation": {"kind": "text_in_list", "column": "state", "values": ["A", "B"]},
+            }]
+            snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+            snapshot_path = root / "snapshot.json"
+            snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+            with patch("sys.argv", ["generate_ddl", "--snapshot", str(snapshot_path), "--output-dir", str(root / "ddl")]):
+                with self.assertRaisesRegex(SystemExit, "SNAPSHOT_STRUCTURAL_FINGERPRINT_MISMATCH"):
+                    generate_ddl_main()
 
     def test_fingerprint_tampering_is_rejected(self) -> None:
         snapshot = sample_snapshot()

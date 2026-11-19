@@ -9,6 +9,7 @@ from pathlib import Path
 from collections import Counter
 from typing import Any
 
+from .check_translation import CheckTranslationError, render_check_translation
 from .generated_columns import declares_generated_column, generated_dependencies_valid, target_generated_column
 from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, quote_identifier, quote_literal
 
@@ -16,7 +17,7 @@ SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "2.2.0"
+GENERATOR_VERSION = "2.3.0"
 SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
@@ -362,7 +363,7 @@ def generate_ddl(
     collation_overrides: dict[str, str] | None = None,
     application_role: str | None = None,
 ) -> DdlBundle:
-    if snapshot.get("catalog_version") != 7 or snapshot.get("source_schema") != SOURCE_SCHEMA:
+    if snapshot.get("catalog_version") != 8 or snapshot.get("source_schema") != SOURCE_SCHEMA:
         raise DdlGenerationError("CATALOG_VERSION_OR_SOURCE_NOT_ALLOWLISTED")
     fingerprint = snapshot.get("fingerprint_sha256")
     if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
@@ -398,6 +399,7 @@ def generate_ddl(
         "collation_C_columns": [],
         "zero_date_nullable_columns": [],
         "enum_checks_deferred": [],
+        "translated_check_constraints": [],
         "source_schema": SOURCE_SCHEMA,
         "target_schema": TARGET_SCHEMA,
         "legacy_schema": LEGACY_SCHEMA,
@@ -415,7 +417,7 @@ def generate_ddl(
         "unique_indexes_post_load": [],
         "foreign_keys_post_load": [],
         "foreign_keys": {"generated_not_valid": 0, "unsupported": [], "deferred": []},
-        "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "generated_columns": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "unsigned_sequence_pairs": 0},
+        "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "generated_columns": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "check_constraints": 0, "unsigned_sequence_pairs": 0},
         "generated_columns": [],
         "unsigned_bigint_range": {
             "observed_above_signed_limit": [],
@@ -437,6 +439,18 @@ def generate_ddl(
         },
     }
     table_by_name = {str(table["name"]): table for table in snapshot.get("tables", []) if table.get("type") == "BASE TABLE"}
+    check_by_table: dict[str, list[dict[str, Any]]] = {}
+    check_names: set[tuple[str, str]] = set()
+    for check in snapshot.get("check_constraints", []):
+        check_table = str(check.get("table", ""))
+        check_name = str(check.get("name", ""))
+        if check_table not in table_by_name or not check_name:
+            raise DdlGenerationError("CHECK_CONSTRAINT_METADATA_INVALID")
+        key = (check_table, check_name)
+        if key in check_names:
+            raise DdlGenerationError("DUPLICATE_CHECK_CONSTRAINT_METADATA")
+        check_names.add(key)
+        check_by_table.setdefault(check_table, []).append(check)
     if len(table_by_name) != len([table for table in snapshot.get("tables", []) if table.get("type") == "BASE TABLE"]):
         raise DdlGenerationError("DUPLICATE_TABLE_METADATA")
     unsigned_bigint_flags, unsigned_bigint_observed, unsigned_bigint_aligned = _unsigned_bigint_range_flags(
@@ -559,6 +573,22 @@ def generate_ddl(
             columns = table.get("columns", [])
             if not columns:
                 raise TypeMappingError("TABLE_HAS_NO_COLUMNS")
+            column_names: set[str] = set()
+            column_ordinals: list[int] = []
+            for column in columns:
+                if not isinstance(column, dict):
+                    raise TypeMappingError("COLUMN_METADATA_INVALID")
+                column_name = str(column.get("name", ""))
+                _ident(column_name)
+                if column_name in column_names:
+                    raise TypeMappingError("DUPLICATE_COLUMN_METADATA")
+                column_names.add(column_name)
+                ordinal = column.get("ordinal")
+                if isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 1:
+                    raise TypeMappingError("COLUMN_ORDINAL_METADATA_INVALID")
+                column_ordinals.append(ordinal)
+            if sorted(column_ordinals) != list(range(1, len(columns) + 1)):
+                raise TypeMappingError("COLUMN_ORDINAL_METADATA_INVALID")
             table_column_types: dict[str, tuple[str, str | None]] = {}
             auto_columns = [column for column in columns if "auto_increment" in str(column.get("extra", "")).lower()]
             if len(auto_columns) > 1:
@@ -646,6 +676,37 @@ def generate_ddl(
                         report["review_items"].append({"table": table_name, "column": name, "code": "ON_UPDATE_NON_TEMPORAL_TYPE"})
                     else:
                         on_update_groups.setdefault(table_name, []).append(name)
+            column_metadata = {str(column["name"]): column for column in columns}
+            for check in check_by_table.get(table_name, []):
+                source_constraint = str(check.get("name", ""))
+                translation = check.get("translation")
+                if check.get("enforced") is not True or not isinstance(translation, dict):
+                    report["review_items"].append({
+                        "table": table_name,
+                        "constraint": source_constraint,
+                        "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED",
+                    })
+                    continue
+                try:
+                    expression = render_check_translation(translation, columns=column_metadata)
+                    target_constraint = _generated_name("ck_mysql", table_name, source_constraint)
+                    _ident(target_constraint)
+                except (CheckTranslationError, TypeMappingError, KeyError, ValueError):
+                    report["review_items"].append({
+                        "table": table_name,
+                        "constraint": source_constraint,
+                        "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED",
+                    })
+                    continue
+                column_defs.append(f"CONSTRAINT {_ident(target_constraint)} CHECK ({expression})")
+                report["translated_check_constraints"].append({
+                    "table": table_name,
+                    "constraint": target_constraint,
+                    "kind": translation["kind"],
+                    "column": translation["column"],
+                    "values_count": len(translation["values"]) if translation["kind"] == "text_in_list" else None,
+                })
+                report["generated"]["check_constraints"] += 1
             if pk_columns:
                 for name in pk_columns:
                     if name not in {str(column["name"]) for column in columns}:
@@ -915,12 +976,12 @@ def generate_ddl(
 
     checks = snapshot.get("check_constraints", [])
     for check in checks:
-        report["review_items"].append({
-            "table": str(check.get("table", "")),
-            "constraint": str(check.get("name", "")),
-            "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED",
-            "definition_sha256": str(check.get("definition_sha256", "")),
-        })
+        if check.get("enforced") is not True or not isinstance(check.get("translation"), dict):
+            report["review_items"].append({
+                "table": str(check.get("table", "")),
+                "constraint": str(check.get("name", "")),
+                "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED",
+            })
 
     report["unique_indexes_pending_collision_scan"] = unique_pending
     report["primary_keys_post_load"] = primary_keys_post_load
