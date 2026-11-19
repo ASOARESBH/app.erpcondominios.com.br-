@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import tempfile
 from typing import Any
 
@@ -17,7 +18,8 @@ from .type_mapping import TypeMappingError, parse_mysql_enum, quote_literal
 
 
 SOURCE_SCHEMA = "erp_pg_source"
-CATALOG_VERSION = 4
+CATALOG_VERSION = 7
+SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
 POSTGRES_SIGNED_BIGINT_MAX = 9223372036854775807
 SAFE_TEXT_DEFAULT_NAMES = frozenset({
     "status", "estado", "situacao", "tipo", "categoria", "nivel", "ativo", "habilitado",
@@ -286,7 +288,10 @@ def _source_grant_inventory(cursor: Any, schema: str) -> tuple[list[dict[str, An
                 scope = "OTHER"
                 unresolved_role_grants = True
             privileges = sorted({part.strip().upper() for part in match.group(1).split(",") if part.strip()})
-            inventory.append({"scope": scope, "privileges": privileges})
+            # MySQL emits implicit global USAGE for an account with no global privileges.
+            # It is not an effective privilege and is omitted; any other global grant is rejected below.
+            if not (scope == "GLOBAL" and privileges == ["USAGE"]):
+                inventory.append({"scope": scope, "privileges": privileges})
             if scope in {"GLOBAL", "SCHEMA"}:
                 full_scope_privileges.update(privileges)
     inventory = sorted({json.dumps(item, sort_keys=True): item for item in inventory}.values(), key=lambda item: item["scope"])
@@ -300,20 +305,42 @@ def _source_grant_inventory(cursor: Any, schema: str) -> tuple[list[dict[str, An
     return inventory, visibility, unresolved_role_grants
 
 
-def _grants_are_read_only(inventory: list[dict[str, Any]]) -> bool:
-    allowed = {
-        "GLOBAL": {"USAGE"},
-        "SCHEMA": {"SELECT", "SHOW VIEW"},
-        "SCHEMA_OBJECTS": {"SELECT", "SHOW VIEW"},
-    }
-    return bool(inventory) and all(
-        item["scope"] in allowed and set(item["privileges"]).issubset(allowed[item["scope"]])
-        for item in inventory
-    )
+def _grants_match_source_clone_allowlist(inventory: list[dict[str, Any]]) -> bool:
+    privileges_by_scope: dict[str, set[str]] = {}
+    for item in inventory:
+        scope = item.get("scope")
+        privileges = item.get("privileges")
+        if scope not in {"GLOBAL", "SCHEMA"} or not isinstance(privileges, list):
+            return False
+        privileges_by_scope.setdefault(scope, set()).update(str(value).upper() for value in privileges)
+    return privileges_by_scope == {"SCHEMA": {"SELECT", "SHOW VIEW", "TRIGGER"}}
 
 
 def _has_schema_wide_select(inventory: list[dict[str, Any]]) -> bool:
     return any(item["scope"] == "SCHEMA" and "SELECT" in item["privileges"] for item in inventory)
+
+
+def _admin_verifies_source_has_no_routines_or_events() -> bool:
+    if os.geteuid() != 0:
+        return False
+    query = (
+        "SELECT (SELECT COUNT(*) FROM information_schema.routines "
+        "WHERE routine_schema='erp_pg_source'), "
+        "(SELECT COUNT(*) FROM information_schema.events "
+        "WHERE event_schema='erp_pg_source')"
+    )
+    try:
+        result = subprocess.run(
+            ["/usr/bin/mysql", "--no-defaults", "--protocol=socket", "--user=root",
+             "--batch", "--skip-column-names", "--execute", query],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "0\t0"
 
 
 def _catalog_signature(cursor: Any, schema: str, visibility: dict[str, bool]) -> str:
@@ -410,10 +437,11 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
         grant_inventory, metadata_visibility, unresolved_role_grants = _source_grant_inventory(cursor, SOURCE_SCHEMA)
         if unresolved_role_grants:
             raise CatalogError("SOURCE_ROLE_GRANTS_UNRESOLVED")
-        if not _grants_are_read_only(grant_inventory):
-            raise CatalogError("SOURCE_ACCOUNT_GRANTS_NOT_READ_ONLY")
+        if not _grants_match_source_clone_allowlist(grant_inventory):
+            raise CatalogError("SOURCE_ACCOUNT_GRANTS_NOT_ALLOWLISTED")
         if not _has_schema_wide_select(grant_inventory):
             raise CatalogError("SOURCE_SCHEMA_WIDE_SELECT_REQUIRED")
+        routines_events_empty_before = _admin_verifies_source_has_no_routines_or_events()
         signature_before = _catalog_signature(cursor, SOURCE_SCHEMA, metadata_visibility)
         cursor.execute("SELECT @@SESSION.sql_mode AS session_sql_mode, @@SESSION.time_zone AS session_time_zone, @@SYSTEM_TIME_ZONE AS system_time_zone")
         session_row = cursor.fetchone() or {}
@@ -619,6 +647,9 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
 
         signature_after = _catalog_signature(cursor, SOURCE_SCHEMA, metadata_visibility)
         grants_after, visibility_after, unresolved_after = _source_grant_inventory(cursor, SOURCE_SCHEMA)
+        routines_events_empty_after = _admin_verifies_source_has_no_routines_or_events()
+        if routines_events_empty_before != routines_events_empty_after:
+            raise CatalogError("SOURCE_ROUTINES_EVENTS_CHANGED_DURING_CAPTURE")
         if signature_before != signature_after or grant_inventory != grants_after or metadata_visibility != visibility_after or unresolved_role_grants != unresolved_after:
             raise CatalogError("MYSQL_CATALOG_CHANGED_DURING_CAPTURE")
 
@@ -645,8 +676,10 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
             "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
             "metadata_visibility": metadata_visibility,
+            "source_routines_events_zero_verified": routines_events_empty_before and routines_events_empty_after,
             "grants": grant_inventory,
-            "source_grants_read_only": _grants_are_read_only(grant_inventory),
+            "source_grant_policy_id": SOURCE_GRANT_POLICY_ID,
+            "source_grants_policy_accepted": _grants_match_source_clone_allowlist(grant_inventory),
             "source_schema_wide_select": _has_schema_wide_select(grant_inventory),
             "unresolved_role_grants": unresolved_role_grants,
             "captured_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -747,7 +780,9 @@ def main() -> int:
         "events": len(snapshot["events"]) if snapshot["metadata_visibility"]["events"] else None,
         "metadata_visibility": snapshot["metadata_visibility"],
         "grant_scopes": len(snapshot["grants"]),
-        "source_grants_read_only": snapshot["source_grants_read_only"],
+        "source_grant_policy_id": snapshot["source_grant_policy_id"],
+        "source_grants_policy_accepted": snapshot["source_grants_policy_accepted"],
+        "source_routines_events_zero_verified": snapshot["source_routines_events_zero_verified"],
         "source_schema_wide_select": snapshot["source_schema_wide_select"],
         "review_items": len(snapshot["review_items"]),
     }

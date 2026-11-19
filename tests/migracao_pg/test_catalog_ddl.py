@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
-from tools.migracao_pg.catalog import CatalogError, _atomic_json, _foreign_key_action_rules, _grants_are_read_only, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, collect_catalog
+from tools.migracao_pg.catalog import CatalogError, _admin_verifies_source_has_no_routines_or_events, _atomic_json, _foreign_key_action_rules, _grants_match_source_clone_allowlist, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, collect_catalog
 from tools.migracao_pg.ddl import BUSINESS_TRIGGER_SOURCE_SHA256, DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
 from tools.migracao_pg.generate_ddl import main as generate_ddl_main
 from tools.migracao_pg.generated_columns import identify_generated_column
@@ -15,7 +15,7 @@ from tools.migracao_pg.generated_columns import identify_generated_column
 
 def sample_snapshot() -> dict:
     snapshot = {
-        "catalog_version": 4,
+        "catalog_version": 7,
         "source_schema": "erp_pg_source",
         "source_server_version": "8.4.13",
         "captured_at_utc": "2026-11-16T00:00:00+00:00",
@@ -60,8 +60,13 @@ def sample_snapshot() -> dict:
         "views": [],
         "routines": [],
         "events": [],
-        "metadata_visibility": {"views": True, "triggers": True, "routines": True, "events": True},
-        "source_grants_read_only": True,
+        "metadata_visibility": {"views": True, "triggers": True, "routines": False, "events": False},
+        "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
+        "source_grants_policy_accepted": True,
+        "source_routines_events_zero_verified": True,
+        "grants": [
+            {"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER"]},
+        ],
         "source_schema_wide_select": True,
         "review_items": [],
         "fingerprint_sha256": "",
@@ -80,7 +85,10 @@ class FakeCursor:
         if "CURRENT_USER()" in sql:
             self.current = [{"connected_account": "pg_reader@localhost", "selected_database": "erp_pg_source", "server_version": "8.4.13"}]
         elif "SHOW GRANTS" in sql:
-            self.current = [{"grants": "GRANT SELECT, SHOW VIEW ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"}]
+            self.current = [
+                {"grants": "GRANT USAGE ON *.* TO 'pg_reader'@'localhost'"},
+                {"grants": "GRANT SELECT, SHOW VIEW, TRIGGER ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"},
+            ]
         elif "information_schema.user_privileges" in sql:
             self.current = [{"privilege_type": "ALL PRIVILEGES"}]
         elif "information_schema.tables" in sql:
@@ -179,12 +187,26 @@ class CatalogTests(unittest.TestCase):
                 return self.rows
 
         cursor = GrantsCursor([
-            {"grant": "GRANT SELECT, SHOW VIEW, TRIGGER, SHOW ROUTINE, EVENT ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"},
+            {"grant": "GRANT SELECT, SHOW VIEW, TRIGGER ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"},
         ])
         inventory, visibility, unresolved = _source_grant_inventory(cursor, "erp_pg_source")
-        self.assertTrue(all(visibility.values()))
+        self.assertTrue(visibility["views"])
+        self.assertTrue(visibility["triggers"])
+        self.assertFalse(visibility["routines"])
+        self.assertFalse(visibility["events"])
         self.assertFalse(unresolved)
         self.assertNotIn("pg_reader", repr(inventory))
+
+        cursor = GrantsCursor([
+            {"grant": "GRANT USAGE ON *.* TO 'pg_reader'@'localhost'"},
+            {"grant": "GRANT SELECT, SHOW VIEW, TRIGGER ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"},
+        ])
+        inventory, visibility, unresolved = _source_grant_inventory(cursor, "erp_pg_source")
+        self.assertEqual(inventory, [{"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER"]}])
+        self.assertTrue(_grants_match_source_clone_allowlist(inventory))
+        self.assertFalse(unresolved)
+        self.assertFalse(visibility["routines"])
+        self.assertFalse(visibility["events"])
 
         cursor = GrantsCursor([{"grant": "GRANT `catalog_reader`@`%` TO 'pg_reader'@'localhost'"}])
         _, visibility, unresolved = _source_grant_inventory(cursor, "erp_pg_source")
@@ -202,15 +224,86 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(inventory[0]["scope"], "SCHEMA_OBJECTS")
         self.assertFalse(any(visibility.values()))
 
-    def test_source_account_must_have_read_only_privileges(self) -> None:
-        self.assertTrue(_grants_are_read_only([
+    def test_source_account_must_match_exact_clone_allowlist(self) -> None:
+        allowed = [
+            {"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER"]},
+        ]
+        self.assertTrue(_grants_match_source_clone_allowlist(allowed))
+        self.assertFalse(_grants_match_source_clone_allowlist(allowed + [{"scope": "OTHER", "privileges": ["SELECT"]}]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
+            {"scope": "GLOBAL", "privileges": ["SELECT"]},
+            allowed[0],
+        ]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
             {"scope": "GLOBAL", "privileges": ["USAGE"]},
+            allowed[0],
+        ]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
             {"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW"]},
         ]))
-        self.assertFalse(_grants_are_read_only([{"scope": "SCHEMA", "privileges": ["ALL PRIVILEGES"]}]))
-        self.assertFalse(_grants_are_read_only([{"scope": "SCHEMA", "privileges": ["SELECT", "TRIGGER"]}]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
+            {"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER", "UPDATE"]},
+        ]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
+            {"scope": "SCHEMA_OBJECTS", "privileges": ["TRIGGER"]},
+        ]))
         self.assertTrue(_has_schema_wide_select([{"scope": "SCHEMA", "privileges": ["SELECT"]}]))
         self.assertFalse(_has_schema_wide_select([{"scope": "SCHEMA_OBJECTS", "privileges": ["SELECT"]}]))
+
+    def test_routines_events_proof_is_aggregate_root_only_and_fail_closed(self) -> None:
+        with patch("tools.migracao_pg.catalog.os.geteuid", return_value=1000), \
+             patch("tools.migracao_pg.catalog.subprocess.run") as run:
+            self.assertFalse(_admin_verifies_source_has_no_routines_or_events())
+            run.assert_not_called()
+
+        with patch("tools.migracao_pg.catalog.os.geteuid", return_value=0), \
+             patch("tools.migracao_pg.catalog.subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = "0\t0\n"
+            self.assertTrue(_admin_verifies_source_has_no_routines_or_events())
+            args = run.call_args.args[0]
+            self.assertIn("COUNT(*)", args[-1])
+            self.assertIn("erp_pg_source", args[-1])
+
+            run.return_value.stdout = "1\t0\n"
+            self.assertFalse(_admin_verifies_source_has_no_routines_or_events())
+            run.return_value.returncode = 1
+            self.assertFalse(_admin_verifies_source_has_no_routines_or_events())
+
+    def test_catalog_accepts_admin_zero_proof_without_routine_event_definition_grants(self) -> None:
+        connection = FakeConnection()
+        with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=True) as proof:
+            result = collect_catalog(connection)
+        self.assertTrue(result["source_routines_events_zero_verified"])
+        self.assertFalse(result["metadata_visibility"]["routines"])
+        self.assertFalse(result["metadata_visibility"]["events"])
+        self.assertEqual(result["routines"], [])
+        self.assertEqual(result["events"], [])
+        self.assertEqual(proof.call_count, 2)
+        executed = "\n".join(connection.statements).lower()
+        self.assertNotIn("from information_schema.routines", executed)
+        self.assertNotIn("from information_schema.events", executed)
+
+    def test_catalog_without_admin_zero_proof_keeps_routines_events_unverified(self) -> None:
+        with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=False):
+            result = collect_catalog(FakeConnection())
+        self.assertFalse(result["source_routines_events_zero_verified"])
+        self.assertFalse(result["metadata_visibility"]["routines"])
+        self.assertFalse(result["metadata_visibility"]["events"])
+        self.assertEqual(result["routines"], [])
+        self.assertEqual(result["events"], [])
+
+    def test_ddl_rejects_nonempty_routines_or_events_without_definition_grants(self) -> None:
+        for object_type in ("routines", "events"):
+            snapshot = sample_snapshot()
+            snapshot[object_type] = [{"name": "synthetic_object"}]
+            snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+            bundle = generate_ddl(snapshot)
+            self.assertFalse(bundle.report["executable_complete"])
+            self.assertIn(
+                "SOURCE_ROUTINES_EVENTS_ZERO_PROOF_INCONSISTENT",
+                {item["code"] for item in bundle.report["review_items"]},
+            )
 
     def test_catalog_default_allowlist_handles_text_literals_and_sensitive_names(self) -> None:
         stamp = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "CURRENT_TIMESTAMP"}
@@ -284,8 +377,10 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(result["source_schema"], "erp_pg_source")
         self.assertEqual(len(result["collector_code_sha256"]), 64)
         self.assertEqual(result["tables"][0]["name"], "x")
-        self.assertTrue(result["source_grants_read_only"])
+        self.assertTrue(result["source_grants_policy_accepted"])
         self.assertTrue(result["source_schema_wide_select"])
+        self.assertFalse(result["source_routines_events_zero_verified"])
+        self.assertEqual(result["grants"], [{"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER"]}])
         self.assertEqual(len(result["structural_fingerprint_sha256"]), 64)
         self.assertNotIn("view_definition", result["views"])
         utc_index = connection.statements.index("SET SESSION time_zone = '+00:00'")
@@ -784,12 +879,12 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(DdlGenerationError, "COLLATION_OVERRIDE_COLUMN_NOT_FOUND"):
             generate_ddl(snapshot, collation_overrides={"child.not_a_column": "C"})
 
-    def test_ddl_requires_source_read_only_grant_proof(self) -> None:
+    def test_ddl_requires_source_allowlist_grant_proof(self) -> None:
         snapshot = sample_snapshot()
-        snapshot.pop("source_grants_read_only")
+        snapshot.pop("source_grants_policy_accepted")
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
-        self.assertIn("SOURCE_ACCOUNT_READ_ONLY_NOT_PROVEN", {item["code"] for item in bundle.report["review_items"]})
+        self.assertIn("SOURCE_GRANT_POLICY_NOT_ACCEPTED", {item["code"] for item in bundle.report["review_items"]})
         self.assertFalse(bundle.report["executable_complete"])
 
     def test_malicious_index_direction_is_not_emitted(self) -> None:
@@ -867,7 +962,7 @@ class CatalogTests(unittest.TestCase):
             snapshot_path.write_text(json.dumps(sample_snapshot()), encoding="utf-8")
             args = ["generate_ddl", "--snapshot", str(snapshot_path), "--output-dir", str(output_dir)]
             with patch("sys.argv", args):
-                self.assertEqual(generate_ddl_main(), 0)
+                self.assertEqual(generate_ddl_main(), 2)
             bundles = list(output_dir.glob("catalog-*-collation-*"))
             self.assertEqual(len(bundles), 1)
             self.assertTrue((bundles[0] / "BUNDLE_COMPLETE").is_file())

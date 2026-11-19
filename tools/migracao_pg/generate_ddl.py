@@ -91,7 +91,7 @@ def main() -> int:
     bundle.report["generator_code_sha256"] = generator_hash
     bundle.report["application_role_sha256"] = role_hash
     bundle.report["snapshot_file_sha256"] = snapshot_sha256
-    safety_header = "-- LOAD ARTIFACT: DO NOT APPLY unless report.json has load_executable_complete=true and required load reviews are approved.\n"
+    safety_header = "-- LOAD ARTIFACT: DO NOT APPLY unless report.json has executable_complete=true and all migration reviews are approved.\n"
     script_artifacts = {
         filename: (safety_header + f"-- Generator code SHA-256: {generator_hash}\n" + content).rstrip("\n") + "\n"
         for filename, content in bundle.scripts.items()
@@ -130,7 +130,7 @@ def main() -> int:
         "foreign_keys_generated_not_valid": bundle.report["foreign_keys"]["generated_not_valid"],
         "foreign_keys_deferred": len(bundle.report["foreign_keys"]["deferred"]),
     }, sort_keys=True))
-    return 0 if bundle.report["load_executable_complete"] else 2
+    return 0 if bundle.report["executable_complete"] else 2
 
 
 if __name__ == "__main__":

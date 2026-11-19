@@ -393,6 +393,7 @@ def _validate_contract(
     snapshot: dict[str, Any],
     report: dict[str, Any],
     mappings: dict[str, Any],
+    expected_target_database: str = TARGET_DATABASE,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
     if not all(isinstance(x, dict) for x in (snapshot, report, mappings)):
         _fail("RECONCILIATION_INPUT_INVALID")
@@ -402,15 +403,21 @@ def _validate_contract(
     if source_user is not None and source_user.split("@", 1)[0] != "pg_reader":
         _fail("SOURCE_ACCOUNT_NOT_ALLOWLISTED")
     target_db, _target_user = _identity_value(target, source=False)
-    if target_db != TARGET_DATABASE:
+    if target_db != expected_target_database:
         _fail("TARGET_DATABASE_NOT_ALLOWLISTED")
 
     if snapshot.get("source_schema") != SOURCE_SCHEMA:
         _fail("SNAPSHOT_SOURCE_SCHEMA_INVALID")
-    if snapshot.get("source_grants_read_only") is not True or snapshot.get("source_schema_wide_select") is not True:
-        _fail("SOURCE_READ_ONLY_EVIDENCE_MISSING")
+    if snapshot.get("source_grant_policy_id") != "erp_pg_source_select_show_view_trigger_v2" \
+        or snapshot.get("source_grants_policy_accepted") is not True \
+        or snapshot.get("source_routines_events_zero_verified") is not True \
+        or snapshot.get("source_schema_wide_select") is not True:
+        _fail("SOURCE_GRANT_POLICY_EVIDENCE_MISSING")
     visibility = snapshot.get("metadata_visibility")
-    if not isinstance(visibility, dict) or any(visibility.get(k) is not True for k in ("views", "triggers", "routines", "events")):
+    if not isinstance(visibility, dict) \
+        or any(visibility.get(k) is not True for k in ("views", "triggers")) \
+        or any(visibility.get(k) is not False for k in ("routines", "events")) \
+        or snapshot.get("routines") != [] or snapshot.get("events") != []:
         _fail("SNAPSHOT_METADATA_VISIBILITY_UNPROVEN")
     if snapshot.get("catalog_consistency_check") != "PRE_POST_SIGNATURE_MATCH":
         _fail("SNAPSHOT_CONSISTENCY_EVIDENCE_MISSING")
@@ -420,7 +427,7 @@ def _validate_contract(
 
     if report.get("status") not in {LOAD_PENDING_STATUS, LOAD_PARTIAL_STATUS}:
         _fail("LOAD_COMMIT_EVIDENCE_INVALID")
-    if report.get("source_schema") != SOURCE_SCHEMA or report.get("target_database") != TARGET_DATABASE:
+    if report.get("source_schema") != SOURCE_SCHEMA or report.get("target_database") != expected_target_database:
         _fail("LOAD_SCOPE_MISMATCH")
     if report.get("target_schema") != "erp" or report.get("bundle_catalog_fingerprint") != snapshot.get("fingerprint_sha256"):
         _fail("LOAD_SNAPSHOT_MISMATCH")
@@ -1950,7 +1957,8 @@ def reconcile(
     mappings: dict[str, Any],
     *,
     checkpoint: Callable[[Any], None] | None = None,
-    temp_root: str | os.PathLike[str] | None = None,
+    temp_root: Path | str | None = None,
+    expected_target_database: str = TARGET_DATABASE,
 ) -> dict[str, Any]:
     """Compare origem read-only e destino allowlisted usando entradas injetadas.
 
@@ -1965,7 +1973,7 @@ def reconcile(
     result: dict[str, Any] = {
         "reconciler_version": 3,
         "source_schema": SOURCE_SCHEMA,
-        "target_database": TARGET_DATABASE,
+        "target_database": expected_target_database,
         "allowed_target_schemas": sorted(TARGET_SCHEMAS),
         "status": "BLOCKED",
         "failure_code": None,
@@ -1977,7 +1985,9 @@ def reconcile(
     }
     try:
         counter_store = _DiskCounterStore(temp_root=temp_root)
-        tables_manifest, normalized_mappings = _validate_contract(source, target, snapshot, report, mappings)
+        tables_manifest, normalized_mappings = _validate_contract(
+            source, target, snapshot, report, mappings, expected_target_database
+        )
         result["table_failures"] = _load_table_failures(report)
         names = sorted(tables_manifest)
         source_acc: dict[str, dict[str, Any]] = {}

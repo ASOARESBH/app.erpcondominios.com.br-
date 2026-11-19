@@ -147,9 +147,13 @@ def base_contract(*, source_rows=None, target_rows=None, snapshot=None, report=N
     table = deepcopy(TABLE)
     snap = {
         "source_schema": "erp_pg_source",
-        "source_grants_read_only": True,
+        "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
+        "source_grants_policy_accepted": True,
+        "source_routines_events_zero_verified": True,
         "source_schema_wide_select": True,
-        "metadata_visibility": {"views": True, "triggers": True, "routines": True, "events": True},
+        "metadata_visibility": {"views": True, "triggers": True, "routines": False, "events": False},
+        "routines": [],
+        "events": [],
         "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
         "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
         "fingerprint_sha256": "f" * 64,
@@ -171,7 +175,7 @@ def base_contract(*, source_rows=None, target_rows=None, snapshot=None, report=N
     load_report = {
         "status": "LOAD_COMMITTED_PENDING_RECONCILIATION",
         "source_schema": "erp_pg_source",
-        "target_database": "erp_pg_dev",
+        "target_database": target_db,
         "target_schema": "erp",
         "bundle_catalog_fingerprint": snap["fingerprint_sha256"],
         "table_counts": [{"table": "synthetic", "source_rows": len(src), "target_rows": len(dst)}],
@@ -226,6 +230,21 @@ def run_contract(**kwargs):
     source, target, snapshot, report, mappings = base_contract(**kwargs)
     result = reconcile(source, target, snapshot, report, mappings)
     return result, source, target
+
+
+class TargetProfileContractTests(unittest.TestCase):
+    def test_cutover_reconciliation_requires_explicit_target_identity(self):
+        source, target, snapshot, report, mappings = base_contract(target_db="erp_pg_cutover_synthetic")
+        result = reconcile(
+            source, target, snapshot, report, mappings,
+            expected_target_database="erp_pg_cutover_synthetic",
+        )
+        self.assertEqual(result["status"], "RECONCILED")
+
+        source, target, snapshot, report, mappings = base_contract(target_db="erp_pg_cutover_synthetic")
+        blocked = reconcile(source, target, snapshot, report, mappings)
+        self.assertEqual(blocked["status"], "BLOCKED")
+        self.assertEqual(blocked["failure_code"], "TARGET_DATABASE_NOT_ALLOWLISTED")
 
 
 class CanonicalRowHashTests(unittest.TestCase):

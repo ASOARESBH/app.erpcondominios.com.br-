@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -45,15 +46,52 @@ class TargetConfigTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaisesRegex(LoaderError, code):
                 loader._validate_target_config(candidate)
 
+    def test_cutover_target_profile_rejects_development_and_mysql_names(self) -> None:
+        candidate = dict(self.config, dbname="erp_pg_cutover_synthetic")
+        self.assertEqual(loader._validate_target_config(candidate, "cutover")["dbname"], "erp_pg_cutover_synthetic")
+        for name in (
+            "erp_pg_dev", "erp_pg_source", "erp_hml_mysql",
+            "erpcondominios", "erpcondominios_stage_20261114", "postgres",
+        ):
+            with self.subTest(dbname=name), self.assertRaisesRegex(LoaderError, "TARGET_CONFIG_SCOPE_MISMATCH"):
+                loader._validate_target_config(dict(self.config, dbname=name), "cutover")
+        with self.assertRaisesRegex(LoaderError, "TARGET_PROFILE_NOT_ALLOWLISTED"):
+            loader._validate_target_config(candidate, "unknown")
+
+
+    def test_cutover_execution_marker_is_root_only_and_one_shot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "cutover.started"
+            with patch.object(loader, "CUTOVER_TARGET_EXECUTION_MARKER", marker), \
+                 patch.object(loader.os, "geteuid", return_value=0):
+                loader._consume_cutover_execution_marker("erp_pg_cutover_synthetic")
+                self.assertEqual(marker.read_text(encoding="ascii"), "erp_pg_cutover_synthetic\n")
+                self.assertEqual(stat.S_IMODE(marker.stat().st_mode), 0o600)
+                with self.assertRaisesRegex(LoaderError, "CUTOVER_EXECUTION_ALREADY_CONSUMED"):
+                    loader._consume_cutover_execution_marker("erp_pg_cutover_synthetic")
+
+    def test_cutover_execution_marker_requires_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "cutover.started"
+            with patch.object(loader, "CUTOVER_TARGET_EXECUTION_MARKER", marker), \
+                 patch.object(loader.os, "geteuid", return_value=1000):
+                with self.assertRaisesRegex(LoaderError, "CUTOVER_EXECUTION_MARKER_ROOT_REQUIRED"):
+                    loader._consume_cutover_execution_marker("erp_pg_cutover_synthetic")
+            self.assertFalse(marker.exists())
+
 
 class SourceSnapshotProofTests(unittest.TestCase):
     def setUp(self) -> None:
         self.snapshot = {
             "structural_fingerprint_sha256": "a" * 64,
             "source_schema": loader.SOURCE_SCHEMA,
-            "source_grants_read_only": True,
+            "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
+            "source_grants_policy_accepted": True,
+            "source_routines_events_zero_verified": True,
             "source_schema_wide_select": True,
-            "metadata_visibility": {key: True for key in ("views", "triggers", "routines", "events")},
+            "metadata_visibility": {"views": True, "triggers": True, "routines": False, "events": False},
+            "routines": [],
+            "events": [],
             "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
             "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
         }
@@ -63,7 +101,9 @@ class SourceSnapshotProofTests(unittest.TestCase):
 
     def test_rejects_missing_or_changed_live_proofs(self) -> None:
         cases = (
-            ("source_grants_read_only", False, "SOURCE_CATALOG_PROOF_INVALID"),
+            ("source_grants_policy_accepted", False, "SOURCE_CATALOG_PROOF_INVALID"),
+            ("source_grant_policy_id", "unknown", "SOURCE_CATALOG_PROOF_INVALID"),
+            ("source_routines_events_zero_verified", False, "SOURCE_CATALOG_PROOF_INVALID"),
             ("source_schema_wide_select", False, "SOURCE_SCHEMA_SELECT_PROOF_INVALID"),
             ("catalog_consistency_check", None, "SOURCE_CATALOG_CONSISTENCY_UNPROVEN"),
             ("timestamp_transfer_contract", {"source_session": "local", "target_wall_time": "UTC"}, "SOURCE_TIMESTAMP_TRANSFER_CONTRACT_INVALID"),
@@ -76,7 +116,7 @@ class SourceSnapshotProofTests(unittest.TestCase):
 
     def test_rejects_incomplete_metadata_visibility(self) -> None:
         current = dict(self.snapshot)
-        current["metadata_visibility"] = dict(self.snapshot["metadata_visibility"], events=False)
+        current["metadata_visibility"] = dict(self.snapshot["metadata_visibility"], views=False)
         with self.assertRaisesRegex(LoaderError, "SOURCE_METADATA_VISIBILITY_UNPROVEN"):
             loader._validate_source_snapshot(current, self.snapshot)
 
@@ -712,11 +752,22 @@ class NormalizeMysqlValueTests(unittest.TestCase):
 
 
 class BundleValidationTests(unittest.TestCase):
-    def test_real_versioned_bundle_is_blocked_when_collector_code_is_stale(self) -> None:
-        candidate = next(loader.BUNDLE_ROOT.glob("catalog-*-code-*/report.json"))
-        bundle_name = candidate.parent.name
-        with self.assertRaisesRegex(LoaderError, "BUNDLE_(COLLECTOR_CODE_MISMATCH|CATALOG_FINGERPRINT_MISMATCH)"):
-            validate_bundle(bundle_name, require_executable=False)
+    def test_executable_bundle_rejects_trigger_placeholder_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle_name = "catalog-" + "a" * 12 + "-collation-" + "b" * 8 + "-role-" + "c" * 8 + "-code-" + "d" * 8
+            bundle = root / bundle_name
+            bundle.mkdir()
+            (bundle / "BUNDLE_COMPLETE").write_text("bundle_complete=true\n", encoding="utf-8")
+            (bundle / "report.json").write_text(json.dumps({
+                "load_executable_complete": True,
+                "executable_complete": False,
+            }), encoding="utf-8")
+            (bundle / "catalog_snapshot.json").write_text(json.dumps({}), encoding="utf-8")
+            with patch.object(loader, "BUNDLE_ROOT", root), \
+                 patch.object(loader, "_validate_executable_bundle_ownership"):
+                with self.assertRaisesRegex(LoaderError, "BUNDLE_EXECUTION_INCOMPLETE"):
+                    validate_bundle(bundle_name)
 
     def test_bundle_name_is_allowlisted(self) -> None:
         for invalid in ("../catalog-x", "erp_pg_dev", "catalog-../../outside"):
@@ -1208,7 +1259,10 @@ class LoadTransactionTests(unittest.TestCase):
         target = _FakeTarget()
         captured_reports = []
         role = "erp_app"
-        config = {"user": "erp_p2_loader", "application_user": role}
+        config = {
+            "user": "erp_p2_loader", "application_user": role,
+            "dbname": "erp_pg_dev", "schema": "erp",
+        }
         names = table_names or ["synthetic_table"]
         report = {
             "application_role_sha256": hashlib.sha256(role.encode()).hexdigest(),
@@ -1224,9 +1278,13 @@ class LoadTransactionTests(unittest.TestCase):
         }
         snapshot = {
             "source_schema": "erp_pg_source",
-            "source_grants_read_only": True,
+            "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
+            "source_grants_policy_accepted": True,
+            "source_routines_events_zero_verified": True,
             "source_schema_wide_select": True,
-            "metadata_visibility": {key: True for key in ("views", "triggers", "routines", "events")},
+            "metadata_visibility": {"views": True, "triggers": True, "routines": False, "events": False},
+            "routines": [],
+            "events": [],
             "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
             "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
             "structural_fingerprint_sha256": "a" * 64,
@@ -1431,9 +1489,13 @@ class ReconciliationCleanupTests(unittest.TestCase):
             "source_schema": loader.SOURCE_SCHEMA,
             "tables": [],
             "structural_fingerprint_sha256": "a" * 64,
-            "source_grants_read_only": True,
+            "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
+            "source_grants_policy_accepted": True,
+            "source_routines_events_zero_verified": True,
             "source_schema_wide_select": True,
-            "metadata_visibility": {key: True for key in ("views", "triggers", "routines", "events")},
+            "metadata_visibility": {"views": True, "triggers": True, "routines": False, "events": False},
+            "routines": [],
+            "events": [],
             "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
             "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
         }
@@ -1464,7 +1526,7 @@ class ReconciliationCleanupTests(unittest.TestCase):
         with patch.object(loader, "validate_bundle", return_value=(Path("/tmp/bundle"), bundle_report, snapshot)), \
              patch.object(loader, "_read_reconciliation_report", return_value=load_report), \
              patch.object(loader, "_source_defaults_path", return_value=Path("/tmp/source.cnf")), \
-             patch.object(loader, "_load_target_config", return_value={"application_user": role}), \
+             patch.object(loader, "_load_target_config", return_value={"application_user": role, "dbname": "erp_pg_dev"}), \
              patch.object(loader, "_validate_column_mappings", return_value={}), \
              patch.object(loader, "_validated_identity_plan", return_value={}), \
              patch.object(loader, "_connect_source", return_value=(source, snapshot)), \

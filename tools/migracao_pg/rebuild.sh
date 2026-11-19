@@ -2,10 +2,10 @@
 set -Eeuo pipefail
 umask 077
 
-readonly TARGET_DATABASE='erp_pg_dev'
 readonly REPORT_ROOT='/var/backups/erpcondominios/p2-runs'
-readonly LOCK_FILE='/run/lock/erp-p2-development.lock'
-readonly ALLOWED_PROFILE='development'
+readonly LOCK_FILE='/run/lock/erp-p2-migration.lock'
+readonly PROFILE_DEVELOPMENT='development'
+readonly PROFILE_CUTOVER='cutover'
 readonly DEFAULT_PYTHON='/var/www/erpcondominios-pg/p2-venv/bin/python'
 readonly RELEASE_ROOT='/var/www/erpcondominios-pg/releases'
 readonly SYSTEM_PATH='/usr/sbin:/usr/bin:/sbin:/bin'
@@ -38,7 +38,7 @@ cleanup() {
 trap cleanup EXIT
 
 usage() {
-    printf 'Uso: %s development {preflight|load} <nome-bundle> <arquivo-defaults-source>\n' "$0" >&2
+    printf 'Uso: %s {development|cutover} {preflight|load} <nome-bundle> <arquivo-defaults-source>\n' "$0" >&2
     exit 64
 }
 
@@ -47,7 +47,7 @@ profile=$1
 command=$2
 bundle=$3
 source_defaults_file=$4
-[[ "$profile" == "$ALLOWED_PROFILE" ]] || { printf 'REBUILD_ERROR=PROFILE_NOT_ALLOWED\n' >&2; exit 64; }
+[[ "$profile" == "$PROFILE_DEVELOPMENT" || "$profile" == "$PROFILE_CUTOVER" ]] || { printf 'REBUILD_ERROR=PROFILE_NOT_ALLOWED\n' >&2; exit 64; }
 [[ "$command" == 'preflight' || "$command" == 'load' ]] || usage
 [[ "$bundle" =~ ^catalog-[a-f0-9]{12}-collation-[a-f0-9]{8}-role-[a-f0-9]{8}-code-[a-f0-9]{8}$ ]] || {
     printf 'REBUILD_ERROR=BUNDLE_NAME_INVALID\n' >&2
@@ -325,13 +325,15 @@ fi
 
 phase='source-preflight'
 preflight_json=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 "$python_bin" -E -B -m tools.migracao_pg.loader preflight \
+    --profile "$profile" \
     --bundle-name "$bundle" \
     --source-defaults-file "$source_defaults_file")
 printf '%s\n' "$preflight_json"
+target_database=$(/usr/bin/env -i "PATH=$SYSTEM_PATH" "$python_bin" -E -B -c 'import json,re,sys; d=json.load(sys.stdin); n=d.get("target_database"); ok=isinstance(n,str) and re.fullmatch(r"erp[a-z0-9_]{3,60}",n) and d.get("profile") in {"development","cutover"}; sys.exit(65) if not ok or d.get("profile") != sys.argv[1] else print(n)' "$profile" <<< "$preflight_json")
 
 if [[ "$command" == 'preflight' ]]; then
     phase='complete'
-    printf 'REBUILD_STATUS=PREFLIGHT_COMPLETE TARGET=%s\n' "$TARGET_DATABASE"
+    printf 'REBUILD_STATUS=PREFLIGHT_COMPLETE PROFILE=%s TARGET=%s\n' "$profile" "$target_database"
     exit 0
 fi
 
@@ -342,6 +344,7 @@ fi
 
 phase='target-rebuild'
 load_result=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 "$python_bin" -E -B -m tools.migracao_pg.loader load \
+    --profile "$profile" \
     --bundle-name "$bundle" \
     --source-defaults-file "$source_defaults_file" \
     --report-file "$report_file")
@@ -354,6 +357,7 @@ fi
 phase='reconciliation'
 set +e
 reconciliation_result=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 "$python_bin" -E -B -m tools.migracao_pg.loader reconcile \
+    --profile "$profile" \
     --bundle-name "$bundle" \
     --source-defaults-file "$source_defaults_file" \
     --report-file "$report_file")
@@ -367,4 +371,4 @@ fi
 
 phase='complete'
 runner_finished_epoch=$(/usr/bin/date +%s)
-printf 'REBUILD_STATUS=LOAD_RECONCILED TARGET=%s ELAPSED_SECONDS=%s\n' "$TARGET_DATABASE" "$((runner_finished_epoch - runner_started_epoch))"
+printf 'REBUILD_STATUS=LOAD_RECONCILED PROFILE=%s TARGET=%s ELAPSED_SECONDS=%s\n' "$profile" "$target_database" "$((runner_finished_epoch - runner_started_epoch))"

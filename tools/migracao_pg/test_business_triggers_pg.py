@@ -2,6 +2,7 @@
 """Teste transacional das sete triggers P2 no alvo descartável erp_pg_dev."""
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 import uuid
@@ -16,7 +17,7 @@ DDL_PATH = ROOT / "sql" / "postgresql" / "070_business_triggers_tenant_scoped.sq
 DSN = "dbname=erp_pg_dev host=/var/run/postgresql user=postgres"
 TENANT_A = 2_100_000_000
 TENANT_B = 2_100_000_001
-BASE_ID = -2_147_000_000
+BASE_ID = 2_100_000_000
 SEQUENCES = (
     "acessos_visitantes_id_seq",
     "alertas_estoque_id_seq",
@@ -292,6 +293,9 @@ def sequence_states_equal(conn: psycopg.Connection, states: dict[str, tuple[int,
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Teste transacional das sete triggers P2 em erp_pg_dev")
+    parser.add_argument("--installed", action="store_true", help="validar triggers existentes sem executar DDL")
+    args = parser.parse_args()
     if not DDL_PATH.is_file():
         print("HARNESS=FAIL; reason=ddl_file_missing")
         return 2
@@ -318,29 +322,42 @@ def main() -> int:
         )
         if active:
             raise ProbeFailure("concurrent_target_connections")
-        absent = conn.execute(
+        installed = conn.execute(
                 """SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
                    JOIN pg_namespace n ON n.oid=c.relnamespace
                    WHERE NOT t.tgisinternal AND n.nspname='erp' AND t.tgname = ANY(%s)""",
                 ([name for _, name in TRIGGERS],),
         ).fetchone()[0]
-        if absent:
+        if args.installed and installed != 7:
+            raise ProbeFailure("business_trigger_definition_count_mismatch")
+        if not args.installed and installed:
             raise ProbeFailure("business_trigger_name_already_exists")
         assert_fixture_range_empty(conn)
         states = capture_sequences(conn)
         conn.execute("BEGIN")
         began = True
-        body = re.sub(r"\A\s*BEGIN\s*;", "", ddl, count=1, flags=re.IGNORECASE)
-        body = re.sub(r"COMMIT\s*;\s*\Z", "", body, count=1, flags=re.IGNORECASE)
-        ClientCursor(conn).execute(body)
-        trigger_count = scalar(
+        if args.installed:
+            enabled = scalar(
                 conn,
                 """SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
                    JOIN pg_namespace n ON n.oid=c.relnamespace
-                   WHERE NOT t.tgisinternal AND n.nspname='erp' AND t.tgname = ANY(%s)""",
+                   WHERE NOT t.tgisinternal AND n.nspname='erp' AND t.tgenabled='O'
+                     AND t.tgname = ANY(%s)""",
                 ([name for _, name in TRIGGERS],),
-        )
-        assert_equal(trigger_count, 7, "all_seven_trigger_definitions_created_in_test_transaction")
+            )
+            assert_equal(enabled, 7, "all_seven_installed_triggers_enabled")
+        else:
+            body = re.sub(r"\A\s*BEGIN\s*;", "", ddl, count=1, flags=re.IGNORECASE)
+            body = re.sub(r"COMMIT\s*;\s*\Z", "", body, count=1, flags=re.IGNORECASE)
+            ClientCursor(conn).execute(body)
+            trigger_count = scalar(
+                    conn,
+                    """SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+                       JOIN pg_namespace n ON n.oid=c.relnamespace
+                       WHERE NOT t.tgisinternal AND n.nspname='erp' AND t.tgname = ANY(%s)""",
+                    ([name for _, name in TRIGGERS],),
+            )
+            assert_equal(trigger_count, 7, "all_seven_trigger_definitions_created_in_test_transaction")
         outcomes.append(("all_seven_trigger_definitions", True, None))
 
         cases = (
@@ -380,10 +397,10 @@ def main() -> int:
                    WHERE NOT t.tgisinternal AND n.nspname='erp' AND t.tgname = ANY(%s)""",
                 ([name for _, name in TRIGGERS],),
         )
-        assert_equal(remaining_triggers, 0, "trigger_ddl_rolled_back")
+        assert_equal(remaining_triggers, 7 if args.installed else 0, "trigger_state_preserved_after_rollback")
         restore_sequences(conn, states)
         assert_equal(sequence_states_equal(conn, states), True, "all_sequences_restored")
-        outcomes.append(("rollback_no_fixture_or_trigger_persisted", True, None))
+        outcomes.append(("rollback_no_fixture_or_trigger_state_changed", True, None))
         outcomes.append(("all_eleven_sequences_restored", True, None))
     except Exception as exc:
         if conn is not None and not conn.closed and began:
@@ -411,7 +428,8 @@ def main() -> int:
     for label, passed, detail in outcomes:
         print(f"CASE={label}; status={'PASS' if passed else 'FAIL'}" + (f"; detail={detail}" if detail else ""))
         failed += 0 if passed else 1
-    print(f"SUMMARY=cases:{len(outcomes)};passed:{len(outcomes)-failed};failed:{failed};target:erp_pg_dev")
+    mode = "installed" if args.installed else "transactional_ddl"
+    print(f"SUMMARY=cases:{len(outcomes)};passed:{len(outcomes)-failed};failed:{failed};mode:{mode};target:erp_pg_dev")
     return 0 if failed == 0 else 1
 
 

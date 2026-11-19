@@ -16,7 +16,8 @@ SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "1.9.0"
+GENERATOR_VERSION = "2.2.0"
+SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
 POSTGRES_SEQUENCE_MAX = 9223372036854775807
@@ -361,7 +362,7 @@ def generate_ddl(
     collation_overrides: dict[str, str] | None = None,
     application_role: str | None = None,
 ) -> DdlBundle:
-    if snapshot.get("catalog_version") != 4 or snapshot.get("source_schema") != SOURCE_SCHEMA:
+    if snapshot.get("catalog_version") != 7 or snapshot.get("source_schema") != SOURCE_SCHEMA:
         raise DdlGenerationError("CATALOG_VERSION_OR_SOURCE_NOT_ALLOWLISTED")
     fingerprint = snapshot.get("fingerprint_sha256")
     if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
@@ -465,16 +466,27 @@ def generate_ddl(
         "metadata_visibility": dict(snapshot.get("metadata_visibility", {})),
         "source_grants": snapshot.get("grants", []),
         "unresolved_role_grants": bool(snapshot.get("unresolved_role_grants", False)),
-        "source_grants_read_only": snapshot.get("source_grants_read_only") is True,
+        "source_grant_policy_id": snapshot.get("source_grant_policy_id"),
+        "source_grants_policy_accepted": snapshot.get("source_grants_policy_accepted") is True,
+        "source_routines_events_zero_verified": snapshot.get("source_routines_events_zero_verified") is True,
         "source_schema_wide_select": snapshot.get("source_schema_wide_select") is True,
     }
-    if snapshot.get("source_grants_read_only") is not True:
-        report["review_items"].append({"code": "SOURCE_ACCOUNT_READ_ONLY_NOT_PROVEN"})
+    if snapshot.get("source_grant_policy_id") != SOURCE_GRANT_POLICY_ID \
+        or snapshot.get("source_grants_policy_accepted") is not True:
+        report["review_items"].append({"code": "SOURCE_GRANT_POLICY_NOT_ACCEPTED"})
+    if snapshot.get("source_routines_events_zero_verified") is not True:
+        report["review_items"].append({"code": "SOURCE_ROUTINES_EVENTS_ZERO_NOT_VERIFIED"})
     if snapshot.get("source_schema_wide_select") is not True:
         report["review_items"].append({"code": "SOURCE_SCHEMA_WIDE_SELECT_NOT_PROVEN"})
-    for object_type in ("views", "triggers", "routines", "events"):
-        if snapshot.get("metadata_visibility", {}).get(object_type) is not True:
+    visibility = snapshot.get("metadata_visibility", {})
+    for object_type in ("views", "triggers"):
+        if visibility.get(object_type) is not True:
             report["review_items"].append({"object_type": object_type, "code": "METADATA_VISIBILITY_NOT_CONFIRMED"})
+    if any(visibility.get(object_type) is not False for object_type in ("routines", "events")):
+        report["review_items"].append({"code": "ROUTINE_EVENT_GRANT_VISIBILITY_POLICY_MISMATCH"})
+    if snapshot.get("source_routines_events_zero_verified") is not True \
+        or snapshot.get("routines") != [] or snapshot.get("events") != []:
+        report["review_items"].append({"code": "SOURCE_ROUTINES_EVENTS_ZERO_PROOF_INCONSISTENT"})
     if snapshot.get("unresolved_role_grants"):
         report["review_items"].append({"code": "SOURCE_ROLE_GRANTS_UNRESOLVED"})
     source_triggers = snapshot.get("triggers", [])

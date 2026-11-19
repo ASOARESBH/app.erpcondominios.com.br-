@@ -20,7 +20,7 @@ from typing import Any
 if os.geteuid() == 0 and os.environ.get("ERP_P2_ROOT_LAUNCHER_VERIFIED") != "1":
     raise SystemExit("LOADER_ROOT_EXECUTION_REQUIRES_REBUILD_RUNNER")
 
-from .catalog import CatalogError, SOURCE_SCHEMA, _collector_fingerprint, _mysql_socket_options, _validate_defaults_file, collect_catalog
+from .catalog import CatalogError, SOURCE_GRANT_POLICY_ID, SOURCE_SCHEMA, _collector_fingerprint, _mysql_socket_options, _validate_defaults_file, collect_catalog
 from .ddl import GENERATOR_VERSION, LEGACY_SCHEMA, MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX, TARGET_SCHEMA, _schema_for_table, canonical_fingerprint
 from .generate_ddl import _generator_fingerprint
 from .generated_columns import is_generated_column, target_generated_column
@@ -32,10 +32,17 @@ from .type_mapping import (
     parse_mysql_enum,
 )
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-BUNDLE_ROOT = REPOSITORY_ROOT / "sql" / "postgresql"
+BUNDLE_ROOT = Path("/var/lib/erpcondominios-pg/p2-bundles")
 TARGET_DATABASE = "erp_pg_dev"
-MIGRATION_TARGET_CONFIG = Path("/etc/erpcondominios-pg/secrets/p2-loader.cnf")
+MIGRATION_TARGET_CONFIGS = {
+    "development": Path("/etc/erpcondominios-pg/secrets/p2-loader.cnf"),
+    "cutover": Path("/etc/erpcondominios-pg/secrets/p2-loader-cutover.cnf"),
+}
+CUTOVER_TARGET_APPROVAL_FILE = Path("/etc/erpcondominios-pg/secrets/p2-cutover-target.approved")
+CUTOVER_TARGET_EXECUTION_MARKER = Path("/etc/erpcondominios-pg/secrets/p2-cutover-execution.started")
+PROTECTED_TARGET_DATABASES = frozenset({
+    "erp_pg_dev", "erp_pg_source", "erp_hml_mysql", "erpcondominios", "erpcondominios_stage_20261114",
+})
 SOURCE_SECRET_ROOT = Path("/etc/erpcondominios/secrets")
 REPORT_ROOT = Path("/var/backups/erpcondominios/p2-runs")
 MYSQL_BATCH_SIZE = 1
@@ -161,20 +168,29 @@ def validate_bundle(bundle_name: str, *, require_executable: bool = True) -> tup
     snapshot, snapshot_raw = _read_json(bundle / "catalog_snapshot.json")
     if require_executable and report.get("load_executable_complete") is not True:
         raise LoaderError("BUNDLE_REQUIRES_REVIEW")
+    if require_executable and report.get("executable_complete") is not True:
+        raise LoaderError("BUNDLE_EXECUTION_INCOMPLETE")
     if report.get("source_schema") != SOURCE_SCHEMA or snapshot.get("source_schema") != SOURCE_SCHEMA:
         raise LoaderError("BUNDLE_SOURCE_SCHEMA_MISMATCH")
     if report.get("target_schema") != TARGET_SCHEMA:
         raise LoaderError("BUNDLE_TARGET_SCHEMA_MISMATCH")
-    if snapshot.get("catalog_version") != 4 or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
+    if snapshot.get("catalog_version") != 7 or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
         raise LoaderError("BUNDLE_CATALOG_FINGERPRINT_MISMATCH")
     if report.get("catalog_fingerprint_sha256") != snapshot.get("fingerprint_sha256"):
         raise LoaderError("BUNDLE_REPORT_CATALOG_MISMATCH")
     if snapshot.get("collector_code_sha256") != _collector_fingerprint():
         raise LoaderError("BUNDLE_COLLECTOR_CODE_MISMATCH")
-    if snapshot.get("source_grants_read_only") is not True or snapshot.get("source_schema_wide_select") is not True:
+    if snapshot.get("source_grant_policy_id") != SOURCE_GRANT_POLICY_ID \
+        or snapshot.get("source_grants_policy_accepted") is not True \
+        or snapshot.get("source_routines_events_zero_verified") is not True \
+        or snapshot.get("source_schema_wide_select") is not True:
         raise LoaderError("BUNDLE_SOURCE_GRANT_PROOF_MISSING")
     visibility = snapshot.get("metadata_visibility")
-    if not isinstance(visibility, dict) or any(visibility.get(key) is not True for key in ("views", "triggers", "routines", "events")):
+    if not isinstance(visibility, dict) \
+        or any(visibility.get(key) is not True for key in ("views", "triggers")) \
+        or any(visibility.get(key) is not False for key in ("routines", "events")) \
+        or snapshot.get("source_routines_events_zero_verified") is not True \
+        or snapshot.get("routines") != [] or snapshot.get("events") != []:
         raise LoaderError("BUNDLE_METADATA_VISIBILITY_UNPROVEN")
     if report.get("generator_version") != GENERATOR_VERSION:
         raise LoaderError("BUNDLE_GENERATOR_VERSION_MISMATCH")
@@ -193,7 +209,7 @@ def validate_bundle(bundle_name: str, *, require_executable: bool = True) -> tup
         raw = path.read_bytes()
         if hashlib.sha256(raw).hexdigest() != script_hashes[name]:
             raise LoaderError("BUNDLE_SCRIPT_CHECKSUM_MISMATCH")
-        if not raw.startswith(b"-- LOAD ARTIFACT: DO NOT APPLY unless report.json has load_executable_complete=true and required load reviews are approved.\n"):
+        if not raw.startswith(b"-- LOAD ARTIFACT: DO NOT APPLY unless report.json has executable_complete=true and all migration reviews are approved.\n"):
             raise LoaderError("BUNDLE_SCRIPT_SAFETY_HEADER_MISSING")
         expected_header = f"-- Generator code SHA-256: {report['generator_code_sha256']}\n".encode("ascii")
         if expected_header not in raw[:512]:
@@ -425,11 +441,21 @@ def _connect_source(defaults_file: Path):
         raise LoaderError("MYSQL_SOURCE_PREFLIGHT_FAILED") from error
 
 
-def _validate_target_config(config: dict[str, Any]) -> dict[str, Any]:
+def _validate_target_config(config: dict[str, Any], profile: str = "development") -> dict[str, Any]:
     expected_keys = {"host", "port", "dbname", "user", "password", "schema", "timezone", "application_user"}
     if not isinstance(config, dict) or set(config) != expected_keys:
         raise LoaderError("TARGET_CONFIG_SHAPE_INVALID")
-    if config["dbname"] != TARGET_DATABASE or config["schema"] != TARGET_SCHEMA:
+    if profile == "development":
+        database_allowed = config["dbname"] == TARGET_DATABASE
+    elif profile == "cutover":
+        database_allowed = (
+            isinstance(config["dbname"], str)
+            and re.fullmatch(r"erp[a-z0-9_]{3,60}", config["dbname"]) is not None
+            and config["dbname"] not in PROTECTED_TARGET_DATABASES
+        )
+    else:
+        raise LoaderError("TARGET_PROFILE_NOT_ALLOWLISTED")
+    if not database_allowed or config["schema"] != TARGET_SCHEMA:
         raise LoaderError("TARGET_CONFIG_SCOPE_MISMATCH")
     if config["host"] not in {"localhost", "127.0.0.1", "::1", "/run/postgresql", "/var/run/postgresql"}:
         raise LoaderError("TARGET_HOST_MUST_BE_LOCAL")
@@ -449,8 +475,10 @@ def _validate_target_config(config: dict[str, Any]) -> dict[str, Any]:
     return config
 
 
-def _load_target_config() -> dict[str, Any]:
-    path = MIGRATION_TARGET_CONFIG
+def _load_target_config(profile: str = "development") -> dict[str, Any]:
+    if profile not in MIGRATION_TARGET_CONFIGS:
+        raise LoaderError("TARGET_PROFILE_NOT_ALLOWLISTED")
+    path = MIGRATION_TARGET_CONFIGS[profile]
     for directory in (path.parent, *path.parent.parents):
         if directory == Path("/"):
             break
@@ -483,7 +511,51 @@ def _load_target_config() -> dict[str, Any]:
     if parser.defaults() or parser.sections() != ["postgresql"]:
         raise LoaderError("TARGET_CONFIG_SHAPE_INVALID")
     config = dict(parser.items("postgresql", raw=True))
-    return _validate_target_config(config)
+    if profile == "cutover":
+        try:
+            approval_info = CUTOVER_TARGET_APPROVAL_FILE.lstat()
+            if not stat.S_ISREG(approval_info.st_mode) or approval_info.st_uid != 0 \
+                or stat.S_IMODE(approval_info.st_mode) != 0o600 \
+                or CUTOVER_TARGET_APPROVAL_FILE.is_symlink():
+                raise LoaderError("CUTOVER_TARGET_APPROVAL_INVALID")
+            approved_database = CUTOVER_TARGET_APPROVAL_FILE.read_text(encoding="ascii").strip()
+        except LoaderError:
+            raise
+        except Exception as error:
+            raise LoaderError("CUTOVER_TARGET_APPROVAL_UNAVAILABLE") from error
+        if approved_database != config.get("dbname"):
+            raise LoaderError("CUTOVER_TARGET_NOT_APPROVED")
+    return _validate_target_config(config, profile)
+
+
+def _consume_cutover_execution_marker(database: str) -> None:
+    if os.geteuid() != 0:
+        raise LoaderError("CUTOVER_EXECUTION_MARKER_ROOT_REQUIRED")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(CUTOVER_TARGET_EXECUTION_MARKER, flags, 0o600)
+    except FileExistsError as error:
+        raise LoaderError("CUTOVER_EXECUTION_ALREADY_CONSUMED") from error
+    except OSError as error:
+        raise LoaderError("CUTOVER_EXECUTION_MARKER_CREATE_FAILED") from error
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
+            raise LoaderError("CUTOVER_EXECUTION_MARKER_MODE_INVALID")
+        payload = (database + "\n").encode("ascii", errors="strict")
+        remaining = memoryview(payload)
+        while remaining:
+            written = os.write(fd, remaining)
+            if written <= 0:
+                raise LoaderError("CUTOVER_EXECUTION_MARKER_WRITE_FAILED")
+            remaining = remaining[written:]
+        os.fsync(fd)
+    except LoaderError:
+        raise
+    except Exception as error:
+        raise LoaderError("CUTOVER_EXECUTION_MARKER_WRITE_FAILED") from error
+    finally:
+        os.close(fd)
 
 
 def _connect_target(config: dict[str, Any]):
@@ -510,6 +582,7 @@ def _target_preflight(
     connection: Any,
     expected_user: str = "erp_p2_loader",
     application_user: str = "erp_app",
+    expected_database: str = TARGET_DATABASE,
 ) -> dict[str, Any]:
     try:
         with connection.cursor() as cursor:
@@ -530,7 +603,7 @@ def _target_preflight(
         raise LoaderError("POSTGRES_TARGET_PREFLIGHT_FAILED", _sqlstate(error)) from error
     if not row or len(row) != 8:
         raise LoaderError("POSTGRES_TARGET_PREFLIGHT_INVALID")
-    if row[0] != TARGET_DATABASE:
+    if row[0] != expected_database:
         raise LoaderError("POSTGRES_TARGET_DATABASE_MISMATCH")
     if row[1] != expected_user:
         raise LoaderError("POSTGRES_TARGET_ROLE_MISMATCH")
@@ -2125,17 +2198,23 @@ def _validate_source_snapshot(current: dict[str, Any], expected: dict[str, Any])
     if current.get("structural_fingerprint_sha256") != expected.get("structural_fingerprint_sha256"):
         raise LoaderError("SOURCE_CATALOG_DRIFT_FROM_BUNDLE")
     if current.get("source_schema") != SOURCE_SCHEMA \
-        or current.get("source_grants_read_only") is not True \
-        or expected.get("source_grants_read_only") is not True:
+        or current.get("source_grant_policy_id") != SOURCE_GRANT_POLICY_ID \
+        or expected.get("source_grant_policy_id") != SOURCE_GRANT_POLICY_ID \
+        or current.get("source_grants_policy_accepted") is not True \
+        or expected.get("source_grants_policy_accepted") is not True \
+        or current.get("source_routines_events_zero_verified") is not True \
+        or expected.get("source_routines_events_zero_verified") is not True:
         raise LoaderError("SOURCE_CATALOG_PROOF_INVALID")
     if current.get("source_schema_wide_select") is not True \
         or expected.get("source_schema_wide_select") is not True:
         raise LoaderError("SOURCE_SCHEMA_SELECT_PROOF_INVALID")
-    required_visibility = ("views", "triggers", "routines", "events")
     current_visibility = current.get("metadata_visibility")
     expected_visibility = expected.get("metadata_visibility")
     if not isinstance(current_visibility, dict) or not isinstance(expected_visibility, dict) \
-        or any(current_visibility.get(key) is not True or expected_visibility.get(key) is not True for key in required_visibility):
+        or any(current_visibility.get(key) is not True or expected_visibility.get(key) is not True for key in ("views", "triggers")) \
+        or any(current_visibility.get(key) is not False or expected_visibility.get(key) is not False for key in ("routines", "events")) \
+        or current.get("routines") != [] or expected.get("routines") != [] \
+        or current.get("events") != [] or expected.get("events") != []:
         raise LoaderError("SOURCE_METADATA_VISIBILITY_UNPROVEN")
     if current.get("catalog_consistency_check") != "PRE_POST_SIGNATURE_MATCH" \
         or expected.get("catalog_consistency_check") != "PRE_POST_SIGNATURE_MATCH":
@@ -2146,8 +2225,9 @@ def _validate_source_snapshot(current: dict[str, Any], expected: dict[str, Any])
         raise LoaderError("SOURCE_TIMESTAMP_TRANSFER_CONTRACT_INVALID")
 
 
-def run_preflight(bundle_name: str, defaults_file: str | None = None) -> dict[str, Any]:
+def run_preflight(bundle_name: str, defaults_file: str | None = None, profile: str = "development") -> dict[str, Any]:
     bundle, report, snapshot = validate_bundle(bundle_name, require_executable=False)
+    target_config = _load_target_config(profile)
     source_defaults = _source_defaults_path(defaults_file)
     source, current_snapshot = _connect_source(source_defaults)
     memory_guard = _MemoryGuard()
@@ -2176,12 +2256,11 @@ def run_preflight(bundle_name: str, defaults_file: str | None = None) -> dict[st
         memory_guard.stop_monitor()
         source.close()
 
-    target_config = _load_target_config()
     if report.get("application_role_sha256") != hashlib.sha256(target_config["application_user"].encode("utf-8")).hexdigest():
         raise LoaderError("BUNDLE_APPLICATION_ROLE_MISMATCH")
     target = _connect_target(target_config)
     try:
-        target_summary = _target_preflight(target, target_config["user"], target_config["application_user"])
+        target_summary = _target_preflight(target, target_config["user"], target_config["application_user"], target_config["dbname"])
         with target.cursor() as cursor:
             cursor.execute("SELECT count(*) FROM pg_namespace WHERE nspname = %s", (TARGET_SCHEMA,))
             target_schema_present = bool(cursor.fetchone()[0])
@@ -2191,9 +2270,11 @@ def run_preflight(bundle_name: str, defaults_file: str | None = None) -> dict[st
 
     return {
         "status": "PREFLIGHT_READ_ONLY",
+        "profile": profile,
         "source_schema": SOURCE_SCHEMA,
-        "target_database": TARGET_DATABASE,
-        "bundle_executable_complete": report.get("load_executable_complete") is True,
+        "target_database": target_config["dbname"],
+        "bundle_executable_complete": report.get("executable_complete") is True,
+        "bundle_load_executable_complete": report.get("load_executable_complete") is True,
         "bundle_review_items": len(report.get("review_items", [])),
         "bundle_blocked_tables": len(report.get("blocked_tables", [])),
         "source_catalog_matches_bundle": True,
@@ -2214,13 +2295,13 @@ def run_preflight(bundle_name: str, defaults_file: str | None = None) -> dict[st
     }
 
 
-def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Path | None = None) -> dict[str, Any]:
+def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Path | None = None, profile: str = "development") -> dict[str, Any]:
     if report_path is None:
         raise LoaderError("LOAD_REPORT_FILE_REQUIRED")
     _require_load_runtime()
     bundle, report, snapshot = validate_bundle(bundle_name, require_executable=True)
     source_defaults = _source_defaults_path(defaults_file)
-    target_config = _load_target_config()
+    target_config = _load_target_config(profile)
     if report.get("application_role_sha256") != hashlib.sha256(target_config["application_user"].encode("utf-8")).hexdigest():
         raise LoaderError("BUNDLE_APPLICATION_ROLE_MISMATCH")
     table_names = list(report["generated_tables"])
@@ -2231,8 +2312,9 @@ def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Pa
     memory_guard = _MemoryGuard()
     initial_report = {
         "status": "STARTED",
+        "profile": profile,
         "source_schema": SOURCE_SCHEMA,
-        "target_database": TARGET_DATABASE,
+        "target_database": target_config["dbname"],
         "target_schema": TARGET_SCHEMA,
         "legacy_schema": LEGACY_SCHEMA,
         "bundle_catalog_fingerprint": report.get("catalog_fingerprint_sha256"),
@@ -2275,7 +2357,9 @@ def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Pa
         nul_spool = tempfile.TemporaryFile(mode="w+b", prefix="p2-nul-audit-", dir=str(REPORT_ROOT))
         target = _connect_target(target_config)
         memory_guard.set_connection(target)
-        target_preflight = _target_preflight(target, target_config["user"], target_config["application_user"])
+        target_preflight = _target_preflight(target, target_config["user"], target_config["application_user"], target_config["dbname"])
+        if profile == "cutover":
+            _consume_cutover_execution_marker(target_config["dbname"])
         target.autocommit = False
         import psycopg
         from psycopg import sql
@@ -2285,7 +2369,7 @@ def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Pa
                 with target.cursor() as cursor:
                     cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)", (20261117, 2026))
                     cursor.execute("SELECT current_database()")
-                    if cursor.fetchone()[0] != TARGET_DATABASE:
+                    if cursor.fetchone()[0] != target_config["dbname"]:
                         raise LoaderError("POSTGRES_TARGET_DATABASE_MISMATCH")
                     for schema_name in (TARGET_SCHEMA, LEGACY_SCHEMA):
                         cursor.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema_name)))
@@ -2425,8 +2509,9 @@ def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Pa
 
         report_result = {
             "status": "LOAD_PARTIAL_PENDING_RECONCILIATION" if table_failures else "LOAD_COMMITTED_PENDING_RECONCILIATION",
+            "profile": profile,
             "source_schema": SOURCE_SCHEMA,
-            "target_database": TARGET_DATABASE,
+            "target_database": target_config["dbname"],
             "target_schema": TARGET_SCHEMA,
             "bundle_catalog_fingerprint": report.get("catalog_fingerprint_sha256"),
             "generator_version": report.get("generator_version"),
@@ -2614,13 +2699,15 @@ def _validated_identity_plan(snapshot: dict[str, Any], table_names: list[str], m
     return identities_by_table
 
 
-def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path) -> dict[str, Any]:
+def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path, profile: str = "development") -> dict[str, Any]:
     from .reconcile import reconcile
 
     started_at = time.time()
     bundle, bundle_report, snapshot = validate_bundle(bundle_name, require_executable=True)
     del bundle
     report = _read_reconciliation_report(report_path)
+    if report.get("profile", "development") != profile:
+        raise LoaderError("LOAD_PROFILE_MISMATCH")
     if report.get("status") not in {
         "LOAD_COMMITTED_PENDING_RECONCILIATION",
         "LOAD_PARTIAL_PENDING_RECONCILIATION",
@@ -2635,7 +2722,7 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
         raise LoaderError("LOAD_SNAPSHOT_MISMATCH")
 
     source_defaults = _source_defaults_path(defaults_file)
-    target_config = _load_target_config()
+    target_config = _load_target_config(profile)
     if bundle_report.get("application_role_sha256") != hashlib.sha256(target_config["application_user"].encode("utf-8")).hexdigest():
         raise LoaderError("BUNDLE_APPLICATION_ROLE_MISMATCH")
     table_names = list(bundle_report.get("generated_tables", []))
@@ -2679,6 +2766,7 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
             source, target, snapshot, comparison_report, mappings,
             checkpoint=_reconcile_checkpoint,
             temp_root=REPORT_ROOT,
+            expected_target_database=target_config["dbname"],
         )
         if load_was_partial and result.get("status") == "RECONCILED":
             result = {"status": "BLOCKED", "failure_code": "PARTIAL_LOAD_CANNOT_BE_ACCEPTED"}
@@ -2766,8 +2854,9 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Loader transacional do perfil P2 de desenvolvimento")
+    parser = argparse.ArgumentParser(description="Loader transacional do P2/P5; source fixo em erp_pg_source")
     parser.add_argument("command", choices=("preflight", "load", "reconcile"))
+    parser.add_argument("--profile", choices=("development", "cutover"), default="development")
     parser.add_argument("--bundle-name", required=True)
     parser.add_argument("--source-defaults-file")
     parser.add_argument("--report-file")
@@ -2778,15 +2867,15 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
         if args.command == "preflight":
-            result = run_preflight(args.bundle_name, args.source_defaults_file)
+            result = run_preflight(args.bundle_name, args.source_defaults_file, args.profile)
         elif args.command == "load":
             if not args.report_file:
                 raise LoaderError("LOAD_REPORT_FILE_REQUIRED")
-            result = run_load(args.bundle_name, args.source_defaults_file, Path(args.report_file))
+            result = run_load(args.bundle_name, args.source_defaults_file, Path(args.report_file), args.profile)
         else:
             if not args.report_file:
                 raise LoaderError("LOAD_REPORT_FILE_REQUIRED")
-            result = run_reconcile(args.bundle_name, args.source_defaults_file, Path(args.report_file))
+            result = run_reconcile(args.bundle_name, args.source_defaults_file, Path(args.report_file), args.profile)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if args.command != "reconcile" or result.get("status") == "RECONCILED" else 2
     except LoaderError as error:
