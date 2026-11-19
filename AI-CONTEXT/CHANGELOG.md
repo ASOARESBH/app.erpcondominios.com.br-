@@ -11,6 +11,11 @@ Registro de alterações significativas no ERP.
 - Preparado e ativado o release imutável `ca4135c0b9cc891dcb80773e9337ca642dc05032` somente no vhost loopback 8443, com TLS, Basic Auth e sem regra UFW; smoke HTTP base passou. Teste autenticado manual de André permanece pendente. Produção, current produtivo, DNS, cutover e `main` não foram alterados.
 - Suíte sintética P2: 190 testes aprovados com a venv de dependências do pipeline. P2 continua BLOQUEADA / NÃO ACEITA para produção até resolver a FK, repetir a carga com o bundle/rebuild versionado, reconciliar tudo, revisar as exceções e obter o teste manual no 8443.
 
+### Projeto PostgreSQL P2 — BIGINT unsigned (2026-11-19)
+- Portada para o pipeline versionado a regra aprovada em `pg/carga-rapida`: `bigint unsigned` usa PostgreSQL `bigint` com `CHECK (>= 0)` quando os valores cabem no limite assinado e `numeric(20,0)` somente quando a pré-varredura encontra valores maiores; as extremidades unsigned ligadas por FK recebem tipo-alvo alinhado.
+- Catálogo elevado a v4 e snapshot contém somente sinal booleano agregado, sem máximos ou linhas. Regressão sintética do par `rbac_sessoes` → `rbac_auditoria`, carga não executada ainda pelo commit nesta anotação. Suíte total 193/193, `compileall` e `git diff --check` passaram.
+- Código publicado no commit `a2e8b7c6cb3b133b5e9b3f0d4f70694e6f33fb5e` da branch `pg/triggers-tenant-scoped`, PR #26 contra `pg/integracao`. Nenhuma mudança em `main`, produção, DNS ou cutover.
+
 
 ### Projeto PostgreSQL P3.1b — shim mysqli sobre PDO (branch isolada, 2026-11-15)
 - Adicionado bootstrap opt-in via `auto_prepend_file` para aliases mysqli e 26 funções procedurais, sem carregar junto da extensão nativa. MySQL continua default; PostgreSQL exige perfil próprio e schema, enquanto argumentos de conexão divergentes são rejeitados.
