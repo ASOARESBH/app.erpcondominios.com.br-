@@ -8,6 +8,12 @@ Este é o **Cérebro do Framework**. Utilize este índice para localizar rapidam
 - **Banco de Dados**: [DATABASE.md](DATABASE.md)
 - **APIs e Endpoints**: [API.md](API.md)
 
+## 🧭 0. Habilidades por tema (leia a do tema antes de agir)
+Resumos estáveis e já aprovados, para não reler o repositório nem reabrir decisões. O estado do dia continua nos documentos de cada tema.
+- **Endpoints/API**: [skills/erp-condominios-api-dev/SKILL.md](skills/erp-condominios-api-dev/SKILL.md)
+- **Servidor Hetzner, deploy, bancos, 8443/8444**: [skills/erp-condominios-infra-hetzner/SKILL.md](skills/erp-condominios-infra-hetzner/SKILL.md)
+- **Migração PostgreSQL 18, carga, triggers, virada**: [skills/erp-condominios-migracao-pg/SKILL.md](skills/erp-condominios-migracao-pg/SKILL.md)
+
 ## 💻 2. Guias de Desenvolvimento
 - **Frontend (Vanilla JS)**: [FRONTEND.md](FRONTEND.md)
 - **Backend (PHP 8)**: [BACKEND.md](BACKEND.md)

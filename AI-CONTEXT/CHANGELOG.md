@@ -4,6 +4,9 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### AI-CONTEXT — habilidades por tema (2026-11-19)
+- Adicionadas `AI-CONTEXT/skills/` com três SKILL.md (API, infra Hetzner, migração PostgreSQL) e entrada no INDEX. Mesmo conteúdo das habilidades do projeto no Claude, versionado no repositório para a Manus e outros agentes lerem direto. Ao alterar uma habilidade, atualizar os dois lugares.
+
 
 ### Projeto PostgreSQL P3.1b — shim mysqli sobre PDO (branch isolada, 2026-11-15)
 - Adicionado bootstrap opt-in via `auto_prepend_file` para aliases mysqli e 26 funções procedurais, sem carregar junto da extensão nativa. MySQL continua default; PostgreSQL exige perfil próprio e schema, enquanto argumentos de conexão divergentes são rejeitados.
