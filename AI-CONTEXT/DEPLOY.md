@@ -100,7 +100,7 @@ Smoke de 18/11, realizado localmente com hostname/domínio e certificado verific
 
 **Estado:** plano apenas. Nenhum congelamento, backup final, target definitivo, troca de driver, DNS ou cutover foi executado/autorizado nesta rodada. Produção continua MySQL em `erpcondominios_stage_20261114`; `erpcondominios` permanece o rollback antigo. O `pg_reader` não terá grant em nenhum dos dois.
 
-**Evidência de 19/11:** o refresh de `erp_pg_source` a partir do backup diário passou. A medição disponível cobre somente o trecho de restore, com 30 s e `MemAvailable` mínima de 3.411.900 KiB; isso não é duração end-to-end e não deve ser usado como tal. O runner imutável instalado ainda era catálogo v7 e bloqueou no preflight com 74 reviews. A investigação v8 em worktree traduziu os dois CHECKs; o bundle diagnóstico v8d tem 64 reviews textuais e `executable_complete=false`. Nenhuma versão v8 do rebuild/load, reconciliação ou trigger pós-carga foi executada.
+**Evidência de 19/11:** o refresh de `erp_pg_source` a partir do backup diário passou. A medição disponível cobre somente o trecho de restore, com 30 s e `MemAvailable` mínima de 3.411.900 KiB; isso não é duração end-to-end e não deve ser usado como tal. O runner imutável instalado ainda era catálogo v7 e bloqueou no preflight com 74 reviews. A versão WIP v8 da branch traduziu os dois CHECKs; o bundle diagnóstico v8d tem 64 reviews textuais e `executable_complete=false`. Nenhuma versão v8 do rebuild/load, reconciliação ou trigger pós-carga foi executada.
 
 ### Horários propostos (BRT; data a ser combinada com André)
 
