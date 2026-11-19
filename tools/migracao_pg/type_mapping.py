@@ -155,6 +155,7 @@ def map_mysql_type(
     target_collation: str | None = None,
     column_name: str | None = None,
     no_backslash_escapes: bool = False,
+    unsigned_bigint_exceeds_signed_limit: bool | None = None,
 ) -> TypeMapping:
     """Map MySQL INFORMATION_SCHEMA.COLUMN_TYPE to a PostgreSQL declaration.
 
@@ -192,10 +193,18 @@ def map_mysql_type(
         mysql_max = (1 << bits) - 1 if unsigned else (1 << (bits - 1)) - 1
         target = signed_target
         target_bounds = integer_ranges[base][2]
-        if unsigned:
+        if unsigned and base == "bigint":
+            if not isinstance(unsigned_bigint_exceeds_signed_limit, bool):
+                raise TypeMappingError("UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED")
+            target = "NUMERIC(20,0)" if unsigned_bigint_exceeds_signed_limit else "BIGINT"
+            if not unsigned_bigint_exceeds_signed_limit:
+                checks.append(_column_check(column_name, ">= 0"))
+                return TypeMapping(target, checks=tuple(checks))
+            target_bounds = (0, 99999999999999999999)
+        elif unsigned:
             target = {
                 "tinyint": "SMALLINT", "smallint": "INTEGER", "mediumint": "INTEGER",
-                "int": "BIGINT", "integer": "BIGINT", "bigint": "NUMERIC(20,0)",
+                "int": "BIGINT", "integer": "BIGINT",
             }[base]
             target_bounds = {
                 "SMALLINT": (-32768, 32767), "INTEGER": (-2147483648, 2147483647),

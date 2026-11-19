@@ -16,7 +16,7 @@ SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "1.8.0"
+GENERATOR_VERSION = "1.9.0"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
 POSTGRES_SEQUENCE_MAX = 9223372036854775807
@@ -83,6 +83,53 @@ def _is_legacy_backup_table(name: str) -> bool:
 
 def _schema_for_table(name: str) -> str:
     return LEGACY_SCHEMA if _is_legacy_backup_table(name) else TARGET_SCHEMA
+
+
+def _unsigned_bigint_range_flags(
+    table_by_name: dict[str, dict[str, Any]], foreign_keys: list[dict[str, Any]]
+) -> tuple[dict[tuple[str, str], bool], list[dict[str, str]], list[dict[str, str]]]:
+    unsigned_columns: set[tuple[str, str]] = set()
+    flags: dict[tuple[str, str], bool] = {}
+    for table_name, table in table_by_name.items():
+        for column in table.get("columns", []):
+            key = (table_name, str(column.get("name", "")))
+            if str(column.get("data_type", "")).lower() != "bigint" or not re.search(
+                r"\b(?:unsigned|zerofill)\b", str(column.get("column_type", "")), re.IGNORECASE
+            ):
+                continue
+            unsigned_columns.add(key)
+            value = column.get("unsigned_bigint_exceeds_signed_limit")
+            if not isinstance(value, bool):
+                continue
+            flags[key] = value
+
+    promoted = {key for key, value in flags.items() if value}
+    changed = True
+    while changed:
+        changed = False
+        for fk in foreign_keys:
+            source = [str(value) for value in fk.get("columns", [])]
+            target = [str(value) for value in fk.get("referenced_columns", [])]
+            if len(source) != len(target):
+                continue
+            left_table = str(fk.get("table", ""))
+            right_table = str(fk.get("referenced_table", ""))
+            for source_column, target_column in zip(source, target):
+                left = (left_table, source_column)
+                right = (right_table, target_column)
+                if left not in unsigned_columns or right not in unsigned_columns or left not in flags or right not in flags:
+                    continue
+                if (left in promoted) != (right in promoted):
+                    promoted.update((left, right))
+                    changed = True
+
+    effective = {key: key in promoted for key in unsigned_columns if key in flags}
+    observed = [{"table": table, "column": column} for table, column in sorted(flags) if flags[(table, column)]]
+    aligned = [
+        {"table": table, "column": column}
+        for table, column in sorted(promoted - {key for key, value in flags.items() if value})
+    ]
+    return effective, observed, aligned
 
 
 def _key_requires_collision_scan(table: dict[str, Any], columns: list[str], overrides: dict[str, str]) -> bool:
@@ -314,7 +361,7 @@ def generate_ddl(
     collation_overrides: dict[str, str] | None = None,
     application_role: str | None = None,
 ) -> DdlBundle:
-    if snapshot.get("catalog_version") != 3 or snapshot.get("source_schema") != SOURCE_SCHEMA:
+    if snapshot.get("catalog_version") != 4 or snapshot.get("source_schema") != SOURCE_SCHEMA:
         raise DdlGenerationError("CATALOG_VERSION_OR_SOURCE_NOT_ALLOWLISTED")
     fingerprint = snapshot.get("fingerprint_sha256")
     if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
@@ -369,6 +416,11 @@ def generate_ddl(
         "foreign_keys": {"generated_not_valid": 0, "unsupported": [], "deferred": []},
         "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "generated_columns": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "unsigned_sequence_pairs": 0},
         "generated_columns": [],
+        "unsigned_bigint_range": {
+            "observed_above_signed_limit": [],
+            "aligned_for_foreign_keys": [],
+            "numeric_columns": [],
+        },
         "auto_increment": {
             "post_load_sync_required": True,
             "sync_policy": "ONE_SHOT_BEFORE_APPLICATION_WRITES",
@@ -386,6 +438,16 @@ def generate_ddl(
     table_by_name = {str(table["name"]): table for table in snapshot.get("tables", []) if table.get("type") == "BASE TABLE"}
     if len(table_by_name) != len([table for table in snapshot.get("tables", []) if table.get("type") == "BASE TABLE"]):
         raise DdlGenerationError("DUPLICATE_TABLE_METADATA")
+    unsigned_bigint_flags, unsigned_bigint_observed, unsigned_bigint_aligned = _unsigned_bigint_range_flags(
+        table_by_name, snapshot.get("foreign_keys", [])
+    )
+    report["unsigned_bigint_range"]["observed_above_signed_limit"] = unsigned_bigint_observed
+    report["unsigned_bigint_range"]["aligned_for_foreign_keys"] = unsigned_bigint_aligned
+    report["unsigned_bigint_range"]["numeric_columns"] = [
+        {"table": table, "column": column}
+        for table, column in sorted(unsigned_bigint_flags)
+        if unsigned_bigint_flags[(table, column)]
+    ]
     if snapshot.get("views"):
         report["review_items"].append({"code": "VIEW_TRANSLATION_REQUIRED", "count": len(snapshot["views"])})
     all_columns = [column for table in table_by_name.values() for column in table.get("columns", [])]
@@ -508,6 +570,7 @@ def generate_ddl(
                     target_collation=target_collation,
                     column_name=name,
                     no_backslash_escapes=bool(snapshot.get("source_no_backslash_escapes", False)),
+                    unsigned_bigint_exceeds_signed_limit=unsigned_bigint_flags.get((table_name, name)),
                 )
                 table_column_types[name] = (mapping.sql_type, mapping.collation_sql)
                 declaration = f"{_ident(name)} {mapping.declaration}"

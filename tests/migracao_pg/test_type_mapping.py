@@ -39,9 +39,18 @@ class TypeMappingTests(unittest.TestCase):
         self.assertIn("BETWEEN 0 AND 16777215", medium_unsigned.checks[0])
         int_unsigned = map_mysql_type("int unsigned", column_name="int_unsigned_value")
         self.assertEqual(int_unsigned.sql_type, "BIGINT")
-        bigint_unsigned = map_mysql_type("bigint unsigned", column_name="n")
-        self.assertEqual(bigint_unsigned.sql_type, "NUMERIC(20,0)")
-        self.assertIn("BETWEEN 0 AND 18446744073709551615", bigint_unsigned.checks[0])
+        with self.assertRaisesRegex(TypeMappingError, "UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED"):
+            map_mysql_type("bigint unsigned", column_name="n")
+        bigint_unsigned = map_mysql_type(
+            "bigint unsigned", column_name="n", unsigned_bigint_exceeds_signed_limit=False
+        )
+        self.assertEqual(bigint_unsigned.sql_type, "BIGINT")
+        self.assertEqual(bigint_unsigned.checks, ('CHECK ("n" >= 0)',))
+        bigint_unsigned_wide = map_mysql_type(
+            "bigint unsigned", column_name="n", unsigned_bigint_exceeds_signed_limit=True
+        )
+        self.assertEqual(bigint_unsigned_wide.sql_type, "NUMERIC(20,0)")
+        self.assertIn("BETWEEN 0 AND 18446744073709551615", bigint_unsigned_wide.checks[0])
 
     def test_text_types_require_explicit_collation(self) -> None:
         with self.assertRaisesRegex(TypeMappingError, "TEXT_COLLATION_DECISION_REQUIRED"):

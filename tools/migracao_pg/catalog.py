@@ -17,7 +17,8 @@ from .type_mapping import TypeMappingError, parse_mysql_enum, quote_literal
 
 
 SOURCE_SCHEMA = "erp_pg_source"
-CATALOG_VERSION = 3
+CATALOG_VERSION = 4
+POSTGRES_SIGNED_BIGINT_MAX = 9223372036854775807
 SAFE_TEXT_DEFAULT_NAMES = frozenset({
     "status", "estado", "situacao", "tipo", "categoria", "nivel", "ativo", "habilitado",
     "enabled", "visivel", "publicado", "prioridade", "modo", "origem", "formato", "cor",
@@ -192,6 +193,43 @@ def _safe_default(column: dict[str, Any], *, no_backslash_escapes: bool = False)
 def _rows(cursor: Any, sql: str, args: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
     cursor.execute(sql, args)
     return [{str(key).lower(): value for key, value in row.items()} for row in cursor.fetchall()]
+
+
+def _mysql_identifier(identifier: str) -> str:
+    if not isinstance(identifier, str) or not identifier or "\x00" in identifier:
+        raise CatalogError("MYSQL_IDENTIFIER_INVALID")
+    return "`" + identifier.replace("`", "``") + "`"
+
+
+def _unsigned_bigint_range_scan(cursor: Any, table: str, columns: list[str]) -> dict[str, bool]:
+    if not columns:
+        return {}
+    aliases = [f"exceeds_signed_limit_{index}" for index in range(len(columns))]
+    projections = [
+        f"COALESCE(MAX({_mysql_identifier(column)}) > %s, 0) AS {_mysql_identifier(alias)}"
+        for column, alias in zip(columns, aliases)
+    ]
+    query = (
+        f"SELECT {', '.join(projections)} FROM "
+        f"{_mysql_identifier(SOURCE_SCHEMA)}.{_mysql_identifier(table)}"
+    )
+    try:
+        cursor.execute(query, tuple(POSTGRES_SIGNED_BIGINT_MAX for _ in columns))
+        row = cursor.fetchone()
+    except Exception as error:
+        raise CatalogError("UNSIGNED_BIGINT_RANGE_SCAN_FAILED") from error
+    if not isinstance(row, dict):
+        raise CatalogError("UNSIGNED_BIGINT_RANGE_SCAN_RESULT_INVALID")
+    result: dict[str, bool] = {}
+    for column, alias in zip(columns, aliases):
+        value = next((item for key, item in row.items() if str(key).lower() == alias), None)
+        if isinstance(value, bool):
+            result[column] = value
+        elif value in (0, 1):
+            result[column] = bool(value)
+        else:
+            raise CatalogError("UNSIGNED_BIGINT_RANGE_SCAN_RESULT_INVALID")
+    return result
 
 
 def _index_columns(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -395,6 +433,23 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             WHERE table_schema=%s
             ORDER BY table_name, ordinal_position
         """, (SOURCE_SCHEMA,))
+        base_tables = {
+            str(item["table_name"])
+            for item in tables
+            if str(item.get("table_type", "")).upper() == "BASE TABLE"
+        }
+        unsigned_bigint_columns: dict[str, list[str]] = {}
+        for row in raw_columns:
+            column_type = str(row.get("column_type", ""))
+            if str(row.get("table_name", "")) in base_tables \
+                and str(row.get("data_type", "")).lower() == "bigint" and re.search(
+                r"\b(?:unsigned|zerofill)\b", column_type, re.IGNORECASE
+            ):
+                unsigned_bigint_columns.setdefault(str(row["table_name"]), []).append(str(row["column_name"]))
+        unsigned_bigint_ranges = {
+            table: _unsigned_bigint_range_scan(cursor, table, columns)
+            for table, columns in sorted(unsigned_bigint_columns.items())
+        }
         columns: dict[str, list[dict[str, Any]]] = {}
         review_items: list[dict[str, str]] = []
         for row in raw_columns:
@@ -409,6 +464,8 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 "source_collation": row.get("collation_name"),
                 "extra": str(row.get("extra") or ""),
             }
+            if str(row.get("data_type", "")).lower() == "bigint" and column["name"] in unsigned_bigint_ranges.get(table, {}):
+                column["unsigned_bigint_exceeds_signed_limit"] = unsigned_bigint_ranges[table][column["name"]]
             default = _safe_default(row, no_backslash_escapes=no_backslash_escapes)
             if default is not None:
                 column["default"] = default

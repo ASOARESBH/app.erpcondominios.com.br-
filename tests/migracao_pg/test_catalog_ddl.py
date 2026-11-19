@@ -15,7 +15,7 @@ from tools.migracao_pg.generated_columns import identify_generated_column
 
 def sample_snapshot() -> dict:
     snapshot = {
-        "catalog_version": 3,
+        "catalog_version": 4,
         "source_schema": "erp_pg_source",
         "source_server_version": "8.4.13",
         "captured_at_utc": "2026-11-16T00:00:00+00:00",
@@ -296,6 +296,72 @@ class CatalogTests(unittest.TestCase):
         ))
         self.assertTrue(connection.rolled_back)
 
+    def test_unsigned_bigint_range_scan_records_only_boolean_metadata(self) -> None:
+        class UnsignedBigintCursor(FakeCursor):
+            def __init__(self, exceeds: bool) -> None:
+                super().__init__()
+                self.exceeds = exceeds
+                self.range_query = ""
+                self.range_args = ()
+
+            def execute(self, sql: str, args=()) -> None:
+                super().execute(sql, args)
+                if "generation_expression" in sql and "information_schema.columns" in sql:
+                    self.current[0].update(data_type="bigint", column_type="bigint unsigned")
+                elif "COALESCE(MAX(" in sql:
+                    self.range_query = sql
+                    self.range_args = args
+                    self.current = [{"exceeds_signed_limit_0": int(self.exceeds)}]
+
+        class UnsignedBigintConnection(FakeConnection):
+            def __init__(self, exceeds: bool) -> None:
+                self.c = UnsignedBigintCursor(exceeds)
+                self.statements = self.c.statements
+                self.rolled_back = False
+
+        for exceeds in (False, True):
+            with self.subTest(exceeds=exceeds):
+                connection = UnsignedBigintConnection(exceeds)
+                result = collect_catalog(connection)
+                column = result["tables"][0]["columns"][0]
+                self.assertIs(column["unsigned_bigint_exceeds_signed_limit"], exceeds)
+                self.assertIn("`erp_pg_source`.`x`", connection.c.range_query)
+                self.assertEqual(connection.c.range_args, (9223372036854775807,))
+                self.assertTrue(connection.rolled_back)
+
+    def test_unsigned_bigint_range_scan_records_only_boolean_metadata(self) -> None:
+        class UnsignedBigintCursor(FakeCursor):
+            def __init__(self, exceeds: bool) -> None:
+                super().__init__()
+                self.exceeds = exceeds
+                self.range_query = ""
+                self.range_args = ()
+
+            def execute(self, sql: str, args=()) -> None:
+                super().execute(sql, args)
+                if "generation_expression" in sql and "information_schema.columns" in sql:
+                    self.current[0].update(data_type="bigint", column_type="bigint unsigned")
+                elif "COALESCE(MAX(" in sql:
+                    self.range_query = sql
+                    self.range_args = args
+                    self.current = [{"exceeds_signed_limit_0": int(self.exceeds)}]
+
+        class UnsignedBigintConnection(FakeConnection):
+            def __init__(self, exceeds: bool) -> None:
+                self.c = UnsignedBigintCursor(exceeds)
+                self.statements = self.c.statements
+                self.rolled_back = False
+
+        for exceeds in (False, True):
+            with self.subTest(exceeds=exceeds):
+                connection = UnsignedBigintConnection(exceeds)
+                result = collect_catalog(connection)
+                column = result["tables"][0]["columns"][0]
+                self.assertIs(column["unsigned_bigint_exceeds_signed_limit"], exceeds)
+                self.assertIn("`erp_pg_source`.`x`", connection.c.range_query)
+                self.assertEqual(connection.c.range_args, (9223372036854775807,))
+                self.assertTrue(connection.rolled_back)
+
     def test_catalog_can_leave_the_read_only_snapshot_open_for_the_loader(self) -> None:
         connection = FakeConnection()
         result = collect_catalog(connection, keep_snapshot=True)
@@ -504,7 +570,7 @@ class CatalogTests(unittest.TestCase):
     def test_unsigned_bigint_auto_increment_uses_nontransactional_sequence_pair(self) -> None:
         snapshot = sample_snapshot()
         parent = snapshot["tables"][0]
-        parent["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment")
+        parent["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment", unsigned_bigint_exceeds_signed_limit=True)
         parent["source_next_auto_increment"] = 15
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"parent.name": "ci", "child.state": "ci", "child.api_token": "C"}, application_role="erp_app")
@@ -536,9 +602,72 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(bundle.report["auto_increment"]["columns"][0]["strategy"], "unsigned_sequence_pair")
         self.assertTrue(bundle.report["auto_increment"]["runtime_privileges"]["unsigned_function_execute_granted"])
 
+    def test_rbac_unsigned_bigint_fk_pair_uses_bigint_when_within_signed_limit(self) -> None:
+        snapshot = sample_snapshot()
+        parent, child = snapshot["tables"]
+        parent["name"] = "rbac_sessoes"
+        parent["columns"][0].update(
+            data_type="bigint", column_type="bigint unsigned", extra="auto_increment",
+            unsigned_bigint_exceeds_signed_limit=False,
+        )
+        child["name"] = "rbac_auditoria"
+        child["columns"][0].update(
+            name="sessao_id", data_type="bigint", column_type="bigint unsigned",
+            unsigned_bigint_exceeds_signed_limit=False,
+        )
+        snapshot["indexes"][2]["table"] = "rbac_auditoria"
+        snapshot["indexes"][2]["columns"][0]["name"] = "sessao_id"
+        snapshot["foreign_keys"][0].update(
+            table="rbac_auditoria", name="fk_rbac_auditoria_sessao",
+            columns=["sessao_id"], referenced_table="rbac_sessoes", referenced_columns=["id"],
+        )
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+
+        bundle = generate_ddl(snapshot, application_role="erp_app")
+        tables = bundle.scripts["00_tables.sql"]
+        self.assertRegex(tables, r'"id" BIGINT GENERATED BY DEFAULT AS IDENTITY NOT NULL,\n  CONSTRAINT "ck_rbac_sessoes_id_1" CHECK \("id" >= 0\)')
+        self.assertRegex(tables, r'"sessao_id" BIGINT NOT NULL,\n  CONSTRAINT "ck_rbac_auditoria_sessao_id_1" CHECK \("sessao_id" >= 0\)')
+        self.assertEqual(bundle.report["foreign_keys"]["generated_not_valid"], 1)
+        self.assertEqual(bundle.report["foreign_keys"]["unsupported"], [])
+        self.assertEqual(bundle.report["foreign_keys_post_load"][0]["columns"], ["sessao_id"])
+        self.assertEqual(bundle.report["foreign_keys_post_load"][0]["referenced_table"], "rbac_sessoes")
+        self.assertEqual(bundle.report["unsigned_bigint_range"]["numeric_columns"], [])
+
+    def test_unsigned_bigint_fk_pair_aligns_numeric_only_if_a_value_exceeds_limit(self) -> None:
+        snapshot = sample_snapshot()
+        parent, child = snapshot["tables"]
+        parent["name"] = "rbac_sessoes"
+        parent["columns"][0].update(
+            data_type="bigint", column_type="bigint unsigned", extra="auto_increment",
+            unsigned_bigint_exceeds_signed_limit=False,
+        )
+        child["name"] = "rbac_auditoria"
+        child["columns"][0].update(
+            name="sessao_id", data_type="bigint", column_type="bigint unsigned",
+            unsigned_bigint_exceeds_signed_limit=True,
+        )
+        snapshot["indexes"][2]["table"] = "rbac_auditoria"
+        snapshot["indexes"][2]["columns"][0]["name"] = "sessao_id"
+        snapshot["foreign_keys"][0].update(
+            table="rbac_auditoria", name="fk_rbac_auditoria_sessao",
+            columns=["sessao_id"], referenced_table="rbac_sessoes", referenced_columns=["id"],
+        )
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+
+        bundle = generate_ddl(snapshot, application_role="erp_app")
+        tables = bundle.scripts["00_tables.sql"]
+        self.assertRegex(tables, r'"id" NUMERIC\(20,0\) DEFAULT "erp"\."_p2_next_unsigned_id"\(')
+        self.assertRegex(tables, r'"sessao_id" NUMERIC\(20,0\) NOT NULL')
+        self.assertEqual(bundle.report["foreign_keys"]["generated_not_valid"], 1)
+        self.assertEqual(bundle.report["foreign_keys"]["unsupported"], [])
+        self.assertEqual(bundle.report["unsigned_bigint_range"]["numeric_columns"], [
+            {"table": "rbac_auditoria", "column": "sessao_id"},
+            {"table": "rbac_sessoes", "column": "id"},
+        ])
+
     def test_unsigned_bigint_allocator_rollover_boundary_is_represented_exactly(self) -> None:
         snapshot = sample_snapshot()
-        snapshot["tables"][0]["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment")
+        snapshot["tables"][0]["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment", unsigned_bigint_exceeds_signed_limit=True)
         snapshot["tables"][0]["source_next_auto_increment"] = 9223372036854775808
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"parent.name": "ci", "child.state": "ci", "child.api_token": "C"})
@@ -549,7 +678,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_unsigned_bigint_allocator_requires_explicit_application_role(self) -> None:
         snapshot = sample_snapshot()
-        snapshot["tables"][0]["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment")
+        snapshot["tables"][0]["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment", unsigned_bigint_exceeds_signed_limit=True)
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"parent.name": "ci", "child.state": "ci", "child.api_token": "C"})
         self.assertIn("AUTO_INCREMENT_APPLICATION_ROLE_REQUIRED", {item["code"] for item in bundle.report["review_items"]})
