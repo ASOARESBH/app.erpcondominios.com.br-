@@ -9,6 +9,7 @@ readonly PROFILE_CUTOVER='cutover'
 readonly DEFAULT_PYTHON='/var/www/erpcondominios-pg/p2-venv/bin/python'
 readonly RELEASE_ROOT='/var/www/erpcondominios-pg/releases'
 readonly SYSTEM_PATH='/usr/sbin:/usr/bin:/sbin:/bin'
+readonly SOURCE_DEFAULTS_FILE='/etc/erpcondominios/secrets/pg_reader.cnf'
 
 phase='startup'
 runner_started_epoch=$(/usr/bin/date +%s)
@@ -38,21 +39,29 @@ cleanup() {
 trap cleanup EXIT
 
 usage() {
-    printf 'Uso: %s {development|cutover} {preflight|load} <nome-bundle> <arquivo-defaults-source>\n' "$0" >&2
+    printf 'Uso: %s development catalog-bundle | %s {development|cutover} {preflight|load} <nome-bundle> <arquivo-defaults-source>\n' "$0" "$0" >&2
     exit 64
 }
 
-[[ $# -eq 4 ]] || usage
+[[ $# -eq 2 || $# -eq 4 ]] || usage
 profile=$1
 command=$2
-bundle=$3
-source_defaults_file=$4
+bundle=''
+source_defaults_file=''
 [[ "$profile" == "$PROFILE_DEVELOPMENT" || "$profile" == "$PROFILE_CUTOVER" ]] || { printf 'REBUILD_ERROR=PROFILE_NOT_ALLOWED\n' >&2; exit 64; }
-[[ "$command" == 'preflight' || "$command" == 'load' ]] || usage
-[[ "$bundle" =~ ^catalog-[a-f0-9]{12}-collation-[a-f0-9]{8}-role-[a-f0-9]{8}-code-[a-f0-9]{8}$ ]] || {
-    printf 'REBUILD_ERROR=BUNDLE_NAME_INVALID\n' >&2
-    exit 64
-}
+if [[ "$command" == 'catalog-bundle' ]]; then
+    [[ $# -eq 2 && "$profile" == "$PROFILE_DEVELOPMENT" ]] || usage
+    source_defaults_file=$SOURCE_DEFAULTS_FILE
+else
+    [[ $# -eq 4 ]] || usage
+    [[ "$command" == 'preflight' || "$command" == 'load' ]] || usage
+    bundle=$3
+    source_defaults_file=$4
+    [[ "$bundle" =~ ^catalog-[a-f0-9]{12}-collation-[a-f0-9]{8}-role-[a-f0-9]{8}-code-[a-f0-9]{8}$ ]] || {
+        printf 'REBUILD_ERROR=BUNDLE_NAME_INVALID\n' >&2
+        exit 64
+    }
+fi
 [[ "$(/usr/bin/id -u)" -eq 0 ]] || { printf 'REBUILD_ERROR=ROOT_REQUIRED\n' >&2; exit 77; }
 [[ "$source_defaults_file" == /* && -f "$source_defaults_file" && ! -L "$source_defaults_file" ]] || {
     printf 'REBUILD_ERROR=SOURCE_DEFAULTS_FILE_INVALID\n' >&2
@@ -306,6 +315,75 @@ fi
 }
 exec 9<>"$LOCK_FILE"
 /usr/bin/flock -n 9 || { printf 'REBUILD_ERROR=RUN_ALREADY_ACTIVE\n' >&2; exit 75; }
+
+if [[ "$command" == 'catalog-bundle' ]]; then
+    phase='catalog-bundle'
+    set +e
+    capture_json=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 "$python_bin" -E -B -m tools.migracao_pg.catalog_bundle)
+    capture_exit=$?
+    set -e
+    if (( capture_exit != 0 )); then
+        printf 'REBUILD_ERROR=CATALOG_BUNDLE_CAPTURE_FAILED EXIT=%s\n' "$capture_exit" >&2
+        exit 78
+    fi
+    /usr/bin/env -i "PATH=$SYSTEM_PATH" "$python_bin" -E -B -c '
+import json,sys
+d=json.load(sys.stdin)
+assert d.get("status") == "CATALOG_BUNDLE_READY"
+assert d.get("source_schema") == "erp_pg_source"
+assert d.get("catalog_version") == 12
+assert d.get("bundle_executable_complete") is True
+assert d.get("bundle_load_executable_complete") is True
+assert d.get("selection_private") is True
+assert d.get("memory_guard_min_available_kib") == 1572864
+assert d.get("minimum_available_kib_observed", 0) >= 1572864
+assert d.get("catalog", {}).get("tables") == 276
+assert d.get("catalog", {}).get("reviews") == 0
+assert d.get("catalog", {}).get("foreign_keys") == 11
+assert d.get("catalog", {}).get("triggers") == 7
+assert d.get("bundle", {}).get("reviews") == 0
+assert d.get("bundle", {}).get("translated_business_triggers") == 7
+assert d.get("bundle", {}).get("foreign_keys_generated_not_valid") == 11
+' <<< "$capture_json" || {
+        printf 'REBUILD_ERROR=CATALOG_BUNDLE_GATE_FAILED\n' >&2
+        exit 78
+    }
+    printf '%s\n' "$capture_json"
+    printf 'REBUILD_STATUS=CATALOG_BUNDLE_READY PROFILE=development SOURCE=erp_pg_source\n'
+    phase='complete'
+    exit 0
+fi
+
+if [[ "$profile" == "$PROFILE_DEVELOPMENT" ]]; then
+    phase='catalog-selection-validation'
+    selection_file="/var/lib/erpcondominios-pg/p2-bundles/development-v12-${release_id}.selection"
+    trusted_file "$selection_file" || {
+        printf 'REBUILD_ERROR=CATALOG_BUNDLE_SELECTION_REQUIRED\n' >&2
+        exit 78
+    }
+    [[ "$(/usr/bin/stat -c '%u:%a' -- "$selection_file")" == '0:600' ]] || {
+        printf 'REBUILD_ERROR=CATALOG_BUNDLE_SELECTION_MODE_INVALID\n' >&2
+        exit 78
+    }
+    selection_valid=$(/usr/bin/env -i "PATH=$SYSTEM_PATH" "$python_bin" -E -B -c '
+import json,re,sys
+def unique(pairs):
+    d={}
+    for k,v in pairs:
+        if k in d: raise ValueError("duplicate")
+        d[k]=v
+    return d
+try:
+    with open(sys.argv[1], "r", encoding="ascii") as f: d=json.load(f, object_pairs_hook=unique)
+except Exception: sys.exit(1)
+ok=isinstance(d,dict) and set(d)=={"release_sha","bundle_name"} and d.get("release_sha")==sys.argv[2] and d.get("bundle_name")==sys.argv[3] and isinstance(d.get("bundle_name"),str) and re.fullmatch(r"catalog-[a-f0-9]{12}-collation-[a-f0-9]{8}-role-[a-f0-9]{8}-code-[a-f0-9]{8}",d["bundle_name"])
+sys.exit(0 if ok else 1)
+' "$selection_file" "$release_id" "$bundle" && printf 'yes' || printf 'no')
+    [[ "$selection_valid" == 'yes' ]] || {
+        printf 'REBUILD_ERROR=CATALOG_BUNDLE_SELECTION_MISMATCH\n' >&2
+        exit 78
+    }
+fi
 
 phase='bundle-validation'
 report_file=''

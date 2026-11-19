@@ -4,6 +4,12 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — runner protegido para captura catálogo→bundle v12 (2026-11-19)
+- Adicionado `development catalog-bundle` ao `rebuild.sh`: captura somente de `erp_pg_source`, profile cutover recusado, lock compartilhado, release/manifest root-only, `nice`/`ionice` e memória mínima contínua de 1,5 GiB.
+- Bundle gerado em staging privado; só é promovido depois de fingerprints, schema/grants, TIME v3, manifest Base64 único (`tenant_arquivos.conteudo` → `TEXT COLLATE "C"`), 276 tabelas, 11 FKs, 7 triggers, zero reviews e `validate_bundle` passarem. Marker privado vincula o bundle à release; preflight/load development exigem esse vínculo.
+- Revisão adversarial: booleanos estritos, FK unsupported bloqueada, promoção atômica e tentativa isolada. Validação local: 246 testes P2; codec PHP, 4 `php -l`, linter SQL em 4 PHPs, 8 cenários, `py_compile`, `bash -n` e `git diff --check` PASS.
+- Este registro cobre a implementação; não a execução remota. Bundle, preflight, load, quick-loader, triggers pós-carga, neutralização e ativação do 8443 permanecem pendentes até as etapas seguintes autorizadas.
+
 ### Projeto PostgreSQL P2 — catálogo v12/Base64 e TIME v3 (2026-11-19)
 - Implementada a decisão de André: somente `tenant_arquivos.conteudo` é armazenada como Base64 canônico em PostgreSQL `TEXT COLLATE "C"`; outros binários seguem `BYTEA` byte a byte. Loader, DDL e reconciliador exigem manifest exato, preservam e validam bytes/tamanho/SHA-256 lógicos; adapter PHP mantém bytes no MySQL e decodifica de forma estrita no PostgreSQL. Sem mudança no contrato HTTP.
 - Policy TIME v3: `TIME(0)` para valores civis sem fração irrepresentável; `INTERVAL` para negativo/estendido; fração não representável é review bloqueante, nunca truncada. Expressões/defaults não mapeados e NUL em texto continuam fail-closed.
