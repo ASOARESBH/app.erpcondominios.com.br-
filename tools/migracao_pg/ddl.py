@@ -9,16 +9,16 @@ from pathlib import Path
 from collections import Counter
 from typing import Any
 
-from .catalog import TIME_RANGE_POLICY_ID
+from .catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID
 from .check_translation import CheckTranslationError, render_check_translation
 from .generated_columns import declares_generated_column, generated_dependencies_valid, target_generated_column
-from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, quote_identifier, quote_literal
+from .type_mapping import BINARY_STORAGE_POLICY_ID, TypeMappingError, expected_binary_storage_encoding, expected_binary_storage_manifest, map_mysql_type, parse_mysql_enum, quote_identifier, quote_literal
 
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "2.4.0"
+GENERATOR_VERSION = "2.7.0"
 SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
@@ -175,6 +175,53 @@ def _target_collation(column: dict[str, Any], explicit: dict[str, str], table: s
     return "ci"
 
 
+def _decode_canonical_e_literal(expression: str) -> str | None:
+    if not expression.startswith("E'") or not expression.endswith("'"):
+        return None
+    body = expression[2:-1]
+    decoded: list[str] = []
+    index = 0
+    escapes = {"b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
+    while index < len(body):
+        character = body[index]
+        if character == "'":
+            if index + 1 >= len(body) or body[index + 1] != "'":
+                return None
+            decoded.append("'")
+            index += 2
+            continue
+        if character != "\\":
+            decoded.append(character)
+            index += 1
+            continue
+        if index + 1 >= len(body):
+            return None
+        escaped = body[index + 1]
+        if escaped == "\\":
+            decoded.append("\\")
+            index += 2
+        elif escaped in escapes:
+            decoded.append(escapes[escaped])
+            index += 2
+        elif escaped in "01234567" and index + 3 < len(body) \
+            and all(digit in "01234567" for digit in body[index + 1:index + 4]):
+            decoded.append(chr(int(body[index + 1:index + 4], 8)))
+            index += 4
+        else:
+            return None
+    value = "".join(decoded)
+    if "\x00" in value or quote_literal(value) != expression:
+        return None
+    return value
+
+
+def _decode_typed_e_literal(expression: str, type_name: str) -> str | None:
+    prefix = type_name + " "
+    if not expression.startswith(prefix):
+        return None
+    return _decode_canonical_e_literal(expression[len(prefix):])
+
+
 def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, no_backslash_escapes: bool = False) -> str | None:
     default = column.get("default")
     if default is None:
@@ -193,43 +240,41 @@ def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, 
             if re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", expression):
                 return expression
         elif data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext", "enum"}:
-            if expression == "''" or re.fullmatch(r"'(?:[^']|'')*'", expression):
-                literal = expression[1:-1].replace("''", "'")
-                if "\x00" not in literal and quote_literal(literal) == expression:
-                    return expression
+            if _decode_canonical_e_literal(expression) is not None:
+                return expression
         elif data_type in {"datetime", "timestamp"}:
-            expected = "timezone('America/Sao_Paulo', statement_timestamp())" if data_type == "timestamp" else "LOCALTIMESTAMP(0)"
+            expected = f"timezone({quote_literal('America/Sao_Paulo')}, statement_timestamp())" if data_type == "timestamp" else "LOCALTIMESTAMP(0)"
             if expression == expected:
                 return expression
-            match = re.fullmatch(r"TIMESTAMP '([^']+)'", expression)
-            if match:
+            literal = _decode_typed_e_literal(expression, "TIMESTAMP")
+            if literal is not None:
                 try:
-                    parsed = datetime.fromisoformat(match.group(1))
+                    parsed = datetime.fromisoformat(literal)
                 except ValueError:
                     parsed = None
                 if parsed is not None and parsed.tzinfo is None and not parsed.microsecond:
                     return expression
         elif data_type == "date":
-            match = re.fullmatch(r"DATE '([^']+)'", expression)
-            if match:
+            literal = _decode_typed_e_literal(expression, "DATE")
+            if literal is not None:
                 try:
-                    date.fromisoformat(match.group(1))
+                    date.fromisoformat(literal)
                 except ValueError:
                     pass
                 else:
                     return expression
         elif data_type == "time":
             if column.get("time_uses_interval") is True:
-                match = re.fullmatch(r"INTERVAL '([+-]?\d{1,3}:\d{2}:\d{2}(?:\.\d{1,6})?)'", expression)
-                if match:
-                    hours, minutes, seconds = (int(part) for part in match.group(1).lstrip("+-").split(":", 2))
+                literal = _decode_typed_e_literal(expression, "INTERVAL")
+                if literal is not None and re.fullmatch(r"[+-]?\d{1,3}:\d{2}:\d{2}(?:\.\d{1,6})?", literal):
+                    hours, minutes, seconds = (int(part) for part in literal.lstrip("+-").split(":", 2))
                     if hours <= 838 and minutes <= 59 and seconds <= 59:
                         return expression
             elif column.get("time_uses_interval") is False:
-                match = re.fullmatch(r"TIME '((?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?)'", expression)
-                if match:
+                literal = _decode_typed_e_literal(expression, "TIME")
+                if literal is not None and re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?", literal):
                     try:
-                        parsed = datetime.strptime(match.group(1).split(".", 1)[0], "%H:%M:%S")
+                        parsed = datetime.strptime(literal.split(".", 1)[0], "%H:%M:%S")
                     except ValueError:
                         parsed = None
                     if parsed is not None:
@@ -367,9 +412,16 @@ def generate_ddl(
     collation_overrides: dict[str, str] | None = None,
     application_role: str | None = None,
 ) -> DdlBundle:
-    if snapshot.get("catalog_version") != 9 or snapshot.get("source_schema") != SOURCE_SCHEMA \
-        or snapshot.get("time_range_policy_id") != TIME_RANGE_POLICY_ID:
+    if snapshot.get("binary_storage_required") is not True:
+        raise DdlGenerationError("BINARY_STORAGE_POLICY_REQUIRED")
+    if snapshot.get("catalog_version") != CATALOG_VERSION or snapshot.get("source_schema") != SOURCE_SCHEMA \
+        or snapshot.get("time_range_policy_id") != TIME_RANGE_POLICY_ID \
+        or snapshot.get("binary_storage_policy_id") != BINARY_STORAGE_POLICY_ID:
         raise DdlGenerationError("CATALOG_VERSION_OR_SOURCE_NOT_ALLOWLISTED")
+    try:
+        expected_binary_columns = expected_binary_storage_manifest(snapshot)
+    except TypeMappingError as error:
+        raise DdlGenerationError(error.code) from error
     fingerprint = snapshot.get("fingerprint_sha256")
     if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
         raise DdlGenerationError("CATALOG_FINGERPRINT_INVALID")
@@ -411,6 +463,7 @@ def generate_ddl(
             "interval_columns": [],
             "extended_data_columns": [],
             "extended_default_columns": [],
+            "fractional_precision_review_columns": [],
         },
         "source_schema": SOURCE_SCHEMA,
         "target_schema": TARGET_SCHEMA,
@@ -431,6 +484,7 @@ def generate_ddl(
         "foreign_keys": {"generated_not_valid": 0, "unsupported": [], "deferred": []},
         "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "generated_columns": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "check_constraints": 0, "unsigned_sequence_pairs": 0},
         "generated_columns": [],
+        "binary_storage": {"policy_id": BINARY_STORAGE_POLICY_ID, "columns": []},
         "unsigned_bigint_range": {
             "observed_above_signed_limit": [],
             "aligned_for_foreign_keys": [],
@@ -610,6 +664,9 @@ def generate_ddl(
                 name = str(column["name"])
                 _ident(name)
                 data_type = str(column["data_type"])
+                binary_encoding = expected_binary_storage_encoding(table_name, name)
+                if column.get("binary_storage_encoding") != binary_encoding:
+                    raise TypeMappingError("BINARY_STORAGE_POLICY_METADATA_MISMATCH")
                 generated_spec = target_generated_column(table_name, column)
                 if (column.get("generated_expression_present") is True or declares_generated_column(column)) and generated_spec is None:
                     raise TypeMappingError("GENERATED_COLUMN_TRANSLATION_REQUIRED")
@@ -622,11 +679,21 @@ def generate_ddl(
                 mapping = map_mysql_type(
                     str(column["column_type"]),
                     target_collation=target_collation,
+                    table_name=table_name,
                     column_name=name,
+                    binary_storage_encoding=binary_encoding,
                     no_backslash_escapes=bool(snapshot.get("source_no_backslash_escapes", False)),
                     unsigned_bigint_exceeds_signed_limit=unsigned_bigint_flags.get((table_name, name)),
                     time_uses_interval=column.get("time_uses_interval"),
                 )
+                if mapping.storage_encoding is not None:
+                    report["binary_storage"]["columns"].append({
+                        "table": table_name,
+                        "column": name,
+                        "encoding": mapping.storage_encoding,
+                        "target_type": mapping.sql_type,
+                        "target_collation": mapping.collation_sql,
+                    })
                 if data_type.lower() == "time":
                     if column.get("time_uses_interval") is True:
                         report["time_mapping"]["interval_columns"].append({"table": table_name, "column": name})
@@ -638,6 +705,8 @@ def generate_ddl(
                         report["time_mapping"]["clock_columns"].append({"table": table_name, "column": name})
                     else:
                         raise TypeMappingError("MYSQL_TIME_RANGE_SCAN_REQUIRED")
+                    if column.get("time_has_fractional_seconds") is True or column.get("time_default_has_fractional_seconds") is True:
+                        report["time_mapping"]["fractional_precision_review_columns"].append({"table": table_name, "column": name})
                 table_column_types[name] = (mapping.sql_type, mapping.collation_sql)
                 declaration = f"{_ident(name)} {mapping.declaration}"
                 extra = str(column.get("extra", "")).lower()
@@ -894,6 +963,8 @@ def generate_ddl(
                     if column_meta is None:
                         raise TypeMappingError("INDEX_COLUMN_NOT_FOUND")
                     column_type = str(column_meta.get("data_type", "")).lower()
+                    if expected_binary_storage_encoding(table_name, column_name) == "base64":
+                        raise TypeMappingError("BASE64_BINARY_PREFIX_INDEX_UNSUPPORTED")
                     if _textual(column_type):
                         expression = f"left({_ident(column_name)}::text, {prefix_length})"
                     elif column_type in {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}:
@@ -1012,6 +1083,8 @@ def generate_ddl(
     report["unique_indexes_post_load"] = unique_indexes_post_load
     report["auto_increment"]["generated"] = len(identity_columns)
     report["auto_increment"]["columns"] = identity_columns
+    if report["binary_storage"]["columns"] != expected_binary_columns:
+        report["review_items"].append({"code": "BINARY_STORAGE_POLICY_MANIFEST_MISMATCH"})
     unique_reviews: dict[tuple[str, ...], dict[str, Any]] = {}
     for item in report["review_items"]:
         key = tuple(str(item.get(field, "")) for field in (

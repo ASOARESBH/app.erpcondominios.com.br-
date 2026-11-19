@@ -6,6 +6,7 @@ from datetime import datetime, time, timedelta
 from tools.migracao_pg.type_mapping import (
     TemporalValueError,
     TypeMappingError,
+    expected_binary_storage_manifest,
     map_mysql_type,
     normalize_temporal_value,
     parse_mysql_enum,
@@ -16,6 +17,49 @@ from tools.migracao_pg.type_mapping import (
 
 
 class TypeMappingTests(unittest.TestCase):
+    def test_required_binary_storage_manifest_cannot_be_omitted(self) -> None:
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_POLICY_REQUIRED"):
+            expected_binary_storage_manifest({"tables": []})
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_POLICY_REQUIRED"):
+            expected_binary_storage_manifest({"binary_storage_required": False, "tables": []})
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_TABLE_REQUIRED"):
+            expected_binary_storage_manifest({"binary_storage_required": True, "tables": []})
+
+        snapshot = {
+            "binary_storage_required": True,
+            "tables": [{
+                "name": "tenant_arquivos",
+                "type": "BASE TABLE",
+                "columns": [{
+                    "name": "conteudo",
+                    "data_type": "longblob",
+                    "column_type": "longblob",
+                    "binary_storage_encoding": "base64",
+                }],
+            }],
+        }
+        self.assertEqual(expected_binary_storage_manifest(snapshot), [{
+            "table": "tenant_arquivos",
+            "column": "conteudo",
+            "encoding": "base64",
+            "target_type": "TEXT",
+            "target_collation": '"C"',
+        }])
+
+        snapshot["tables"][0]["type"] = "VIEW"
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_TABLE_METADATA_MISMATCH"):
+            expected_binary_storage_manifest(snapshot)
+
+        snapshot["tables"][0]["type"] = "BASE TABLE"
+        snapshot["tables"][0]["columns"][0]["binary_storage_encoding"] = "bytea"
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_COLUMN_METADATA_MISMATCH"):
+            expected_binary_storage_manifest(snapshot)
+
+        snapshot["tables"][0]["columns"][0]["binary_storage_encoding"] = "base64"
+        snapshot["tables"][0]["columns"][0]["column_type"] = "blob"
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_COLUMN_METADATA_MISMATCH"):
+            expected_binary_storage_manifest(snapshot)
+
     def test_prompt_core_type_mapping(self) -> None:
         self.assertEqual(map_mysql_type("datetime").sql_type, "TIMESTAMP(0) WITHOUT TIME ZONE")
         self.assertEqual(map_mysql_type("timestamp").sql_type, "TIMESTAMP(0) WITHOUT TIME ZONE")
@@ -110,10 +154,28 @@ class TypeMappingTests(unittest.TestCase):
         self.assertEqual(map_mysql_type("longblob", column_name="payload").sql_type, "BYTEA")
         self.assertEqual(map_mysql_type("longtext", target_collation="ci").sql_type, "TEXT")
 
+    def test_exact_approved_binary_column_maps_to_ascii_base64_text(self) -> None:
+        mapping = map_mysql_type(
+            "longblob", table_name="tenant_arquivos", column_name="conteudo",
+            binary_storage_encoding="base64",
+        )
+        self.assertEqual(mapping.sql_type, "TEXT")
+        self.assertEqual(mapping.collation_sql, '\"C\"')
+        self.assertEqual(mapping.storage_encoding, "base64")
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_POLICY_REQUIRED"):
+            map_mysql_type("longblob", table_name="tenant_arquivos", column_name="conteudo")
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_POLICY_MISMATCH"):
+            map_mysql_type("longblob", table_name="other_table", column_name="conteudo", binary_storage_encoding="base64")
+        with self.assertRaisesRegex(TypeMappingError, "BINARY_STORAGE_SOURCE_TYPE_MISMATCH"):
+            map_mysql_type(
+                "blob", table_name="tenant_arquivos", column_name="conteudo",
+                binary_storage_encoding="base64",
+            )
+
     def test_temporal_precision_and_unlisted_types_fail_closed(self) -> None:
         self.assertIn("FRACTIONAL_SECONDS_REVIEW_REQUIRED", map_mysql_type("datetime(6)").review_codes)
         self.assertEqual(map_mysql_type("time", time_uses_interval=True).sql_type, "INTERVAL")
-        self.assertEqual(map_mysql_type("time(6)", time_uses_interval=False).sql_type, "TIME(6)")
+        self.assertEqual(map_mysql_type("time(6)", time_uses_interval=False).sql_type, "TIME(0)")
         self.assertEqual(map_mysql_type("time(6)", time_uses_interval=True).sql_type, "INTERVAL")
         with self.assertRaisesRegex(TypeMappingError, "MYSQL_TIME_RANGE_SCAN_REQUIRED"):
             map_mysql_type("time")
@@ -122,7 +184,10 @@ class TypeMappingTests(unittest.TestCase):
 
     def test_identifier_quoting(self) -> None:
         self.assertEqual(quote_identifier('odd"name'), '"odd""name"')
-        self.assertEqual(quote_literal("name's path"), "'name''s path'")
+        self.assertEqual(quote_literal("name's path"), "E'name''s path'")
+        self.assertEqual(quote_literal("path\\' OR 1=1 --"), r"E'path\\'' OR 1=1 --'")
+        self.assertEqual(quote_literal("line1\nline2"), r"E'line1\nline2'")
+        self.assertEqual(quote_literal("\x01A"), r"E'\001A'")
         for identifier in ("", "bad\x00name"):
             with self.subTest(identifier=identifier), self.assertRaises(TypeMappingError):
                 quote_identifier(identifier)
@@ -163,7 +228,10 @@ class TemporalNormalizationTests(unittest.TestCase):
     def test_time_range_scan_selects_clock_time_or_interval(self) -> None:
         self.assertEqual(normalize_temporal_value("23:59:59", "time", time_as_interval=False), time(23, 59, 59))
         self.assertEqual(normalize_temporal_value("00:00:00", "time", time_as_interval=False), time(0, 0, 0))
-        self.assertEqual(normalize_temporal_value("12:30:45.123456", "time(6)", time_as_interval=False), time(12, 30, 45, 123456))
+        with self.assertRaisesRegex(TemporalValueError, "MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED"):
+            normalize_temporal_value("12:30:45.123456", "time(6)", time_as_interval=False)
+        with self.assertRaisesRegex(TemporalValueError, "MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED"):
+            normalize_temporal_value(time(12, 30, 45, 1), "time(6)", time_as_interval=False)
         self.assertEqual(normalize_temporal_value("23:59:59", "time", time_as_interval=True), timedelta(hours=23, minutes=59, seconds=59))
         self.assertEqual(normalize_temporal_value("24:00:00", "time", time_as_interval=True), timedelta(hours=24))
         self.assertEqual(normalize_temporal_value("-01:00:00", "time", time_as_interval=True), -timedelta(hours=1))

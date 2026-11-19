@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import base64
 from decimal import Decimal
 from datetime import datetime, time, timedelta, timezone
 import hashlib
@@ -11,10 +12,12 @@ from unittest.mock import patch
 
 from tools.migracao_pg.loader import _audit_pk_text as loader_audit_pk_text
 from tools.migracao_pg.loader import _MemoryGuard
-from tools.migracao_pg.ddl import MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX
-from tools.migracao_pg.reconcile import _DiskCounterStore, _accumulate_row, _aggregate_metric_results, _foreign_key_metric, _new_accumulator
+from tools.migracao_pg.catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID, _collector_fingerprint, _structural_fingerprint
+from tools.migracao_pg.ddl import MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX, canonical_fingerprint
+from tools.migracao_pg.reconcile import _DiskCounterStore, _accumulate_row, _aggregate_metric_results, _binary_storage_schema_metric, _foreign_key_metric, _new_accumulator, _stream_row_size_limit
 from tools.migracao_pg.reconcile import _audit_pk_text as reconcile_audit_pk_text
-from tools.migracao_pg.reconcile import canonical_row_sha256, reconcile
+from tools.migracao_pg.reconcile import canonical_row_sha256, reconcile as _reconcile
+from tools.migracao_pg.type_mapping import BINARY_STORAGE_POLICY_ID, expected_binary_storage_manifest
 
 
 TABLE = {
@@ -33,6 +36,37 @@ TABLE = {
 }
 SOURCE_ROW = (1, 7, Decimal("2.30"), b"\x00x", "hi\x00there", "a")
 TARGET_ROW = (1, 7, Decimal("2.30"), b"\x00x", "hithere", "a")
+BINARY_TABLE = {
+    "name": "tenant_arquivos",
+    "type": "BASE TABLE",
+    "engine": "InnoDB",
+    "source_next_auto_increment": None,
+    "columns": [{
+        "name": "conteudo",
+        "ordinal": 1,
+        "data_type": "longblob",
+        "column_type": "longblob",
+        "binary_storage_encoding": "base64",
+        "extra": "",
+    }],
+}
+
+
+def _seal_snapshot(snapshot):
+    snapshot["collector_code_sha256"] = _collector_fingerprint()
+    snapshot["structural_fingerprint_sha256"] = _structural_fingerprint(snapshot)
+    snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+    return snapshot
+
+
+def reconcile(source, target, snapshot, report, mappings, **kwargs):
+    previous_fingerprint = snapshot.get("fingerprint_sha256")
+    if previous_fingerprint != canonical_fingerprint(snapshot):
+        _seal_snapshot(snapshot)
+        if report.get("bundle_catalog_fingerprint") == previous_fingerprint:
+            report["bundle_catalog_fingerprint"] = snapshot["fingerprint_sha256"]
+    kwargs.setdefault("live_source_snapshot", snapshot)
+    return _reconcile(source, target, snapshot, report, mappings, **kwargs)
 
 
 class FakeCursor:
@@ -48,7 +82,17 @@ class FakeCursor:
         self.params = params
         self.connection.queries.append(self.sql)
         self.pos = 0
-        if "SELECT DATABASE() AS database_name" in self.sql:
+        if "FROM information_schema.columns" in self.sql:
+            _schema, table_name, column_name = self.params
+            if self.connection.binary_schema_override is not None:
+                self.rows = [self.connection.binary_schema_override]
+            elif (table_name, column_name) == ("tenant_arquivos", "conteudo"):
+                self.rows = [("text", "C")]
+            elif (table_name, column_name) == ("synthetic", "payload"):
+                self.rows = [("bytea", None)]
+            else:
+                self.rows = []
+        elif "SELECT DATABASE() AS database_name" in self.sql:
             self.rows = [(self.connection.database, self.connection.user)]
         elif "SELECT current_database() AS database_name" in self.sql:
             self.rows = [(self.connection.database, self.connection.user)]
@@ -84,7 +128,7 @@ class FakeCursor:
         elif "FROM pg_catalog.pg_constraint AS constraint_row" in self.sql:
             self.rows = list(self.connection.foreign_key_definitions)
         elif self.sql.startswith("SELECT ") and " FROM " in self.sql:
-            self.rows = list(self.connection.table_rows)
+            self.rows = list(self.connection.binary_rows if "tenant_arquivos" in self.sql else self.connection.table_rows)
         else:
             raise AssertionError(f"Unexpected synthetic SQL shape: {self.sql}")
 
@@ -111,13 +155,15 @@ class FakeCursor:
 
 
 class FakeConnection:
-    def __init__(self, *, database: str, user: str, table_rows=(), orphan_count=0, audit_rows=(), foreign_key_definitions=()) -> None:
+    def __init__(self, *, database: str, user: str, table_rows=(), binary_rows=(), orphan_count=0, audit_rows=(), foreign_key_definitions=()) -> None:
         self.database = database
         self.user = user
         self.table_rows = list(table_rows)
+        self.binary_rows = list(binary_rows)
         self.orphan_count = orphan_count
         self.audit_rows = list(audit_rows)
         self.foreign_key_definitions = list(foreign_key_definitions)
+        self.binary_schema_override = None
         self.fetchmany_sizes: list[int] = []
         self.queries: list[str] = []
         self.sequence_lookup_keys: list[str] = []
@@ -146,6 +192,10 @@ def base_contract(*, source_rows=None, target_rows=None, snapshot=None, report=N
                   source_db="erp_pg_source", target_db="erp_pg_dev", source_orphans=0, target_orphans=0):
     table = deepcopy(TABLE)
     snap = {
+        "catalog_version": CATALOG_VERSION,
+        "binary_storage_policy_id": BINARY_STORAGE_POLICY_ID,
+        "binary_storage_required": True,
+        "time_range_policy_id": TIME_RANGE_POLICY_ID,
         "source_schema": "erp_pg_source",
         "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
         "source_grants_policy_accepted": True,
@@ -156,19 +206,28 @@ def base_contract(*, source_rows=None, target_rows=None, snapshot=None, report=N
         "events": [],
         "catalog_consistency_check": "PRE_POST_SIGNATURE_MATCH",
         "timestamp_transfer_contract": {"source_session": "UTC", "target_wall_time": "America/Sao_Paulo"},
-        "fingerprint_sha256": "f" * 64,
         "foreign_keys": [],
-        "tables": [table],
+        "tables": [table, deepcopy(BINARY_TABLE)],
     }
     table["primary_key"] = [{"ordinal": 1, "column": "id"}]
+    _seal_snapshot(snap)
     map_data = {
         "synthetic": {
             "columns": deepcopy(table["columns"]),
             "types": {column["name"]: object() for column in table["columns"]},
             "enum_labels": {"state": ("a", "b")},
+            "storage_encodings": {},
             "target_schema": "erp",
             "identity_columns": [{"column": "id", "strategy": "identity"}],
-        }
+        },
+        "tenant_arquivos": {
+            "columns": deepcopy(BINARY_TABLE["columns"]),
+            "types": {"conteudo": object()},
+            "enum_labels": {},
+            "storage_encodings": {"conteudo": "base64"},
+            "target_schema": "erp",
+            "identity_columns": [],
+        },
     }
     src = [SOURCE_ROW] if source_rows is None else list(source_rows)
     dst = [TARGET_ROW] if target_rows is None else list(target_rows)
@@ -178,7 +237,11 @@ def base_contract(*, source_rows=None, target_rows=None, snapshot=None, report=N
         "target_database": target_db,
         "target_schema": "erp",
         "bundle_catalog_fingerprint": snap["fingerprint_sha256"],
-        "table_counts": [{"table": "synthetic", "source_rows": len(src), "target_rows": len(dst)}],
+        "binary_storage": {"policy_id": BINARY_STORAGE_POLICY_ID, "columns": expected_binary_storage_manifest(snap)},
+        "table_counts": [
+            {"table": "synthetic", "source_rows": len(src), "target_rows": len(dst)},
+            {"table": "tenant_arquivos", "source_rows": 0, "target_rows": 0},
+        ],
         "text_policy_findings": [
             {"table": "synthetic", "column": "description", "scan_status": "SCANNED", "detector_disagreement": False,
              "cells_scanned": len(src), "method_a_python_string_cells_with_nul": 1, "method_a_decode_failures": 0,
@@ -193,7 +256,13 @@ def base_contract(*, source_rows=None, target_rows=None, snapshot=None, report=N
             {"table": "synthetic", "column": "payload", "cells_scanned": len(src),
              "method_b_cells_with_nul": 1, "python_cells_with_nul": 1, "nul_bytes": 1,
              "binary_bytes_scanned": 2 * len(src),
-             "bytea_policy": "raw_bytes_without_text_decode_or_nul_normalization"}
+             "storage_policy_id": BINARY_STORAGE_POLICY_ID,
+             "storage_encoding": "bytea", "nul_policy": "preserve_exact_bytes"},
+            {"table": "tenant_arquivos", "column": "conteudo", "cells_scanned": 0,
+             "method_b_cells_with_nul": 0, "python_cells_with_nul": 0, "nul_bytes": 0,
+             "binary_bytes_scanned": 0,
+             "storage_policy_id": BINARY_STORAGE_POLICY_ID,
+             "storage_encoding": "base64", "nul_policy": "preserve_exact_bytes"},
         ],
         "nul_values_normalized": [
             {"table": "synthetic", "column": "description", "cells_with_nul": 1, "nul_bytes": 1,
@@ -233,6 +302,30 @@ def run_contract(**kwargs):
 
 
 class TargetProfileContractTests(unittest.TestCase):
+    def test_reconciler_requires_live_source_snapshot_and_reports_contract_v4(self):
+        source, target, snapshot, report, mappings = base_contract()
+        missing_live = _reconcile(source, target, snapshot, report, mappings)
+        self.assertEqual(missing_live["status"], "BLOCKED")
+        self.assertEqual(missing_live["failure_code"], "LIVE_SOURCE_CATALOG_REQUIRED")
+
+        result = reconcile(source, target, snapshot, report, mappings)
+        self.assertEqual(result["status"], "RECONCILED")
+        self.assertEqual(result["reconciler_version"], 4)
+
+    def test_reconciler_rejects_coordinated_snapshot_report_table_omission(self):
+        source, target, live_snapshot, report, mappings = base_contract()
+        tampered = deepcopy(live_snapshot)
+        tampered["tables"] = [table for table in tampered["tables"] if table["name"] != "synthetic"]
+        _seal_snapshot(tampered)
+        report["bundle_catalog_fingerprint"] = tampered["fingerprint_sha256"]
+
+        result = _reconcile(
+            source, target, tampered, report, mappings,
+            live_source_snapshot=live_snapshot,
+        )
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["failure_code"], "SOURCE_CATALOG_DRIFT_FROM_BUNDLE")
+
     def test_cutover_reconciliation_requires_explicit_target_identity(self):
         source, target, snapshot, report, mappings = base_contract(target_db="erp_pg_cutover_synthetic")
         result = reconcile(
@@ -289,6 +382,18 @@ class CanonicalRowHashTests(unittest.TestCase):
         self.assertEqual(canonical_row_sha256((nul_json,), json_column), canonical_row_sha256((clean_json,), json_column))
         binary = [{"name": "b", "data_type": "blob", "column_type": "blob"}]
         self.assertNotEqual(canonical_row_sha256((b"A\x00B",), binary), canonical_row_sha256((b"AB",), binary))
+        encoded_binary = [{
+            "name": "conteudo", "data_type": "longblob", "column_type": "longblob",
+            "binary_storage_encoding": "base64",
+        }]
+        original = b"\x00\xffERP-file\x80"
+        encoded = base64.b64encode(original).decode("ascii")
+        self.assertEqual(
+            canonical_row_sha256((original,), encoded_binary, is_source=True),
+            canonical_row_sha256((encoded,), encoded_binary, is_source=False),
+        )
+        with self.assertRaisesRegex(RuntimeError, "BINARY_BASE64_TARGET_VALUE_INVALID"):
+            canonical_row_sha256((encoded + "!",), encoded_binary, is_source=False)
         text = [{"name": "t", "data_type": "text", "character_set": "utf8mb4"}]
         self.assertNotEqual(canonical_row_sha256(("É",), text), canonical_row_sha256(("é",), text))
 
@@ -382,6 +487,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
             "numeric_sums": "PASS",
             "binary_octet_length": "PASS",
             "binary_bytewise_hash": "PASS",
+            "binary_storage_schema": "PASS",
             "tenant_distribution": "PASS",
             "tenant_row_hashes": "PASS",
             "enum_values": "PASS",
@@ -408,6 +514,33 @@ class ReconciliationMetricsTests(unittest.TestCase):
         self.assertEqual(result["status"], "DIVERGED")
         self.assertEqual(result["metrics"]["load_table_failures"], "DIVERGED")
         self.assertEqual(result["table_failures"], report["table_failures"])
+
+    def test_binary_storage_schema_mismatch_blocks_reconciliation(self):
+        source, target, snapshot, report, mappings = base_contract()
+        target.binary_schema_override = ("text", "C")
+        result = reconcile(source, target, snapshot, report, mappings)
+        self.assertEqual(result["status"], "DIVERGED")
+        self.assertMetric(result, "binary_storage_schema", "DIVERGED")
+        self.assertEqual(result["binary_storage_schema"]["columns_checked"], 2)
+        self.assertEqual(result["binary_storage_schema"]["columns_mismatched"], 1)
+
+    def test_approved_base64_column_requires_text_with_c_collation(self):
+        target = FakeConnection(database="erp_pg_dev", user="erp_p2_loader")
+        tables = {"tenant_arquivos": {"columns": [{"name": "conteudo", "data_type": "longblob"}]}}
+        mappings = {"tenant_arquivos": {"target_schema": "erp"}}
+        matched, metric = _binary_storage_schema_metric(target, tables, mappings)
+        self.assertTrue(matched)
+        self.assertEqual(metric["columns_checked"], 1)
+        self.assertEqual(metric["columns_mismatched"], 0)
+        self.assertEqual(metric["columns_by_storage_encoding"], {"base64": 1, "bytea": 0})
+
+    def test_base64_target_row_limit_accounts_for_encoding_expansion(self):
+        base64_columns = [{"name": "conteudo", "binary_storage_encoding": "base64"}]
+        bytea_columns = [{"name": "payload", "binary_storage_encoding": "bytea"}]
+        raw_limit = 128 * 1024 * 1024
+        self.assertEqual(_stream_row_size_limit(base64_columns, is_source=False), ((raw_limit + 2) // 3) * 4)
+        self.assertEqual(_stream_row_size_limit(base64_columns, is_source=True), raw_limit)
+        self.assertEqual(_stream_row_size_limit(bytea_columns, is_source=False), raw_limit)
 
     def test_partial_load_without_failure_evidence_is_blocked(self):
         source, target, snapshot, report, mappings = base_contract()
@@ -495,7 +628,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
         with patch("tools.migracao_pg.reconcile.MAX_RECONCILE_ROW_BYTES", 1):
             result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "BLOCKED")
-        self.assertEqual(result["failure_code"], "RECONCILE_ROW_EXCEEDS_128_MIB")
+        self.assertEqual(result["failure_code"], "RECONCILE_ROW_EXCEEDS_ROW_LIMIT")
 
     def test_sqlite_counter_store_enforces_size_limit_and_cleans_up(self):
         store = _DiskCounterStore(max_bytes=16 * 1024, minimum_free_bytes=0)

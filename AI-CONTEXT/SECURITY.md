@@ -128,3 +128,12 @@ Arquivos de upload de moradores/documentos ficam fora da raiz pública ou proteg
 ### P3.2 — Portal Bearer e logout (complemento)
 
 No login Portal MySQL, o Bearer emitido é guardado somente na sessão PHP server-side, não em log ou em outro campo RBAC. `logout_morador.php` usa o marcador para revogar a sessão Bearer, restrita ao morador e tenant associados à sessão, antes de destruir o estado PHP. O login grava `sessoes_portal.tenant_id` quando a coluna existe no schema corrente e conserva o contrato legado quando ausente; esse valor é derivado no servidor. PostgreSQL Portal permanece bloqueado.
+
+
+## 12. Conteúdo binário de arquivos de tenant — representação P2 (2026-11-19)
+
+A conversão Base64 é restrita à fronteira da coluna allowlisted `tenant_arquivos.conteudo` no driver PostgreSQL; no MySQL, os bytes permanecem inalterados. A entrada para PostgreSQL é Base64 ASCII canônico em `TEXT COLLATE "C"`; leitura exige decode estrito e recusa conteúdo inválido/não canônico. Tamanho e SHA-256 são conferidos sobre os bytes lógicos originais, nunca sobre o texto Base64. Outros tipos binários não passam pelo codec.
+
+Falhas não devem registrar, retornar ou incluir no log bytes, Base64, trechos de arquivo, credenciais ou metadados de sessão. Os handlers devolvem erro controlado; `api/api_imagem_projeto.php` não permite cache compartilhado para imagem de projeto não pública (`private, no-store`, `Vary: Cookie, Authorization`). O objeto em Base64 não é formato de transporte novo nem autorização adicional: autenticação, RBAC, tenant e regras de visibilidade continuam aplicadas antes da leitura canônica.
+
+O manifesto da política P2 é obrigatório e validado por catálogo/DDL/loader/reconciliador; divergência, coluna extra, mudança de tipo/collation ou valor Base64 inválido é fail-closed. A implementação local não implica ativação de PostgreSQL em produção.

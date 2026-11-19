@@ -21,7 +21,7 @@ class CheckTranslationTests(unittest.TestCase):
         )
         self.assertEqual(
             render_check_translation(translation, columns={"som_tipo": {"data_type": "varchar"}}),
-            '"som_tipo" IN (\'classico\', \'campainha\', \'suave\')',
+            '"som_tipo" IN (E\'classico\', E\'campainha\', E\'suave\')',
         )
 
     def test_translates_single_numeric_between_check(self) -> None:

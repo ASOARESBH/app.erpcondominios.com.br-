@@ -14,14 +14,14 @@ import tempfile
 from typing import Any
 
 from .generated_columns import declares_generated_column, identify_generated_column
-from .type_mapping import TypeMappingError, parse_mysql_enum, quote_literal
+from .type_mapping import BINARY_STORAGE_POLICY_ID, TypeMappingError, expected_binary_storage_encoding, parse_mysql_enum, quote_literal
 from .check_translation import CheckTranslationError, translate_mysql_check_clause
 
 
 SOURCE_SCHEMA = "erp_pg_source"
-CATALOG_VERSION = 9
+CATALOG_VERSION = 12
 SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
-TIME_RANGE_POLICY_ID = "mysql_time_clock_or_extended_interval_v2_data_and_default"
+TIME_RANGE_POLICY_ID = "mysql_time_clock_time0_or_extended_interval_v3"
 POSTGRES_SIGNED_BIGINT_MAX = 9223372036854775807
 class CatalogError(RuntimeError):
     pass
@@ -94,6 +94,7 @@ def _safe_default(
     *,
     no_backslash_escapes: bool = False,
     time_has_extended_values: bool | None = None,
+    time_has_fractional_seconds: bool = False,
 ) -> dict[str, str] | None:
     value = column.get("column_default")
     if value is None:
@@ -117,7 +118,7 @@ def _safe_default(
         if precision:
             return {"kind": "review", "code": "FRACTIONAL_DEFAULT_PRECISION_REVIEW_REQUIRED"}
         if data_type == "timestamp":
-            return {"kind": "sql", "expression": "timezone('America/Sao_Paulo', statement_timestamp())"}
+            return {"kind": "sql", "expression": f"timezone({quote_literal('America/Sao_Paulo')}, statement_timestamp())"}
         if data_type == "datetime":
             return {"kind": "sql", "expression": "LOCALTIMESTAMP(0)"}
         return {"kind": "review", "code": "CURRENT_TIMESTAMP_DEFAULT_TYPE_REVIEW_REQUIRED"}
@@ -160,6 +161,8 @@ def _safe_default(
             return {"kind": "sql", "expression": f"INTERVAL {quote_literal(canonical)}"}
         if _time_default_has_extended_range(raw):
             return {"kind": "review", "code": "STATIC_TIME_DEFAULT_OUTSIDE_TIME_OF_DAY_RANGE"}
+        if time_has_fractional_seconds:
+            return {"kind": "review", "code": "MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED"}
         clock_value = canonical.lstrip("+")
         if clock_value.startswith("-"):
             clock_value = clock_value[1:]
@@ -222,17 +225,23 @@ def _unsigned_bigint_range_scan(cursor: Any, table: str, columns: list[str]) -> 
     return result
 
 
-def _time_range_scan(cursor: Any, table: str, columns: list[str]) -> dict[str, bool]:
+def _time_range_scan(cursor: Any, table: str, columns: list[str]) -> dict[str, dict[str, bool]]:
     if not columns:
         return {}
-    aliases = [f"has_extended_time_{index}" for index in range(len(columns))]
-    projections = [
-        "COALESCE((MIN(TIME_TO_SEC({column})) < 0 OR "
-        "MAX(TIME_TO_SEC({column})) > 86399), 0) AS {alias}".format(
-            column=_mysql_identifier(column), alias=_mysql_identifier(alias)
-        )
-        for column, alias in zip(columns, aliases)
-    ]
+    aliases = [(f"has_extended_time_{index}", f"has_fractional_time_{index}") for index in range(len(columns))]
+    projections: list[str] = []
+    for column, (extended_alias, fractional_alias) in zip(columns, aliases):
+        identifier = _mysql_identifier(column)
+        projections.extend((
+            "COALESCE((MIN(TIME_TO_SEC({column})) < 0 OR "
+            "MAX(TIME_TO_SEC({column})) > 86399), 0) AS {alias}".format(
+                column=identifier, alias=_mysql_identifier(extended_alias)
+            ),
+            "COALESCE(MAX(CASE WHEN {column} IS NOT NULL AND "
+            "MOD(TIME_TO_SEC({column}), 1) <> 0 THEN 1 ELSE 0 END), 0) AS {alias}".format(
+                column=identifier, alias=_mysql_identifier(fractional_alias)
+            ),
+        ))
     query = (
         f"SELECT {', '.join(projections)} FROM "
         f"{_mysql_identifier(SOURCE_SCHEMA)}.{_mysql_identifier(table)}"
@@ -244,15 +253,18 @@ def _time_range_scan(cursor: Any, table: str, columns: list[str]) -> dict[str, b
         raise CatalogError("TIME_RANGE_SCAN_FAILED") from error
     if not isinstance(row, dict):
         raise CatalogError("TIME_RANGE_SCAN_RESULT_INVALID")
-    result: dict[str, bool] = {}
-    for column, alias in zip(columns, aliases):
-        value = next((item for key, item in row.items() if str(key).lower() == alias), None)
-        if isinstance(value, bool):
-            result[column] = value
-        elif value in (0, 1):
-            result[column] = bool(value)
-        else:
-            raise CatalogError("TIME_RANGE_SCAN_RESULT_INVALID")
+    result: dict[str, dict[str, bool]] = {}
+    for column, (extended_alias, fractional_alias) in zip(columns, aliases):
+        values: dict[str, bool] = {}
+        for key_name, alias in (("extended", extended_alias), ("fractional", fractional_alias)):
+            value = next((item for key, item in row.items() if str(key).lower() == alias), None)
+            if isinstance(value, bool):
+                values[key_name] = value
+            elif value in (0, 1):
+                values[key_name] = bool(value)
+            else:
+                raise CatalogError("TIME_RANGE_SCAN_RESULT_INVALID")
+        result[column] = values
     return result
 
 
@@ -268,6 +280,13 @@ def _time_default_has_extended_range(value: object, extra: object = "") -> bool:
     if sign == "-":
         total = -total
     return total < 0 or total > 86399 * 1_000_000
+
+
+def _time_default_has_fractional_seconds(value: object, extra: object = "") -> bool:
+    if value is None or "default_generated" in str(extra).lower():
+        return False
+    match = re.fullmatch(r"[+-]?\d{1,3}:\d{2}:\d{2}(?:\.(\d{1,6}))?", str(value))
+    return bool(match and match.group(1) and any(digit != "0" for digit in match.group(1)))
 
 
 def _index_columns(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -518,7 +537,7 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             table: _unsigned_bigint_range_scan(cursor, table, columns)
             for table, columns in sorted(unsigned_bigint_columns.items())
         }
-        time_extended_ranges = {
+        time_ranges = {
             table: _time_range_scan(cursor, table, columns)
             for table, columns in sorted(time_columns.items())
         }
@@ -536,29 +555,49 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
                 "source_collation": row.get("collation_name"),
                 "extra": str(row.get("extra") or ""),
             }
+            binary_encoding = expected_binary_storage_encoding(table, column["name"])
+            if binary_encoding is not None:
+                if column["data_type"] != "longblob":
+                    raise CatalogError("BINARY_STORAGE_SOURCE_TYPE_MISMATCH")
+                column["binary_storage_encoding"] = binary_encoding
             if str(row.get("data_type", "")).lower() == "bigint" and column["name"] in unsigned_bigint_ranges.get(table, {}):
                 column["unsigned_bigint_exceeds_signed_limit"] = unsigned_bigint_ranges[table][column["name"]]
             if str(row.get("data_type", "")).lower() == "time" and table in base_tables:
-                if column["name"] not in time_extended_ranges.get(table, {}):
+                if column["name"] not in time_ranges.get(table, {}):
                     raise CatalogError("TIME_RANGE_SCAN_RESULT_INVALID")
-                time_extended = time_extended_ranges[table][column["name"]]
+                range_metrics = time_ranges[table][column["name"]]
+                time_extended = range_metrics["extended"]
+                time_fractional = range_metrics["fractional"]
                 time_extended_default = _time_default_has_extended_range(
                     row.get("column_default"), row.get("extra")
                 )
+                time_fractional_default = _time_default_has_fractional_seconds(
+                    row.get("column_default"), row.get("extra")
+                )
                 column["time_has_extended_values"] = time_extended
+                column["time_has_fractional_seconds"] = time_fractional
                 column["time_default_has_extended_value"] = time_extended_default
+                column["time_default_has_fractional_seconds"] = time_fractional_default
                 time_uses_interval = time_extended or time_extended_default
                 column["time_uses_interval"] = time_uses_interval
+                if (time_fractional or time_fractional_default) and not time_uses_interval:
+                    review = {"table": table, "column": column["name"], "code": "MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED"}
+                    if review not in review_items:
+                        review_items.append(review)
             else:
                 time_uses_interval = None
             default = _safe_default(
                 row,
                 no_backslash_escapes=no_backslash_escapes,
                 time_has_extended_values=time_uses_interval,
+                time_has_fractional_seconds=(
+                    _time_default_has_fractional_seconds(row.get("column_default"), row.get("extra"))
+                    if str(row.get("data_type", "")).lower() == "time" else False
+                ),
             )
             if default is not None:
                 column["default"] = default
-                if default["kind"] == "review":
+                if default["kind"] == "review" and {"table": table, "column": column["name"], "code": default["code"]} not in review_items:
                     review_items.append({"table": table, "column": column["name"], "code": default["code"]})
             expression = str(row.get("generation_expression") or "")
             if expression or declares_generated_column(column):
@@ -749,6 +788,8 @@ def collect_catalog(connection: Any, *, schema: str = SOURCE_SCHEMA, keep_snapsh
             })
         snapshot: dict[str, Any] = {
             "catalog_version": CATALOG_VERSION,
+            "binary_storage_policy_id": BINARY_STORAGE_POLICY_ID,
+            "binary_storage_required": True,
             "time_range_policy_id": TIME_RANGE_POLICY_ID,
             "collector_code_sha256": _collector_fingerprint(),
             "source_schema": SOURCE_SCHEMA,

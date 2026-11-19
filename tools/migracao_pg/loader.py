@@ -20,13 +20,16 @@ from typing import Any
 if os.geteuid() == 0 and os.environ.get("ERP_P2_ROOT_LAUNCHER_VERIFIED") != "1":
     raise SystemExit("LOADER_ROOT_EXECUTION_REQUIRES_REBUILD_RUNNER")
 
-from .catalog import CatalogError, SOURCE_GRANT_POLICY_ID, SOURCE_SCHEMA, TIME_RANGE_POLICY_ID, _collector_fingerprint, _mysql_socket_options, _structural_fingerprint, _validate_defaults_file, collect_catalog
+from .catalog import CATALOG_VERSION, CatalogError, SOURCE_GRANT_POLICY_ID, SOURCE_SCHEMA, TIME_RANGE_POLICY_ID, _collector_fingerprint, _mysql_socket_options, _structural_fingerprint, _validate_defaults_file, collect_catalog
 from .ddl import GENERATOR_VERSION, LEGACY_SCHEMA, MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX, TARGET_SCHEMA, _schema_for_table, canonical_fingerprint
 from .generate_ddl import _generator_fingerprint
 from .generated_columns import is_generated_column, target_generated_column
 from .type_mapping import (
+    BINARY_STORAGE_POLICY_ID,
     TemporalValueError,
     TypeMappingError,
+    expected_binary_storage_encoding,
+    expected_binary_storage_manifest,
     map_mysql_type,
     normalize_temporal_value,
     parse_mysql_enum,
@@ -179,7 +182,9 @@ def validate_bundle(bundle_name: str, *, require_executable: bool = True) -> tup
         raise LoaderError("BUNDLE_SOURCE_SCHEMA_MISMATCH")
     if report.get("target_schema") != TARGET_SCHEMA:
         raise LoaderError("BUNDLE_TARGET_SCHEMA_MISMATCH")
-    if snapshot.get("catalog_version") != 9 or snapshot.get("time_range_policy_id") != TIME_RANGE_POLICY_ID \
+    if snapshot.get("catalog_version") != CATALOG_VERSION or snapshot.get("time_range_policy_id") != TIME_RANGE_POLICY_ID \
+        or snapshot.get("binary_storage_policy_id") != BINARY_STORAGE_POLICY_ID \
+        or snapshot.get("binary_storage_required") is not True \
         or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
         raise LoaderError("BUNDLE_CATALOG_FINGERPRINT_MISMATCH")
     if report.get("catalog_fingerprint_sha256") != snapshot.get("fingerprint_sha256"):
@@ -202,6 +207,17 @@ def validate_bundle(bundle_name: str, *, require_executable: bool = True) -> tup
         raise LoaderError("BUNDLE_METADATA_VISIBILITY_UNPROVEN")
     if report.get("generator_version") != GENERATOR_VERSION:
         raise LoaderError("BUNDLE_GENERATOR_VERSION_MISMATCH")
+    try:
+        expected_binary_storage = {
+            "policy_id": BINARY_STORAGE_POLICY_ID,
+            "columns": expected_binary_storage_manifest(snapshot),
+        }
+    except TypeMappingError as error:
+        raise LoaderError(error.code) from error
+    if not expected_binary_storage["columns"]:
+        raise LoaderError("BUNDLE_BINARY_STORAGE_MANIFEST_MISSING")
+    if report.get("binary_storage") != expected_binary_storage:
+        raise LoaderError("BUNDLE_BINARY_STORAGE_MANIFEST_MISMATCH")
     if report.get("generator_code_sha256") != _generator_fingerprint():
         raise LoaderError("BUNDLE_GENERATOR_CODE_MISMATCH")
     if report.get("snapshot_file_sha256") != hashlib.sha256(snapshot_raw).hexdigest():
@@ -989,7 +1005,9 @@ def _scan_source_binary_policy(source: Any, snapshot: dict[str, Any], memory_gua
                 "python_cells_with_nul": 0,
                 "nul_bytes": 0,
                 "binary_bytes_scanned": 0,
-                "bytea_policy": "raw_bytes_without_text_decode_or_nul_normalization",
+                "storage_policy_id": BINARY_STORAGE_POLICY_ID,
+                "storage_encoding": expected_binary_storage_encoding(table_name, column_name) or "bytea",
+                "nul_policy": "preserve_exact_bytes",
             }
             try:
                 with source.cursor(pymysql.cursors.Cursor) as aggregate_cursor:
@@ -1357,7 +1375,15 @@ def normalize_mysql_value(
     if data_type in {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}:
         if not isinstance(value, (bytes, bytearray, memoryview)):
             raise LoaderError("BINARY_COLUMN_VALUE_NOT_BYTES")
-        return bytes(value)
+        encoding = expected_binary_storage_encoding(table_name or "", str(column.get("name", "")))
+        if column.get("binary_storage_encoding") != encoding:
+            raise LoaderError("BINARY_STORAGE_POLICY_METADATA_MISMATCH")
+        raw = bytes(value)
+        if encoding == "base64":
+            if data_type != "longblob":
+                raise LoaderError("BINARY_STORAGE_SOURCE_TYPE_MISMATCH")
+            return base64.b64encode(raw).decode("ascii")
+        return raw
     if data_type == "bit":
         match = re.fullmatch(r"bit\s*\(\s*(\d+)\s*\)", column_type, re.IGNORECASE)
         if not match:
@@ -1468,6 +1494,13 @@ def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], 
     overrides = report.get("collation_overrides")
     if not isinstance(overrides, dict):
         raise LoaderError("BUNDLE_COLLATION_OVERRIDES_INVALID")
+    contains_binary_columns = any(
+        str(column.get("data_type", "")).lower() in {"binary", "varbinary", "tinyblob", "blob", "mediumblob", "longblob"}
+        for table in snapshot.get("tables", []) if table.get("type") == "BASE TABLE"
+        for column in table.get("columns", [])
+    )
+    if contains_binary_columns and snapshot.get("binary_storage_policy_id") != BINARY_STORAGE_POLICY_ID:
+        raise LoaderError("BUNDLE_BINARY_STORAGE_POLICY_MISMATCH")
     decisions = report.get("collation_decisions")
     if not isinstance(decisions, list):
         raise LoaderError("BUNDLE_COLLATION_DECISIONS_INVALID")
@@ -1510,12 +1543,16 @@ def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], 
         copy_columns: list[dict[str, Any]] = []
         generated_columns: list[dict[str, Any]] = []
         enum_labels: dict[str, tuple[str, ...]] = {}
+        storage_encodings: dict[str, str] = {}
         for column in ordered:
             name = column.get("name")
             if not isinstance(name, str) or not name:
                 raise LoaderError("BUNDLE_COLUMN_METADATA_INVALID")
             key = f"{table_name}.{name}"
             target_collation = overrides.get(key, collations.get(key))
+            binary_encoding = expected_binary_storage_encoding(table_name, name)
+            if column.get("binary_storage_encoding") != binary_encoding:
+                raise LoaderError("BUNDLE_BINARY_STORAGE_POLICY_METADATA_MISMATCH")
             if is_generated_column(column):
                 generated_spec = target_generated_column(table_name, column)
                 if generated_spec is None:
@@ -1527,7 +1564,9 @@ def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], 
                 mapped[name] = map_mysql_type(
                     str(column.get("column_type", "")),
                     target_collation=target_collation,
+                    table_name=table_name,
                     column_name=name,
+                    binary_storage_encoding=binary_encoding,
                     no_backslash_escapes=no_backslash_escapes,
                     time_uses_interval=column.get("time_uses_interval"),
                 )
@@ -1536,6 +1575,8 @@ def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], 
                         str(column.get("column_type", "")),
                         no_backslash_escapes=no_backslash_escapes,
                     )
+                if binary_encoding is not None:
+                    storage_encodings[name] = binary_encoding
             except TypeMappingError as error:
                 raise LoaderError(error.code) from error
         if not copy_columns:
@@ -1547,6 +1588,7 @@ def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], 
             "generated_columns": generated_columns,
             "types": mapped,
             "enum_labels": enum_labels,
+            "storage_encodings": storage_encodings,
             "target_schema": expected_schemas[table_name],
         }
     return mappings
@@ -1820,6 +1862,8 @@ def _unique_index_parts(item: dict[str, Any], mapping: dict[str, Any]) -> tuple[
         if prefix_length is not None:
             if isinstance(prefix_length, bool) or not isinstance(prefix_length, int) or not 1 <= prefix_length <= 65535:
                 raise LoaderError("BUNDLE_UNIQUE_PREFIX_LENGTH_INVALID")
+            if expected_binary_storage_encoding(str(item.get("table", "")), name) == "base64":
+                raise LoaderError("BUNDLE_UNIQUE_BASE64_PREFIX_INDEX_UNSUPPORTED")
             data_type = str(column.get("data_type", "")).lower()
             if data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext", "enum"}:
                 expression = sql.SQL("left({}::text, {})").format(identifier, sql.Literal(prefix_length))
@@ -2239,6 +2283,8 @@ def _validate_source_snapshot(current: dict[str, Any], expected: dict[str, Any])
     if current.get("structural_fingerprint_sha256") != expected.get("structural_fingerprint_sha256"):
         raise LoaderError("SOURCE_CATALOG_DRIFT_FROM_BUNDLE")
     if current.get("source_schema") != SOURCE_SCHEMA \
+        or current.get("binary_storage_required") is not True \
+        or expected.get("binary_storage_required") is not True \
         or current.get("source_grant_policy_id") != SOURCE_GRANT_POLICY_ID \
         or expected.get("source_grant_policy_id") != SOURCE_GRANT_POLICY_ID \
         or current.get("source_grants_policy_accepted") is not True \
@@ -2566,6 +2612,7 @@ def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Pa
             "table_failures": table_failures,
             "text_policy_findings": initial_report.get("text_policy_findings", []),
             "binary_policy_findings": initial_report.get("binary_policy_findings", []),
+            "binary_storage": report.get("binary_storage"),
             "nul_values_normalized": _nul_report_rows(nul_normalization_counts),
             "zero_dates_normalized": _zero_date_report_rows(normalization_counts),
             "zero_date_nullability_results": report.get("zero_date_nullability_results", []),
@@ -2806,6 +2853,7 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
             checkpoint=_reconcile_checkpoint,
             temp_root=REPORT_ROOT,
             expected_target_database=target_config["dbname"],
+            live_source_snapshot=current_snapshot,
         )
         if load_was_partial and result.get("status") == "RECONCILED":
             result = {"status": "BLOCKED", "failure_code": "PARTIAL_LOAD_CANNOT_BE_ACCEPTED"}

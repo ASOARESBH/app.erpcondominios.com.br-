@@ -7,6 +7,7 @@ ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
 require_once 'tenant_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_binary_codec.php';
 ob_end_clean();
 
 $_origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -56,18 +57,30 @@ function tf_insert_file($db, $tenantId, $type, $originalName, $mime, $content, $
     $sha = hash('sha256', $content);
     $token = $public ? bin2hex(random_bytes(24)) : null;
     $userId = (int)($_SESSION['usuario_id'] ?? 0);
+    $postgres = \ERP\Database\DatabaseDialect::isPostgres($db);
+    $storedContent = erp_tenant_file_encode_for_storage($db, $content);
     $stmt = $db->prepare('INSERT INTO tenant_arquivos (tenant_id, tipo, nome_original, extensao, mime_type, tamanho_bytes, sha256, conteudo, publico, token_publico, caminho_legado, criado_por_usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     if (!$stmt) throw new Exception('Falha ao preparar arquivo: ' . $db->error);
-    $blob = null;
-    $stmt->bind_param('issssisbissi', $tenantId, $type, $originalName, $extension, $mime, $bytes, $sha, $blob, $public, $token, $legacyPath, $userId);
-    $stmt->send_long_data(7, $content);
+    if ($postgres) {
+        $stmt->bind_param('issssississi', $tenantId, $type, $originalName, $extension, $mime, $bytes, $sha, $storedContent, $public, $token, $legacyPath, $userId);
+    } else {
+        $blob = null;
+        $stmt->bind_param('issssisbissi', $tenantId, $type, $originalName, $extension, $mime, $bytes, $sha, $blob, $public, $token, $legacyPath, $userId);
+        $stmt->send_long_data(7, $content);
+    }
     if (!$stmt->execute()) throw new Exception('Falha ao gravar arquivo: ' . $stmt->error);
     $id = (int)$db->insert_id;
     $stmt->close();
     return ['id' => $id, 'token' => $token, 'sha256' => $sha, 'bytes' => $bytes];
 }
 
-function tf_stream($row, $download) {
+function tf_stream($db, $row, $download) {
+    $row['conteudo'] = erp_tenant_file_decode_from_storage(
+        $db,
+        (string)$row['conteudo'],
+        $row['tamanho_bytes'] ?? null,
+        isset($row['sha256']) ? (string)$row['sha256'] : null
+    );
     $name = tf_safe_filename($row['nome_original']);
     header('Content-Type: ' . ($row['mime_type'] ?: 'application/octet-stream'));
     header('X-Content-Type-Options: nosniff');
@@ -117,7 +130,7 @@ try {
     if ($acao === 'publico') {
         $token = preg_replace('/[^a-f0-9]/i', '', $_GET['token'] ?? '');
         if (strlen($token) !== 48) tf_json(false, 'Token público inválido', null, 400);
-        $stmt = $db->prepare('SELECT tipo, nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE token_publico = ? AND publico = 1 AND ativo = 1 LIMIT 1');
+        $stmt = $db->prepare('SELECT tipo, nome_original, mime_type, tamanho_bytes, sha256, conteudo FROM tenant_arquivos WHERE token_publico = ? AND publico = 1 AND ativo = 1 LIMIT 1');
         $stmt->bind_param('s', $token);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
@@ -126,7 +139,7 @@ try {
             verificarAutenticacao(true, 'operador');
             rbacExigir($db, 'moradores', 'visualizar', ['submodulo_chave' => 'anexos']);
         }
-        tf_stream($row, false);
+        tf_stream($db, $row, false);
     }
 
     // Compatibilidade temporária: URLs históricas /uploads/... são atendidas pelo BLOB.
@@ -144,16 +157,16 @@ try {
             rbacExigir($db, 'moradores', 'visualizar', ['submodulo_chave' => 'anexos']);
         }
         if ($sessionTenant > 0) {
-            $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
+            $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, sha256, conteudo FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? AND ativo = 1 LIMIT 1');
             $stmt->bind_param('is', $sessionTenant, $legacy);
         } else {
-            $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE caminho_legado = ? AND publico = 1 AND ativo = 1 LIMIT 1');
+            $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, sha256, conteudo FROM tenant_arquivos WHERE caminho_legado = ? AND publico = 1 AND ativo = 1 LIMIT 1');
             $stmt->bind_param('s', $legacy);
         }
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         if (!$row) tf_json(false, 'Arquivo legado não encontrado ou sem permissão', null, 404);
-        tf_stream($row, false);
+        tf_stream($db, $row, false);
     }
 
     // O portal recebe somente logos do próprio tenant. A rota não permite
@@ -163,7 +176,7 @@ try {
         if (!$portalTenantId) tf_json(false, 'Sessão expirada. Faça login novamente.', null, 401);
         $id = (int)($_GET['id'] ?? 0);
         if ($id <= 0) tf_json(false, 'Identificador de arquivo inválido', null, 400);
-        $stmt = $db->prepare("SELECT nome_original, mime_type, tamanho_bytes, conteudo
+        $stmt = $db->prepare("SELECT nome_original, mime_type, tamanho_bytes, sha256, conteudo
                               FROM tenant_arquivos
                               WHERE id = ? AND tenant_id = ? AND tipo = 'logo_tenant' AND ativo = 1
                               LIMIT 1");
@@ -175,7 +188,7 @@ try {
         if (!$row || strpos((string)$row['mime_type'], 'image/') !== 0) {
             tf_json(false, 'Arquivo não encontrado ou sem permissão', null, 404);
         }
-        tf_stream($row, false);
+        tf_stream($db, $row, false);
     }
 
     verificarAutenticacao(true, 'operador');
@@ -193,12 +206,12 @@ try {
         if ($tipoArquivo === 'morador_anexo') {
             rbacExigir($db, 'moradores', 'visualizar', ['submodulo_chave' => 'anexos', 'registro_tipo' => 'tenant_arquivo', 'registro_id' => $id]);
         }
-        $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE id = ? AND tenant_id = ? AND ativo = 1 LIMIT 1');
+        $stmt = $db->prepare('SELECT nome_original, mime_type, tamanho_bytes, sha256, conteudo FROM tenant_arquivos WHERE id = ? AND tenant_id = ? AND ativo = 1 LIMIT 1');
         $stmt->bind_param('ii', $id, $tenantId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         if (!$row) tf_json(false, 'Arquivo não encontrado ou sem permissão', null, 404);
-        tf_stream($row, isset($_GET['download']) && $_GET['download'] === '1');
+        tf_stream($db, $row, isset($_GET['download']) && $_GET['download'] === '1');
     }
 
     if ($acao === 'listar') {

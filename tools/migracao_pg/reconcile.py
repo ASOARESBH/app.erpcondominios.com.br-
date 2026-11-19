@@ -27,9 +27,10 @@ import base64
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from .ddl import POSTGRES_SEQUENCE_MAX, UNSIGNED_BIGINT_OFFSET, MYSQL_UNSIGNED_BIGINT_MAX
+from .catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID, _collector_fingerprint, _structural_fingerprint
+from .ddl import POSTGRES_SEQUENCE_MAX, UNSIGNED_BIGINT_OFFSET, MYSQL_UNSIGNED_BIGINT_MAX, canonical_fingerprint
 from .generated_columns import declares_generated_column, generated_dependencies_valid
-from .type_mapping import TemporalValueError, normalize_temporal_value, parse_mysql_enum
+from .type_mapping import BINARY_STORAGE_POLICY_ID, TemporalValueError, TypeMappingError, expected_binary_storage_encoding, expected_binary_storage_manifest, normalize_temporal_value, parse_mysql_enum
 
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_DATABASE = "erp_pg_dev"
@@ -44,6 +45,7 @@ FLOAT_TYPES = frozenset({"float", "double", "real"})
 MAX_RECONCILE_TEMP_BYTES = 1024 * 1024 * 1024
 MIN_RECONCILE_TEMP_FREE_BYTES = 512 * 1024 * 1024
 MAX_RECONCILE_ROW_BYTES = 128 * 1024 * 1024
+MAX_RECONCILE_BASE64_ROW_BYTES = ((MAX_RECONCILE_ROW_BYTES + 2) // 3) * 4
 RECONCILE_COMMIT_ROWS = 512
 
 
@@ -387,6 +389,47 @@ def _identity_value(connection: Any, *, source: bool) -> tuple[str, str | None]:
     return database, account if isinstance(account, str) else None
 
 
+def _validate_snapshot_provenance(snapshot: dict[str, Any], live_source_snapshot: dict[str, Any] | None) -> None:
+    if not isinstance(live_source_snapshot, dict):
+        _fail("LIVE_SOURCE_CATALOG_REQUIRED")
+    try:
+        expected_manifest = expected_binary_storage_manifest(snapshot)
+        live_manifest = expected_binary_storage_manifest(live_source_snapshot)
+    except TypeMappingError as error:
+        _fail(error.code)
+    if not expected_manifest or expected_manifest != live_manifest:
+        _fail("BINARY_STORAGE_MANIFEST_MISMATCH")
+
+    for candidate in (snapshot, live_source_snapshot):
+        if candidate.get("source_schema") != SOURCE_SCHEMA \
+            or candidate.get("catalog_version") != CATALOG_VERSION \
+            or candidate.get("time_range_policy_id") != TIME_RANGE_POLICY_ID \
+            or candidate.get("binary_storage_policy_id") != BINARY_STORAGE_POLICY_ID \
+            or candidate.get("binary_storage_required") is not True:
+            _fail("CATALOG_PROVENANCE_POLICY_INVALID")
+        if candidate.get("collector_code_sha256") != _collector_fingerprint():
+            _fail("CATALOG_COLLECTOR_PROVENANCE_INVALID")
+        structural = candidate.get("structural_fingerprint_sha256")
+        fingerprint = candidate.get("fingerprint_sha256")
+        try:
+            structural_valid = isinstance(structural, str) and hmac.compare_digest(
+                structural, _structural_fingerprint(candidate)
+            )
+            fingerprint_valid = isinstance(fingerprint, str) and hmac.compare_digest(
+                fingerprint, canonical_fingerprint(candidate)
+            )
+        except Exception:
+            _fail("CATALOG_FINGERPRINT_INVALID")
+        if not structural_valid or not fingerprint_valid:
+            _fail("CATALOG_FINGERPRINT_INVALID")
+
+    expected_structural = snapshot.get("structural_fingerprint_sha256")
+    live_structural = live_source_snapshot.get("structural_fingerprint_sha256")
+    if not isinstance(expected_structural, str) or not isinstance(live_structural, str) \
+        or not hmac.compare_digest(expected_structural, live_structural):
+        _fail("SOURCE_CATALOG_DRIFT_FROM_BUNDLE")
+
+
 def _validate_contract(
     source: Any,
     target: Any,
@@ -408,6 +451,10 @@ def _validate_contract(
 
     if snapshot.get("source_schema") != SOURCE_SCHEMA:
         _fail("SNAPSHOT_SOURCE_SCHEMA_INVALID")
+    if snapshot.get("catalog_version") != CATALOG_VERSION \
+        or snapshot.get("time_range_policy_id") != TIME_RANGE_POLICY_ID \
+        or snapshot.get("binary_storage_policy_id") != BINARY_STORAGE_POLICY_ID:
+        _fail("CATALOG_POLICY_EVIDENCE_MISSING")
     if snapshot.get("source_grant_policy_id") != "erp_pg_source_select_show_view_trigger_v2" \
         or snapshot.get("source_grants_policy_accepted") is not True \
         or snapshot.get("source_routines_events_zero_verified") is not True \
@@ -429,6 +476,15 @@ def _validate_contract(
         _fail("LOAD_COMMIT_EVIDENCE_INVALID")
     if report.get("source_schema") != SOURCE_SCHEMA or report.get("target_database") != expected_target_database:
         _fail("LOAD_SCOPE_MISMATCH")
+    try:
+        expected_binary_storage = {
+            "policy_id": BINARY_STORAGE_POLICY_ID,
+            "columns": expected_binary_storage_manifest(snapshot),
+        }
+    except TypeMappingError as error:
+        _fail(error.code)
+    if report.get("binary_storage") != expected_binary_storage:
+        _fail("BINARY_STORAGE_MANIFEST_MISMATCH")
     if report.get("target_schema") != "erp" or report.get("bundle_catalog_fingerprint") != snapshot.get("fingerprint_sha256"):
         _fail("LOAD_SNAPSHOT_MISMATCH")
 
@@ -477,6 +533,13 @@ def _validate_contract(
                     _fail("GENERATED_COLUMN_MAPPING_UNAPPROVED")
         if set(types) != set(expected_names):
             _fail("COLUMN_TYPE_MAPPING_INCOMPLETE")
+        expected_encodings = {
+            column["name"]: encoding
+            for column in source_columns
+            if (encoding := expected_binary_storage_encoding(name, column["name"])) is not None
+        }
+        if mapping.get("storage_encodings") != expected_encodings:
+            _fail("BINARY_STORAGE_COLUMN_MAPPING_MISMATCH")
         if table.get("source_next_auto_increment") is not None and not any("auto_increment" in str(c.get("extra", "")).lower() for c in source_columns):
             _fail("IDENTITY_COLUMN_METADATA_MISSING")
         table["columns"] = source_columns
@@ -748,7 +811,29 @@ def _temporal_payload(value: Any, kind: str, *, time_as_interval: bool | None = 
     return text.encode("ascii")
 
 
-def _canonical_value(value: Any, column: dict[str, Any], *, is_source: bool) -> tuple[bytes, dict[str, int]]:
+def _binary_payload(value: Any, *, is_source: bool, storage_encoding: str | None) -> bytes:
+    if storage_encoding == "base64":
+        if is_source:
+            if not isinstance(value, (bytes, bytearray, memoryview)):
+                _fail("BINARY_VALUE_NOT_BYTES")
+            return bytes(value)
+        if not isinstance(value, str):
+            _fail("BINARY_BASE64_TARGET_VALUE_NOT_TEXT")
+        try:
+            payload = base64.b64decode(value.encode("ascii", errors="strict"), validate=True)
+        except (UnicodeEncodeError, ValueError):
+            _fail("BINARY_BASE64_TARGET_VALUE_INVALID")
+        if base64.b64encode(payload).decode("ascii") != value:
+            _fail("BINARY_BASE64_TARGET_VALUE_NONCANONICAL")
+        return payload
+    if storage_encoding is not None or not isinstance(value, (bytes, bytearray, memoryview)):
+        _fail("BINARY_VALUE_NOT_BYTES")
+    return bytes(value)
+
+
+def _canonical_value(
+    value: Any, column: dict[str, Any], *, is_source: bool, storage_encoding: str | None = None
+) -> tuple[bytes, dict[str, int]]:
     """Return typed bytes plus private per-cell NUL observations."""
     nul = {"physical": 0, "semantic": 0, "normalized": 0, "escaped": 0, "bytes": 0, "scanned": 0}
     kind = str(column.get("data_type", "")).lower()
@@ -784,9 +869,7 @@ def _canonical_value(value: Any, column: dict[str, Any], *, is_source: bool) -> 
                 return b"N", nul
         canonical = _temporal_payload(value, kind, time_as_interval=time_as_interval)
     elif kind in BINARY_TYPES:
-        if not isinstance(value, (bytes, bytearray, memoryview)):
-            _fail("BINARY_VALUE_NOT_BYTES")
-        canonical = bytes(value)
+        canonical = _binary_payload(value, is_source=is_source, storage_encoding=storage_encoding)
         nul = {"physical": int(b"\x00" in canonical), "semantic": 0, "normalized": 0, "escaped": 0, "bytes": canonical.count(b"\x00"), "scanned": 1}
     elif kind == "bit":
         width_match = re.search(r"\((\d+)\)", str(column.get("column_type", "")))
@@ -874,7 +957,8 @@ def canonical_row_sha256(row: Any, columns: list[dict[str, Any]], *, is_source: 
     digest.update(len(columns).to_bytes(8, "big"))
     for column, value in zip(columns, values, strict=True):
         name = str(column["name"]).encode("utf-8", errors="strict")
-        data, _nul = _canonical_value(value, column, is_source=is_source)
+        storage_encoding = column.get("binary_storage_encoding") if not is_source else None
+        data, _nul = _canonical_value(value, column, is_source=is_source, storage_encoding=storage_encoding)
         digest.update(_frame(b"C", name))
         digest.update(_frame(b"V", data))
     return digest.hexdigest()
@@ -964,7 +1048,8 @@ def _nul_audit_counter_key(pk_text: str, original_digest: bytes) -> bytes:
 
 
 def _cell_canonical_bytes(value: Any, column: dict[str, Any], *, is_source: bool) -> bytes:
-    data, _ = _canonical_value(value, column, is_source=is_source)
+    storage_encoding = column.get("binary_storage_encoding") if not is_source else None
+    data, _ = _canonical_value(value, column, is_source=is_source, storage_encoding=storage_encoding)
     return data
 
 
@@ -994,7 +1079,8 @@ def _accumulate_row(acc: dict[str, Any], values: list[Any], table: dict[str, Any
     for column, value in zip(columns, values, strict=True):
         name = str(column["name"])
         kind = str(column.get("data_type", "")).lower()
-        raw, nul = _canonical_value(value, column, is_source=is_source)
+        storage_encoding = mapping.get("storage_encodings", {}).get(name) if not is_source else None
+        raw, nul = _canonical_value(value, column, is_source=is_source, storage_encoding=storage_encoding)
         if column.get("generated_expression_present") is True:
             generated_counter = acc["generated"].get(name)
             if generated_counter is None:
@@ -1025,9 +1111,7 @@ def _accumulate_row(acc: dict[str, Any], values: list[Any], table: dict[str, Any
             entry = acc["binary"][name]
             item = acc["nul"][name]
             if value is not None:
-                if not isinstance(value, (bytes, bytearray, memoryview)):
-                    _fail("BINARY_VALUE_NOT_BYTES")
-                payload = bytes(value)
+                payload = _binary_payload(value, is_source=is_source, storage_encoding=storage_encoding)
                 entry["nonnull"] += 1
                 entry["octets"] += len(payload)
                 entry["nul_bytes"] += payload.count(b"\x00")
@@ -1094,6 +1178,7 @@ def _stream_table(connection: Any, *, schema: str, table_name: str, columns: lis
         )
     statement = f"SELECT {select_list} FROM {_qualified(schema, table_name, mysql=mysql)}"
     side = "source" if is_source else "target"
+    row_size_limit = _stream_row_size_limit(columns, is_source=is_source)
     accumulator = _new_accumulator(table, mapping, store, side=side, table_name=table_name)
     try:
         with _stream_cursor(
@@ -1127,8 +1212,8 @@ def _stream_table(connection: Any, *, schema: str, table_name: str, columns: lis
                             row_size += len(value.isoformat().encode("utf-8"))
                         else:
                             row_size += len(str(value).encode("utf-8"))
-                    if row_size > MAX_RECONCILE_ROW_BYTES:
-                        _fail("RECONCILE_ROW_EXCEEDS_128_MIB")
+                    if row_size > row_size_limit:
+                        _fail("RECONCILE_ROW_EXCEEDS_ROW_LIMIT")
                     _accumulate_row(accumulator, values, table, mapping, is_source=is_source)
                     processed += 1
                     if processed % RECONCILE_COMMIT_ROWS == 0:
@@ -1142,6 +1227,12 @@ def _stream_table(connection: Any, *, schema: str, table_name: str, columns: lis
     except Exception:
         _fail("TABLE_SCAN_FAILED")
     return accumulator
+
+
+def _stream_row_size_limit(columns: list[dict[str, Any]], *, is_source: bool) -> int:
+    if not is_source and any(column.get("binary_storage_encoding") == "base64" for column in columns):
+        return MAX_RECONCILE_BASE64_ROW_BYTES
+    return MAX_RECONCILE_ROW_BYTES
 
 
 def _report_list_index(report: dict[str, Any], key: str, identity: tuple[str, str] | None = None) -> dict[tuple[str, str], dict[str, Any]]:
@@ -1279,7 +1370,10 @@ def _validate_policy_evidence(
                 }
                 if any(finding.get(field) != expected for field, expected in expected_pairs.items()):
                     evidence_ok = False
-                if finding.get("bytea_policy") != "raw_bytes_without_text_decode_or_nul_normalization":
+                expected_encoding = expected_binary_storage_encoding(table_name, name) or "bytea"
+                if finding.get("storage_policy_id") != BINARY_STORAGE_POLICY_ID \
+                    or finding.get("storage_encoding") != expected_encoding \
+                    or finding.get("nul_policy") != "preserve_exact_bytes":
                     evidence_ok = False
                 if source_metrics.get("physical") != target_metrics.get("physical") or source_metrics.get("bytes") != target_metrics.get("bytes"):
                     policy_equal = False
@@ -1292,6 +1386,52 @@ def _validate_policy_evidence(
     if not evidence_ok:
         blockers.append("NUL_EVIDENCE_INCOMPLETE_OR_MISMATCHED")
     return evidence_ok, policy_equal, blockers
+
+
+def _binary_storage_schema_metric(
+    target: Any, tables: dict[str, dict[str, Any]], mappings: dict[str, dict[str, Any]]
+) -> tuple[bool, dict[str, Any]]:
+    checked = 0
+    mismatches: list[dict[str, str]] = []
+    encoding_counts = {"base64": 0, "bytea": 0}
+    for table_name, table in tables.items():
+        schema = mappings[table_name]["target_schema"]
+        for column in table["columns"]:
+            if str(column.get("data_type", "")).lower() not in BINARY_TYPES:
+                continue
+            name = str(column["name"])
+            encoding = expected_binary_storage_encoding(table_name, name) or "bytea"
+            checked += 1
+            encoding_counts[encoding] += 1
+            try:
+                with _cursor(target) as cursor:
+                    _execute(
+                        cursor,
+                        "SELECT data_type, collation_name FROM information_schema.columns "
+                        "WHERE table_schema=%s AND table_name=%s AND column_name=%s",
+                        (schema, table_name, name),
+                    )
+                    row = cursor.fetchone()
+            except Exception:
+                _fail("BINARY_STORAGE_SCHEMA_QUERY_FAILED")
+            if row is None:
+                mismatches.append({"table": table_name, "column": name, "reason": "COLUMN_MISSING"})
+                continue
+            target_type = _row_value(row, "data_type", 0)
+            collation = _row_value(row, "collation_name", 1)
+            if encoding == "base64":
+                matched = isinstance(target_type, str) and target_type.lower() == "text" \
+                    and isinstance(collation, str) and collation == "C"
+            else:
+                matched = isinstance(target_type, str) and target_type.lower() == "bytea"
+            if not matched:
+                mismatches.append({"table": table_name, "column": name, "reason": "TARGET_TYPE_OR_COLLATION_MISMATCH"})
+    return not mismatches, {
+        "columns_checked": checked,
+        "columns_mismatched": len(mismatches),
+        "columns_by_storage_encoding": encoding_counts,
+        "mismatches": mismatches,
+    }
 
 
 def _enum_metric(report: dict[str, Any], tables: dict[str, dict[str, Any]],
@@ -1963,6 +2103,7 @@ def reconcile(
     checkpoint: Callable[[Any], None] | None = None,
     temp_root: Path | str | None = None,
     expected_target_database: str = TARGET_DATABASE,
+    live_source_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compare origem read-only e destino allowlisted usando entradas injetadas.
 
@@ -1975,7 +2116,7 @@ def reconcile(
     metric_status: dict[str, str] = {}
     tables_manifest: dict[str, dict[str, Any]] = {}
     result: dict[str, Any] = {
-        "reconciler_version": 3,
+        "reconciler_version": 4,
         "source_schema": SOURCE_SCHEMA,
         "target_database": expected_target_database,
         "allowed_target_schemas": sorted(TARGET_SCHEMAS),
@@ -1989,8 +2130,9 @@ def reconcile(
     }
     try:
         counter_store = _DiskCounterStore(temp_root=temp_root)
+        _validate_snapshot_provenance(snapshot, live_source_snapshot)
         tables_manifest, normalized_mappings = _validate_contract(
-            source, target, snapshot, report, mappings, expected_target_database
+            source, target, snapshot, report, mappings, expected_target_database,
         )
         result["table_failures"] = _load_table_failures(report)
         names = sorted(tables_manifest)
@@ -2026,6 +2168,11 @@ def reconcile(
         metric_status["numeric_sums"] = "PASS" if numeric_equal else "DIVERGED"
         metric_status["binary_octet_length"] = "PASS" if binary_length_equal else "DIVERGED"
         metric_status["binary_bytewise_hash"] = "PASS" if binary_hash_equal else "DIVERGED"
+        binary_schema_ok, binary_schema_result = _binary_storage_schema_metric(
+            target, tables_manifest, normalized_mappings
+        )
+        result["binary_storage_schema"] = binary_schema_result
+        metric_status["binary_storage_schema"] = "PASS" if binary_schema_ok else "DIVERGED"
         metric_status["tenant_distribution"] = "PASS" if tenant_equal else "DIVERGED"
         metric_status["tenant_row_hashes"] = "PASS" if tenant_hashes_equal else "DIVERGED"
 

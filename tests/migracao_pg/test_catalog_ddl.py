@@ -8,16 +8,19 @@ from pathlib import Path
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
-from tools.migracao_pg.catalog import CatalogError, _admin_verifies_source_has_no_routines_or_events, _atomic_json, _collector_fingerprint, _foreign_key_action_rules, _grants_match_source_clone_allowlist, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, _structural_fingerprint, collect_catalog
+from tools.migracao_pg.catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID, CatalogError, _admin_verifies_source_has_no_routines_or_events, _atomic_json, _collector_fingerprint, _foreign_key_action_rules, _grants_match_source_clone_allowlist, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, _structural_fingerprint, collect_catalog
 from tools.migracao_pg.ddl import BUSINESS_TRIGGER_SOURCE_SHA256, DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
 from tools.migracao_pg.generate_ddl import main as generate_ddl_main
 from tools.migracao_pg.generated_columns import identify_generated_column
+from tools.migracao_pg.type_mapping import BINARY_STORAGE_POLICY_ID
 
 
 def sample_snapshot() -> dict:
     snapshot = {
-        "catalog_version": 9,
-        "time_range_policy_id": "mysql_time_clock_or_extended_interval_v2_data_and_default",
+        "catalog_version": CATALOG_VERSION,
+        "binary_storage_policy_id": BINARY_STORAGE_POLICY_ID,
+        "binary_storage_required": True,
+        "time_range_policy_id": TIME_RANGE_POLICY_ID,
         "source_schema": "erp_pg_source",
         "source_server_version": "8.4.13",
         "captured_at_utc": "2026-11-16T00:00:00+00:00",
@@ -42,11 +45,23 @@ def sample_snapshot() -> dict:
                 "source_next_auto_increment": None,
                 "columns": [
                     {"name": "parent_id", "ordinal": 1, "nullable": False, "data_type": "int", "column_type": "int unsigned", "character_set": None, "source_collation": None, "extra": ""},
-                    {"name": "state", "ordinal": 2, "nullable": False, "data_type": "enum", "column_type": "enum('A','B')", "character_set": "utf8mb4", "source_collation": "utf8mb4_0900_ai_ci", "extra": "", "default": {"kind": "sql", "expression": "'A'"}},
+                    {"name": "state", "ordinal": 2, "nullable": False, "data_type": "enum", "column_type": "enum('A','B')", "character_set": "utf8mb4", "source_collation": "utf8mb4_0900_ai_ci", "extra": "", "default": {"kind": "sql", "expression": "E'A'"}},
                     {"name": "updated_at", "ordinal": 3, "nullable": False, "data_type": "datetime", "column_type": "datetime", "character_set": None, "source_collation": None, "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP", "default": {"kind": "sql", "expression": "LOCALTIMESTAMP(0)"}},
                     {"name": "api_token", "ordinal": 4, "nullable": True, "data_type": "varchar", "column_type": "varchar(64)", "character_set": "utf8mb4", "source_collation": "utf8mb4_unicode_ci", "extra": ""},
                 ],
                 "primary_key": [],
+            },
+            {
+                "name": "tenant_arquivos",
+                "type": "BASE TABLE",
+                "engine": "InnoDB",
+                "source_collation": "utf8mb4_unicode_ci",
+                "source_next_auto_increment": None,
+                "columns": [
+                    {"name": "id", "ordinal": 1, "nullable": False, "data_type": "int", "column_type": "int unsigned", "character_set": None, "source_collation": None, "extra": ""},
+                    {"name": "conteudo", "ordinal": 2, "nullable": True, "data_type": "longblob", "column_type": "longblob", "character_set": None, "source_collation": None, "extra": "", "binary_storage_encoding": "base64"},
+                ],
+                "primary_key": [{"ordinal": 1, "column": "id"}],
             },
         ],
         "indexes": [
@@ -147,17 +162,21 @@ class FakeConnection:
 
 
 class TimeRangeCursor(FakeCursor):
-    def __init__(self, extended: bool, default_value: str = "09:30:00") -> None:
+    def __init__(self, extended: bool, default_value: str = "09:30:00", fractional: bool = False) -> None:
         super().__init__()
         self.extended = extended
         self.default_value = default_value
+        self.fractional = fractional
         self.range_query = ""
 
     def execute(self, sql: str, args=()) -> None:
         if "TIME_TO_SEC" in sql:
             self.statements.append(sql)
             self.range_query = sql
-            self.current = [{"has_extended_time_0": int(self.extended)}]
+            self.current = [{
+                "has_extended_time_0": int(self.extended),
+                "has_fractional_time_0": int(self.fractional),
+            }]
             return
         super().execute(sql, args)
         if "information_schema.columns" in sql and "generation_expression" in sql:
@@ -170,8 +189,8 @@ class TimeRangeCursor(FakeCursor):
 
 
 class TimeRangeConnection(FakeConnection):
-    def __init__(self, extended: bool, default_value: str = "09:30:00") -> None:
-        self.c = TimeRangeCursor(extended, default_value)
+    def __init__(self, extended: bool, default_value: str = "09:30:00", fractional: bool = False) -> None:
+        self.c = TimeRangeCursor(extended, default_value, fractional)
         self.statements = self.c.statements
         self.rolled_back = False
 
@@ -360,7 +379,7 @@ class CatalogTests(unittest.TestCase):
         self.assertFalse(any(item["code"] == "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED" for item in result["review_items"]))
         self.assertFalse(any(item.get("table") == "chatin_preferencias" and item.get("column") == "som_tipo" and item["code"] == "TEXT_DEFAULT_REVIEW_REQUIRED" for item in result["review_items"]))
         captured_columns = {column["name"]: column for column in result["tables"][0]["columns"]}
-        self.assertEqual(captured_columns["som_tipo"]["default"], {"kind": "sql", "expression": "'classico'"})
+        self.assertEqual(captured_columns["som_tipo"]["default"], {"kind": "sql", "expression": "E'classico'"})
 
     def test_catalog_keeps_untranslated_and_unenforced_checks_as_reviews(self) -> None:
         connection = FakeConnection()
@@ -381,7 +400,7 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED", codes)
         self.assertIn("MYSQL_CHECK_NOT_ENFORCED_REVIEW_REQUIRED", codes)
         self.assertNotIn("TEXT_DEFAULT_REVIEW_REQUIRED", codes)
-        self.assertEqual(result["tables"][0]["columns"][1]["default"], {"kind": "sql", "expression": "'classico'"})
+        self.assertEqual(result["tables"][0]["columns"][1]["default"], {"kind": "sql", "expression": "E'classico'"})
         self.assertTrue(all("translation" not in check for check in result["check_constraints"]))
         check_reviews = [item for item in result["review_items"] if item["code"].startswith("MYSQL_CHECK_")]
         self.assertEqual(len(check_reviews), 2)
@@ -410,15 +429,15 @@ class CatalogTests(unittest.TestCase):
 
     def test_catalog_copies_all_text_literals_including_sensitive_names_and_empty_values(self) -> None:
         stamp = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "CURRENT_TIMESTAMP"}
-        self.assertEqual(_safe_default(stamp), {"kind": "sql", "expression": "timezone('America/Sao_Paulo', statement_timestamp())"})
+        self.assertEqual(_safe_default(stamp), {"kind": "sql", "expression": "timezone(E'America/Sao_Paulo', statement_timestamp())"})
         values = (
-            ("status", "active", "'active'"),
-            ("api_token", "secret-default", "'secret-default'"),
-            ("bridge_api_key", "", "''"),
-            ("smtp_host", "localhost", "'localhost'"),
-            ("value", "O'Brien", "'O''Brien'"),
-            ("value", "NULL", "'NULL'"),
-            ("value", "line\\nfeed", "'line\\nfeed'"),
+            ("status", "active", "E'active'"),
+            ("api_token", "secret-default", "E'secret-default'"),
+            ("bridge_api_key", "", "E''"),
+            ("smtp_host", "localhost", "E'localhost'"),
+            ("value", "O'Brien", "E'O''Brien'"),
+            ("value", "NULL", "E'NULL'"),
+            ("value", "line\\nfeed", r"E'line\\nfeed'"),
         )
         for name, value, expected in values:
             column = {"name": name, "data_type": "varchar", "column_type": "varchar(100)", "column_default": value}
@@ -438,21 +457,27 @@ class CatalogTests(unittest.TestCase):
         report = {"review_items": []}
         for data_type in ("char", "varchar", "nchar", "nvarchar", "text"):
             column = {"name": "status", "data_type": data_type, "column_type": f"{data_type}(40)", "nullable": True,
-                      "default": {"kind": "sql", "expression": "'active'"}}
-            self.assertEqual(_sql_default(column, "synthetic", report), "'active'")
+                      "default": {"kind": "sql", "expression": "E'active'"}}
+            self.assertEqual(_sql_default(column, "synthetic", report), "E'active'")
         escaped = {"name": "status", "data_type": "varchar", "column_type": "varchar(40)", "nullable": True,
-                   "default": {"kind": "sql", "expression": "'O''Brien'"}}
-        self.assertEqual(_sql_default(escaped, "synthetic", report), "'O''Brien'")
+                   "default": {"kind": "sql", "expression": "E'O''Brien'"}}
+        self.assertEqual(_sql_default(escaped, "synthetic", report), "E'O''Brien'")
+        backslash_literal = {"name": "status", "data_type": "varchar", "column_type": "varchar(40)", "nullable": True,
+                             "default": {"kind": "sql", "expression": r"E'line\\nfeed'"}}
+        self.assertEqual(_sql_default(backslash_literal, "synthetic", report), r"E'line\\nfeed'")
+        noncanonical_escape = {"name": "status", "data_type": "varchar", "column_type": "varchar(40)", "nullable": True,
+                               "default": {"kind": "sql", "expression": r"E'line\qfeed'"}}
+        self.assertIsNone(_sql_default(noncanonical_escape, "synthetic", report))
         expression = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "default_value()", "extra": "DEFAULT_GENERATED"}
         self.assertEqual(_safe_default(expression), {"kind": "review", "code": "TEXT_EXPRESSION_DEFAULT_REVIEW_REQUIRED"})
 
     def test_text_enum_default_is_copied_as_a_quoted_literal(self) -> None:
         enum = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "A"}
-        self.assertEqual(_safe_default(enum), {"kind": "sql", "expression": "'A'"})
+        self.assertEqual(_safe_default(enum), {"kind": "sql", "expression": "E'A'"})
         enum_null = {"data_type": "enum", "column_type": "enum('NULL','B')", "column_default": "NULL"}
-        self.assertEqual(_safe_default(enum_null), {"kind": "sql", "expression": "'NULL'"})
+        self.assertEqual(_safe_default(enum_null), {"kind": "sql", "expression": "E'NULL'"})
         enum_literal = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "O'Brien"}
-        self.assertEqual(_safe_default(enum_literal), {"kind": "sql", "expression": "'O''Brien'"})
+        self.assertEqual(_safe_default(enum_literal), {"kind": "sql", "expression": "E'O''Brien'"})
 
     def test_temporal_defaults_are_canonicalized_without_source_timezone_guessing(self) -> None:
         date_default = {"data_type": "date", "column_type": "date", "column_default": "0000-00-00"}
@@ -461,9 +486,9 @@ class CatalogTests(unittest.TestCase):
         timestamp_default = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "2026-11-17 00:00:00"}
         zero_timestamp_default = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "0000-00-00 00:00:00"}
         self.assertEqual(_safe_default(date_default), {"kind": "sql", "expression": "NULL"})
-        self.assertEqual(_safe_default(time_default, time_has_extended_values=True), {"kind": "sql", "expression": "INTERVAL '-25:00:00'"})
-        self.assertEqual(_safe_default(clock_default, time_has_extended_values=False), {"kind": "sql", "expression": "TIME '09:30:00'"})
-        self.assertEqual(_safe_default(timestamp_default), {"kind": "sql", "expression": "TIMESTAMP '2026-11-17 00:00:00'"})
+        self.assertEqual(_safe_default(time_default, time_has_extended_values=True), {"kind": "sql", "expression": "INTERVAL E'-25:00:00'"})
+        self.assertEqual(_safe_default(clock_default, time_has_extended_values=False), {"kind": "sql", "expression": "TIME E'09:30:00'"})
+        self.assertEqual(_safe_default(timestamp_default), {"kind": "sql", "expression": "TIMESTAMP E'2026-11-17 00:00:00'"})
         self.assertEqual(_safe_default(zero_timestamp_default), {"kind": "sql", "expression": "NULL"})
         fractional_timestamp_default = dict(timestamp_default, column_default="2026-11-17 00:00:00.123456")
         self.assertEqual(_safe_default(fractional_timestamp_default), {"kind": "review", "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED"})
@@ -482,11 +507,11 @@ class CatalogTests(unittest.TestCase):
         bundle = generate_ddl(snapshot)
         tables = bundle.scripts["00_tables.sql"]
         self.assertIn('"zero_date" DATE DEFAULT NULL', tables)
-        self.assertIn('"elapsed" INTERVAL NOT NULL DEFAULT INTERVAL \'-25:00:00\'', tables)
-        self.assertIn('"clock_time" TIME(0) NOT NULL DEFAULT TIME \'09:30:00\'', tables)
+        self.assertIn('"elapsed" INTERVAL NOT NULL DEFAULT INTERVAL E\'-25:00:00\'', tables)
+        self.assertIn('"clock_time" TIME(0) NOT NULL DEFAULT TIME E\'09:30:00\'', tables)
         self.assertEqual(bundle.report["time_mapping"]["interval_columns"], [{"table": "parent", "column": "elapsed"}])
         self.assertEqual(bundle.report["time_mapping"]["clock_columns"], [{"table": "parent", "column": "clock_time"}])
-        self.assertIn('"stamp_default" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT TIMESTAMP \'2026-11-17 00:00:00\'', tables)
+        self.assertIn('"stamp_default" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT TIMESTAMP E\'2026-11-17 00:00:00\'', tables)
         self.assertIn('"zero_timestamp" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL', tables)
 
     def test_catalog_is_metadata_only_and_rolls_back_read_transaction(self) -> None:
@@ -510,21 +535,37 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(connection.rolled_back)
 
     def test_catalog_time_range_scan_selects_boolean_mapping_per_column(self) -> None:
-        for extended, default, expected_default, expected_interval, default_extended in (
-            (False, "09:30:00", "TIME '09:30:00'", False, False),
-            (True, "-01:00:00", "INTERVAL '-01:00:00'", True, True),
-            (False, "-01:00:00", "INTERVAL '-01:00:00'", True, True),
+        for extended, default, fractional, expected_default, expected_interval, default_extended, fractional_review in (
+            (False, "09:30:00", False, "TIME E'09:30:00'", False, False, False),
+            (True, "-01:00:00", False, "INTERVAL E'-01:00:00'", True, True, False),
+            (False, "-01:00:00", False, "INTERVAL E'-01:00:00'", True, True, False),
+            (False, "23:59:59.5", False, "INTERVAL E'23:59:59.500000'", True, True, False),
+            (False, "12:30:45.5", False, None, False, False, True),
+            (False, "09:30:00", True, "TIME E'09:30:00'", False, False, True),
         ):
-            with self.subTest(extended=extended):
-                connection = TimeRangeConnection(extended, default)
+            with self.subTest(extended=extended, fractional=fractional, default=default):
+                connection = TimeRangeConnection(extended, default, fractional)
                 result = collect_catalog(connection)
                 column = next(item for item in result["tables"][0]["columns"] if item["name"] == "scheduled_time")
                 self.assertIs(column["time_has_extended_values"], extended)
+                self.assertIs(column["time_has_fractional_seconds"], fractional)
                 self.assertIs(column["time_default_has_extended_value"], default_extended)
+                self.assertIs(column["time_default_has_fractional_seconds"], default.endswith(".5"))
                 self.assertIs(column["time_uses_interval"], expected_interval)
-                self.assertEqual(column["default"], {"kind": "sql", "expression": expected_default})
+                if expected_default is None:
+                    self.assertEqual(column["default"], {
+                        "kind": "review", "code": "MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED",
+                    })
+                else:
+                    self.assertEqual(column["default"], {"kind": "sql", "expression": expected_default})
+                if fractional_review:
+                    self.assertIn({
+                        "table": "x", "column": "scheduled_time",
+                        "code": "MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED",
+                    }, result["review_items"])
                 self.assertIn("MIN(TIME_TO_SEC(`scheduled_time`)) < 0", connection.c.range_query)
                 self.assertIn("MAX(TIME_TO_SEC(`scheduled_time`)) > 86399", connection.c.range_query)
+                self.assertIn("MOD(TIME_TO_SEC(`scheduled_time`), 1) <> 0", connection.c.range_query)
                 self.assertTrue(connection.rolled_back)
 
     def test_catalog_time_range_scan_fails_closed_on_invalid_result(self) -> None:
@@ -692,6 +733,59 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(bundle.report["auto_increment"]["generated"], 1)
         self.assertFalse(bundle.report["executable_complete"])
 
+    def test_ddl_encodes_only_approved_longblob_as_base64_text(self) -> None:
+        snapshot = sample_snapshot()
+        bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
+        self.assertIn('"conteudo" TEXT COLLATE "C"', bundle.scripts["00_tables.sql"])
+        self.assertEqual(bundle.report["binary_storage"]["policy_id"], BINARY_STORAGE_POLICY_ID)
+        self.assertEqual(bundle.report["binary_storage"]["columns"], [{
+            "table": "tenant_arquivos", "column": "conteudo", "encoding": "base64",
+            "target_type": "TEXT", "target_collation": '\"C\"',
+        }])
+
+    def test_ddl_requires_binary_storage_marker_and_manifest(self) -> None:
+        for value in (None, False):
+            snapshot = sample_snapshot()
+            if value is None:
+                snapshot.pop("binary_storage_required")
+            else:
+                snapshot["binary_storage_required"] = value
+            with self.subTest(marker=value), self.assertRaisesRegex(DdlGenerationError, "BINARY_STORAGE_POLICY_REQUIRED"):
+                generate_ddl(snapshot)
+
+        snapshot = sample_snapshot()
+        snapshot["tables"] = [table for table in snapshot["tables"] if table["name"] != "tenant_arquivos"]
+        snapshot["collector_code_sha256"] = _collector_fingerprint()
+        snapshot["structural_fingerprint_sha256"] = _structural_fingerprint(snapshot)
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        with self.assertRaisesRegex(DdlGenerationError, "BINARY_STORAGE_TABLE_REQUIRED"):
+            generate_ddl(snapshot)
+
+        snapshot = sample_snapshot()
+        tenant_columns = next(table["columns"] for table in snapshot["tables"] if table["name"] == "tenant_arquivos")
+        tenant_columns[1]["binary_storage_encoding"] = "bytea"
+        with self.assertRaisesRegex(DdlGenerationError, "BINARY_STORAGE_COLUMN_METADATA_MISMATCH"):
+            generate_ddl(snapshot)
+
+    def test_ddl_blocks_prefix_index_on_base64_binary_column(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["indexes"].append({
+            "table": "tenant_arquivos", "name": "prefix_conteudo", "non_unique": True,
+            "type": "BTREE", "visible": True,
+            "columns": [{"ordinal": 1, "name": "conteudo", "prefix_length": 16,
+                         "direction": "ASC", "expression_present": False}],
+        })
+        snapshot["collector_code_sha256"] = _collector_fingerprint()
+        snapshot["structural_fingerprint_sha256"] = _structural_fingerprint(snapshot)
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertTrue(any(
+            item.get("code") == "BASE64_BINARY_PREFIX_INDEX_UNSUPPORTED"
+            for item in bundle.report["unsupported_indexes"]
+        ))
+        self.assertFalse(bundle.report["load_executable_complete"])
+        self.assertFalse(bundle.report["executable_complete"])
+
     def test_ddl_maps_approved_generated_water_consumption_and_defers_business_triggers(self) -> None:
         snapshot = sample_snapshot()
         snapshot["triggers"] = [{"name": "water_business", "table": "lancamentos_agua", "event": "INSERT", "body_sha256": "a" * 64}]
@@ -809,7 +903,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(bundle.report["table_schemas"]["archive_2026_11_17"], "legado")
         self.assertIn('REVOKE ALL ON SCHEMA "legado" FROM "erp_app"', tables)
         self.assertIn('REVOKE ALL ON TABLE "legado"."auditoria_nul" FROM "erp_app"', tables)
-        self.assertIn('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "erp"."child", "erp"."parent" TO "erp_app"', tables)
+        self.assertIn('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "erp"."child", "erp"."parent", "erp"."tenant_arquivos" TO "erp_app"', tables)
         self.assertNotIn('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "erp"', tables)
         self.assertNotIn('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legado".', tables)
 
@@ -822,7 +916,7 @@ class CatalogTests(unittest.TestCase):
         bundle = generate_ddl(snapshot, collation_overrides={"parent.name": "ci", "child.state": "ci", "child.api_token": "C"}, application_role="erp_app")
         tables = bundle.scripts["00_tables.sql"]
         sequences = bundle.scripts["30_post_load_sequences.sql"]
-        self.assertIn('"id" NUMERIC(20,0) DEFAULT "erp"."_p2_next_unsigned_id"(\'erp.parent.id\') NOT NULL', tables)
+        self.assertIn('"id" NUMERIC(20,0) DEFAULT "erp"."_p2_next_unsigned_id"(E\'erp.parent.id\') NOT NULL', tables)
         self.assertIn('CREATE TABLE "erp"."_p2_autoincrement_state"', tables)
         self.assertIn("CREATE SEQUENCE \"erp\".\"p2_u64_lo_parent_id\"", tables)
         self.assertIn("CREATE SEQUENCE \"erp\".\"p2_u64_hi_parent_id\"", tables)
@@ -850,7 +944,8 @@ class CatalogTests(unittest.TestCase):
 
     def test_rbac_unsigned_bigint_fk_pair_uses_bigint_when_within_signed_limit(self) -> None:
         snapshot = sample_snapshot()
-        parent, child = snapshot["tables"]
+        tables_by_name = {table["name"]: table for table in snapshot["tables"]}
+        parent, child = tables_by_name["parent"], tables_by_name["child"]
         parent["name"] = "rbac_sessoes"
         parent["columns"][0].update(
             data_type="bigint", column_type="bigint unsigned", extra="auto_increment",
@@ -881,7 +976,8 @@ class CatalogTests(unittest.TestCase):
 
     def test_unsigned_bigint_fk_pair_aligns_numeric_only_if_a_value_exceeds_limit(self) -> None:
         snapshot = sample_snapshot()
-        parent, child = snapshot["tables"]
+        tables_by_name = {table["name"]: table for table in snapshot["tables"]}
+        parent, child = tables_by_name["parent"], tables_by_name["child"]
         parent["name"] = "rbac_sessoes"
         parent["columns"][0].update(
             data_type="bigint", column_type="bigint unsigned", extra="auto_increment",
@@ -961,7 +1057,7 @@ class CatalogTests(unittest.TestCase):
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
         tables = bundle.scripts["00_tables.sql"]
-        self.assertIn('CHECK ("name" IN (\'alpha\', \'beta\'))', tables)
+        self.assertIn('CHECK ("name" IN (E\'alpha\', E\'beta\'))', tables)
         self.assertIn('CHECK ("parent_id" BETWEEN 1 AND 100)', tables)
         self.assertEqual(bundle.report["generated"]["check_constraints"], 2)
         self.assertEqual(len(bundle.report["translated_check_constraints"]), 2)

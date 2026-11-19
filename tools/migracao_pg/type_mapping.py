@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 import re
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -28,12 +29,51 @@ class TemporalValueError(ValueError):
         super().__init__(code)
 
 
+BINARY_STORAGE_POLICY_ID = "mysql_binary_exact_base64_ascii_text_v1"
+BASE64_TEXT_COLUMNS = frozenset({("tenant_arquivos", "conteudo")})
+
+
+def expected_binary_storage_encoding(table_name: str, column_name: str) -> str | None:
+    return "base64" if (table_name, column_name) in BASE64_TEXT_COLUMNS else None
+
+
+def expected_binary_storage_manifest(snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    if snapshot.get("binary_storage_required") is not True:
+        raise TypeMappingError("BINARY_STORAGE_POLICY_REQUIRED")
+    tables = snapshot.get("tables")
+    if not isinstance(tables, list):
+        raise TypeMappingError("BINARY_STORAGE_SNAPSHOT_INVALID")
+    matching_tables = [table for table in tables if isinstance(table, dict) and table.get("name") == "tenant_arquivos"]
+    if not matching_tables:
+        raise TypeMappingError("BINARY_STORAGE_TABLE_REQUIRED")
+    if len(matching_tables) != 1:
+        raise TypeMappingError("BINARY_STORAGE_TABLE_METADATA_AMBIGUOUS")
+    if matching_tables[0].get("type") != "BASE TABLE":
+        raise TypeMappingError("BINARY_STORAGE_TABLE_METADATA_MISMATCH")
+    columns = matching_tables[0].get("columns")
+    if not isinstance(columns, list):
+        raise TypeMappingError("BINARY_STORAGE_COLUMN_METADATA_MISSING")
+    matching_columns = [column for column in columns if isinstance(column, dict) and column.get("name") == "conteudo"]
+    if len(matching_columns) != 1 or matching_columns[0].get("data_type") != "longblob" \
+        or str(matching_columns[0].get("column_type", "")).strip().lower() != "longblob" \
+        or matching_columns[0].get("binary_storage_encoding") != "base64":
+        raise TypeMappingError("BINARY_STORAGE_COLUMN_METADATA_MISMATCH")
+    return [{
+        "table": "tenant_arquivos",
+        "column": "conteudo",
+        "encoding": "base64",
+        "target_type": "TEXT",
+        "target_collation": '\"C\"',
+    }]
+
+
 @dataclass(frozen=True)
 class TypeMapping:
     sql_type: str
     collation_sql: str | None = None
     checks: tuple[str, ...] = ()
     review_codes: tuple[str, ...] = ()
+    storage_encoding: str | None = None
 
     @property
     def declaration(self) -> str:
@@ -60,10 +100,25 @@ def quote_identifier(identifier: str) -> str:
 
 
 def quote_literal(value: str) -> str:
-    """Quote literal PostgreSQL sem interpolação de SQL executável."""
+    """Quote literal PostgreSQL sem depender de standard_conforming_strings."""
+    if not isinstance(value, str):
+        raise TypeMappingError("INVALID_LITERAL")
     if "\x00" in value:
         raise TypeMappingError("ENUM_LABEL_CONTAINS_NUL")
-    return "'" + value.replace("'", "''") + "'"
+    escaped = []
+    control_escapes = {"\b": r"\b", "\f": r"\f", "\n": r"\n", "\r": r"\r", "\t": r"\t", "\v": r"\v"}
+    for character in value:
+        if character == "\\":
+            escaped.append(r"\\")
+        elif character == "'":
+            escaped.append("''")
+        elif character in control_escapes:
+            escaped.append(control_escapes[character])
+        elif ord(character) < 0x20 or ord(character) == 0x7f:
+            escaped.append(f"\\{ord(character):03o}")
+        else:
+            escaped.append(character)
+    return "E'" + "".join(escaped) + "'"
 
 
 def parse_mysql_enum(column_type: str, *, no_backslash_escapes: bool = False) -> tuple[str, ...]:
@@ -153,7 +208,9 @@ def map_mysql_type(
     column_type: str,
     *,
     target_collation: str | None = None,
+    table_name: str | None = None,
     column_name: str | None = None,
+    binary_storage_encoding: str | None = None,
     no_backslash_escapes: bool = False,
     unsigned_bigint_exceeds_signed_limit: bool | None = None,
     time_uses_interval: bool | None = None,
@@ -240,7 +297,7 @@ def map_mysql_type(
         if base == "time":
             if not isinstance(time_uses_interval, bool):
                 raise TypeMappingError("MYSQL_TIME_RANGE_SCAN_REQUIRED")
-            temporal = "INTERVAL" if time_uses_interval else f"TIME({precision})"
+            temporal = "INTERVAL" if time_uses_interval else "TIME(0)"
             return TypeMapping(temporal)
         if precision > 0 and base != "time":
             reviews.append("FRACTIONAL_SECONDS_REVIEW_REQUIRED")
@@ -280,6 +337,11 @@ def map_mysql_type(
         return TypeMapping("CHARACTER VARYING", collation_sql=_collation_clause(target_collation), checks=tuple(checks))
 
     if base in {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}:
+        expected_encoding = expected_binary_storage_encoding(table_name or "", column_name or "")
+        if binary_storage_encoding is not None and binary_storage_encoding != expected_encoding:
+            raise TypeMappingError("BINARY_STORAGE_POLICY_MISMATCH")
+        if expected_encoding is not None and binary_storage_encoding != expected_encoding:
+            raise TypeMappingError("BINARY_STORAGE_POLICY_REQUIRED")
         limits = {"tinyblob": 255, "blob": 65535, "mediumblob": 16777215, "longblob": 4294967295}
         if base in {"binary", "varbinary"}:
             length_match = re.fullmatch(r"\(\s*(\d+)\s*\)", clean_rest)
@@ -299,6 +361,10 @@ def map_mysql_type(
             column = quote_identifier(column_name) if column_name is not None else None
             if column is None:
                 raise TypeMappingError("COLUMN_NAME_REQUIRED_FOR_CHECK")
+            if expected_encoding == "base64":
+                if base != "longblob":
+                    raise TypeMappingError("BINARY_STORAGE_SOURCE_TYPE_MISMATCH")
+                return TypeMapping("TEXT", collation_sql='"C"', storage_encoding="base64")
             checks.append(_check(f"octet_length({column}) <= {limits[base]}"))
         return TypeMapping("BYTEA", checks=tuple(checks))
 
@@ -398,6 +464,8 @@ def normalize_temporal_value(
         if isinstance(value, timedelta):
             if time_as_interval:
                 return value
+            if value.microseconds:
+                raise TemporalValueError("MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED")
             total_microseconds = (value.days * 86400 + value.seconds) * 1_000_000 + value.microseconds
             if not 0 <= total_microseconds <= 86399 * 1_000_000:
                 raise TemporalValueError("MYSQL_TIME_VALUE_OUTSIDE_TIME_OF_DAY_RANGE")
@@ -418,6 +486,8 @@ def normalize_temporal_value(
             total = -total if sign == "-" else total
             if time_as_interval:
                 return total
+            if microsecond:
+                raise TemporalValueError("MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED")
             if total < timedelta(0) or total > timedelta(seconds=86399):
                 raise TemporalValueError("MYSQL_TIME_VALUE_OUTSIDE_TIME_OF_DAY_RANGE")
             return time(hour, minute, second, microsecond)
@@ -426,7 +496,9 @@ def normalize_temporal_value(
         if value.tzinfo is not None:
             raise TemporalValueError("MYSQL_TIME_MUST_REMAIN_TIMEZONE_NAIVE")
         if not time_as_interval:
-            if (value.hour, value.minute, value.second, value.microsecond) > (23, 59, 59, 0):
+            if value.microsecond:
+                raise TemporalValueError("MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED")
+            if (value.hour, value.minute, value.second) > (23, 59, 59):
                 raise TemporalValueError("MYSQL_TIME_VALUE_OUTSIDE_TIME_OF_DAY_RANGE")
             return value
         return timedelta(hours=value.hour, minutes=value.minute, seconds=value.second, microseconds=value.microsecond)

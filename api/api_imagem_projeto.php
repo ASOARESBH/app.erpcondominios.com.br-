@@ -21,6 +21,7 @@
 ob_start();
 require_once 'config.php';
 require_once 'auth_helper.php';
+require_once __DIR__ . '/helpers/tenant_file_binary_codec.php';
 ob_end_clean();
 
 header('X-Content-Type-Options: nosniff');
@@ -34,18 +35,34 @@ function img_negar($msg = 'Acesso negado.', $code = 403) {
 }
 
 // Serve um BLOB vinculado ao tenant e finaliza; retorna false se não encontrado.
-function img_servir_banco($conn, int $tenantId, string $caminho): bool {
+function img_servir_banco($conn, int $tenantId, string $caminho, bool $publicCache = false): bool {
     $caminho = ltrim($caminho, './');
     if ($tenantId <= 0 || $caminho === '') return false;
-    $stmt = $conn->prepare('SELECT mime_type, tamanho_bytes, conteudo FROM tenant_arquivos WHERE tenant_id=? AND caminho_legado=? AND ativo=1 AND publico=1 LIMIT 1');
+    $stmt = $conn->prepare('SELECT mime_type, tamanho_bytes, sha256, conteudo FROM tenant_arquivos WHERE tenant_id=? AND caminho_legado=? AND ativo=1 AND publico=1 LIMIT 1');
     $stmt->bind_param('is', $tenantId, $caminho);
     $stmt->execute();
     $arquivo = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     if (!$arquivo) return false;
+    try {
+        $arquivo['conteudo'] = erp_tenant_file_decode_from_storage(
+            $conn,
+            (string)$arquivo['conteudo'],
+            $arquivo['tamanho_bytes'] ?? null,
+            isset($arquivo['sha256']) ? (string)$arquivo['sha256'] : null
+        );
+    } catch (UnexpectedValueException $error) {
+        error_log('[ImagemProjeto][ERRO] Falha na validação do conteúdo binário.');
+        img_negar('Imagem indisponível.', 500);
+    }
     if (ob_get_length()) ob_clean();
     header('Content-Type: ' . ($arquivo['mime_type'] ?: 'image/jpeg'));
-    header('Cache-Control: public, max-age=86400');
+    if ($publicCache) {
+        header('Cache-Control: public, max-age=86400');
+    } else {
+        header('Cache-Control: private, no-store, max-age=0');
+        header('Vary: Cookie, Authorization');
+    }
     header('Content-Length: ' . (int)$arquivo['tamanho_bytes']);
     echo $arquivo['conteudo'];
     exit;
@@ -192,14 +209,15 @@ if (!$usuarioERP) {
 if (!$autorizado) img_negar('Este projeto não está disponível.', 403);
 
 // ── Servir ────────────────────────────────────────────
+$imagemPublica = (int)($os['projeto_publico'] ?? 0) === 1;
 if ($tipo === 'foto') {
-    if (img_servir_banco($conn, (int)$os['tenant_id'], $fotoRow['arquivo'])) exit;
+    if (img_servir_banco($conn, (int)$os['tenant_id'], $fotoRow['arquivo'], $imagemPublica)) exit;
     img_servir_padrao();
 }
 
 // tipo === 'capa' — prioridade: projeto_imagem_capa → primeira foto → padrão
 if (!empty($os['projeto_imagem_capa'])) {
-    if (img_servir_banco($conn, (int)$os['tenant_id'], $os['projeto_imagem_capa'])) exit;
+    if (img_servir_banco($conn, (int)$os['tenant_id'], $os['projeto_imagem_capa'], $imagemPublica)) exit;
 }
 
 $stmtPrimeira = $conn->prepare(
@@ -215,7 +233,7 @@ $resPrimeira = $stmtPrimeira->get_result();
 $primeira = $resPrimeira ? $resPrimeira->fetch_assoc() : null;
 $stmtPrimeira->close();
 if ($primeira) {
-    if (img_servir_banco($conn, (int)$os['tenant_id'], $primeira['arquivo'])) exit;
+    if (img_servir_banco($conn, (int)$os['tenant_id'], $primeira['arquivo'], $imagemPublica)) exit;
 }
 
 img_servir_padrao();

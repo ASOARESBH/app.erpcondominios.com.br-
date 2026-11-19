@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 from tools.migracao_pg import loader
 from tools.migracao_pg.loader import LoaderError, _MemoryGuard, _row_size_bytes, _sqlstate, _validate_column_mappings, _validate_row_size, normalize_mysql_value, validate_bundle
+from tools.migracao_pg.reconcile import canonical_row_sha256
 
 
 class TargetConfigTests(unittest.TestCase):
@@ -105,6 +106,7 @@ class SourceSnapshotProofTests(unittest.TestCase):
         self.snapshot = {
             "structural_fingerprint_sha256": "a" * 64,
             "source_schema": loader.SOURCE_SCHEMA,
+            "binary_storage_required": True,
             "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
             "source_grants_policy_accepted": True,
             "source_routines_events_zero_verified": True,
@@ -261,7 +263,9 @@ class NulPolicyTests(unittest.TestCase):
         self.assertEqual(result[0]["python_cells_with_nul"], 1)
         self.assertEqual(result[0]["nul_bytes"], 1)
         self.assertEqual(result[0]["binary_bytes_scanned"], len(b"\x00\xffpayload") + len(b"plain"))
-        self.assertEqual(result[0]["bytea_policy"], "raw_bytes_without_text_decode_or_nul_normalization")
+        self.assertEqual(result[0]["storage_encoding"], "bytea")
+        self.assertEqual(result[0]["storage_policy_id"], "mysql_binary_exact_base64_ascii_text_v1")
+        self.assertEqual(result[0]["nul_policy"], "preserve_exact_bytes")
 
     def test_binary_nul_scan_fails_closed_on_detector_disagreement(self) -> None:
         class Guard:
@@ -649,6 +653,49 @@ class NormalizeMysqlValueTests(unittest.TestCase):
         raw = b"\x00\xffpayload"
         self.assertEqual(normalize_mysql_value(raw, {"data_type": "longblob", "column_type": "longblob"}), raw)
         self.assertEqual(normalize_mysql_value(raw, {"data_type": "varbinary", "column_type": "varbinary(32)"}), raw)
+
+    def test_approved_binary_payload_is_canonical_base64_ascii(self) -> None:
+        raw = b"\x00\xffpayload\x80"
+        column = {
+            "name": "conteudo", "data_type": "longblob", "column_type": "longblob",
+            "binary_storage_encoding": "base64",
+        }
+        encoded = normalize_mysql_value(raw, column, table_name="tenant_arquivos")
+        self.assertEqual(encoded, "AP9wYXlsb2FkgA==")
+        self.assertTrue(encoded.isascii())
+        self.assertEqual(base64.b64decode(encoded, validate=True), raw)
+        with self.assertRaisesRegex(LoaderError, "BINARY_STORAGE_POLICY_METADATA_MISMATCH"):
+            normalize_mysql_value(raw, column, table_name="other_table")
+        with self.assertRaisesRegex(LoaderError, "BINARY_STORAGE_POLICY_METADATA_MISMATCH"):
+            normalize_mysql_value(raw, {"name": "conteudo", "data_type": "longblob", "column_type": "longblob"}, table_name="tenant_arquivos")
+
+    def test_approved_binary_snapshot_mapping_copy_and_reconciliation_round_trip(self) -> None:
+        snapshot = {
+            "binary_storage_policy_id": loader.BINARY_STORAGE_POLICY_ID,
+            "source_no_backslash_escapes": False,
+            "tables": [{
+                "name": "tenant_arquivos", "type": "BASE TABLE", "columns": [{
+                    "name": "conteudo", "ordinal": 1, "nullable": True,
+                    "data_type": "longblob", "column_type": "longblob", "extra": "",
+                    "binary_storage_encoding": "base64",
+                }],
+            }],
+        }
+        report = {
+            "collation_overrides": {}, "collation_decisions": [],
+            "table_schemas": {"tenant_arquivos": "erp"},
+        }
+        mapping = _validate_column_mappings(snapshot, report, ["tenant_arquivos"])["tenant_arquivos"]
+        raw = bytes(range(256)) + b"\x00\xffpayload\x80"
+        column = mapping["copy_columns"][0]
+        encoded = normalize_mysql_value(raw, column, table_name="tenant_arquivos")
+        self.assertEqual(mapping["storage_encodings"], {"conteudo": "base64"})
+        self.assertEqual(mapping["types"]["conteudo"].sql_type, "TEXT")
+        self.assertTrue(encoded.isascii())
+        self.assertEqual(
+            canonical_row_sha256((raw,), [column], is_source=True),
+            canonical_row_sha256((encoded,), [column], is_source=False),
+        )
 
     def test_text_nul_requires_audit_collector_when_called_directly(self) -> None:
         with self.assertRaisesRegex(LoaderError, "SOURCE_TEXT_NUL_REPORT_REQUIRED"):
@@ -1212,6 +1259,24 @@ class EnumCheckTests(unittest.TestCase):
 
 
 class UniqueForeignKeyTests(unittest.TestCase):
+    def test_unique_prefix_index_on_base64_binary_column_is_rejected(self) -> None:
+        mapping = {
+            "target_schema": "erp",
+            "columns": [{"name": "conteudo", "data_type": "longblob"}],
+            "types": {
+                "conteudo": loader.map_mysql_type(
+                    "longblob", table_name="tenant_arquivos", column_name="conteudo",
+                    binary_storage_encoding="base64",
+                ),
+            },
+        }
+        item = {
+            "table": "tenant_arquivos",
+            "columns": [{"name": "conteudo", "prefix_length": 16, "direction": "ASC"}],
+        }
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_UNIQUE_BASE64_PREFIX_INDEX_UNSUPPORTED"):
+            loader._unique_index_parts(item, mapping)
+
     def test_unique_collision_under_ci_converts_only_colliding_column_to_c(self) -> None:
         target = _FakeTarget()
         target.count_results = [0, 1, 1, 0, 0, 0]
@@ -1372,6 +1437,7 @@ class LoadTransactionTests(unittest.TestCase):
         }
         snapshot = {
             "source_schema": "erp_pg_source",
+            "binary_storage_required": True,
             "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
             "source_grants_policy_accepted": True,
             "source_routines_events_zero_verified": True,
@@ -1581,6 +1647,7 @@ class ReconciliationCleanupTests(unittest.TestCase):
         role = "erp_app"
         snapshot = {
             "source_schema": loader.SOURCE_SCHEMA,
+            "binary_storage_required": True,
             "tables": [],
             "structural_fingerprint_sha256": "a" * 64,
             "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
