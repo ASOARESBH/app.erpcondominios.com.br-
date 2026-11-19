@@ -96,10 +96,17 @@ def ler_catalogo(my, db):
 def pre_varredura(my, t, cols, rel):
     """Descobre datas zero em colunas NOT NULL, TIME fora da faixa e valores de ENUM fora da lista."""
     c = my.cursor()
-    info = {"temporal_vira_null": set(), "time_interval": set(), "enum_extra": {}}
+    info = {"temporal_vira_null": set(), "time_interval": set(), "enum_extra": {}, "bigint_numeric": set()}
     for col in cols:
         n, d = col["n"], col["dt"]
         qn = f"`{n}`"
+        if d == "bigint" and "unsigned" in col["ct"].lower():
+            # bigint unsigned vira bigint (mesmo tipo das PKs identity, para FKs funcionarem);
+            # só usa numeric(20,0) se existir valor acima do limite do bigint assinado.
+            c.execute(f"SELECT COUNT(*) FROM `{t}` WHERE {qn} > 9223372036854775807")
+            if c.fetchone()[0]:
+                info["bigint_numeric"].add(n)
+                rel["bigint_acima_do_limite"].append({"tabela": t, "coluna": n})
         if d in TEMPORAL:
             c.execute(f"SELECT COUNT(*) FROM `{t}` WHERE CAST({qn} AS CHAR) LIKE '0000%%' "
                       f"OR CAST({qn} AS CHAR) REGEXP '^[0-9]{{4}}-00|^[0-9]{{4}}-[0-9]{{2}}-00'")
@@ -137,7 +144,7 @@ def tipo_pg(col, info, usar_ci):
     elif d in ("mediumint", "int", "integer"):
         base = "bigint" if unsigned else "integer"
     elif d == "bigint":
-        base = "bigint" if (auto or not unsigned) else "numeric(20,0)"
+        base = "numeric(20,0)" if (unsigned and col["n"] in info["bigint_numeric"]) else "bigint"
     elif d in ("decimal", "numeric"):
         base = f"numeric({col['np']},{col['ns']})"
     elif d == "float":
@@ -436,7 +443,11 @@ def criar_fks(pg, sch_of, fks, rel):
             with pg.transaction():
                 pg.execute(stmt)
         except psycopg.Error as e:
-            rel["fks"].append({"tabela": t, "fk": nome, "estado": "NAO_CRIADA", "sqlstate": e.sqlstate})
+            rel["fks"].append({"tabela": t, "fk": nome, "estado": "NAO_CRIADA", "sqlstate": e.sqlstate,
+                               "tipos": [pg.execute("SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
+                                                    "WHERE attrelid = %s::regclass AND attname = %s",
+                                                    (f'{sch_of[x]}."{x}"', cname)).fetchone()[0]
+                                         for x, cname in ((t, partes[0]["col"]), (rt, partes[0]["rc"]))]})
             continue
         try:
             with pg.transaction():
@@ -488,7 +499,8 @@ def main():
 
     rel = {k: [] for k in ("datas_zero", "time_para_interval", "enum_fora_da_lista", "colunas_geradas",
                            "defaults_descartados", "not_null_removido", "fulltext_adiados", "indices_ignorados",
-                           "unique_rebaixado", "nul_removido", "fks", "tabelas", "falhas")}
+                           "unique_rebaixado", "nul_removido", "fks", "tabelas", "falhas",
+                           "bigint_acima_do_limite")}
     rel["triggers_mysql_nao_criadas"] = [{"nome": x["n"], "tabela": x["t"], "quando": f"{x['tm']} {x['ev']}"}
                                          for x in triggers]
 
@@ -570,7 +582,8 @@ def main():
         json.dump(rel, f, ensure_ascii=False, indent=1, default=str)
     log("RESUMO " + json.dumps(resumo, ensure_ascii=False))
     for k in ("datas_zero", "not_null_removido", "enum_fora_da_lista", "time_para_interval", "nul_removido",
-              "defaults_descartados", "unique_rebaixado", "indices_ignorados", "fulltext_adiados"):
+              "defaults_descartados", "unique_rebaixado", "indices_ignorados", "fulltext_adiados",
+              "bigint_acima_do_limite"):
         if rel[k]:
             log(f"  {k}: {len(rel[k])}")
     log(f"Relatório completo (sem dados): {a.relatorio}")

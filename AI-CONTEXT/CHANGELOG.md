@@ -7,6 +7,7 @@ Registro de alterações significativas no ERP.
 ### Projeto PostgreSQL — carga direta para teste manual (2026-11-18)
 - Adicionado `tools/migracao_pg/carga_rapida_pg.py`: copia `erp_pg_source` (MySQL) para `erp_pg_dev` (PostgreSQL) com as regras de tipo aprovadas, reconciliação por tabela e relatório sem dados. Bloqueia origens de produção e destinos fora da allowlist. Detalhes em DATABASE.md §22.
 - Validado localmente com fixture sintética (8/8 tabelas). Produção não lida nem alterada.
+- Ensaio real na Hetzner (Manus): 276/276 tabelas, 213.515 linhas, zero divergências; FK `fk_rbac_auditoria_sessao` falhou (42804). Corrigido o mapeamento `bigint unsigned` → `bigint` (numeric só acima do limite). O `type_mapping.py` da P2 tem o mesmo defeito. Detalhes em DATABASE.md §22.1.
 
 
 ### Projeto PostgreSQL P3.1b — shim mysqli sobre PDO (branch isolada, 2026-11-15)

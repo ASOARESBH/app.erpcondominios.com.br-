@@ -32,3 +32,11 @@ INSERT INTO codigos (codigo) VALUES ('abc'),('ABC');
 INSERT INTO `order` (`user`,`select`) VALUES ('u',1);
 SET FOREIGN_KEY_CHECKS=0; INSERT INTO orfaos (tenant_id) VALUES (1),(99); SET FOREIGN_KEY_CHECKS=1;
 CREATE TRIGGER trg_x BEFORE INSERT ON `order` FOR EACH ROW SET NEW.`select`=1;
+USE erp_pg_source;
+CREATE TABLE rbac_sessoes (id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY, sessao_hash char(64) NOT NULL);
+CREATE TABLE rbac_auditoria (id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY, sessao_id bigint unsigned DEFAULT NULL,
+  KEY(sessao_id), CONSTRAINT fk_rbac_auditoria_sessao FOREIGN KEY (sessao_id) REFERENCES rbac_sessoes(id) ON DELETE SET NULL ON UPDATE CASCADE);
+CREATE TABLE contador_grande (id int AUTO_INCREMENT PRIMARY KEY, valor bigint unsigned);
+INSERT INTO rbac_sessoes (sessao_hash) VALUES (REPEAT('a',64)),(REPEAT('b',64));
+INSERT INTO rbac_auditoria (sessao_id) VALUES (1),(2),(NULL);
+INSERT INTO contador_grande (valor) VALUES (18446744073709551615),(1);
