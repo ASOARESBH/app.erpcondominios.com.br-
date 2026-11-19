@@ -4,6 +4,9 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Carga rápida PG — Base64 em tenant_arquivos.conteudo (2026-11-19)
+- `carga_rapida_pg.py` alinhado ao contrato v12: Base64 canônico em TEXT "C" e reconciliação por hash de bytes. Ver DATABASE.md §22.8.
+
 ### Projeto PostgreSQL — carga direta para teste manual (2026-11-18)
 - Adicionado `tools/migracao_pg/carga_rapida_pg.py`: copia `erp_pg_source` (MySQL) para `erp_pg_dev` (PostgreSQL) com as regras de tipo aprovadas, reconciliação por tabela e relatório sem dados. Bloqueia origens de produção e destinos fora da allowlist. Detalhes em DATABASE.md §22.
 - Validado localmente com fixture sintética (8/8 tabelas). Produção não lida nem alterada.

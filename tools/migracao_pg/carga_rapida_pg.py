@@ -14,7 +14,7 @@ Uso (no servidor, como root):
 
 Proteções: recusa os bancos de produção como origem e só escreve em destinos da allowlist.
 """
-import argparse, datetime as dt, decimal, hashlib, json, re, sys, time
+import argparse, base64, datetime as dt, decimal, hashlib, json, re, sys, time
 from zoneinfo import ZoneInfo
 
 import pymysql, pymysql.cursors
@@ -30,6 +30,9 @@ RE_LEGADO = re.compile(r"(_bkp_|_backup$|_backup_|_old$|_copy$|_\d{8}(_|$))", re
 RE_COLLATE_C = re.compile(r"(token|hash|senha|password|secret|chave|api_?key|slug|uuid|caminho|path|arquivo|filename|url)", re.I)
 TEXT_TYPES = {"varchar", "char", "text", "tinytext", "mediumtext", "longtext", "enum", "set"}
 TEMPORAL = {"datetime", "timestamp", "date"}
+# Contrato P2 v12 (decisão do André, 19/11): este payload fica como Base64 canônico em TEXT COLLATE "C".
+BASE64_COLS = {("tenant_arquivos", "conteudo")}
+BLOB_TYPES = {"blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary"}
 
 
 def log(msg):
@@ -163,7 +166,11 @@ def tipo_pg(col, info, usar_ci):
         base = "interval" if col["n"] in info["time_interval"] else "time(0) without time zone"
     elif d == "json":
         base = "json"
-    elif d in ("blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary"):
+    elif d in BLOB_TYPES and (col["t"], col["n"]) in BASE64_COLS:
+        if d != "longblob":
+            raise SystemExit(f"Base64 exige longblob: {col['t']}.{col['n']} é {d}")
+        return "text", "C", False
+    elif d in BLOB_TYPES:
         base = "bytea"
     elif d in ("varchar", "char"):
         base = f"{'varchar' if d == 'varchar' else 'char'}({col['ml']})"
@@ -325,7 +332,7 @@ def carregar(my, pg, db, sch, t, cols, rel, lote=2000):
     order = (" ORDER BY " + ", ".join(f"`{p}`" for p in pk)) if pk else ""
     cur = my.cursor(pymysql.cursors.SSCursor)
     cur.execute(f"SELECT {', '.join(sel)} FROM `{db}`.`{t}`{order}")
-    tipos = [c["dt"] for c in load_cols]
+    tipos = ["__b64__" if (t, c["n"]) in BASE64_COLS else c["dt"] for c in load_cols]
     nul_count = 0
     n = 0
     copy_sql = sql.SQL("COPY {} ({}) FROM STDIN").format(
@@ -341,6 +348,9 @@ def carregar(my, pg, db, sch, t, cols, rel, lote=2000):
                     for v, d in zip(r, tipos):
                         if v is None:
                             out.append(None)
+                            continue
+                        if d == "__b64__":
+                            out.append(base64.b64encode(bytes(v)).decode("ascii"))
                             continue
                         if d in TEMPORAL:
                             if v.startswith("0000") or v[5:7] == "00" or (len(v) >= 10 and v[8:10] == "00"):
@@ -398,8 +408,20 @@ def reconciliar(my, pg, db, sch, t, cols, n_carregado):
         elif col["dt"] in ("blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary"):
             c.execute(f"SELECT CAST(SUM(OCTET_LENGTH(`{nome}`)) AS CHAR) FROM `{db}`.`{t}`")
             b_src = c.fetchone()[0]
-            b_dst = pg.execute(sql.SQL("SELECT sum(octet_length({c}))::text FROM {q}").format(
+            expr = "decode({c}, 'base64')" if (t, nome) in BASE64_COLS else "{c}"
+            b_dst = pg.execute(sql.SQL("SELECT sum(octet_length(" + expr + "))::text FROM {q}").format(
                 c=sql.Identifier(nome), q=qi(sch, t))).fetchone()[0]
+            if (t, nome) in BASE64_COLS:
+                c.execute(f"SELECT LOWER(HEX(UNHEX(SHA2(GROUP_CONCAT(SHA2(`{nome}`, 256) ORDER BY "
+                          f"{', '.join('`'+k['n']+'`' for k in cols if k['ck'] == 'PRI') or '1'} SEPARATOR ''), 256))))"
+                          f" FROM `{db}`.`{t}`")
+                h_src = c.fetchone()[0]
+                pk = ", ".join('"' + k["n"] + '"' for k in cols if k["ck"] == "PRI") or "1"
+                h_dst = pg.execute(sql.SQL("SELECT encode(sha256(convert_to(string_agg(encode(sha256(decode({c}, 'base64')), 'hex'), '' ORDER BY " + pk + "), 'UTF8')), 'hex') FROM {q}").format(
+                    c=sql.Identifier(nome), q=qi(sch, t))).fetchone()[0]
+                if h_src != h_dst:
+                    r["ok"] = False
+                    r["detalhes"].append(f"hash_base64:{nome}")
             if not num_eq(b_src, b_dst):
                 r["ok"] = False
                 r["detalhes"].append(f"bytes:{nome}")
@@ -480,6 +502,7 @@ def main():
     myc = my.cursor()
     myc.execute("SET SESSION time_zone = '+00:00'")
     myc.execute("SET SESSION sql_mode = ''")
+    myc.execute("SET SESSION group_concat_max_len = 1073741824")
     myc.execute("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
     myc.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
 

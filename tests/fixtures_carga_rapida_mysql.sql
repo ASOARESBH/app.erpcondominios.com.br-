@@ -40,3 +40,5 @@ CREATE TABLE contador_grande (id int AUTO_INCREMENT PRIMARY KEY, valor bigint un
 INSERT INTO rbac_sessoes (sessao_hash) VALUES (REPEAT('a',64)),(REPEAT('b',64));
 INSERT INTO rbac_auditoria (sessao_id) VALUES (1),(2),(NULL);
 INSERT INTO contador_grande (valor) VALUES (18446744073709551615),(1);
+CREATE TABLE tenant_arquivos (id int NOT NULL AUTO_INCREMENT PRIMARY KEY, tenant_id int unsigned NOT NULL, nome varchar(100), conteudo longblob);
+INSERT INTO tenant_arquivos (tenant_id,nome,conteudo) VALUES (1,'a.pdf',UNHEX('255044460000FF00FE0D0A')),(1,'vazio',''),(2,'nulo',NULL),(2,'grande',REPEAT(UNHEX('00FF41'),200000));
