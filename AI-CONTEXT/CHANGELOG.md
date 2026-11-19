@@ -4,6 +4,13 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — recarga após fix BIGINT unsigned (2026-11-19)
+- Recarregado somente `erp_pg_dev` com o commit aprovado `84bd3f2329238330740b2e2be4bf9abc4b889a39`: 276/276 tabelas, 213.515/213.515 linhas, zero divergências/falhas e 11/11 FKs validadas, sem órfãos. Menor `MemAvailable` observado: 2.862.960 KiB; 33,7 s internos. Não houve escrita em `erp_pg_source`; uma contagem agregada em transação `READ ONLY` confirmou 276 tabelas, 7 triggers, zero routines e 213.515 linhas. A conta contém `TRIGGER` para inspeção de metadata e, por isso, não tem capability estritamente read-only de DDL.
+- O mapeamento P2 equivalente foi publicado em `a2e8b7c6cb3b133b5e9b3f0d4f70694e6f33fb5e`; catálogo v4 pre-scan persiste somente booleano de faixa e alinha a FK `rbac_sessoes`/`rbac_auditoria`. 193/193 testes sintéticos passaram.
+- O `rebuild.sh` versionado executou somente preflight e parou antes de qualquer escrita por `SOURCE_ACCOUNT_GRANTS_NOT_READ_ONLY`: `pg_reader` tem `TRIGGER` no escopo do schema para visibilidade de metadata. Nenhum relaxamento foi aplicado; a política precisa ser revisada sem mascarar que esse grant também permite DDL de trigger.
+- As sete triggers tenant-scoped foram reinstaladas em `erp_pg_dev`; suas definições ficaram enabled. O harness transacional pós-recarga encontrou triggers já instaladas e devolveu `ProbeFailure` no guard, portanto não é uma reprovação comportamental, mas também não prova o PASS após esta recarga. Integrações de saída seguem neutralizadas no target.
+- Checksums do baseline pré-operação mantiveram-se iguais (45 arquivos); smoke produtivo: `/` 200, login canônico 301, API anônima 401; serviços ativos. Monitoramento sanitizado de 15 minutos no 8443 terminou com zero SQL_NAO_TRADUZIDO, PHP fatal, erro PostgreSQL ou erro Nginx; MemAvailable permaneceu entre 3.405.428 e 3.426.164 KiB. Nenhuma escrita em produção/rollback/source, alteração de `main`, DNS, cutover ou deploy produtivo. P2 permanece BLOQUEADA/NÃO ACEITA; aguarda-se o resultado funcional do teste autenticado manual no 8443.
+
 ### Projeto PostgreSQL P2 — ensaio controlado (2026-11-18)
 - Atualizado o clone MySQL read-only `erp_pg_source` do backup diário validado de `erpcondominios_stage_20261114`; o ensaio separado carregou `erp_pg_dev` com 276/276 tabelas e 213.515/213.515 linhas. A carga usou `carga_rapida_pg.py`, não o `rebuild.sh` versionado; portanto a equivalência do pipeline P2 ainda não foi demonstrada.
 - Resultado não aceito: dez FKs validadas sem órfãos, uma FK não criada por incompatibilidade de tipos (`rbac_auditoria.fk_rbac_auditoria_sessao`, SQLSTATE `42804`). Exceções agregadas incluem 439 datas zero, 214 ENUMs fora da lista e dois relaxamentos NOT NULL; nenhum valor de linha foi registrado no changelog.
@@ -28,7 +35,7 @@ Registro de alterações significativas no ERP.
 ### Projeto PostgreSQL P1 — Hetzner (parcial, 2026-11-15)
 - Iniciado o cluster PostgreSQL 18.6 apenas em loopback; preparado banco vazio `erp_pg_dev` com schemas `erp`/`legado`, ICU `ci` e perfil de memória 512 MB/2 GB/8 MB.
 - Backup root-only da configuração PostgreSQL antes do ajuste; monitoramento inicial >5 min manteve memória disponível acima de 5,5 GB e PSI `avg10=0.00`.
-- O backup diário foi validado e restaurado exclusivamente no schema MySQL `erp_pg_source` (275 tabelas, 7 triggers, 0 views/routines/events); conta `pg_reader` read-only e credencial root-only 0600. Checksums de configuração e smoke da produção passaram; produção permaneceu intacta.
+- O backup diário foi validado e restaurado exclusivamente no schema MySQL `erp_pg_source` (275 tabelas, 7 triggers, 0 views/routines/events naquele snapshot); `pg_reader` usou acesso de dados read-only e credencial root-only 0600. Revisão posterior confirmou que `TRIGGER` também permite DDL sobre triggers no clone, razão pela qual o preflight P2 agora falha fechado até revisão do contrato. Checksums de configuração e smoke da produção passaram; produção permaneceu intacta.
 - P1 segue parcial: nenhuma carga foi feita no PostgreSQL, e a camada de compatibilidade integrada, FPM isolado e vhosts 8443/8444 ainda não existem. Sem alteração de Nginx/UFW/DNS nesta restauração.
 
 ### Projeto PostgreSQL P3 — primeiro PR (2026-11-15)
