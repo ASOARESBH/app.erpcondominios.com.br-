@@ -159,3 +159,8 @@ No momento deste registro, o v12 está publicado somente na branch `pg/triggers-
 O subcomando `development catalog-bundle` opera somente em release P2 imutável, captura do clone `erp_pg_source` com `pg_reader`, usa `nice -n 19`/`ionice -c3`, monitoramento contínuo de memória (mínimo 1,5 GiB), lock exclusivo e artefatos root-only. Bundle só é promovido a `p2-bundles/` depois de v12, policy Base64/TEXT C, TIME v3, 276 tabelas, 11 FKs, 7 triggers, zero reviews e `validate_bundle` aprovados. Um marker root `0600` vincula bundle e SHA; `development preflight/load` recusa qualquer bundle diferente ou sem marker. `cutover catalog-bundle` é inválido.
 
 Estado deste registro: runner/testes publicados após validação local, mas a captura/preflight/load da VM ainda não foi executada por esta nota. Não há autorização para cutover: nenhuma manutenção, backup final, mudança de driver/config, target definitivo, DNS ou produção foi executada. Qualquer review ou falha no preflight é NO-GO antes da carga.
+
+
+### Diagnóstico de execução P2 v12 — 2026-11-19
+
+A release `aff56b4` foi instalada em diretório imutável próprio, fora de `current`, com configuração isolada copiada e manifest verificado. A captura catalog-bundle terminou em `NameError` do símbolo `hashlib` no gate de proveniência; essa execução não promoveu artefato nem seletor. Sem preflight/load ou mutação de banco. O log e o staging root-only foram preservados. Foi preparado fix local com teste, que só pode ser executado após commit/push e instalação de nova release. O link `current` do 8443 permanece no release anterior; nenhum go-live foi iniciado.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -188,6 +189,12 @@ def _validate_bundle_report(report: dict[str, Any]) -> dict[str, int]:
     }:
         raise CatalogBundleError("BUNDLE_REQUIRES_REVIEW")
     return counts
+
+
+def _validate_generator_summary(summary: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    if summary.get("catalog_fingerprint_sha256") != snapshot.get("fingerprint_sha256") \
+        or summary.get("application_role_sha256") != hashlib.sha256(b"erp_app").hexdigest():
+        raise CatalogBundleError("DDL_GENERATION_PROVENANCE_MISMATCH")
 
 
 def _available_memory_kib() -> int:
@@ -431,9 +438,7 @@ def capture_catalog_bundle() -> dict[str, Any]:
     if summary.get("executable_complete") is not True or summary.get("load_executable_complete") is not True \
         or summary.get("review_items") != 0 or summary.get("blocked_tables") != 0:
         raise CatalogBundleError("BUNDLE_REQUIRES_REVIEW")
-    if summary.get("catalog_fingerprint_sha256") != snapshot.get("fingerprint_sha256") \
-        or summary.get("application_role_sha256") != hashlib.sha256(b"erp_app").hexdigest():
-        raise CatalogBundleError("DDL_GENERATION_PROVENANCE_MISMATCH")
+    _validate_generator_summary(summary, snapshot)
     _validate_bundle_files(bundle_path)
     report = _read_json(bundle_path / "report.json", "BUNDLE_REPORT_INVALID")
     bundle_counts = _validate_bundle_report(report)

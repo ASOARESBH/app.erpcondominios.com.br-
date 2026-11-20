@@ -196,3 +196,10 @@ P5 segue planejamento: sem mudança em produção MySQL, rollback, `main`, DNS, 
 O runner protegido recebeu `development catalog-bundle`, com origem fixa `erp_pg_source`, `pg_reader.cnf` validado root-only, `nice`/`ionice`, guard contínuo de 1,5 GiB e logs/workdirs privados. O catálogo e o bundle precisam passar fingerprints/proveniência v12, allowlist Base64 única em `tenant_arquivos.conteudo`→`TEXT COLLATE "C"`, TIME v3, 276 tabelas/11 FKs/7 triggers e zero reviews/bloqueios. A saída é gerada em staging; só bundle validado pelo `validate_bundle` é promovido atomicamente. Marker privado vincula nome de bundle e SHA de release, e `development preflight/load` exige esse vínculo. Cutover não usa nem aceita esse subcomando.
 
 A revisão adversarial foi incorporada: booleans estritos, FK unsupported bloqueada, tentativas com staging separado e encerramento seguro se a telemetria de memória falhar. Os 246 testes P2, testes PHP Base64, lint PHP/SQL, 8 cenários, compilação e sintaxe passaram localmente. Este commit, sozinho, ainda não gerou bundle nem tocou `erp_pg_dev`; a execução remota autorizada ocorrerá só após publicação e instalação do SHA validado. `erp_pg_teste` permanece não existente; uso do quick-loader requer a harmonização/versão exata autorizada.
+
+
+### Captura v12 interrompida antes de promoção — 2026-11-19
+
+O release `aff56b4` foi instalado fora de `current`, com configuração PG runtime preservada e manifest verificado. A primeira execução autorizada do subcomando falhou com `NameError` de `hashlib` no gate do fingerprint da role, depois de criar artefatos apenas no staging privado. Não foi promovido bundle/selection e não houve preflight, load, escrita em `erp_pg_dev`, comparação, trigger/neutralização ou troca do 8443. O log/workdir privados foram mantidos.
+
+A correção local importa `hashlib` e tem teste direto de fingerprint de catálogo/role; 15/15 testes focados e gates sintáticos passaram. A correção precisa de commit/push e nova release antes da repetição. Esta falha não alterou o banco fonte porque a captura é read-only e não tocou qualquer target.

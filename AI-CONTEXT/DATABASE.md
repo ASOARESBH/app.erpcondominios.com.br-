@@ -285,3 +285,12 @@ A captura valida catálogo v12, schema/grants/proveniência, contagens autorizad
 A revisão adversarial corrigiu exigência booleana estrita em `metadata_visibility`, rejeição de `foreign_keys.unsupported`, captura de memória com encerramento do subprocesso, staging isolado por tentativa, validação das somas/fingerprints de saída e promoção somente após validação. Validação local: suíte P2 **246 testes**, harness PHP Base64 sintético PASS, quatro `php -l` PASS, linter SQL em quatro arquivos PASS, 8 cenários do linter PASS, `py_compile`, `bash -n` e `git diff --check` PASS. Esses testes não são execução na VM.
 
 **Estado ao fechar este commit:** ainda não houve push/release desse runner, captura de catálogo/bundle v12, preflight, carga ou alteração de `erp_pg_dev`; nenhum comparativo quick-loader, teste pós-carga de triggers/neutralização ou troca de `current` do 8443 ocorreu. A produção/rollback MySQL, `erp_pg_source`, `main`, DNS e target definitivo seguem fora do escopo e intocados. P2 segue não aceita até carga e reconciliação completas.
+
+
+### §22.9 Captura v12: primeira tentativa bloqueada antes da promoção/load — 2026-11-19
+
+O release `aff56b4` foi instalado em `/var/www/erpcondominios-pg/releases/<SHA>` fora de `current`; seu manifest, REVISION e contagem de arquivos foram verificados. A configuração de runtime foi copiada somente do release PostgreSQL corrente para preservar a instância isolada. `current` não foi trocado.
+
+A primeira chamada `development catalog-bundle` parou com `NameError` interno ao calcular o fingerprint da role de aplicação: faltava importar `hashlib`. Foi um erro do runner após a geração de staging e antes da promoção do bundle/marker; portanto não houve bundle v12 selecionado, preflight, `rebuild.sh load`, escrita em `erp_pg_dev`, quick-loader, triggers ou neutralização. A coleta do catálogo em `erp_pg_source` foi transacional READ ONLY. O log e o workdir privados da tentativa foram preservados para diagnóstico; nenhum conteúdo foi exposto.
+
+O fix importa `hashlib`, extrai a validação do resumo do gerador para função testável e acrescenta regressão positiva/negativa. Validação focal: 15/15 testes do capturador, `py_compile`, `bash -n` e `git diff --check` PASS. A correção ainda precisa ser commitada/publicada e instalada como release imutável antes de repetir a captura. O clone fonte e todos os bancos de produção/rollback permanecem intocados; a P2 segue bloqueada.

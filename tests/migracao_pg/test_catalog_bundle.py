@@ -161,6 +161,17 @@ class CatalogBundleValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(catalog_bundle.CatalogBundleError, "BUNDLE_FOREIGN_KEY_UNSUPPORTED"):
             catalog_bundle._validate_bundle_report(report)
 
+    def test_generator_summary_requires_matching_catalog_and_role_fingerprints(self) -> None:
+        snapshot = {"fingerprint_sha256": "a" * 64}
+        summary = {
+            "catalog_fingerprint_sha256": "a" * 64,
+            "application_role_sha256": catalog_bundle.hashlib.sha256(b"erp_app").hexdigest(),
+        }
+        catalog_bundle._validate_generator_summary(summary, snapshot)
+        summary["application_role_sha256"] = "0" * 64
+        with self.assertRaisesRegex(catalog_bundle.CatalogBundleError, "DDL_GENERATION_PROVENANCE_MISMATCH"):
+            catalog_bundle._validate_generator_summary(summary, snapshot)
+
     def test_memory_guard_refuses_to_start_child_below_1536_mib(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "stage.log"
