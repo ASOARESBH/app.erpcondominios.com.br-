@@ -7,7 +7,7 @@ Registro de alterações significativas no ERP.
 ### Projeto PostgreSQL P2 — corrige matching de constraints FK no reconciliador v7 (2026-11-20)
 - O report privado do load registra 11 FKs `VALIDATED`; o reconciliador v6 reportou 0/11 presentes. Causa confirmada estaticamente: DDL/loader geram nomes PostgreSQL determinísticos e o reconciliador os comparava com os nomes MySQL originais. O contrato v7 agora deriva o mesmo nome gerado. O report anterior continua `DIVERGED` e não houve verificação nova no target.
 - O load v12 executou o script `40_business_triggers.sql` do bundle após COPY; não houve reinstalação separada após a reconciliação, harness `--installed` ou neutralização das integrações.
-- Hash por linha/tenant de `monitoramento_eventos_hub` segue divergente e sem causa-raiz isolada. Retry de uso único consumida: sem nova consulta, reconciliação, carga ou ações pós-carga sob autorização anterior. Fix somente local, ainda sem commit/release.
+- Hash por linha/tenant de `monitoramento_eventos_hub` segue divergente e sem causa-raiz isolada. Retry de uso único consumida: sem nova consulta, reconciliação, carga ou ações pós-carga sob autorização anterior. Fix publicado em `ea0d4d7600e16edb33a57c4da1ab9681aa044667`, ainda sem release/validação no target.
 - Testes focados de reconciliação 56/56 e suíte P2 282/282; `py_compile`, `bash -n` e `git diff --check` PASS.
 
 ### Projeto PostgreSQL P2 — retry v12 divergente, sem aceite (2026-11-20)
