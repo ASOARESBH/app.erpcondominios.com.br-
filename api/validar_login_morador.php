@@ -12,6 +12,18 @@ ini_set('session.gc_maxlifetime', 7200); // 2 horas
 // Iniciar sessão ANTES de incluir config.php
 session_start();
 
+function portal_morador_iniciar_sessao_autenticada(): void {
+    if (session_status() !== PHP_SESSION_ACTIVE || !session_regenerate_id(true)) {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION = [];
+            session_destroy();
+            session_write_close();
+        }
+        throw new RuntimeException('Não foi possível iniciar a sessão autenticada do Portal.');
+    }
+    $_SESSION = [];
+}
+
 // Incluir arquivo de configuração
 require_once 'config.php';
 require_once __DIR__ . '/db/DatabaseDialect.php';
@@ -19,6 +31,9 @@ require_once __DIR__ . '/db/DatabaseDialect.php';
 // Incluir detector de loop de autenticação
 require_once 'auth_loop_detector.php';
 $detector = new AuthLoopDetector();
+$portalSessaoAutenticada = false;
+$tokenPortalCriado = null;
+$tokenPortalPersistido = false;
 
 // Verificar se IP está bloqueado
 if ($detector->verificarIPBloqueado($_SERVER['REMOTE_ADDR'], 'morador')) {
@@ -62,11 +77,19 @@ try {
         SELECT id, nome, cpf, senha, unidade, email, ativo$campoTenantMorador
         FROM moradores
         WHERE REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?
-        LIMIT 1
+        LIMIT 2
     ");
     $stmt->bind_param("s", $cpf);
-    $stmt->execute();
+    if (!$stmt->execute()) throw new RuntimeException('Não foi possível consultar o cadastro do morador.');
     $resultado = $stmt->get_result();
+    if (!$resultado) throw new RuntimeException('Não foi possível consultar o cadastro do morador.');
+
+    if ($resultado->num_rows > 1) {
+        $stmt->close();
+        fechar_conexao($conexao);
+        http_response_code(409);
+        retornar_json(false, 'Não foi possível processar o login. Tente novamente.');
+    }
     
     // Verificar se o morador existe
     if ($resultado->num_rows === 0) {
@@ -158,6 +181,7 @@ try {
     
     // Gerar token único
     $token = bin2hex(random_bytes(32));
+    $tokenPortalCriado = $token;
     $data_expiracao = date('Y-m-d H:i:s', strtotime('+7 days'));
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? '';
     $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
@@ -205,10 +229,13 @@ try {
             $stmt_sessao->bind_param("issss", $morador['id'], $token, $ip_address, $user_agent, $data_expiracao);
         }
         if (!$stmt_sessao->execute()) { $stmt_sessao->close(); throw new RuntimeException('Não foi possível persistir a sessão Portal.'); }
+        $tokenPortalPersistido = true;
         $stmt_sessao->close();
     }
     
     // Login bem-sucedido - criar sessão PHP também (compatibilidade)
+    portal_morador_iniciar_sessao_autenticada();
+    $portalSessaoAutenticada = true;
     $_SESSION['morador_id'] = $morador['id'];
     $_SESSION['morador_nome'] = $morador['nome'];
     $_SESSION['morador_cpf'] = $morador['cpf'];
@@ -256,7 +283,45 @@ try {
     if (!empty($portalTransactionStarted) && isset($conexao) && $conexao) {
         try { $conexao->rollback(); } catch (Throwable) {}
     }
+    if (isset($conexao) && $conexao) {
+        try { fechar_conexao($conexao); } catch (Throwable) {}
+        $conexao = null;
+    }
+    if ($tokenPortalPersistido && $tokenPortalCriado !== null) {
+        $conexaoRevogacao = null;
+        try {
+            $conexaoRevogacao = conectar_banco();
+            $temTenantRevogacao = \ERP\Database\DatabaseDialect::columnExists($conexaoRevogacao, 'sessoes_portal', 'tenant_id');
+            if ($isPostgres && !$temTenantRevogacao) throw new RuntimeException('PORTAL_SESSION_TENANT_SCHEMA_UNAVAILABLE');
+            if ($temTenantRevogacao) {
+                $stmtRevogacao = $conexaoRevogacao->prepare('DELETE FROM sessoes_portal WHERE token=? AND morador_id=? AND tenant_id=?');
+                $moradorIdRevogacao = (int)$morador['id'];
+                $tenantIdRevogacao = (int)$tenant_id;
+                $stmtRevogacao->bind_param('sii', $tokenPortalCriado, $moradorIdRevogacao, $tenantIdRevogacao);
+            } else {
+                $stmtRevogacao = $conexaoRevogacao->prepare('DELETE FROM sessoes_portal WHERE token=? AND morador_id=?');
+                $moradorIdRevogacao = (int)$morador['id'];
+                $stmtRevogacao->bind_param('si', $tokenPortalCriado, $moradorIdRevogacao);
+            }
+            if (!$stmtRevogacao || !$stmtRevogacao->execute()) {
+                if ($stmtRevogacao) $stmtRevogacao->close();
+                throw new RuntimeException('PORTAL_SESSION_COMPENSATION_FAILED');
+            }
+            $stmtRevogacao->close();
+        } catch (Throwable) {
+            error_log('[validar_login_morador] Falha na revogação compensatória da sessão Portal.');
+        } finally {
+            if ($conexaoRevogacao) {
+                try { fechar_conexao($conexaoRevogacao); } catch (Throwable) {}
+            }
+        }
+    }
+    if ($portalSessaoAutenticada && session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION = [];
+        session_destroy();
+        session_write_close();
+    }
     error_log('[validar_login_morador] Falha interna no login.');
-    if (isset($conexao) && $conexao) { try { fechar_conexao($conexao); } catch (Throwable) {} }
+    http_response_code(503);
     retornar_json(false, 'Erro ao processar login. Tente novamente.');
 }

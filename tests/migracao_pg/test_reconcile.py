@@ -14,10 +14,10 @@ from tools.migracao_pg.loader import _audit_pk_text as loader_audit_pk_text
 from tools.migracao_pg.loader import _MemoryGuard
 from tools.migracao_pg.catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID, _collector_fingerprint, _structural_fingerprint
 from tools.migracao_pg.ddl import MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX, canonical_fingerprint
-from tools.migracao_pg.reconcile import _DiskCounterStore, _accumulate_row, _aggregate_metric_results, _binary_storage_schema_metric, _foreign_key_metric, _new_accumulator, _stream_row_size_limit
+from tools.migracao_pg.reconcile import _DiskCounterStore, _accumulate_row, _aggregate_metric_results, _binary_storage_schema_metric, _foreign_key_metric, _new_accumulator, _stream_row_size_limit, _stream_table
 from tools.migracao_pg.reconcile import _audit_pk_text as reconcile_audit_pk_text
 from tools.migracao_pg.reconcile import ReconciliationError, _execute, _identity_value, canonical_row_sha256, reconcile as _reconcile
-from tools.migracao_pg.reconcile import _parse_json
+from tools.migracao_pg.reconcile import _json_canonical, _parse_json
 from tools.migracao_pg.type_mapping import BINARY_STORAGE_POLICY_ID, expected_binary_storage_manifest
 
 
@@ -399,7 +399,23 @@ class CanonicalRowHashTests(unittest.TestCase):
         self.assertIsInstance(parsed_json["integer"], Decimal)
         self.assertIsInstance(parsed_json["decimal"], Decimal)
         self.assertEqual(parsed_json["integer"], parsed_json["decimal"])
+        for equivalent in (("1", "1.000"), ("1000000000000000000000000", "1e24"), ("0", "-0e9999999")):
+            with self.subTest(equivalent=equivalent):
+                left, right = (Decimal(value) for value in equivalent)
+                self.assertEqual(_json_canonical(left), _json_canonical(right))
+        self.assertEqual(_json_canonical(Decimal("1e10000000")), "1e10000000")
+        self.assertEqual(_json_canonical(Decimal("1e-10000000")), "1e-10000000")
         self.assertNotEqual(canonical_row_sha256((b'{"a":[1,2]}',), json_column), canonical_row_sha256((b'{"a":[2,1]}',), json_column))
+        self.assertEqual(
+            canonical_row_sha256(('"\\ud83d\\ude80"',), json_column),
+            canonical_row_sha256(('"🚀"',), json_column),
+        )
+        with self.assertRaisesRegex(ReconciliationError, "JSON_UNICODE_INVALID"):
+            canonical_row_sha256(('"\\ud800"',), json_column)
+        with self.assertRaisesRegex(ReconciliationError, "JSON_DUPLICATE_KEY"):
+            _parse_json('{"a":1,"a":2}', source_column=json_column[0], is_source=False)
+        with self.assertRaisesRegex(ReconciliationError, "JSON_NONFINITE_NUMBER"):
+            _parse_json('{"a":NaN}', source_column=json_column[0], is_source=False)
         nul_json = b'{"a":"\\u0000"}'
         clean_json = b'{"a":""}'
         self.assertEqual(canonical_row_sha256((nul_json,), json_column), canonical_row_sha256((clean_json,), json_column))
@@ -1063,6 +1079,64 @@ class ColumnDiagnosticTests(unittest.TestCase):
             rendered = repr(result)
             for private_value in ("same", "different", "unicode", "é", "sha256"):
                 self.assertNotIn(private_value, rendered)
+        finally:
+            store.close()
+
+    def test_streaming_casts_json_as_bytes_source_and_text_target(self):
+        table_name = "monitoramento_eventos_hub"
+        columns = [
+            {"name": "id", "ordinal": 1, "data_type": "int", "column_type": "int", "extra": ""},
+            {"name": "metadata_json", "ordinal": 2, "data_type": "json", "column_type": "json", "character_set": "utf8mb4", "extra": ""},
+        ]
+        table = {"name": table_name, "type": "BASE TABLE", "primary_key": [{"ordinal": 1, "column": "id"}], "columns": columns}
+        mapping = {"storage_encodings": {}, "enum_labels": {}}
+
+        class Cursor:
+            def __init__(self, row):
+                self.row = row
+                self.statement = None
+                self.read = False
+
+            def execute(self, statement, _params=()):
+                self.statement = statement
+
+            def fetchmany(self, _size):
+                if self.read:
+                    return []
+                self.read = True
+                return [self.row]
+
+            def close(self):
+                return None
+
+        class Connection:
+            def __init__(self, row):
+                self.fake_cursor = Cursor(row)
+
+            def cursor(self, *_args, **_kwargs):
+                return self.fake_cursor
+
+        source = Connection((1, b'{"b":2.000,"a":1}'))
+        target = Connection((1, '{"a":1.0,"b":2}'))
+        store = _DiskCounterStore()
+        try:
+            source_acc = _stream_table(
+                source, schema="erp_pg_source", table_name=table_name, columns=columns, mysql=True,
+                table=table, mapping=mapping, is_source=True, store=store, column_diagnostics=True,
+            )
+            target_acc = _stream_table(
+                target, schema="erp", table_name=table_name, columns=columns, mysql=False,
+                table=table, mapping=mapping, is_source=False, store=store, column_diagnostics=True,
+            )
+            store.commit()
+            self.assertIn("CAST(`metadata_json` AS BINARY)", source.fake_cursor.statement)
+            self.assertIn('"metadata_json"::text AS "metadata_json"', target.fake_cursor.statement)
+            self.assertEqual(source_acc["count"], 1)
+            self.assertEqual(target_acc["count"], 1)
+            self.assertTrue(source_acc["hashes"].equals(target_acc["hashes"]))
+            self.assertTrue(source_acc["column_hashes"]["metadata_json"].equals(
+                target_acc["column_hashes"]["metadata_json"]
+            ))
         finally:
             store.close()
 

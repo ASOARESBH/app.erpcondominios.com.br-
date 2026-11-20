@@ -523,3 +523,21 @@ Reteste da release corretiva `0578cf3ba43b79376e86ccf746d4d86965912af8`: **22/22
 - Login web/CPF legado e sessão Portal Bearer ganharam caminho PostgreSQL tenant-scoped; 20 testes auth/RBAC e 12 Portal/Bearer passaram. Quatro `php -l` e linter SQL explícito passaram; homologação HTTP/PHP-FPM live ainda pendente.
 - Runners P5 locais: suíte sintética 18 testes + 4 subtestes. Captura de catálogo segue restrita a `erp_pg_source`; manutenção cobre os dois vhosts 443 com exceção IPv4 `/32` root-only e sem reload; rollback não opera bancos. Backup final permanece fail-closed até definição de credencial dedicada.
 - Gates adicionais: 288 testes P2 + 117 subtestes, `py_compile`, `bash -n` e `git diff --check` PASS. Nenhuma reconciliação live, carga, alteração na VM/Nginx/produção, troca do 8443 ou cutover foi executada. A divergência já registrada em `monitoramento_eventos_hub` e a retry single-use consumida mantêm P2 e P5 em NO-GO.
+
+
+### Hardening local P2/P3/P5 — 2026-11-20
+- P2: canonicalização JSON do reconciliador com `Decimal`, forma científica exata, rejeição sanitizada de Unicode inválido e teste sintético do streaming MySQL bytes × PostgreSQL text. Nenhuma reconciliação live repetida.
+- P5: backups de manutenção com nomes exclusivos; `activate`/`deactivate` restauram o marcador após falha de `nginx -t`, com erros específicos se a restauração também falhar. Nenhum runner executado na VM nem reload Nginx.
+- P3: rotação de sessão no login CPF, rejeição genérica de CPF/e-mail ambíguos, erros operacionais Bearer como HTTP 503 e logout confirmado antes de limpar sessão/token no cliente. Fallback de senha em texto claro e persistência atual do token continuam pendências explícitas, sem mudança de schema.
+- Verificação local: 289 testes P2, 22 P5 e suítes sintéticas P3 passaram; PHP lint e linter SQL nos quatro endpoints, `py_compile`, `bash -n` e `git diff --check` passaram.
+- Sem banco/VM/live HTTP, carga, mudança no 8443, produção, `main`, DNS ou cutover. P2 continua bloqueada pela divergência registrada de `monitoramento_eventos_hub` e pela retry single-use consumida; P5 segue NO-GO e o backup final permanece bloqueado até política da credencial dedicada.
+
+
+### Complemento da revisão local P3/P5 — 2026-11-20
+- Login CPF: falha tardia após persistência/commit do Bearer agora tenta revogação compensatória por token, morador e tenant antes de limpar a sessão; falhas operacionais retornam 503. Logout aceita Bearer válido após expiração da sessão PHP, mantendo escopo derivado do token; a rota GET preserva `/frontend/login_morador.html`. Regressões sintéticas cobrem os caminhos.
+- Runner P5: `prepare` relê e compara configuração/allowlist/vhosts/estado sob lock, antes de backup e mutação; `_write` limpa seu temporário próprio quando há falha parcial. Regressões sintéticas cobrem os dois caminhos.
+- Logout Bearer: sem sessão PHP, a consulta exige exatamente uma sessão ativa/não expirada; o destino GET é `/frontend/login_morador.html`. Falhas de conexão respondem 503 genérico.
+- Revisões estáticas independentes: nenhuma falha encontrada no reconciliador P2; observações de testes fake permanecem riscos de validação live. Nenhum acesso a bancos/VM, runner real, HTTP live ou alteração de produção.
+
+
+Gates finais: P2 289/289, P5 26/26, auth/RBAC P3 20/20, Portal/logout 18/18 e bootstrap 13/13; quatro `php -l`, `pg_sql_lint` dos quatro endpoints, `py_compile`, `bash -n` e `git diff --check` passaram. As suítes locais continuam sintéticas; não houve conexão com banco nem HTTP/PHP-FPM live.

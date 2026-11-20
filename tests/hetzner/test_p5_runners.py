@@ -1,6 +1,7 @@
 """Testes sintéticos P5; nenhum banco, backup, Nginx, VM ou symlink de produção é acessado."""
 from __future__ import annotations
 
+from contextlib import ExitStack
 import datetime as dt
 import gzip
 import importlib.util
@@ -213,6 +214,67 @@ class P5BackupSyntheticTests(unittest.TestCase):
 
 
 class P5MaintenanceSyntheticTests(unittest.TestCase):
+    def _environment(self, stack: ExitStack, root: Path):
+        owner_uid = os.geteuid()
+        root.chmod(0o755)
+        vhost_dir = root / "sites-enabled"
+        conf_dir = root / "conf.d"
+        snippets_dir = root / "snippets"
+        backup_root = root / "backups"
+        lock_dir = root / "run-lock"
+        for directory in (vhost_dir, conf_dir, snippets_dir):
+            directory.mkdir(mode=0o755)
+        backup_root.mkdir(mode=0o700)
+        lock_dir.mkdir(mode=0o700)
+        main_path = root / "nginx.conf"
+        main_path.write_text(maintenance.MAIN_MARKER + "\n", encoding="utf-8")
+        main_path.chmod(0o644)
+        vhosts = [
+            {"kind": "domain", "path": str(vhost_dir / "app.conf"), "server_name": "app.erpcondominios.com.br"},
+            {"kind": "ip", "path": str(vhost_dir / "ip.conf"), "server_name": "2.29.161.106"},
+        ]
+        for item in vhosts:
+            path = Path(item["path"])
+            path.write_text(
+                "server {\n"
+                "    listen 443 ssl;\n"
+                f"    server_name {item['server_name']};\n"
+                f"    root {maintenance.PRODUCTION_ROOT};\n"
+                f"    {maintenance.VHOST_MARKER}\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            path.chmod(0o644)
+        config_path = root / "maintenance.json"
+        approval_path = root / "maintenance-approval.json"
+        allow_path = conf_dir / "erp-p5-maintenance-maps.conf"
+        active_path = conf_dir / "erp-p5-maintenance-active.map"
+        location_path = snippets_dir / "erp-p5-maintenance-503.conf"
+        config_path.write_text(json.dumps({
+            "vhosts": vhosts,
+            "allowed_client_cidr": "1.1.1.1/32",
+            "nginx_main": str(main_path),
+            "backup_root": str(backup_root),
+            "approval_file": str(approval_path),
+        }), encoding="utf-8")
+        config_path.chmod(0o600)
+        for name, value in {
+            "CONFIG": config_path,
+            "APPROVAL": approval_path,
+            "BACKUP_ROOT": backup_root,
+            "LOCK": lock_dir / "maintenance.lock",
+            "NGINX_MAIN": main_path,
+            "ALLOW_CONFIG": allow_path,
+            "ACTIVE_ENTRIES": active_path,
+            "LOCATION": location_path,
+            "VHOST_DIR": vhost_dir,
+            "NGINX": Path("/usr/bin/true"),
+        }.items():
+            stack.enter_context(mock.patch.object(maintenance, name, value))
+        stack.enter_context(mock.patch.object(maintenance, "root_required"))
+        stack.enter_context(mock.patch.object(maintenance, "validate_approval"))
+        return owner_uid, main_path, [Path(item["path"]) for item in vhosts], active_path
+
     def _write_config(self, path: Path, cidr: str):
         data = {
             "vhosts": [
@@ -265,6 +327,163 @@ class P5MaintenanceSyntheticTests(unittest.TestCase):
         with mock.patch.object(maintenance, "CONFIG", Path("/nonexistent/p5/maintenance.json")):
             with self.assertRaises(common.P5Error):
                 maintenance.check(owner_uid=os.geteuid())
+
+    def test_prepare_activate_deactivate_state_machine_is_consistent(self):
+        class Result:
+            returncode = 0
+
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            owner_uid, _main_path, _vhosts, active_path = self._environment(stack, Path(tmp))
+            runner = mock.Mock(return_value=Result())
+            prepared = maintenance.prepare(runner=runner, owner_uid=owner_uid)
+            self.assertEqual(prepared["status"], "PREPARED_NOT_RELOADED")
+            self.assertEqual(maintenance.check(owner_uid=owner_uid)[2], "PREPARED")
+            activated = maintenance.activate(runner=runner, owner_uid=owner_uid)
+            self.assertEqual(activated["status"], "ACTIVATION_MARKER_PREPARED_NOT_RELOADED")
+            self.assertEqual(maintenance.check(owner_uid=owner_uid)[2], "ACTIVE")
+            self.assertIn("1;", active_path.read_text(encoding="ascii"))
+            deactivated = maintenance.deactivate(runner=runner, owner_uid=owner_uid)
+            self.assertEqual(deactivated["status"], "DEACTIVATION_MARKER_CLEARED_NOT_RELOADED")
+            self.assertEqual(maintenance.check(owner_uid=owner_uid)[2], "PREPARED")
+            self.assertIn("Inactive by default", active_path.read_text(encoding="ascii"))
+            self.assertEqual(runner.call_count, 3)
+
+    def test_prepare_restores_original_configs_when_nginx_test_fails(self):
+        class Result:
+            returncode = 1
+
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            owner_uid, main_path, vhosts, active_path = self._environment(stack, Path(tmp))
+            originals = {path: path.read_bytes() for path in [main_path, *vhosts]}
+            with self.assertRaises(common.P5Error) as caught:
+                maintenance.prepare(runner=mock.Mock(return_value=Result()), owner_uid=owner_uid)
+            self.assertEqual(caught.exception.code, "NGINX_TEST_FAILED")
+            for path, content in originals.items():
+                self.assertEqual(path.read_bytes(), content)
+            self.assertFalse(active_path.exists())
+            self.assertEqual(maintenance.check(owner_uid=owner_uid)[2], "UNPREPARED")
+
+    def test_prepare_rejects_allowlist_change_while_waiting_for_lock(self):
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            owner_uid, main_path, vhosts, active_path = self._environment(stack, Path(tmp))
+            original_check = maintenance.check
+
+            def changed_config(*, owner_uid=0):
+                data, _cidr, state = original_check(owner_uid=owner_uid)
+                data = dict(data)
+                data["allowed_client_cidr"] = "8.8.8.8/32"
+                return data, "8.8.8.8/32", state
+
+            with mock.patch.object(
+                maintenance,
+                "check",
+                side_effect=[original_check(owner_uid=owner_uid), changed_config(owner_uid=owner_uid)],
+            ):
+                with self.assertRaises(common.P5Error) as caught:
+                    maintenance.prepare(owner_uid=owner_uid)
+            self.assertEqual(caught.exception.code, "MAINTENANCE_STATE_CHANGED")
+            self.assertEqual(main_path.read_text(encoding="utf-8"), maintenance.MAIN_MARKER + "\n")
+            self.assertTrue(all(path.exists() for path in vhosts))
+            self.assertFalse(active_path.exists())
+            self.assertEqual(list(maintenance.BACKUP_ROOT.iterdir()), [])
+
+    def test_write_removes_temporary_file_when_atomic_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "nginx.conf"
+            target.write_bytes(b"original\n")
+            target.chmod(0o644)
+            with mock.patch.object(maintenance.os, "chown", side_effect=OSError("synthetic failure")):
+                with self.assertRaises(OSError):
+                    maintenance._write(target, b"replacement\n", owner_uid=os.geteuid())
+            self.assertEqual(target.read_bytes(), b"original\n")
+            self.assertEqual(list(root.glob(".nginx.conf.*.tmp")), [])
+
+    def test_prepare_rolls_back_earlier_files_after_partial_write_failure(self):
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            owner_uid, main_path, vhosts, active_path = self._environment(stack, Path(tmp))
+            originals = {path: path.read_bytes() for path in [main_path, *vhosts]}
+            original_write = maintenance._write
+            failed = False
+
+            def fail_once(path, payload, owner_uid=0):
+                nonlocal failed
+                if path == vhosts[0] and not failed:
+                    failed = True
+                    raise OSError("synthetic partial write failure")
+                return original_write(path, payload, owner_uid)
+
+            with mock.patch.object(maintenance, "_write", side_effect=fail_once):
+                with self.assertRaises(OSError):
+                    maintenance.prepare(owner_uid=owner_uid)
+            self.assertTrue(failed)
+            for path, content in originals.items():
+                self.assertEqual(path.read_bytes(), content)
+            self.assertFalse(active_path.exists())
+            self.assertEqual(list(Path(tmp).rglob(".*.tmp")), [])
+            self.assertEqual(maintenance.check(owner_uid=owner_uid)[2], "UNPREPARED")
+
+    def test_prepare_rolls_back_before_propagating_keyboard_interrupt(self):
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            owner_uid, main_path, vhosts, active_path = self._environment(stack, Path(tmp))
+            originals = {path: path.read_bytes() for path in [main_path, *vhosts]}
+            original_write = maintenance._write
+            interrupted = False
+
+            def interrupt_once(path, payload, owner_uid=0):
+                nonlocal interrupted
+                if path == vhosts[0] and not interrupted:
+                    interrupted = True
+                    raise KeyboardInterrupt
+                return original_write(path, payload, owner_uid)
+
+            with mock.patch.object(maintenance, "_write", side_effect=interrupt_once):
+                with self.assertRaises(KeyboardInterrupt):
+                    maintenance.prepare(owner_uid=owner_uid)
+            self.assertTrue(interrupted)
+            for path, content in originals.items():
+                self.assertEqual(path.read_bytes(), content)
+            self.assertFalse(active_path.exists())
+            self.assertEqual(list(Path(tmp).rglob(".*.tmp")), [])
+            self.assertEqual(maintenance.check(owner_uid=owner_uid)[2], "UNPREPARED")
+
+    def test_activate_restores_marker_when_nginx_test_fails(self):
+        class Ok:
+            returncode = 0
+
+        class Failed:
+            returncode = 1
+
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            owner_uid, _main_path, _vhosts, active_path = self._environment(stack, Path(tmp))
+            maintenance.prepare(runner=mock.Mock(return_value=Ok()), owner_uid=owner_uid)
+            original = active_path.read_bytes()
+            with self.assertRaises(common.P5Error) as caught:
+                maintenance.activate(runner=mock.Mock(return_value=Failed()), owner_uid=owner_uid)
+            self.assertEqual(caught.exception.code, "NGINX_TEST_FAILED")
+            self.assertEqual(active_path.read_bytes(), original)
+            self.assertEqual(maintenance.check(owner_uid=owner_uid)[2], "PREPARED")
+
+    def test_deactivate_restores_active_marker_when_nginx_test_fails(self):
+        class Ok:
+            returncode = 0
+
+        class Failed:
+            returncode = 1
+
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            owner_uid, _main_path, _vhosts, active_path = self._environment(stack, Path(tmp))
+            maintenance.prepare(runner=mock.Mock(return_value=Ok()), owner_uid=owner_uid)
+            maintenance.activate(runner=mock.Mock(return_value=Ok()), owner_uid=owner_uid)
+            active = active_path.read_bytes()
+            with self.assertRaises(common.P5Error) as caught:
+                maintenance.deactivate(runner=mock.Mock(return_value=Failed()), owner_uid=owner_uid)
+            self.assertEqual(caught.exception.code, "NGINX_TEST_FAILED")
+            self.assertEqual(active_path.read_bytes(), active)
+            self.assertEqual(maintenance.check(owner_uid=owner_uid)[2], "ACTIVE")
+            backups = list(maintenance.BACKUP_ROOT.iterdir())
+            self.assertEqual(len(backups), 5)
+            self.assertEqual(len({path.name for path in backups}), len(backups))
 
 
 class P5RollbackSyntheticTests(unittest.TestCase):

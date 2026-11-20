@@ -232,3 +232,17 @@ O report de carga contém 11 FKs `VALIDATED`, enquanto o reconciliador v6 report
 Foram adicionados runners locais para captura do catálogo cutover, backup MySQL final, preparação/ativação/desativação do marcador de manutenção 503 e rollback de um comando. A suíte P5 sintética passou: 18 testes e 4 subtestes. A captura é limitada a `erp_pg_source`, exige configuração/aprovação root-only, release imutável, `nice -n 19`/`ionice -c3` e pelo menos 1,5 GiB disponíveis. Não foi executada.
 
 O backup final permanece intencionalmente bloqueado por `MYSQL_CREDENTIAL_POLICY_UNCONFIGURED`; nenhuma credencial foi presumida e nenhum dump foi criado. A manutenção valida exatamente os vhosts configurados de domínio e IP em 443, com exceção de um IPv4 `/32` não especial proveniente de arquivo root-only; prepara mapas/default-deny e backup privado, roda apenas `nginx -t` e nunca recarrega Nginx. A allowlist de IP ausente ou inválida falha fechada. O rollback requer manutenção ativa, release anterior e config MySQL privada validada; altera apenas symlink/config e recarrega PHP-FPM, sem operações de banco. Esses runners não foram instalados nem executados na VM, Nginx não foi alterado/recarregado, e não houve backup, rollback ou cutover. P5 continua NO-GO até reconciliação aceita e política de credencial aprovada.
+
+
+### Hardening sintético do runner de manutenção P5 — 2026-11-20
+
+O runner `deploy/hetzner/p5/maintenance.py` usa sufixo de PID/clock monotônico nos backups para evitar colisão entre prepare/activate/deactivate no mesmo segundo. Falha de `nginx -t` ao ativar/desativar restaura o conteúdo anterior; falha na própria restauração produz código técnico sanitizado específico. Os testes exercitam ambos os fluxos e verificam que o runner não recarrega Nginx. O runner de manutenção continua não instalado/não executado na VM; configuração Nginx e produção permaneceram intocadas. O runner de backup final segue bloqueado por política de credencial dedicada ainda não definida; não gerar dump até essa política existir.
+
+
+Complemento: `prepare`, `activate` e `deactivate` validam novamente a aprovação e o estado da configuração sob o lock exclusivo antes da mutação. Backups são criados com `O_EXCL`, modo 0600, `fsync` do arquivo e do diretório; falha/corrida não substitui backup existente nem estado inesperado.
+
+
+Revisão final — 2026-11-20: `prepare` também relê e compara allowlist/vhosts/estado sob o lock exclusivo, antes de criar backups ou alterar arquivos, evitando preparar mapas com configuração obsoleta. Regressão sintética cobre mudança concorrente de CIDR. Nenhuma configuração Nginx real foi lida ou alterada nesta revisão.
+
+
+Fechamento da revisão P5 — 2026-11-20: `_write` agora remove o arquivo temporário próprio se escrita/chown/chmod/replace falhar, permitindo que o rollback tente restaurar os demais arquivos sem colidir com resíduo da mesma execução. `prepare` também tenta restaurar os arquivos se receber `KeyboardInterrupt`/`SystemExit` e propaga a interrupção após a tentativa; falha persistente do rollback continua exigindo recuperação manual indicada pelo código sanitizado. A suíte sintética final passou 26/26, incluindo revalidação de configuração sob lock, limpeza de temporário e rollback após falha parcial/interrupção. Nenhum runner foi instalado ou executado na VM.

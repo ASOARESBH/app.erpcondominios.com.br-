@@ -677,10 +677,14 @@ def _decimal_json(value: Decimal) -> str:
         _fail("JSON_NONFINITE_NUMBER")
     if value == 0:
         return "0"
-    text = format(value, "f")
-    if "." in text:
-        text = text.rstrip("0").rstrip(".")
-    return text
+    sign, digits, exponent = value.as_tuple()
+    coefficient = "".join(str(digit) for digit in digits).rstrip("0")
+    exponent += len(digits) - len(coefficient)
+    adjusted_exponent = exponent + len(coefficient) - 1
+    mantissa = coefficient[0]
+    if len(coefficient) > 1:
+        mantissa += "." + coefficient[1:]
+    return ("-" if sign else "") + mantissa + "e" + str(adjusted_exponent)
 
 
 def _json_canonical(value: Any) -> str:
@@ -915,7 +919,10 @@ def _canonical_value(
                 if escaped_nul_count:
                     semantic_bytes = escaped_nul_count * 6 * len("\\".encode(_text_codec(column)))
                 parsed = removed
-            canonical = _json_canonical(parsed).encode("utf-8")
+            try:
+                canonical = _json_canonical(parsed).encode("utf-8")
+            except UnicodeEncodeError:
+                _fail("JSON_UNICODE_INVALID")
         else:
             if is_source:
                 canonical = text.replace("\x00", "").encode("utf-8")

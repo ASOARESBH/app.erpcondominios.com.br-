@@ -373,3 +373,25 @@ O reconciliador canonicaliza valores JSON por parsing, ordenação de chaves e s
 Nenhuma nova reconciliação, consulta de banco, carga, trigger, neutralização ou alteração do `current` 8443 foi executada. A retry read-only single-use segue consumida; a divergência de hash de linhas/tenant em `monitoramento_eventos_hub` não foi reavaliada e P2 permanece NÃO ACEITA/NO-GO. Produção MySQL, rollback, `main`, DNS e banco definitivo permanecem intocados.
 
 Os runners P5 receberam testes sintéticos: 18 testes e 4 subtestes aprovados. A captura de catálogo segue fixada em `erp_pg_source`, com cwd/release imutáveis, aprovação root-only, prioridade `nice`/`ionice` e guard mínimo de memória; não foi executada. O runner do backup final continua fail-closed com `MYSQL_CREDENTIAL_POLICY_UNCONFIGURED`, até que exista política explícita para a credencial dedicada; não houve dump. A preparação de manutenção valida dois vhosts de produção em 443 e CIDR IPv4 `/32` global vindo de configuração privada root-only, sem reload; rollback validado sinteticamente restaura release/config MySQL e declara zero operações de banco. Nenhum dos runners foi executado na VM.
+
+
+### §22.19 Hardening local de P2/P3/P5 — 2026-11-20
+
+O reconciliador P2 agora serializa números JSON como notação científica canônica sem expandir expoentes extremos, conserva equivalência entre inteiro/decimal/escala e transforma Unicode não serializável em erro sanitizado. Regressões sintéticas cobrem números equivalentes, limites de expoente, Unicode suplementar/inválido, chaves duplicadas e constantes não finitas. Um teste com cursores fakes confirma que a origem MySQL projeta JSON como bytes (`CAST(... AS BINARY)`), o target PostgreSQL como texto (`::text`) e que os hashes canônicos coincidem para objetos JSON equivalentes; nenhuma configuração global de decoder foi adicionada.
+
+Os runners locais de manutenção P5 geram nomes de backup exclusivos por execução. Em falha de `nginx -t` durante `activate` ou `deactivate`, restauram o marcador anterior; falha também na restauração é reportada com código sanitizado próprio. A suíte P5 confirma os estados sintéticos e as reversões. Os runners continuam não executados na VM e não recarregam Nginx.
+
+No Portal, o login CPF rotaciona a sessão, recusa CPF ambíguo; o login por e-mail recusa resultados múltiplos por identidade; falhas operacionais Bearer retornam 503 em vez de serem classificadas como token inválido; o logout só limpa sessão local após revogação confirmada. Testes HTTP/PHP-FPM live não foram executados.
+
+Gates locais nesta revisão: suíte P2 289/289; runners P5 22/22; suítes sintéticas PHP P3 concluídas; `php -l`, `pg_sql_lint`, `py_compile`, `bash -n` e `git diff --check` passaram. A primeira tentativa de suíte completa ocorreu antes da instalação das dependências Python de teste e falhou por ausência de PyMySQL/Psycopg; repetida com dependências presentes, passou. Não houve nova consulta/reconciliação em banco, carga, alteração em `erp_pg_dev`, runner P5 real, mudança em 8443, produção, `main`, DNS ou cutover. A retry read-only single-use continua consumida; a divergência de `monitoramento_eventos_hub` continua sem causa-raiz provada e P2 permanece NÃO ACEITA/NO-GO. P5 permanece NO-GO; a política de credencial dedicada do backup final continua indefinida.
+
+
+Complemento do §22.19: `prepare`, `activate` e `deactivate` repetem validação de aprovação/estado sob lock exclusivo. Backups usam criação exclusiva, modo 0600, `fsync` do conteúdo e do diretório; não substituem cópia existente. Esta é validação sintética local, não execução operacional.
+
+
+### §22.20 Complemento da revisão local P3/P5 — 2026-11-20
+
+A revisão final fechou riscos estáticos: no login CPF, falha posterior ao commit tenta revogar compensatoriamente o token recém-persistido, com escopo por token/morador/tenant; o logout Bearer exige identidade única mesmo sem sessão PHP e usa 503 genérico em falha de conexão; em `prepare` P5, o runner relê configuração, allowlist, vhosts e estado sob o lock antes de modificar arquivos, e `_write` remove seu temporário próprio em erro parcial. Testes locais sintéticos cobrem essas guardas. Nenhuma ação live foi realizada; falha da própria revogação compensatória continua sendo condição operacional registrada de modo sanitizado.
+
+
+Resultado dos gates locais finais: P2 289/289, P5 26/26, auth/RBAC P3 20/20, Portal/logout 18/18 e bootstrap 13/13. `php -l` nos quatro endpoints, `pg_sql_lint` nesses mesmos quatro, `py_compile`, `bash -n` e `git diff --check` passaram. As suítes de reconciliador usam cursores/conexões fakes; isso não equivale a validação com os drivers ou bancos reais.

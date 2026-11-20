@@ -3700,15 +3700,26 @@ function setLoadingText(txt) {
 /* ──────────────────────────────────────────────────────────────────
    LOGOUT
    ────────────────────────────────────────────────────────────────── */
-function fazerLogout() {
+async function fazerLogout() {
     if (!confirm('Deseja realmente sair do portal?')) return;
+
+    try {
+        const resposta = await fetch(window.location.origin + '/api/logout_morador.php', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Authorization': 'Bearer ' + Portal.token }
+        });
+        const resultado = await resposta.json();
+        if (!resposta.ok || !resultado.sucesso) {
+            mostrarAlerta(resultado.mensagem || 'Não foi possível encerrar a sessão. Tente novamente.', 'error');
+            return;
+        }
+    } catch (_) {
+        mostrarAlerta('Não foi possível confirmar o encerramento da sessão. Tente novamente.', 'error');
+        return;
+    }
+
     if (window.ChatIn) window.ChatIn.encerrar();
-
-    fetch(window.location.origin + '/api/logout_morador.php', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + Portal.token }
-    }).catch(() => {});
-
     ['portal_token','morador_id','morador_nome','morador_unidade','morador_email'].forEach(k => localStorage.removeItem(k));
     window.location.href = window.location.origin + '/frontend/login.html';
 }

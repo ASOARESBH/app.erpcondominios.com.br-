@@ -132,11 +132,17 @@ try {
     $stmt = $conexao->prepare(
         "SELECT id, nome, email, senha, funcao, departamento, permissao, ativo,
                 COALESCE(sessao_inativa, 0) AS sessao_inativa
-         FROM usuarios WHERE email = ? LIMIT 1"
+         FROM usuarios WHERE email = ? LIMIT 2"
     );
     $stmt->bind_param('s', $email);
     $stmt->execute();
     $res = $stmt->get_result();
+
+    if ($res->num_rows > 1) {
+        $stmt->close();
+        http_response_code(409);
+        retornar_json(false, 'Não foi possível processar o login. Tente novamente.');
+    }
 
     if ($res->num_rows > 0) {
         $usuario = $res->fetch_assoc();
@@ -167,12 +173,18 @@ try {
     $tenantSelectMorador = $isPostgresLogin ? ', tenant_id' : '';
     $stmt = $conexao->prepare(
         "SELECT id, nome, email, senha, cpf, unidade, ativo, senha_temporaria{$tenantSelectMorador}
-         FROM moradores WHERE email = ? LIMIT 1"
+         FROM moradores WHERE email = ? LIMIT 2"
     );
     $stmt->bind_param('s', $email);
     $stmt->execute();
     $res = $stmt->get_result();
     $morador = null;
+
+    if ($res->num_rows > 1) {
+        $stmt->close();
+        http_response_code(409);
+        retornar_json(false, 'Não foi possível processar o login. Tente novamente.');
+    }
 
     if ($res->num_rows > 0) {
         $morador = $res->fetch_assoc();
