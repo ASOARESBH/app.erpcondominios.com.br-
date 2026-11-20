@@ -37,6 +37,10 @@ from .type_mapping import (
 
 BUNDLE_ROOT = Path("/var/lib/erpcondominios-pg/p2-bundles")
 TARGET_DATABASE = "erp_pg_dev"
+EXPECTED_SOURCE_TABLE_COUNT = 276
+LOAD_PENDING_RECONCILIATION_STATUS = "LOAD_COMMITTED_PENDING_RECONCILIATION"
+PREVIOUS_LOAD_RELEASE_SHA = "d6579290be8ee852635a45f662519ea2abea6008"
+PREVIOUS_LOAD_GENERATOR_VERSION = "2.7.0"
 CUTOVER_TARGET_DATABASE = "erpcondominios_pg"
 DEVELOPMENT_MIGRATION_ROLE = "erp_p2_loader"
 DEVELOPMENT_APPLICATION_ROLE = "erp_app"
@@ -115,11 +119,12 @@ def _read_json(path: Path) -> tuple[dict[str, Any], bytes]:
     return payload, raw
 
 
-def _bundle_path(bundle_name: str) -> Path:
+def _bundle_path(bundle_name: str, bundle_root: Path | None = None) -> Path:
     if not re.fullmatch(r"catalog-[a-f0-9]{12}-collation-[a-f0-9]{8}-role-[a-f0-9]{8}-code-[a-f0-9]{8}", bundle_name):
         raise LoaderError("BUNDLE_NAME_INVALID")
-    root = BUNDLE_ROOT.resolve(strict=True)
-    candidate = BUNDLE_ROOT / bundle_name
+    effective_root = BUNDLE_ROOT if bundle_root is None else bundle_root
+    root = effective_root.resolve(strict=True)
+    candidate = effective_root / bundle_name
     if candidate.is_symlink() or not candidate.is_dir():
         raise LoaderError("BUNDLE_DIRECTORY_INVALID")
     resolved = candidate.resolve(strict=True)
@@ -164,8 +169,14 @@ def _validate_executable_bundle_ownership(bundle: Path) -> None:
             raise LoaderError("BUNDLE_FILE_NOT_ROOT_CONTROLLED")
 
 
-def validate_bundle(bundle_name: str, *, require_executable: bool = True) -> tuple[Path, dict[str, Any], dict[str, Any]]:
-    bundle = _bundle_path(bundle_name)
+def validate_bundle(
+    bundle_name: str,
+    *,
+    require_executable: bool = True,
+    bundle_root: Path | None = None,
+    expected_generator_fingerprint: str | None = None,
+) -> tuple[Path, dict[str, Any], dict[str, Any]]:
+    bundle = _bundle_path(bundle_name, bundle_root)
     if require_executable:
         _validate_executable_bundle_ownership(bundle)
     marker = bundle / "BUNDLE_COMPLETE"
@@ -218,7 +229,9 @@ def validate_bundle(bundle_name: str, *, require_executable: bool = True) -> tup
         raise LoaderError("BUNDLE_BINARY_STORAGE_MANIFEST_MISSING")
     if report.get("binary_storage") != expected_binary_storage:
         raise LoaderError("BUNDLE_BINARY_STORAGE_MANIFEST_MISMATCH")
-    if report.get("generator_code_sha256") != _generator_fingerprint():
+    current_generator_fingerprint = _generator_fingerprint() if expected_generator_fingerprint is None else expected_generator_fingerprint
+    if not isinstance(current_generator_fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", current_generator_fingerprint) \
+        or report.get("generator_code_sha256") != current_generator_fingerprint:
         raise LoaderError("BUNDLE_GENERATOR_CODE_MISMATCH")
     if report.get("snapshot_file_sha256") != hashlib.sha256(snapshot_raw).hexdigest():
         raise LoaderError("BUNDLE_SNAPSHOT_CHECKSUM_MISMATCH")
@@ -268,6 +281,53 @@ def _available_memory_mib_or_none() -> int | None:
         return _read_available_memory_mib()
     except Exception:
         return None
+
+
+def _bundle_provenance(bundle_name: str, report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "bundle_name": bundle_name,
+        "generator_version": report.get("generator_version"),
+        "generator_code_sha256": report.get("generator_code_sha256"),
+        "catalog_fingerprint_sha256": report.get("catalog_fingerprint_sha256"),
+        "collation_overrides_sha256": report.get("collation_overrides_sha256"),
+        "application_role_sha256": report.get("application_role_sha256"),
+        "generated_scripts_sha256": report.get("generated_scripts_sha256"),
+    }
+
+
+def _bundle_semantics_match(previous_bundle: Path, rebound_bundle: Path) -> bool:
+    try:
+        previous_report, _ = _read_json(previous_bundle / "report.json")
+        rebound_report, _ = _read_json(rebound_bundle / "report.json")
+    except LoaderError:
+        return False
+    volatile_report_keys = {"generator_code_sha256", "snapshot_file_sha256", "generated_scripts_sha256"}
+    previous_semantics = {key: value for key, value in previous_report.items() if key not in volatile_report_keys}
+    rebound_semantics = {key: value for key, value in rebound_report.items() if key not in volatile_report_keys}
+    if previous_semantics != rebound_semantics:
+        return False
+    previous_scripts = previous_report.get("generated_scripts_sha256")
+    rebound_scripts = rebound_report.get("generated_scripts_sha256")
+    if not isinstance(previous_scripts, dict) or not isinstance(rebound_scripts, dict) \
+        or set(previous_scripts) != set(rebound_scripts):
+        return False
+    for filename in previous_scripts:
+        if not isinstance(filename, str) or Path(filename).name != filename or not filename.endswith(".sql"):
+            return False
+        stripped_contents = []
+        for bundle in (previous_bundle, rebound_bundle):
+            try:
+                lines = (bundle / filename).read_text(encoding="utf-8").splitlines(keepends=True)
+            except (OSError, UnicodeError):
+                return False
+            if len(lines) < 3 \
+                or lines[0] != "-- LOAD ARTIFACT: DO NOT APPLY unless report.json has executable_complete=true and all migration reviews are approved.\n" \
+                or not re.fullmatch(r"-- Generator code SHA-256: [0-9a-f]{64}\n", lines[1]):
+                return False
+            stripped_contents.append("".join(lines[2:]))
+        if stripped_contents[0] != stripped_contents[1]:
+            return False
+    return True
 
 
 def _require_load_runtime() -> None:
@@ -2345,6 +2405,102 @@ def _read_reconciliation_report(path: Path) -> dict[str, Any]:
     return result
 
 
+def _current_release_sha() -> str:
+    release_sha = Path(__file__).resolve().parents[2].name
+    if not re.fullmatch(r"[a-f0-9]{40}", release_sha):
+        raise LoaderError("IMMUTABLE_RELEASE_REQUIRED")
+    return release_sha
+
+
+def _read_retry_selection(bundle_name: str, report_path: Path, report: dict[str, Any]) -> dict[str, Any]:
+    release_sha = _current_release_sha()
+    try:
+        root_info = BUNDLE_ROOT.lstat()
+        selection_path = BUNDLE_ROOT / f"development-v12-{release_sha}.selection"
+        selection_info = selection_path.lstat()
+    except OSError as error:
+        raise LoaderError("RECONCILIATION_RETRY_SELECTION_REQUIRED") from error
+    if not stat.S_ISDIR(root_info.st_mode) or root_info.st_uid != 0 or stat.S_IMODE(root_info.st_mode) != 0o700 \
+        or BUNDLE_ROOT.is_symlink() or not stat.S_ISREG(selection_info.st_mode) \
+        or selection_info.st_uid != 0 or stat.S_IMODE(selection_info.st_mode) != 0o600 or selection_path.is_symlink():
+        raise LoaderError("RECONCILIATION_RETRY_SELECTION_INVALID")
+    selection, _ = _read_json(selection_path)
+    if set(selection) != {"release_sha", "bundle_name", "load_evidence"} \
+        or selection.get("release_sha") != release_sha or selection.get("bundle_name") != bundle_name:
+        raise LoaderError("RECONCILIATION_RETRY_SELECTION_INVALID")
+    evidence = selection.get("load_evidence")
+    expected_keys = {
+        "load_release_sha", "load_report_sha256", "previous_bundle_name",
+        "previous_bundle_report_sha256", "previous_generator_code_sha256", "previous_generator_version",
+        "catalog_fingerprint_sha256", "previous_bundle_provenance",
+    }
+    if not isinstance(evidence, dict) or set(evidence) != expected_keys \
+        or evidence.get("load_release_sha") != PREVIOUS_LOAD_RELEASE_SHA \
+        or evidence.get("previous_generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION \
+        or not isinstance(evidence.get("previous_generator_code_sha256"), str) \
+        or not re.fullmatch(r"[0-9a-f]{64}", evidence["previous_generator_code_sha256"]) \
+        or not isinstance(evidence.get("previous_bundle_name"), str) \
+        or not re.fullmatch(
+            rf"catalog-[a-f0-9]{{12}}-collation-[a-f0-9]{{8}}-role-[a-f0-9]{{8}}-code-{evidence['previous_generator_code_sha256'][:8]}",
+            evidence["previous_bundle_name"],
+        ):
+        raise LoaderError("RECONCILIATION_RETRY_EVIDENCE_INVALID")
+    previous_provenance = evidence.get("previous_bundle_provenance")
+    provenance_keys = {
+        "bundle_name", "generator_version", "generator_code_sha256", "catalog_fingerprint_sha256",
+        "collation_overrides_sha256", "application_role_sha256", "generated_scripts_sha256",
+    }
+    script_hashes = previous_provenance.get("generated_scripts_sha256") if isinstance(previous_provenance, dict) else None
+    if not isinstance(previous_provenance, dict) or set(previous_provenance) != provenance_keys \
+        or previous_provenance.get("bundle_name") != evidence.get("previous_bundle_name") \
+        or previous_provenance.get("generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION \
+        or previous_provenance.get("generator_code_sha256") != evidence.get("previous_generator_code_sha256") \
+        or previous_provenance.get("catalog_fingerprint_sha256") != evidence.get("catalog_fingerprint_sha256") \
+        or previous_provenance.get("application_role_sha256") != hashlib.sha256(b"erp_app").hexdigest() \
+        or not isinstance(previous_provenance.get("collation_overrides_sha256"), str) \
+        or not re.fullmatch(r"[0-9a-f]{64}", previous_provenance["collation_overrides_sha256"]) \
+        or not isinstance(script_hashes, dict) or set(script_hashes) != set(SCRIPT_NAMES) \
+        or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value) for value in script_hashes.values()):
+        raise LoaderError("RECONCILIATION_RETRY_BUNDLE_PROVENANCE_INVALID")
+    try:
+        previous_bundle, previous_report, previous_snapshot = validate_bundle(
+            evidence["previous_bundle_name"],
+            require_executable=True,
+            bundle_root=BUNDLE_ROOT,
+            expected_generator_fingerprint=evidence["previous_generator_code_sha256"],
+        )
+        current_bundle, current_report, _current_snapshot = validate_bundle(bundle_name, require_executable=True)
+        _loaded_previous_report, previous_report_bytes = _read_json(previous_bundle / "report.json")
+    except LoaderError as error:
+        raise LoaderError("RECONCILIATION_RETRY_BUNDLE_PROVENANCE_INVALID") from error
+    if hashlib.sha256(previous_report_bytes).hexdigest() != evidence.get("previous_bundle_report_sha256") \
+        or _bundle_provenance(evidence["previous_bundle_name"], previous_report) != previous_provenance \
+        or previous_snapshot.get("fingerprint_sha256") != evidence.get("catalog_fingerprint_sha256") \
+        or current_report.get("catalog_fingerprint_sha256") != evidence.get("catalog_fingerprint_sha256") \
+        or not _bundle_semantics_match(previous_bundle, current_bundle):
+        raise LoaderError("RECONCILIATION_RETRY_BUNDLE_PROVENANCE_MISMATCH")
+    try:
+        fd = os.open(report_path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+        with os.fdopen(fd, "rb") as stream:
+            report_info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(report_info.st_mode) or report_info.st_uid != 0 or stat.S_IMODE(report_info.st_mode) != 0o600:
+                raise LoaderError("LOAD_REPORT_MODE_OR_OWNER_INVALID")
+            report_bytes = stream.read()
+        parsed_report = json.loads(report_bytes.decode("utf-8", errors="strict"), object_pairs_hook=_unique_json_pairs)
+    except LoaderError:
+        raise
+    except Exception as error:
+        raise LoaderError("LOAD_REPORT_INVALID") from error
+    if parsed_report != report or hashlib.sha256(report_bytes).hexdigest() != evidence.get("load_report_sha256") \
+        or report.get("bundle_catalog_fingerprint") != evidence.get("catalog_fingerprint_sha256") \
+        or report.get("generator_version") != evidence.get("previous_generator_version") \
+        or (report.get("bundle_provenance") is not None and report.get("bundle_provenance") != previous_provenance) \
+        or ("legacy_schema" not in report and report.get("generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION) \
+        or ("legacy_schema" in report and report.get("legacy_schema") != LEGACY_SCHEMA):
+        raise LoaderError("RECONCILIATION_RETRY_EVIDENCE_MISMATCH")
+    return evidence
+
+
 def _validate_source_snapshot(current: dict[str, Any], expected: dict[str, Any]) -> None:
     if current.get("structural_fingerprint_sha256") != expected.get("structural_fingerprint_sha256"):
         raise LoaderError("SOURCE_CATALOG_DRIFT_FROM_BUNDLE")
@@ -2376,6 +2532,95 @@ def _validate_source_snapshot(current: dict[str, Any], expected: dict[str, Any])
     if current.get("timestamp_transfer_contract") != timestamp_contract \
         or expected.get("timestamp_transfer_contract") != timestamp_contract:
         raise LoaderError("SOURCE_TIMESTAMP_TRANSFER_CONTRACT_INVALID")
+
+
+def _preflight_policy_gate(
+    text_findings: list[dict[str, Any]],
+    binary_findings: list[dict[str, Any]],
+    source_counts: list[dict[str, Any]],
+    snapshot: dict[str, Any],
+    target_scope: dict[str, Any],
+) -> None:
+    if not source_counts or len(source_counts) != EXPECTED_SOURCE_TABLE_COUNT:
+        raise LoaderError("PREFLIGHT_SOURCE_TABLE_COUNT_INVALID")
+    names = [item.get("table") for item in source_counts if isinstance(item, dict)]
+    if len(names) != EXPECTED_SOURCE_TABLE_COUNT or any(not isinstance(name, str) for name in names) or len(set(names)) != EXPECTED_SOURCE_TABLE_COUNT:
+        raise LoaderError("PREFLIGHT_SOURCE_TABLE_MANIFEST_INVALID")
+    snapshot_table_names = {
+        table.get("name") for table in snapshot.get("tables", [])
+        if isinstance(table, dict) and table.get("type") == "BASE TABLE"
+    }
+    if len(snapshot_table_names) != EXPECTED_SOURCE_TABLE_COUNT or set(names) != snapshot_table_names:
+        raise LoaderError("PREFLIGHT_SOURCE_TABLE_MANIFEST_MISMATCH")
+    for item in source_counts:
+        rows = item.get("rows")
+        if type(rows) is not int or rows < 0:
+            raise LoaderError("PREFLIGHT_SOURCE_ROW_COUNT_INVALID")
+    text_types = {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext", "enum", "set", "json"}
+    binary_types = {"binary", "varbinary", "tinyblob", "blob", "mediumblob", "longblob"}
+    expected_text: set[tuple[str, str]] = set()
+    expected_binary: set[tuple[str, str]] = set()
+    for table in snapshot.get("tables", []):
+        if not isinstance(table, dict) or table.get("type") != "BASE TABLE" or not isinstance(table.get("name"), str):
+            continue
+        for column in table.get("columns", []):
+            if not isinstance(column, dict) or not isinstance(column.get("name"), str):
+                raise LoaderError("PREFLIGHT_COLUMN_MANIFEST_INVALID")
+            key = (table["name"], column["name"])
+            data_type = str(column.get("data_type", "")).lower()
+            if data_type in text_types:
+                expected_text.add(key)
+            if data_type in binary_types:
+                expected_binary.add(key)
+    text_keys = {
+        (item.get("table"), item.get("column")) for item in text_findings if isinstance(item, dict)
+    }
+    if len(text_keys) != len(text_findings) or text_keys != expected_text:
+        raise LoaderError("PREFLIGHT_TEXT_POLICY_MANIFEST_MISMATCH")
+    for item in text_findings:
+        if not isinstance(item, dict) or item.get("scan_status") != "SCANNED" \
+            or type(item.get("cells_expected")) is not int or type(item.get("cells_scanned")) is not int \
+            or item.get("cells_expected") != item.get("cells_scanned") \
+            or item.get("detector_disagreement") is not False \
+            or any(type(item.get(key)) is not int or item.get(key) != 0 for key in (
+                "method_a_python_string_cells_with_nul", "method_a_decode_failures",
+                "method_b_cells_with_nul", "python_cells_with_nul", "cells_with_nul",
+                "invalid_charset_cells_with_nul", "non_utf8_cells_with_nul", "invalid_utf8_cells_after_nul",
+                "invalid_declared_charset_cells_after_nul",
+            )):
+            raise LoaderError("PREFLIGHT_TEXT_POLICY_REVIEW_REQUIRED")
+    binary_keys = {
+        (item.get("table"), item.get("column")) for item in binary_findings if isinstance(item, dict)
+    }
+    if len(binary_keys) != len(binary_findings) or binary_keys != expected_binary \
+        or ("tenant_arquivos", "conteudo") not in expected_binary:
+        raise LoaderError("PREFLIGHT_BINARY_STORAGE_ALLOWLIST_MISMATCH")
+    for item in binary_findings:
+        if not isinstance(item, dict) or item.get("scan_status", "SCANNED") != "SCANNED" \
+            or type(item.get("cells_expected")) is not int or type(item.get("cells_scanned")) is not int \
+            or item.get("cells_expected") != item.get("cells_scanned") \
+            or type(item.get("method_b_cells_with_nul")) is not int \
+            or type(item.get("python_cells_with_nul")) is not int \
+            or item.get("method_b_cells_with_nul") != item.get("python_cells_with_nul") \
+            or type(item.get("nul_bytes")) is not int or item["nul_bytes"] < 0 \
+            or type(item.get("binary_bytes_scanned")) is not int or item["binary_bytes_scanned"] < 0 \
+            or item.get("storage_policy_id") != BINARY_STORAGE_POLICY_ID:
+            raise LoaderError("PREFLIGHT_BINARY_SCAN_INVALID")
+        table, column = item.get("table"), item.get("column")
+        if not isinstance(table, str) or not isinstance(column, str):
+            raise LoaderError("PREFLIGHT_BINARY_SCAN_INVALID")
+        expected_encoding = "base64" if (table, column) == ("tenant_arquivos", "conteudo") else "bytea"
+        if item.get("storage_encoding") != expected_encoding or item.get("nul_policy") != "preserve_exact_bytes":
+            raise LoaderError("PREFLIGHT_BINARY_STORAGE_POLICY_INVALID")
+    required_true = (
+        "database_matches", "local_endpoint", "migrator_login_non_elevated", "schema_create_privilege",
+        "existing_schemas_owned_or_absent", "application_role_separate", "application_role_non_elevated",
+    )
+    if any(target_scope.get(key) is not True for key in required_true) \
+        or any(type(target_scope.get(key)) is not int or target_scope.get(key) != 0
+               for key in ("migrator_role_memberships", "application_role_memberships")) \
+        or type(target_scope.get("target_schema_present")) is not bool:
+        raise LoaderError("PREFLIGHT_TARGET_SCOPE_INVALID")
 
 
 def run_preflight(bundle_name: str, defaults_file: str | None = None, profile: str = "development") -> dict[str, Any]:
@@ -2418,6 +2663,8 @@ def run_preflight(bundle_name: str, defaults_file: str | None = None, profile: s
         target_summary["target_schema_present"] = target_schema_present
     finally:
         target.close()
+
+    _preflight_policy_gate(nul_findings, binary_findings, source_report, snapshot, target_summary)
 
     return {
         "status": "PREFLIGHT_READ_ONLY",
@@ -2664,8 +2911,10 @@ def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Pa
             "source_schema": SOURCE_SCHEMA,
             "target_database": target_config["dbname"],
             "target_schema": TARGET_SCHEMA,
+            "legacy_schema": LEGACY_SCHEMA,
             "bundle_catalog_fingerprint": report.get("catalog_fingerprint_sha256"),
             "generator_version": report.get("generator_version"),
+            "bundle_provenance": _bundle_provenance(bundle_name, report),
             "tables_loaded": sum(item.get("status") == "COPIED" for item in copied_rows),
             "rows_loaded": sum(item["source_rows"] or 0 for item in copied_rows if item.get("status") == "COPIED"),
             "elapsed_seconds": round(time.time() - started_at, 3),
@@ -2851,7 +3100,80 @@ def _validated_identity_plan(snapshot: dict[str, Any], table_names: list[str], m
     return identities_by_table
 
 
-def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path, profile: str = "development") -> dict[str, Any]:
+def _retryable_committed_reconciliation_query_failure(report: dict[str, Any], bundle_report: dict[str, Any], profile: str) -> bool:
+    prior_reconciliation = report.get("reconciliation")
+    legacy_scope_valid = report.get("legacy_schema") == LEGACY_SCHEMA or (
+        "legacy_schema" not in report and report.get("generator_version") == PREVIOUS_LOAD_GENERATOR_VERSION
+    )
+    return (
+        profile == "development"
+        and report.get("profile") == profile
+        and report.get("source_schema") == SOURCE_SCHEMA
+        and report.get("target_database") == TARGET_DATABASE
+        and report.get("target_schema") == TARGET_SCHEMA
+        and legacy_scope_valid
+        and report.get("status") == "LOAD_COMMITTED_RECONCILIATION_BLOCKED"
+        and report.get("reconciliation_previous_status") == LOAD_PENDING_RECONCILIATION_STATUS
+        and ("reconciliation_retry_used" not in report or report.get("reconciliation_retry_used") is False)
+        and isinstance(prior_reconciliation, dict)
+        and prior_reconciliation.get("status") == "BLOCKED"
+        and prior_reconciliation.get("failure_code") == "DATABASE_QUERY_FAILED"
+        and report.get("table_failures") == []
+        and report.get("tables_loaded") == len(bundle_report.get("generated_tables", []))
+        and type(report.get("rows_loaded")) is int
+        and report["rows_loaded"] >= 0
+        and _committed_table_counts_match(report, bundle_report)
+        and all(report.get(key) is True for key in (
+            "source_cleanup_confirmed", "target_cleanup_confirmed", "nul_spool_cleanup_confirmed"
+        ))
+    )
+
+
+def _committed_table_counts_match(report: dict[str, Any], bundle_report: dict[str, Any]) -> bool:
+    counts = report.get("table_counts")
+    generated_tables = bundle_report.get("generated_tables")
+    if not isinstance(counts, list) or not isinstance(generated_tables, list) \
+        or len(counts) != len(generated_tables) or any(not isinstance(table, str) for table in generated_tables):
+        return False
+    if len(set(generated_tables)) != len(generated_tables):
+        return False
+    if any(not isinstance(item, dict) or item.get("status") != "COPIED"
+           or not isinstance(item.get("table"), str)
+           or type(item.get("source_rows")) is not int or item["source_rows"] < 0
+           or type(item.get("target_rows")) is not int or item["target_rows"] < 0
+           or item["source_rows"] != item["target_rows"] for item in counts):
+        return False
+    names = [item["table"] for item in counts]
+    return len(set(names)) == len(names) and set(names) == set(generated_tables) \
+        and sum(item["source_rows"] for item in counts) == report.get("rows_loaded") \
+        and sum(item["target_rows"] for item in counts) == report.get("rows_loaded")
+
+
+def validate_reconcile_retry(bundle_name: str, report_path: Path, profile: str = "development") -> dict[str, Any]:
+    if profile != "development":
+        raise LoaderError("RECONCILIATION_RETRY_NOT_ALLOWED")
+    _bundle, bundle_report, _snapshot = validate_bundle(bundle_name, require_executable=True)
+    report = _read_reconciliation_report(report_path)
+    if report.get("profile", "development") != profile \
+        or not _retryable_committed_reconciliation_query_failure(report, bundle_report, profile):
+        raise LoaderError("RECONCILIATION_RETRY_NOT_ALLOWED")
+    if report.get("bundle_catalog_fingerprint") != bundle_report.get("catalog_fingerprint_sha256"):
+        raise LoaderError("LOAD_SNAPSHOT_MISMATCH")
+    _read_retry_selection(bundle_name, report_path, report)
+    return {
+        "status": "RECONCILIATION_RETRY_READY",
+        "profile": profile,
+        "source_schema": SOURCE_SCHEMA,
+        "target_database": TARGET_DATABASE,
+        "tables": report["tables_loaded"],
+        "rows": report["rows_loaded"],
+        "retry_unused": report.get("reconciliation_retry_used") is not True,
+        "cleanup_confirmed": True,
+    }
+
+
+def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path, profile: str = "development",
+                  retry_read_only: bool = False) -> dict[str, Any]:
     from .reconcile import reconcile
 
     started_at = time.time()
@@ -2860,18 +3182,24 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
     report = _read_reconciliation_report(report_path)
     if report.get("profile", "development") != profile:
         raise LoaderError("LOAD_PROFILE_MISMATCH")
-    if report.get("status") not in {
+    prior_status = report.get("status")
+    retryable_read_only_failure = _retryable_committed_reconciliation_query_failure(report, bundle_report, profile)
+    pending_statuses = {
         "LOAD_COMMITTED_PENDING_RECONCILIATION",
         "LOAD_PARTIAL_PENDING_RECONCILIATION",
-        "LOAD_COMMITTED_RECONCILED",
-        "LOAD_COMMITTED_RECONCILIATION_DIVERGED",
-        "LOAD_COMMITTED_RECONCILIATION_BLOCKED",
-        "LOAD_PARTIAL_RECONCILIATION_DIVERGED",
-        "LOAD_PARTIAL_RECONCILIATION_BLOCKED",
-    }:
+    }
+    if retry_read_only:
+        if not retryable_read_only_failure:
+            raise LoaderError("RECONCILIATION_RETRY_NOT_ALLOWED")
+    elif prior_status not in pending_statuses:
         raise LoaderError("LOAD_COMMIT_EVIDENCE_INVALID")
     if report.get("bundle_catalog_fingerprint") != bundle_report.get("catalog_fingerprint_sha256"):
         raise LoaderError("LOAD_SNAPSHOT_MISMATCH")
+    if retry_read_only:
+        _read_retry_selection(bundle_name, report_path, report)
+        report["reconciliation_retry_used"] = True
+        report["reconciliation_retry_started_at_epoch"] = int(started_at)
+        _replace_report(report, report_path)
 
     source_defaults = _source_defaults_path(defaults_file)
     target_config = _load_target_config(profile)
@@ -2889,7 +3217,6 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
     memory_guard = _MemoryGuard()
     result: dict[str, Any] | None = None
     cleanup_failures: list[str] = []
-    prior_status = report.get("status")
     load_was_partial = prior_status == "LOAD_PARTIAL_PENDING_RECONCILIATION" or bool(report.get("table_failures"))
     try:
         if any(report.get(key) is not True for key in (
@@ -2941,6 +3268,8 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
             "elapsed_seconds_total": round(time.time() - started_at, 3),
             "available_memory_mib_end": _available_memory_mib_or_none(),
         }
+        if isinstance(error.sqlstate, str) and re.fullmatch(r"[0-9A-Z]{5}", error.sqlstate):
+            failure["sqlstate"] = error.sqlstate
         report["status"] = "LOAD_PARTIAL_RECONCILIATION_BLOCKED" if load_was_partial else "LOAD_COMMITTED_RECONCILIATION_BLOCKED"
         report["reconciliation"] = failure
         report["reconciliation_previous_status"] = prior_status
@@ -3008,27 +3337,37 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Loader transacional do P2/P5; source fixo em erp_pg_source")
-    parser.add_argument("command", choices=("preflight", "load", "reconcile"))
+    parser.add_argument("command", choices=("preflight", "load", "reconcile", "validate-reconcile"))
     parser.add_argument("--profile", choices=("development", "cutover"), default="development")
     parser.add_argument("--bundle-name", required=True)
     parser.add_argument("--source-defaults-file")
     parser.add_argument("--report-file")
+    parser.add_argument("--retry-read-only", action="store_true")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
+        if args.retry_read_only and args.command not in {"reconcile", "validate-reconcile"}:
+            raise LoaderError("RECONCILIATION_RETRY_ACTION_INVALID")
         if args.command == "preflight":
             result = run_preflight(args.bundle_name, args.source_defaults_file, args.profile)
         elif args.command == "load":
             if not args.report_file:
                 raise LoaderError("LOAD_REPORT_FILE_REQUIRED")
             result = run_load(args.bundle_name, args.source_defaults_file, Path(args.report_file), args.profile)
+        elif args.command == "validate-reconcile":
+            if not args.report_file or not args.retry_read_only:
+                raise LoaderError("RECONCILIATION_RETRY_ACTION_INVALID")
+            result = validate_reconcile_retry(args.bundle_name, Path(args.report_file), args.profile)
         else:
             if not args.report_file:
                 raise LoaderError("LOAD_REPORT_FILE_REQUIRED")
-            result = run_reconcile(args.bundle_name, args.source_defaults_file, Path(args.report_file), args.profile)
+            result = run_reconcile(
+                args.bundle_name, args.source_defaults_file, Path(args.report_file), args.profile,
+                retry_read_only=args.retry_read_only,
+            )
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if args.command != "reconcile" or result.get("status") == "RECONCILED" else 2
     except LoaderError as error:

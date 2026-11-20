@@ -16,7 +16,7 @@ from tools.migracao_pg.catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID, _co
 from tools.migracao_pg.ddl import MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX, canonical_fingerprint
 from tools.migracao_pg.reconcile import _DiskCounterStore, _accumulate_row, _aggregate_metric_results, _binary_storage_schema_metric, _foreign_key_metric, _new_accumulator, _stream_row_size_limit
 from tools.migracao_pg.reconcile import _audit_pk_text as reconcile_audit_pk_text
-from tools.migracao_pg.reconcile import canonical_row_sha256, reconcile as _reconcile
+from tools.migracao_pg.reconcile import ReconciliationError, _execute, canonical_row_sha256, reconcile as _reconcile
 from tools.migracao_pg.type_mapping import BINARY_STORAGE_POLICY_ID, expected_binary_storage_manifest
 
 
@@ -302,7 +302,7 @@ def run_contract(**kwargs):
 
 
 class TargetProfileContractTests(unittest.TestCase):
-    def test_reconciler_requires_live_source_snapshot_and_reports_contract_v4(self):
+    def test_reconciler_requires_live_source_snapshot_and_reports_contract_v5(self):
         source, target, snapshot, report, mappings = base_contract()
         missing_live = _reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(missing_live["status"], "BLOCKED")
@@ -310,7 +310,7 @@ class TargetProfileContractTests(unittest.TestCase):
 
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "RECONCILED")
-        self.assertEqual(result["reconciler_version"], 4)
+        self.assertEqual(result["reconciler_version"], 5)
 
     def test_reconciler_rejects_coordinated_snapshot_report_table_omission(self):
         source, target, live_snapshot, report, mappings = base_contract()
@@ -926,6 +926,40 @@ class ReconciliationMetricsTests(unittest.TestCase):
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(result["failure_code"], "IDENTITY_SEQUENCE_EXHAUSTED")
+
+    def test_query_failure_report_contains_only_safe_sqlstate_and_table(self):
+        source, target, snapshot, report, mappings = base_contract()
+        with patch("tools.migracao_pg.reconcile._stream_table", side_effect=ReconciliationError("DATABASE_QUERY_FAILED", "42P01")):
+            result = reconcile(source, target, snapshot, report, mappings)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["reconciler_version"], 5)
+        self.assertEqual(result["failure_code"], "DATABASE_QUERY_FAILED")
+        self.assertEqual(result["sqlstate"], "42P01")
+        self.assertEqual(result["failure_table"], "synthetic")
+        self.assertEqual(result["failure_side"], "source")
+        self.assertNotIn("sql", result)
+        self.assertNotIn("message", result)
+
+    def test_reconciliation_error_rejects_non_sqlstate_metadata(self):
+        error = ReconciliationError("DATABASE_QUERY_FAILED", "private-message")
+        self.assertIsNone(error.sqlstate)
+
+    def test_execute_preserves_sqlstate_but_not_database_error_text(self):
+        class SyntheticDatabaseError(Exception):
+            sqlstate = "42P01"
+
+            def __str__(self):
+                return "sensitive database error text"
+
+        class Cursor:
+            def execute(self, statement, params=()):
+                raise SyntheticDatabaseError()
+
+        with self.assertRaises(ReconciliationError) as caught:
+            _execute(Cursor(), "SELECT 1")
+        self.assertEqual(caught.exception.code, "DATABASE_QUERY_FAILED")
+        self.assertEqual(caught.exception.sqlstate, "42P01")
+        self.assertEqual(str(caught.exception), "DATABASE_QUERY_FAILED")
 
 
 if __name__ == "__main__":

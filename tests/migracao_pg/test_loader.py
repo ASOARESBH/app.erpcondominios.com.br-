@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager, ExitStack
+from contextlib import contextmanager, ExitStack, redirect_stderr
 from datetime import date, datetime, timedelta
 import base64
 import hashlib
@@ -1021,6 +1021,21 @@ class SourceConnectionSetupTests(unittest.TestCase):
 
 
 class RebuildRunnerSecurityTests(unittest.TestCase):
+    def test_read_only_reconcile_retry_is_release_bound_and_report_private(self) -> None:
+        script = Path("tools/migracao_pg/rebuild.sh").read_text(encoding="utf-8")
+        self.assertIn("development reconcile", script)
+        self.assertIn("reconciliation-report-validation", script)
+        self.assertIn("REPORT_FILE_MODE_INVALID", script)
+        self.assertIn("reconciliation-read-only-retry", script)
+        self.assertIn('"$python_bin" -E -B -m tools.migracao_pg.loader reconcile', script)
+        self.assertIn("--retry-read-only", script)
+        self.assertIn("emit_summary preflight", script)
+        self.assertIn("emit_summary load", script)
+        self.assertIn("emit_summary reconcile", script)
+        self.assertNotIn('printf \'%s\\n\' "$reconciliation_json"', script)
+        self.assertNotIn('printf \'%s\\n\' "$reconciliation_result"', script)
+        self.assertIn("RECONCILIATION_COMPLETE", script)
+
     def test_root_runner_is_confined_to_immutable_revisioned_release(self) -> None:
         script = Path("tools/migracao_pg/rebuild.sh").read_text(encoding="utf-8")
         self.assertIn("ROOT_EXECUTION_REQUIRES_IMMUTABLE_RELEASE", script)
@@ -1816,6 +1831,219 @@ class ReconciliationCleanupTests(unittest.TestCase):
         self.assertEqual(reports[-1]["status"], "LOAD_COMMITTED_RECONCILIATION_BLOCKED")
         self.assertTrue(source.closed)
         self.assertTrue(target.closed)
+
+
+class ReconciliationRetryGateTests(unittest.TestCase):
+    def _eligible_report(self):
+        return {
+            "profile": "development",
+            "source_schema": "erp_pg_source",
+            "target_database": "erp_pg_dev",
+            "target_schema": "erp",
+            "legacy_schema": "legado",
+            "status": "LOAD_COMMITTED_RECONCILIATION_BLOCKED",
+            "reconciliation_previous_status": "LOAD_COMMITTED_PENDING_RECONCILIATION",
+            "reconciliation": {"status": "BLOCKED", "failure_code": "DATABASE_QUERY_FAILED"},
+            "table_failures": [],
+            "tables_loaded": 2,
+            "rows_loaded": 17,
+            "table_counts": [
+                {"table": "one", "source_rows": 8, "target_rows": 8, "status": "COPIED"},
+                {"table": "two", "source_rows": 9, "target_rows": 9, "status": "COPIED"},
+            ],
+            "source_cleanup_confirmed": True,
+            "target_cleanup_confirmed": True,
+            "nul_spool_cleanup_confirmed": True,
+        }
+
+    def test_only_complete_committed_query_failure_is_retryable_once(self) -> None:
+        report = self._eligible_report()
+        bundle_report = {"generated_tables": ["one", "two"]}
+        self.assertTrue(loader._retryable_committed_reconciliation_query_failure(report, bundle_report, "development"))
+        report["reconciliation_retry_used"] = True
+        self.assertFalse(loader._retryable_committed_reconciliation_query_failure(report, bundle_report, "development"))
+
+    def test_legacy_report_without_legacy_schema_requires_historical_generator_version(self) -> None:
+        report = self._eligible_report()
+        report.pop("legacy_schema")
+        self.assertFalse(loader._retryable_committed_reconciliation_query_failure(report, {"generated_tables": ["one", "two"]}, "development"))
+        report["generator_version"] = loader.PREVIOUS_LOAD_GENERATOR_VERSION
+        self.assertTrue(loader._retryable_committed_reconciliation_query_failure(report, {"generated_tables": ["one", "two"]}, "development"))
+
+    def test_partial_load_wrong_failure_profile_or_cleanup_are_not_retryable(self) -> None:
+        bundle_report = {"generated_tables": ["one", "two"]}
+        mutations = (
+            ("table_failures", [{"table": "one"}]),
+            ("tables_loaded", 1),
+            ("rows_loaded", "17"),
+            ("target_cleanup_confirmed", False),
+            ("source_schema", "erpcondominios_stage_20261114"),
+            ("target_database", "erpcondominios_pg"),
+            ("target_schema", "public"),
+            ("legacy_schema", "public"),
+            ("reconciliation_previous_status", "LOAD_PARTIAL_PENDING_RECONCILIATION"),
+            ("reconciliation_retry_used", True),
+            ("status", "LOAD_COMMITTED_RECONCILED"),
+            ("profile", "cutover"),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key):
+                report = self._eligible_report()
+                if key == "profile":
+                    profile = value
+                else:
+                    report[key] = value
+                    profile = "development"
+                self.assertFalse(loader._retryable_committed_reconciliation_query_failure(report, bundle_report, profile))
+
+    def test_only_database_query_failure_code_is_retryable(self) -> None:
+        report = self._eligible_report()
+        report["reconciliation"]["failure_code"] = "IDENTITY_SEQUENCE_EXHAUSTED"
+        self.assertFalse(loader._retryable_committed_reconciliation_query_failure(report, {"generated_tables": ["one", "two"]}, "development"))
+
+    def test_retry_evidence_validation_is_local_and_aggregate_only(self) -> None:
+        report = self._eligible_report()
+        report["bundle_catalog_fingerprint"] = "a" * 64
+        bundle_report = {"generated_tables": ["one", "two"], "catalog_fingerprint_sha256": "a" * 64}
+        with patch.object(loader, "validate_bundle", return_value=(None, bundle_report, {})), \
+            patch.object(loader, "_read_reconciliation_report", return_value=report), \
+            patch.object(loader, "_read_retry_selection", return_value={"verified": True}) as read_selection, \
+            patch.object(loader, "_connect_source") as connect_source, \
+            patch.object(loader, "_connect_target") as connect_target:
+            result = loader.validate_reconcile_retry("synthetic", Path("/unused/report.json"))
+        self.assertEqual(
+            result,
+            {
+                "status": "RECONCILIATION_RETRY_READY", "profile": "development",
+                "source_schema": "erp_pg_source", "target_database": "erp_pg_dev",
+                "tables": 2, "rows": 17, "retry_unused": True, "cleanup_confirmed": True,
+            },
+        )
+        connect_source.assert_not_called()
+        connect_target.assert_not_called()
+        read_selection.assert_called_once()
+
+    def test_terminal_and_partial_reports_cannot_reenter_normal_reconciliation(self) -> None:
+        bundle_report = {"generated_tables": ["one", "two"]}
+        terminal_statuses = (
+            "LOAD_COMMITTED_RECONCILED",
+            "LOAD_COMMITTED_RECONCILIATION_DIVERGED",
+            "LOAD_COMMITTED_RECONCILIATION_BLOCKED",
+            "LOAD_PARTIAL_RECONCILIATION_DIVERGED",
+            "LOAD_PARTIAL_RECONCILIATION_BLOCKED",
+        )
+        for status in terminal_statuses:
+            with self.subTest(status=status):
+                report = self._eligible_report()
+                report["status"] = status
+                with patch.object(loader, "validate_bundle", return_value=(None, bundle_report, {})), \
+                    patch.object(loader, "_read_reconciliation_report", return_value=report), \
+                    patch.object(loader, "_connect_source") as connect_source, \
+                    patch.object(loader, "_connect_target") as connect_target:
+                    with self.assertRaises(loader.LoaderError) as error:
+                        loader.run_reconcile("synthetic-bundle", None, Path("/unused/report.json"), "development")
+                self.assertEqual(error.exception.code, "LOAD_COMMIT_EVIDENCE_INVALID")
+                connect_source.assert_not_called()
+                connect_target.assert_not_called()
+
+    def test_read_only_retry_flag_rejects_completed_or_diverged_report(self) -> None:
+        bundle_report = {"generated_tables": ["one", "two"]}
+        for status in ("LOAD_COMMITTED_RECONCILED", "LOAD_COMMITTED_RECONCILIATION_DIVERGED"):
+            with self.subTest(status=status):
+                report = self._eligible_report()
+                report["status"] = status
+                with patch.object(loader, "validate_bundle", return_value=(None, bundle_report, {})), \
+                    patch.object(loader, "_read_reconciliation_report", return_value=report), \
+                    patch.object(loader, "_connect_source") as connect_source, \
+                    patch.object(loader, "_connect_target") as connect_target:
+                    with self.assertRaises(loader.LoaderError) as error:
+                        loader.run_reconcile(
+                            "synthetic-bundle", None, Path("/unused/report.json"), "development",
+                            retry_read_only=True,
+                        )
+                self.assertEqual(error.exception.code, "RECONCILIATION_RETRY_NOT_ALLOWED")
+                connect_source.assert_not_called()
+                connect_target.assert_not_called()
+
+    def test_retry_flag_is_rejected_for_non_reconcile_command(self) -> None:
+        with redirect_stderr(io.StringIO()):
+            status = loader.main(["preflight", "--bundle-name", "synthetic", "--retry-read-only"])
+        self.assertEqual(status, 2)
+
+
+class PreflightPolicyGateTests(unittest.TestCase):
+    def _inputs(self):
+        snapshot = {
+            "tables": [
+                {"name": "fixture_text", "type": "BASE TABLE", "columns": [
+                    {"name": "descricao", "data_type": "varchar"},
+                ]},
+                {"name": "tenant_arquivos", "type": "BASE TABLE", "columns": [
+                    {"name": "conteudo", "data_type": "longblob"},
+                ]},
+            ] + [
+                {"name": f"fixture_{index}", "type": "BASE TABLE", "columns": []}
+                for index in range(loader.EXPECTED_SOURCE_TABLE_COUNT - 2)
+            ],
+        }
+        text = [{
+            "table": "fixture_text", "column": "descricao", "scan_status": "SCANNED",
+            "detector_disagreement": False,
+            "cells_expected": 1, "cells_scanned": 1,
+            "method_a_python_string_cells_with_nul": 0, "method_a_decode_failures": 0,
+            "method_b_cells_with_nul": 0, "python_cells_with_nul": 0, "cells_with_nul": 0,
+            "invalid_charset_cells_with_nul": 0, "non_utf8_cells_with_nul": 0, "invalid_utf8_cells_after_nul": 0,
+            "invalid_declared_charset_cells_after_nul": 0,
+        }]
+        binary = [{
+            "table": "tenant_arquivos", "column": "conteudo", "scan_status": "SCANNED",
+            "cells_expected": 1, "cells_scanned": 1,
+            "method_b_cells_with_nul": 1, "python_cells_with_nul": 1,
+            "nul_bytes": 1, "binary_bytes_scanned": 3,
+            "storage_policy_id": loader.BINARY_STORAGE_POLICY_ID,
+            "storage_encoding": "base64", "nul_policy": "preserve_exact_bytes",
+        }]
+        counts = [
+            {"table": "fixture_text", "rows": 0},
+            {"table": "tenant_arquivos", "rows": 1},
+        ] + [
+            {"table": f"fixture_{index}", "rows": 0}
+            for index in range(loader.EXPECTED_SOURCE_TABLE_COUNT - 2)
+        ]
+        target = {
+            "database_matches": True, "local_endpoint": True, "migrator_login_non_elevated": True,
+            "schema_create_privilege": True, "existing_schemas_owned_or_absent": True,
+            "application_role_separate": True, "application_role_non_elevated": True,
+            "migrator_role_memberships": 0, "application_role_memberships": 0,
+            "target_schema_present": True,
+        }
+        return text, binary, counts, snapshot, target
+
+    def test_complete_preflight_evidence_accepts_allowlisted_base64_and_nul(self) -> None:
+        self.assertIsNone(loader._preflight_policy_gate(*self._inputs()))
+
+    def test_missing_text_finding_fails_closed(self) -> None:
+        text, binary, counts, snapshot, target = self._inputs()
+        with self.assertRaisesRegex(LoaderError, "PREFLIGHT_TEXT_POLICY_MANIFEST_MISMATCH"):
+            loader._preflight_policy_gate([], binary, counts, snapshot, target)
+
+    def test_source_counts_with_same_size_but_wrong_table_name_fail_closed(self) -> None:
+        text, binary, counts, snapshot, target = self._inputs()
+        counts[0] = {"table": "fixture_wrong", "rows": 0}
+        with self.assertRaisesRegex(LoaderError, "PREFLIGHT_SOURCE_TABLE_MANIFEST_MISMATCH"):
+            loader._preflight_policy_gate(text, binary, counts, snapshot, target)
+
+    def test_binary_detector_disagreement_fails_closed(self) -> None:
+        text, binary, counts, snapshot, target = self._inputs()
+        binary[0]["method_b_cells_with_nul"] = 0
+        with self.assertRaisesRegex(LoaderError, "PREFLIGHT_BINARY_SCAN_INVALID"):
+            loader._preflight_policy_gate(text, binary, counts, snapshot, target)
+
+    def test_target_scope_invalid_fails_closed(self) -> None:
+        text, binary, counts, snapshot, target = self._inputs()
+        target["application_role_non_elevated"] = False
+        with self.assertRaisesRegex(LoaderError, "PREFLIGHT_TARGET_SCOPE_INVALID"):
+            loader._preflight_policy_gate(text, binary, counts, snapshot, target)
 
 
 if __name__ == "__main__":

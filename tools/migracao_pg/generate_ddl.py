@@ -42,7 +42,8 @@ def _unique_object(pairs):
 
 GENERATOR_COMPONENTS = (
     "generate_ddl.py", "ddl.py", "generated_columns.py", "type_mapping.py",
-    "check_translation.py", "loader.py", "070_business_triggers_tenant_scoped.sql",
+    "check_translation.py", "loader.py", "reconcile.py", "catalog_bundle.py",
+    "070_business_triggers_tenant_scoped.sql",
 )
 
 

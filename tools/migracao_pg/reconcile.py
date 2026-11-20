@@ -249,16 +249,28 @@ class _DiskCounter:
         return difference
 
 
+def _safe_sqlstate(error: BaseException) -> str | None:
+    candidates = [getattr(error, "sqlstate", None), getattr(error, "pgcode", None)]
+    diagnostic = getattr(error, "diag", None)
+    if diagnostic is not None:
+        candidates.append(getattr(diagnostic, "sqlstate", None))
+    for value in candidates:
+        if isinstance(value, str) and re.fullmatch(r"[0-9A-Z]{5}", value):
+            return value
+    return None
+
+
 class ReconciliationError(RuntimeError):
     """Erro sanitizado: a mensagem contém apenas um código estável."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, sqlstate: str | None = None) -> None:
         self.code = code
+        self.sqlstate = sqlstate if isinstance(sqlstate, str) and re.fullmatch(r"[0-9A-Z]{5}", sqlstate) else None
         super().__init__(code)
 
 
-def _fail(code: str) -> None:
-    raise ReconciliationError(code)
+def _fail(code: str, sqlstate: str | None = None) -> None:
+    raise ReconciliationError(code, sqlstate)
 
 
 def _ident_mysql(value: str) -> str:
@@ -305,8 +317,8 @@ def _cursor(connection: Any) -> Iterator[Any]:
                     close()
     except ReconciliationError:
         raise
-    except Exception:
-        _fail("DATABASE_QUERY_FAILED")
+    except Exception as error:
+        _fail("DATABASE_QUERY_FAILED", _safe_sqlstate(error))
 
 
 def _execute(cursor: Any, sql: str, params: tuple[Any, ...] = ()) -> None:
@@ -318,10 +330,10 @@ def _execute(cursor: Any, sql: str, params: tuple[Any, ...] = ()) -> None:
             _fail("DATABASE_QUERY_FAILED")
         try:
             cursor.execute(sql)
-        except Exception:
-            _fail("DATABASE_QUERY_FAILED")
-    except Exception:
-        _fail("DATABASE_QUERY_FAILED")
+        except Exception as error:
+            _fail("DATABASE_QUERY_FAILED", _safe_sqlstate(error))
+    except Exception as error:
+        _fail("DATABASE_QUERY_FAILED", _safe_sqlstate(error))
 
 
 @contextmanager
@@ -354,8 +366,8 @@ def _stream_cursor(connection: Any, *, mysql: bool, cursor_name: str) -> Iterato
                     close()
     except ReconciliationError:
         raise
-    except Exception:
-        _fail("DATABASE_QUERY_FAILED")
+    except Exception as error:
+        _fail("DATABASE_QUERY_FAILED", _safe_sqlstate(error))
 
 
 def _row_value(row: Any, key: str, index: int = 0) -> Any:
@@ -1584,8 +1596,8 @@ def _fetchone(connection: Any, statement: str, params: tuple[Any, ...] = (),
         _execute(cursor, statement, params)
         try:
             return cursor.fetchone()
-        except Exception:
-            _fail("DATABASE_QUERY_FAILED")
+        except Exception as error:
+            _fail("DATABASE_QUERY_FAILED", _safe_sqlstate(error))
 
 
 def _fetch_count(connection: Any, statement: str, params: tuple[Any, ...] = (),
@@ -2116,7 +2128,7 @@ def reconcile(
     metric_status: dict[str, str] = {}
     tables_manifest: dict[str, dict[str, Any]] = {}
     result: dict[str, Any] = {
-        "reconciler_version": 4,
+        "reconciler_version": 5,
         "source_schema": SOURCE_SCHEMA,
         "target_database": expected_target_database,
         "allowed_target_schemas": sorted(TARGET_SCHEMAS),
@@ -2128,6 +2140,8 @@ def reconcile(
         "temporary_store_cleanup": "PENDING",
         "table_failures": [],
     }
+    current_table: str | None = None
+    current_side: str | None = None
     try:
         counter_store = _DiskCounterStore(temp_root=temp_root)
         _validate_snapshot_provenance(snapshot, live_source_snapshot)
@@ -2139,17 +2153,22 @@ def reconcile(
         source_acc: dict[str, dict[str, Any]] = {}
         target_acc: dict[str, dict[str, Any]] = {}
         for name in names:
+            current_table = name
             table, mapping = tables_manifest[name], normalized_mappings[name]
             cols = table["columns"]
+            current_side = "source"
             source_acc[name] = _stream_table(
                 source, schema=SOURCE_SCHEMA, table_name=name, columns=cols, mysql=True,
                 table=table, mapping=mapping, is_source=True, store=counter_store, checkpoint=checkpoint,
             )
+            current_side = "target"
             target_acc[name] = _stream_table(
                 target, schema=mapping["target_schema"], table_name=name, columns=cols, mysql=False,
                 table=table, mapping=mapping, is_source=False, store=counter_store, checkpoint=checkpoint,
             )
 
+        current_table = None
+        current_side = None
         counter_store.commit()
         table_results = _aggregate_metric_results(tables_manifest, source_acc, target_acc)
         result["tables"] = table_results
@@ -2214,6 +2233,12 @@ def reconcile(
     except ReconciliationError as error:
         result["status"] = "BLOCKED"
         result["failure_code"] = error.code
+        if error.sqlstate is not None:
+            result["sqlstate"] = error.sqlstate
+        if current_table is not None:
+            result["failure_table"] = current_table
+        if current_side is not None:
+            result["failure_side"] = current_side
         if error.code == "METRIC_NOT_IMPLEMENTED":
             result["blockers"] = ["METRIC_NOT_IMPLEMENTED"]
     except Exception:

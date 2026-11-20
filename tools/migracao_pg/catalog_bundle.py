@@ -45,6 +45,10 @@ EXPECTED_BINARY_REPORT = {
         "target_collation": '"C"',
     }],
 }
+PREVIOUS_LOAD_RELEASE_SHA = "d6579290be8ee852635a45f662519ea2abea6008"
+PREVIOUS_LOAD_GENERATOR_FINGERPRINT = "1873874c6e98916c2da80678bde4ab4212dcb58055700cf5b5a32182e62970db"
+PREVIOUS_LOAD_GENERATOR_VERSION = "2.7.0"
+PREVIOUS_LOAD_REPORT = re.compile(r"^rebuild-[0-9]{8}T[0-9]{6}Z-[0-9]+\.json$")
 
 
 class CatalogBundleError(RuntimeError):
@@ -197,6 +201,77 @@ def _validate_generator_summary(summary: dict[str, Any], snapshot: dict[str, Any
         raise CatalogBundleError("DDL_GENERATION_PROVENANCE_MISMATCH")
 
 
+def _validate_committed_load_evidence(load_report: dict[str, Any]) -> list[dict[str, Any]]:
+    legacy_scope_valid = load_report.get("legacy_schema") == "legado" or (
+        "legacy_schema" not in load_report
+        and load_report.get("generator_version") == PREVIOUS_LOAD_GENERATOR_VERSION
+    )
+    if load_report.get("profile") != "development" \
+        or load_report.get("source_schema") != SOURCE_SCHEMA \
+        or load_report.get("target_database") != "erp_pg_dev" \
+        or load_report.get("target_schema") != "erp" \
+        or not legacy_scope_valid \
+        or load_report.get("status") != "LOAD_COMMITTED_RECONCILIATION_BLOCKED" \
+        or load_report.get("reconciliation_previous_status") != "LOAD_COMMITTED_PENDING_RECONCILIATION" \
+        or load_report.get("reconciliation_retry_used") is not None \
+        or not isinstance(load_report.get("reconciliation"), dict) \
+        or load_report["reconciliation"].get("status") != "BLOCKED" \
+        or load_report["reconciliation"].get("failure_code") != "DATABASE_QUERY_FAILED" \
+        or load_report.get("table_failures") != [] \
+        or load_report.get("tables_loaded") != EXPECTED_TABLES \
+        or type(load_report.get("rows_loaded")) is not int or load_report["rows_loaded"] < 0 \
+        or any(load_report.get(key) is not True for key in (
+            "source_cleanup_confirmed", "target_cleanup_confirmed", "nul_spool_cleanup_confirmed"
+        )):
+        raise CatalogBundleError("COMMITTED_LOAD_EVIDENCE_NOT_ALLOWLISTED")
+    table_counts = load_report.get("table_counts")
+    if not isinstance(table_counts, list) or len(table_counts) != EXPECTED_TABLES \
+        or any(not isinstance(item, dict) or item.get("status") != "COPIED"
+               or type(item.get("source_rows")) is not int or item["source_rows"] < 0
+               or type(item.get("target_rows")) is not int or item["target_rows"] < 0
+               or item["source_rows"] != item["target_rows"]
+               or not isinstance(item.get("table"), str) for item in table_counts):
+        raise CatalogBundleError("COMMITTED_LOAD_COUNTS_INVALID")
+    names = [item["table"] for item in table_counts]
+    if len(set(names)) != EXPECTED_TABLES \
+        or sum(item["source_rows"] for item in table_counts) != load_report["rows_loaded"] \
+        or sum(item["target_rows"] for item in table_counts) != load_report["rows_loaded"]:
+        raise CatalogBundleError("COMMITTED_LOAD_COUNTS_INVALID")
+    return table_counts
+
+
+def _load_counts_match_bundle(table_counts: list[dict[str, Any]], generated_tables: list[str]) -> bool:
+    if len(table_counts) != EXPECTED_TABLES or len(generated_tables) != EXPECTED_TABLES \
+        or any(not isinstance(item, dict) or not isinstance(item.get("table"), str) for item in table_counts) \
+        or any(not isinstance(name, str) for name in generated_tables):
+        return False
+    count_names = [item["table"] for item in table_counts]
+    return len(set(count_names)) == EXPECTED_TABLES and len(set(generated_tables)) == EXPECTED_TABLES \
+        and set(count_names) == set(generated_tables)
+
+
+def _verified_load_report_hash(report_path: Path, expected_report: dict[str, Any]) -> str:
+    try:
+        fd = os.open(report_path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
+                raise CatalogBundleError("LOAD_REPORT_MODE_OR_OWNER_INVALID")
+            raw = stream.read()
+        parsed = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=_unique_object)
+    except CatalogBundleError:
+        raise
+    except Exception as error:
+        raise CatalogBundleError("LOAD_REPORT_INVALID") from error
+    if parsed != expected_report:
+        raise CatalogBundleError("LOAD_REPORT_CHANGED_DURING_VALIDATION")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _bundle_semantics_match(previous_bundle: Path, rebound_bundle: Path) -> bool:
+    return loader_module._bundle_semantics_match(previous_bundle, rebound_bundle)
+
+
 def _available_memory_kib() -> int:
     try:
         for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
@@ -295,13 +370,21 @@ def _run_stage(
         raise
 
 
-def _atomic_selection(path: Path, release_id: str, bundle_name: str) -> None:
+def _atomic_selection(
+    path: Path,
+    release_id: str,
+    bundle_name: str,
+    load_evidence: dict[str, Any] | None = None,
+) -> None:
     if not BUNDLE_NAME_PATTERN.fullmatch(bundle_name):
         raise CatalogBundleError("BUNDLE_NAME_INVALID")
     if path.exists() or path.is_symlink():
         raise CatalogBundleError("BUNDLE_SELECTION_ALREADY_EXISTS")
+    selection = {"release_sha": release_id, "bundle_name": bundle_name}
+    if load_evidence is not None:
+        selection["load_evidence"] = load_evidence
     payload = json.dumps(
-        {"release_sha": release_id, "bundle_name": bundle_name},
+        selection,
         sort_keys=True,
         separators=(",", ":"),
     ) + "\n"
@@ -449,14 +532,14 @@ def capture_catalog_bundle() -> dict[str, Any]:
         raise CatalogBundleError("BUNDLE_COMPLETION_MARKER_INVALID")
     if ddl_code != 0:
         raise CatalogBundleError("BUNDLE_REQUIRES_REVIEW")
-    previous_bundle_root = loader_module.BUNDLE_ROOT
-    loader_module.BUNDLE_ROOT = staging_bundle_root
     try:
-        _validated_path, validated_report, validated_snapshot = validate_bundle(bundle_name, require_executable=True)
+        _validated_path, validated_report, validated_snapshot = validate_bundle(
+            bundle_name,
+            require_executable=True,
+            bundle_root=staging_bundle_root,
+        )
     except LoaderError as error:
         raise CatalogBundleError(error.code) from error
-    finally:
-        loader_module.BUNDLE_ROOT = previous_bundle_root
     if validated_report != report or validated_snapshot != snapshot:
         raise CatalogBundleError("BUNDLE_VALIDATION_RESULT_MISMATCH")
 
@@ -469,7 +552,11 @@ def capture_catalog_bundle() -> dict[str, Any]:
         raise CatalogBundleError("BUNDLE_PROMOTION_FAILED") from error
     _validate_bundle_files(final_bundle)
     try:
-        _validated_path, final_report, final_snapshot = validate_bundle(bundle_name, require_executable=True)
+        _validated_path, final_report, final_snapshot = validate_bundle(
+            bundle_name,
+            require_executable=True,
+            bundle_root=BUNDLE_ROOT,
+        )
     except LoaderError as error:
         raise CatalogBundleError(error.code) from error
     if final_report != report or final_snapshot != snapshot:
@@ -491,12 +578,203 @@ def capture_catalog_bundle() -> dict[str, Any]:
     }
 
 
+def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
+    """Re-emit DDL for the exact private snapshot tied to the approved committed load.
+
+    This operation does not connect to either database and does not alter the load.
+    The resulting release-bound selection can be used only for the read-only reconcile retry.
+    """
+    started = time.monotonic()
+    if os.geteuid() != 0 or os.environ.get("ERP_P2_ROOT_LAUNCHER_VERIFIED") != "1":
+        raise CatalogBundleError("ROOT_RUNNER_VERIFICATION_REQUIRED")
+    release_root = Path(__file__).resolve().parents[2]
+    release_id = release_root.name
+    if not re.fullmatch(r"[a-f0-9]{40}", release_id) or release_id == PREVIOUS_LOAD_RELEASE_SHA:
+        raise CatalogBundleError("IMMUTABLE_RELEASE_REQUIRED")
+    if report_path.parent != Path("/var/backups/erpcondominios/p2-runs") \
+        or not PREVIOUS_LOAD_REPORT.fullmatch(report_path.name):
+        raise CatalogBundleError("LOAD_REPORT_PATH_NOT_ALLOWLISTED")
+    try:
+        load_report = loader_module._read_reconciliation_report(report_path)
+    except LoaderError as error:
+        raise CatalogBundleError(error.code) from error
+    table_counts = _validate_committed_load_evidence(load_report)
+    load_report_sha256 = _verified_load_report_hash(report_path, load_report)
+
+    bundle_root_info = BUNDLE_ROOT.lstat()
+    if not stat.S_ISDIR(bundle_root_info.st_mode) or bundle_root_info.st_uid != 0 \
+        or stat.S_IMODE(bundle_root_info.st_mode) != 0o700 or BUNDLE_ROOT.is_symlink():
+        raise CatalogBundleError("BUNDLE_ROOT_MODE_INVALID")
+    previous_selection_path = BUNDLE_ROOT / f"development-v12-{PREVIOUS_LOAD_RELEASE_SHA}.selection"
+    if not _regular_file(previous_selection_path, 0o600):
+        raise CatalogBundleError("PREVIOUS_LOAD_SELECTION_INVALID")
+    selection = _read_json(previous_selection_path, "PREVIOUS_LOAD_SELECTION_INVALID")
+    if set(selection) != {"release_sha", "bundle_name"} \
+        or selection.get("release_sha") != PREVIOUS_LOAD_RELEASE_SHA \
+        or not isinstance(selection.get("bundle_name"), str) \
+        or not BUNDLE_NAME_PATTERN.fullmatch(selection["bundle_name"]):
+        raise CatalogBundleError("PREVIOUS_LOAD_SELECTION_INVALID")
+
+    try:
+        previous_bundle, previous_report, snapshot = validate_bundle(
+            selection["bundle_name"],
+            require_executable=True,
+            bundle_root=BUNDLE_ROOT,
+            expected_generator_fingerprint=PREVIOUS_LOAD_GENERATOR_FINGERPRINT,
+        )
+    except LoaderError as error:
+        raise CatalogBundleError(error.code) from error
+    previous_overrides = previous_report.get("collation_overrides")
+    if not isinstance(previous_overrides, dict) \
+        or any(not isinstance(key, str) or value not in {"ci", "C"} for key, value in previous_overrides.items()):
+        raise CatalogBundleError("PREVIOUS_BUNDLE_COLLATION_OVERRIDES_INVALID")
+    previous_overrides_json = json.dumps(previous_overrides, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    previous_overrides_sha256 = hashlib.sha256(previous_overrides_json.encode("utf-8")).hexdigest()
+    previous_role_sha256 = hashlib.sha256(b"erp_app").hexdigest()
+    previous_bundle_provenance = {
+        "bundle_name": selection["bundle_name"],
+        "generator_version": previous_report.get("generator_version"),
+        "generator_code_sha256": previous_report.get("generator_code_sha256"),
+        "catalog_fingerprint_sha256": previous_report.get("catalog_fingerprint_sha256"),
+        "collation_overrides_sha256": previous_report.get("collation_overrides_sha256"),
+        "application_role_sha256": previous_report.get("application_role_sha256"),
+        "generated_scripts_sha256": previous_report.get("generated_scripts_sha256"),
+    }
+    expected_previous_bundle_name = (
+        f"catalog-{snapshot.get('fingerprint_sha256', '')[:12]}"
+        f"-collation-{previous_overrides_sha256[:8]}"
+        f"-role-{previous_role_sha256[:8]}"
+        f"-code-{PREVIOUS_LOAD_GENERATOR_FINGERPRINT[:8]}"
+    )
+    if previous_report.get("generator_code_sha256") != PREVIOUS_LOAD_GENERATOR_FINGERPRINT \
+        or previous_report.get("generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION \
+        or previous_report.get("application_role") != "erp_app" \
+        or previous_report.get("application_role_sha256") != previous_role_sha256 \
+        or previous_report.get("collation_overrides_sha256") != previous_overrides_sha256 \
+        or selection.get("bundle_name") != expected_previous_bundle_name \
+        or load_report.get("generator_version") != previous_report.get("generator_version") \
+        or (load_report.get("bundle_provenance") is not None and load_report.get("bundle_provenance") != previous_bundle_provenance) \
+        or ("legacy_schema" in load_report and load_report.get("legacy_schema") != "legado") \
+        or load_report.get("bundle_catalog_fingerprint") != snapshot.get("fingerprint_sha256") \
+        or load_report.get("binary_storage") != previous_report.get("binary_storage") \
+        or not _load_counts_match_bundle(table_counts, previous_report.get("generated_tables", [])):
+        raise CatalogBundleError("COMMITTED_LOAD_BUNDLE_MISMATCH")
+    catalog_counts = _validate_catalog_snapshot(snapshot)
+    bundle_counts = _validate_bundle_report(previous_report)
+
+    selection_path = BUNDLE_ROOT / f"development-v12-{release_id}.selection"
+    if selection_path.exists() or selection_path.is_symlink():
+        raise CatalogBundleError("BUNDLE_SELECTION_ALREADY_EXISTS")
+    attempt_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}"
+    work = BUNDLE_ROOT / f".catalog-rebind-{release_id}-{attempt_id}"
+    if work.exists() or work.is_symlink():
+        raise CatalogBundleError("CATALOG_REBIND_ALREADY_EXISTS")
+    work.mkdir(mode=0o700)
+    os.chown(work, 0, 0)
+    staging_bundle_root = work / "bundles"
+    staging_bundle_root.mkdir(mode=0o700)
+    os.chown(staging_bundle_root, 0, 0)
+    snapshot_path = work / "catalog_snapshot.json"
+    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    os.chown(snapshot_path, 0, 0)
+    os.chmod(snapshot_path, 0o600)
+    overrides = previous_report.get("collation_overrides")
+    if not isinstance(overrides, dict) or any(not isinstance(k, str) or v not in {"ci", "C"} for k, v in overrides.items()):
+        raise CatalogBundleError("PREVIOUS_BUNDLE_COLLATION_OVERRIDES_INVALID")
+    overrides_path = work / "collation-overrides.json"
+    overrides_path.write_text(json.dumps(overrides, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    os.chown(overrides_path, 0, 0)
+    os.chmod(overrides_path, 0o600)
+    ddl_log = work / "ddl-rebind.log"
+    ddl_code, minimum_memory = _run_stage(
+        [str(Path(sys.executable)), "-E", "-B", "-m", "tools.migracao_pg.generate_ddl",
+         "--snapshot", str(snapshot_path), "--collation-overrides", str(overrides_path),
+         "--application-role", "erp_app", "--output-dir", str(staging_bundle_root)],
+        ddl_log,
+        "catalog-rebundle-ddl",
+    )
+    if ddl_code != 0:
+        raise CatalogBundleError("DDL_REBIND_FAILED")
+    try:
+        lines = ddl_log.read_text(encoding="utf-8").splitlines()
+        summary = json.loads(lines[-1], object_pairs_hook=_unique_object) if lines else None
+    except (OSError, UnicodeError, json.JSONDecodeError, CatalogBundleError) as error:
+        raise CatalogBundleError("DDL_GENERATION_SUMMARY_INVALID") from error
+    if not isinstance(summary, dict):
+        raise CatalogBundleError("DDL_GENERATION_SUMMARY_INVALID")
+    bundle_path_value = summary.get("output_directory")
+    if not isinstance(bundle_path_value, str):
+        raise CatalogBundleError("DDL_OUTPUT_DIRECTORY_INVALID")
+    bundle_path = Path(bundle_path_value)
+    if bundle_path.parent != staging_bundle_root or bundle_path.is_symlink():
+        raise CatalogBundleError("DDL_OUTPUT_DIRECTORY_INVALID")
+    bundle_name = bundle_path.name
+    if not BUNDLE_NAME_PATTERN.fullmatch(bundle_name) or summary.get("executable_complete") is not True \
+        or summary.get("load_executable_complete") is not True or summary.get("review_items") != 0 \
+        or summary.get("blocked_tables") != 0:
+        raise CatalogBundleError("BUNDLE_REQUIRES_REVIEW")
+    _validate_generator_summary(summary, snapshot)
+    _validate_bundle_files(bundle_path)
+    report = _read_json(bundle_path / "report.json", "BUNDLE_REPORT_INVALID")
+    bundle_counts = _validate_bundle_report(report)
+    bundled_snapshot = _read_json(bundle_path / "catalog_snapshot.json", "BUNDLE_SNAPSHOT_INVALID")
+    if bundled_snapshot != snapshot or report.get("collation_overrides") != overrides:
+        raise CatalogBundleError("BUNDLE_SNAPSHOT_MISMATCH")
+    if not _bundle_semantics_match(previous_bundle, bundle_path):
+        raise CatalogBundleError("BUNDLE_SEMANTIC_DRIFT_FROM_LOAD")
+    try:
+        _path, validated_report, validated_snapshot = validate_bundle(
+            bundle_name, require_executable=True, bundle_root=staging_bundle_root,
+        )
+    except LoaderError as error:
+        raise CatalogBundleError(error.code) from error
+    if validated_report != report or validated_snapshot != snapshot:
+        raise CatalogBundleError("BUNDLE_VALIDATION_RESULT_MISMATCH")
+    final_bundle = BUNDLE_ROOT / bundle_name
+    if final_bundle.exists() or final_bundle.is_symlink():
+        raise CatalogBundleError("BUNDLE_OUTPUT_ALREADY_EXISTS")
+    os.rename(bundle_path, final_bundle)
+    _validate_bundle_files(final_bundle)
+    try:
+        _validated_path, final_report, final_snapshot = validate_bundle(bundle_name, require_executable=True)
+    except LoaderError as error:
+        raise CatalogBundleError(error.code) from error
+    if final_report != report or final_snapshot != snapshot:
+        raise CatalogBundleError("BUNDLE_FINAL_VALIDATION_MISMATCH")
+    load_evidence = {
+        "load_release_sha": PREVIOUS_LOAD_RELEASE_SHA,
+        "load_report_sha256": load_report_sha256,
+        "previous_bundle_name": selection["bundle_name"],
+        "previous_bundle_report_sha256": hashlib.sha256((previous_bundle / "report.json").read_bytes()).hexdigest(),
+        "previous_generator_code_sha256": PREVIOUS_LOAD_GENERATOR_FINGERPRINT,
+        "previous_generator_version": PREVIOUS_LOAD_GENERATOR_VERSION,
+        "catalog_fingerprint_sha256": snapshot["fingerprint_sha256"],
+        "previous_bundle_provenance": previous_bundle_provenance,
+    }
+    _atomic_selection(selection_path, release_id, bundle_name, load_evidence)
+    return {
+        "status": "CATALOG_BUNDLE_REBOUND",
+        "source_schema": SOURCE_SCHEMA,
+        "catalog_version": CATALOG_VERSION,
+        "bundle_executable_complete": True,
+        "bundle_load_executable_complete": True,
+        "catalog": catalog_counts,
+        "bundle": bundle_counts,
+        "memory_guard_min_available_kib": MIN_AVAILABLE_KIB,
+        "minimum_available_kib_observed": minimum_memory,
+        "elapsed_seconds": round(time.monotonic() - started, 3),
+        "selection_private": True,
+        "database_connections": 0,
+    }
+
+
 def main() -> int:
-    if len(sys.argv) != 1:
+    if len(sys.argv) not in {1, 2}:
         print("CATALOG_BUNDLE_ERROR=ARGUMENTS_NOT_ALLOWED", file=sys.stderr)
         return 64
     try:
-        result = capture_catalog_bundle()
+        result = capture_catalog_bundle() if len(sys.argv) == 1 \
+            else rebind_committed_load_bundle(Path(sys.argv[1]))
     except CatalogBundleError as error:
         print(f"CATALOG_BUNDLE_ERROR={error.code}", file=sys.stderr)
         return 2
