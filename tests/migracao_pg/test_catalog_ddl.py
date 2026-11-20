@@ -3,18 +3,24 @@ from __future__ import annotations
 import unittest
 import json
 import hashlib
+import stat
 from pathlib import Path
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
-from tools.migracao_pg.catalog import CatalogError, _atomic_json, _grants_are_read_only, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, collect_catalog
-from tools.migracao_pg.ddl import DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
+from tools.migracao_pg.catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID, CatalogError, _admin_verifies_source_has_no_routines_or_events, _atomic_json, _collector_fingerprint, _foreign_key_action_rules, _grants_match_source_clone_allowlist, _has_schema_wide_select, _mysql_socket_options, _safe_default, _source_grant_inventory, _structural_fingerprint, collect_catalog
+from tools.migracao_pg.ddl import BUSINESS_TRIGGER_SOURCE_SHA256, DdlGenerationError, _sql_default, canonical_fingerprint, generate_ddl
 from tools.migracao_pg.generate_ddl import main as generate_ddl_main
+from tools.migracao_pg.generated_columns import identify_generated_column
+from tools.migracao_pg.type_mapping import BINARY_STORAGE_POLICY_ID
 
 
 def sample_snapshot() -> dict:
     snapshot = {
-        "catalog_version": 2,
+        "catalog_version": CATALOG_VERSION,
+        "binary_storage_policy_id": BINARY_STORAGE_POLICY_ID,
+        "binary_storage_required": True,
+        "time_range_policy_id": TIME_RANGE_POLICY_ID,
         "source_schema": "erp_pg_source",
         "source_server_version": "8.4.13",
         "captured_at_utc": "2026-11-16T00:00:00+00:00",
@@ -39,11 +45,23 @@ def sample_snapshot() -> dict:
                 "source_next_auto_increment": None,
                 "columns": [
                     {"name": "parent_id", "ordinal": 1, "nullable": False, "data_type": "int", "column_type": "int unsigned", "character_set": None, "source_collation": None, "extra": ""},
-                    {"name": "state", "ordinal": 2, "nullable": False, "data_type": "enum", "column_type": "enum('A','B')", "character_set": "utf8mb4", "source_collation": "utf8mb4_0900_ai_ci", "extra": "", "default": {"kind": "sql", "expression": "'A'"}},
+                    {"name": "state", "ordinal": 2, "nullable": False, "data_type": "enum", "column_type": "enum('A','B')", "character_set": "utf8mb4", "source_collation": "utf8mb4_0900_ai_ci", "extra": "", "default": {"kind": "sql", "expression": "E'A'"}},
                     {"name": "updated_at", "ordinal": 3, "nullable": False, "data_type": "datetime", "column_type": "datetime", "character_set": None, "source_collation": None, "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP", "default": {"kind": "sql", "expression": "LOCALTIMESTAMP(0)"}},
                     {"name": "api_token", "ordinal": 4, "nullable": True, "data_type": "varchar", "column_type": "varchar(64)", "character_set": "utf8mb4", "source_collation": "utf8mb4_unicode_ci", "extra": ""},
                 ],
                 "primary_key": [],
+            },
+            {
+                "name": "tenant_arquivos",
+                "type": "BASE TABLE",
+                "engine": "InnoDB",
+                "source_collation": "utf8mb4_unicode_ci",
+                "source_next_auto_increment": None,
+                "columns": [
+                    {"name": "id", "ordinal": 1, "nullable": False, "data_type": "int", "column_type": "int unsigned", "character_set": None, "source_collation": None, "extra": ""},
+                    {"name": "conteudo", "ordinal": 2, "nullable": True, "data_type": "longblob", "column_type": "longblob", "character_set": None, "source_collation": None, "extra": "", "binary_storage_encoding": "base64"},
+                ],
+                "primary_key": [{"ordinal": 1, "column": "id"}],
             },
         ],
         "indexes": [
@@ -59,12 +77,19 @@ def sample_snapshot() -> dict:
         "views": [],
         "routines": [],
         "events": [],
-        "metadata_visibility": {"views": True, "triggers": True, "routines": True, "events": True},
-        "source_grants_read_only": True,
+        "metadata_visibility": {"views": True, "triggers": True, "routines": False, "events": False},
+        "source_grant_policy_id": "erp_pg_source_select_show_view_trigger_v2",
+        "source_grants_policy_accepted": True,
+        "source_routines_events_zero_verified": True,
+        "grants": [
+            {"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER"]},
+        ],
         "source_schema_wide_select": True,
         "review_items": [],
         "fingerprint_sha256": "",
     }
+    snapshot["collector_code_sha256"] = _collector_fingerprint()
+    snapshot["structural_fingerprint_sha256"] = _structural_fingerprint(snapshot)
     snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
     return snapshot
 
@@ -76,23 +101,32 @@ class FakeCursor:
 
     def execute(self, sql: str, args=()) -> None:
         self.statements.append(sql)
+        table_name = getattr(self, "table_name", "x")
         if "CURRENT_USER()" in sql:
             self.current = [{"connected_account": "pg_reader@localhost", "selected_database": "erp_pg_source", "server_version": "8.4.13"}]
         elif "SHOW GRANTS" in sql:
-            self.current = [{"grants": "GRANT SELECT, SHOW VIEW ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"}]
+            self.current = [
+                {"grants": "GRANT USAGE ON *.* TO 'pg_reader'@'localhost'"},
+                {"grants": "GRANT SELECT, SHOW VIEW, TRIGGER ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"},
+            ]
         elif "information_schema.user_privileges" in sql:
             self.current = [{"privilege_type": "ALL PRIVILEGES"}]
         elif "information_schema.tables" in sql:
-            self.current = [{"table_name": "x", "table_type": "BASE TABLE", "engine": "InnoDB", "table_collation": "utf8mb4_unicode_ci", "auto_increment": None}]
+            self.current = [{"table_name": table_name, "table_type": "BASE TABLE", "engine": "InnoDB", "table_collation": "utf8mb4_unicode_ci", "auto_increment": None}]
         elif "information_schema.columns" in sql:
             if "generation_expression" in sql:
-                self.current = [{"table_name": "x", "column_name": "id", "ordinal_position": 1, "column_default": None, "is_nullable": "NO", "data_type": "int", "column_type": "int", "character_set_name": None, "collation_name": None, "extra": "", "generation_expression": ""}]
+                self.current = [
+                    {"table_name": table_name, "column_name": "id", "ordinal_position": 1, "column_default": None, "is_nullable": "NO", "data_type": "int", "column_type": "int", "character_set_name": None, "collation_name": None, "extra": "", "generation_expression": ""},
+                    {"table_name": table_name, "column_name": "som_tipo", "ordinal_position": 2, "column_default": "classico", "is_nullable": "NO", "data_type": "varchar", "column_type": "varchar(20)", "character_set_name": "utf8mb4", "collation_name": "utf8mb4_unicode_ci", "extra": "", "generation_expression": ""},
+                ]
             else:
                 self.current = []
         elif "information_schema.statistics" in sql:
             self.current = []
         elif "information_schema.key_column_usage" in sql:
-            self.current = [{"table_name": "x", "constraint_name": "PRIMARY", "ordinal_position": 1, "column_name": "id", "referenced_table_schema": None, "referenced_table_name": None, "referenced_column_name": None}]
+            self.current = [{"table_name": table_name, "constraint_name": "PRIMARY", "ordinal_position": 1, "column_name": "id", "referenced_table_schema": None, "referenced_table_name": None, "referenced_column_name": None}]
+        elif "cc.check_clause" in sql:
+            self.current = getattr(self, "check_rows", [])
         elif "information_schema.table_constraints" in sql:
             self.current = []
         elif "information_schema.referential_constraints" in sql:
@@ -127,15 +161,80 @@ class FakeConnection:
         self.rolled_back = True
 
 
+class TimeRangeCursor(FakeCursor):
+    def __init__(self, extended: bool, default_value: str = "09:30:00", fractional: bool = False) -> None:
+        super().__init__()
+        self.extended = extended
+        self.default_value = default_value
+        self.fractional = fractional
+        self.range_query = ""
+
+    def execute(self, sql: str, args=()) -> None:
+        if "TIME_TO_SEC" in sql:
+            self.statements.append(sql)
+            self.range_query = sql
+            self.current = [{
+                "has_extended_time_0": int(self.extended),
+                "has_fractional_time_0": int(self.fractional),
+            }]
+            return
+        super().execute(sql, args)
+        if "information_schema.columns" in sql and "generation_expression" in sql:
+            self.current.append({
+                "table_name": "x", "column_name": "scheduled_time", "ordinal_position": 3,
+                "column_default": self.default_value, "is_nullable": "YES", "data_type": "time",
+                "column_type": "time", "character_set_name": None, "collation_name": None,
+                "extra": "", "generation_expression": "",
+            })
+
+
+class TimeRangeConnection(FakeConnection):
+    def __init__(self, extended: bool, default_value: str = "09:30:00", fractional: bool = False) -> None:
+        self.c = TimeRangeCursor(extended, default_value, fractional)
+        self.statements = self.c.statements
+        self.rolled_back = False
+
+
 class CatalogTests(unittest.TestCase):
+    def test_generated_column_allowlist_accepts_only_the_approved_water_expression(self) -> None:
+        approved = identify_generated_column(
+            "lancamentos_agua", "consumo", "decimal", "decimal(10,2)", "STORED GENERATED",
+            "((`leitura_atual` - `leitura_anterior`))",
+        )
+        self.assertEqual(approved["key"], "lancamentos_agua.consumo.v1")
+        self.assertEqual(approved["target_expression"], '"leitura_atual" - "leitura_anterior"')
+        self.assertIsNone(identify_generated_column(
+            "lancamentos_agua", "consumo", "decimal", "decimal(10,2)", "VIRTUAL GENERATED",
+            "(`leitura_atual` - `leitura_anterior`)",
+        ))
+        self.assertIsNone(identify_generated_column(
+            "lancamentos_agua", "consumo", "decimal", "decimal(10,2)", "STORED GENERATED",
+            "`leitura_atual` + `leitura_anterior`",
+        ))
+
     def test_catalog_connection_requires_unix_socket(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "client.cnf"
-            path.write_text("[client]\nprotocol=SOCKET\nsocket=/run/mysqld/mysqld.sock\n", encoding="utf-8")
+            path.write_text("[client]\nuser=pg_reader\nprotocol=SOCKET\nsocket=/run/mysqld/mysqld.sock\n", encoding="utf-8")
             self.assertEqual(_mysql_socket_options(path), {"unix_socket": "/run/mysqld/mysqld.sock"})
-            path.write_text("[client]\nprotocol=TCP\nhost=localhost\n", encoding="utf-8")
+            path.write_text("[client]\nuser=pg_reader\nprotocol=TCP\nhost=localhost\n", encoding="utf-8")
             with self.assertRaisesRegex(CatalogError, "MYSQL_PROTOCOL_MUST_BE_SOCKET"):
                 _mysql_socket_options(path)
+            path.write_text("[client]\nuser=erp_app\nprotocol=SOCKET\n", encoding="utf-8")
+            with self.assertRaisesRegex(CatalogError, "MYSQL_ACCOUNT_MUST_BE_PG_READER"):
+                _mysql_socket_options(path)
+            path.write_text("[client]\nuser=pg_reader\nprotocol=SOCKET\nsocket=/tmp/other-mysql.sock\n", encoding="utf-8")
+            with self.assertRaisesRegex(CatalogError, "MYSQL_SOCKET_PATH_NOT_ALLOWLISTED"):
+                _mysql_socket_options(path)
+
+    def test_foreign_key_action_rules_require_exactly_one_valid_metadata_row(self) -> None:
+        valid = {("child", "fk_parent"): [{"update_rule": "CASCADE", "delete_rule": "RESTRICT"}]}
+        self.assertEqual(_foreign_key_action_rules("child", "fk_parent", valid), ("CASCADE", "RESTRICT"))
+        with self.assertRaisesRegex(CatalogError, "FOREIGN_KEY_RULES_MISSING_OR_AMBIGUOUS"):
+            _foreign_key_action_rules("child", "fk_parent", {})
+        ambiguous = {("child", "fk_parent"): valid[("child", "fk_parent")] * 2}
+        with self.assertRaisesRegex(CatalogError, "FOREIGN_KEY_RULES_MISSING_OR_AMBIGUOUS"):
+            _foreign_key_action_rules("child", "fk_parent", ambiguous)
 
     def test_grant_inventory_is_sanitized_and_unresolved_roles_fail_closed(self) -> None:
         class GrantsCursor:
@@ -147,12 +246,26 @@ class CatalogTests(unittest.TestCase):
                 return self.rows
 
         cursor = GrantsCursor([
-            {"grant": "GRANT SELECT, SHOW VIEW, TRIGGER, SHOW ROUTINE, EVENT ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"},
+            {"grant": "GRANT SELECT, SHOW VIEW, TRIGGER ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"},
         ])
         inventory, visibility, unresolved = _source_grant_inventory(cursor, "erp_pg_source")
-        self.assertTrue(all(visibility.values()))
+        self.assertTrue(visibility["views"])
+        self.assertTrue(visibility["triggers"])
+        self.assertFalse(visibility["routines"])
+        self.assertFalse(visibility["events"])
         self.assertFalse(unresolved)
         self.assertNotIn("pg_reader", repr(inventory))
+
+        cursor = GrantsCursor([
+            {"grant": "GRANT USAGE ON *.* TO 'pg_reader'@'localhost'"},
+            {"grant": "GRANT SELECT, SHOW VIEW, TRIGGER ON `erp_pg_source`.* TO 'pg_reader'@'localhost'"},
+        ])
+        inventory, visibility, unresolved = _source_grant_inventory(cursor, "erp_pg_source")
+        self.assertEqual(inventory, [{"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER"]}])
+        self.assertTrue(_grants_match_source_clone_allowlist(inventory))
+        self.assertFalse(unresolved)
+        self.assertFalse(visibility["routines"])
+        self.assertFalse(visibility["events"])
 
         cursor = GrantsCursor([{"grant": "GRANT `catalog_reader`@`%` TO 'pg_reader'@'localhost'"}])
         _, visibility, unresolved = _source_grant_inventory(cursor, "erp_pg_source")
@@ -170,80 +283,235 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(inventory[0]["scope"], "SCHEMA_OBJECTS")
         self.assertFalse(any(visibility.values()))
 
-    def test_source_account_must_have_read_only_privileges(self) -> None:
-        self.assertTrue(_grants_are_read_only([
+    def test_source_account_must_match_exact_clone_allowlist(self) -> None:
+        allowed = [
+            {"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER"]},
+        ]
+        self.assertTrue(_grants_match_source_clone_allowlist(allowed))
+        self.assertFalse(_grants_match_source_clone_allowlist(allowed + [{"scope": "OTHER", "privileges": ["SELECT"]}]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
+            {"scope": "GLOBAL", "privileges": ["SELECT"]},
+            allowed[0],
+        ]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
             {"scope": "GLOBAL", "privileges": ["USAGE"]},
+            allowed[0],
+        ]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
             {"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW"]},
         ]))
-        self.assertFalse(_grants_are_read_only([{"scope": "SCHEMA", "privileges": ["ALL PRIVILEGES"]}]))
-        self.assertFalse(_grants_are_read_only([{"scope": "SCHEMA", "privileges": ["SELECT", "TRIGGER"]}]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
+            {"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER", "UPDATE"]},
+        ]))
+        self.assertFalse(_grants_match_source_clone_allowlist([
+            {"scope": "SCHEMA_OBJECTS", "privileges": ["TRIGGER"]},
+        ]))
         self.assertTrue(_has_schema_wide_select([{"scope": "SCHEMA", "privileges": ["SELECT"]}]))
         self.assertFalse(_has_schema_wide_select([{"scope": "SCHEMA_OBJECTS", "privileges": ["SELECT"]}]))
 
-    def test_catalog_default_allowlist_handles_text_literals_and_sensitive_names(self) -> None:
+    def test_routines_events_proof_is_aggregate_root_only_and_fail_closed(self) -> None:
+        with patch("tools.migracao_pg.catalog.os.geteuid", return_value=1000), \
+             patch("tools.migracao_pg.catalog.subprocess.run") as run:
+            self.assertFalse(_admin_verifies_source_has_no_routines_or_events())
+            run.assert_not_called()
+
+        with patch("tools.migracao_pg.catalog.os.geteuid", return_value=0), \
+             patch("tools.migracao_pg.catalog.subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = "0\t0\n"
+            self.assertTrue(_admin_verifies_source_has_no_routines_or_events())
+            args = run.call_args.args[0]
+            self.assertIn("COUNT(*)", args[-1])
+            self.assertIn("erp_pg_source", args[-1])
+
+            run.return_value.stdout = "1\t0\n"
+            self.assertFalse(_admin_verifies_source_has_no_routines_or_events())
+            run.return_value.returncode = 1
+            self.assertFalse(_admin_verifies_source_has_no_routines_or_events())
+
+    def test_catalog_accepts_admin_zero_proof_without_routine_event_definition_grants(self) -> None:
+        connection = FakeConnection()
+        with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=True) as proof:
+            result = collect_catalog(connection)
+        self.assertTrue(result["source_routines_events_zero_verified"])
+        self.assertFalse(result["metadata_visibility"]["routines"])
+        self.assertFalse(result["metadata_visibility"]["events"])
+        self.assertEqual(result["routines"], [])
+        self.assertEqual(result["events"], [])
+        self.assertEqual(proof.call_count, 2)
+        executed = "\n".join(connection.statements).lower()
+        self.assertNotIn("from information_schema.routines", executed)
+        self.assertNotIn("from information_schema.events", executed)
+
+    def test_catalog_check_capture_stores_only_validated_translation(self) -> None:
+        connection = FakeConnection()
+        connection.c.table_name = "chatin_preferencias"
+        connection.c.check_rows = [{
+            "table_name": "chatin_preferencias",
+            "constraint_name": "chk_id_range",
+            "check_clause": "((`id` BETWEEN 1 AND 9))",
+            "enforced": "YES",
+        }, {
+            "table_name": "chatin_preferencias",
+            "constraint_name": "chk_som_tipo",
+            "check_clause": "((`som_tipo` IN (_utf8mb4'classico', _utf8mb4'campainha', _utf8mb4'suave'))) ",
+            "enforced": "YES",
+        }]
+        with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=True):
+            result = collect_catalog(connection)
+        self.assertEqual(result["check_constraints"], [{
+            "table": "chatin_preferencias",
+            "name": "chk_id_range",
+            "enforced": True,
+            "definition_sha256": hashlib.sha256("((`id` BETWEEN 1 AND 9))".encode("utf-8")).hexdigest(),
+            "translation": {"kind": "numeric_between", "column": "id", "lower": "1", "upper": "9"},
+        }, {
+            "table": "chatin_preferencias",
+            "name": "chk_som_tipo",
+            "enforced": True,
+            "definition_sha256": hashlib.sha256("((`som_tipo` IN (_utf8mb4'classico', _utf8mb4'campainha', _utf8mb4'suave'))) ".encode("utf-8")).hexdigest(),
+            "translation": {"kind": "text_in_list", "column": "som_tipo", "values": ["classico", "campainha", "suave"]},
+        }])
+        serialized = json.dumps(result["check_constraints"], ensure_ascii=False)
+        self.assertNotIn("check_clause", serialized)
+        self.assertNotIn("BETWEEN 1 AND 9", serialized)
+        self.assertNotIn("_utf8mb4", serialized)
+        self.assertFalse(any(item["code"] == "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED" for item in result["review_items"]))
+        self.assertFalse(any(item.get("table") == "chatin_preferencias" and item.get("column") == "som_tipo" and item["code"] == "TEXT_DEFAULT_REVIEW_REQUIRED" for item in result["review_items"]))
+        captured_columns = {column["name"]: column for column in result["tables"][0]["columns"]}
+        self.assertEqual(captured_columns["som_tipo"]["default"], {"kind": "sql", "expression": "E'classico'"})
+
+    def test_catalog_keeps_untranslated_and_unenforced_checks_as_reviews(self) -> None:
+        connection = FakeConnection()
+        connection.c.check_rows = [{
+            "table_name": "x",
+            "constraint_name": "chk_unsupported",
+            "check_clause": "LOWER(`som_tipo`) IN (_utf8mb4'a', _utf8mb4'b')",
+            "enforced": "YES",
+        }, {
+            "table_name": "x",
+            "constraint_name": "chk_not_enforced",
+            "check_clause": "((`som_tipo` IN (_utf8mb4'classico', _utf8mb4'campainha'))) ",
+            "enforced": "NO",
+        }]
+        with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=True):
+            result = collect_catalog(connection)
+        codes = {item["code"] for item in result["review_items"]}
+        self.assertIn("MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED", codes)
+        self.assertIn("MYSQL_CHECK_NOT_ENFORCED_REVIEW_REQUIRED", codes)
+        self.assertNotIn("TEXT_DEFAULT_REVIEW_REQUIRED", codes)
+        self.assertEqual(result["tables"][0]["columns"][1]["default"], {"kind": "sql", "expression": "E'classico'"})
+        self.assertTrue(all("translation" not in check for check in result["check_constraints"]))
+        check_reviews = [item for item in result["review_items"] if item["code"].startswith("MYSQL_CHECK_")]
+        self.assertEqual(len(check_reviews), 2)
+        self.assertTrue(all({"table", "constraint", "code"} <= set(item) for item in check_reviews))
+
+    def test_catalog_without_admin_zero_proof_keeps_routines_events_unverified(self) -> None:
+        with patch("tools.migracao_pg.catalog._admin_verifies_source_has_no_routines_or_events", return_value=False):
+            result = collect_catalog(FakeConnection())
+        self.assertFalse(result["source_routines_events_zero_verified"])
+        self.assertFalse(result["metadata_visibility"]["routines"])
+        self.assertFalse(result["metadata_visibility"]["events"])
+        self.assertEqual(result["routines"], [])
+        self.assertEqual(result["events"], [])
+
+    def test_ddl_rejects_nonempty_routines_or_events_without_definition_grants(self) -> None:
+        for object_type in ("routines", "events"):
+            snapshot = sample_snapshot()
+            snapshot[object_type] = [{"name": "synthetic_object"}]
+            snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+            bundle = generate_ddl(snapshot)
+            self.assertFalse(bundle.report["executable_complete"])
+            self.assertIn(
+                "SOURCE_ROUTINES_EVENTS_ZERO_PROOF_INCONSISTENT",
+                {item["code"] for item in bundle.report["review_items"]},
+            )
+
+    def test_catalog_copies_all_text_literals_including_sensitive_names_and_empty_values(self) -> None:
         stamp = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "CURRENT_TIMESTAMP"}
-        self.assertEqual(_safe_default(stamp), {"kind": "sql", "expression": "timezone('America/Sao_Paulo', statement_timestamp())"})
-        safe = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "active"}
-        safe_default = _safe_default(safe)
-        self.assertEqual(safe_default, {"kind": "sql", "expression": "'active'"})
+        self.assertEqual(_safe_default(stamp), {"kind": "sql", "expression": "timezone(E'America/Sao_Paulo', statement_timestamp())"})
+        values = (
+            ("status", "active", "E'active'"),
+            ("api_token", "secret-default", "E'secret-default'"),
+            ("bridge_api_key", "", "E''"),
+            ("smtp_host", "localhost", "E'localhost'"),
+            ("value", "O'Brien", "E'O''Brien'"),
+            ("value", "NULL", "E'NULL'"),
+            ("value", "line\\nfeed", r"E'line\\nfeed'"),
+        )
+        for name, value, expected in values:
+            column = {"name": name, "data_type": "varchar", "column_type": "varchar(100)", "column_default": value}
+            with self.subTest(name=name, value=value):
+                safe_default = _safe_default(column)
+                self.assertEqual(safe_default, {"kind": "sql", "expression": expected})
+                report = {"review_items": []}
+                self.assertEqual(
+                    _sql_default({**column, "nullable": True, "default": safe_default}, "synthetic", report),
+                    expected,
+                )
+                self.assertEqual(report["review_items"], [])
+        self.assertEqual(
+            _safe_default({"name": "value", "data_type": "varchar", "column_type": "varchar(10)", "column_default": "nul\x00value"}),
+            {"kind": "review", "code": "TEXT_LITERAL_DEFAULT_UNSUPPORTED"},
+        )
         report = {"review_items": []}
-        self.assertEqual(_sql_default({**safe, "nullable": True, "default": safe_default}, "synthetic", report), "'active'")
-        self.assertEqual(report["review_items"], [])
         for data_type in ("char", "varchar", "nchar", "nvarchar", "text"):
             column = {"name": "status", "data_type": data_type, "column_type": f"{data_type}(40)", "nullable": True,
-                      "default": {"kind": "sql", "expression": "'active'"}}
-            self.assertEqual(_sql_default(column, "synthetic", report), "'active'")
+                      "default": {"kind": "sql", "expression": "E'active'"}}
+            self.assertEqual(_sql_default(column, "synthetic", report), "E'active'")
         escaped = {"name": "status", "data_type": "varchar", "column_type": "varchar(40)", "nullable": True,
-                   "default": {"kind": "sql", "expression": "'O''Brien'"}}
-        self.assertEqual(_sql_default(escaped, "synthetic", report), "'O''Brien'")
-        sensitive = {"name": "api_token", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "active"}
-        self.assertEqual(_safe_default(sensitive), {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"})
+                   "default": {"kind": "sql", "expression": "E'O''Brien'"}}
+        self.assertEqual(_sql_default(escaped, "synthetic", report), "E'O''Brien'")
+        backslash_literal = {"name": "status", "data_type": "varchar", "column_type": "varchar(40)", "nullable": True,
+                             "default": {"kind": "sql", "expression": r"E'line\\nfeed'"}}
+        self.assertEqual(_sql_default(backslash_literal, "synthetic", report), r"E'line\\nfeed'")
+        noncanonical_escape = {"name": "status", "data_type": "varchar", "column_type": "varchar(40)", "nullable": True,
+                               "default": {"kind": "sql", "expression": r"E'line\qfeed'"}}
+        self.assertIsNone(_sql_default(noncanonical_escape, "synthetic", report))
         expression = {"name": "status", "data_type": "varchar", "column_type": "varchar(100)", "column_default": "default_value()", "extra": "DEFAULT_GENERATED"}
         self.assertEqual(_safe_default(expression), {"kind": "review", "code": "TEXT_EXPRESSION_DEFAULT_REVIEW_REQUIRED"})
-        text_null = {"data_type": "varchar", "column_type": "varchar(100)", "column_default": "NULL"}
-        self.assertEqual(_safe_default(text_null), {"kind": "review", "code": "AMBIGUOUS_TEXT_NULL_DEFAULT_REVIEW_REQUIRED"})
 
-    def test_catalog_text_default_requires_positive_safe_column_and_value_classification(self) -> None:
-        self.assertEqual(
-            _safe_default({"name": "salt", "data_type": "varchar", "column_type": "varchar(64)", "column_default": "active"}),
-            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
-        )
-        self.assertEqual(
-            _safe_default({"name": "status", "data_type": "varchar", "column_type": "varchar(64)", "column_default": "secret-default"}),
-            {"kind": "review", "code": "TEXT_DEFAULT_REVIEW_REQUIRED"},
-        )
+    def test_text_enum_default_is_copied_as_a_quoted_literal(self) -> None:
         enum = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "A"}
-        self.assertEqual(_safe_default(enum), {"kind": "sql", "expression": "'A'"})
+        self.assertEqual(_safe_default(enum), {"kind": "sql", "expression": "E'A'"})
         enum_null = {"data_type": "enum", "column_type": "enum('NULL','B')", "column_default": "NULL"}
-        self.assertEqual(_safe_default(enum_null), {"kind": "sql", "expression": "'NULL'"})
-        enum_null_ambiguous = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "NULL"}
-        self.assertEqual(_safe_default(enum_null_ambiguous), {"kind": "review", "code": "AMBIGUOUS_ENUM_NULL_DEFAULT_REVIEW_REQUIRED"})
+        self.assertEqual(_safe_default(enum_null), {"kind": "sql", "expression": "E'NULL'"})
+        enum_literal = {"data_type": "enum", "column_type": "enum('A','B')", "column_default": "O'Brien"}
+        self.assertEqual(_safe_default(enum_literal), {"kind": "sql", "expression": "E'O''Brien'"})
 
     def test_temporal_defaults_are_canonicalized_without_source_timezone_guessing(self) -> None:
         date_default = {"data_type": "date", "column_type": "date", "column_default": "0000-00-00"}
         time_default = {"data_type": "time", "column_type": "time", "column_default": "-25:00:00"}
+        clock_default = {"data_type": "time", "column_type": "time", "column_default": "09:30:00"}
         timestamp_default = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "2026-11-17 00:00:00"}
         zero_timestamp_default = {"data_type": "timestamp", "column_type": "timestamp", "column_default": "0000-00-00 00:00:00"}
         self.assertEqual(_safe_default(date_default), {"kind": "sql", "expression": "NULL"})
-        self.assertEqual(_safe_default(time_default), {"kind": "sql", "expression": "INTERVAL '-25:00:00'"})
-        self.assertEqual(_safe_default(timestamp_default), {"kind": "sql", "expression": "TIMESTAMP '2026-11-17 00:00:00'"})
+        self.assertEqual(_safe_default(time_default, time_has_extended_values=True), {"kind": "sql", "expression": "INTERVAL E'-25:00:00'"})
+        self.assertEqual(_safe_default(clock_default, time_has_extended_values=False), {"kind": "sql", "expression": "TIME E'09:30:00'"})
+        self.assertEqual(_safe_default(timestamp_default), {"kind": "sql", "expression": "TIMESTAMP E'2026-11-17 00:00:00'"})
         self.assertEqual(_safe_default(zero_timestamp_default), {"kind": "sql", "expression": "NULL"})
         fractional_timestamp_default = dict(timestamp_default, column_default="2026-11-17 00:00:00.123456")
         self.assertEqual(_safe_default(fractional_timestamp_default), {"kind": "review", "code": "STATIC_TEMPORAL_DEFAULT_REVIEW_REQUIRED"})
+        time_function_default = {"data_type": "time", "column_type": "time", "column_default": "CURRENT_TIMESTAMP", "extra": "DEFAULT_GENERATED"}
+        self.assertEqual(_safe_default(time_function_default, time_has_extended_values=False), {"kind": "review", "code": "CURRENT_TIMESTAMP_DEFAULT_TYPE_REVIEW_REQUIRED"})
 
         snapshot = sample_snapshot()
         snapshot["tables"][0]["columns"].extend([
             {"name": "zero_date", "ordinal": 3, "nullable": False, "data_type": "date", "column_type": "date", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(date_default)},
-            {"name": "elapsed", "ordinal": 4, "nullable": False, "data_type": "time", "column_type": "time", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(time_default)},
-            {"name": "stamp_default", "ordinal": 5, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(timestamp_default)},
-            {"name": "zero_timestamp", "ordinal": 6, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(zero_timestamp_default)},
+            {"name": "elapsed", "ordinal": 4, "nullable": False, "data_type": "time", "column_type": "time", "character_set": None, "source_collation": None, "extra": "", "time_uses_interval": True, "default": _safe_default(time_default, time_has_extended_values=True)},
+            {"name": "clock_time", "ordinal": 5, "nullable": False, "data_type": "time", "column_type": "time", "character_set": None, "source_collation": None, "extra": "", "time_uses_interval": False, "default": _safe_default(clock_default, time_has_extended_values=False)},
+            {"name": "stamp_default", "ordinal": 6, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(timestamp_default)},
+            {"name": "zero_timestamp", "ordinal": 7, "nullable": False, "data_type": "timestamp", "column_type": "timestamp", "character_set": None, "source_collation": None, "extra": "", "default": _safe_default(zero_timestamp_default)},
         ])
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot)
         tables = bundle.scripts["00_tables.sql"]
         self.assertIn('"zero_date" DATE DEFAULT NULL', tables)
-        self.assertIn('"elapsed" INTERVAL NOT NULL DEFAULT INTERVAL \'-25:00:00\'', tables)
-        self.assertIn('"stamp_default" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT TIMESTAMP \'2026-11-17 00:00:00\'', tables)
+        self.assertIn('"elapsed" INTERVAL NOT NULL DEFAULT INTERVAL E\'-25:00:00\'', tables)
+        self.assertIn('"clock_time" TIME(0) NOT NULL DEFAULT TIME E\'09:30:00\'', tables)
+        self.assertEqual(bundle.report["time_mapping"]["interval_columns"], [{"table": "parent", "column": "elapsed"}])
+        self.assertEqual(bundle.report["time_mapping"]["clock_columns"], [{"table": "parent", "column": "clock_time"}])
+        self.assertIn('"stamp_default" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT TIMESTAMP E\'2026-11-17 00:00:00\'', tables)
         self.assertIn('"zero_timestamp" TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL', tables)
 
     def test_catalog_is_metadata_only_and_rolls_back_read_transaction(self) -> None:
@@ -252,22 +520,161 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(result["source_schema"], "erp_pg_source")
         self.assertEqual(len(result["collector_code_sha256"]), 64)
         self.assertEqual(result["tables"][0]["name"], "x")
-        self.assertTrue(result["source_grants_read_only"])
+        self.assertTrue(result["source_grants_policy_accepted"])
         self.assertTrue(result["source_schema_wide_select"])
+        self.assertFalse(result["source_routines_events_zero_verified"])
+        self.assertEqual(result["grants"], [{"scope": "SCHEMA", "privileges": ["SELECT", "SHOW VIEW", "TRIGGER"]}])
         self.assertEqual(len(result["structural_fingerprint_sha256"]), 64)
         self.assertNotIn("view_definition", result["views"])
-        self.assertIn("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY", connection.statements[1])
+        utc_index = connection.statements.index("SET SESSION time_zone = '+00:00'")
+        snapshot_index = connection.statements.index("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
+        self.assertLess(utc_index, snapshot_index)
         self.assertLess(connection.statements.index("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY"), next(
             index for index, statement in enumerate(connection.statements) if "SHOW GRANTS" in statement
         ))
         self.assertTrue(connection.rolled_back)
 
+    def test_catalog_time_range_scan_selects_boolean_mapping_per_column(self) -> None:
+        for extended, default, fractional, expected_default, expected_interval, default_extended, fractional_review in (
+            (False, "09:30:00", False, "TIME E'09:30:00'", False, False, False),
+            (True, "-01:00:00", False, "INTERVAL E'-01:00:00'", True, True, False),
+            (False, "-01:00:00", False, "INTERVAL E'-01:00:00'", True, True, False),
+            (False, "23:59:59.5", False, "INTERVAL E'23:59:59.500000'", True, True, False),
+            (False, "12:30:45.5", False, None, False, False, True),
+            (False, "09:30:00", True, "TIME E'09:30:00'", False, False, True),
+        ):
+            with self.subTest(extended=extended, fractional=fractional, default=default):
+                connection = TimeRangeConnection(extended, default, fractional)
+                result = collect_catalog(connection)
+                column = next(item for item in result["tables"][0]["columns"] if item["name"] == "scheduled_time")
+                self.assertIs(column["time_has_extended_values"], extended)
+                self.assertIs(column["time_has_fractional_seconds"], fractional)
+                self.assertIs(column["time_default_has_extended_value"], default_extended)
+                self.assertIs(column["time_default_has_fractional_seconds"], default.endswith(".5"))
+                self.assertIs(column["time_uses_interval"], expected_interval)
+                if expected_default is None:
+                    self.assertEqual(column["default"], {
+                        "kind": "review", "code": "MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED",
+                    })
+                else:
+                    self.assertEqual(column["default"], {"kind": "sql", "expression": expected_default})
+                if fractional_review:
+                    self.assertIn({
+                        "table": "x", "column": "scheduled_time",
+                        "code": "MYSQL_TIME_FRACTIONAL_PRECISION_REVIEW_REQUIRED",
+                    }, result["review_items"])
+                self.assertIn("MIN(TIME_TO_SEC(`scheduled_time`)) < 0", connection.c.range_query)
+                self.assertIn("MAX(TIME_TO_SEC(`scheduled_time`)) > 86399", connection.c.range_query)
+                self.assertIn("MOD(TIME_TO_SEC(`scheduled_time`), 1) <> 0", connection.c.range_query)
+                self.assertTrue(connection.rolled_back)
+
+    def test_catalog_time_range_scan_fails_closed_on_invalid_result(self) -> None:
+        class InvalidTimeRangeCursor(TimeRangeCursor):
+            def execute(self, sql: str, args=()) -> None:
+                if "TIME_TO_SEC" in sql:
+                    self.statements.append(sql)
+                    self.current = [{"has_extended_time_0": None}]
+                    return
+                super().execute(sql, args)
+
+        connection = FakeConnection()
+        connection.c = InvalidTimeRangeCursor(False)
+        connection.statements = connection.c.statements
+        with self.assertRaisesRegex(CatalogError, "TIME_RANGE_SCAN_RESULT_INVALID"):
+            collect_catalog(connection)
+
+    def test_unsigned_bigint_range_scan_records_only_boolean_metadata(self) -> None:
+        class UnsignedBigintCursor(FakeCursor):
+            def __init__(self, exceeds: bool) -> None:
+                super().__init__()
+                self.exceeds = exceeds
+                self.range_query = ""
+                self.range_args = ()
+
+            def execute(self, sql: str, args=()) -> None:
+                super().execute(sql, args)
+                if "generation_expression" in sql and "information_schema.columns" in sql:
+                    self.current[0].update(data_type="bigint", column_type="bigint unsigned")
+                elif "COALESCE(MAX(" in sql:
+                    self.range_query = sql
+                    self.range_args = args
+                    self.current = [{"exceeds_signed_limit_0": int(self.exceeds)}]
+
+        class UnsignedBigintConnection(FakeConnection):
+            def __init__(self, exceeds: bool) -> None:
+                self.c = UnsignedBigintCursor(exceeds)
+                self.statements = self.c.statements
+                self.rolled_back = False
+
+        for exceeds in (False, True):
+            with self.subTest(exceeds=exceeds):
+                connection = UnsignedBigintConnection(exceeds)
+                result = collect_catalog(connection)
+                column = result["tables"][0]["columns"][0]
+                self.assertIs(column["unsigned_bigint_exceeds_signed_limit"], exceeds)
+                self.assertIn("`erp_pg_source`.`x`", connection.c.range_query)
+                self.assertEqual(connection.c.range_args, (9223372036854775807,))
+                self.assertTrue(connection.rolled_back)
+
+    def test_unsigned_bigint_range_scan_records_only_boolean_metadata(self) -> None:
+        class UnsignedBigintCursor(FakeCursor):
+            def __init__(self, exceeds: bool) -> None:
+                super().__init__()
+                self.exceeds = exceeds
+                self.range_query = ""
+                self.range_args = ()
+
+            def execute(self, sql: str, args=()) -> None:
+                super().execute(sql, args)
+                if "generation_expression" in sql and "information_schema.columns" in sql:
+                    self.current[0].update(data_type="bigint", column_type="bigint unsigned")
+                elif "COALESCE(MAX(" in sql:
+                    self.range_query = sql
+                    self.range_args = args
+                    self.current = [{"exceeds_signed_limit_0": int(self.exceeds)}]
+
+        class UnsignedBigintConnection(FakeConnection):
+            def __init__(self, exceeds: bool) -> None:
+                self.c = UnsignedBigintCursor(exceeds)
+                self.statements = self.c.statements
+                self.rolled_back = False
+
+        for exceeds in (False, True):
+            with self.subTest(exceeds=exceeds):
+                connection = UnsignedBigintConnection(exceeds)
+                result = collect_catalog(connection)
+                column = result["tables"][0]["columns"][0]
+                self.assertIs(column["unsigned_bigint_exceeds_signed_limit"], exceeds)
+                self.assertIn("`erp_pg_source`.`x`", connection.c.range_query)
+                self.assertEqual(connection.c.range_args, (9223372036854775807,))
+                self.assertTrue(connection.rolled_back)
+
     def test_catalog_can_leave_the_read_only_snapshot_open_for_the_loader(self) -> None:
         connection = FakeConnection()
         result = collect_catalog(connection, keep_snapshot=True)
         self.assertEqual(result["catalog_consistency_check"], "PRE_POST_SIGNATURE_MATCH")
+        self.assertIn("SET SESSION time_zone = '+00:00'", connection.statements)
         self.assertIn("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY", connection.statements)
         self.assertFalse(connection.rolled_back)
+
+    def test_catalog_marks_generated_extra_without_expression_as_review(self) -> None:
+        class MissingExpressionCursor(FakeCursor):
+            def execute(self, sql: str, args=()) -> None:
+                super().execute(sql, args)
+                if "generation_expression" in sql:
+                    self.current[0]["extra"] = "STORED GENERATED"
+                    self.current[0]["generation_expression"] = ""
+
+        class MissingExpressionConnection(FakeConnection):
+            def __init__(self) -> None:
+                self.c = MissingExpressionCursor()
+                self.statements = self.c.statements
+                self.rolled_back = False
+
+        result = collect_catalog(MissingExpressionConnection())
+        column = result["tables"][0]["columns"][0]
+        self.assertTrue(column["generated_expression_present"])
+        self.assertIn("GENERATED_COLUMN_EXPRESSION_MISSING", {item["code"] for item in result["review_items"]})
 
     def test_catalog_output_is_private_and_never_overwritten(self) -> None:
         with TemporaryDirectory() as directory:
@@ -303,6 +710,10 @@ class CatalogTests(unittest.TestCase):
         self.assertNotIn("CHECK (\"state\" IN ('A', 'B'))", tables)
         self.assertEqual(bundle.report["enum_checks_deferred"][0]["column"], "state")
         self.assertEqual(bundle.report["primary_keys_post_load"][0]["table"], "parent")
+        pk_names = [item["constraint_name"] for item in bundle.report["primary_keys_post_load"]]
+        self.assertTrue(pk_names)
+        self.assertEqual(len(pk_names), len(set(pk_names)))
+        self.assertEqual(pk_names[0], "pk_parent_primary")
         self.assertEqual(bundle.report["unique_indexes_post_load"][0]["index"], "uq_parent_name")
         self.assertNotIn("CREATE UNIQUE INDEX", bundle.scripts["10_indexes.sql"])
         self.assertIn("COLLATE ci", tables)
@@ -320,11 +731,157 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("pg_catalog.pg_sequence_last_value(v_sequence::regclass)", sequences)
         self.assertNotIn("BEGIN;", sequences)
         self.assertNotIn("COMMIT;", sequences)
-        self.assertIn("LOCK TABLE \"erp\".\"parent\" IN ACCESS EXCLUSIVE MODE", sequences)
+        self.assertIn('LOCK TABLE "erp"."parent" IN ACCESS EXCLUSIVE MODE', sequences)
         self.assertIn("post-load sequence sync is one-shot", sequences)
         self.assertIn("sequence sync already started; manual recovery required", sequences)
         self.assertEqual(bundle.report["auto_increment"]["generated"], 1)
         self.assertFalse(bundle.report["executable_complete"])
+
+    def test_ddl_encodes_only_approved_longblob_as_base64_text(self) -> None:
+        snapshot = sample_snapshot()
+        bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
+        self.assertIn('"conteudo" TEXT COLLATE "C"', bundle.scripts["00_tables.sql"])
+        self.assertEqual(bundle.report["binary_storage"]["policy_id"], BINARY_STORAGE_POLICY_ID)
+        self.assertEqual(bundle.report["binary_storage"]["columns"], [{
+            "table": "tenant_arquivos", "column": "conteudo", "encoding": "base64",
+            "target_type": "TEXT", "target_collation": '\"C\"',
+        }])
+
+    def test_ddl_requires_binary_storage_marker_and_manifest(self) -> None:
+        for value in (None, False):
+            snapshot = sample_snapshot()
+            if value is None:
+                snapshot.pop("binary_storage_required")
+            else:
+                snapshot["binary_storage_required"] = value
+            with self.subTest(marker=value), self.assertRaisesRegex(DdlGenerationError, "BINARY_STORAGE_POLICY_REQUIRED"):
+                generate_ddl(snapshot)
+
+        snapshot = sample_snapshot()
+        snapshot["tables"] = [table for table in snapshot["tables"] if table["name"] != "tenant_arquivos"]
+        snapshot["collector_code_sha256"] = _collector_fingerprint()
+        snapshot["structural_fingerprint_sha256"] = _structural_fingerprint(snapshot)
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        with self.assertRaisesRegex(DdlGenerationError, "BINARY_STORAGE_TABLE_REQUIRED"):
+            generate_ddl(snapshot)
+
+        snapshot = sample_snapshot()
+        tenant_columns = next(table["columns"] for table in snapshot["tables"] if table["name"] == "tenant_arquivos")
+        tenant_columns[1]["binary_storage_encoding"] = "bytea"
+        with self.assertRaisesRegex(DdlGenerationError, "BINARY_STORAGE_COLUMN_METADATA_MISMATCH"):
+            generate_ddl(snapshot)
+
+    def test_ddl_blocks_prefix_index_on_base64_binary_column(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["indexes"].append({
+            "table": "tenant_arquivos", "name": "prefix_conteudo", "non_unique": True,
+            "type": "BTREE", "visible": True,
+            "columns": [{"ordinal": 1, "name": "conteudo", "prefix_length": 16,
+                         "direction": "ASC", "expression_present": False}],
+        })
+        snapshot["collector_code_sha256"] = _collector_fingerprint()
+        snapshot["structural_fingerprint_sha256"] = _structural_fingerprint(snapshot)
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertTrue(any(
+            item.get("code") == "BASE64_BINARY_PREFIX_INDEX_UNSUPPORTED"
+            for item in bundle.report["unsupported_indexes"]
+        ))
+        self.assertFalse(bundle.report["load_executable_complete"])
+        self.assertFalse(bundle.report["executable_complete"])
+
+    def test_ddl_maps_approved_generated_water_consumption_and_defers_business_triggers(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["triggers"] = [{"name": "water_business", "table": "lancamentos_agua", "event": "INSERT", "body_sha256": "a" * 64}]
+        snapshot["tables"].append({
+            "name": "lancamentos_agua", "type": "BASE TABLE", "engine": "InnoDB",
+            "source_collation": "utf8mb4_unicode_ci", "source_next_auto_increment": 2,
+            "columns": [
+                {"name": "id", "ordinal": 1, "nullable": False, "data_type": "int", "column_type": "int", "extra": "auto_increment"},
+                {"name": "leitura_anterior", "ordinal": 2, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "leitura_atual", "ordinal": 3, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "consumo", "ordinal": 4, "nullable": True, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1", "generated_expression_sha256": "b" * 64},
+            ],
+            "primary_key": [{"ordinal": 1, "column": "id"}],
+        })
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        table_ddl = bundle.scripts["00_tables.sql"]
+        self.assertIn('"consumo" NUMERIC(10,2) GENERATED ALWAYS AS ("leitura_atual" - "leitura_anterior") STORED', table_ddl)
+        self.assertEqual(bundle.report["generated"]["generated_columns"], 1)
+        self.assertTrue(bundle.report["load_executable_complete"])
+        self.assertFalse(bundle.report["executable_complete"])
+        self.assertEqual(len(bundle.report["post_load_trigger_translation_required"]), 1)
+
+    def test_ddl_blocks_unknown_generated_column_expression_key(self) -> None:
+        snapshot = sample_snapshot()
+        column = snapshot["tables"][0]["columns"][0]
+        column.update({"generated_expression_present": True, "generated_expression_key": "unknown.v1", "extra": "STORED GENERATED"})
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertFalse(bundle.report["load_executable_complete"])
+        self.assertIn("GENERATED_COLUMN_TRANSLATION_REQUIRED", {item["code"] for item in bundle.report["blocked_tables"]})
+
+    def test_approved_business_triggers_are_scheduled_after_copy(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["triggers"] = [
+            {"table": table, "name": name, "timing": timing, "event": event, "body_sha256": body_sha256}
+            for (table, name, timing, event), body_sha256 in sorted(BUSINESS_TRIGGER_SOURCE_SHA256.items())
+        ]
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+
+        bundle = generate_ddl(snapshot)
+
+        script = bundle.scripts["40_business_triggers.sql"]
+        self.assertEqual(script.upper().count("CREATE TRIGGER"), 7)
+        self.assertEqual(len(bundle.report["translated_business_triggers"]), 7)
+        self.assertEqual(bundle.report["post_load_trigger_translation_required"], [])
+        self.assertTrue(bundle.report["executable_complete"])
+        self.assertNotRegex(script, r"(?im)^\s*(BEGIN|COMMIT)\s*;")
+
+    def test_unknown_business_trigger_is_not_installed(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+
+        bundle = generate_ddl(snapshot)
+
+        self.assertNotRegex(bundle.scripts["40_business_triggers.sql"], r"(?i)CREATE\s+TRIGGER")
+        self.assertEqual(len(bundle.report["post_load_trigger_translation_required"]), 1)
+        self.assertFalse(bundle.report["executable_complete"])
+
+    def test_ddl_blocks_generated_water_with_text_dependency(self) -> None:
+        snapshot = sample_snapshot()
+        table = {
+            "name": "lancamentos_agua", "type": "BASE TABLE", "engine": "InnoDB",
+            "source_collation": "utf8mb4_unicode_ci", "columns": [
+                {"name": "leitura_anterior", "ordinal": 1, "nullable": False, "data_type": "varchar", "column_type": "varchar(20)", "extra": ""},
+                {"name": "leitura_atual", "ordinal": 2, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "consumo", "ordinal": 3, "nullable": True, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1"},
+            ], "primary_key": [],
+        }
+        snapshot["tables"].append(table)
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertFalse(bundle.report["load_executable_complete"])
+        self.assertIn("GENERATED_COLUMN_DEPENDENCY_UNSUPPORTED", {item["code"] for item in bundle.report["blocked_tables"]})
+        self.assertNotIn('"consumo" NUMERIC(10,2) GENERATED ALWAYS', bundle.scripts["00_tables.sql"])
+
+    def test_ddl_blocks_generated_dependency_that_is_itself_generated(self) -> None:
+        snapshot = sample_snapshot()
+        table = {
+            "name": "lancamentos_agua", "type": "BASE TABLE", "engine": "InnoDB",
+            "source_collation": "utf8mb4_unicode_ci", "columns": [
+                {"name": "leitura_anterior", "ordinal": 1, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True},
+                {"name": "leitura_atual", "ordinal": 2, "nullable": False, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": ""},
+                {"name": "consumo", "ordinal": 3, "nullable": True, "data_type": "decimal", "column_type": "decimal(10,2)", "extra": "STORED GENERATED", "generated_expression_present": True, "generated_expression_key": "lancamentos_agua.consumo.v1"},
+            ], "primary_key": [],
+        }
+        snapshot["tables"].append(table)
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot)
+        self.assertFalse(bundle.report["load_executable_complete"])
+        blocked_codes = {item["code"] for item in bundle.report["blocked_tables"]}
+        self.assertTrue(blocked_codes & {"GENERATED_COLUMN_DEPENDENCY_UNSUPPORTED", "GENERATED_COLUMN_TRANSLATION_REQUIRED"})
 
     def test_backup_tables_are_created_in_legacy_schema(self) -> None:
         snapshot = sample_snapshot()
@@ -350,20 +907,20 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(bundle.report["table_schemas"]["archive_2026_11_17"], "legado")
         self.assertIn('REVOKE ALL ON SCHEMA "legado" FROM "erp_app"', tables)
         self.assertIn('REVOKE ALL ON TABLE "legado"."auditoria_nul" FROM "erp_app"', tables)
-        self.assertIn('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "erp"."child", "erp"."parent" TO "erp_app"', tables)
+        self.assertIn('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "erp"."child", "erp"."parent", "erp"."tenant_arquivos" TO "erp_app"', tables)
         self.assertNotIn('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "erp"', tables)
         self.assertNotIn('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legado".', tables)
 
     def test_unsigned_bigint_auto_increment_uses_nontransactional_sequence_pair(self) -> None:
         snapshot = sample_snapshot()
         parent = snapshot["tables"][0]
-        parent["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment")
+        parent["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment", unsigned_bigint_exceeds_signed_limit=True)
         parent["source_next_auto_increment"] = 15
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"parent.name": "ci", "child.state": "ci", "child.api_token": "C"}, application_role="erp_app")
         tables = bundle.scripts["00_tables.sql"]
         sequences = bundle.scripts["30_post_load_sequences.sql"]
-        self.assertIn('"id" NUMERIC(20,0) DEFAULT "erp"."_p2_next_unsigned_id"(\'erp.parent.id\') NOT NULL', tables)
+        self.assertIn('"id" NUMERIC(20,0) DEFAULT "erp"."_p2_next_unsigned_id"(E\'erp.parent.id\') NOT NULL', tables)
         self.assertIn('CREATE TABLE "erp"."_p2_autoincrement_state"', tables)
         self.assertIn("CREATE SEQUENCE \"erp\".\"p2_u64_lo_parent_id\"", tables)
         self.assertIn("CREATE SEQUENCE \"erp\".\"p2_u64_hi_parent_id\"", tables)
@@ -389,9 +946,74 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(bundle.report["auto_increment"]["columns"][0]["strategy"], "unsigned_sequence_pair")
         self.assertTrue(bundle.report["auto_increment"]["runtime_privileges"]["unsigned_function_execute_granted"])
 
+    def test_rbac_unsigned_bigint_fk_pair_uses_bigint_when_within_signed_limit(self) -> None:
+        snapshot = sample_snapshot()
+        tables_by_name = {table["name"]: table for table in snapshot["tables"]}
+        parent, child = tables_by_name["parent"], tables_by_name["child"]
+        parent["name"] = "rbac_sessoes"
+        parent["columns"][0].update(
+            data_type="bigint", column_type="bigint unsigned", extra="auto_increment",
+            unsigned_bigint_exceeds_signed_limit=False,
+        )
+        child["name"] = "rbac_auditoria"
+        child["columns"][0].update(
+            name="sessao_id", data_type="bigint", column_type="bigint unsigned",
+            unsigned_bigint_exceeds_signed_limit=False,
+        )
+        snapshot["indexes"][2]["table"] = "rbac_auditoria"
+        snapshot["indexes"][2]["columns"][0]["name"] = "sessao_id"
+        snapshot["foreign_keys"][0].update(
+            table="rbac_auditoria", name="fk_rbac_auditoria_sessao",
+            columns=["sessao_id"], referenced_table="rbac_sessoes", referenced_columns=["id"],
+        )
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+
+        bundle = generate_ddl(snapshot, application_role="erp_app")
+        tables = bundle.scripts["00_tables.sql"]
+        self.assertRegex(tables, r'"id" BIGINT GENERATED BY DEFAULT AS IDENTITY NOT NULL,\n  CONSTRAINT "ck_rbac_sessoes_id_1" CHECK \("id" >= 0\)')
+        self.assertRegex(tables, r'"sessao_id" BIGINT NOT NULL,\n  CONSTRAINT "ck_rbac_auditoria_sessao_id_1" CHECK \("sessao_id" >= 0\)')
+        self.assertEqual(bundle.report["foreign_keys"]["generated_not_valid"], 1)
+        self.assertEqual(bundle.report["foreign_keys"]["unsupported"], [])
+        self.assertEqual(bundle.report["foreign_keys_post_load"][0]["columns"], ["sessao_id"])
+        self.assertEqual(bundle.report["foreign_keys_post_load"][0]["referenced_table"], "rbac_sessoes")
+        self.assertEqual(bundle.report["unsigned_bigint_range"]["numeric_columns"], [])
+
+    def test_unsigned_bigint_fk_pair_aligns_numeric_only_if_a_value_exceeds_limit(self) -> None:
+        snapshot = sample_snapshot()
+        tables_by_name = {table["name"]: table for table in snapshot["tables"]}
+        parent, child = tables_by_name["parent"], tables_by_name["child"]
+        parent["name"] = "rbac_sessoes"
+        parent["columns"][0].update(
+            data_type="bigint", column_type="bigint unsigned", extra="auto_increment",
+            unsigned_bigint_exceeds_signed_limit=False,
+        )
+        child["name"] = "rbac_auditoria"
+        child["columns"][0].update(
+            name="sessao_id", data_type="bigint", column_type="bigint unsigned",
+            unsigned_bigint_exceeds_signed_limit=True,
+        )
+        snapshot["indexes"][2]["table"] = "rbac_auditoria"
+        snapshot["indexes"][2]["columns"][0]["name"] = "sessao_id"
+        snapshot["foreign_keys"][0].update(
+            table="rbac_auditoria", name="fk_rbac_auditoria_sessao",
+            columns=["sessao_id"], referenced_table="rbac_sessoes", referenced_columns=["id"],
+        )
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+
+        bundle = generate_ddl(snapshot, application_role="erp_app")
+        tables = bundle.scripts["00_tables.sql"]
+        self.assertRegex(tables, r'"id" NUMERIC\(20,0\) DEFAULT "erp"\."_p2_next_unsigned_id"\(')
+        self.assertRegex(tables, r'"sessao_id" NUMERIC\(20,0\) NOT NULL')
+        self.assertEqual(bundle.report["foreign_keys"]["generated_not_valid"], 1)
+        self.assertEqual(bundle.report["foreign_keys"]["unsupported"], [])
+        self.assertEqual(bundle.report["unsigned_bigint_range"]["numeric_columns"], [
+            {"table": "rbac_auditoria", "column": "sessao_id"},
+            {"table": "rbac_sessoes", "column": "id"},
+        ])
+
     def test_unsigned_bigint_allocator_rollover_boundary_is_represented_exactly(self) -> None:
         snapshot = sample_snapshot()
-        snapshot["tables"][0]["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment")
+        snapshot["tables"][0]["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment", unsigned_bigint_exceeds_signed_limit=True)
         snapshot["tables"][0]["source_next_auto_increment"] = 9223372036854775808
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"parent.name": "ci", "child.state": "ci", "child.api_token": "C"})
@@ -402,7 +1024,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_unsigned_bigint_allocator_requires_explicit_application_role(self) -> None:
         snapshot = sample_snapshot()
-        snapshot["tables"][0]["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment")
+        snapshot["tables"][0]["columns"][0].update(data_type="bigint", column_type="bigint unsigned", extra="auto_increment", unsigned_bigint_exceeds_signed_limit=True)
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"parent.name": "ci", "child.state": "ci", "child.api_token": "C"})
         self.assertIn("AUTO_INCREMENT_APPLICATION_ROLE_REQUIRED", {item["code"] for item in bundle.report["review_items"]})
@@ -419,6 +1041,51 @@ class CatalogTests(unittest.TestCase):
         self.assertIn('left("name"::text, 10)', bundle.scripts["10_indexes.sql"])
         self.assertTrue(any(item.get("code") == "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED" for item in bundle.report["review_items"]))
         self.assertFalse(bundle.report["executable_complete"])
+
+    def test_validated_mysql_check_translations_are_emitted_as_postgres_constraints(self) -> None:
+        snapshot = sample_snapshot()
+        snapshot["check_constraints"] = [
+            {
+                "table": "parent",
+                "name": "chk_name_values",
+                "enforced": True,
+                "translation": {"kind": "text_in_list", "column": "name", "values": ["alpha", "beta"]},
+            },
+            {
+                "table": "child",
+                "name": "chk_parent_id_range",
+                "enforced": True,
+                "translation": {"kind": "numeric_between", "column": "parent_id", "lower": "1", "upper": "100"},
+            },
+        ]
+        snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+        bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
+        tables = bundle.scripts["00_tables.sql"]
+        self.assertIn('CHECK ("name" IN (E\'alpha\', E\'beta\'))', tables)
+        self.assertIn('CHECK ("parent_id" BETWEEN 1 AND 100)', tables)
+        self.assertEqual(bundle.report["generated"]["check_constraints"], 2)
+        self.assertEqual(len(bundle.report["translated_check_constraints"]), 2)
+        self.assertNotIn("MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED", {item["code"] for item in bundle.report["review_items"]})
+
+    def test_duplicate_or_invalid_column_metadata_blocks_table(self) -> None:
+        snapshots = []
+        duplicate_name = sample_snapshot()
+        duplicate_name["tables"][0]["columns"].append({**duplicate_name["tables"][0]["columns"][1], "ordinal": 3})
+        snapshots.append((duplicate_name, "DUPLICATE_COLUMN_METADATA"))
+        duplicate_ordinal = sample_snapshot()
+        duplicate_ordinal["tables"][0]["columns"][1]["ordinal"] = 1
+        snapshots.append((duplicate_ordinal, "COLUMN_ORDINAL_METADATA_INVALID"))
+        missing_ordinal = sample_snapshot()
+        del missing_ordinal["tables"][0]["columns"][1]["ordinal"]
+        snapshots.append((missing_ordinal, "COLUMN_ORDINAL_METADATA_INVALID"))
+
+        for snapshot, expected_code in snapshots:
+            with self.subTest(expected_code=expected_code):
+                snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+                bundle = generate_ddl(snapshot)
+                blocked = {item["table"]: item["code"] for item in bundle.report["blocked_tables"]}
+                self.assertEqual(blocked.get("parent"), expected_code)
+                self.assertFalse(bundle.report["executable_complete"])
 
     def test_fulltext_index_is_emitted_as_portuguese_gin(self) -> None:
         snapshot = sample_snapshot()
@@ -508,12 +1175,12 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(DdlGenerationError, "COLLATION_OVERRIDE_COLUMN_NOT_FOUND"):
             generate_ddl(snapshot, collation_overrides={"child.not_a_column": "C"})
 
-    def test_ddl_requires_source_read_only_grant_proof(self) -> None:
+    def test_ddl_requires_source_allowlist_grant_proof(self) -> None:
         snapshot = sample_snapshot()
-        snapshot.pop("source_grants_read_only")
+        snapshot.pop("source_grants_policy_accepted")
         snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
         bundle = generate_ddl(snapshot, collation_overrides={"child.api_token": "C"})
-        self.assertIn("SOURCE_ACCOUNT_READ_ONLY_NOT_PROVEN", {item["code"] for item in bundle.report["review_items"]})
+        self.assertIn("SOURCE_GRANT_POLICY_NOT_ACCEPTED", {item["code"] for item in bundle.report["review_items"]})
         self.assertFalse(bundle.report["executable_complete"])
 
     def test_malicious_index_direction_is_not_emitted(self) -> None:
@@ -583,7 +1250,7 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("GREATEST(COALESCE(v_max, 0), 0)", bundle.scripts["30_post_load_sequences.sql"])
         self.assertFalse(bundle.report["executable_complete"])
 
-    def test_cli_writes_non_executable_bundle_once_and_refuses_overwrite(self) -> None:
+    def test_cli_writes_load_executable_bundle_once_and_refuses_overwrite(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             snapshot_path = root / "snapshot.json"
@@ -594,11 +1261,16 @@ class CatalogTests(unittest.TestCase):
                 self.assertEqual(generate_ddl_main(), 2)
             bundles = list(output_dir.glob("catalog-*-collation-*"))
             self.assertEqual(len(bundles), 1)
+            self.assertEqual(stat.S_IMODE(bundles[0].stat().st_mode), 0o700)
+            for artifact in bundles[0].iterdir():
+                self.assertEqual(stat.S_IMODE(artifact.stat().st_mode), 0o600)
             self.assertTrue((bundles[0] / "BUNDLE_COMPLETE").is_file())
             snapshot_copy = bundles[0] / "catalog_snapshot.json"
             self.assertTrue(snapshot_copy.is_file())
             self.assertEqual(json.loads(snapshot_copy.read_text(encoding="utf-8"))["fingerprint_sha256"], sample_snapshot()["fingerprint_sha256"])
             report = json.loads((bundles[0] / "report.json").read_text(encoding="utf-8"))
+            self.assertTrue(report["load_executable_complete"])
+            self.assertFalse(report["executable_complete"])
             self.assertEqual(report["snapshot_file_sha256"], hashlib.sha256(snapshot_copy.read_bytes()).hexdigest())
             self.assertEqual(len(report["generated_tables"]), report["generated"]["tables"])
             scripts = report["generated_scripts_sha256"]
@@ -608,6 +1280,23 @@ class CatalogTests(unittest.TestCase):
             self.assertIn('executable_complete": false', (bundles[0] / "report.json").read_text(encoding="utf-8"))
             with patch("sys.argv", args), self.assertRaisesRegex(SystemExit, "OUTPUT_ALREADY_EXISTS"):
                 generate_ddl_main()
+
+    def test_cli_rejects_recomputed_canonical_hash_with_stale_structural_provenance(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshot = sample_snapshot()
+            snapshot["check_constraints"] = [{
+                "table": "child",
+                "name": "synthetic_check",
+                "enforced": True,
+                "translation": {"kind": "text_in_list", "column": "state", "values": ["A", "B"]},
+            }]
+            snapshot["fingerprint_sha256"] = canonical_fingerprint(snapshot)
+            snapshot_path = root / "snapshot.json"
+            snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+            with patch("sys.argv", ["generate_ddl", "--snapshot", str(snapshot_path), "--output-dir", str(root / "ddl")]):
+                with self.assertRaisesRegex(SystemExit, "SNAPSHOT_STRUCTURAL_FINGERPRINT_MISMATCH"):
+                    generate_ddl_main()
 
     def test_fingerprint_tampering_is_rejected(self) -> None:
         snapshot = sample_snapshot()

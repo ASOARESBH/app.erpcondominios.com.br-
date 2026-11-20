@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/tenant_file_binary_codec.php';
 /**
  * Serviço compartilhado para arquivos de negócio Multi-Tenant.
  * Não grava arquivos em public_html/uploads; persiste o binário em tenant_arquivos.
@@ -38,6 +39,8 @@ if (!function_exists('tenant_file_gravar_conteudo')) {
         $sha = hash('sha256', $content);
         $token = $publico ? bin2hex(random_bytes(24)) : null;
         $usuarioId = (int)($usuarioId ?? ($_SESSION['usuario_id'] ?? 0));
+        $postgres = \ERP\Database\DatabaseDialect::isPostgres($db);
+        $storedContent = erp_tenant_file_encode_for_storage($db, $content);
 
         $existe = $db->prepare('SELECT id FROM tenant_arquivos WHERE tenant_id = ? AND caminho_legado = ? LIMIT 1');
         if (!$existe) throw new RuntimeException('Falha ao verificar arquivo existente: ' . $db->error);
@@ -50,9 +53,13 @@ if (!function_exists('tenant_file_gravar_conteudo')) {
             $id = (int)$anterior['id'];
             $stmt = $db->prepare('UPDATE tenant_arquivos SET tipo=?, nome_original=?, extensao=?, mime_type=?, tamanho_bytes=?, sha256=?, conteudo=?, publico=?, token_publico=?, criado_por_usuario_id=?, ativo=1, atualizado_em=NOW() WHERE id=? AND tenant_id=?');
             if (!$stmt) throw new RuntimeException('Falha ao atualizar arquivo: ' . $db->error);
-            $blob = null;
-            $stmt->bind_param('ssssisbisiii', $tipo, $nomeOriginal, $extensao, $mime, $tamanho, $sha, $blob, $publico, $token, $usuarioId, $id, $tenantId);
-            $stmt->send_long_data(6, $content);
+            if ($postgres) {
+                $stmt->bind_param('ssssissisiii', $tipo, $nomeOriginal, $extensao, $mime, $tamanho, $sha, $storedContent, $publico, $token, $usuarioId, $id, $tenantId);
+            } else {
+                $blob = null;
+                $stmt->bind_param('ssssisbisiii', $tipo, $nomeOriginal, $extensao, $mime, $tamanho, $sha, $blob, $publico, $token, $usuarioId, $id, $tenantId);
+                $stmt->send_long_data(6, $content);
+            }
             if (!$stmt->execute()) throw new RuntimeException('Falha ao atualizar arquivo: ' . $stmt->error);
             $stmt->close();
             error_log("[TenantArquivo][ATUALIZADO] tenant={$tenantId}; arquivo={$id}; tipo={$tipo}; caminho={$caminhoLegado}; bytes={$tamanho}");
@@ -61,9 +68,13 @@ if (!function_exists('tenant_file_gravar_conteudo')) {
 
         $stmt = $db->prepare('INSERT INTO tenant_arquivos (tenant_id, tipo, nome_original, extensao, mime_type, tamanho_bytes, sha256, conteudo, publico, token_publico, caminho_legado, criado_por_usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         if (!$stmt) throw new RuntimeException('Falha ao preparar arquivo: ' . $db->error);
-        $blob = null;
-        $stmt->bind_param('issssisbissi', $tenantId, $tipo, $nomeOriginal, $extensao, $mime, $tamanho, $sha, $blob, $publico, $token, $caminhoLegado, $usuarioId);
-        $stmt->send_long_data(7, $content);
+        if ($postgres) {
+            $stmt->bind_param('issssississi', $tenantId, $tipo, $nomeOriginal, $extensao, $mime, $tamanho, $sha, $storedContent, $publico, $token, $caminhoLegado, $usuarioId);
+        } else {
+            $blob = null;
+            $stmt->bind_param('issssisbissi', $tenantId, $tipo, $nomeOriginal, $extensao, $mime, $tamanho, $sha, $blob, $publico, $token, $caminhoLegado, $usuarioId);
+            $stmt->send_long_data(7, $content);
+        }
         if (!$stmt->execute()) throw new RuntimeException('Falha ao gravar arquivo: ' . $stmt->error);
         $id = (int)$db->insert_id;
         $stmt->close();

@@ -281,3 +281,12 @@ Referência completa em `AI-CONTEXT/CHATIN.md`.
 ## 19. Portal do Morador — tenant e revogação Bearer no logout
 
 No login MySQL do Portal, `api/api_verificar_tipo_login.php` detecta `sessoes_portal.tenant_id` no schema corrente por `DatabaseDialect::columnExists()`. Quando a coluna existe, a linha nova recebe o tenant derivado do cadastro do morador; quando não existe, permanece o `INSERT` legado. O cliente nunca escolhe nem envia esse tenant. O login também guarda o Bearer em `$_SESSION['morador_portal_token']` na sessão PHP server-side, para que `api/logout_morador.php` possa revogá-lo antes de destruir a sessão. O endpoint de logout não aceita token pela querystring e restringe a atualização ao morador e tenant da sessão. O caminho Portal PostgreSQL continua bloqueado até homologação própria.
+
+
+## 23. Arquivos de tenant — fronteira binária MySQL/PostgreSQL (2026-11-19)
+
+O contrato HTTP de upload/download não muda. `tenant_arquivos.conteudo` é tratado pela API como bytes lógicos: no MySQL, o adapter deixa o conteúdo inalterado; no PostgreSQL, somente essa coluna allowlisted é armazenada como Base64 ASCII canônico em `TEXT COLLATE "C"`. Os demais campos/tipos binários do banco continuam bytea/`BYTEA` conforme o mapeamento P2, sem codificação global.
+
+Os writers usam `api/helpers/tenant_file_binary_codec.php` e conservam `tamanho_bytes` e `sha256` calculados sobre os bytes originais. A leitura canônica em `api/api_arquivos_tenant.php` decodifica Base64 em modo estrito, rejeita representações não canônicas e valida tamanho/hash quando disponíveis antes de transmitir. `api/api_imagem_projeto.php` usa o mesmo codec. `api/get_logo_empresa.php` resolve o ID e delega ao endpoint canônico; `api/api_documentos.php` também redireciona para esse endpoint, sem consumir diretamente o payload. O erro de integridade é tratado de modo controlado e não inclui conteúdo do arquivo.
+
+No endpoint de imagens, cache compartilhado só se aplica a projeto público; conteúdo não público recebe `private, no-store` e `Vary: Cookie, Authorization`. Esta decisão altera apenas o armazenamento interno PostgreSQL, não o formato entregue ao cliente.

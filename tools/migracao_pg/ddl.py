@@ -5,21 +5,36 @@ from datetime import date, datetime
 import hashlib
 import json
 import re
+from pathlib import Path
 from collections import Counter
 from typing import Any
 
-from .type_mapping import TypeMappingError, map_mysql_type, parse_mysql_enum, quote_identifier, quote_literal
+from .catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID
+from .check_translation import CheckTranslationError, render_check_translation
+from .generated_columns import declares_generated_column, generated_dependencies_valid, target_generated_column
+from .type_mapping import BINARY_STORAGE_POLICY_ID, TypeMappingError, expected_binary_storage_encoding, expected_binary_storage_manifest, map_mysql_type, parse_mysql_enum, quote_identifier, quote_literal
 
 SOURCE_SCHEMA = "erp_pg_source"
 TARGET_SCHEMA = "erp"
 LEGACY_SCHEMA = "legado"
 MAX_IDENTIFIER_BYTES = 63
-GENERATOR_VERSION = "1.5.3"
+GENERATOR_VERSION = "2.7.0"
+SOURCE_GRANT_POLICY_ID = "erp_pg_source_select_show_view_trigger_v2"
 AUTOINCREMENT_STATE_STORE = "_p2_autoincrement_state"
 UNSIGNED_IDENTITY_FUNCTION = "_p2_next_unsigned_id"
 POSTGRES_SEQUENCE_MAX = 9223372036854775807
 UNSIGNED_BIGINT_OFFSET = 9223372036854775808
 MYSQL_UNSIGNED_BIGINT_MAX = 18446744073709551615
+BUSINESS_TRIGGER_SOURCE_SHA256 = {
+    ("checklist_veicular", "trg_atualizar_km_acumulado", "AFTER", "UPDATE"): "236afd03ce87d410571b1e9bab6b461a7543a8f72308a2d3f0cfbf752ff67413",
+    ("dependentes", "tr_dependente_ativar_veiculos", "BEFORE", "UPDATE"): "87c2eabb8e13760db61ea1a5d9bd01ef7a92689e546eada1b916a62a5d98e8a4",
+    ("dependentes", "tr_dependente_deletar_veiculos", "BEFORE", "DELETE"): "c9c617367a42f86f625a2c04b6cf1384caa19bdf04f0df5d713e88ed3708362f",
+    ("dependentes", "tr_dependente_inativar_veiculos", "BEFORE", "UPDATE"): "26d1ff52cc0fca6d6e4f7a93ea3b940788866fa6214522e4ac06126c31cf50a1",
+    ("logs_validacoes_dispositivo", "after_validacao_dispositivo_insert", "AFTER", "INSERT"): "c8ed66f274c4d58f1092980c89bca871fb7871f777c8eeae250b47bb2342fd18",
+    ("produtos_estoque", "trg_alerta_estoque_baixo", "AFTER", "UPDATE"): "c1fcba675ba3423c1bcbc50d65ca38e8e60f800313cfc739ac1cadf8a1235c97",
+    ("qrcode_tokens", "after_qrcode_token_insert", "AFTER", "INSERT"): "bd36dac166ce871c10a393d8f959206c43bc2f4f8c22adb5926064e5c38d0ab8",
+}
+BUSINESS_TRIGGER_SCRIPT = Path(__file__).resolve().parents[2] / "sql" / "postgresql" / "070_business_triggers_tenant_scoped.sql"
 
 
 class DdlGenerationError(RuntimeError):
@@ -73,6 +88,53 @@ def _schema_for_table(name: str) -> str:
     return LEGACY_SCHEMA if _is_legacy_backup_table(name) else TARGET_SCHEMA
 
 
+def _unsigned_bigint_range_flags(
+    table_by_name: dict[str, dict[str, Any]], foreign_keys: list[dict[str, Any]]
+) -> tuple[dict[tuple[str, str], bool], list[dict[str, str]], list[dict[str, str]]]:
+    unsigned_columns: set[tuple[str, str]] = set()
+    flags: dict[tuple[str, str], bool] = {}
+    for table_name, table in table_by_name.items():
+        for column in table.get("columns", []):
+            key = (table_name, str(column.get("name", "")))
+            if str(column.get("data_type", "")).lower() != "bigint" or not re.search(
+                r"\b(?:unsigned|zerofill)\b", str(column.get("column_type", "")), re.IGNORECASE
+            ):
+                continue
+            unsigned_columns.add(key)
+            value = column.get("unsigned_bigint_exceeds_signed_limit")
+            if not isinstance(value, bool):
+                continue
+            flags[key] = value
+
+    promoted = {key for key, value in flags.items() if value}
+    changed = True
+    while changed:
+        changed = False
+        for fk in foreign_keys:
+            source = [str(value) for value in fk.get("columns", [])]
+            target = [str(value) for value in fk.get("referenced_columns", [])]
+            if len(source) != len(target):
+                continue
+            left_table = str(fk.get("table", ""))
+            right_table = str(fk.get("referenced_table", ""))
+            for source_column, target_column in zip(source, target):
+                left = (left_table, source_column)
+                right = (right_table, target_column)
+                if left not in unsigned_columns or right not in unsigned_columns or left not in flags or right not in flags:
+                    continue
+                if (left in promoted) != (right in promoted):
+                    promoted.update((left, right))
+                    changed = True
+
+    effective = {key: key in promoted for key in unsigned_columns if key in flags}
+    observed = [{"table": table, "column": column} for table, column in sorted(flags) if flags[(table, column)]]
+    aligned = [
+        {"table": table, "column": column}
+        for table, column in sorted(promoted - {key for key, value in flags.items() if value})
+    ]
+    return effective, observed, aligned
+
+
 def _key_requires_collision_scan(table: dict[str, Any], columns: list[str], overrides: dict[str, str]) -> bool:
     column_by_name = {str(column["name"]): column for column in table.get("columns", [])}
     for name in columns:
@@ -113,6 +175,53 @@ def _target_collation(column: dict[str, Any], explicit: dict[str, str], table: s
     return "ci"
 
 
+def _decode_canonical_e_literal(expression: str) -> str | None:
+    if not expression.startswith("E'") or not expression.endswith("'"):
+        return None
+    body = expression[2:-1]
+    decoded: list[str] = []
+    index = 0
+    escapes = {"b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
+    while index < len(body):
+        character = body[index]
+        if character == "'":
+            if index + 1 >= len(body) or body[index + 1] != "'":
+                return None
+            decoded.append("'")
+            index += 2
+            continue
+        if character != "\\":
+            decoded.append(character)
+            index += 1
+            continue
+        if index + 1 >= len(body):
+            return None
+        escaped = body[index + 1]
+        if escaped == "\\":
+            decoded.append("\\")
+            index += 2
+        elif escaped in escapes:
+            decoded.append(escapes[escaped])
+            index += 2
+        elif escaped in "01234567" and index + 3 < len(body) \
+            and all(digit in "01234567" for digit in body[index + 1:index + 4]):
+            decoded.append(chr(int(body[index + 1:index + 4], 8)))
+            index += 4
+        else:
+            return None
+    value = "".join(decoded)
+    if "\x00" in value or quote_literal(value) != expression:
+        return None
+    return value
+
+
+def _decode_typed_e_literal(expression: str, type_name: str) -> str | None:
+    prefix = type_name + " "
+    if not expression.startswith(prefix):
+        return None
+    return _decode_canonical_e_literal(expression[len(prefix):])
+
+
 def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, no_backslash_escapes: bool = False) -> str | None:
     default = column.get("default")
     if default is None:
@@ -130,45 +239,46 @@ def _sql_default(column: dict[str, Any], table: str, report: dict[str, Any], *, 
         if data_type in {"tinyint", "smallint", "mediumint", "int", "integer", "bigint", "decimal", "numeric", "float", "double", "real", "year"}:
             if re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", expression):
                 return expression
-        elif data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext"}:
-            if expression == "''" or re.fullmatch(r"'(?:[^']|'')*'", expression):
-                literal = expression[1:-1].replace("''", "'")
-                if "\x00" not in literal and quote_literal(literal) == expression:
-                    return expression
+        elif data_type in {"char", "varchar", "nchar", "nvarchar", "tinytext", "text", "mediumtext", "longtext", "enum"}:
+            if _decode_canonical_e_literal(expression) is not None:
+                return expression
         elif data_type in {"datetime", "timestamp"}:
-            expected = "timezone('America/Sao_Paulo', statement_timestamp())" if data_type == "timestamp" else "LOCALTIMESTAMP(0)"
+            expected = f"timezone({quote_literal('America/Sao_Paulo')}, statement_timestamp())" if data_type == "timestamp" else "LOCALTIMESTAMP(0)"
             if expression == expected:
                 return expression
-            match = re.fullmatch(r"TIMESTAMP '([^']+)'", expression)
-            if match:
+            literal = _decode_typed_e_literal(expression, "TIMESTAMP")
+            if literal is not None:
                 try:
-                    parsed = datetime.fromisoformat(match.group(1))
+                    parsed = datetime.fromisoformat(literal)
                 except ValueError:
                     parsed = None
                 if parsed is not None and parsed.tzinfo is None and not parsed.microsecond:
                     return expression
         elif data_type == "date":
-            match = re.fullmatch(r"DATE '([^']+)'", expression)
-            if match:
+            literal = _decode_typed_e_literal(expression, "DATE")
+            if literal is not None:
                 try:
-                    date.fromisoformat(match.group(1))
+                    date.fromisoformat(literal)
                 except ValueError:
                     pass
                 else:
                     return expression
         elif data_type == "time":
-            match = re.fullmatch(r"INTERVAL '([+-]?\d{1,3}:\d{2}:\d{2}(?:\.\d{1,6})?)'", expression)
-            if match:
-                hours, minutes, seconds = (int(part) for part in match.group(1).lstrip("+-").split(":", 2))
-                if hours <= 838 and minutes <= 59 and seconds <= 59:
-                    return expression
-        elif data_type == "enum":
-            try:
-                labels = parse_mysql_enum(str(column.get("column_type", "")), no_backslash_escapes=no_backslash_escapes)
-                if any(expression == quote_literal(label) for label in labels):
-                    return expression
-            except TypeMappingError:
-                pass
+            if column.get("time_uses_interval") is True:
+                literal = _decode_typed_e_literal(expression, "INTERVAL")
+                if literal is not None and re.fullmatch(r"[+-]?\d{1,3}:\d{2}:\d{2}(?:\.\d{1,6})?", literal):
+                    hours, minutes, seconds = (int(part) for part in literal.lstrip("+-").split(":", 2))
+                    if hours <= 838 and minutes <= 59 and seconds <= 59:
+                        return expression
+            elif column.get("time_uses_interval") is False:
+                literal = _decode_typed_e_literal(expression, "TIME")
+                if literal is not None and re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?", literal):
+                    try:
+                        parsed = datetime.strptime(literal.split(".", 1)[0], "%H:%M:%S")
+                    except ValueError:
+                        parsed = None
+                    if parsed is not None:
+                        return expression
         report["review_items"].append({"table": table, "column": str(column["name"]), "code": "DEFAULT_EXPRESSION_NOT_ALLOWLISTED"})
         return None
     report["review_items"].append({"table": table, "column": str(column["name"]), "code": str(default.get("code", "DEFAULT_REVIEW_REQUIRED"))})
@@ -302,8 +412,16 @@ def generate_ddl(
     collation_overrides: dict[str, str] | None = None,
     application_role: str | None = None,
 ) -> DdlBundle:
-    if snapshot.get("catalog_version") != 2 or snapshot.get("source_schema") != SOURCE_SCHEMA:
+    if snapshot.get("binary_storage_required") is not True:
+        raise DdlGenerationError("BINARY_STORAGE_POLICY_REQUIRED")
+    if snapshot.get("catalog_version") != CATALOG_VERSION or snapshot.get("source_schema") != SOURCE_SCHEMA \
+        or snapshot.get("time_range_policy_id") != TIME_RANGE_POLICY_ID \
+        or snapshot.get("binary_storage_policy_id") != BINARY_STORAGE_POLICY_ID:
         raise DdlGenerationError("CATALOG_VERSION_OR_SOURCE_NOT_ALLOWLISTED")
+    try:
+        expected_binary_columns = expected_binary_storage_manifest(snapshot)
+    except TypeMappingError as error:
+        raise DdlGenerationError(error.code) from error
     fingerprint = snapshot.get("fingerprint_sha256")
     if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
         raise DdlGenerationError("CATALOG_FINGERPRINT_INVALID")
@@ -338,6 +456,15 @@ def generate_ddl(
         "collation_C_columns": [],
         "zero_date_nullable_columns": [],
         "enum_checks_deferred": [],
+        "translated_check_constraints": [],
+        "time_mapping": {
+            "policy_id": TIME_RANGE_POLICY_ID,
+            "clock_columns": [],
+            "interval_columns": [],
+            "extended_data_columns": [],
+            "extended_default_columns": [],
+            "fractional_precision_review_columns": [],
+        },
         "source_schema": SOURCE_SCHEMA,
         "target_schema": TARGET_SCHEMA,
         "legacy_schema": LEGACY_SCHEMA,
@@ -355,7 +482,14 @@ def generate_ddl(
         "unique_indexes_post_load": [],
         "foreign_keys_post_load": [],
         "foreign_keys": {"generated_not_valid": 0, "unsupported": [], "deferred": []},
-        "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "unsigned_sequence_pairs": 0},
+        "generated": {"tables": 0, "primary_keys": 0, "on_update_triggers": 0, "generated_columns": 0, "indexes": 0, "unique_indexes": 0, "enum_checks": 0, "check_constraints": 0, "unsigned_sequence_pairs": 0},
+        "generated_columns": [],
+        "binary_storage": {"policy_id": BINARY_STORAGE_POLICY_ID, "columns": []},
+        "unsigned_bigint_range": {
+            "observed_above_signed_limit": [],
+            "aligned_for_foreign_keys": [],
+            "numeric_columns": [],
+        },
         "auto_increment": {
             "post_load_sync_required": True,
             "sync_policy": "ONE_SHOT_BEFORE_APPLICATION_WRITES",
@@ -371,8 +505,30 @@ def generate_ddl(
         },
     }
     table_by_name = {str(table["name"]): table for table in snapshot.get("tables", []) if table.get("type") == "BASE TABLE"}
+    check_by_table: dict[str, list[dict[str, Any]]] = {}
+    check_names: set[tuple[str, str]] = set()
+    for check in snapshot.get("check_constraints", []):
+        check_table = str(check.get("table", ""))
+        check_name = str(check.get("name", ""))
+        if check_table not in table_by_name or not check_name:
+            raise DdlGenerationError("CHECK_CONSTRAINT_METADATA_INVALID")
+        key = (check_table, check_name)
+        if key in check_names:
+            raise DdlGenerationError("DUPLICATE_CHECK_CONSTRAINT_METADATA")
+        check_names.add(key)
+        check_by_table.setdefault(check_table, []).append(check)
     if len(table_by_name) != len([table for table in snapshot.get("tables", []) if table.get("type") == "BASE TABLE"]):
         raise DdlGenerationError("DUPLICATE_TABLE_METADATA")
+    unsigned_bigint_flags, unsigned_bigint_observed, unsigned_bigint_aligned = _unsigned_bigint_range_flags(
+        table_by_name, snapshot.get("foreign_keys", [])
+    )
+    report["unsigned_bigint_range"]["observed_above_signed_limit"] = unsigned_bigint_observed
+    report["unsigned_bigint_range"]["aligned_for_foreign_keys"] = unsigned_bigint_aligned
+    report["unsigned_bigint_range"]["numeric_columns"] = [
+        {"table": table, "column": column}
+        for table, column in sorted(unsigned_bigint_flags)
+        if unsigned_bigint_flags[(table, column)]
+    ]
     if snapshot.get("views"):
         report["review_items"].append({"code": "VIEW_TRANSLATION_REQUIRED", "count": len(snapshot["views"])})
     all_columns = [column for table in table_by_name.values() for column in table.get("columns", [])]
@@ -390,20 +546,43 @@ def generate_ddl(
         "metadata_visibility": dict(snapshot.get("metadata_visibility", {})),
         "source_grants": snapshot.get("grants", []),
         "unresolved_role_grants": bool(snapshot.get("unresolved_role_grants", False)),
-        "source_grants_read_only": snapshot.get("source_grants_read_only") is True,
+        "source_grant_policy_id": snapshot.get("source_grant_policy_id"),
+        "source_grants_policy_accepted": snapshot.get("source_grants_policy_accepted") is True,
+        "source_routines_events_zero_verified": snapshot.get("source_routines_events_zero_verified") is True,
         "source_schema_wide_select": snapshot.get("source_schema_wide_select") is True,
     }
-    if snapshot.get("source_grants_read_only") is not True:
-        report["review_items"].append({"code": "SOURCE_ACCOUNT_READ_ONLY_NOT_PROVEN"})
+    if snapshot.get("source_grant_policy_id") != SOURCE_GRANT_POLICY_ID \
+        or snapshot.get("source_grants_policy_accepted") is not True:
+        report["review_items"].append({"code": "SOURCE_GRANT_POLICY_NOT_ACCEPTED"})
+    if snapshot.get("source_routines_events_zero_verified") is not True:
+        report["review_items"].append({"code": "SOURCE_ROUTINES_EVENTS_ZERO_NOT_VERIFIED"})
     if snapshot.get("source_schema_wide_select") is not True:
         report["review_items"].append({"code": "SOURCE_SCHEMA_WIDE_SELECT_NOT_PROVEN"})
-    for object_type in ("views", "triggers", "routines", "events"):
-        if snapshot.get("metadata_visibility", {}).get(object_type) is not True:
+    visibility = snapshot.get("metadata_visibility", {})
+    for object_type in ("views", "triggers"):
+        if visibility.get(object_type) is not True:
             report["review_items"].append({"object_type": object_type, "code": "METADATA_VISIBILITY_NOT_CONFIRMED"})
+    if any(visibility.get(object_type) is not False for object_type in ("routines", "events")):
+        report["review_items"].append({"code": "ROUTINE_EVENT_GRANT_VISIBILITY_POLICY_MISMATCH"})
+    if snapshot.get("source_routines_events_zero_verified") is not True \
+        or snapshot.get("routines") != [] or snapshot.get("events") != []:
+        report["review_items"].append({"code": "SOURCE_ROUTINES_EVENTS_ZERO_PROOF_INCONSISTENT"})
     if snapshot.get("unresolved_role_grants"):
         report["review_items"].append({"code": "SOURCE_ROLE_GRANTS_UNRESOLVED"})
-    for trigger in snapshot.get("triggers", []):
-        report["review_items"].append({
+    source_triggers = snapshot.get("triggers", [])
+    actual_trigger_hashes = {
+        (str(trigger.get("table", "")), str(trigger.get("name", "")),
+         str(trigger.get("timing", "")).upper(), str(trigger.get("event", "")).upper()):
+        str(trigger.get("body_sha256", ""))
+        for trigger in source_triggers
+    }
+    business_triggers_approved = (
+        len(source_triggers) == len(BUSINESS_TRIGGER_SOURCE_SHA256)
+        and actual_trigger_hashes == BUSINESS_TRIGGER_SOURCE_SHA256
+    )
+    trigger_translation_items = []
+    for trigger in (() if business_triggers_approved else source_triggers):
+        trigger_translation_items.append({
             "table": str(trigger.get("table", "")),
             "trigger": str(trigger.get("name", "")),
             "body_sha256": str(trigger.get("body_sha256", "")),
@@ -460,6 +639,22 @@ def generate_ddl(
             columns = table.get("columns", [])
             if not columns:
                 raise TypeMappingError("TABLE_HAS_NO_COLUMNS")
+            column_names: set[str] = set()
+            column_ordinals: list[int] = []
+            for column in columns:
+                if not isinstance(column, dict):
+                    raise TypeMappingError("COLUMN_METADATA_INVALID")
+                column_name = str(column.get("name", ""))
+                _ident(column_name)
+                if column_name in column_names:
+                    raise TypeMappingError("DUPLICATE_COLUMN_METADATA")
+                column_names.add(column_name)
+                ordinal = column.get("ordinal")
+                if isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 1:
+                    raise TypeMappingError("COLUMN_ORDINAL_METADATA_INVALID")
+                column_ordinals.append(ordinal)
+            if sorted(column_ordinals) != list(range(1, len(columns) + 1)):
+                raise TypeMappingError("COLUMN_ORDINAL_METADATA_INVALID")
             table_column_types: dict[str, tuple[str, str | None]] = {}
             auto_columns = [column for column in columns if "auto_increment" in str(column.get("extra", "")).lower()]
             if len(auto_columns) > 1:
@@ -468,20 +663,63 @@ def generate_ddl(
             for column in columns:
                 name = str(column["name"])
                 _ident(name)
-                if column.get("generated_expression_present"):
-                    raise TypeMappingError("GENERATED_COLUMN_TRANSLATION_REQUIRED")
                 data_type = str(column["data_type"])
+                binary_encoding = expected_binary_storage_encoding(table_name, name)
+                if column.get("binary_storage_encoding") != binary_encoding:
+                    raise TypeMappingError("BINARY_STORAGE_POLICY_METADATA_MISMATCH")
+                generated_spec = target_generated_column(table_name, column)
+                if (column.get("generated_expression_present") is True or declares_generated_column(column)) and generated_spec is None:
+                    raise TypeMappingError("GENERATED_COLUMN_TRANSLATION_REQUIRED")
+                if generated_spec is not None:
+                    if not generated_dependencies_valid(table_name, column, columns):
+                        raise TypeMappingError("GENERATED_COLUMN_DEPENDENCY_UNSUPPORTED")
+                    if data_type.lower() != "decimal" or column.get("default") is not None:
+                        raise TypeMappingError("GENERATED_COLUMN_METADATA_UNSUPPORTED")
                 target_collation = _target_collation(column, overrides, table_name, report) if _textual(data_type) else None
                 mapping = map_mysql_type(
                     str(column["column_type"]),
                     target_collation=target_collation,
+                    table_name=table_name,
                     column_name=name,
+                    binary_storage_encoding=binary_encoding,
                     no_backslash_escapes=bool(snapshot.get("source_no_backslash_escapes", False)),
+                    unsigned_bigint_exceeds_signed_limit=unsigned_bigint_flags.get((table_name, name)),
+                    time_uses_interval=column.get("time_uses_interval"),
                 )
+                if mapping.storage_encoding is not None:
+                    report["binary_storage"]["columns"].append({
+                        "table": table_name,
+                        "column": name,
+                        "encoding": mapping.storage_encoding,
+                        "target_type": mapping.sql_type,
+                        "target_collation": mapping.collation_sql,
+                    })
+                if data_type.lower() == "time":
+                    if column.get("time_uses_interval") is True:
+                        report["time_mapping"]["interval_columns"].append({"table": table_name, "column": name})
+                        if column.get("time_has_extended_values") is True:
+                            report["time_mapping"]["extended_data_columns"].append({"table": table_name, "column": name})
+                        if column.get("time_default_has_extended_value") is True:
+                            report["time_mapping"]["extended_default_columns"].append({"table": table_name, "column": name})
+                    elif column.get("time_uses_interval") is False:
+                        report["time_mapping"]["clock_columns"].append({"table": table_name, "column": name})
+                    else:
+                        raise TypeMappingError("MYSQL_TIME_RANGE_SCAN_REQUIRED")
+                    if column.get("time_has_fractional_seconds") is True or column.get("time_default_has_fractional_seconds") is True:
+                        report["time_mapping"]["fractional_precision_review_columns"].append({"table": table_name, "column": name})
                 table_column_types[name] = (mapping.sql_type, mapping.collation_sql)
                 declaration = f"{_ident(name)} {mapping.declaration}"
                 extra = str(column.get("extra", "")).lower()
-                if "auto_increment" in extra:
+                if generated_spec is not None:
+                    declaration += f" GENERATED ALWAYS AS ({generated_spec['target_expression']}) STORED"
+                    report["generated_columns"].append({
+                        "table": table_name,
+                        "column": name,
+                        "key": generated_spec["key"],
+                        "dependencies": list(generated_spec["dependencies"]),
+                    })
+                    report["generated"]["generated_columns"] += 1
+                elif "auto_increment" in extra:
                     if mapping.sql_type == "NUMERIC(20,0)":
                         sequence_key = f"{target_schema}.{table_name}.{name}"
                         table_allocators.append({
@@ -499,7 +737,7 @@ def generate_ddl(
                     nullable = True
                 if not nullable:
                     declaration += " NOT NULL"
-                default_sql = _sql_default(
+                default_sql = None if generated_spec is not None else _sql_default(
                     column,
                     table_name,
                     report,
@@ -526,16 +764,47 @@ def generate_ddl(
                         "status": "CHECK_AFTER_VALUE_SCAN",
                     })
                 report["review_items"].extend({"table": table_name, "column": name, "code": code} for code in mapping.review_codes)
-                if "on update current_timestamp" in extra:
+                if "on update current_timestamp" in extra and generated_spec is None:
                     if data_type.lower() not in {"timestamp", "datetime"}:
                         report["review_items"].append({"table": table_name, "column": name, "code": "ON_UPDATE_NON_TEMPORAL_TYPE"})
                     else:
                         on_update_groups.setdefault(table_name, []).append(name)
+            column_metadata = {str(column["name"]): column for column in columns}
+            for check in check_by_table.get(table_name, []):
+                source_constraint = str(check.get("name", ""))
+                translation = check.get("translation")
+                if check.get("enforced") is not True or not isinstance(translation, dict):
+                    report["review_items"].append({
+                        "table": table_name,
+                        "constraint": source_constraint,
+                        "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED",
+                    })
+                    continue
+                try:
+                    expression = render_check_translation(translation, columns=column_metadata)
+                    target_constraint = _generated_name("ck_mysql", table_name, source_constraint)
+                    _ident(target_constraint)
+                except (CheckTranslationError, TypeMappingError, KeyError, ValueError):
+                    report["review_items"].append({
+                        "table": table_name,
+                        "constraint": source_constraint,
+                        "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED",
+                    })
+                    continue
+                column_defs.append(f"CONSTRAINT {_ident(target_constraint)} CHECK ({expression})")
+                report["translated_check_constraints"].append({
+                    "table": table_name,
+                    "constraint": target_constraint,
+                    "kind": translation["kind"],
+                    "column": translation["column"],
+                    "values_count": len(translation["values"]) if translation["kind"] == "text_in_list" else None,
+                })
+                report["generated"]["check_constraints"] += 1
             if pk_columns:
                 for name in pk_columns:
                     if name not in {str(column["name"]) for column in columns}:
                         raise TypeMappingError("PRIMARY_KEY_COLUMN_NOT_FOUND")
-                pk_name = "PRIMARY" if len("PRIMARY") <= MAX_IDENTIFIER_BYTES else "pk_" + hashlib.sha256(table_name.encode()).hexdigest()[:16]
+                pk_name = _generated_name("pk", table_name, "primary")
                 primary_keys_post_load.append({"table": table_name, "columns": pk_columns, "target_schema": target_schema, "constraint_name": pk_name})
                 report["primary_keys_pending_collision_scan"].append({
                     "table": table_name,
@@ -694,6 +963,8 @@ def generate_ddl(
                     if column_meta is None:
                         raise TypeMappingError("INDEX_COLUMN_NOT_FOUND")
                     column_type = str(column_meta.get("data_type", "")).lower()
+                    if expected_binary_storage_encoding(table_name, column_name) == "base64":
+                        raise TypeMappingError("BASE64_BINARY_PREFIX_INDEX_UNSUPPORTED")
                     if _textual(column_type):
                         expression = f"left({_ident(column_name)}::text, {prefix_length})"
                     elif column_type in {"tinyblob", "blob", "mediumblob", "longblob", "binary", "varbinary"}:
@@ -800,18 +1071,20 @@ def generate_ddl(
 
     checks = snapshot.get("check_constraints", [])
     for check in checks:
-        report["review_items"].append({
-            "table": str(check.get("table", "")),
-            "constraint": str(check.get("name", "")),
-            "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED",
-            "definition_sha256": str(check.get("definition_sha256", "")),
-        })
+        if check.get("enforced") is not True or not isinstance(check.get("translation"), dict):
+            report["review_items"].append({
+                "table": str(check.get("table", "")),
+                "constraint": str(check.get("name", "")),
+                "code": "MYSQL_CHECK_EXPRESSION_TRANSLATION_REQUIRED",
+            })
 
     report["unique_indexes_pending_collision_scan"] = unique_pending
     report["primary_keys_post_load"] = primary_keys_post_load
     report["unique_indexes_post_load"] = unique_indexes_post_load
     report["auto_increment"]["generated"] = len(identity_columns)
     report["auto_increment"]["columns"] = identity_columns
+    if report["binary_storage"]["columns"] != expected_binary_columns:
+        report["review_items"].append({"code": "BINARY_STORAGE_POLICY_MANIFEST_MISMATCH"})
     unique_reviews: dict[tuple[str, ...], dict[str, Any]] = {}
     for item in report["review_items"]:
         key = tuple(str(item.get(field, "")) for field in (
@@ -829,9 +1102,34 @@ def generate_ddl(
         "20_foreign_keys_not_valid.sql": "\n\n".join(fk_statements),
         "30_post_load_sequences.sql": "\n\n".join(_identity_sequence_script(fingerprint, identity_columns)),
     }
+    if business_triggers_approved:
+        if BUSINESS_TRIGGER_SCRIPT.is_symlink() or not BUSINESS_TRIGGER_SCRIPT.is_file():
+            raise DdlGenerationError("APPROVED_BUSINESS_TRIGGER_SCRIPT_MISSING")
+        business_trigger_sql = BUSINESS_TRIGGER_SCRIPT.read_text(encoding="utf-8")
+        if len(re.findall(r"\bCREATE\s+TRIGGER\b", business_trigger_sql, flags=re.IGNORECASE)) != 7:
+            raise DdlGenerationError("APPROVED_BUSINESS_TRIGGER_SCRIPT_INVALID")
+        scripts["40_business_triggers.sql"] = business_trigger_sql
+        report["translated_business_triggers"] = [
+            {"table": table, "trigger": name, "timing": timing, "event": event,
+             "source_body_sha256": body_sha256}
+            for (table, name, timing, event), body_sha256 in sorted(BUSINESS_TRIGGER_SOURCE_SHA256.items())
+        ]
+    else:
+        scripts["40_business_triggers.sql"] = "-- No approved translation for the current source trigger catalog.\n"
+        report["translated_business_triggers"] = []
     scripts = {name: f"-- Collation overrides SHA-256: {overrides_sha256}\n\n{content}" for name, content in scripts.items()}
     report["generated_tables"] = sorted(emitted_tables)
-    report["executable_complete"] = not report["blocked_tables"] and not report["unsupported_indexes"] and not report["deferred_indexes"] and not report["foreign_keys"]["unsupported"] and not report["foreign_keys"]["deferred"] and not report["review_items"]
+    non_trigger_reviews = [item for item in report["review_items"] if item.get("code") != "BUSINESS_TRIGGER_TRANSLATION_REQUIRED"]
+    report["load_executable_complete"] = (
+        not report["blocked_tables"]
+        and not report["unsupported_indexes"]
+        and not report["deferred_indexes"]
+        and not report["foreign_keys"]["unsupported"]
+        and not report["foreign_keys"]["deferred"]
+        and not non_trigger_reviews
+    )
+    report["executable_complete"] = report["load_executable_complete"] and not trigger_translation_items
+    report["post_load_trigger_translation_required"] = trigger_translation_items
     return DdlBundle(scripts=scripts, report=report)
 
 

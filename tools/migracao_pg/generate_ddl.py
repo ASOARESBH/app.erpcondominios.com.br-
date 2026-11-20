@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 
+from .catalog import _collector_fingerprint, _structural_fingerprint
 from .ddl import DdlGenerationError, canonical_fingerprint, generate_ddl
 
 
@@ -19,7 +20,7 @@ def _write_new_file(path: Path, content: str) -> None:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
-        os.chmod(temp_name, 0o644)
+        os.chmod(temp_name, 0o600)
         os.link(temp_name, path)
     except FileExistsError as error:
         raise SystemExit("OUTPUT_ALREADY_EXISTS") from error
@@ -39,11 +40,19 @@ def _unique_object(pairs):
     return result
 
 
+GENERATOR_COMPONENTS = (
+    "generate_ddl.py", "ddl.py", "generated_columns.py", "type_mapping.py",
+    "check_translation.py", "loader.py", "reconcile.py", "catalog_bundle.py",
+    "070_business_triggers_tenant_scoped.sql",
+)
+
+
 def _generator_fingerprint() -> str:
     digest = hashlib.sha256()
-    for name in ("generate_ddl.py", "ddl.py", "type_mapping.py"):
+    for name in GENERATOR_COMPONENTS:
         digest.update(name.encode("utf-8") + b"\0")
-        digest.update(Path(__file__).with_name(name).read_bytes())
+        path = (Path(__file__).resolve().parents[2] / "sql" / "postgresql" / name) if name.endswith(".sql") else Path(__file__).with_name(name)
+        digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
 
@@ -62,6 +71,10 @@ def main() -> int:
         raise SystemExit("SNAPSHOT_INVALID")
     if not isinstance(snapshot, dict) or canonical_fingerprint(snapshot) != snapshot.get("fingerprint_sha256"):
         raise SystemExit("SNAPSHOT_FINGERPRINT_MISMATCH")
+    if snapshot.get("collector_code_sha256") != _collector_fingerprint():
+        raise SystemExit("SNAPSHOT_COLLECTOR_CODE_MISMATCH")
+    if snapshot.get("structural_fingerprint_sha256") != _structural_fingerprint(snapshot):
+        raise SystemExit("SNAPSHOT_STRUCTURAL_FINGERPRINT_MISMATCH")
     fingerprint = str(snapshot["fingerprint_sha256"])
     snapshot_artifact = snapshot_text if snapshot_text.endswith("\n") else snapshot_text + "\n"
     snapshot_sha256 = hashlib.sha256(snapshot_artifact.encode("utf-8")).hexdigest()
@@ -90,7 +103,7 @@ def main() -> int:
     bundle.report["generator_code_sha256"] = generator_hash
     bundle.report["application_role_sha256"] = role_hash
     bundle.report["snapshot_file_sha256"] = snapshot_sha256
-    safety_header = "-- REVIEW ARTIFACT: DO NOT APPLY until report.json has executable_complete=true and required reviews are approved.\n"
+    safety_header = "-- LOAD ARTIFACT: DO NOT APPLY unless report.json has executable_complete=true and all migration reviews are approved.\n"
     script_artifacts = {
         filename: (safety_header + f"-- Generator code SHA-256: {generator_hash}\n" + content).rstrip("\n") + "\n"
         for filename, content in bundle.scripts.items()
@@ -100,7 +113,7 @@ def main() -> int:
         for filename, content in sorted(script_artifacts.items())
     }
     output_dir.parent.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(mode=0o755, exist_ok=False)
+    output_dir.mkdir(mode=0o700, exist_ok=False)
     try:
         for filename, content in script_artifacts.items():
             _write_new_file(output_dir / filename, content)
@@ -120,6 +133,7 @@ def main() -> int:
         "application_role_sha256": role_hash,
         "generator_code_sha256": generator_hash,
         "output_directory": str(output_dir),
+        "load_executable_complete": bundle.report["load_executable_complete"],
         "executable_complete": bundle.report["executable_complete"],
         "review_items": len(bundle.report["review_items"]),
         "blocked_tables": len(bundle.report["blocked_tables"]),
