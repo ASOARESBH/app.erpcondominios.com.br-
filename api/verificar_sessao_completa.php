@@ -60,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 require_once 'config.php';
 require_once __DIR__ . '/tenant_helper.php';
 require_once __DIR__ . '/rbac_helper.php';
+require_once __DIR__ . '/db/DatabaseDialect.php';
 
 // Padrões: 60 min total, 0 = sem timeout de inatividade
 define('SESSAO_TIMEOUT_TOTAL_MIN',       60);
@@ -84,6 +85,7 @@ function obter_token_bearer() {
     }
     if (empty($auth)) $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
     if (!empty($auth) && preg_match('/Bearer\s+(.+)$/i', $auth, $m)) return trim($m[1]);
+    if (defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql') return '';
     if (!empty($_COOKIE['portal_token'])) return trim($_COOKIE['portal_token']);
     return trim($_POST['token'] ?? $_GET['token'] ?? '');
 }
@@ -108,88 +110,116 @@ function obter_config_timeout($conexao) {
 
 function verificar_sessao_portal($conexao, $token, $cfg) {
     if (empty($token)) { log_sessao('Token vazio', 'WARN'); return null; }
-    // Verificar a tabela sem depender de sintaxe específica do driver.
     try {
-        if (!\ERP\Database\DatabaseDialect::tableExists($conexao, 'sessoes_portal')) {
-            log_sessao('Tabela de sessões do Portal indisponível.', 'WARN');
+        $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
+        if (!\ERP\Database\DatabaseDialect::tableExists($conexao, 'sessoes_portal')) return null;
+        $sessionHasTenant = \ERP\Database\DatabaseDialect::columnExists($conexao, 'sessoes_portal', 'tenant_id');
+        $residentHasTenant = \ERP\Database\DatabaseDialect::columnExists($conexao, 'moradores', 'tenant_id');
+        if ($isPostgres && (!$sessionHasTenant || !$residentHasTenant
+            || !\ERP\Database\DatabaseDialect::tableExists($conexao, 'tenants'))) {
+            log_sessao('Schema tenant do Portal indisponível.', 'WARN');
             return null;
         }
+        $tenantJoin = $residentHasTenant ? " INNER JOIN tenants t ON t.id=m.tenant_id AND t.status='ativo'" : '';
+        $tenantSelect = $residentHasTenant ? ', m.tenant_id AS morador_tenant_id' : ', 0 AS morador_tenant_id';
+        $sessionTenantSelect = $sessionHasTenant ? ', sp.tenant_id AS sessao_tenant_id' : ', 0 AS sessao_tenant_id';
+        $tenantMatch = ($sessionHasTenant && $residentHasTenant) ? ' AND sp.tenant_id=m.tenant_id' : '';
+        $stmt = $conexao->prepare(
+            "SELECT sp.id AS sessao_id, sp.morador_id, sp.data_login, sp.data_expiracao, sp.ativo,
+                    sp.ultimo_ativo, sp.timeout_total_min, sp.timeout_inatividade_min,
+                    m.nome AS morador_nome, m.email AS morador_email,
+                    m.unidade AS morador_unidade, m.cpf AS morador_cpf,
+                    m.telefone AS morador_telefone, m.celular AS morador_celular,
+                    COALESCE(m.sessao_personalizada, 0) AS sessao_personalizada,
+                    m.timeout_total_min AS m_timeout_total,
+                    m.timeout_inatividade_min AS m_timeout_inatividade{$tenantSelect}{$sessionTenantSelect}
+             FROM sessoes_portal sp INNER JOIN moradores m ON m.id=sp.morador_id{$tenantJoin}
+             WHERE sp.token=? AND sp.ativo=1 AND m.ativo=1{$tenantMatch} LIMIT 1"
+        );
+        if (!$stmt || !$stmt->bind_param('s', $token) || !$stmt->execute()) {
+            if ($stmt) $stmt->close();
+            log_sessao('Falha ao consultar sessão do Portal.', 'WARN');
+            return null;
+        }
+        $result = $stmt->get_result();
+        $sess = $result ? $result->fetch_assoc() : null;
+        if ($result) $result->free();
+        $stmt->close();
+        if (!$sess) { log_sessao('Sessão do Portal não encontrada.', 'WARN'); return null; }
+
+        $tenantId = (int)($sess['morador_tenant_id'] ?? 0);
+        if ($isPostgres && ($tenantId <= 0 || (int)($sess['sessao_tenant_id'] ?? 0) !== $tenantId)) return null;
+        if (empty($sess['data_expiracao']) || strtotime((string)$sess['data_expiracao']) <= time()) {
+            $expire = $sessionHasTenant
+                ? $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE id=? AND token=? AND morador_id=? AND tenant_id=? AND ativo=1')
+                : $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE id=? AND token=? AND morador_id=? AND ativo=1');
+            if (!$expire) return null;
+            if ($sessionHasTenant) $expire->bind_param('isii', $sess['sessao_id'], $token, $sess['morador_id'], $tenantId);
+            else $expire->bind_param('isi', $sess['sessao_id'], $token, $sess['morador_id']);
+            $expiredOk = $expire->execute() && $expire->affected_rows > 0;
+            $expire->close();
+            return $expiredOk ? ['expirou' => true, 'motivo' => 'token_expirado'] : null;
+        }
+
+        $usa_custom = (int)($sess['sessao_personalizada'] ?? 0);
+        if ($usa_custom && !empty($sess['m_timeout_total'])) {
+            $t_total = (int)$sess['m_timeout_total'];
+            $t_inativ = (int)($sess['m_timeout_inatividade'] ?? $cfg['inatividade']);
+        } else {
+            $t_total = (int)($sess['timeout_total_min'] ?: $cfg['total']);
+            $t_inativ = (int)($sess['timeout_inatividade_min'] ?: $cfg['inatividade']);
+        }
+        $agora = time();
+        $login = strtotime((string)$sess['data_login']);
+        $ativo = $sess['ultimo_ativo'] ? strtotime((string)$sess['ultimo_ativo']) : $login;
+        if ($login === false || $ativo === false) return null;
+        $seg_login = $agora - $login;
+        $seg_inativ = $agora - $ativo;
+        $lim_total = $t_total * 60;
+        $motivoExpiracao = ($lim_total > 0 && $seg_login >= $lim_total) ? 'timeout_total'
+            : (($t_inativ > 0 && $seg_inativ >= $t_inativ * 60) ? 'inatividade' : null);
+        if ($motivoExpiracao !== null) {
+            $expire = $sessionHasTenant
+                ? $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE id=? AND token=? AND morador_id=? AND tenant_id=? AND ativo=1')
+                : $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE id=? AND token=? AND morador_id=? AND ativo=1');
+            if (!$expire) return null;
+            if ($sessionHasTenant) $expire->bind_param('isii', $sess['sessao_id'], $token, $sess['morador_id'], $tenantId);
+            else $expire->bind_param('isi', $sess['sessao_id'], $token, $sess['morador_id']);
+            $expiredOk = $expire->execute() && $expire->affected_rows > 0;
+            $expire->close();
+            return $expiredOk ? ['expirou' => true, 'motivo' => $motivoExpiracao] : null;
+        }
+
+        $updateSql = $sessionHasTenant
+            ? 'UPDATE sessoes_portal SET ultimo_ativo=NOW() WHERE id=? AND token=? AND morador_id=? AND tenant_id=? AND ativo=1'
+            : 'UPDATE sessoes_portal SET ultimo_ativo=NOW() WHERE id=? AND token=? AND morador_id=? AND ativo=1';
+        $update = $conexao->prepare($updateSql);
+        if (!$update) return null;
+        if ($sessionHasTenant) $update->bind_param('isii', $sess['sessao_id'], $token, $sess['morador_id'], $tenantId);
+        else $update->bind_param('isi', $sess['sessao_id'], $token, $sess['morador_id']);
+        $updateExecuted = $update->execute();
+        $updated = $updateExecuted && (!$isPostgres || $update->affected_rows > 0);
+        $update->close();
+        if (!$updated) return null;
+
+        $rest_total = $lim_total > 0 ? max(0, $lim_total - $seg_login) : 9999999;
+        $rest_inativ = $t_inativ > 0 ? max(0, $t_inativ * 60 - $seg_inativ) : 9999999;
+        $tempo_rest = min($rest_total, $rest_inativ);
+        log_sessao('Sessão Portal válida.', 'INFO');
+        return [
+            'expirou' => false, 'sessao_id' => (int)$sess['sessao_id'],
+            'morador_id' => (int)$sess['morador_id'], 'tenant_id' => $tenantId,
+            'nome' => $sess['morador_nome'], 'email' => $sess['morador_email'],
+            'unidade' => $sess['morador_unidade'], 'cpf' => $sess['morador_cpf'],
+            'telefone' => $sess['morador_telefone'], 'celular' => $sess['morador_celular'],
+            'data_login' => $sess['data_login'], 'timeout_total_min' => $t_total,
+            'timeout_inatividade_min' => $t_inativ, 'tempo_restante_seg' => $tempo_rest,
+            'restante_total_seg' => $rest_total, 'restante_inatividade_seg' => $rest_inativ,
+        ];
     } catch (Throwable $e) {
-        log_sessao('Falha ao verificar tabela de sessões do Portal.', 'WARN');
+        log_sessao('Falha ao validar sessão do Portal.', 'WARN');
         return null;
     }
-    try {
-    $stmt = $conexao->prepare("
-        SELECT sp.id AS sessao_id, sp.morador_id, sp.data_login, sp.ativo,
-               sp.ultimo_ativo, sp.timeout_total_min, sp.timeout_inatividade_min,
-               m.nome AS morador_nome, m.email AS morador_email,
-               m.unidade AS morador_unidade, m.cpf AS morador_cpf,
-               m.telefone AS morador_telefone, m.celular AS morador_celular,
-               COALESCE(m.sessao_personalizada, 0) AS sessao_personalizada,
-               m.timeout_total_min AS m_timeout_total,
-               m.timeout_inatividade_min AS m_timeout_inatividade
-        FROM sessoes_portal sp
-        INNER JOIN moradores m ON m.id = sp.morador_id
-        WHERE sp.token = ? AND sp.ativo = 1 LIMIT 1");
-    $stmt->bind_param('s', $token);
-    $stmt->execute();
-    $sess = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    if (!$sess) { log_sessao('Sessão do Portal não encontrada.', 'WARN'); return null; }
-    } catch (Throwable $e) { log_sessao('Falha ao verificar sessão do Portal.', 'ERROR'); return null; }
-    try {
-
-    $usa_custom = (int)($sess['sessao_personalizada'] ?? 0);
-    if ($usa_custom && !empty($sess['m_timeout_total'])) {
-        $t_total  = (int)$sess['m_timeout_total'];
-        $t_inativ = (int)($sess['m_timeout_inatividade'] ?? $cfg['inatividade']);
-    } else {
-        $t_total  = (int)($sess['timeout_total_min']       ?: $cfg['total']);
-        $t_inativ = (int)($sess['timeout_inatividade_min'] ?: $cfg['inatividade']);
-    }
-
-    $agora      = time();
-    $login      = strtotime($sess['data_login']);
-    $ativo      = $sess['ultimo_ativo'] ? strtotime($sess['ultimo_ativo']) : $login;
-    $seg_login  = $agora - $login;
-    $seg_inativ = $agora - $ativo;
-    $lim_total  = $t_total * 60;
-
-    // Verificar expiração por tempo total
-    if ($lim_total > 0 && $seg_login >= $lim_total) {
-        log_sessao("Expirou timeout total ({$t_total}min).", 'INFO');
-        $conexao->query("UPDATE sessoes_portal SET ativo=0 WHERE id={$sess['sessao_id']}");
-        return ['expirou' => true, 'motivo' => 'timeout_total'];
-    }
-
-    // Verificar expiração por inatividade (0 = desabilitado)
-    if ($t_inativ > 0) {
-        $lim_inativ = $t_inativ * 60;
-        if ($seg_inativ >= $lim_inativ) {
-            log_sessao("Expirou inatividade ({$t_inativ}min).", 'INFO');
-            $conexao->query("UPDATE sessoes_portal SET ativo=0 WHERE id={$sess['sessao_id']}");
-            return ['expirou' => true, 'motivo' => 'inatividade'];
-        }
-    }
-
-    $conexao->query("UPDATE sessoes_portal SET ultimo_ativo=NOW() WHERE id={$sess['sessao_id']}");
-    $rest_total  = $lim_total > 0 ? max(0, $lim_total - $seg_login) : 9999999;
-    $rest_inativ = $t_inativ > 0  ? max(0, $t_inativ * 60 - $seg_inativ) : 9999999;
-    $tempo_rest  = min($rest_total, $rest_inativ);
-    log_sessao("Sessão Portal válida; restante:{$tempo_rest}s.", 'INFO');
-
-    return [
-        'expirou' => false, 'sessao_id' => (int)$sess['sessao_id'],
-        'morador_id' => (int)$sess['morador_id'],
-        'nome' => $sess['morador_nome'], 'email' => $sess['morador_email'],
-        'unidade' => $sess['morador_unidade'], 'cpf' => $sess['morador_cpf'],
-        'telefone' => $sess['morador_telefone'], 'celular' => $sess['morador_celular'],
-        'data_login' => $sess['data_login'],
-        'timeout_total_min' => $t_total, 'timeout_inatividade_min' => $t_inativ,
-        'tempo_restante_seg' => $tempo_rest,
-        'restante_total_seg' => $rest_total, 'restante_inatividade_seg' => $rest_inativ,
-    ];
-    } catch (Throwable $e) { log_sessao('Falha ao calcular tempo da sessão Portal.', 'ERROR'); return null; }
 }
 
 function verificar_sessao_erp() {
@@ -273,17 +303,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
     }
 
-    if ($postgresSelecionado && !$sessao_erp_valida && !empty($token)) {
-        retornar_erro_sessao('O login do Portal do Morador ainda não foi homologado para este driver.', 503);
-    }
-
     if (!$sessao_erp_valida && !empty($token)) {
         $config = obter_config_timeout($conexao);
         $sessao = verificar_sessao_portal($conexao, $token, $config);
         if (!$sessao) retornar_erro_sessao('Token inválido ou sessão não encontrada');
-        if ($sessao['expirou']) {
+        if (!empty($sessao['expirou'])) {
             $msg = $sessao['motivo'] === 'inatividade'
-                ? 'Sessão encerrada por inatividade' : 'Sessão encerrada por tempo máximo atingido';
+                ? 'Sessão encerrada por inatividade'
+                : (($sessao['motivo'] ?? '') === 'token_expirado' ? 'Sessão encerrada por tempo máximo atingido' : 'Sessão encerrada por tempo máximo atingido');
             retornar_erro_sessao($msg);
         }
         $tr = $sessao['tempo_restante_seg'];
@@ -382,9 +409,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = obter_token_bearer();
     if (empty($acao)) retornar_erro_sessao('Ação não especificada', 400);
     $postgresSelecionado = defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql';
-    if ($postgresSelecionado && !empty($token)) {
-        retornar_erro_sessao('O login do Portal do Morador ainda não foi homologado para este driver.', 503);
-    }
     if ($postgresSelecionado && in_array($acao, ['renovar', 'ping'], true)) {
         exigir_sessao_erp_postgres_valida($conexao);
     }
@@ -392,12 +416,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($acao === 'renovar' || $acao === 'ping') {
         if (!empty($token)) {
             $config = obter_config_timeout($conexao);
-            try {
-            $stmt = $conexao->prepare("UPDATE sessoes_portal SET ultimo_ativo=NOW() WHERE token=? AND ativo=1");
-            if ($stmt) { $stmt->bind_param('s', $token); $stmt->execute(); $stmt->close(); }
-            } catch (Throwable $e) { log_sessao('Falha ao renovar sessão do Portal.', 'WARN'); }
-            $af = 1;
-            if ($acao === 'renovar' && $af === 0) retornar_erro_sessao('Sessão não encontrada para renovação');
+            $sessaoPortal = verificar_sessao_portal($conexao, $token, $config);
+            if (!$sessaoPortal || !empty($sessaoPortal['expirou'])) retornar_erro_sessao('Sessão não encontrada para renovação');
             log_sessao('Sessão Portal renovada ou verificada.', 'INFO');
             $tr_renovado = $config['inatividade'] > 0 ? $config['inatividade'] * 60 : null;
             retornar_sucesso_sessao(['mensagem'=>'Sessão renovada','novo_ultimo_ativo'=>date('Y-m-d H:i:s'),'tempo_restante_segundos'=>$tr_renovado]);
@@ -413,8 +433,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($acao === 'logout') {
         if (!empty($token)) {
-            $stmt = $conexao->prepare("UPDATE sessoes_portal SET ativo=0 WHERE token=?");
-            $stmt->bind_param('s', $token); $stmt->execute(); $stmt->close();
+            $config = obter_config_timeout($conexao);
+            $sessaoPortal = verificar_sessao_portal($conexao, $token, $config);
+            if (!$sessaoPortal || !empty($sessaoPortal['expirou'])) retornar_erro_sessao('Token inválido ou sessão não encontrada');
+            $hasTenant = \ERP\Database\DatabaseDialect::columnExists($conexao, 'sessoes_portal', 'tenant_id');
+            $stmt = $hasTenant
+                ? $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE token=? AND morador_id=? AND tenant_id=? AND ativo=1')
+                : $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE token=? AND morador_id=? AND ativo=1');
+            if (!$stmt) retornar_erro_sessao('Sessão não encontrada para encerramento');
+            if ($hasTenant) $stmt->bind_param('sii', $token, $sessaoPortal['morador_id'], $sessaoPortal['tenant_id']);
+            else $stmt->bind_param('si', $token, $sessaoPortal['morador_id']);
+            $revoked = $stmt->execute() && $stmt->affected_rows > 0;
+            $stmt->close();
+            if (!$revoked) retornar_erro_sessao('Sessão não encontrada para encerramento');
             log_sessao('Logout do Portal realizado.', 'INFO');
         }
         if (rbacTabelasDisponiveis($conexao)) rbacEncerrarSessaoAtual($conexao, 'LOGOUT_USUARIO');

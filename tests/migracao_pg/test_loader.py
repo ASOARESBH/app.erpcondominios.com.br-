@@ -2013,6 +2013,171 @@ class ReconciliationRetryGateTests(unittest.TestCase):
         self.assertEqual(status, 2)
 
 
+class RepeatableReadOnlyReconciliationTests(unittest.TestCase):
+    def _contract(self):
+        generated_tables = [f"table_{index:03d}" for index in range(loader.EXPECTED_SOURCE_TABLE_COUNT)]
+        fingerprint = "a" * 64
+        role_fingerprint = hashlib.sha256(b"erp_app").hexdigest()
+        bundle_report = {
+            "generated_tables": generated_tables,
+            "catalog_fingerprint_sha256": fingerprint,
+            "application_role_sha256": role_fingerprint,
+        }
+        load_report = {
+            "status": "LOAD_COMMITTED_RECONCILIATION_DIVERGED",
+            "profile": "development",
+            "source_schema": "erp_pg_source",
+            "target_database": "erp_pg_dev",
+            "target_schema": "erp",
+            "legacy_schema": "legado",
+            "generator_version": loader.PREVIOUS_LOAD_GENERATOR_VERSION,
+            "bundle_catalog_fingerprint": fingerprint,
+            "tables_loaded": len(generated_tables),
+            "rows_loaded": 0,
+            "table_counts": [
+                {"table": name, "source_rows": 0, "target_rows": 0, "status": "COPIED"}
+                for name in generated_tables
+            ],
+            "table_failures": [],
+            "source_cleanup_confirmed": True,
+            "target_cleanup_confirmed": True,
+            "nul_spool_cleanup_confirmed": True,
+        }
+        return generated_tables, bundle_report, load_report, {"fingerprint_sha256": fingerprint}
+
+    def test_repeated_execution_preserves_load_report_markers_and_database_state(self) -> None:
+        _tables, bundle_report, load_report, snapshot = self._contract()
+        original_report = json.dumps(load_report, sort_keys=True)
+        source = type("Source", (), {"rollback": lambda self: None, "close": lambda self: None})()
+        targets = [_FakeTarget(), _FakeTarget()]
+        written_reports = []
+
+        class Guard:
+            def start_monitor(self, connection): pass
+            def sample(self): pass
+            def set_connection(self, connection): pass
+            def sample_if_due(self): pass
+            def _raise_if_stopped(self): pass
+            def stop_monitor(self): pass
+
+        with tempfile.TemporaryDirectory() as report_root, ExitStack() as stack:
+            Path(report_root).chmod(0o700)
+            stack.enter_context(patch.object(loader, "REPORT_ROOT", Path(report_root)))
+            stack.enter_context(patch.object(loader, "validate_bundle", return_value=(Path("/tmp/bundle"), bundle_report, snapshot)))
+            stack.enter_context(patch.object(loader, "_read_private_report_snapshot", return_value=(load_report, "b" * 64, (1, 2, 3, 4, 5))))
+            stack.enter_context(patch.object(loader, "_validate_read_only_selection"))
+            stack.enter_context(patch.object(loader, "_source_defaults_path", return_value=Path("/tmp/source.cnf")))
+            stack.enter_context(patch.object(loader, "_load_target_config", return_value={"application_user": "erp_app", "dbname": "erp_pg_dev"}))
+            stack.enter_context(patch.object(loader, "_validate_column_mappings", return_value={}))
+            stack.enter_context(patch.object(loader, "_validated_identity_plan", return_value={}))
+            stack.enter_context(patch.object(loader, "_connect_source", return_value=(source, snapshot)))
+            stack.enter_context(patch.object(loader, "_validate_source_snapshot"))
+            stack.enter_context(patch.object(loader, "_connect_target", side_effect=targets))
+            stack.enter_context(patch.object(loader, "_MemoryGuard", Guard))
+            stack.enter_context(patch("tools.migracao_pg.reconcile.reconcile", return_value={
+                "status": "DIVERGED",
+                "failure_code": None,
+                "metrics": {"row_hash_multiset": "DIVERGED"},
+                "elapsed_seconds": 0.1,
+                "temporary_store_cleanup": "PASS",
+                "tables": {
+                    "monitoramento_eventos_hub": {
+                        "source_count": 3,
+                        "target_count": 3,
+                        "row_count_equal": True,
+                        "row_multiset_hashes_equal": False,
+                        "max_ids": {"id": {"source_max": "SECRET_ID", "target_max": "SECRET_ID", "equal": True}},
+                        "numeric_sums": {"amount": {"source_sum": "SECRET_SUM", "target_sum": "SECRET_SUM", "equal": True}},
+                        "binary_lengths": {},
+                        "generated_columns": {},
+                        "tenant_distribution": {"equal": True, "row_hashes_equal": False},
+                        "column_value_multisets": {
+                            "metadata_json": {
+                                "source_cells": 3,
+                                "target_cells": 3,
+                                "source_distinct_values": 2,
+                                "target_distinct_values": 2,
+                                "multiset_difference_count": 0,
+                                "equal": True,
+                            },
+                            "observacao": {
+                                "source_cells": 3,
+                                "target_cells": 3,
+                                "source_distinct_values": 2,
+                                "target_distinct_values": 2,
+                                "multiset_difference_count": 2,
+                                "equal": False,
+                            },
+                        },
+                    }
+                },
+                "foreign_keys": [{"table": "technical_table", "constraint_name": "private_name", "source_orphans": 0, "target_orphans": 0, "constraint_present": True, "constraint_validated": True, "equal": True}],
+                "identity_sequences": [{"table": "technical_table", "column": "id", "source_max_id": "SECRET_ID", "next_sequence_value": "SECRET_ID", "equal_max_id": True, "sequence_above_max": True}],
+            }))
+            stack.enter_context(patch.object(loader, "_write_report_exclusive", side_effect=lambda payload, path: written_reports.append((dict(payload), path))))
+            stack.enter_context(patch.object(loader, "_replace_report", side_effect=AssertionError("load report must not be replaced")))
+            stack.enter_context(patch.object(loader, "_read_retry_selection", side_effect=AssertionError("single-use marker must not be consumed")))
+
+            results = [
+                loader.run_read_only_reconcile(
+                    "synthetic-bundle", None, Path("/var/backups/erpcondominios/p2-runs/rebuild-20261120T000000Z-10.json"),
+                    diagnose_monitoramento_eventos_hub=True,
+                )
+                for _ in range(2)
+            ]
+
+        self.assertEqual([item["status"] for item in results], ["DIVERGED", "DIVERGED"])
+        self.assertTrue(all(item["load_report_preserved"] is True for item in results))
+        self.assertNotEqual(results[0]["report_file"], results[1]["report_file"])
+        self.assertEqual(len(written_reports), 2)
+        self.assertEqual(json.dumps(load_report, sort_keys=True), original_report)
+        self.assertTrue(all(target.closed and target.rollbacks == 1 for target in targets))
+        self.assertTrue(all(len(target.statements) == 1 and "READ ONLY" in target.statements[0][0] for target in targets))
+        self.assertEqual(written_reports[0][0]["tables"]["monitoramento_eventos_hub"]["column_value_multisets"]["observacao"]["multiset_difference_count"], 2)
+        rendered = json.dumps(written_reports[0][0], sort_keys=True)
+        for forbidden in ("SECRET_ID", "SECRET_SUM", "private_name", "sha256", "token", "password"):
+            self.assertNotIn(forbidden, rendered)
+
+    def test_cutover_profile_is_rejected_before_validation_or_connections(self) -> None:
+        with patch.object(loader, "validate_bundle") as validate_bundle, \
+             patch.object(loader, "_connect_source") as connect_source, \
+             patch.object(loader, "_connect_target") as connect_target:
+            with self.assertRaisesRegex(LoaderError, "READ_ONLY_RECONCILE_PROFILE_NOT_ALLOWED"):
+                loader.run_read_only_reconcile("synthetic", None, Path("/tmp/report.json"), profile="cutover")
+        validate_bundle.assert_not_called()
+        connect_source.assert_not_called()
+        connect_target.assert_not_called()
+
+    def test_aggregate_column_report_contains_only_counts_and_boolean_results(self) -> None:
+        raw = {
+            "status": "DIVERGED",
+            "failure_code": "SYNTHETIC_FAILURE",
+            "metrics": {"row_hash_multiset": "DIVERGED"},
+            "tables": {
+                "monitoramento_eventos_hub": {
+                    "source_count": 3,
+                    "target_count": 3,
+                    "row_count_equal": True,
+                    "row_multiset_hashes_equal": False,
+                    "max_ids": {"id": {"source_max": "PRIVATE_VALUE", "target_max": "PRIVATE_VALUE", "equal": True}},
+                    "numeric_sums": {"amount": {"source_sum": "PRIVATE_VALUE", "target_sum": "PRIVATE_VALUE", "equal": True}},
+                    "binary_lengths": {},
+                    "generated_columns": {},
+                    "tenant_distribution": {"equal": True, "row_hashes_equal": False},
+                    "column_value_multisets": {"metadata_json": {
+                        "source_cells": 3, "target_cells": 3, "source_distinct_values": 2,
+                        "target_distinct_values": 2, "multiset_difference_count": 1, "equal": False,
+                    }},
+                }
+            },
+        }
+        summary = loader._aggregate_reconciliation_report(raw, column_diagnostic=True, load_report_preserved=True)
+        rendered = json.dumps(summary, sort_keys=True)
+        self.assertEqual(summary["tables"]["monitoramento_eventos_hub"]["column_value_multisets"]["metadata_json"]["multiset_difference_count"], 1)
+        for forbidden in ("PRIVATE_VALUE", "source_sum", "source_max", "sha256", "digest"):
+            self.assertNotIn(forbidden, rendered)
+
+
 class PreflightPolicyGateTests(unittest.TestCase):
     def _inputs(self):
         snapshot = {

@@ -14,6 +14,7 @@ session_start();
 
 // Incluir arquivo de configuração
 require_once 'config.php';
+require_once __DIR__ . '/db/DatabaseDialect.php';
 
 // Incluir detector de loop de autenticação
 require_once 'auth_loop_detector.php';
@@ -49,21 +50,16 @@ if (strlen($cpf) !== 11) {
 try {
     // Conectar ao banco de dados
     $conexao = conectar_banco();
-    
-    // O contexto tenant é lido do cadastro do morador, nunca do formulário.
-    // Em esquemas legados sem tenant_id, a instalação é tratada como tenant 1.
-    $stmtTenantMorador = $conexao->prepare("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='moradores' AND COLUMN_NAME='tenant_id' LIMIT 1");
-    $temTenantMorador = false;
-    if ($stmtTenantMorador) {
-        $stmtTenantMorador->execute();
-        $temTenantMorador = (bool)$stmtTenantMorador->get_result()->fetch_row();
-        $stmtTenantMorador->close();
+    $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
+    $temTenantMorador = \ERP\Database\DatabaseDialect::columnExists($conexao, 'moradores', 'tenant_id');
+    if ($isPostgres && !$temTenantMorador) {
+        throw new RuntimeException('Schema de moradores sem tenant_id.');
     }
-    $campoTenantMorador = $temTenantMorador ? 'tenant_id' : '1 AS tenant_id';
+    $campoTenantMorador = $temTenantMorador ? ', tenant_id' : '';
 
     // Buscar morador removendo formatação do CPF no banco também.
     $stmt = $conexao->prepare("
-        SELECT id, nome, cpf, senha, unidade, email, ativo, $campoTenantMorador
+        SELECT id, nome, cpf, senha, unidade, email, ativo$campoTenantMorador
         FROM moradores
         WHERE REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = ?
         LIMIT 1
@@ -78,10 +74,10 @@ try {
         fechar_conexao($conexao);
         
         // Registrar tentativa de login falha
-        registrar_log('LOGIN_MORADOR_FALHA', "Tentativa de login com CPF não cadastrado: {$cpf}");
+        registrar_log('LOGIN_MORADOR_FALHA', 'CREDENCIAL_NAO_RECONHECIDA', null, false);
         
         // Registrar tentativa no detector de loop
-        $detector->registrarTentativa('morador', $cpf, $_SERVER['REMOTE_ADDR'], false, 'CPF não cadastrado');
+        // O detector legado persiste CPF, IP e identificador de sessão; não o invocar nesta rota.
         
         retornar_json(false, 'CPF ou senha incorretos!');
     }
@@ -90,17 +86,22 @@ try {
     $morador = $resultado->fetch_assoc();
     $stmt->close();
     $tenant_id = (int)($morador['tenant_id'] ?? 0);
-    if ($tenant_id <= 0) {
+    if ($temTenantMorador && $tenant_id <= 0) {
         fechar_conexao($conexao);
         retornar_json(false, 'Não foi possível identificar o condomínio deste morador. Entre em contato com a administração.');
     }
+    if ($isPostgres && !$temTenantMorador) {
+        fechar_conexao($conexao);
+        retornar_json(false, 'Não foi possível identificar o condomínio deste morador. Entre em contato com a administração.');
+    }
+    if (!$temTenantMorador) $tenant_id = 1; // compatibilidade histórica MySQL.
     
     // Verificar se o morador está ativo
     if ($morador['ativo'] != 1) {
         fechar_conexao($conexao);
         
         // Registrar tentativa de login com morador inativo
-        registrar_log('LOGIN_MORADOR_FALHA', "Tentativa de login com morador inativo: {$cpf}", $morador['nome']);
+        registrar_log('LOGIN_MORADOR_FALHA', 'CONTA_INATIVA', null, false);
         
         retornar_json(false, 'Morador inativo. Entre em contato com a administração.');
     }
@@ -122,13 +123,22 @@ try {
             
             // Atualizar automaticamente para BCRYPT (mais seguro)
             $senha_bcrypt = password_hash($senha, PASSWORD_DEFAULT);
-            $stmt_update_senha = $conexao->prepare("UPDATE moradores SET senha = ? WHERE id = ?");
-            $stmt_update_senha->bind_param("si", $senha_bcrypt, $morador['id']);
-            $stmt_update_senha->execute();
-            $stmt_update_senha->close();
+            if (!$isPostgres) {
+                $stmt_update_senha = $temTenantMorador
+                    ? $conexao->prepare("UPDATE moradores SET senha = ? WHERE id = ? AND tenant_id = ? AND ativo = 1")
+                    : $conexao->prepare("UPDATE moradores SET senha = ? WHERE id = ? AND ativo = 1");
+                if (!$stmt_update_senha) throw new RuntimeException('Não foi possível preparar atualização de credencial.');
+                if ($temTenantMorador) $stmt_update_senha->bind_param("sii", $senha_bcrypt, $morador['id'], $tenant_id);
+                else $stmt_update_senha->bind_param("si", $senha_bcrypt, $morador['id']);
+                if (!$stmt_update_senha->execute()) {
+                    $stmt_update_senha->close();
+                    throw new RuntimeException('Não foi possível atualizar credencial.');
+                }
+                $stmt_update_senha->close();
+            }
             
             // Log da atualização
-            registrar_log('SENHA_ATUALIZADA', "Senha do morador {$morador['nome']} atualizada de SHA1 para BCRYPT", $morador['nome']);
+            registrar_log('SENHA_ATUALIZADA', 'CREDENCIAL_LEGADA_ATUALIZADA', null, false);
         }
     }
     
@@ -136,10 +146,10 @@ try {
         fechar_conexao($conexao);
         
         // Registrar tentativa de login com senha incorreta
-        registrar_log('LOGIN_MORADOR_FALHA', "Tentativa de login com senha incorreta: {$cpf}", $morador['nome']);
+        registrar_log('LOGIN_MORADOR_FALHA', 'CREDENCIAL_INVALIDA', null, false);
         
         // Registrar tentativa no detector de loop
-        $detector->registrarTentativa('morador', $cpf, $_SERVER['REMOTE_ADDR'], false, 'Senha incorreta');
+        // O detector legado persiste CPF, IP e identificador de sessão; não o invocar nesta rota.
         
         retornar_json(false, 'CPF ou senha incorretos!');
     }
@@ -152,21 +162,27 @@ try {
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? '';
     $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     
-    // Verificar se a tabela sessoes_portal existe, se não, usar sessão PHP
-    $tabela_existe = false;
-    $resultado_tabela = $conexao->query("SHOW TABLES LIKE 'sessoes_portal'");
-    if ($resultado_tabela && $resultado_tabela->num_rows > 0) {
-        $tabela_existe = true;
-    }
-    
+    // Persistir o Bearer; indisponibilidade do schema falha fechada.
+    $tabela_existe = \ERP\Database\DatabaseDialect::tableExists($conexao, 'sessoes_portal');
+    if (!$tabela_existe) throw new RuntimeException('Schema de sessões do Portal indisponível.');
+
     if ($tabela_existe) {
-        $stmtTenantSessao = $conexao->prepare("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sessoes_portal' AND COLUMN_NAME='tenant_id' LIMIT 1");
-        $temTenantSessao = false;
-        if ($stmtTenantSessao) {
-            $stmtTenantSessao->execute();
-            $temTenantSessao = (bool)$stmtTenantSessao->get_result()->fetch_row();
-            $stmtTenantSessao->close();
-        }
+        $temTenantSessao = \ERP\Database\DatabaseDialect::columnExists($conexao, 'sessoes_portal', 'tenant_id');
+        if ($isPostgres && !$temTenantSessao) throw new RuntimeException('Schema de sessões do Portal sem tenant_id.');
+        $tenantAtivo = null;
+        $stmtAtivo = $temTenantMorador
+            ? $conexao->prepare("SELECT t.id FROM moradores m INNER JOIN tenants t ON t.id=m.tenant_id WHERE m.id=? AND m.tenant_id=? AND m.ativo=1 AND t.status='ativo' LIMIT 1")
+            : ($isPostgres ? false : $conexao->prepare("SELECT id FROM tenants WHERE id=1 AND status='ativo' LIMIT 1"));
+        if (!$stmtAtivo) throw new RuntimeException('Não foi possível validar o tenant do morador.');
+        if ($temTenantMorador) $stmtAtivo->bind_param('ii', $morador['id'], $tenant_id);
+        if (!$stmtAtivo->execute()) { $stmtAtivo->close(); throw new RuntimeException('Não foi possível validar o tenant do morador.'); }
+        $tenantAtivoResult = $stmtAtivo->get_result();
+        $tenantAtivo = $tenantAtivoResult ? $tenantAtivoResult->fetch_assoc() : null;
+        $stmtAtivo->close();
+        if (!$tenantAtivo || (int)$tenantAtivo['id'] !== $tenant_id) throw new RuntimeException('Tenant ativo do morador indisponível.');
+
+        if (!$conexao->begin_transaction()) throw new RuntimeException('Não foi possível iniciar transação da sessão Portal.');
+        $portalTransactionStarted = true;
 
         // Limpar tokens antigos apenas no contexto do tenant, quando disponível.
         if ($temTenantSessao) {
@@ -176,7 +192,7 @@ try {
             $stmt_limpar = $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ?");
             $stmt_limpar->bind_param("i", $morador['id']);
         }
-        $stmt_limpar->execute();
+        if (!$stmt_limpar->execute()) { $stmt_limpar->close(); throw new RuntimeException('Não foi possível substituir sessões anteriores.'); }
         $stmt_limpar->close();
 
         // Persistir explicitamente tenant_id para que o Bearer possa ser
@@ -188,7 +204,7 @@ try {
             $stmt_sessao = $conexao->prepare("INSERT INTO sessoes_portal (morador_id, token, ip_address, user_agent, data_expiracao) VALUES (?, ?, ?, ?, ?)");
             $stmt_sessao->bind_param("issss", $morador['id'], $token, $ip_address, $user_agent, $data_expiracao);
         }
-        $stmt_sessao->execute();
+        if (!$stmt_sessao->execute()) { $stmt_sessao->close(); throw new RuntimeException('Não foi possível persistir a sessão Portal.'); }
         $stmt_sessao->close();
     }
     
@@ -206,22 +222,26 @@ try {
     
     // Atualizar último acesso do morador
     if ($temTenantMorador) {
-        $stmt_update = $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW(), data_atualizacao = NOW() WHERE id = ? AND tenant_id = ?");
+        $stmt_update = $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW(), data_atualizacao = NOW() WHERE id = ? AND tenant_id = ? AND ativo = 1");
         $stmt_update->bind_param("ii", $morador['id'], $tenant_id);
     } else {
         $stmt_update = $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW(), data_atualizacao = NOW() WHERE id = ?");
         $stmt_update->bind_param("i", $morador['id']);
     }
-    $stmt_update->execute();
+    if (!$stmt_update->execute()) { $stmt_update->close(); throw new RuntimeException('Não foi possível atualizar último acesso.'); }
     $stmt_update->close();
+    if (isset($portalTransactionStarted) && $portalTransactionStarted) {
+        if (!$conexao->commit()) throw new RuntimeException('Não foi possível confirmar transação da sessão Portal.');
+        $portalTransactionStarted = false;
+    }
     
     fechar_conexao($conexao);
     
     // Registrar login bem-sucedido
-    registrar_log('LOGIN_MORADOR_SUCESSO', "Login de morador realizado: {$cpf} - {$morador['nome']}", $morador['nome']);
+    registrar_log('LOGIN_MORADOR_SUCESSO', 'LOGIN_PORTAL_CONFIRMADO', null, false);
     
     // Registrar tentativa bem-sucedida no detector de loop
-    $detector->registrarTentativa('morador', $cpf, $_SERVER['REMOTE_ADDR'], true, '');
+    // O detector legado persiste dados pessoais e identificadores de sessão; a auditoria acima é agregada.
     
     // Retornar sucesso COM TOKEN
     retornar_json(true, 'Login realizado com sucesso!', array(
@@ -232,7 +252,11 @@ try {
         'morador_id' => $morador['id']
     ));
     
-} catch (Exception $e) {
-    error_log("Erro no login de morador: " . $e->getMessage());
+} catch (Throwable $e) {
+    if (!empty($portalTransactionStarted) && isset($conexao) && $conexao) {
+        try { $conexao->rollback(); } catch (Throwable) {}
+    }
+    error_log('[validar_login_morador] Falha interna no login.');
+    if (isset($conexao) && $conexao) { try { fechar_conexao($conexao); } catch (Throwable) {} }
     retornar_json(false, 'Erro ao processar login. Tente novamente.');
 }

@@ -47,6 +47,7 @@ MIN_RECONCILE_TEMP_FREE_BYTES = 512 * 1024 * 1024
 MAX_RECONCILE_ROW_BYTES = 128 * 1024 * 1024
 MAX_RECONCILE_BASE64_ROW_BYTES = ((MAX_RECONCILE_ROW_BYTES + 2) // 3) * 4
 RECONCILE_COMMIT_ROWS = 512
+COLUMN_DIAGNOSTIC_TABLES = frozenset({"monitoramento_eventos_hub"})
 
 
 class _DiskCounterStore:
@@ -639,7 +640,7 @@ def _parse_json(value: Any, *, source_column: dict[str, Any], is_source: bool) -
                 text,
                 object_pairs_hook=_json_pairs,
                 parse_float=Decimal,
-                parse_int=int,
+                parse_int=Decimal,
                 parse_constant=_reject_json_constant,
             )
         if isinstance(value, (dict, list)):
@@ -987,12 +988,16 @@ def _row_hashes_digest(counts: _DiskCounter, total: int) -> bytes:
 
 
 def _new_accumulator(table: dict[str, Any], mapping: dict[str, Any], store: _DiskCounterStore,
-                     *, side: str, table_name: str) -> dict[str, Any]:
+                     *, side: str, table_name: str, column_diagnostics: bool = False) -> dict[str, Any]:
     columns = table["columns"]
     prefix = f"{side}:{table_name}"
     return {
         "count": 0,
         "hashes": store.counter(prefix + ":rows"),
+        "column_hashes": {
+            c["name"]: store.counter(f"{prefix}:column:{c['name']}")
+            for c in columns
+        } if column_diagnostics else {},
         "maxima": {},
         "sums": {c["name"]: Decimal(0) for c in columns if str(c.get("data_type", "")).lower() in INTEGER_TYPES | NUMERIC_TYPES | FLOAT_TYPES},
         "binary": {c["name"]: {"nonnull": 0, "octets": 0, "nul_bytes": 0,
@@ -1093,6 +1098,9 @@ def _accumulate_row(acc: dict[str, Any], values: list[Any], table: dict[str, Any
         kind = str(column.get("data_type", "")).lower()
         storage_encoding = mapping.get("storage_encodings", {}).get(name) if not is_source else None
         raw, nul = _canonical_value(value, column, is_source=is_source, storage_encoding=storage_encoding)
+        column_counter = acc["column_hashes"].get(name)
+        if column_counter is not None:
+            column_counter.add(hashlib.sha256(raw).digest())
         if column.get("generated_expression_present") is True:
             generated_counter = acc["generated"].get(name)
             if generated_counter is None:
@@ -1170,7 +1178,8 @@ def _accumulate_row(acc: dict[str, Any], values: list[Any], table: dict[str, Any
 
 def _stream_table(connection: Any, *, schema: str, table_name: str, columns: list[dict[str, Any]], mysql: bool,
                   table: dict[str, Any], mapping: dict[str, Any], is_source: bool,
-                  store: _DiskCounterStore, checkpoint: Callable[[Any], None] | None = None) -> dict[str, Any]:
+                  store: _DiskCounterStore, checkpoint: Callable[[Any], None] | None = None,
+                  column_diagnostics: bool = False) -> dict[str, Any]:
     columns = sorted(columns, key=lambda item: int(item.get("ordinal", 0)))
     table = {**table, "columns": columns}
     if mysql:
@@ -1191,7 +1200,10 @@ def _stream_table(connection: Any, *, schema: str, table_name: str, columns: lis
     statement = f"SELECT {select_list} FROM {_qualified(schema, table_name, mysql=mysql)}"
     side = "source" if is_source else "target"
     row_size_limit = _stream_row_size_limit(columns, is_source=is_source)
-    accumulator = _new_accumulator(table, mapping, store, side=side, table_name=table_name)
+    accumulator = _new_accumulator(
+        table, mapping, store, side=side, table_name=table_name,
+        column_diagnostics=column_diagnostics,
+    )
     try:
         with _stream_cursor(
             connection,
@@ -2103,6 +2115,20 @@ def _aggregate_metric_results(tables: dict[str, dict[str, Any]], source_acc: dic
                 "row_hashes_equal": tenant_hashes_equal,
             },
         }
+        if source["column_hashes"] or target["column_hashes"]:
+            if set(source["column_hashes"]) != set(target["column_hashes"]):
+                _fail("COLUMN_DIAGNOSTIC_MAPPING_MISMATCH")
+            result[table]["column_value_multisets"] = {
+                column: {
+                    "source_cells": left.total(),
+                    "target_cells": target["column_hashes"][column].total(),
+                    "source_distinct_values": left.unique_count(),
+                    "target_distinct_values": target["column_hashes"][column].unique_count(),
+                    "multiset_difference_count": left.difference_count(target["column_hashes"][column]),
+                    "equal": left.equals(target["column_hashes"][column]),
+                }
+                for column, left in source["column_hashes"].items()
+            }
     return result
 
 
@@ -2117,6 +2143,7 @@ def reconcile(
     temp_root: Path | str | None = None,
     expected_target_database: str = TARGET_DATABASE,
     live_source_snapshot: dict[str, Any] | None = None,
+    column_diagnostic_tables: set[str] | frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """Compare origem read-only e destino allowlisted usando entradas injetadas.
 
@@ -2144,6 +2171,8 @@ def reconcile(
     current_table: str | None = None
     current_side: str | None = None
     try:
+        if not set(column_diagnostic_tables).issubset(COLUMN_DIAGNOSTIC_TABLES):
+            _fail("COLUMN_DIAGNOSTIC_TABLE_NOT_ALLOWLISTED")
         counter_store = _DiskCounterStore(temp_root=temp_root)
         _validate_snapshot_provenance(snapshot, live_source_snapshot)
         tables_manifest, normalized_mappings = _validate_contract(
@@ -2151,6 +2180,8 @@ def reconcile(
         )
         result["table_failures"] = _load_table_failures(report)
         names = sorted(tables_manifest)
+        if not set(column_diagnostic_tables).issubset(names):
+            _fail("COLUMN_DIAGNOSTIC_TABLE_NOT_IN_SNAPSHOT")
         source_acc: dict[str, dict[str, Any]] = {}
         target_acc: dict[str, dict[str, Any]] = {}
         for name in names:
@@ -2161,11 +2192,13 @@ def reconcile(
             source_acc[name] = _stream_table(
                 source, schema=SOURCE_SCHEMA, table_name=name, columns=cols, mysql=True,
                 table=table, mapping=mapping, is_source=True, store=counter_store, checkpoint=checkpoint,
+                column_diagnostics=name in column_diagnostic_tables,
             )
             current_side = "target"
             target_acc[name] = _stream_table(
                 target, schema=mapping["target_schema"], table_name=name, columns=cols, mysql=False,
                 table=table, mapping=mapping, is_source=False, store=counter_store, checkpoint=checkpoint,
+                column_diagnostics=name in column_diagnostic_tables,
             )
 
         current_table = None

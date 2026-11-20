@@ -515,3 +515,11 @@ Reteste da release corretiva `0578cf3ba43b79376e86ccf746d4d86965912af8`: **22/22
 - Captura v12 e preflight da release `0481548` passaram; load abortou com `POSTGRES_PRIMARY_KEY_CREATE_FAILED` / `42P07` na criação post-load das PKs.
 - O report privado confirmou `FAILED_ROLLED_BACK` e limpeza source/target/spool; carga não aceita, sem quick-loader/comparação ou validação pós-carga.
 - Causa: nome `PRIMARY` repetido para índices de várias tabelas. DDL corrigido para gerar nome único por tabela; 251 testes P2 e gates PHP/SQL/sintaxe passaram. Fix ainda aguarda commit/push e nova release/captura/preflight/load.
+
+
+### PostgreSQL P2/P3/P5 — preparação local e gates — 2026-11-20
+
+- Canonicalização de JSON no reconciliador: `json.loads` usa `Decimal` para inteiros e decimais, com chaves ordenadas; regressão sintética confirma equivalência numérica. O diagnóstico agregado por coluna permanece limitado a `monitoramento_eventos_hub`.
+- Login web/CPF legado e sessão Portal Bearer ganharam caminho PostgreSQL tenant-scoped; 20 testes auth/RBAC e 12 Portal/Bearer passaram. Quatro `php -l` e linter SQL explícito passaram; homologação HTTP/PHP-FPM live ainda pendente.
+- Runners P5 locais: suíte sintética 18 testes + 4 subtestes. Captura de catálogo segue restrita a `erp_pg_source`; manutenção cobre os dois vhosts 443 com exceção IPv4 `/32` root-only e sem reload; rollback não opera bancos. Backup final permanece fail-closed até definição de credencial dedicada.
+- Gates adicionais: 288 testes P2 + 117 subtestes, `py_compile`, `bash -n` e `git diff --check` PASS. Nenhuma reconciliação live, carga, alteração na VM/Nginx/produção, troca do 8443 ou cutover foi executada. A divergência já registrada em `monitoramento_eventos_hub` e a retry single-use consumida mantêm P2 e P5 em NO-GO.

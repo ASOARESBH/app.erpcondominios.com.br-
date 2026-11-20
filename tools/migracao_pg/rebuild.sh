@@ -39,7 +39,7 @@ cleanup() {
 trap cleanup EXIT
 
 usage() {
-    printf 'Uso: %s development catalog-bundle | %s development catalog-rebind <report.json> | %s development reconcile <nome-bundle> <arquivo-defaults-source> <report.json> | %s {development|cutover} {preflight|load} <nome-bundle> <arquivo-defaults-source>\n' "$0" "$0" "$0" "$0" >&2
+    printf 'Uso: %s development catalog-bundle | %s development catalog-rebind <report.json> | %s development reconcile <nome-bundle> <arquivo-defaults-source> <report.json> | %s development reconcile-read-only <nome-bundle> <load-report.json> [--diagnose-monitoramento-eventos-hub] | %s {development|cutover} {preflight|load} <nome-bundle> <arquivo-defaults-source>\n' "$0" "$0" "$0" "$0" "$0" >&2
     exit 64
 }
 
@@ -49,6 +49,8 @@ command=$2
 bundle=''
 source_defaults_file=''
 report_file=''
+load_report_file=''
+diagnose_column=false
 [[ "$profile" == "$PROFILE_DEVELOPMENT" || "$profile" == "$PROFILE_CUTOVER" ]] || { printf 'REBUILD_ERROR=PROFILE_NOT_ALLOWED\n' >&2; exit 64; }
 if [[ "$command" == 'catalog-bundle' ]]; then
     [[ $# -eq 2 && "$profile" == "$PROFILE_DEVELOPMENT" ]] || usage
@@ -71,6 +73,23 @@ elif [[ "$command" == 'reconcile' ]]; then
         exit 64
     }
     [[ "$report_file" =~ ^/var/backups/erpcondominios/p2-runs/rebuild-[0-9]{8}T[0-9]{6}Z-[0-9]+\.json$ ]] || {
+        printf 'REBUILD_ERROR=REPORT_FILE_NOT_ALLOWLISTED\n' >&2
+        exit 78
+    }
+elif [[ "$command" == 'reconcile-read-only' ]]; then
+    [[ "$profile" == "$PROFILE_DEVELOPMENT" && ( $# -eq 4 || $# -eq 5 ) ]] || usage
+    bundle=$3
+    load_report_file=$4
+    source_defaults_file=$SOURCE_DEFAULTS_FILE
+    if [[ $# -eq 5 ]]; then
+        [[ "$5" == '--diagnose-monitoramento-eventos-hub' ]] || usage
+        diagnose_column=true
+    fi
+    [[ "$bundle" =~ ^catalog-[a-f0-9]{12}-collation-[a-f0-9]{8}-role-[a-f0-9]{8}-code-[a-f0-9]{8}$ ]] || {
+        printf 'REBUILD_ERROR=BUNDLE_NAME_INVALID\n' >&2
+        exit 64
+    }
+    [[ "$load_report_file" =~ ^/var/backups/erpcondominios/p2-runs/rebuild-[0-9]{8}T[0-9]{6}Z-[0-9]+\.json$ ]] || {
         printf 'REBUILD_ERROR=REPORT_FILE_NOT_ALLOWLISTED\n' >&2
         exit 78
     }
@@ -461,7 +480,7 @@ try:
 except Exception: sys.exit(1)
 base=isinstance(d,dict) and d.get("release_sha")==sys.argv[2] and d.get("bundle_name")==sys.argv[3] and isinstance(d.get("bundle_name"),str) and re.fullmatch(r"catalog-[a-f0-9]{12}-collation-[a-f0-9]{8}-role-[a-f0-9]{8}-code-[a-f0-9]{8}",d["bundle_name"])
 ordinary=base and set(d)=={"release_sha","bundle_name"}
-rebound=base and set(d)=={"release_sha","bundle_name","load_evidence"} and sys.argv[4] in {"preflight","reconcile"} and isinstance(d.get("load_evidence"),dict)
+rebound=base and set(d)=={"release_sha","bundle_name","load_evidence"} and sys.argv[4] in {"preflight","reconcile","reconcile-read-only"} and isinstance(d.get("load_evidence"),dict)
 ok=ordinary or rebound
 sys.exit(0 if ok else 1)
 ' "$selection_file" "$release_id" "$bundle" "$command" && printf 'yes' || printf 'no')
@@ -469,6 +488,49 @@ sys.exit(0 if ok else 1)
         printf 'REBUILD_ERROR=CATALOG_BUNDLE_SELECTION_MISMATCH\n' >&2
         exit 78
     }
+fi
+
+if [[ "$command" == 'reconcile-read-only' ]]; then
+    phase='read-only-reconciliation-load-report-validation'
+    trusted_directory_chain "$REPORT_ROOT" && [[ "$(/usr/bin/stat -c '%u:%a' -- "$REPORT_ROOT")" == '0:700' ]] || {
+        printf 'REBUILD_ERROR=REPORT_ROOT_MODE_INVALID\n' >&2
+        exit 78
+    }
+    trusted_file "$load_report_file" && [[ "$(/usr/bin/stat -c '%u:%a' -- "$load_report_file")" == '0:600' ]] || {
+        printf 'REBUILD_ERROR=REPORT_FILE_MODE_INVALID\n' >&2
+        exit 78
+    }
+    phase='read-only-reconciliation'
+    readonly_args=(
+        --profile development
+        --bundle-name "$bundle"
+        --source-defaults-file "$source_defaults_file"
+        --load-report-file "$load_report_file"
+    )
+    if [[ "$diagnose_column" == true ]]; then
+        readonly_args+=(--diagnose-monitoramento-eventos-hub)
+    fi
+    set +e
+    readonly_json=$(/usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/bin/env -i "PATH=$SYSTEM_PATH" ERP_P2_ROOT_LAUNCHER_VERIFIED=1 \
+        "$python_bin" -E -B -m tools.migracao_pg.loader reconcile-read-only "${readonly_args[@]}")
+    readonly_exit=$?
+    set -e
+    if [[ -z "$readonly_json" ]]; then
+        printf 'REBUILD_ERROR=READ_ONLY_RECONCILE_NO_RESULT EXIT=%s\n' "$readonly_exit" >&2
+        exit 78
+    fi
+    printf '%s\n' "$readonly_json"
+    readonly_status=$(/usr/bin/env -i "PATH=$SYSTEM_PATH" "$python_bin" -E -B -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status", "BLOCKED"))' <<< "$readonly_json") || {
+        printf 'REBUILD_ERROR=READ_ONLY_RECONCILE_RESULT_INVALID\n' >&2
+        exit 78
+    }
+    [[ "$readonly_exit" -eq 0 && "$readonly_status" == 'RECONCILED' ]] || {
+        printf 'REBUILD_ERROR=READ_ONLY_RECONCILE_NOT_ACCEPTED STATUS=%s\n' "$readonly_status" >&2
+        exit 78
+    }
+    phase='complete'
+    printf 'REBUILD_STATUS=READ_ONLY_RECONCILIATION_COMPLETE PROFILE=development SOURCE=erp_pg_source TARGET=erp_pg_dev REPEATABLE=true LOAD_REPORT_PRESERVED=true\n'
+    exit 0
 fi
 
 if [[ "$command" == 'reconcile' ]]; then

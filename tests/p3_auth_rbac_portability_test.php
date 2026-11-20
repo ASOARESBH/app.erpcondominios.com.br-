@@ -496,10 +496,12 @@ try {
         p3AssertSame(true, rbacEfetivaPermissaoPermitida($effective2, 'moradores', 'editar'), 'PERMITIR individual deve prevalecer sobre NEGAR de grupo.');
     });
 
-    $test('Portal PostgreSQL bloqueia antes de escrita e o verificador não expõe session_id', static function (): void {
+    $test('Portal PostgreSQL cria e valida sessão Bearer tenant-scoped sem relaxar RBAC', static function (): void {
         $login = file_get_contents(__DIR__ . '/../api/api_verificar_tipo_login.php');
         $authHelper = file_get_contents(__DIR__ . '/../api/auth_helper.php');
         $session = file_get_contents(__DIR__ . '/../api/verificar_sessao_completa.php');
+        $cpfLogin = file_get_contents(__DIR__ . '/../api/validar_login_morador.php');
+        $logout = file_get_contents(__DIR__ . '/../api/logout_morador.php');
         $frontend = file_get_contents(__DIR__ . '/../frontend/login.html');
         $sessionInitializer = strpos($login, 'function iniciar_sessao_autenticada_limpa');
         $erpStart = strpos($login, '// 5c. Criar sessão ERP com tenant_id');
@@ -509,7 +511,7 @@ try {
         $portalReset = strpos($login, 'iniciar_sessao_autenticada_limpa();', $portalStart);
         $portalToken = strpos($login, '$token     = bin2hex(random_bytes(32))', $portalStart);
         $portalBegin = strpos($login, '$conexao->begin_transaction()', $portalStart);
-        $portalDelete = strpos($login, 'DELETE FROM sessoes_portal WHERE morador_id = ?', $portalStart);
+        $portalDelete = strpos($login, 'DELETE FROM sessoes_portal WHERE morador_id = ? AND tenant_id = ?', $portalStart);
         $portalInsert = strpos($login, 'INSERT INTO sessoes_portal', $portalStart);
         $portalUpdate = strpos($login, 'UPDATE moradores SET ultimo_acesso = NOW()', $portalStart);
         $portalResponse = strpos($login, '$respostaPortal = json_encode([', $portalStart);
@@ -528,27 +530,30 @@ try {
         $moradoresDdlStart = strpos($moradoresDdl, 'CREATE TABLE IF NOT EXISTS moradores');
         $moradoresDdlEnd = is_int($moradoresDdlStart) ? strpos($moradoresDdl, ';', $moradoresDdlStart) : false;
         p3AssertSame(true, is_int($moradoresDdlStart) && is_int($moradoresDdlEnd) && str_contains(substr($moradoresDdl, $moradoresDdlStart, $moradoresDdlEnd - $moradoresDdlStart), 'ENGINE=InnoDB'), 'Rollback da transação que atualiza último acesso depende de moradores InnoDB no DDL canônico.');
-        p3AssertSame(true, str_contains($catchBlock, 'if ($portalTransactionStarted') && str_contains($catchBlock, '$conexao->rollback()') && str_contains($catchBlock, 'if ($novaSessaoAutenticada') && str_contains($catchBlock, 'session_destroy()') && str_contains($catchBlock, 'conectar_banco()') && str_contains($catchBlock, 'DELETE FROM sessoes_portal WHERE morador_id = ? AND token = ?') && str_contains($catchBlock, 'if (!$stmt_revogar->execute())'), 'Falha deve reverter sessões anteriores, destruir sessão PHP parcial e tentar revogar token isolado.');
+        p3AssertSame(true, str_contains($catchBlock, 'if ($portalTransactionStarted') && str_contains($catchBlock, '$conexao->rollback()') && str_contains($catchBlock, 'if ($novaSessaoAutenticada') && str_contains($catchBlock, 'session_destroy()') && str_contains($catchBlock, 'conectar_banco()') && str_contains($catchBlock, 'DELETE FROM sessoes_portal WHERE morador_id = ? AND tenant_id = ? AND token = ?') && str_contains($catchBlock, 'if (!$stmt_revogar->execute())'), 'Falha deve reverter sessões anteriores, destruir sessão PHP parcial e revogar token no escopo tenant/morador.');
         p3AssertSame(true, str_contains($catchBlock, 'try { fechar_conexao($conexaoRevogacao); } catch (Throwable) {}') && str_contains($catchBlock, "try {\n            fechar_conexao(\$conexao);\n        } catch (Throwable)"), 'Falha ao fechar qualquer conexão no catch não pode impedir destruição da sessão nem resposta genérica.');
         $committedGuard = strpos($catchBlock, 'if ($portalTransactionCommitted && isset($respostaPortal)');
         $tokenRevocation = strpos($catchBlock, 'if ($tokenPortalCriado !== null');
         p3AssertSame(true, is_int($committedGuard) && is_int($tokenRevocation) && $committedGuard < $tokenRevocation && str_contains(substr($catchBlock, $committedGuard, $tokenRevocation - $committedGuard), 'echo $respostaPortal;') && str_contains(substr($catchBlock, $committedGuard, $tokenRevocation - $committedGuard), 'exit;'), 'Após commit confirmado, falha tardia deve devolver a resposta serializada e não revogar o token durável.');
-        p3AssertSame(true, is_string($login) && str_contains($login, "if (defined('ERP_DB_DRIVER') && ERP_DB_DRIVER === 'pgsql') http_response_code(503);"), 'Falhas do login PostgreSQL devem ter status 503.');
-        p3AssertSame(true, str_contains($login, '$senha_valida_morador && !\\ERP\\Database\\DatabaseDialect::isPostgres($conexao)'), 'Upgrade de senha Portal não pode escrever em PostgreSQL antes do bloqueio.');
+        p3AssertSame(false, str_contains($login, 'O login do Portal do Morador ainda não foi homologado para este driver.'), 'Login Portal deve ser habilitado para PostgreSQL, sem bypass pré-escrita.');
+        p3AssertSame(true, str_contains($login, "m.id = ? AND m.tenant_id = ? AND m.ativo = 1 AND t.status = 'ativo'") && str_contains($login, "WHERE id = ? AND tenant_id = ? AND ativo = 1"), 'Login Portal PostgreSQL deriva tenant do morador e confirma morador/tenant ativos.');
+        p3AssertSame(true, str_contains($login, 'INSERT INTO sessoes_portal (morador_id, tenant_id, token, ip_address, user_agent, data_expiracao)') && str_contains($login, 'columnExists($conexao, \'sessoes_portal\', \'tenant_id\')'), 'Login persiste tenant_id com metadata portável e prepared statements.');
         $getStart = strpos($session, "if (\$_SERVER['REQUEST_METHOD'] === 'GET')");
         $postStart = strpos($session, "if (\$_SERVER['REQUEST_METHOD'] === 'POST')");
         p3AssertSame(true, is_int($getStart) && is_int($postStart) && $postStart > $getStart, 'Blocos GET/POST de sessão precisam existir.');
         $getBlock = substr($session, $getStart, $postStart - $getStart);
-        $getBarrier = strpos($getBlock, 'O login do Portal');
         $getTimeoutConfig = strpos($getBlock, '$config = obter_config_timeout');
         $getPortalLookup = strpos($getBlock, '$sessao = verificar_sessao_portal');
-        p3AssertSame(true, is_int($getBarrier) && is_int($getTimeoutConfig) && is_int($getPortalLookup) && $getBarrier < $getTimeoutConfig && $getTimeoutConfig < $getPortalLookup, 'GET deve bloquear Portal antes de ler config_sessao ou a sessão Bearer.');
+        p3AssertSame(true, is_int($getTimeoutConfig) && is_int($getPortalLookup) && $getTimeoutConfig < $getPortalLookup, 'GET deve validar a sessão Bearer depois de carregar seus limites.');
         $postBlock = substr($session, $postStart);
-        $postBarrier = strpos($postBlock, 'O login do Portal');
         $postTimeoutConfig = strpos($postBlock, '$config = obter_config_timeout');
-        $postPortalUpdate = strpos($postBlock, 'UPDATE sessoes_portal');
-        p3AssertSame(true, is_int($postBarrier) && is_int($postTimeoutConfig) && is_int($postPortalUpdate) && $postBarrier < $postTimeoutConfig && $postTimeoutConfig < $postPortalUpdate, 'POST deve bloquear Portal antes de ler config_sessao ou atualizar sessão Bearer.');
+        $postPortalUpdate = strpos($postBlock, '$sessaoPortal = verificar_sessao_portal');
+        p3AssertSame(true, is_int($postTimeoutConfig) && is_int($postPortalUpdate) && $postTimeoutConfig < $postPortalUpdate, 'POST deve verificar existência, tenant, atividade e expiração antes de informar renovação.');
+        p3AssertSame(true, str_contains($session, 'sp.token=? AND sp.ativo=1 AND m.ativo=1') && str_contains($session, 'sp.tenant_id=m.tenant_id') && str_contains($session, 'data_expiracao') && str_contains($session, 'UPDATE sessoes_portal SET ultimo_ativo=NOW() WHERE id=? AND token=? AND morador_id=? AND tenant_id=? AND ativo=1'), 'Validação GET/POST deve exigir token, morador/tenant ativos, expiração e update scoped.');
+        p3AssertSame(true, str_contains($session, "if (!\$sessaoPortal || !empty(\$sessaoPortal['expirou'])) retornar_erro_sessao") && str_contains($session, '$update->affected_rows > 0') && str_contains($session, '$stmt->affected_rows > 0'), 'Sucesso de renovação/logout somente segue confirmação da sessão afetada.');
         p3AssertSame(false, str_contains($session, 'session_id()'), 'A resposta do verificador não pode incluir o PHP session_id.');
+        p3AssertSame(true, is_string($cpfLogin) && str_contains($cpfLogin, 'DatabaseDialect::columnExists($conexao, \'moradores\', \'tenant_id\')') && str_contains($cpfLogin, 'DatabaseDialect::columnExists($conexao, \'sessoes_portal\', \'tenant_id\')') && str_contains($cpfLogin, 'begin_transaction()') && str_contains($cpfLogin, 'tenant_id = ? AND ativo = 1'), 'Rota CPF ativa valida tenant e persiste sessão em transação com escopo de morador.');
+        p3AssertSame(true, is_string($logout) && str_contains($logout, 'DatabaseDialect::columnExists($conexao, \'sessoes_portal\', \'tenant_id\')') && str_contains($logout, 'WHERE token=? AND morador_id=? AND tenant_id=? AND ativo=1'), 'Logout usa metadata portável e revogação tenant+morador-scoped.');
         p3AssertSame(true, str_contains($session, 'if ($uid >= 0)'), 'ID de usuário zero deve atualizar o estado sessao_inativa no verificador.');
         p3AssertSame(true, str_contains($login, "OR ? = 'super_admin'") && str_contains($login, 't.slug = ?') && str_contains($login, 'resolverTenantSlugDaUrl(!$isPostgres)'), 'super_admin global só pode acessar tenant ativo resolvido pelo host do servidor.');
         p3AssertSame(false, str_contains($login, 'tenant_slug_escolhido') || str_contains($frontend, 'tenant_slug_escolhido') || str_contains($frontend, '_escolherTenant') || str_contains($frontend, '_criarPopupTenant'), 'P3.2 não pode aceitar seleção tenant do cliente nem reenviar senha para um segundo POST.');

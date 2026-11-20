@@ -17,6 +17,7 @@ from tools.migracao_pg.ddl import MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_M
 from tools.migracao_pg.reconcile import _DiskCounterStore, _accumulate_row, _aggregate_metric_results, _binary_storage_schema_metric, _foreign_key_metric, _new_accumulator, _stream_row_size_limit
 from tools.migracao_pg.reconcile import _audit_pk_text as reconcile_audit_pk_text
 from tools.migracao_pg.reconcile import ReconciliationError, _execute, _identity_value, canonical_row_sha256, reconcile as _reconcile
+from tools.migracao_pg.reconcile import _parse_json
 from tools.migracao_pg.type_mapping import BINARY_STORAGE_POLICY_ID, expected_binary_storage_manifest
 
 
@@ -392,6 +393,12 @@ class CanonicalRowHashTests(unittest.TestCase):
         self.assertEqual(canonical_row_sha256((Decimal("1.20"),), numeric), canonical_row_sha256(("1.20",), numeric))
         json_column = [{"name": "j", "data_type": "json", "column_type": "json", "character_set": "utf8mb4"}]
         self.assertEqual(canonical_row_sha256((' {"b":2,"a":1} ',), json_column), canonical_row_sha256((' {"a":1,"b":2} ',), json_column))
+        self.assertEqual(canonical_row_sha256((b'{"n":1.000,"s":"\\u00e9"}',), json_column),
+                         canonical_row_sha256((' {"s":"é","n":1} ',), json_column))
+        parsed_json = _parse_json('{"integer":1,"decimal":1.000}', source_column=json_column[0], is_source=False)
+        self.assertIsInstance(parsed_json["integer"], Decimal)
+        self.assertIsInstance(parsed_json["decimal"], Decimal)
+        self.assertEqual(parsed_json["integer"], parsed_json["decimal"])
         self.assertNotEqual(canonical_row_sha256((b'{"a":[1,2]}',), json_column), canonical_row_sha256((b'{"a":[2,1]}',), json_column))
         nul_json = b'{"a":"\\u0000"}'
         clean_json = b'{"a":""}'
@@ -591,6 +598,34 @@ class ReconciliationMetricsTests(unittest.TestCase):
         self.assertMetric(result, "row_hash_multiset", "DIVERGED")
         self.assertNotIn("other-secret-description", repr(result))
         self.assertNotIn(hashlib.sha256(b"other-secret-description").hexdigest(), repr(result))
+
+    def test_column_diagnostic_reports_only_aggregate_multiset_difference(self):
+        source, target, snapshot, report, mappings = base_contract(
+            target_rows=[(1, 7, Decimal("2.30"), b"\x00x", "hithere", "b")]
+        )
+        store = _DiskCounterStore()
+        try:
+            table = snapshot["tables"][0]
+            mapping = mappings["synthetic"]
+            left = _new_accumulator(table, mapping, store, side="source", table_name="synthetic", column_diagnostics=True)
+            right = _new_accumulator(table, mapping, store, side="target", table_name="synthetic", column_diagnostics=True)
+            _accumulate_row(left, SOURCE_ROW, table, mapping, is_source=True)
+            _accumulate_row(right, target.table_rows[0], table, mapping, is_source=False)
+            store.commit()
+            metrics = _aggregate_metric_results(
+                {"synthetic": table}, {"synthetic": left}, {"synthetic": right}
+            )["synthetic"]["column_value_multisets"]
+            self.assertTrue(metrics["description"]["equal"])
+            self.assertEqual(metrics["description"]["multiset_difference_count"], 0)
+            self.assertFalse(metrics["state"]["equal"])
+            self.assertEqual(metrics["state"]["multiset_difference_count"], 2)
+            self.assertEqual(metrics["state"]["source_cells"], 1)
+            self.assertEqual(metrics["state"]["target_cells"], 1)
+            rendered = repr(metrics)
+            for value in ("hithere", "other-secret-description", "private-row-value", "sha256"):
+                self.assertNotIn(value, rendered)
+        finally:
+            store.close()
 
     def test_max_id_divergence(self):
         changed = (2, 7, Decimal("2.30"), b"\x00x", "hithere", "a")
@@ -976,6 +1011,79 @@ class ReconciliationMetricsTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "DATABASE_QUERY_FAILED")
         self.assertEqual(caught.exception.sqlstate, "42P01")
         self.assertEqual(str(caught.exception), "DATABASE_QUERY_FAILED")
+
+
+class ColumnDiagnosticTests(unittest.TestCase):
+    def test_multiset_counts_nulls_duplicates_and_canonical_json(self):
+        table_name = "monitoramento_eventos_hub"
+        table = {
+            "name": table_name,
+            "type": "BASE TABLE",
+            "primary_key": [{"ordinal": 1, "column": "id"}],
+            "columns": [
+                {"name": "id", "ordinal": 1, "data_type": "int", "column_type": "int", "extra": ""},
+                {"name": "tenant_id", "ordinal": 2, "data_type": "int", "column_type": "int", "extra": ""},
+                {"name": "metadata_json", "ordinal": 3, "data_type": "json", "column_type": "json", "character_set": "utf8mb4", "extra": ""},
+                {"name": "observacao", "ordinal": 4, "data_type": "text", "column_type": "text", "character_set": "utf8mb4", "extra": ""},
+            ],
+        }
+        source_rows = [
+            (1, 9, b'{"b":2,"a":1.000,"unicode":"\\u00e9"}', None),
+            (2, 9, b'{"a":1,"b":2.0,"unicode":"\xc3\xa9"}', "same"),
+            (3, 9, b'{"unicode":"\xc3\xa9","b":2,"a":1}', "same"),
+        ]
+        target_rows = [
+            (11, 9, '{"unicode":"é","b":2.00,"a":1}', None),
+            (12, 9, '{"b":2,"a":1,"unicode":"é"}', "same"),
+            (13, 9, '{"a":1.000,"b":2,"unicode":"é"}', "different"),
+        ]
+        mapping = {"storage_encodings": {}, "enum_labels": {}}
+        store = _DiskCounterStore()
+        try:
+            source_acc = _new_accumulator(table, mapping, store, side="source", table_name=table_name, column_diagnostics=True)
+            target_acc = _new_accumulator(table, mapping, store, side="target", table_name=table_name, column_diagnostics=True)
+            for row in source_rows:
+                _accumulate_row(source_acc, row, table, mapping, is_source=True)
+            for row in target_rows:
+                _accumulate_row(target_acc, row, table, mapping, is_source=False)
+            store.commit()
+            result = _aggregate_metric_results(
+                {table_name: table}, {table_name: source_acc}, {table_name: target_acc}
+            )[table_name]["column_value_multisets"]
+            self.assertEqual(result["metadata_json"]["source_cells"], 3)
+            self.assertEqual(result["metadata_json"]["target_cells"], 3)
+            self.assertEqual(result["metadata_json"]["source_distinct_values"], 1)
+            self.assertEqual(result["metadata_json"]["target_distinct_values"], 1)
+            self.assertEqual(result["metadata_json"]["multiset_difference_count"], 0)
+            self.assertTrue(result["metadata_json"]["equal"])
+            self.assertEqual(result["observacao"]["source_distinct_values"], 2)
+            self.assertEqual(result["observacao"]["target_distinct_values"], 3)
+            self.assertEqual(result["observacao"]["multiset_difference_count"], 2)
+            self.assertFalse(result["observacao"]["equal"])
+            rendered = repr(result)
+            for private_value in ("same", "different", "unicode", "é", "sha256"):
+                self.assertNotIn(private_value, rendered)
+        finally:
+            store.close()
+
+    def test_diagnostic_table_allowlist_is_exact_and_snapshot_bound(self):
+        source, target, snapshot, report, mappings = base_contract()
+        rejected = _reconcile(
+            source, target, snapshot, report, mappings,
+            live_source_snapshot=snapshot,
+            column_diagnostic_tables={"synthetic"},
+        )
+        self.assertEqual(rejected["status"], "BLOCKED")
+        self.assertEqual(rejected["failure_code"], "COLUMN_DIAGNOSTIC_TABLE_NOT_ALLOWLISTED")
+
+        source, target, snapshot, report, mappings = base_contract()
+        missing = _reconcile(
+            source, target, snapshot, report, mappings,
+            live_source_snapshot=snapshot,
+            column_diagnostic_tables={"monitoramento_eventos_hub"},
+        )
+        self.assertEqual(missing["status"], "BLOCKED")
+        self.assertEqual(missing["failure_code"], "COLUMN_DIAGNOSTIC_TABLE_NOT_IN_SNAPSHOT")
 
 
 if __name__ == "__main__":

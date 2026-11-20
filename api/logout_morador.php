@@ -5,6 +5,7 @@
 
 session_start();
 require_once 'config.php';
+require_once __DIR__ . '/db/DatabaseDialect.php';
 
 // Revogar o Bearer desta sessão antes de destruir a sessão PHP. O token nunca
 // é aceito do query string e a revogação é restringida ao morador/tenant da sessão.
@@ -12,35 +13,38 @@ $moradorId = (int)($_SESSION['morador_id'] ?? 0);
 $tenantId = (int)($_SESSION['tenant_id'] ?? 0);
 $tokenPortal = (string)($_SESSION['morador_portal_token'] ?? '');
 if ($moradorId > 0 && $tokenPortal !== '') {
-    $conexao = conectar_banco();
-    $stmtTenantSessao = $conexao->prepare("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sessoes_portal' AND COLUMN_NAME='tenant_id' LIMIT 1");
-    $temTenantSessao = false;
-    if ($stmtTenantSessao) {
-        $stmtTenantSessao->execute();
-        $temTenantSessao = (bool)$stmtTenantSessao->get_result()->fetch_row();
-        $stmtTenantSessao->close();
-    }
-    if ($temTenantSessao && $tenantId > 0) {
-        $stmtRevogar = $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE token=? AND morador_id=? AND tenant_id=? AND ativo=1');
-        if ($stmtRevogar) {
+    $conexao = null;
+    try {
+        $conexao = conectar_banco();
+        $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
+        $temTenantSessao = \ERP\Database\DatabaseDialect::columnExists($conexao, 'sessoes_portal', 'tenant_id');
+        if ($isPostgres && (!$temTenantSessao || $tenantId <= 0)) {
+            throw new RuntimeException('Schema de sessão Portal sem tenant válido.');
+        }
+        if ($temTenantSessao) {
+            $stmtRevogar = $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE token=? AND morador_id=? AND tenant_id=? AND ativo=1');
+            if (!$stmtRevogar) throw new RuntimeException('Falha ao preparar revogação Portal.');
             $stmtRevogar->bind_param('sii', $tokenPortal, $moradorId, $tenantId);
-            $stmtRevogar->execute();
-            $stmtRevogar->close();
-        }
-    } else {
-        $stmtRevogar = $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE token=? AND morador_id=? AND ativo=1');
-        if ($stmtRevogar) {
+        } else {
+            // Compatibilidade MySQL apenas para schemas legados sem coluna tenant_id.
+            $stmtRevogar = $conexao->prepare('UPDATE sessoes_portal SET ativo=0 WHERE token=? AND morador_id=? AND ativo=1');
+            if (!$stmtRevogar) throw new RuntimeException('Falha ao preparar revogação Portal.');
             $stmtRevogar->bind_param('si', $tokenPortal, $moradorId);
-            $stmtRevogar->execute();
-            $stmtRevogar->close();
+        }
+        if (!$stmtRevogar->execute()) throw new RuntimeException('Falha ao revogar sessão Portal.');
+        $stmtRevogar->close();
+    } catch (Throwable $e) {
+        error_log('[logout_morador] Falha ao revogar sessão Portal.');
+    } finally {
+        if ($conexao !== null) {
+            try { fechar_conexao($conexao); } catch (Throwable) { error_log('[logout_morador] Falha ao fechar conexão.'); }
         }
     }
-    fechar_conexao($conexao);
 }
 
 // Registrar log antes de destruir a sessão
 if (isset($_SESSION['morador_nome'])) {
-    registrar_log('LOGOUT_MORADOR', 'Morador deslogado do Portal.', $_SESSION['morador_nome']);
+    registrar_log('LOGOUT_MORADOR', 'LOGOUT_PORTAL', null, false);
 }
 
 // Destruir todas as variáveis de sessão

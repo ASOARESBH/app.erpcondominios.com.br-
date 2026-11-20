@@ -108,14 +108,19 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 $novaSessaoAutenticada = false;
 $tokenPortalCriado = null;
 $moradorTokenCriadoId = null;
+$moradorTokenCriadoTenantId = null;
 $portalTransactionStarted = false;
 $portalTransactionCommitted = false;
 
 try {
     $conexao = conectar_banco();
-    if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
+    $isPostgresLogin = \ERP\Database\DatabaseDialect::isPostgres($conexao);
+    if ($isPostgresLogin) {
         require_once __DIR__ . '/rbac_helper.php';
         rbacTabelasDisponiveis($conexao);
+        if (!\ERP\Database\DatabaseDialect::columnExists($conexao, 'moradores', 'tenant_id')) {
+            throw new RuntimeException('Schema de moradores sem tenant_id.');
+        }
     }
 
     $encontrou_erp     = false;
@@ -159,8 +164,9 @@ try {
     }
 
     // ─── 2. Verificar tabela MORADORES (Portal) ────────────────────────────
+    $tenantSelectMorador = $isPostgresLogin ? ', tenant_id' : '';
     $stmt = $conexao->prepare(
-        "SELECT id, nome, email, senha, cpf, unidade, ativo, senha_temporaria
+        "SELECT id, nome, email, senha, cpf, unidade, ativo, senha_temporaria{$tenantSelectMorador}
          FROM moradores WHERE email = ? LIMIT 1"
     );
     $stmt->bind_param('s', $email);
@@ -201,7 +207,8 @@ try {
                     'email'            => $morador['email'],
                     'cpf'              => $morador['cpf'],
                     'unidade'          => $morador['unidade'],
-                    'senha_temporaria' => (int)($morador['senha_temporaria'] ?? 0)
+                    'senha_temporaria' => (int)($morador['senha_temporaria'] ?? 0),
+                    'tenant_id'        => $isPostgresLogin ? (int)$morador['tenant_id'] : null
                 ];
             }
         }
@@ -438,10 +445,6 @@ try {
 
     // ─── 6. AUTENTICAÇÃO MORADOR ─────────────────────────────────────────
     if ($tipo_final === 'morador') {
-        if (\ERP\Database\DatabaseDialect::isPostgres($conexao)) {
-            http_response_code(503);
-            retornar_json(false, 'O login do Portal do Morador ainda não foi homologado para este driver.');
-        }
         iniciar_sessao_autenticada_limpa();
         $novaSessaoAutenticada = true;
         $token     = bin2hex(random_bytes(32));
@@ -450,18 +453,29 @@ try {
         $expiracao = date('Y-m-d H:i:s', strtotime('+7 days'));
         $ip        = $_SERVER['REMOTE_ADDR'] ?? '';
         $ua        = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $isPostgres = \ERP\Database\DatabaseDialect::isPostgres($conexao);
 
-        // Resolver tenant do morador pelo tenant_id da tabela moradores
+        // PostgreSQL só aceita tenant_id derivado do morador e tenant ativo.
         $tenant_morador = null;
-        $stmt_tm = $conexao->prepare(
-            "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.logo_url, t.plano
-             FROM tenants t
-             INNER JOIN moradores m ON m.tenant_id = t.id
-             WHERE m.id = ? AND t.status = 'ativo'
-             LIMIT 1"
-        );
+        $stmt_tm = $isPostgres
+            ? $conexao->prepare(
+                "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.logo_url, t.plano
+                 FROM moradores m INNER JOIN tenants t ON t.id = m.tenant_id
+                 WHERE m.id = ? AND m.tenant_id = ? AND m.ativo = 1 AND t.status = 'ativo' LIMIT 1"
+            )
+            : $conexao->prepare(
+                "SELECT t.id, t.slug, t.razao_social, t.nome_fantasia, t.logo_url, t.plano
+                 FROM tenants t INNER JOIN moradores m ON m.tenant_id = t.id
+                 WHERE m.id = ? AND t.status = 'ativo' LIMIT 1"
+            );
         if (!$stmt_tm) throw new RuntimeException('Não foi possível validar o tenant do morador.');
-        $stmt_tm->bind_param('i', $dados_morador['id']);
+        if ($isPostgres) {
+            $tenantMoradorId = (int)($dados_morador['tenant_id'] ?? 0);
+            if ($tenantMoradorId <= 0) throw new RuntimeException('Não foi possível identificar o condomínio do morador.');
+            $stmt_tm->bind_param('ii', $dados_morador['id'], $tenantMoradorId);
+        } else {
+            $stmt_tm->bind_param('i', $dados_morador['id']);
+        }
         if (!$stmt_tm->execute()) {
             $stmt_tm->close();
             throw new RuntimeException('Não foi possível validar o tenant do morador.');
@@ -471,33 +485,45 @@ try {
             $tenant_morador = $res_tm->fetch_assoc();
         }
         $stmt_tm->close();
-        // Fallback: tenant 1
-        if (!$tenant_morador) {
+        // Compatibilidade histórica MySQL; nunca sintetizar tenant no PostgreSQL.
+        if (!$tenant_morador && !$isPostgres) {
             $tenant_morador = carregarTenantPorId($conexao, 1);
         }
+        if (!$tenant_morador && $isPostgres) throw new RuntimeException('Tenant ativo do morador indisponível.');
+        $tenantSessaoPortalId = (int)($tenant_morador['id'] ?? 0);
+        $moradorTokenCriadoTenantId = $tenantSessaoPortalId;
 
         // Limpar tokens antigos e inserir novo
         $sessoesPortalDisponivel = \ERP\Database\DatabaseDialect::tableExists($conexao, 'sessoes_portal');
         if (!$sessoesPortalDisponivel) {
             throw new RuntimeException('Schema de sessões do Portal indisponível.');
         }
+        $portalSessionHasTenant = \ERP\Database\DatabaseDialect::columnExists($conexao, 'sessoes_portal', 'tenant_id');
+        if ($isPostgres && !$portalSessionHasTenant) {
+            throw new RuntimeException('Schema de sessões do Portal sem tenant_id.');
+        }
+        if ($portalSessionHasTenant && $tenantSessaoPortalId <= 0) {
+            throw new RuntimeException('Não foi possível identificar o condomínio da sessão do Portal.');
+        }
         if (!$conexao->begin_transaction()) {
             throw new RuntimeException('Não foi possível iniciar a transação da sessão Portal.');
         }
         $portalTransactionStarted = true;
-        $stmt_del = $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ?");
+        $stmt_del = $portalSessionHasTenant
+            ? $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ? AND tenant_id = ?")
+            : $conexao->prepare("DELETE FROM sessoes_portal WHERE morador_id = ?");
         if (!$stmt_del) throw new RuntimeException('Não foi possível preparar a limpeza de sessões do Portal.');
-        $stmt_del->bind_param('i', $dados_morador['id']);
+        if ($portalSessionHasTenant) {
+            $stmt_del->bind_param('ii', $dados_morador['id'], $tenantSessaoPortalId);
+        } else {
+            $stmt_del->bind_param('i', $dados_morador['id']);
+        }
         if (!$stmt_del->execute()) {
             $stmt_del->close();
             throw new RuntimeException('Não foi possível limpar sessões anteriores do Portal.');
         }
         $stmt_del->close();
 
-        $portalSessionHasTenant = \ERP\Database\DatabaseDialect::columnExists($conexao, 'sessoes_portal', 'tenant_id');
-        if ($portalSessionHasTenant && (int)($tenant_morador['id'] ?? 0) <= 0) {
-            throw new RuntimeException('Não foi possível identificar o condomínio da sessão do Portal.');
-        }
         $stmt_ins = $portalSessionHasTenant
             ? $conexao->prepare(
                 "INSERT INTO sessoes_portal (morador_id, tenant_id, token, ip_address, user_agent, data_expiracao)
@@ -520,12 +546,22 @@ try {
         }
         $stmt_ins->close();
 
-        $stmt_upd = $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW() WHERE id = ?");
+        $stmt_upd = $isPostgres
+            ? $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW() WHERE id = ? AND tenant_id = ? AND ativo = 1")
+            : $conexao->prepare("UPDATE moradores SET ultimo_acesso = NOW() WHERE id = ?");
         if (!$stmt_upd) throw new RuntimeException('Não foi possível preparar o registro do último acesso.');
-        $stmt_upd->bind_param('i', $dados_morador['id']);
+        if ($isPostgres) {
+            $stmt_upd->bind_param('ii', $dados_morador['id'], $tenantSessaoPortalId);
+        } else {
+            $stmt_upd->bind_param('i', $dados_morador['id']);
+        }
         if (!$stmt_upd->execute()) {
             $stmt_upd->close();
             throw new RuntimeException('Não foi possível registrar o último acesso.');
+        }
+        if ($isPostgres && $stmt_upd->affected_rows < 1) {
+            $stmt_upd->close();
+            throw new RuntimeException('Não foi possível confirmar o morador ativo do Portal.');
         }
         $stmt_upd->close();
 
@@ -606,9 +642,20 @@ try {
         $conexaoRevogacao = null;
         try {
             $conexaoRevogacao = conectar_banco();
-            $stmt_revogar = $conexaoRevogacao->prepare('DELETE FROM sessoes_portal WHERE morador_id = ? AND token = ?');
+            $isPostgresRevogacao = \ERP\Database\DatabaseDialect::isPostgres($conexaoRevogacao);
+            $revogacaoTemTenant = \ERP\Database\DatabaseDialect::columnExists($conexaoRevogacao, 'sessoes_portal', 'tenant_id');
+            if ($isPostgresRevogacao && (!$revogacaoTemTenant || (int)$moradorTokenCriadoTenantId <= 0)) {
+                throw new RuntimeException('Schema de revogação Portal sem tenant_id.');
+            }
+            $stmt_revogar = $revogacaoTemTenant
+                ? $conexaoRevogacao->prepare('DELETE FROM sessoes_portal WHERE morador_id = ? AND tenant_id = ? AND token = ?')
+                : $conexaoRevogacao->prepare('DELETE FROM sessoes_portal WHERE morador_id = ? AND token = ?');
             if (!$stmt_revogar) throw new RuntimeException('Não foi possível preparar revogação do token Portal.');
-            $stmt_revogar->bind_param('is', $moradorTokenCriadoId, $tokenPortalCriado);
+            if ($revogacaoTemTenant) {
+                $stmt_revogar->bind_param('iis', $moradorTokenCriadoId, $moradorTokenCriadoTenantId, $tokenPortalCriado);
+            } else {
+                $stmt_revogar->bind_param('is', $moradorTokenCriadoId, $tokenPortalCriado);
+            }
             if (!$stmt_revogar->execute()) throw new RuntimeException('Não foi possível revogar o token Portal.');
             $stmt_revogar->close();
             fechar_conexao($conexaoRevogacao);

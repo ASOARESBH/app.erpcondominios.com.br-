@@ -38,6 +38,7 @@ from .type_mapping import (
 BUNDLE_ROOT = Path("/var/lib/erpcondominios-pg/p2-bundles")
 TARGET_DATABASE = "erp_pg_dev"
 EXPECTED_SOURCE_TABLE_COUNT = 276
+EXPECTED_FOREIGN_KEY_COUNT = 11
 LOAD_PENDING_RECONCILIATION_STATUS = "LOAD_COMMITTED_PENDING_RECONCILIATION"
 PREVIOUS_LOAD_RELEASE_SHA = "e0fbaf119c3ecd300be9511135ccaa2282fc9162"
 PREVIOUS_LOAD_GENERATOR_VERSION = "2.7.0"
@@ -3207,6 +3208,343 @@ def _committed_table_counts_match(report: dict[str, Any], bundle_report: dict[st
         and sum(item["target_rows"] for item in counts) == report.get("rows_loaded")
 
 
+READ_ONLY_RECONCILE_LOAD_STATUSES = frozenset({
+    "LOAD_COMMITTED_PENDING_RECONCILIATION",
+    "LOAD_COMMITTED_RECONCILIATION_BLOCKED",
+    "LOAD_COMMITTED_RECONCILIATION_DIVERGED",
+    "LOAD_COMMITTED_RECONCILED",
+})
+
+
+def _read_private_report_snapshot(path: Path) -> tuple[dict[str, Any], str, tuple[int, ...]]:
+    try:
+        root = REPORT_ROOT.resolve(strict=True)
+        root_info = root.lstat()
+        candidate = path.absolute()
+        if root != REPORT_ROOT or not stat.S_ISDIR(root_info.st_mode) or root_info.st_uid != 0 \
+            or stat.S_IMODE(root_info.st_mode) != 0o700 or candidate.parent.resolve(strict=True) != root \
+            or not re.fullmatch(r"rebuild-[0-9]{8}T[0-9]{6}Z-[0-9]+\.json", candidate.name):
+            raise LoaderError("LOAD_REPORT_PATH_NOT_ALLOWLISTED")
+        fd = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+    except LoaderError:
+        raise
+    except Exception as error:
+        raise LoaderError("LOAD_REPORT_UNAVAILABLE") from error
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
+            raise LoaderError("LOAD_REPORT_MODE_OR_OWNER_INVALID")
+        with os.fdopen(fd, "rb") as stream:
+            fd = -1
+            raw = stream.read(64 * 1024 * 1024 + 1)
+        if len(raw) > 64 * 1024 * 1024:
+            raise LoaderError("LOAD_REPORT_SIZE_LIMIT")
+        parsed = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=_unique_json_pairs)
+        if not isinstance(parsed, dict):
+            raise LoaderError("LOAD_REPORT_INVALID")
+        identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        return parsed, hashlib.sha256(raw).hexdigest(), identity
+    except LoaderError:
+        raise
+    except Exception as error:
+        raise LoaderError("LOAD_REPORT_INVALID") from error
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def _validate_read_only_selection(bundle_name: str, report_path: Path, load_report: dict[str, Any]) -> None:
+    release_sha = _current_release_sha()
+    try:
+        root_info = BUNDLE_ROOT.lstat()
+        selection_path = BUNDLE_ROOT / f"development-v12-{release_sha}.selection"
+        selection_info = selection_path.lstat()
+    except OSError as error:
+        raise LoaderError("BUNDLE_SELECTION_REQUIRED") from error
+    if not stat.S_ISDIR(root_info.st_mode) or root_info.st_uid != 0 or stat.S_IMODE(root_info.st_mode) != 0o700 \
+        or BUNDLE_ROOT.is_symlink() or not stat.S_ISREG(selection_info.st_mode) \
+        or selection_info.st_uid != 0 or stat.S_IMODE(selection_info.st_mode) != 0o600 or selection_path.is_symlink():
+        raise LoaderError("BUNDLE_SELECTION_MODE_INVALID")
+    selection, _ = _read_json(selection_path)
+    if set(selection) == {"release_sha", "bundle_name"}:
+        if selection.get("release_sha") != release_sha or selection.get("bundle_name") != bundle_name:
+            raise LoaderError("BUNDLE_SELECTION_MISMATCH")
+        return
+    if set(selection) == {"release_sha", "bundle_name", "load_evidence"} \
+        and selection.get("release_sha") == release_sha and selection.get("bundle_name") == bundle_name:
+        _read_retry_selection(bundle_name, report_path, load_report)
+        return
+    raise LoaderError("BUNDLE_SELECTION_MISMATCH")
+
+
+def _validate_read_only_load_evidence(
+    load_report: dict[str, Any],
+    load_report_digest: str,
+    bundle: Path,
+    bundle_report: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> None:
+    legacy_scope_valid = load_report.get("legacy_schema") == LEGACY_SCHEMA or (
+        "legacy_schema" not in load_report
+        and load_report.get("generator_version") == PREVIOUS_LOAD_GENERATOR_VERSION
+    )
+    generated_tables = bundle_report.get("generated_tables")
+    if load_report.get("profile") != "development" \
+        or load_report.get("source_schema") != SOURCE_SCHEMA \
+        or load_report.get("target_database") != TARGET_DATABASE \
+        or load_report.get("target_schema") != TARGET_SCHEMA \
+        or not legacy_scope_valid \
+        or load_report.get("status") not in READ_ONLY_RECONCILE_LOAD_STATUSES \
+        or load_report.get("bundle_catalog_fingerprint") != snapshot.get("fingerprint_sha256") \
+        or load_report.get("table_failures") != [] \
+        or load_report.get("tables_loaded") != EXPECTED_SOURCE_TABLE_COUNT \
+        or type(load_report.get("rows_loaded")) is not int or load_report["rows_loaded"] < 0 \
+        or any(load_report.get(key) is not True for key in (
+            "source_cleanup_confirmed", "target_cleanup_confirmed", "nul_spool_cleanup_confirmed"
+        )) \
+        or not isinstance(generated_tables, list) or len(generated_tables) != EXPECTED_SOURCE_TABLE_COUNT \
+        or not _committed_table_counts_match(load_report, bundle_report):
+        raise LoaderError("READ_ONLY_RECONCILE_LOAD_EVIDENCE_INVALID")
+
+    provenance = load_report.get("bundle_provenance")
+    if provenance is None:
+        if load_report.get("generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION:
+            raise LoaderError("READ_ONLY_RECONCILE_LEGACY_PROVENANCE_INVALID")
+        return
+    expected_keys = {
+        "bundle_name", "generator_version", "generator_code_sha256", "catalog_fingerprint_sha256",
+        "collation_overrides_sha256", "application_role_sha256", "generated_scripts_sha256",
+    }
+    if not isinstance(provenance, dict) or set(provenance) != expected_keys \
+        or not isinstance(provenance.get("bundle_name"), str) \
+        or not re.fullmatch(r"catalog-[a-f0-9]{12}-collation-[a-f0-9]{8}-role-[a-f0-9]{8}-code-[a-f0-9]{8}", provenance["bundle_name"]) \
+        or provenance.get("catalog_fingerprint_sha256") != snapshot.get("fingerprint_sha256") \
+        or provenance.get("application_role_sha256") != bundle_report.get("application_role_sha256") \
+        or not isinstance(provenance.get("generator_code_sha256"), str) \
+        or not re.fullmatch(r"[0-9a-f]{64}", provenance["generator_code_sha256"]):
+        raise LoaderError("READ_ONLY_RECONCILE_BUNDLE_PROVENANCE_INVALID")
+    try:
+        previous_bundle, previous_report, _previous_snapshot = validate_bundle(
+            provenance["bundle_name"], require_executable=True, bundle_root=BUNDLE_ROOT,
+            expected_generator_fingerprint=provenance["generator_code_sha256"],
+        )
+    except LoaderError as error:
+        raise LoaderError("READ_ONLY_RECONCILE_BUNDLE_PROVENANCE_INVALID") from error
+    if _bundle_provenance(provenance["bundle_name"], previous_report) != provenance \
+        or load_report.get("generator_version") != provenance.get("generator_version") \
+        or not _bundle_semantics_match(previous_bundle, bundle):
+        raise LoaderError("READ_ONLY_RECONCILE_BUNDLE_PROVENANCE_MISMATCH")
+    if not isinstance(load_report_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", load_report_digest):
+        raise LoaderError("LOAD_REPORT_DIGEST_INVALID")
+
+
+def _aggregate_reconciliation_report(
+    result: dict[str, Any], *, column_diagnostic: bool, load_report_preserved: bool,
+) -> dict[str, Any]:
+    allowed_statuses = {"RECONCILED", "DIVERGED", "BLOCKED"}
+    status = result.get("status") if result.get("status") in allowed_statuses else "BLOCKED"
+    summary: dict[str, Any] = {
+        "status": status,
+        "profile": "development",
+        "source_schema": SOURCE_SCHEMA,
+        "target_database": TARGET_DATABASE,
+        "reconciler_version": 7,
+        "failure_code": result.get("failure_code") if isinstance(result.get("failure_code"), str) and re.fullmatch(r"[A-Z0-9_]{1,96}", result["failure_code"]) else None,
+        "sqlstate": result.get("sqlstate") if isinstance(result.get("sqlstate"), str) and re.fullmatch(r"[0-9A-Z]{5}", result["sqlstate"]) else None,
+        "elapsed_seconds": result.get("elapsed_seconds_total", result.get("elapsed_seconds")),
+        "temporary_store_cleanup": result.get("temporary_store_cleanup"),
+        "load_report_preserved": load_report_preserved,
+        "metrics": {
+            key: value for key, value in (result.get("metrics") or {}).items()
+            if isinstance(key, str) and value in {"PASS", "DIVERGED", "BLOCKED"}
+        },
+        "tables": {},
+    }
+    if isinstance(result.get("failure_table"), str):
+        summary["failure_table"] = result["failure_table"]
+    if result.get("failure_side") in {"source", "target"}:
+        summary["failure_side"] = result["failure_side"]
+
+    tables = result.get("tables")
+    if isinstance(tables, dict):
+        for table, values in tables.items():
+            if not isinstance(table, str) or not isinstance(values, dict):
+                continue
+            item: dict[str, Any] = {
+                "source_rows": values.get("source_count"),
+                "target_rows": values.get("target_count"),
+                "row_count_equal": values.get("row_count_equal") is True,
+                "row_multiset_equal": values.get("row_multiset_hashes_equal") is True,
+                "max_id_columns": sum(isinstance(v, dict) for v in (values.get("max_ids") or {}).values()),
+                "max_id_columns_equal": sum(1 for v in (values.get("max_ids") or {}).values() if isinstance(v, dict) and v.get("equal") is True),
+                "numeric_sum_columns": sum(isinstance(v, dict) for v in (values.get("numeric_sums") or {}).values()),
+                "numeric_sum_columns_equal": sum(1 for v in (values.get("numeric_sums") or {}).values() if isinstance(v, dict) and v.get("equal") is True),
+                "binary_columns": sum(isinstance(v, dict) for v in (values.get("binary_lengths") or {}).values()),
+                "binary_columns_equal": sum(1 for v in (values.get("binary_lengths") or {}).values() if isinstance(v, dict) and v.get("octet_lengths_equal") is True and v.get("bytewise_hashes_equal") is True),
+                "generated_columns": sum(isinstance(v, dict) for v in (values.get("generated_columns") or {}).values()),
+                "generated_columns_equal": sum(1 for v in (values.get("generated_columns") or {}).values() if isinstance(v, dict) and v.get("calculated_values_equal") is True),
+                "tenant_count_equal": (values.get("tenant_distribution") or {}).get("equal") is True,
+                "tenant_row_hashes_equal": (values.get("tenant_distribution") or {}).get("row_hashes_equal") is True,
+            }
+            if column_diagnostic and table == "monitoramento_eventos_hub":
+                columns = values.get("column_value_multisets")
+                if isinstance(columns, dict):
+                    item["column_value_multisets"] = {
+                        column: {
+                            key: column_result.get(key)
+                            for key in ("source_cells", "target_cells", "source_distinct_values", "target_distinct_values", "multiset_difference_count", "equal")
+                            if key in column_result
+                        }
+                        for column, column_result in columns.items()
+                        if isinstance(column, str) and isinstance(column_result, dict)
+                    }
+            summary["tables"][table] = item
+
+    foreign_keys = result.get("foreign_keys")
+    if isinstance(foreign_keys, list):
+        summary["foreign_keys"] = {
+            "count": len(foreign_keys),
+            "constraints_present": sum(1 for item in foreign_keys if isinstance(item, dict) and item.get("constraint_present") is True),
+            "constraints_validated": sum(1 for item in foreign_keys if isinstance(item, dict) and item.get("constraint_validated") is True),
+            "source_orphan_rows": sum(item.get("source_orphans", 0) for item in foreign_keys if isinstance(item, dict) and type(item.get("source_orphans")) is int),
+            "target_orphan_rows": sum(item.get("target_orphans", 0) for item in foreign_keys if isinstance(item, dict) and type(item.get("target_orphans")) is int),
+            "equal": all(item.get("equal") is True for item in foreign_keys if isinstance(item, dict)) and len(foreign_keys) == EXPECTED_FOREIGN_KEY_COUNT,
+        }
+    identities = result.get("identity_sequences")
+    if isinstance(identities, list):
+        summary["identity_sequences"] = {
+            "count": len(identities),
+            "max_id_equal": sum(1 for item in identities if isinstance(item, dict) and item.get("equal_max_id") is True),
+            "sequence_above_max": sum(1 for item in identities if isinstance(item, dict) and item.get("sequence_above_max") is True),
+        }
+    return summary
+
+
+def run_read_only_reconcile(
+    bundle_name: str,
+    defaults_file: str | None,
+    load_report_path: Path,
+    *,
+    profile: str = "development",
+    diagnose_monitoramento_eventos_hub: bool = False,
+) -> dict[str, Any]:
+    from .reconcile import reconcile
+
+    if profile != "development":
+        raise LoaderError("READ_ONLY_RECONCILE_PROFILE_NOT_ALLOWED")
+    if type(diagnose_monitoramento_eventos_hub) is not bool:
+        raise LoaderError("COLUMN_DIAGNOSTIC_FLAG_INVALID")
+
+    started_at = time.time()
+    bundle, bundle_report, snapshot = validate_bundle(bundle_name, require_executable=True)
+    load_report, load_report_digest, load_report_identity = _read_private_report_snapshot(load_report_path)
+    _validate_read_only_selection(bundle_name, load_report_path, load_report)
+    _validate_read_only_load_evidence(load_report, load_report_digest, bundle, bundle_report, snapshot)
+    source_defaults = _source_defaults_path(defaults_file)
+    target_config = _load_target_config(profile)
+    if target_config["dbname"] != TARGET_DATABASE:
+        raise LoaderError("READ_ONLY_RECONCILE_TARGET_NOT_ALLOWLISTED")
+    if bundle_report.get("application_role_sha256") != hashlib.sha256(target_config["application_user"].encode("utf-8")).hexdigest():
+        raise LoaderError("BUNDLE_APPLICATION_ROLE_MISMATCH")
+
+    table_names = list(bundle_report.get("generated_tables", []))
+    mappings = _validate_column_mappings(snapshot, bundle_report, table_names)
+    identities_by_table = _validated_identity_plan(
+        snapshot, table_names, mappings, (bundle_report.get("auto_increment") or {}).get("columns")
+    )
+    for table_name, mapping in mappings.items():
+        mapping["identity_columns"] = identities_by_table.get(table_name, [])
+
+    source = target = None
+    memory_guard = _MemoryGuard()
+    cleanup_failures: list[str] = []
+    raw_result: dict[str, Any] = {"status": "BLOCKED", "failure_code": "RECONCILIATION_RUNNER_FAILURE"}
+    try:
+        source, current_snapshot = _connect_source(source_defaults)
+        _validate_source_snapshot(current_snapshot, snapshot)
+        target = _connect_target(target_config)
+        with target.cursor() as cursor:
+            cursor.execute("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        memory_guard.start_monitor(target)
+        memory_guard.sample()
+
+        def _checkpoint(active_connection: Any) -> None:
+            memory_guard.set_connection(active_connection)
+            memory_guard.sample_if_due()
+
+        comparison_report = dict(load_report)
+        comparison_report["status"] = LOAD_PENDING_RECONCILIATION_STATUS
+        raw_result = reconcile(
+            source,
+            target,
+            snapshot,
+            comparison_report,
+            mappings,
+            checkpoint=_checkpoint,
+            temp_root=REPORT_ROOT,
+            expected_target_database=TARGET_DATABASE,
+            live_source_snapshot=current_snapshot,
+            column_diagnostic_tables={"monitoramento_eventos_hub"} if diagnose_monitoramento_eventos_hub else frozenset(),
+        )
+        memory_guard._raise_if_stopped()
+        raw_result["elapsed_seconds_total"] = round(time.time() - started_at, 3)
+        raw_result["available_memory_mib_end"] = _available_memory_mib_or_none()
+    except LoaderError as error:
+        raw_result = {"status": "BLOCKED", "failure_code": error.code}
+        if error.sqlstate:
+            raw_result["sqlstate"] = error.sqlstate
+    except Exception:
+        raw_result = {"status": "BLOCKED", "failure_code": "RECONCILIATION_RUNNER_FAILURE"}
+    finally:
+        try:
+            memory_guard.stop_monitor()
+        except Exception:
+            cleanup_failures.append("MEMORY_MONITOR")
+        if target is not None:
+            try:
+                target.rollback()
+            except Exception:
+                cleanup_failures.append("TARGET_ROLLBACK")
+            try:
+                target.close()
+            except Exception:
+                cleanup_failures.append("TARGET_CLOSE")
+        if source is not None:
+            try:
+                source.rollback()
+            except Exception:
+                cleanup_failures.append("SOURCE_ROLLBACK")
+            try:
+                source.close()
+            except Exception:
+                cleanup_failures.append("SOURCE_CLOSE")
+
+    try:
+        _load_report_after, after_digest, after_identity = _read_private_report_snapshot(load_report_path)
+        report_preserved = after_digest == load_report_digest and after_identity == load_report_identity
+    except LoaderError:
+        report_preserved = False
+    if cleanup_failures or not report_preserved:
+        raw_result = {
+            "status": "BLOCKED",
+            "failure_code": "RECONCILIATION_CLEANUP_FAILED" if cleanup_failures else "LOAD_REPORT_CHANGED_DURING_RECONCILIATION",
+            "cleanup_failures": cleanup_failures,
+            "elapsed_seconds_total": round(time.time() - started_at, 3),
+        }
+    summary = _aggregate_reconciliation_report(
+        raw_result,
+        column_diagnostic=diagnose_monitoramento_eventos_hub,
+        load_report_preserved=report_preserved,
+    )
+    summary["elapsed_seconds_total"] = round(time.time() - started_at, 3)
+    summary["available_memory_mib_end"] = _available_memory_mib_or_none()
+    report_root = REPORT_ROOT.resolve(strict=True)
+    output_path = report_root / f"reconcile-readonly-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}-{os.urandom(4).hex()}.json"
+    _write_report_exclusive(summary, output_path)
+    summary["report_file"] = str(output_path)
+    return summary
+
+
 def validate_reconcile_retry(bundle_name: str, report_path: Path, profile: str = "development") -> dict[str, Any]:
     if profile != "development":
         raise LoaderError("RECONCILIATION_RETRY_NOT_ALLOWED")
@@ -3395,12 +3733,14 @@ def run_reconcile(bundle_name: str, defaults_file: str | None, report_path: Path
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Loader transacional do P2/P5; source fixo em erp_pg_source")
-    parser.add_argument("command", choices=("preflight", "load", "reconcile", "validate-reconcile"))
+    parser.add_argument("command", choices=("preflight", "load", "reconcile", "validate-reconcile", "reconcile-read-only"))
     parser.add_argument("--profile", choices=("development", "cutover"), default="development")
     parser.add_argument("--bundle-name", required=True)
     parser.add_argument("--source-defaults-file")
     parser.add_argument("--report-file")
+    parser.add_argument("--load-report-file")
     parser.add_argument("--retry-read-only", action="store_true")
+    parser.add_argument("--diagnose-monitoramento-eventos-hub", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -3409,6 +3749,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.retry_read_only and args.command not in {"reconcile", "validate-reconcile"}:
             raise LoaderError("RECONCILIATION_RETRY_ACTION_INVALID")
+        if args.diagnose_monitoramento_eventos_hub and args.command != "reconcile-read-only":
+            raise LoaderError("COLUMN_DIAGNOSTIC_ACTION_INVALID")
+        if args.load_report_file and args.command != "reconcile-read-only":
+            raise LoaderError("LOAD_REPORT_ARGUMENT_INVALID")
         if args.command == "preflight":
             result = run_preflight(args.bundle_name, args.source_defaults_file, args.profile)
         elif args.command == "load":
@@ -3419,6 +3763,16 @@ def main(argv: list[str] | None = None) -> int:
             if not args.report_file or not args.retry_read_only:
                 raise LoaderError("RECONCILIATION_RETRY_ACTION_INVALID")
             result = validate_reconcile_retry(args.bundle_name, Path(args.report_file), args.profile)
+        elif args.command == "reconcile-read-only":
+            if not args.load_report_file or args.report_file or args.retry_read_only:
+                raise LoaderError("READ_ONLY_RECONCILE_ARGUMENTS_INVALID")
+            result = run_read_only_reconcile(
+                args.bundle_name,
+                args.source_defaults_file,
+                Path(args.load_report_file),
+                profile=args.profile,
+                diagnose_monitoramento_eventos_hub=args.diagnose_monitoramento_eventos_hub,
+            )
         else:
             if not args.report_file:
                 raise LoaderError("LOAD_REPORT_FILE_REQUIRED")
