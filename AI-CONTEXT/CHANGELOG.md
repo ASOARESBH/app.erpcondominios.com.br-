@@ -4,6 +4,11 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — retry v12 divergente, sem aceite (2026-11-20)
+- A única reconciliação read-only autorizada terminou `DIVERGED`: 276/276 contagens de linhas iguais, 13 métricas PASS e 3 divergentes. Hash por linha/tenant diverge em uma tabela; as 11 FKs estão ausentes/não validadas, com zero órfãos agregados. A carga permanece não aceita; a retry de uso único foi consumida.
+- Não houve causa-raiz comprovada para o hash divergente. O quick-loader `5572f06` permanece NO-GO; `erp_pg_teste` não foi criado. Triggers pós-carga, neutralização, smoke de arquivos/imagens e ativação do release 8443 não ocorreram; P5 está NO-GO.
+- Os subprocessos medidos somam 102,139 s, mas não constituem duração ponta a ponta (restore/preflight e gates pós-carga não completados, resultado divergente). Produção MySQL, rollback, `main`, DNS e banco definitivo permaneceram intocados.
+
 ### Projeto PostgreSQL P2 — correção de identidade, retry v6 e bloqueio de rebind em load (2026-11-20)
 - A carga v12 existente em `erp_pg_dev` permanece committed (276 tabelas/213.984 linhas, sem falhas de cópia), mas ainda não é aceita: a reconciliação inicial parou antes de comparar tabelas. A investigação read-only confirmou MySQL 1064 na query de identidade antiga por alias reservado; o alias foi trocado para `account_name` e passou em teste read-only contra o clone. Contrato do reconciliador atualizado para v6.
 - Fechados localmente dois achados P1: o SHA do load committed agora coincide entre produtor/consumidor de rebind (`e0fbaf1`), e bundles rebound levam marcador `RECONCILIATION_ONLY`, bloqueado em `run_load` antes de conexão/DDL/COPY. A seleção de desenvolvimento também distingue carga normal de retry com evidência.

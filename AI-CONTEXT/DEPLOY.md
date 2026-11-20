@@ -211,3 +211,12 @@ A comparação pedida com `carga_rapida_pg.py` exato `5572f06` é **NO-GO**: a r
 **Alternativa quick-loader:** o commit solicitado `5572f06` não é atualmente equivalente ao rebuild v12 e não é caminho de fallback executável/aceitável. Só poderá ser reconsiderado após nova versão identificada que implemente TIME v3 (inclusive defaults), Base64 canônico validado, reconciliação binária byte-exata por linha e provenance compatível, com teste integral num alvo isolado. Se isso não estiver publicado e testado antes da janela, o resultado é **NO-GO**, não se troca para uma carga parcial ou de política diferente.
 
 Os horários são proposta, não ordem de congelamento, backup, deploy ou cutover. A reconciliação completa ainda não passou; a duração end-to-end necessária para fixar a janela não foi medida. P5 permanece não executada e exige confirmação explícita de data/horário e os gates preparados acima.
+
+
+### Resultado do retry v12 e estado de P5 — 2026-11-20 (supersede somente o status corrente acima)
+
+A reconciliação read-only autorizada terminou `DIVERGED` (exit 78): 276/276 contagens de linhas iguais, 13 métricas PASS e 3 divergentes. Uma tabela (`monitoramento_eventos_hub`) diverge em hash por linha e por tenant. As 11 FKs estão ausentes/não validadas, embora haja zero órfãos agregados em source/target. Retry de uso único consumido; não repetir. A carga permanece não aceita.
+
+Por consequência, não reinstalar triggers, neutralizar integrações, criar/carregar `erp_pg_teste`, trocar o `current` do 8443 ou liberar teste manual de anexos/imagem. O release v12 `07e11e7` permanece fora de `current`; o 8443 continua no release anterior. O quick-loader `5572f06` não é alternativa elegível: a revisão achou incompatibilidades com TIME v3, Base64 canônico e hash binário por linha. A agenda proposta para sábado 21/11 é somente planejamento e está **NO-GO** no estado atual. Não iniciar congelamento/backup final/cutover sem nova autorização e reconciliação aceita.
+
+Tempos disponíveis dos subprocessos: catálogo 4,184 s; loader 28,495 s; reconciliação inicial 0,785 s; retry read-only 68,675 s. A soma de 102,139 s não representa duração ponta a ponta da migração, porque faltam restore/preflight/validação pós-carga e a execução terminou divergente. Portanto ainda não existe medição válida da janela de virada. Produção MySQL, rollback, DNS, `main` e target definitivo não foram alterados.
