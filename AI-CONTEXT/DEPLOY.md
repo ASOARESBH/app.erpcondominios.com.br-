@@ -169,3 +169,8 @@ A release `aff56b4` foi instalada em diretório imutável próprio, fora de `cur
 ### Status P2 v12 após preflight — 2026-11-19
 
 Release `697d960` foi instalada fora de `current`; catalog-bundle gerou artefato v12 executável e preflight read-only passou. Uma invocação de load foi rejeitada por argumentos; a chamada corrigida parou em `UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED` no mapeamento local, antes da conexão de carga e de qualquer mutação do target. O conserto sincroniza loader/DDL para BIGINT UNSIGNED e propaga o tipo efetivo de FKs; após validação local, exige commit e nova release/captura/preflight. Não trocar `current` do 8443, não considerar homologado e não iniciar P5.
+
+
+### P2 v12 — load revertido antes de reconciliação — 2026-11-19
+
+A release imutável `0481548` está instalada fora de `current`. Captura/preflight passaram, porém o load abortou com SQLSTATE `42P07` ao tentar criar PKs sob nome de índice repetido. O runner confirmou rollback e limpeza; nenhum load parcial é aceito. O DDL agora cria nomes únicos por tabela; aguardar commit/push, release vNext, nova captura/preflight e carga/reconciliação completa. O `current` 8443 continua no release anterior; não houve smoke de anexos/imagens, liberação para teste manual nem ação de cutover.

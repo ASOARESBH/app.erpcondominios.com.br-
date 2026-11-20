@@ -804,7 +804,7 @@ def generate_ddl(
                 for name in pk_columns:
                     if name not in {str(column["name"]) for column in columns}:
                         raise TypeMappingError("PRIMARY_KEY_COLUMN_NOT_FOUND")
-                pk_name = "PRIMARY" if len("PRIMARY") <= MAX_IDENTIFIER_BYTES else "pk_" + hashlib.sha256(table_name.encode()).hexdigest()[:16]
+                pk_name = _generated_name("pk", table_name, "primary")
                 primary_keys_post_load.append({"table": table_name, "columns": pk_columns, "target_schema": target_schema, "constraint_name": pk_name})
                 report["primary_keys_pending_collision_scan"].append({
                     "table": table_name,

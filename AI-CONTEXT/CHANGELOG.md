@@ -482,3 +482,9 @@ Reteste da release corretiva `0578cf3ba43b79376e86ccf746d4d86965912af8`: **22/22
 - Nova captura do catálogo e bundle v12 passou com 276 tabelas, 11 FKs, 7 triggers e zero reviews; preflight read-only alinhou o snapshot, detectou zero NUL em texto e confirmou que NUL binário só ocorre no objeto Base64 allowlisted, com concordância dos dois métodos.
 - O primeiro `load` foi recusado por argumento incorreto; a chamada válida bloqueou antes da conexão de carga em `UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED`. Nenhum DDL/COPY ou escrita no `erp_pg_dev` ocorreu.
 - Correção local: loader consome metadados de range scan e promoção FK do DDL com validação estrita; `loader.py` agora integra o fingerprint do gerador. Testes completos: 251 PASS, incluindo o par sintético de RBAC. Commit e nova release ainda pendentes.
+
+
+### Projeto PostgreSQL P2 — rollback de load por colisão de PK (2026-11-19)
+- Captura v12 e preflight da release `0481548` passaram; load abortou com `POSTGRES_PRIMARY_KEY_CREATE_FAILED` / `42P07` na criação post-load das PKs.
+- O report privado confirmou `FAILED_ROLLED_BACK` e limpeza source/target/spool; carga não aceita, sem quick-loader/comparação ou validação pós-carga.
+- Causa: nome `PRIMARY` repetido para índices de várias tabelas. DDL corrigido para gerar nome único por tabela; 251 testes P2 e gates PHP/SQL/sintaxe passaram. Fix ainda aguarda commit/push e nova release/captura/preflight/load.

@@ -210,3 +210,10 @@ A correção local importa `hashlib` e tem teste direto de fingerprint de catál
 O capturador v12 foi corrigido e publicado em `697d960`; nova release isolada gerou bundle executável (276 tabelas, 11 FKs, 7 triggers, zero reviews) a partir de `erp_pg_source` read-only. O preflight confirmou proveniência do catálogo e target development, zero NUL em texto, detectores binários concordantes e apenas `tenant_arquivos.conteudo` com encoding Base64 allowlisted.
 
 A primeira invocação de load foi recusada na validação de argumentos; a chamada corrigida interrompeu-se em `UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED`, antes de conexões de carga e de qualquer escrita no target. Causa: loader não propagava a evidência de faixa bigint, nem a promoção coordenada de FK reportada pelo DDL. O fix valida e usa `numeric_columns` efetivos e inclui o loader no fingerprint do gerador para obter bundle distinto. 251 testes/gates locais passaram. Ainda não há carga P2 v12, comparação com quick-loader, triggers pós-carga/neutralização ou release v12 ativa em 8443. A carga autorizada deve ocorrer após commit/push, instalação de nova release, nova captura/preflight e aprovação verde.
+
+
+### Estado após tentativa de load v12 — rollback confirmado, correção de PK pendente (2026-11-19)
+
+A captura e preflight da release `0481548` passaram com catálogo 276/276, 11 FKs, 7 triggers, zero reviews; NUL em texto zero e o binário real restringido ao payload Base64 allowlisted. O load começou e abortou com `POSTGRES_PRIMARY_KEY_CREATE_FAILED`/`42P07` após 45 s. O runner marcou `FAILED_ROLLED_BACK`; rollback e limpeza de source, target e spool foram confirmados; não se aceita carga parcial.
+
+Causa: o DDL atribuiu `PRIMARY` a todas as PKs e seus índices backing colidiram no schema PostgreSQL. O gerador agora produz nome determinístico por tabela. Suíte local completa 251/251 e gates PHP/SQL/sintaxe passaram. A correção de PK ainda não foi publicada; nova release, bundle e load precisam repetir os gates. Nenhuma comparação quick-loader, trigger pós-load, neutralização, troca do 8443 ou P5 está concluída/autorizada por estes resultados.

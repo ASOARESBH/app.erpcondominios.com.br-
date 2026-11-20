@@ -710,6 +710,10 @@ class CatalogTests(unittest.TestCase):
         self.assertNotIn("CHECK (\"state\" IN ('A', 'B'))", tables)
         self.assertEqual(bundle.report["enum_checks_deferred"][0]["column"], "state")
         self.assertEqual(bundle.report["primary_keys_post_load"][0]["table"], "parent")
+        pk_names = [item["constraint_name"] for item in bundle.report["primary_keys_post_load"]]
+        self.assertTrue(pk_names)
+        self.assertEqual(len(pk_names), len(set(pk_names)))
+        self.assertEqual(pk_names[0], "pk_parent_primary")
         self.assertEqual(bundle.report["unique_indexes_post_load"][0]["index"], "uq_parent_name")
         self.assertNotIn("CREATE UNIQUE INDEX", bundle.scripts["10_indexes.sql"])
         self.assertIn("COLLATE ci", tables)
