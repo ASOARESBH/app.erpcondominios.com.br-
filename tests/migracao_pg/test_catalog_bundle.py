@@ -96,6 +96,21 @@ class CatalogBundleValidationTests(unittest.TestCase):
         self.assertIn("reconcile.py", GENERATOR_COMPONENTS)
         self.assertIn("catalog_bundle.py", GENERATOR_COMPONENTS)
 
+    def test_committed_load_rebind_is_bound_to_exact_e0fb_release(self) -> None:
+        from tools.migracao_pg import loader
+
+        self.assertEqual(catalog_bundle.PREVIOUS_LOAD_RELEASE_SHA, "e0fbaf119c3ecd300be9511135ccaa2282fc9162")
+        self.assertEqual(loader.PREVIOUS_LOAD_RELEASE_SHA, catalog_bundle.PREVIOUS_LOAD_RELEASE_SHA)
+        self.assertEqual(
+            catalog_bundle.PREVIOUS_LOAD_GENERATOR_FINGERPRINT,
+            "087742954a65138e4b7a1f623a26a285c3693ea9e879b338ff431fe0b7b166cd",
+        )
+        self.assertEqual(catalog_bundle.PREVIOUS_LOAD_GENERATOR_VERSION, "2.7.0")
+        rebound_source = inspect.getsource(catalog_bundle.rebind_committed_load_bundle)
+        capture_source = inspect.getsource(catalog_bundle.capture_catalog_bundle)
+        self.assertIn("_mark_reconciliation_only(bundle_path)", rebound_source)
+        self.assertNotIn("_mark_reconciliation_only(bundle_path)", capture_source)
+
     def test_committed_load_evidence_requires_exact_complete_development_load(self) -> None:
         from tools.migracao_pg.catalog_bundle import _validate_committed_load_evidence
 

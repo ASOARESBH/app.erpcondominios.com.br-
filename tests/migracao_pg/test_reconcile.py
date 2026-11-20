@@ -16,7 +16,7 @@ from tools.migracao_pg.catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID, _co
 from tools.migracao_pg.ddl import MYSQL_UNSIGNED_BIGINT_MAX, POSTGRES_SEQUENCE_MAX, canonical_fingerprint
 from tools.migracao_pg.reconcile import _DiskCounterStore, _accumulate_row, _aggregate_metric_results, _binary_storage_schema_metric, _foreign_key_metric, _new_accumulator, _stream_row_size_limit
 from tools.migracao_pg.reconcile import _audit_pk_text as reconcile_audit_pk_text
-from tools.migracao_pg.reconcile import ReconciliationError, _execute, canonical_row_sha256, reconcile as _reconcile
+from tools.migracao_pg.reconcile import ReconciliationError, _execute, _identity_value, canonical_row_sha256, reconcile as _reconcile
 from tools.migracao_pg.type_mapping import BINARY_STORAGE_POLICY_ID, expected_binary_storage_manifest
 
 
@@ -302,7 +302,7 @@ def run_contract(**kwargs):
 
 
 class TargetProfileContractTests(unittest.TestCase):
-    def test_reconciler_requires_live_source_snapshot_and_reports_contract_v5(self):
+    def test_reconciler_requires_live_source_snapshot_and_reports_contract_v6(self):
         source, target, snapshot, report, mappings = base_contract()
         missing_live = _reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(missing_live["status"], "BLOCKED")
@@ -310,7 +310,7 @@ class TargetProfileContractTests(unittest.TestCase):
 
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "RECONCILED")
-        self.assertEqual(result["reconciler_version"], 5)
+        self.assertEqual(result["reconciler_version"], 6)
 
     def test_reconciler_rejects_coordinated_snapshot_report_table_omission(self):
         source, target, live_snapshot, report, mappings = base_contract()
@@ -338,6 +338,22 @@ class TargetProfileContractTests(unittest.TestCase):
         blocked = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(blocked["status"], "BLOCKED")
         self.assertEqual(blocked["failure_code"], "TARGET_DATABASE_NOT_ALLOWLISTED")
+
+
+class IdentityQueryPortabilityTests(unittest.TestCase):
+    def test_mysql_identity_query_uses_non_reserved_alias(self):
+        connection = FakeConnection(database="erp_pg_source", user="synthetic_user@localhost")
+
+        self.assertEqual(_identity_value(connection, source=True), ("erp_pg_source", "synthetic_user@localhost"))
+        self.assertIn("CURRENT_USER() AS account_name", connection.queries[0])
+        self.assertNotIn("AS current_user", connection.queries[0])
+
+    def test_postgres_identity_query_uses_non_reserved_alias(self):
+        connection = FakeConnection(database="erp_pg_dev", user="synthetic_user")
+
+        self.assertEqual(_identity_value(connection, source=False), ("erp_pg_dev", "synthetic_user"))
+        self.assertIn("current_user AS account_name", connection.queries[0])
+        self.assertNotIn("AS current_user", connection.queries[0])
 
 
 class CanonicalRowHashTests(unittest.TestCase):
@@ -932,7 +948,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
         with patch("tools.migracao_pg.reconcile._stream_table", side_effect=ReconciliationError("DATABASE_QUERY_FAILED", "42P01")):
             result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "BLOCKED")
-        self.assertEqual(result["reconciler_version"], 5)
+        self.assertEqual(result["reconciler_version"], 6)
         self.assertEqual(result["failure_code"], "DATABASE_QUERY_FAILED")
         self.assertEqual(result["sqlstate"], "42P01")
         self.assertEqual(result["failure_table"], "synthetic")

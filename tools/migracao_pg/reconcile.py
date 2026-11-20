@@ -382,9 +382,9 @@ def _row_value(row: Any, key: str, index: int = 0) -> Any:
 
 def _identity_value(connection: Any, *, source: bool) -> tuple[str, str | None]:
     statement = (
-        "SELECT DATABASE() AS database_name, CURRENT_USER() AS current_user"
+        "SELECT DATABASE() AS database_name, CURRENT_USER() AS account_name"
         if source
-        else "SELECT current_database() AS database_name, current_user AS current_user"
+        else "SELECT current_database() AS database_name, current_user AS account_name"
     )
     with _cursor(connection) as cursor:
         _execute(cursor, statement)
@@ -395,7 +395,7 @@ def _identity_value(connection: Any, *, source: bool) -> tuple[str, str | None]:
     if row is None:
         _fail("DATABASE_IDENTITY_UNAVAILABLE")
     database = _row_value(row, "database_name", 0)
-    account = _row_value(row, "current_user", 1)
+    account = _row_value(row, "account_name", 1)
     if not isinstance(database, str):
         _fail("DATABASE_IDENTITY_UNAVAILABLE")
     return database, account if isinstance(account, str) else None
@@ -2128,7 +2128,7 @@ def reconcile(
     metric_status: dict[str, str] = {}
     tables_manifest: dict[str, dict[str, Any]] = {}
     result: dict[str, Any] = {
-        "reconciler_version": 5,
+        "reconciler_version": 6,
         "source_schema": SOURCE_SCHEMA,
         "target_database": expected_target_database,
         "allowed_target_schemas": sorted(TARGET_SCHEMAS),

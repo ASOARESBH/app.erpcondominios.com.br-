@@ -89,6 +89,43 @@ class TargetConfigTests(unittest.TestCase):
             self.assertFalse(marker.exists())
 
 
+class ReboundLoadGuardTests(unittest.TestCase):
+    def test_development_load_accepts_only_ordinary_release_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            root.chmod(0o700)
+            release_sha = "a" * 40
+            bundle_name = "catalog-" + "b" * 12 + "-collation-" + "c" * 8 + "-role-" + "d" * 8 + "-code-" + "e" * 8
+            selection_path = root / f"development-v12-{release_sha}.selection"
+            with patch.object(loader, "BUNDLE_ROOT", root), patch.object(loader, "_current_release_sha", return_value=release_sha):
+                selection_path.write_text(json.dumps({"release_sha": release_sha, "bundle_name": bundle_name}), encoding="ascii")
+                selection_path.chmod(0o600)
+                loader._validate_development_load_selection(bundle_name)
+                selection_path.write_text(json.dumps({
+                    "release_sha": release_sha, "bundle_name": bundle_name, "load_evidence": {"scope": "read-only"},
+                }), encoding="ascii")
+                selection_path.chmod(0o600)
+                with self.assertRaisesRegex(LoaderError, "REBOUND_BUNDLE_LOAD_FORBIDDEN"):
+                    loader._validate_development_load_selection(bundle_name)
+
+    def test_reconciliation_only_bundle_is_rejected_before_source_or_target_access(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            marker = bundle / "RECONCILIATION_ONLY"
+            marker.write_bytes(b"reconciliation_only=true\n")
+            marker.chmod(0o600)
+            with patch.object(loader, "_require_load_runtime"), \
+                patch.object(loader, "validate_bundle", return_value=(bundle, {}, {})), \
+                patch.object(loader, "_source_defaults_path") as source_defaults, \
+                patch.object(loader, "_connect_source") as connect_source, \
+                patch.object(loader, "_connect_target") as connect_target:
+                with self.assertRaisesRegex(LoaderError, "REBOUND_BUNDLE_LOAD_FORBIDDEN"):
+                    loader.run_load("synthetic-bundle", report_path=Path("/tmp/report.json"), profile="cutover")
+            source_defaults.assert_not_called()
+            connect_source.assert_not_called()
+            connect_target.assert_not_called()
+
+
 class SourceCountResultTests(unittest.TestCase):
     def test_accepts_dict_cursor_and_tuple_cursor_counts(self) -> None:
         self.assertEqual(loader._source_count_value({"row_count": 0}), 0)
@@ -170,8 +207,9 @@ class IdentityPlanValidationTests(unittest.TestCase):
             "generated_tables": ["synthetic"],
             "auto_increment": {"columns": [dict(self.valid[0], source_next_auto_increment=999)]},
         }
-        with patch.object(loader, "validate_bundle", return_value=(None, report, self.snapshot)), \
+        with patch.object(loader, "validate_bundle", return_value=(Path("/tmp/synthetic-bundle"), report, self.snapshot)), \
              patch.object(loader, "_require_load_runtime"), \
+             patch.object(loader, "_validate_development_load_selection"), \
              patch.object(loader, "_source_defaults_path", return_value=Path("/tmp/synthetic-source.cnf")), \
              patch.object(loader, "_load_target_config", return_value={"application_user": "erp_app"}), \
              patch.object(loader, "_validate_column_mappings", return_value=self.mappings), \
@@ -1537,6 +1575,7 @@ class LoadTransactionTests(unittest.TestCase):
         }
         patches = ExitStack()
         patches.enter_context(patch.object(loader, "_require_load_runtime"))
+        patches.enter_context(patch.object(loader, "_validate_development_load_selection"))
         patches.enter_context(patch.object(loader, "validate_bundle", return_value=(Path("/tmp/bundle"), report, snapshot)))
         patches.enter_context(patch.object(loader, "_source_defaults_path", return_value=Path("/tmp/source.cnf")))
         patches.enter_context(patch.object(loader, "_load_target_config", return_value=config))

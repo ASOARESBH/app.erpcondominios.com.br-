@@ -45,8 +45,8 @@ EXPECTED_BINARY_REPORT = {
         "target_collation": '"C"',
     }],
 }
-PREVIOUS_LOAD_RELEASE_SHA = "d6579290be8ee852635a45f662519ea2abea6008"
-PREVIOUS_LOAD_GENERATOR_FINGERPRINT = "1873874c6e98916c2da80678bde4ab4212dcb58055700cf5b5a32182e62970db"
+PREVIOUS_LOAD_RELEASE_SHA = "e0fbaf119c3ecd300be9511135ccaa2282fc9162"
+PREVIOUS_LOAD_GENERATOR_FINGERPRINT = "087742954a65138e4b7a1f623a26a285c3693ea9e879b338ff431fe0b7b166cd"
 PREVIOUS_LOAD_GENERATOR_VERSION = "2.7.0"
 PREVIOUS_LOAD_REPORT = re.compile(r"^rebuild-[0-9]{8}T[0-9]{6}Z-[0-9]+\.json$")
 
@@ -435,6 +435,29 @@ def _validate_bundle_files(bundle_path: Path) -> None:
             raise CatalogBundleError("BUNDLE_FILE_MODE_INVALID")
 
 
+def _mark_reconciliation_only(bundle_path: Path) -> None:
+    marker_path = bundle_path / "RECONCILIATION_ONLY"
+    fd = -1
+    try:
+        fd = os.open(
+            marker_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        with os.fdopen(fd, "wb") as stream:
+            fd = -1
+            stream.write(b"reconciliation_only=true\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chown(marker_path, 0, 0)
+        os.chmod(marker_path, 0o600)
+    except OSError as error:
+        raise CatalogBundleError("RECONCILIATION_ONLY_MARKER_WRITE_FAILED") from error
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
 def capture_catalog_bundle() -> dict[str, Any]:
     capture_started = time.monotonic()
     if os.geteuid() != 0 or os.environ.get("ERP_P2_ROOT_LAUNCHER_VERIFIED") != "1":
@@ -714,6 +737,7 @@ def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
         or summary.get("blocked_tables") != 0:
         raise CatalogBundleError("BUNDLE_REQUIRES_REVIEW")
     _validate_generator_summary(summary, snapshot)
+    _mark_reconciliation_only(bundle_path)
     _validate_bundle_files(bundle_path)
     report = _read_json(bundle_path / "report.json", "BUNDLE_REPORT_INVALID")
     bundle_counts = _validate_bundle_report(report)

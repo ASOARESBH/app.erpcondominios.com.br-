@@ -4,6 +4,12 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — correção de identidade, retry v6 e bloqueio de rebind em load (2026-11-20)
+- A carga v12 existente em `erp_pg_dev` permanece committed (276 tabelas/213.984 linhas, sem falhas de cópia), mas ainda não é aceita: a reconciliação inicial parou antes de comparar tabelas. A investigação read-only confirmou MySQL 1064 na query de identidade antiga por alias reservado; o alias foi trocado para `account_name` e passou em teste read-only contra o clone. Contrato do reconciliador atualizado para v6.
+- Fechados localmente dois achados P1: o SHA do load committed agora coincide entre produtor/consumidor de rebind (`e0fbaf1`), e bundles rebound levam marcador `RECONCILIATION_ONLY`, bloqueado em `run_load` antes de conexão/DDL/COPY. A seleção de desenvolvimento também distingue carga normal de retry com evidência.
+- Validação integral local: 282 testes P2; codec PHP, quatro `php -l`, linter SQL dos quatro PHPs, 8 cenários do linter, `py_compile`, `bash -n` e `git diff --check` PASS. Commit/push e nova release ainda pendentes; nenhum rebind/retry foi executado.
+- Auditoria estática do quick-loader exato `5572f06` encontrou incompatibilidades com TIME v3, Base64 canônico e reconciliação binária por linha. Comparação equivalente está bloqueada; não criar/preencher `erp_pg_teste` nem declarar paridade. Triggers/neutralização, troca de `current` 8443 e smoke de anexos/imagem não ocorreram.
+
 ### Projeto PostgreSQL P2 — provenance de retry, gate exato de catálogo e rebind semântico (2026-11-19)
 - A carga versionada v12 foi committed em `erp_pg_dev`: 276 tabelas, 213.984 linhas e zero falhas de cópia. O loader levou 28,171 s; a reconciliação inicial falhou cedo com `DATABASE_QUERY_FAILED`, sem SQLSTATE e sem tabela comparada. Cleanup foi confirmado; carga não repetida e P2 não aceita.
 - Revisão adversarial impediu publicação do retry inicial, que poderia reexecutar status terminal/divergente. A implementação local separa `--retry-read-only`, valida apenas report committed completo/cleanup confirmado e bloqueia qualquer repetição pelo marker persistido antes das conexões. O marker vincula o hash do report à release e bundle original, incluindo hash do report DDL e provenance de gerador, scripts, collation e role. O report legado sem `legacy_schema` só é aceito com a proveniência histórica específica, sem alteração do arquivo; novos reports passam a registrar esse campo.

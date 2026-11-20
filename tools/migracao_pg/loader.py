@@ -39,7 +39,7 @@ BUNDLE_ROOT = Path("/var/lib/erpcondominios-pg/p2-bundles")
 TARGET_DATABASE = "erp_pg_dev"
 EXPECTED_SOURCE_TABLE_COUNT = 276
 LOAD_PENDING_RECONCILIATION_STATUS = "LOAD_COMMITTED_PENDING_RECONCILIATION"
-PREVIOUS_LOAD_RELEASE_SHA = "d6579290be8ee852635a45f662519ea2abea6008"
+PREVIOUS_LOAD_RELEASE_SHA = "e0fbaf119c3ecd300be9511135ccaa2282fc9162"
 PREVIOUS_LOAD_GENERATOR_VERSION = "2.7.0"
 CUTOVER_TARGET_DATABASE = "erpcondominios_pg"
 DEVELOPMENT_MIGRATION_ROLE = "erp_p2_loader"
@@ -2412,6 +2412,61 @@ def _current_release_sha() -> str:
     return release_sha
 
 
+def _validate_development_load_selection(bundle_name: str) -> None:
+    release_sha = _current_release_sha()
+    try:
+        root_info = BUNDLE_ROOT.lstat()
+    except OSError as error:
+        raise LoaderError("BUNDLE_SELECTION_ROOT_INVALID") from error
+    if not stat.S_ISDIR(root_info.st_mode) or root_info.st_uid != os.geteuid() \
+        or stat.S_IMODE(root_info.st_mode) != 0o700 or BUNDLE_ROOT.is_symlink():
+        raise LoaderError("BUNDLE_SELECTION_ROOT_INVALID")
+    try:
+        selection_path = BUNDLE_ROOT / f"development-v12-{release_sha}.selection"
+        fd = os.open(selection_path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+        with os.fdopen(fd, "rb") as stream:
+            selection_info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(selection_info.st_mode) or selection_info.st_uid != os.geteuid() \
+                or stat.S_IMODE(selection_info.st_mode) != 0o600:
+                raise LoaderError("BUNDLE_SELECTION_MODE_INVALID")
+            selection_raw = stream.read(65537)
+    except LoaderError:
+        raise
+    except OSError as error:
+        raise LoaderError("BUNDLE_SELECTION_REQUIRED") from error
+    if len(selection_raw) > 65536:
+        raise LoaderError("BUNDLE_SELECTION_INVALID")
+    try:
+        selection = json.loads(selection_raw.decode("ascii", errors="strict"), object_pairs_hook=_unique_json_pairs)
+    except Exception as error:
+        raise LoaderError("BUNDLE_SELECTION_INVALID") from error
+    if isinstance(selection, dict) and "load_evidence" in selection:
+        raise LoaderError("REBOUND_BUNDLE_LOAD_FORBIDDEN")
+    if not isinstance(selection, dict) or set(selection) != {"release_sha", "bundle_name"} \
+        or selection.get("release_sha") != release_sha or selection.get("bundle_name") != bundle_name:
+        raise LoaderError("BUNDLE_SELECTION_MISMATCH")
+
+
+def _reject_reconciliation_only_bundle(bundle: Path) -> None:
+    marker_path = bundle / "RECONCILIATION_ONLY"
+    try:
+        marker_info = marker_path.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise LoaderError("RECONCILIATION_ONLY_MARKER_INVALID") from error
+    if not stat.S_ISREG(marker_info.st_mode) or marker_info.st_uid != os.geteuid() \
+        or stat.S_IMODE(marker_info.st_mode) != 0o600 or marker_path.is_symlink():
+        raise LoaderError("RECONCILIATION_ONLY_MARKER_INVALID")
+    try:
+        marker = marker_path.read_bytes()
+    except OSError as error:
+        raise LoaderError("RECONCILIATION_ONLY_MARKER_INVALID") from error
+    if marker != b"reconciliation_only=true\n":
+        raise LoaderError("RECONCILIATION_ONLY_MARKER_INVALID")
+    raise LoaderError("REBOUND_BUNDLE_LOAD_FORBIDDEN")
+
+
 def _read_retry_selection(bundle_name: str, report_path: Path, report: dict[str, Any]) -> dict[str, Any]:
     release_sha = _current_release_sha()
     try:
@@ -2697,7 +2752,10 @@ def run_load(bundle_name: str, defaults_file: str | None = None, report_path: Pa
     if report_path is None:
         raise LoaderError("LOAD_REPORT_FILE_REQUIRED")
     _require_load_runtime()
+    if profile == "development":
+        _validate_development_load_selection(bundle_name)
     bundle, report, snapshot = validate_bundle(bundle_name, require_executable=True)
+    _reject_reconciliation_only_bundle(bundle)
     source_defaults = _source_defaults_path(defaults_file)
     target_config = _load_target_config(profile)
     if report.get("application_role_sha256") != hashlib.sha256(target_config["application_user"].encode("utf-8")).hexdigest():
