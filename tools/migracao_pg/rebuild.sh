@@ -121,6 +121,13 @@ trusted_file() {
     [[ "$owner" == '0' ]] && (( (8#$mode & 0022) == 0 ))
 }
 
+trusted_runtime_config_file() {
+    local path=$1 owner group mode
+    [[ "$path" == "$repo_root/api/config.php" && -f "$path" && ! -L "$path" ]] || return 1
+    read -r owner group mode < <(/usr/bin/stat -c '%U %G %a' -- "$path")
+    [[ "$owner:$group:$mode" == 'erp-pg:erp-pg:600' ]]
+}
+
 private_tmp=$(/usr/bin/mktemp -d -- /tmp/erp-p2-rebuild.XXXXXXXX)
 [[ "$(/usr/bin/stat -c '%u:%a' -- "$private_tmp")" == '0:700' ]] || {
     printf 'REBUILD_ERROR=PRIVATE_TEMP_DIRECTORY_INVALID\n' >&2
@@ -184,10 +191,17 @@ while IFS= read -r -d '' release_file; do
         printf 'REBUILD_ERROR=RELEASE_PATH_CONTROL_CHARACTER\n' >&2
         exit 69
     }
-    trusted_file "$release_file" || {
-        printf 'REBUILD_ERROR=RELEASE_FILE_NOT_ROOT_CONTROLLED\n' >&2
-        exit 69
-    }
+    if [[ "$release_relative_path" == 'api/config.php' ]]; then
+        trusted_runtime_config_file "$release_file" || {
+            printf 'REBUILD_ERROR=RUNTIME_CONFIG_MODE_INVALID\n' >&2
+            exit 69
+        }
+    else
+        trusted_file "$release_file" || {
+            printf 'REBUILD_ERROR=RELEASE_FILE_NOT_ROOT_CONTROLLED\n' >&2
+            exit 69
+        }
+    fi
 done < "$private_tmp/release-files.nul"
 if ! /usr/bin/find "$repo_root/tools" -type f \( -name '*.py' -o -name '*.pyc' \) -print0 > "$private_tmp/python-source-files.nul"; then
     printf 'REBUILD_ERROR=RELEASE_ENUMERATION_FAILED\n' >&2
