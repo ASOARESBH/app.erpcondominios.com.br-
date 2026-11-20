@@ -164,3 +164,8 @@ Estado deste registro: runner/testes publicados após validação local, mas a c
 ### Diagnóstico de execução P2 v12 — 2026-11-19
 
 A release `aff56b4` foi instalada em diretório imutável próprio, fora de `current`, com configuração isolada copiada e manifest verificado. A captura catalog-bundle terminou em `NameError` do símbolo `hashlib` no gate de proveniência; essa execução não promoveu artefato nem seletor. Sem preflight/load ou mutação de banco. O log e o staging root-only foram preservados. Foi preparado fix local com teste, que só pode ser executado após commit/push e instalação de nova release. O link `current` do 8443 permanece no release anterior; nenhum go-live foi iniciado.
+
+
+### Status P2 v12 após preflight — 2026-11-19
+
+Release `697d960` foi instalada fora de `current`; catalog-bundle gerou artefato v12 executável e preflight read-only passou. Uma invocação de load foi rejeitada por argumentos; a chamada corrigida parou em `UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED` no mapeamento local, antes da conexão de carga e de qualquer mutação do target. O conserto sincroniza loader/DDL para BIGINT UNSIGNED e propaga o tipo efetivo de FKs; após validação local, exige commit e nova release/captura/preflight. Não trocar `current` do 8443, não considerar homologado e não iniciar P5.

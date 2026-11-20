@@ -613,6 +613,72 @@ class NulPolicyTests(unittest.TestCase):
 
 
 class NormalizeMysqlValueTests(unittest.TestCase):
+    def test_unsigned_bigint_fk_pair_uses_effective_ddl_numeric_promotion(self) -> None:
+        snapshot = {
+            "source_no_backslash_escapes": False,
+            "tables": [
+                {"name": "rbac_sessoes", "type": "BASE TABLE", "columns": [
+                    {"name": "id", "ordinal": 1, "data_type": "bigint", "column_type": "bigint unsigned", "nullable": False, "extra": "auto_increment", "unsigned_bigint_exceeds_signed_limit": False},
+                ]},
+                {"name": "rbac_auditoria", "type": "BASE TABLE", "columns": [
+                    {"name": "sessao_id", "ordinal": 1, "data_type": "bigint", "column_type": "bigint unsigned", "nullable": False, "extra": "", "unsigned_bigint_exceeds_signed_limit": True},
+                ]},
+            ],
+        }
+        report = {
+            "collation_overrides": {}, "collation_decisions": [],
+            "table_schemas": {"rbac_sessoes": "erp", "rbac_auditoria": "erp"},
+            "unsigned_bigint_range": {
+                "observed_above_signed_limit": [{"table": "rbac_auditoria", "column": "sessao_id"}],
+                "aligned_for_foreign_keys": [{"table": "rbac_sessoes", "column": "id"}],
+                "numeric_columns": [
+                    {"table": "rbac_auditoria", "column": "sessao_id"},
+                    {"table": "rbac_sessoes", "column": "id"},
+                ],
+            },
+        }
+        mappings = loader._validate_column_mappings(snapshot, report, ["rbac_sessoes", "rbac_auditoria"])
+        self.assertEqual(mappings["rbac_sessoes"]["types"]["id"].sql_type, "NUMERIC(20,0)")
+        self.assertEqual(mappings["rbac_auditoria"]["types"]["sessao_id"].sql_type, "NUMERIC(20,0)")
+
+    def test_unsigned_bigint_below_signed_limit_stays_bigint(self) -> None:
+        snapshot = {
+            "source_no_backslash_escapes": False,
+            "tables": [{"name": "rbac_sessoes", "type": "BASE TABLE", "columns": [
+                {"name": "id", "ordinal": 1, "data_type": "bigint", "column_type": "bigint unsigned", "nullable": False, "extra": "", "unsigned_bigint_exceeds_signed_limit": False},
+            ]}],
+        }
+        report = {
+            "collation_overrides": {}, "collation_decisions": [],
+            "table_schemas": {"rbac_sessoes": "erp"},
+            "unsigned_bigint_range": {
+                "observed_above_signed_limit": [],
+                "aligned_for_foreign_keys": [],
+                "numeric_columns": [],
+            },
+        }
+        mapping = loader._validate_column_mappings(snapshot, report, ["rbac_sessoes"])
+        self.assertEqual(mapping["rbac_sessoes"]["types"]["id"].sql_type, "BIGINT")
+
+    def test_unsigned_bigint_without_range_scan_fails_closed(self) -> None:
+        snapshot = {
+            "source_no_backslash_escapes": False,
+            "tables": [{"name": "rbac_sessoes", "type": "BASE TABLE", "columns": [
+                {"name": "id", "ordinal": 1, "data_type": "bigint", "column_type": "bigint unsigned", "nullable": False, "extra": ""},
+            ]}],
+        }
+        report = {
+            "collation_overrides": {}, "collation_decisions": [],
+            "table_schemas": {"rbac_sessoes": "erp"},
+            "unsigned_bigint_range": {
+                "observed_above_signed_limit": [],
+                "aligned_for_foreign_keys": [],
+                "numeric_columns": [],
+            },
+        }
+        with self.assertRaisesRegex(LoaderError, "BUNDLE_UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED"):
+            loader._validate_column_mappings(snapshot, report, ["rbac_sessoes"])
+
     def test_generated_water_column_is_excluded_from_copy_columns(self) -> None:
         snapshot = {
             "source_no_backslash_escapes": False,

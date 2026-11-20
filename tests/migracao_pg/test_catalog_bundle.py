@@ -18,6 +18,7 @@ from tools.migracao_pg.catalog import (
     _structural_fingerprint,
 )
 from tools.migracao_pg.ddl import canonical_fingerprint
+from tools.migracao_pg.generate_ddl import GENERATOR_COMPONENTS
 from tools.migracao_pg.type_mapping import BINARY_STORAGE_POLICY_ID
 
 
@@ -89,6 +90,9 @@ def synthetic_bundle_report() -> dict:
 
 
 class CatalogBundleValidationTests(unittest.TestCase):
+    def test_loader_is_part_of_generator_fingerprint_components(self) -> None:
+        self.assertIn("loader.py", GENERATOR_COMPONENTS)
+
     def test_exact_v12_source_manifest_and_catalog_counts_are_accepted(self) -> None:
         self.assertEqual(
             catalog_bundle._validate_catalog_snapshot(synthetic_snapshot()),

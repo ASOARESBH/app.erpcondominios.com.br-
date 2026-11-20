@@ -203,3 +203,10 @@ A revisão adversarial foi incorporada: booleans estritos, FK unsupported bloque
 O release `aff56b4` foi instalado fora de `current`, com configuração PG runtime preservada e manifest verificado. A primeira execução autorizada do subcomando falhou com `NameError` de `hashlib` no gate do fingerprint da role, depois de criar artefatos apenas no staging privado. Não foi promovido bundle/selection e não houve preflight, load, escrita em `erp_pg_dev`, comparação, trigger/neutralização ou troca do 8443. O log/workdir privados foram mantidos.
 
 A correção local importa `hashlib` e tem teste direto de fingerprint de catálogo/role; 15/15 testes focados e gates sintáticos passaram. A correção precisa de commit/push e nova release antes da repetição. Esta falha não alterou o banco fonte porque a captura é read-only e não tocou qualquer target.
+
+
+### Estado operacional v12 — preflight aprovado, load bloqueado antes de mutação (2026-11-19)
+
+O capturador v12 foi corrigido e publicado em `697d960`; nova release isolada gerou bundle executável (276 tabelas, 11 FKs, 7 triggers, zero reviews) a partir de `erp_pg_source` read-only. O preflight confirmou proveniência do catálogo e target development, zero NUL em texto, detectores binários concordantes e apenas `tenant_arquivos.conteudo` com encoding Base64 allowlisted.
+
+A primeira invocação de load foi recusada na validação de argumentos; a chamada corrigida interrompeu-se em `UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED`, antes de conexões de carga e de qualquer escrita no target. Causa: loader não propagava a evidência de faixa bigint, nem a promoção coordenada de FK reportada pelo DDL. O fix valida e usa `numeric_columns` efetivos e inclui o loader no fingerprint do gerador para obter bundle distinto. 251 testes/gates locais passaram. Ainda não há carga P2 v12, comparação com quick-loader, triggers pós-carga/neutralização ou release v12 ativa em 8443. A carga autorizada deve ocorrer após commit/push, instalação de nova release, nova captura/preflight e aprovação verde.

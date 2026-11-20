@@ -1490,6 +1490,65 @@ def normalize_mysql_value(
     return value
 
 
+def _unsigned_bigint_numeric_columns(snapshot: dict[str, Any], report: dict[str, Any]) -> set[tuple[str, str]]:
+    unsigned_columns: set[tuple[str, str]] = set()
+    observed: set[tuple[str, str]] = set()
+    for table in snapshot.get("tables", []):
+        if table.get("type") != "BASE TABLE":
+            continue
+        table_name = table.get("name")
+        if not isinstance(table_name, str):
+            raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_METADATA_INVALID")
+        for column in table.get("columns", []):
+            if str(column.get("data_type", "")).lower() != "bigint" or not re.search(
+                r"\b(?:unsigned|zerofill)\b", str(column.get("column_type", "")), re.IGNORECASE
+            ):
+                continue
+            column_name = column.get("name")
+            exceeds = column.get("unsigned_bigint_exceeds_signed_limit")
+            if not isinstance(column_name, str) or not column_name or not isinstance(exceeds, bool):
+                raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED")
+            key = (table_name, column_name)
+            if key in unsigned_columns:
+                raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_METADATA_INVALID")
+            unsigned_columns.add(key)
+            if exceeds:
+                observed.add(key)
+    if not unsigned_columns:
+        return set()
+
+    range_report = report.get("unsigned_bigint_range")
+    if not isinstance(range_report, dict) or set(range_report) != {
+        "observed_above_signed_limit", "aligned_for_foreign_keys", "numeric_columns"
+    }:
+        raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_METADATA_INVALID")
+
+    def read_pairs(key: str) -> set[tuple[str, str]]:
+        items = range_report.get(key)
+        if not isinstance(items, list):
+            raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_METADATA_INVALID")
+        pairs: set[tuple[str, str]] = set()
+        for item in items:
+            if not isinstance(item, dict) or set(item) != {"table", "column"}:
+                raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_METADATA_INVALID")
+            table_name, column_name = item.get("table"), item.get("column")
+            if not isinstance(table_name, str) or not isinstance(column_name, str) or not table_name or not column_name:
+                raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_METADATA_INVALID")
+            pair = (table_name, column_name)
+            if pair in pairs:
+                raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_METADATA_INVALID")
+            pairs.add(pair)
+        return pairs
+
+    reported_observed = read_pairs("observed_above_signed_limit")
+    aligned = read_pairs("aligned_for_foreign_keys")
+    numeric = read_pairs("numeric_columns")
+    if reported_observed != observed or aligned & observed or not aligned <= unsigned_columns \
+        or numeric != observed | aligned:
+        raise LoaderError("BUNDLE_UNSIGNED_BIGINT_RANGE_METADATA_MISMATCH")
+    return numeric
+
+
 def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], table_names: list[str]) -> dict[str, dict[str, Any]]:
     overrides = report.get("collation_overrides")
     if not isinstance(overrides, dict):
@@ -1523,6 +1582,7 @@ def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], 
     if set(collations) != expected_collations or any(collations.get(key) != value for key, value in overrides.items()):
         raise LoaderError("BUNDLE_COLLATION_DECISIONS_MISMATCH")
     no_backslash_escapes = bool(snapshot.get("source_no_backslash_escapes"))
+    unsigned_bigint_numeric_columns = _unsigned_bigint_numeric_columns(snapshot, report)
     table_map = {item["name"]: item for item in snapshot["tables"] if item.get("type") == "BASE TABLE"}
     if set(table_names) - set(table_map):
         raise LoaderError("BUNDLE_TABLE_METADATA_MISSING")
@@ -1568,6 +1628,12 @@ def _validate_column_mappings(snapshot: dict[str, Any], report: dict[str, Any], 
                     column_name=name,
                     binary_storage_encoding=binary_encoding,
                     no_backslash_escapes=no_backslash_escapes,
+                    unsigned_bigint_exceeds_signed_limit=(
+                        (table_name, name) in unsigned_bigint_numeric_columns
+                        if str(column.get("data_type", "")).lower() == "bigint"
+                        and re.search(r"\b(?:unsigned|zerofill)\b", str(column.get("column_type", "")), re.IGNORECASE)
+                        else None
+                    ),
                     time_uses_interval=column.get("time_uses_interval"),
                 )
                 if str(column.get("data_type", "")).lower() == "enum":

@@ -40,9 +40,15 @@ def _unique_object(pairs):
     return result
 
 
+GENERATOR_COMPONENTS = (
+    "generate_ddl.py", "ddl.py", "generated_columns.py", "type_mapping.py",
+    "check_translation.py", "loader.py", "070_business_triggers_tenant_scoped.sql",
+)
+
+
 def _generator_fingerprint() -> str:
     digest = hashlib.sha256()
-    for name in ("generate_ddl.py", "ddl.py", "generated_columns.py", "type_mapping.py", "check_translation.py", "070_business_triggers_tenant_scoped.sql"):
+    for name in GENERATOR_COMPONENTS:
         digest.update(name.encode("utf-8") + b"\0")
         path = (Path(__file__).resolve().parents[2] / "sql" / "postgresql" / name) if name.endswith(".sql") else Path(__file__).with_name(name)
         digest.update(path.read_bytes())

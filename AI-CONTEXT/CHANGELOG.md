@@ -476,3 +476,9 @@ Reteste da release corretiva `0578cf3ba43b79376e86ccf746d4d86965912af8`: **22/22
 - Release `aff56b4` instalado e validado fora de `current`; a primeira captura parou no gate de fingerprint por import ausente de `hashlib`. O erro foi detectado no log privado sem divulgar seu conteúdo.
 - Nenhum bundle foi promovido/selecionado; nenhum preflight, load, escrita em `erp_pg_dev`, quick-loader, trigger, neutralização ou troca do 8443 ocorreu. Source foi lido apenas em modo READ ONLY. Staging e logs foram preservados.
 - Fix local importa `hashlib` e adiciona teste direto da proveniência: 15/15 testes focados, `py_compile`, `bash -n` e `git diff --check` PASS. A nova tentativa exige commit/push e release versionada.
+
+
+### Projeto PostgreSQL P2 — preflight v12 e gate BIGINT UNSIGNED (2026-11-19)
+- Nova captura do catálogo e bundle v12 passou com 276 tabelas, 11 FKs, 7 triggers e zero reviews; preflight read-only alinhou o snapshot, detectou zero NUL em texto e confirmou que NUL binário só ocorre no objeto Base64 allowlisted, com concordância dos dois métodos.
+- O primeiro `load` foi recusado por argumento incorreto; a chamada válida bloqueou antes da conexão de carga em `UNSIGNED_BIGINT_RANGE_SCAN_REQUIRED`. Nenhum DDL/COPY ou escrita no `erp_pg_dev` ocorreu.
+- Correção local: loader consome metadados de range scan e promoção FK do DDL com validação estrita; `loader.py` agora integra o fingerprint do gerador. Testes completos: 251 PASS, incluindo o par sintético de RBAC. Commit e nova release ainda pendentes.
