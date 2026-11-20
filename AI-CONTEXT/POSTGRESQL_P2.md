@@ -225,7 +225,7 @@ Causa: o DDL atribuiu `PRIMARY` a todas as PKs e seus índices backing colidiram
 
 A retry foi consumida e terminou `DIVERGED` (exit 78), com 276/276 contagens de linhas iguais, 13 métricas PASS e 3 divergentes. As divergências concentram-se em uma tabela (`monitoramento_eventos_hub`) para hashes por linha/tenant e na métrica FK marcou divergência; o report do load registra 11/11 `VALIDATED`, e a comparação de nomes no reconciliador foi corrigida localmente, ainda sem verificação nova no target. A carga committed não é aceita. Não há causa-raiz comprovada para o hash da tabela; não executar nova reconciliação/carga até revisão e autorização.
 
-A comparação do quick-loader `5572f06` continua bloqueada por incompatibilidades com TIME v3, Base64 e hash binário por linha. Não foi criado `erp_pg_teste`. Sem reinstalação pós-carga das triggers, harness `--installed`, neutralização de integrações ou smoke de arquivos/imagens, o 8443 não está pronto para teste manual. O release `07e11e7` está inativo e `current` não mudou. Ver DATABASE §22.16 e DEPLOY para os totais e o estado P5.
+A comparação do quick-loader `5572f06` continua bloqueada por incompatibilidades com TIME v3, Base64 e hash binário por linha. Não foi criado `erp_pg_teste`. O load executou `40_business_triggers.sql` do bundle após o COPY; a reinstalação separada após a reconciliação e o harness `--installed` não foram executados, nem houve neutralização de integrações ou smoke de arquivos/imagens. O 8443 não está pronto para teste manual. O release `07e11e7` está inativo e `current` não mudou. Ver DATABASE §22.16 e DEPLOY para os totais e o estado P5.
 
 
 ### Correção local posterior — FK name matching v7 (2026-11-20)
