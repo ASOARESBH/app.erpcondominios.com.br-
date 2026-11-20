@@ -4,8 +4,13 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — corrige matching de constraints FK no reconciliador v7 (2026-11-20)
+- O report privado do load registra 11 FKs `VALIDATED`; o reconciliador v6 reportou 0/11 presentes. Causa confirmada estaticamente: DDL/loader geram nomes PostgreSQL determinísticos e o reconciliador os comparava com os nomes MySQL originais. O contrato v7 agora deriva o mesmo nome gerado. O report anterior continua `DIVERGED` e não houve verificação nova no target.
+- Hash por linha/tenant de `monitoramento_eventos_hub` segue divergente e sem causa-raiz isolada. Retry de uso único consumida: sem nova consulta, reconciliação, carga ou ações pós-carga sob autorização anterior. Fix somente local, ainda sem commit/release.
+- Testes focados de reconciliação 56/56 e suíte P2 282/282; `py_compile`, `bash -n` e `git diff --check` PASS.
+
 ### Projeto PostgreSQL P2 — retry v12 divergente, sem aceite (2026-11-20)
-- A única reconciliação read-only autorizada terminou `DIVERGED`: 276/276 contagens de linhas iguais, 13 métricas PASS e 3 divergentes. Hash por linha/tenant diverge em uma tabela; as 11 FKs estão ausentes/não validadas, com zero órfãos agregados. A carga permanece não aceita; a retry de uso único foi consumida.
+- A única reconciliação read-only autorizada terminou `DIVERGED`: 276/276 contagens de linhas iguais, 13 métricas PASS e 3 divergentes. Hash por linha/tenant diverge em uma tabela; a métrica FK divergiu, mas o report do load registra 11/11 `VALIDATED`; análise estática aponta provável falso divergente por mismatch de nomes de constraints. O fix local ainda não foi verificado no target. A carga permanece não aceita; a retry de uso único foi consumida.
 - Não houve causa-raiz comprovada para o hash divergente. O quick-loader `5572f06` permanece NO-GO; `erp_pg_teste` não foi criado. Triggers pós-carga, neutralização, smoke de arquivos/imagens e ativação do release 8443 não ocorreram; P5 está NO-GO.
 - Os subprocessos medidos somam 102,139 s, mas não constituem duração ponta a ponta (restore/preflight e gates pós-carga não completados, resultado divergente). Produção MySQL, rollback, `main`, DNS e banco definitivo permaneceram intocados.
 

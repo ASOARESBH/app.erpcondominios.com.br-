@@ -310,7 +310,7 @@ class TargetProfileContractTests(unittest.TestCase):
 
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "RECONCILED")
-        self.assertEqual(result["reconciler_version"], 6)
+        self.assertEqual(result["reconciler_version"], 7)
 
     def test_reconciler_rejects_coordinated_snapshot_report_table_omission(self):
         source, target, live_snapshot, report, mappings = base_contract()
@@ -741,12 +741,12 @@ class ReconciliationMetricsTests(unittest.TestCase):
             "referenced_columns": ["tenant_id"],
         }]
         report["foreign_key_results"] = [{
-            "table": "synthetic", "constraint_name": "fk_self", "referenced_schema": "erp",
+            "table": "synthetic", "constraint_name": "fk_synthetic_fk_self", "referenced_schema": "erp",
             "referenced_table": "synthetic", "columns": ["tenant_id"], "referenced_columns": ["tenant_id"],
             "update_rule": "NO ACTION", "delete_rule": "NO ACTION",
             "orphan_rows": 0, "status": "VALIDATED",
         }]
-        target.foreign_key_definitions = [("erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], True, "a", "a", "fk_self")]
+        target.foreign_key_definitions = [("erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], True, "a", "a", "fk_synthetic_fk_self")]
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertMetric(result, "foreign_keys_orphans", "PASS")
         self.assertTrue(result["foreign_keys"][0]["constraint_present"])
@@ -764,13 +764,13 @@ class ReconciliationMetricsTests(unittest.TestCase):
             "referenced_columns": ["tenant_id"], "update_rule": "NO ACTION", "delete_rule": "NO ACTION",
         }]
         report["foreign_key_results"] = [{
-            "table": "synthetic", "constraint_name": "fk_self", "referenced_schema": "erp",
+            "table": "synthetic", "constraint_name": "fk_synthetic_fk_self", "referenced_schema": "erp",
             "referenced_table": "synthetic", "columns": ["tenant_id"], "referenced_columns": ["tenant_id"],
             "update_rule": "NO ACTION", "delete_rule": "NO ACTION",
             "orphan_rows": 1, "status": "NOT_VALID_ORPHANS_REPORTED",
         }]
         target.foreign_key_definitions = [(
-            "erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], False, "a", "a", "fk_self",
+            "erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], False, "a", "a", "fk_synthetic_fk_self",
         )]
 
         result = reconcile(source, target, snapshot, report, mappings)
@@ -781,7 +781,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
         self.assertFalse(result["foreign_keys"][0]["constraint_validated"])
         self.assertTrue(result["foreign_keys"][0]["constraint_state_acceptable"])
         target.foreign_key_definitions[0] = (
-            "erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], True, "a", "a", "fk_self",
+            "erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], True, "a", "a", "fk_synthetic_fk_self",
         )
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertMetric(result, "foreign_keys_orphans", "DIVERGED")
@@ -794,12 +794,12 @@ class ReconciliationMetricsTests(unittest.TestCase):
             "referenced_columns": ["tenant_id"],
         }]
         report["foreign_key_results"] = [{
-            "table": "synthetic", "constraint_name": "fk_self", "referenced_schema": "erp",
+            "table": "synthetic", "constraint_name": "fk_synthetic_fk_self", "referenced_schema": "erp",
             "referenced_table": "synthetic", "columns": ["tenant_id"], "referenced_columns": ["tenant_id"],
             "update_rule": "NO ACTION", "delete_rule": "NO ACTION",
             "orphan_rows": 0, "status": "VALIDATED",
         }]
-        target.foreign_key_definitions = [("erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], True, "a", "a", "fk_self")]
+        target.foreign_key_definitions = [("erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], True, "a", "a", "fk_synthetic_fk_self")]
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertMetric(result, "foreign_keys_orphans", "DIVERGED")
 
@@ -811,7 +811,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
             "referenced_columns": ["tenant_id"], "update_rule": "NO ACTION", "delete_rule": "NO ACTION",
         }]
         report["foreign_key_results"] = [{
-            "table": "synthetic", "constraint_name": "fk_self", "referenced_schema": "erp",
+            "table": "synthetic", "constraint_name": "fk_synthetic_fk_self", "referenced_schema": "erp",
             "referenced_table": "synthetic", "columns": ["tenant_id"], "referenced_columns": ["tenant_id"],
             "update_rule": "NO ACTION", "delete_rule": "NO ACTION",
             "orphan_rows": 0, "status": "VALIDATED",
@@ -819,7 +819,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertMetric(result, "foreign_keys_orphans", "DIVERGED")
         self.assertFalse(result["foreign_keys"][0]["constraint_present"])
-        target.foreign_key_definitions = [("erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], False, "a", "a", "fk_self")]
+        target.foreign_key_definitions = [("erp", "synthetic", ["tenant_id"], "erp", "synthetic", ["tenant_id"], False, "a", "a", "fk_synthetic_fk_self")]
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertMetric(result, "foreign_keys_orphans", "DIVERGED")
         self.assertTrue(result["foreign_keys"][0]["constraint_present"])
@@ -836,16 +836,16 @@ class ReconciliationMetricsTests(unittest.TestCase):
              "referenced_table": "parent_b", "referenced_columns": ["tenant_id"], "update_rule": "CASCADE", "delete_rule": "RESTRICT"},
         ]
         report["foreign_key_results"] = [
-            {"table": "synthetic", "constraint_name": "fk_a", "referenced_schema": "erp", "referenced_table": "parent_a",
+            {"table": "synthetic", "constraint_name": "fk_synthetic_fk_a", "referenced_schema": "erp", "referenced_table": "parent_a",
              "columns": ["tenant_id"], "referenced_columns": ["tenant_id"], "update_rule": "NO ACTION", "delete_rule": "NO ACTION",
              "orphan_rows": 0, "status": "VALIDATED"},
-            {"table": "synthetic", "constraint_name": "fk_b", "referenced_schema": "erp", "referenced_table": "parent_b",
+            {"table": "synthetic", "constraint_name": "fk_synthetic_fk_b", "referenced_schema": "erp", "referenced_table": "parent_b",
              "columns": ["tenant_id"], "referenced_columns": ["tenant_id"], "update_rule": "CASCADE", "delete_rule": "RESTRICT",
              "orphan_rows": 0, "status": "VALIDATED"},
         ]
         target.foreign_key_definitions = [
-            ("erp", "synthetic", ["tenant_id"], "erp", "parent_a", ["tenant_id"], True, "a", "a", "fk_a"),
-            ("erp", "synthetic", ["tenant_id"], "erp", "parent_b", ["tenant_id"], True, "c", "r", "fk_b"),
+            ("erp", "synthetic", ["tenant_id"], "erp", "parent_a", ["tenant_id"], True, "a", "a", "fk_synthetic_fk_a"),
+            ("erp", "synthetic", ["tenant_id"], "erp", "parent_b", ["tenant_id"], True, "c", "r", "fk_synthetic_fk_b"),
         ]
         ok, comparison = _foreign_key_metric(source, target, snapshot, report, mappings)
         self.assertTrue(ok)
@@ -948,7 +948,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
         with patch("tools.migracao_pg.reconcile._stream_table", side_effect=ReconciliationError("DATABASE_QUERY_FAILED", "42P01")):
             result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "BLOCKED")
-        self.assertEqual(result["reconciler_version"], 6)
+        self.assertEqual(result["reconciler_version"], 7)
         self.assertEqual(result["failure_code"], "DATABASE_QUERY_FAILED")
         self.assertEqual(result["sqlstate"], "42P01")
         self.assertEqual(result["failure_table"], "synthetic")

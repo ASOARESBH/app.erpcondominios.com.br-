@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from .catalog import CATALOG_VERSION, TIME_RANGE_POLICY_ID, _collector_fingerprint, _structural_fingerprint
-from .ddl import POSTGRES_SEQUENCE_MAX, UNSIGNED_BIGINT_OFFSET, MYSQL_UNSIGNED_BIGINT_MAX, canonical_fingerprint
+from .ddl import POSTGRES_SEQUENCE_MAX, UNSIGNED_BIGINT_OFFSET, MYSQL_UNSIGNED_BIGINT_MAX, _generated_name, canonical_fingerprint
 from .generated_columns import declares_generated_column, generated_dependencies_valid
 from .type_mapping import BINARY_STORAGE_POLICY_ID, TemporalValueError, TypeMappingError, expected_binary_storage_encoding, expected_binary_storage_manifest, normalize_temporal_value, parse_mysql_enum
 
@@ -1712,11 +1712,11 @@ def _foreign_key_metric(source: Any, target: Any, snapshot: dict[str, Any], repo
         ref_table = fk.get("referenced_table")
         columns, ref_columns = fk.get("columns"), fk.get("referenced_columns")
         ref_schema = fk.get("referenced_schema")
-        constraint = fk.get("name")
+        source_constraint = fk.get("name")
         update_rule = str(fk.get("update_rule", "NO ACTION")).upper()
         delete_rule = str(fk.get("delete_rule", "NO ACTION")).upper()
-        if not isinstance(table, str) or not isinstance(ref_table, str) or not isinstance(constraint, str) \
-            or not constraint or not isinstance(columns, list) or not columns or not isinstance(ref_columns, list) \
+        if not isinstance(table, str) or not isinstance(ref_table, str) or not isinstance(source_constraint, str) \
+            or not source_constraint or not isinstance(columns, list) or not columns or not isinstance(ref_columns, list) \
             or len(columns) != len(ref_columns) or any(not isinstance(c, str) for c in columns + ref_columns):
             _fail("FOREIGN_KEY_METADATA_INVALID")
         if update_rule not in {"NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"} \
@@ -1726,6 +1726,7 @@ def _foreign_key_metric(source: Any, target: Any, snapshot: dict[str, Any], repo
             _fail("FOREIGN_KEY_SCOPE_INVALID")
         if any(not isinstance(c, str) for c in columns + ref_columns):
             _fail("FOREIGN_KEY_METADATA_INVALID")
+        constraint = _generated_name("fk", table, source_constraint)
         target_schema = mappings[table]["target_schema"]
         target_ref_schema = mappings[ref_table]["target_schema"]
         target_matches = []
@@ -2128,7 +2129,7 @@ def reconcile(
     metric_status: dict[str, str] = {}
     tables_manifest: dict[str, dict[str, Any]] = {}
     result: dict[str, Any] = {
-        "reconciler_version": 6,
+        "reconciler_version": 7,
         "source_schema": SOURCE_SCHEMA,
         "target_database": expected_target_database,
         "allowed_target_schemas": sorted(TARGET_SCHEMAS),
