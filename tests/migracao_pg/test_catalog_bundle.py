@@ -96,20 +96,28 @@ class CatalogBundleValidationTests(unittest.TestCase):
         self.assertIn("reconcile.py", GENERATOR_COMPONENTS)
         self.assertIn("catalog_bundle.py", GENERATOR_COMPONENTS)
 
-    def test_committed_load_rebind_is_bound_to_exact_e0fb_release(self) -> None:
+    def test_committed_load_rebind_is_bound_to_exact_b15_release(self) -> None:
         from tools.migracao_pg import loader
 
-        self.assertEqual(catalog_bundle.PREVIOUS_LOAD_RELEASE_SHA, "e0fbaf119c3ecd300be9511135ccaa2282fc9162")
+        self.assertEqual(catalog_bundle.PREVIOUS_LOAD_RELEASE_SHA, "b15ecd55cbf8dcfddd63d7a0d4e576b9620ed991")
         self.assertEqual(loader.PREVIOUS_LOAD_RELEASE_SHA, catalog_bundle.PREVIOUS_LOAD_RELEASE_SHA)
-        self.assertEqual(
-            catalog_bundle.PREVIOUS_LOAD_GENERATOR_FINGERPRINT,
-            "087742954a65138e4b7a1f623a26a285c3693ea9e879b338ff431fe0b7b166cd",
-        )
         self.assertEqual(catalog_bundle.PREVIOUS_LOAD_GENERATOR_VERSION, "2.7.0")
+        self.assertEqual(catalog_bundle.LATEST_LOAD_REPORT_NAME, "rebuild-20261121T103605Z-586388.json")
         rebound_source = inspect.getsource(catalog_bundle.rebind_committed_load_bundle)
         capture_source = inspect.getsource(catalog_bundle.capture_catalog_bundle)
         self.assertIn("_mark_reconciliation_only(bundle_path)", rebound_source)
         self.assertNotIn("_mark_reconciliation_only(bundle_path)", capture_source)
+
+    def test_rebind_report_path_is_restricted_to_latest_load_report(self) -> None:
+        accepted = Path("/var/backups/erpcondominios/p2-runs/rebuild-20261121T103605Z-586388.json")
+        rejected = (
+            Path("/var/backups/erpcondominios/p2-runs/rebuild-20261120T025127Z-520805.json"),
+            Path("/tmp/rebuild-20261121T103605Z-586388.json"),
+        )
+        self.assertTrue(catalog_bundle._committed_load_report_path_allowed(accepted))
+        for path in rejected:
+            with self.subTest(path=path.name):
+                self.assertFalse(catalog_bundle._committed_load_report_path_allowed(path))
 
     def test_committed_load_evidence_requires_exact_complete_development_load(self) -> None:
         from tools.migracao_pg.catalog_bundle import _validate_committed_load_evidence
@@ -120,9 +128,20 @@ class CatalogBundleValidationTests(unittest.TestCase):
             "target_database": "erp_pg_dev",
             "target_schema": "erp",
             "legacy_schema": "legado",
-            "status": "LOAD_COMMITTED_RECONCILIATION_BLOCKED",
+            "status": "LOAD_COMMITTED_RECONCILIATION_DIVERGED",
+            "generator_version": "2.7.0",
+            "bundle_catalog_fingerprint": "a" * 64,
+            "bundle_provenance": {
+                "bundle_name": "catalog-aaaaaaaaaaaa-collation-bbbbbbbb-role-cccccccc-code-dddddddd",
+                "generator_version": "2.7.0",
+                "generator_code_sha256": "d" * 64,
+                "catalog_fingerprint_sha256": "a" * 64,
+                "collation_overrides_sha256": "e" * 64,
+                "application_role_sha256": "f" * 64,
+                "generated_scripts_sha256": {"00_tables.sql": "1" * 64},
+            },
             "reconciliation_previous_status": "LOAD_COMMITTED_PENDING_RECONCILIATION",
-            "reconciliation": {"status": "BLOCKED", "failure_code": "DATABASE_QUERY_FAILED"},
+            "reconciliation": {"status": "DIVERGED", "failure_code": None},
             "table_failures": [],
             "tables_loaded": 276,
             "rows_loaded": 276,
@@ -146,6 +165,7 @@ class CatalogBundleValidationTests(unittest.TestCase):
             ("status", "LOAD_COMMITTED_RECONCILED"),
             ("target_database", "erpcondominios_pg"),
             ("reconciliation_retry_used", True),
+            ("status", "LOAD_COMMITTED_RECONCILIATION_BLOCKED"),
         ):
             changed = copy.deepcopy(report)
             changed[key] = value
@@ -158,9 +178,17 @@ class CatalogBundleValidationTests(unittest.TestCase):
 
         report = {
             "profile": "development", "source_schema": "erp_pg_source", "target_database": "erp_pg_dev",
-            "target_schema": "erp", "legacy_schema": "legado", "status": "LOAD_COMMITTED_RECONCILIATION_BLOCKED",
+            "target_schema": "erp", "legacy_schema": "legado", "status": "LOAD_COMMITTED_RECONCILIATION_DIVERGED",
+            "generator_version": "2.7.0", "bundle_catalog_fingerprint": "a" * 64,
+            "bundle_provenance": {
+                "bundle_name": "catalog-aaaaaaaaaaaa-collation-bbbbbbbb-role-cccccccc-code-dddddddd",
+                "generator_version": "2.7.0", "generator_code_sha256": "d" * 64,
+                "catalog_fingerprint_sha256": "a" * 64, "collation_overrides_sha256": "e" * 64,
+                "application_role_sha256": "f" * 64,
+                "generated_scripts_sha256": {"00_tables.sql": "1" * 64},
+            },
             "reconciliation_previous_status": "LOAD_COMMITTED_PENDING_RECONCILIATION",
-            "reconciliation": {"status": "BLOCKED", "failure_code": "DATABASE_QUERY_FAILED"},
+            "reconciliation": {"status": "DIVERGED", "failure_code": None},
             "table_failures": [], "tables_loaded": 276, "rows_loaded": 276,
             "source_cleanup_confirmed": True, "target_cleanup_confirmed": True, "nul_spool_cleanup_confirmed": True,
             "table_counts": [

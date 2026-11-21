@@ -45,10 +45,10 @@ EXPECTED_BINARY_REPORT = {
         "target_collation": '"C"',
     }],
 }
-PREVIOUS_LOAD_RELEASE_SHA = "e0fbaf119c3ecd300be9511135ccaa2282fc9162"
-PREVIOUS_LOAD_GENERATOR_FINGERPRINT = "087742954a65138e4b7a1f623a26a285c3693ea9e879b338ff431fe0b7b166cd"
+PREVIOUS_LOAD_RELEASE_SHA = "b15ecd55cbf8dcfddd63d7a0d4e576b9620ed991"
 PREVIOUS_LOAD_GENERATOR_VERSION = "2.7.0"
 PREVIOUS_LOAD_REPORT = re.compile(r"^rebuild-[0-9]{8}T[0-9]{6}Z-[0-9]+\.json$")
+LATEST_LOAD_REPORT_NAME = "rebuild-20261121T103605Z-586388.json"
 
 
 class CatalogBundleError(RuntimeError):
@@ -202,6 +202,11 @@ def _validate_generator_summary(summary: dict[str, Any], snapshot: dict[str, Any
 
 
 def _validate_committed_load_evidence(load_report: dict[str, Any]) -> list[dict[str, Any]]:
+    provenance = load_report.get("bundle_provenance")
+    provenance_keys = {
+        "bundle_name", "generator_version", "generator_code_sha256", "catalog_fingerprint_sha256",
+        "collation_overrides_sha256", "application_role_sha256", "generated_scripts_sha256",
+    }
     legacy_scope_valid = load_report.get("legacy_schema") == "legado" or (
         "legacy_schema" not in load_report
         and load_report.get("generator_version") == PREVIOUS_LOAD_GENERATOR_VERSION
@@ -211,12 +216,19 @@ def _validate_committed_load_evidence(load_report: dict[str, Any]) -> list[dict[
         or load_report.get("target_database") != "erp_pg_dev" \
         or load_report.get("target_schema") != "erp" \
         or not legacy_scope_valid \
-        or load_report.get("status") != "LOAD_COMMITTED_RECONCILIATION_BLOCKED" \
+        or load_report.get("status") != "LOAD_COMMITTED_RECONCILIATION_DIVERGED" \
         or load_report.get("reconciliation_previous_status") != "LOAD_COMMITTED_PENDING_RECONCILIATION" \
         or load_report.get("reconciliation_retry_used") is not None \
         or not isinstance(load_report.get("reconciliation"), dict) \
-        or load_report["reconciliation"].get("status") != "BLOCKED" \
-        or load_report["reconciliation"].get("failure_code") != "DATABASE_QUERY_FAILED" \
+        or load_report["reconciliation"].get("status") != "DIVERGED" \
+        or load_report["reconciliation"].get("failure_code") is not None \
+        or not isinstance(provenance, dict) or set(provenance) != provenance_keys \
+        or not isinstance(provenance.get("bundle_name"), str) \
+        or not BUNDLE_NAME_PATTERN.fullmatch(provenance["bundle_name"]) \
+        or provenance.get("generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION \
+        or not isinstance(provenance.get("generator_code_sha256"), str) \
+        or not re.fullmatch(r"[0-9a-f]{64}", provenance["generator_code_sha256"]) \
+        or provenance.get("catalog_fingerprint_sha256") != load_report.get("bundle_catalog_fingerprint") \
         or load_report.get("table_failures") != [] \
         or load_report.get("tables_loaded") != EXPECTED_TABLES \
         or type(load_report.get("rows_loaded")) is not int or load_report["rows_loaded"] < 0 \
@@ -248,6 +260,12 @@ def _load_counts_match_bundle(table_counts: list[dict[str, Any]], generated_tabl
     count_names = [item["table"] for item in table_counts]
     return len(set(count_names)) == EXPECTED_TABLES and len(set(generated_tables)) == EXPECTED_TABLES \
         and set(count_names) == set(generated_tables)
+
+
+def _committed_load_report_path_allowed(path: Path) -> bool:
+    return path.parent == Path("/var/backups/erpcondominios/p2-runs") \
+        and PREVIOUS_LOAD_REPORT.fullmatch(path.name) is not None \
+        and path.name == LATEST_LOAD_REPORT_NAME
 
 
 def _verified_load_report_hash(report_path: Path, expected_report: dict[str, Any]) -> str:
@@ -602,10 +620,10 @@ def capture_catalog_bundle() -> dict[str, Any]:
 
 
 def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
-    """Re-emit DDL for the exact private snapshot tied to the approved committed load.
+    """Re-emit DDL for the exact private snapshot tied to the latest committed load.
 
     This operation does not connect to either database and does not alter the load.
-    The resulting release-bound selection can be used only for the read-only reconcile retry.
+    The resulting release-bound selection can be used only for read-only reconciliation.
     """
     started = time.monotonic()
     if os.geteuid() != 0 or os.environ.get("ERP_P2_ROOT_LAUNCHER_VERIFIED") != "1":
@@ -614,8 +632,7 @@ def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
     release_id = release_root.name
     if not re.fullmatch(r"[a-f0-9]{40}", release_id) or release_id == PREVIOUS_LOAD_RELEASE_SHA:
         raise CatalogBundleError("IMMUTABLE_RELEASE_REQUIRED")
-    if report_path.parent != Path("/var/backups/erpcondominios/p2-runs") \
-        or not PREVIOUS_LOAD_REPORT.fullmatch(report_path.name):
+    if not _committed_load_report_path_allowed(report_path):
         raise CatalogBundleError("LOAD_REPORT_PATH_NOT_ALLOWLISTED")
     try:
         load_report = loader_module._read_reconciliation_report(report_path)
@@ -628,6 +645,19 @@ def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
     if not stat.S_ISDIR(bundle_root_info.st_mode) or bundle_root_info.st_uid != 0 \
         or stat.S_IMODE(bundle_root_info.st_mode) != 0o700 or BUNDLE_ROOT.is_symlink():
         raise CatalogBundleError("BUNDLE_ROOT_MODE_INVALID")
+    provenance = load_report.get("bundle_provenance")
+    expected_provenance_keys = {
+        "bundle_name", "generator_version", "generator_code_sha256", "catalog_fingerprint_sha256",
+        "collation_overrides_sha256", "application_role_sha256", "generated_scripts_sha256",
+    }
+    if not isinstance(provenance, dict) or set(provenance) != expected_provenance_keys \
+        or provenance.get("generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION \
+        or not isinstance(provenance.get("generator_code_sha256"), str) \
+        or not re.fullmatch(r"[0-9a-f]{64}", provenance["generator_code_sha256"]) \
+        or not isinstance(provenance.get("bundle_name"), str) \
+        or not BUNDLE_NAME_PATTERN.fullmatch(provenance["bundle_name"]):
+        raise CatalogBundleError("COMMITTED_LOAD_BUNDLE_PROVENANCE_INVALID")
+
     previous_selection_path = BUNDLE_ROOT / f"development-v12-{PREVIOUS_LOAD_RELEASE_SHA}.selection"
     if not _regular_file(previous_selection_path, 0o600):
         raise CatalogBundleError("PREVIOUS_LOAD_SELECTION_INVALID")
@@ -635,7 +665,8 @@ def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
     if set(selection) != {"release_sha", "bundle_name"} \
         or selection.get("release_sha") != PREVIOUS_LOAD_RELEASE_SHA \
         or not isinstance(selection.get("bundle_name"), str) \
-        or not BUNDLE_NAME_PATTERN.fullmatch(selection["bundle_name"]):
+        or not BUNDLE_NAME_PATTERN.fullmatch(selection["bundle_name"]) \
+        or selection.get("bundle_name") != provenance["bundle_name"]:
         raise CatalogBundleError("PREVIOUS_LOAD_SELECTION_INVALID")
 
     try:
@@ -643,10 +674,12 @@ def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
             selection["bundle_name"],
             require_executable=True,
             bundle_root=BUNDLE_ROOT,
-            expected_generator_fingerprint=PREVIOUS_LOAD_GENERATOR_FINGERPRINT,
+            expected_generator_fingerprint=provenance["generator_code_sha256"],
         )
     except LoaderError as error:
         raise CatalogBundleError(error.code) from error
+    if loader_module._bundle_provenance(selection["bundle_name"], previous_report) != provenance:
+        raise CatalogBundleError("COMMITTED_LOAD_BUNDLE_PROVENANCE_MISMATCH")
     previous_overrides = previous_report.get("collation_overrides")
     if not isinstance(previous_overrides, dict) \
         or any(not isinstance(key, str) or value not in {"ci", "C"} for key, value in previous_overrides.items()):
@@ -663,20 +696,12 @@ def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
         "application_role_sha256": previous_report.get("application_role_sha256"),
         "generated_scripts_sha256": previous_report.get("generated_scripts_sha256"),
     }
-    expected_previous_bundle_name = (
-        f"catalog-{snapshot.get('fingerprint_sha256', '')[:12]}"
-        f"-collation-{previous_overrides_sha256[:8]}"
-        f"-role-{previous_role_sha256[:8]}"
-        f"-code-{PREVIOUS_LOAD_GENERATOR_FINGERPRINT[:8]}"
-    )
-    if previous_report.get("generator_code_sha256") != PREVIOUS_LOAD_GENERATOR_FINGERPRINT \
-        or previous_report.get("generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION \
+    if previous_report.get("generator_version") != PREVIOUS_LOAD_GENERATOR_VERSION \
         or previous_report.get("application_role") != "erp_app" \
         or previous_report.get("application_role_sha256") != previous_role_sha256 \
         or previous_report.get("collation_overrides_sha256") != previous_overrides_sha256 \
-        or selection.get("bundle_name") != expected_previous_bundle_name \
         or load_report.get("generator_version") != previous_report.get("generator_version") \
-        or (load_report.get("bundle_provenance") is not None and load_report.get("bundle_provenance") != previous_bundle_provenance) \
+        or load_report.get("bundle_provenance") != previous_bundle_provenance \
         or ("legacy_schema" in load_report and load_report.get("legacy_schema") != "legado") \
         or load_report.get("bundle_catalog_fingerprint") != snapshot.get("fingerprint_sha256") \
         or load_report.get("binary_storage") != previous_report.get("binary_storage") \
@@ -770,7 +795,7 @@ def rebind_committed_load_bundle(report_path: Path) -> dict[str, Any]:
         "load_report_sha256": load_report_sha256,
         "previous_bundle_name": selection["bundle_name"],
         "previous_bundle_report_sha256": hashlib.sha256((previous_bundle / "report.json").read_bytes()).hexdigest(),
-        "previous_generator_code_sha256": PREVIOUS_LOAD_GENERATOR_FINGERPRINT,
+        "previous_generator_code_sha256": provenance["generator_code_sha256"],
         "previous_generator_version": PREVIOUS_LOAD_GENERATOR_VERSION,
         "catalog_fingerprint_sha256": snapshot["fingerprint_sha256"],
         "previous_bundle_provenance": previous_bundle_provenance,
