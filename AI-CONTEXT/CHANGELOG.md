@@ -559,3 +559,9 @@ Gates finais: P2 289/289, P5 26/26, auth/RBAC P3 20/20, Portal/logout 18/18 e bo
 - Uma única reconciliação versionada terminou `RECONCILED` (exit 0; 69,66 s): 276 tabelas, 213.984 linhas por lado; contagens, hashes de linha e tenant 276/276; somas numéricas 1.446/1.446; binário e coluna gerada 1/1; máximos de ID 166/166; sequences 237/237 acima dos máximos; FKs 11/11 validadas e zero órfãos. As 16 métricas passaram.
 - Load report divergente original preservado, sem reclassificação. Sem nova carga ou escrita nos bancos; temporários limpos. Produção, rollback, `main`, DNS e `current` do 8443 não foram alterados.
 - A comparação read-only da carga corrente terminou reconciliada, sem reclassificar o load report histórico; aceite funcional do 8443 permanece pendente de triggers, neutralização de integrações e smoke de anexos/imagens. Ver DATABASE §22.23 e POSTGRESQL_P2.md.
+
+
+### Projeto PostgreSQL P2 — tratamento explícito de `monitoramento_eventos_hub` — 2026-11-21
+- Diagnóstico allowlisted read-only v8: 100/100 linhas, hashes por linha e por tenant iguais; 25/25 colunas iguais. `snapshot_sha256`: 100 células por lado, uma distinta por lado, diferença agregada zero. Execução `RECONCILED`, 69,03 s; report original preservado.
+- Decisão documentada: manter a tabela, schema e todas as linhas; comparar com normalização apenas do padding final U+0020 em `CHAR`/`NCHAR`. Sem exclusão, filtro, alteração ou silêncio de métricas; qualquer diferença remanescente é bloqueadora.
+- O load report histórico permanece `LOAD_COMMITTED_RECONCILIATION_DIVERGED`, sem aprovação retroativa. Aceite geral da migração/8443 segue sujeito aos demais gates e à aprovação do André. Ver DATABASE §22.24.
