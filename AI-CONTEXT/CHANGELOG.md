@@ -552,3 +552,10 @@ Reteste da release corretiva `0578cf3ba43b79376e86ccf746d4d86965912af8`: **22/22
 
 
 Gates finais: P2 289/289, P5 26/26, auth/RBAC P3 20/20, Portal/logout 18/18 e bootstrap 13/13; quatro `php -l`, `pg_sql_lint` dos quatro endpoints, `py_compile`, `bash -n` e `git diff --check` passaram. As suítes locais continuam sintéticas; não houve conexão com banco nem HTTP/PHP-FPM live.
+
+
+### Projeto PostgreSQL P2 — reconciliação integral read-only v8 — 2026-11-21
+- Commit `0bde45b200bf6a4c4424a0fbd054f7440fe5f2f7` na branch `pg/reconcile-char-padding`; seleção root-only `RECONCILIATION_ONLY` vinculada ao load report existente passou os guards.
+- Uma única reconciliação versionada terminou `RECONCILED` (exit 0; 69,66 s): 276 tabelas, 213.984 linhas por lado; contagens, hashes de linha e tenant 276/276; somas numéricas 1.446/1.446; binário e coluna gerada 1/1; máximos de ID 166/166; sequences 237/237 acima dos máximos; FKs 11/11 validadas e zero órfãos. As 16 métricas passaram.
+- Load report divergente original preservado, sem reclassificação. Sem nova carga ou escrita nos bancos; temporários limpos. Produção, rollback, `main`, DNS e `current` do 8443 não foram alterados.
+- A comparação read-only da carga corrente terminou reconciliada, sem reclassificar o load report histórico; aceite funcional do 8443 permanece pendente de triggers, neutralização de integrações e smoke de anexos/imagens. Ver DATABASE §22.23 e POSTGRESQL_P2.md.
