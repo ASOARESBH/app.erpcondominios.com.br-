@@ -395,3 +395,12 @@ A revisão final fechou riscos estáticos: no login CPF, falha posterior ao comm
 
 
 Resultado dos gates locais finais: P2 289/289, P5 26/26, auth/RBAC P3 20/20, Portal/logout 18/18 e bootstrap 13/13. `php -l` nos quatro endpoints, `pg_sql_lint` nesses mesmos quatro, `py_compile`, `bash -n` e `git diff --check` passaram. As suítes de reconciliador usam cursores/conexões fakes; isso não equivale a validação com os drivers ou bancos reais.
+
+
+### §22.21 Ensaio `rebuild.sh development` — 2026-11-21 (NO-GO)
+
+A execução única do perfil development terminou com carga committed e reconciliação `DIVERGED` (exit 78). A duração total da invocação foi **116,145 s**; a fase de carga consumiu 27,745 s e a reconciliação 70,850 s. O loader carregou 276/276 tabelas e 213.984 linhas, sem falhas de cópia. A reconciliação reportou 14 métricas `PASS` e duas divergentes: `row_hash_multiset` e `tenant_row_hashes`.
+
+A diferença está em `monitoramento_eventos_hub`: 100 linhas na origem e 100 no destino, contagens iguais, mas multiconjunto de hashes de linha diferente. A divergência por tenant também foi reportada. O relatório não contém diagnóstico por coluna nem comparação explícita de tipos; portanto não há evidência para declarar esses eixos aprovados. Nenhum SQLSTATE foi registrado. O resultado é **NO-GO** e a avaliação de aceite foi interrompida.
+
+Não houve nova carga, nova reconciliação ou investigação de causa após a divergência. A verificação operacional final não encontrou processo ativo do pipeline. `erp_pg_source` permaneceu apenas como origem de leitura; não foram alterados produção, rollback, `main`, DNS, release `current` do 8443 ou banco definitivo. Não foram executadas as etapas pós-carga de reinstalação/teste das triggers, neutralização de integrações ou smoke funcional. Nenhuma decisão de exclusão/isolamento de `monitoramento_eventos_hub` foi aplicada.

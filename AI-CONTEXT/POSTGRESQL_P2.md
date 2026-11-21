@@ -233,3 +233,10 @@ A comparação do quick-loader `5572f06` continua bloqueada por incompatibilidad
 O report do loader registra 11/11 FKs `VALIDATED`, contrariando a métrica da retry, que reportou 0/11 encontradas. O reconciliador v6 comparava o nome original da FK MySQL com o nome PostgreSQL determinístico gerado pelo DDL (`fk_<tabela>_<nome_origem>`). A lógica foi corrigida para derivar o nome esperado com o mesmo helper do DDL/loader e o contrato passou para v7. O fix foi publicado em `ea0d4d7600e16edb33a57c4da1ab9681aa044667`; a suíte reconcile passou 56/56 e a P2 integral 282/282, além de `py_compile`, `bash -n` e `git diff --check`. Ainda não foi instalado/testado na VM. O report anterior permanece `DIVERGED`; a retry single-use não pode ser repetida pela autorização antiga.
 
 A divergência de hash por linha/tenant em `monitoramento_eventos_hub` permanece sem causa-raiz. P2 continua NÃO ACEITA. Não executar nova query/reconciliação/load, triggers/neutralização ou smoke no 8443 sem autorização específica; 8443 não está pronto para o teste manual de anexos/imagens. Ver §22.17 de DATABASE.
+
+
+## Execução corrente — `rebuild.sh development` (2026-11-21): NO-GO
+
+A única carga executada nesta rodada concluiu 276/276 tabelas, 213.984 linhas e zero falhas de cópia. A duração total da invocação foi 116,145 s (carga: 27,745 s; reconciliação: 70,850 s). O status final foi `DIVERGED`, exit 78: 14 métricas `PASS`, duas divergentes (`row_hash_multiset`, `tenant_row_hashes`). `monitoramento_eventos_hub` teve 100 linhas em cada lado e contagem igual, mas hashes agregados por linha/tenant divergentes. Não há diagnóstico por coluna nem comparação explícita de tipos no report; SQLSTATE ausente. Aceite interrompido, P2 não aceita.
+
+Não foi iniciada outra carga, reconciliação ou avaliação após o resultado. Não há processo do pipeline ativo. `erp_pg_source` não foi alterado; produção MySQL, rollback, `main`, DNS, `current` do 8443 e banco definitivo permaneceram intocados. Não foram executados reinstalação/harness das triggers, neutralização de integrações ou smoke pós-carga. A causa da divergência permanece sem diagnóstico; nenhum isolamento da tabela foi aplicado.

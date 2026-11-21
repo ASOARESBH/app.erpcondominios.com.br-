@@ -4,6 +4,11 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — carga do rebuild divergente (2026-11-21)
+- `rebuild.sh development`: 276/276 tabelas, 213.984 linhas e zero falhas de cópia; duração total 116,145 s.
+- Reconciliação `DIVERGED` (exit 78): 14 métricas PASS, duas divergentes (`row_hash_multiset`, `tenant_row_hashes`) em `monitoramento_eventos_hub`; contagens 100/100. Sem SQLSTATE e sem diagnóstico por coluna no relatório. Aceite interrompido; sem nova carga ou reconciliação.
+- Produção, rollback, `main`, DNS, `current` do 8443 e origem `erp_pg_source` permaneceram intocados.
+
 ### Projeto PostgreSQL P2 — corrige matching de constraints FK no reconciliador v7 (2026-11-20)
 - O report privado do load registra 11 FKs `VALIDATED`; o reconciliador v6 reportou 0/11 presentes. Causa confirmada estaticamente: DDL/loader geram nomes PostgreSQL determinísticos e o reconciliador os comparava com os nomes MySQL originais. O contrato v7 agora deriva o mesmo nome gerado. O report anterior continua `DIVERGED` e não houve verificação nova no target.
 - O load v12 executou o script `40_business_triggers.sql` do bundle após COPY; não houve reinstalação separada após a reconciliação, harness `--installed` ou neutralização das integrações.
