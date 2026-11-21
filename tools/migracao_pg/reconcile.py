@@ -928,6 +928,8 @@ def _canonical_value(
                 canonical = text.replace("\x00", "").encode("utf-8")
             else:
                 canonical = text.encode("utf-8")
+            if kind in {"char", "nchar"}:
+                canonical = canonical.rstrip(b" ")
         if is_source:
             nul["physical"] = int(physical_count > 0)
             nul["semantic"] = semantic_count
@@ -2163,7 +2165,7 @@ def reconcile(
     metric_status: dict[str, str] = {}
     tables_manifest: dict[str, dict[str, Any]] = {}
     result: dict[str, Any] = {
-        "reconciler_version": 7,
+        "reconciler_version": 8,
         "source_schema": SOURCE_SCHEMA,
         "target_database": expected_target_database,
         "allowed_target_schemas": sorted(TARGET_SCHEMAS),

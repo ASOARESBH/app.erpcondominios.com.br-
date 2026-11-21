@@ -3348,7 +3348,7 @@ def _aggregate_reconciliation_report(
         "profile": "development",
         "source_schema": SOURCE_SCHEMA,
         "target_database": TARGET_DATABASE,
-        "reconciler_version": 7,
+        "reconciler_version": 8,
         "failure_code": result.get("failure_code") if isinstance(result.get("failure_code"), str) and re.fullmatch(r"[A-Z0-9_]{1,96}", result["failure_code"]) else None,
         "sqlstate": result.get("sqlstate") if isinstance(result.get("sqlstate"), str) and re.fullmatch(r"[0-9A-Z]{5}", result["sqlstate"]) else None,
         "elapsed_seconds": result.get("elapsed_seconds_total", result.get("elapsed_seconds")),

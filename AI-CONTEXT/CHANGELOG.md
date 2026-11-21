@@ -4,6 +4,12 @@ Registro de alterações significativas no ERP.
 
 ## [Unreleased]
 
+### Projeto PostgreSQL P2 — causa-raiz de hash em CHAR confirmada (2026-11-21)
+- Diagnóstico read-only por coluna: 25 colunas examinadas; somente `monitoramento_eventos_hub.snapshot_sha256` diverge. A diferença é o padding de `CHAR(64)`: MySQL entrega comprimento zero em 100/100 células; PostgreSQL/psycopg reporta comprimento 64 em 100/100 células por padding fixo. `::text` retorna comprimento zero nas 100 células PG.
+- Metadata: origem `CHAR(64)`, `utf8mb4_unicode_ci`; destino `character(64)`, `ci`. A canonicalização atual preserva os espaços retornados pelo driver, explicando a divergência por linha e tenant; não é diferença em `metadata_json` nem alteração de conteúdo semântico.
+- Consultas em `erp_pg_source` e `erp_pg_dev` foram read-only, só agregados foram emitidos. Nenhuma carga, dado ou configuração foi alterado.
+- Correção v8 implementada localmente na branch `pg/reconcile-char-padding`: canonicaliza padding final U+0020 somente em `CHAR`/`NCHAR`; preserva espaços finais em `VARCHAR`/`TEXT` e TAB. Testes P2: 290/290; `py_compile`, `bash -n` e `git diff --check` PASS. Aguarda publicação e reconciliação read-only integral; não implica aceite da reconciliação anterior.
+
 ### Projeto PostgreSQL P2 — carga do rebuild divergente (2026-11-21)
 - `rebuild.sh development`: 276/276 tabelas, 213.984 linhas e zero falhas de cópia; duração total 116,145 s.
 - Reconciliação `DIVERGED` (exit 78): 14 métricas PASS, duas divergentes (`row_hash_multiset`, `tenant_row_hashes`) em `monitoramento_eventos_hub`; contagens 100/100. Sem SQLSTATE e sem diagnóstico por coluna no relatório. Aceite interrompido; sem nova carga ou reconciliação.

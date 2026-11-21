@@ -311,7 +311,7 @@ class TargetProfileContractTests(unittest.TestCase):
 
         result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "RECONCILED")
-        self.assertEqual(result["reconciler_version"], 7)
+        self.assertEqual(result["reconciler_version"], 8)
 
     def test_reconciler_rejects_coordinated_snapshot_report_table_omission(self):
         source, target, live_snapshot, report, mappings = base_contract()
@@ -387,6 +387,32 @@ class CanonicalRowHashTests(unittest.TestCase):
         int_col = [{"name": "v", "data_type": "int"}]
         self.assertNotEqual(canonical_row_sha256((None,), int_col), canonical_row_sha256((0,), int_col))
         self.assertEqual(canonical_row_sha256(("007",), int_col), canonical_row_sha256((7,), int_col))
+
+    def test_fixed_width_character_padding_is_normalized_only_for_char_types(self):
+        char_column = [{"name": "v", "data_type": "char", "column_type": "char(64)", "character_set": "utf8mb4"}]
+        self.assertEqual(
+            canonical_row_sha256(("",), char_column, is_source=True),
+            canonical_row_sha256((" " * 64,), char_column, is_source=False),
+        )
+        self.assertEqual(
+            canonical_row_sha256(("a",), char_column, is_source=True),
+            canonical_row_sha256(("a" + " " * 63,), char_column, is_source=False),
+        )
+        self.assertNotEqual(
+            canonical_row_sha256(("a",), char_column, is_source=False),
+            canonical_row_sha256(("a\t",), char_column, is_source=False),
+        )
+        nchar_column = [{"name": "v", "data_type": "nchar", "column_type": "nchar(8)", "character_set": "utf8mb4"}]
+        self.assertEqual(
+            canonical_row_sha256(("é",), nchar_column, is_source=True),
+            canonical_row_sha256(("é" + " " * 7,), nchar_column, is_source=False),
+        )
+        for data_type in ("varchar", "text"):
+            column = [{"name": "v", "data_type": data_type, "column_type": data_type, "character_set": "utf8mb4"}]
+            self.assertNotEqual(
+                canonical_row_sha256(("value",), column, is_source=False),
+                canonical_row_sha256(("value ",), column, is_source=False),
+            )
 
     def test_exact_numeric_json_text_and_raw_binary_canonicalization(self):
         numeric = [{"name": "n", "data_type": "decimal", "column_type": "decimal(8,2)"}]
@@ -999,7 +1025,7 @@ class ReconciliationMetricsTests(unittest.TestCase):
         with patch("tools.migracao_pg.reconcile._stream_table", side_effect=ReconciliationError("DATABASE_QUERY_FAILED", "42P01")):
             result = reconcile(source, target, snapshot, report, mappings)
         self.assertEqual(result["status"], "BLOCKED")
-        self.assertEqual(result["reconciler_version"], 7)
+        self.assertEqual(result["reconciler_version"], 8)
         self.assertEqual(result["failure_code"], "DATABASE_QUERY_FAILED")
         self.assertEqual(result["sqlstate"], "42P01")
         self.assertEqual(result["failure_table"], "synthetic")
